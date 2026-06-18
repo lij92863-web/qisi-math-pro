@@ -1,0 +1,1530 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>奇思数学 Pro | 题库架构拆分版</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/katex@0.16.8/dist/katex.min.css">
+    <script src="https://unpkg.com/katex@0.16.8/dist/katex.min.js"></script>
+    <script src="https://unpkg.com/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/vue-virtual-scroller@2.0.0-beta.8/dist/vue-virtual-scroller.css">
+    <script src="https://unpkg.com/vue-virtual-scroller@2.0.0-beta.8/dist/vue-virtual-scroller.min.js"></script>
+    <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
+    <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.378.0/dist/umd/lucide.min.js"></script>
+    <link rel="stylesheet" href="./app.css?v=stageC2-recognition-summary-01">
+</head>
+<body><div id="app"></div>
+
+    <!-- [组件1]: Icon -->
+    <template id="icon-tpl">
+        <span ref="el" class="inline-flex items-center justify-center shrink-0"></span>
+    </template>
+
+    <!-- [组件2]: KaTeX 渲染组件 (核心离线渲染) -->
+    <template id="latex-preview-tpl">
+        <div :class="['math-content clearfix', $props.class]" v-html="htmlContent"></div>
+    </template>
+
+    <!-- [组件3]: 侧边知识树 -->
+    <template id="knowledge-tree-tpl">
+        <div class="text-[13px] text-gray-700 font-medium select-none">
+            <div @click="select(null)" class="flex items-center gap-2 p-2 mb-2 rounded-lg cursor-pointer transition-colors" :class="activeNode === null ? 'bg-blue-50 text-blue-600 font-bold' : 'hover:bg-gray-50'">
+                <icon name="layers" size="16"></icon> 全部题库
+            </div>
+            <div v-for="l1 in treeData" :key="l1.id" class="mb-1">
+                <div class="flex items-center gap-1.5 p-1.5 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors" :class="{'bg-blue-50 text-blue-600': activeNode === l1.name}">
+                    <button @click.stop="toggle(l1)" class="tree-toggle-btn"><icon :name="l1.expanded ? 'chevron-down' : 'chevron-right'" size="14" class="text-gray-400"></icon></button>
+                    <span @click="select(l1.name)" class="flex-1 truncate font-bold text-gray-800" :class="{'text-blue-600': activeNode === l1.name}">{{l1.name}}</span>
+                </div>
+                <div v-show="l1.expanded" class="pl-2 border-l border-gray-100 ml-2 mt-0.5 flex flex-col gap-0.5">
+                    <div v-for="l2 in l1.children" :key="l2.id">
+                        <div class="flex items-center gap-1.5 p-1.5 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors text-[12px] font-bold text-gray-600" :class="{'bg-blue-50 text-blue-600': activeNode === l2.name}">
+                            <button @click.stop="toggle(l2)" class="tree-toggle-btn"><icon :name="l2.expanded ? 'chevron-down' : 'chevron-right'" size="12" class="text-gray-300"></icon></button>
+                            <span @click="select(l2.name)" class="flex-1 truncate">{{l2.name}}</span>
+                        </div>
+                        <div v-show="l2.expanded" class="pl-4 flex flex-col gap-0.5 mt-0.5">
+                            <div v-for="l3 in l2.children" :key="l3.id" @click="select(l3.name)" class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors" :class="{'bg-blue-50 text-blue-600 font-bold': activeNode === l3.name}">
+                                <span class="flex-1 truncate text-[11px] text-gray-500 hover:text-blue-600" :class="{'text-blue-600 font-bold': activeNode === l3.name}">{{l3.name}}</span>
+                                <span v-if="counts[l3.name]" class="text-[10px] text-gray-400">{{counts[l3.name]}}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- [组件4]: 独立题目卡片 (引入全新高考式排版引擎) -->
+    <template id="question-card-tpl">
+        <div class="question-card group" :class="{'external-selected': externalMode && checked}" v-if="q && q.id">
+            <div class="flex justify-between items-center pb-2 border-b border-gray-100 mb-2 flex-wrap gap-y-1">
+                <div class="flex flex-wrap items-center gap-2">
+                    <div class="flex items-center gap-1.5 text-[11px] font-bold text-gray-500 bg-gray-50 px-2 py-0.5 rounded-sm">
+                        <span class="text-blue-600">{{q?.type || '解答题'}}</span>
+                        <span class="text-gray-300">|</span>
+                        <span class="text-orange-500">{{q?.meta?.diff || q?.diff || '中等'}}</span>
+                        <span class="text-gray-300">|</span>
+                        <span>{{q?.meta?.grade || q?.grade || '高一'}}</span>
+                    </div>
+                    <div v-if="q?.meta?.knowledge || q?.knowledge" class="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-sm border" :class="(q.meta?.knowledgeType || q.knowledgeType) === 'personal' ? 'text-green-600 bg-green-50 border-green-100' : 'text-blue-600 bg-blue-50 border-blue-100'">
+                        <icon name="book-open" size="10"></icon> {{(q.meta?.knowledgeType || q.knowledgeType) === 'personal' ? '个人' : '系统'}}：{{q.meta?.knowledge || q.knowledge}}
+                    </div>
+                    <span
+                        v-if="externalMode && externalStatus"
+                        class="material-status-chip"
+                        :class="externalStatusClassName"
+                        :title="externalStatusTip">
+                        {{ externalStatusText }}
+                    </span>
+                    <span
+                        v-if="externalMode && externalProcessText && q.processStatus !== 'unprocessed'"
+                        class="external-process-chip">
+                        {{ externalProcessText }}
+                    </span>
+                    <div v-if="(q?.meta?.tags || q?.tags) && (q.meta?.tags || q.tags).length" class="text-[10px] text-gray-400 flex gap-1">
+                        <span v-for="tag in (q.meta?.tags || q.tags)" :key="tag" class="border border-gray-100 px-1.5 py-0.5 rounded-sm">#{{tag}}</span>
+                    </div>
+                </div>
+                
+                <div v-if="externalMode" class="external-card-right">
+                    <label v-if="pickMode" class="external-question-checkbox">
+                        <input type="checkbox" :checked="checked" @change="handleTogglePick" />
+                        <span></span>
+                    </label>
+                </div>
+
+                <div v-else class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button @click="toggleEditor" class="px-2 py-0.5 bg-white border border-gray-200 rounded text-[11px] font-bold text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-colors flex items-center gap-1">
+                        <icon name="edit-3" size="10"></icon> {{ isEditing ? '取消' : '编辑' }}
+                    </button>
+                    <button @click="handleToggleAnswer" class="px-2 py-0.5 bg-white border border-gray-200 rounded text-[11px] font-bold text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1" :disabled="!hasAnswer" :class="{'opacity-50 cursor-not-allowed': !hasAnswer}">
+                        <icon :name="showAnswer ? 'eye-off' : 'check-circle'" size="10"></icon> {{ showAnswer ? '隐藏' : '解析' }}
+                    </button>
+                    <button @click="handleToggleCart" :class="['px-2 py-0.5 border rounded text-[11px] font-bold transition-colors flex items-center gap-1', isSelected ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' : 'bg-[#22a039] text-white border-[#22a039] hover:bg-[#1b802d]']">
+                        <icon :name="isSelected ? 'minus' : 'plus'" size="10"></icon> {{ isSelected ? '移出' : '选题' }}
+                    </button>
+                </div>
+            </div>
+
+            <div>
+                <!-- 题干 -->
+                <latex-preview :content="isEditing && activeEditTab === 'stem' ? editStem : q?.stem" :images="isEditing ? editImages : (q?.images||[])"></latex-preview>
+                
+                <!-- 【绝赞重构】标准高考试卷排版 -->
+                <div v-if="(q?.type === '单选题' || q?.type === '多选题') && q?.options && q.options.some(opt => String(opt || '').trim() !== '') && !isEditing" class="gaokao-options">
+                    <div v-for="(opt, idx) in q.options" :key="idx" class="gaokao-option">
+                        <span class="option-label">{{String.fromCharCode(65+idx)}}.</span>
+                        <span class="option-content">
+                            <latex-preview :content="opt" :images="q.images"></latex-preview>
+                        </span>
+                    </div>
+                </div>
+
+                <div v-if="showAnswer && hasAnswer && !isEditing" class="mt-3 pt-2 border-t border-dashed border-gray-200 animate-fade-in bg-gray-50/50 p-2 rounded">
+                    <div v-if="q?.answer" class="mb-2">
+                        <span class="font-bold text-green-700 text-[12px] block mb-0.5">【参考答案】</span> 
+                        <latex-preview :content="q.answer" :images="q.images"></latex-preview>
+                    </div>
+                    <div v-if="q?.solution" class="mt-2 pt-2 border-t border-gray-200/60">
+                        <span class="font-bold text-blue-600 text-[12px] block mb-0.5">【深度解析】</span> 
+                        <latex-preview :content="q.solution" :images="q.images"></latex-preview>
+                    </div>
+                </div>
+
+                <!-- 编辑模式 -->
+                <div v-if="isEditing" class="mt-3 p-3 bg-[#fcfcfd] border border-gray-200 rounded shadow-inner animate-fade-in">
+                    <div class="grid grid-cols-3 gap-2 mb-3 border-b border-gray-100 pb-3 relative">
+                        <select class="input-base text-[11px] py-1" v-model="editType"><option>解答题</option><option>单选题</option><option>多选题</option><option>填空题</option><option>证明题</option></select>
+                        <select class="input-base text-[11px] py-1" v-model="editDiff"><option>容易</option><option>中等</option><option>较难</option><option>压轴</option></select>
+                        <select class="input-base text-[11px] py-1" v-model="editGrade"><option>初一</option><option>初二</option><option>初三</option><option>高一</option><option>高二</option><option>高三</option></select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 mb-3 border-b border-gray-100 pb-3">
+                        <div class="material-field">
+                            <label>系统知识点</label>
+                            <select v-model="editSystemKnowledge">
+                                <option value="">不选择</option>
+                                <option v-for="node in flatKnowledge" :key="node.id" :value="node.name">{{ node.path }}</option>
+                            </select>
+                        </div>
+                        <div class="material-field">
+                            <label>个人知识点</label>
+                            <select v-model="editPersonalKnowledge">
+                                <option value="">不选择</option>
+                                <option v-for="node in flatPersonalKnowledge" :key="node.id" :value="node.name">{{ node.path }}</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="flex gap-1.5">
+                            <button v-for="tab in [{id: 'stem', name: '题干'}, {id: 'answer', name: '答案'}, {id: 'solution', name: '解析'}]" :key="tab.id" @click="activeEditTab = tab.id" :class="['px-2.5 py-0.5 text-[11px] font-bold rounded transition-colors', activeEditTab === tab.id ? 'bg-[#1a73e8] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-100']">
+                                {{tab.name}}
+                            </button>
+                        </div>
+                        <label class="cursor-pointer text-[11px] font-bold text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-1 shadow-sm">
+                            <icon name="image-plus" size="12"></icon> 插图 <input type="file" class="hidden" accept="image/*" @change="handleImageUploadEvent" />
+                        </label>
+                    </div>
+
+                    <textarea
+                        class="w-full h-24 p-2 bg-white border border-gray-200 rounded text-[12px] font-mono outline-none focus:border-blue-400 resize-none custom-scrollbar shadow-sm"
+                        v-model="currentEditText" @paste="handleEditPaste" placeholder="在此修改 LaTeX 源码..."
+                    ></textarea>
+                    
+                    <div class="mt-3 flex justify-between items-center pt-2 border-t border-gray-200">
+                        <button @click="handleDelete" class="text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1 text-[11px] font-bold"><icon name="trash-2" size="12"></icon> 彻底删除</button>
+                        <button @click="handleSaveProps" class="text-[11px] text-white bg-[#1a73e8] hover:bg-blue-700 flex items-center gap-1.5 font-bold px-3 py-1 rounded shadow-sm transition-colors">
+                            <icon name="save" size="12"></icon> 确认更新
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- [组件5]: 主应用布局 -->
+    <template id="app-tpl">
+        <div class="app-container">
+            <aside class="sidebar">
+                <div class="flex items-center gap-3 px-2 mb-8 mt-2">
+                    <div class="w-8 h-8 bg-[#1a73e8] rounded-xl flex items-center justify-center text-white shadow-sm">
+                        <icon name="brain-circuit" size="18"></icon>
+                    </div>
+                    <span class="font-bold text-[16px] tracking-tight text-[#1f2937]">奇思数学 Pro</span>
+                </div>
+                
+                <div class="px-3 mb-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">主控制台</div>
+                <nav class="flex-1 space-y-1">
+                    <button @click="view = 'entry'" :class="['nav-item', view === 'entry' ? 'active' : 'inactive']"><icon name="plus-circle" size="16"></icon> 新题目录入</button>
+                    <button @click="view = 'batchImport'; openBatchList()" :class="['nav-item', view === 'batchImport' ? 'active' : 'inactive']"><icon name="files" size="16"></icon> 批量录题</button>
+                    <button @click="view = 'library'" :class="['nav-item', view === 'library' ? 'active' : 'inactive']"><icon name="layout-grid" size="16"></icon> 题库与检索</button>
+                    <button @click="openExamBuilder" :class="['nav-item', view === 'exam' ? 'active' : 'inactive']"><icon name="file-text" size="16"></icon> 智能组卷台</button>
+                    <button @click="view = 'personal'" :class="['nav-item', view === 'personal' ? 'active' : 'inactive']"><icon name="folder-tree" size="16"></icon> 个人管理</button>
+                    <button @click="view = 'template'" :class="['nav-item', view === 'template' ? 'active' : 'inactive']"><icon name="layout-template" size="16"></icon> 极客排版配置</button>
+                </nav>
+            </aside>
+
+            <main class="main-content custom-scrollbar">
+                <!-- ================= 录题视图 ================= -->
+                <div v-show="view === 'entry'" class="entry-layout animate-slide-up">
+                    <div class="entry-main-card flex-1 bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex flex-col relative">
+                        <h2 class="text-[17px] font-bold text-gray-800 mb-3 border-b border-gray-100 pb-2">题目录入引擎</h2>
+                        
+                        <div class="grid grid-cols-2 lg:grid-cols-5 gap-2 mb-3 relative z-20">
+                            <div class="flex flex-col gap-1">
+                                <label class="text-[10px] font-bold text-gray-500">年级</label>
+                                <select class="input-base entry-compact-control custom-select hover:border-gray-300 transition-colors" v-model="entryForm.grade"><option>初一</option><option>初二</option><option>初三</option><option>高一</option><option>高二</option><option>高三</option></select>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <label class="text-[10px] font-bold text-gray-500">题型</label>
+                                <select class="input-base entry-compact-control custom-select hover:border-gray-300 transition-colors" v-model="entryForm.type"><option>解答题</option><option>单选题</option><option>多选题</option><option>填空题</option><option>证明题</option></select>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <label class="text-[10px] font-bold text-gray-500">难度</label>
+                                <select class="input-base entry-compact-control custom-select hover:border-gray-300 transition-colors" v-model="entryForm.diff"><option>容易</option><option>中等</option><option>较难</option><option>压轴</option></select>
+                            </div>
+                            
+                            <!-- 系统知识点级联面板 -->
+                            <div class="flex flex-col gap-1 relative">
+                                <label class="text-[10px] font-bold text-gray-500">系统知识点</label>
+                                <button @click="showEntryKnowledge = !showEntryKnowledge; showEntryPersonalKnowledge = false" class="w-full text-left input-base entry-compact-control hover:border-blue-400 transition-colors flex justify-between items-center bg-white cursor-pointer">
+                                    <span class="truncate mr-2 text-[12px] font-medium" :class="entryForm.systemKnowledge ? 'text-blue-600' : 'text-gray-700'">{{ entryForm.systemKnowledge || '选择系统节点' }}</span>
+                                    <icon name="chevron-down" size="12" class="text-gray-400 shrink-0"></icon>
+                                </button>
+                                <div v-if="showEntryKnowledge" @click="showEntryKnowledge = false" class="fixed inset-0 z-40"></div>
+                                <div v-if="showEntryKnowledge" class="knowledge-cascader custom-scrollbar right-0 left-auto">
+                                    <div class="cascader-col-1 custom-scrollbar">
+                                        <div v-for="l1 in knowledgeTree" :key="l1.id" @mouseenter="hoverL1 = l1" @click="selectKnowledge(l1.name, 'system')" class="cascader-l1-item flex justify-between items-center" :class="{'active': hoverL1 && hoverL1.id === l1.id, 'selected': entryForm.systemKnowledge === l1.name}">
+                                            <span class="truncate">{{l1.name}}</span>
+                                            <icon name="chevron-right" size="12" class="text-gray-400"></icon>
+                                        </div>
+                                    </div>
+                                    <div class="cascader-col-2 custom-scrollbar">
+                                        <div v-if="!hoverL1" class="text-center text-gray-400 text-xs mt-10">请在左侧选择一级知识模块</div>
+                                        <div v-else>
+                                            <div class="text-[14px] font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100">{{hoverL1.name}}</div>
+                                            <div v-for="l2 in hoverL1.children" :key="l2.id" class="mb-4">
+                                                <button @click="selectKnowledge(l2.name, 'system')" class="cascader-section-title system" :class="{'selected': entryForm.systemKnowledge === l2.name}">{{l2.name}}</button>
+                                                <div class="flex flex-wrap gap-2">
+                                                    <span v-for="l3 in l2.children" :key="l3.id" @click="selectKnowledge(l3.name, 'system')" class="px-2 py-1.5 bg-gray-50 hover:bg-blue-50 hover:text-blue-600 text-[11px] text-gray-600 rounded cursor-pointer transition-colors" :class="{'bg-blue-500 text-white font-bold': entryForm.systemKnowledge === l3.name}">
+                                                        {{l3.name}}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 个人知识点级联面板 -->
+                            <div class="flex flex-col gap-1 relative">
+                                <label class="text-[10px] font-bold text-gray-500">个人知识点</label>
+                                <button @click="showEntryPersonalKnowledge = !showEntryPersonalKnowledge; showEntryKnowledge = false" class="w-full text-left input-base entry-compact-control hover:border-green-400 transition-colors flex justify-between items-center bg-white cursor-pointer">
+                                    <span class="truncate mr-2 text-[12px] font-medium" :class="entryForm.personalKnowledge ? 'text-green-600' : 'text-gray-700'">{{ entryForm.personalKnowledge || '选择个人节点' }}</span>
+                                    <icon name="chevron-down" size="12" class="text-gray-400 shrink-0"></icon>
+                                </button>
+                                <div v-if="showEntryPersonalKnowledge" @click="showEntryPersonalKnowledge = false" class="fixed inset-0 z-40"></div>
+                                <div v-if="showEntryPersonalKnowledge" class="knowledge-cascader custom-scrollbar right-0 left-auto">
+                                    <div class="cascader-col-1 custom-scrollbar">
+                                        <div v-if="personalKnowledgeTree.length === 0" class="p-4 text-[12px] text-gray-400">先到个人管理创建知识点</div>
+                                        <div v-for="l1 in personalKnowledgeTree" :key="l1.id" @mouseenter="hoverPersonalL1 = l1" @click="selectKnowledge(l1.name, 'personal')" class="cascader-l1-item flex justify-between items-center" :class="{'active': hoverPersonalL1 && hoverPersonalL1.id === l1.id, 'selected': entryForm.personalKnowledge === l1.name}">
+                                            <span class="truncate">{{l1.name}}</span>
+                                            <icon name="chevron-right" size="12" class="text-gray-400"></icon>
+                                        </div>
+                                    </div>
+                                    <div class="cascader-col-2 custom-scrollbar">
+                                        <div v-if="!hoverPersonalL1" class="text-center text-gray-400 text-xs mt-10">请在左侧选择一级分类</div>
+                                        <div v-else>
+                                            <div class="text-[14px] font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100">{{hoverPersonalL1.name}}</div>
+                                            <div v-for="l2 in hoverPersonalL1.children" :key="l2.id" class="mb-4">
+                                                <button @click="selectKnowledge(l2.name, 'personal')" class="cascader-section-title personal" :class="{'selected': entryForm.personalKnowledge === l2.name}">{{l2.name}}</button>
+                                                <div class="flex flex-wrap gap-2">
+                                                    <span v-for="l3 in l2.children" :key="l3.id" @click="selectKnowledge(l3.name, 'personal')" class="px-2 py-1.5 bg-gray-50 hover:bg-green-50 hover:text-green-600 text-[11px] text-gray-600 rounded cursor-pointer transition-colors" :class="{'bg-green-500 text-white font-bold': entryForm.personalKnowledge === l3.name}">
+                                                        {{l3.name}}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 极速配图短码框：支持拖拽 -->
+                        <div class="mb-3 flex flex-col gap-1 z-10">
+                            <label class="text-[10px] font-bold text-gray-500">配图上传 (拖拽/粘贴解析)</label>
+                            <div class="drop-zone entry-drop-zone group" @click="$refs.entryImgInput.click()" @dragover.prevent="isDraggingImg=true" @dragleave="isDraggingImg=false" @drop.prevent="handleDrop" :class="{'dragging': isDraggingImg}">
+                                <div class="flex flex-col items-center gap-1.5">
+                                    <icon name="image" size="18" class="text-gray-300 group-hover:text-blue-400 transition-colors"></icon>
+                                    <span class="text-[11px] font-medium text-gray-500">拖拽图片至此框内，或在下方按 <kbd class="bg-white border px-1 rounded shadow-sm text-[10px]">Ctrl+V</kbd> 自动转短码</span>
+                                </div>
+                                <input type="file" ref="entryImgInput" class="hidden" accept="image/*" @change="handleFileChange" />
+                            </div>
+                        </div>
+
+                        <!-- 动态生成的图片短码片段 -->
+                        <div v-if="entryForm.images.length > 0" class="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4 animate-slide-up z-10">
+                            <div v-for="img in entryForm.images" :key="img.id" class="flex items-center justify-between p-1.5 bg-[#fdfdfd] border border-gray-200 rounded-md shadow-sm">
+                                <div class="flex items-center gap-2">
+                                    <img :src="img.url" class="h-6 w-6 object-cover rounded border border-gray-100" />
+                                    <code class="text-[9px] font-mono text-blue-600 bg-blue-50 px-1 py-0.5 rounded">{{img.id}}</code>
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <select class="text-[10px] border border-gray-200 rounded p-1 bg-gray-50 outline-none w-16" v-model="img.align" @change="changeEntryAlign(img.id, $event.target.value)">
+                                        <option value="flushleft">左浮动</option>
+                                        <option value="center">居中块</option>
+                                        <option value="flushright">右浮动</option>
+                                    </select>
+                                    <button @click="copyMainSnippet(img.id)" class="p-1 text-gray-400 hover:text-blue-600" title="点击复制 LaTeX 插入短码"><icon name="copy" size="12"></icon></button>
+                                    <button @click="removeEntryImage(img.id)" class="p-1 text-gray-400 hover:text-red-500" title="移除配图"><icon name="trash-2" size="12"></icon></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-4 border-b border-gray-200 mb-3 px-1 z-10">
+                            <button v-for="t in [{id:'stem',n:'题干'},{id:'answer',n:'答案'},{id:'solution',n:'解析'}]" :key="t.id" @click="entryTab = t.id" :class="['text-[12px] font-bold pb-1.5 border-b-[2px] transition-colors', entryTab === t.id ? 'border-[#1a73e8] text-[#1a73e8]' : 'border-transparent text-gray-400 hover:text-gray-600']">{{t.n}}</button>
+                        </div>
+                        
+                        <textarea
+                            class="textarea-code mb-4 shadow-inner custom-scrollbar z-10 relative"
+                            style="background-color: #fcfcfd;"
+                            v-model="entryForm[entryTab]"
+                            @paste="handleEntryPaste"
+                            :placeholder="'[当前激活区域：' + entryTab + ']\n\n输入 LaTeX 代码。'"
+                        ></textarea>
+
+                        <!-- 静默入库，不给任何打扰弹窗，直接丝滑清空切题库 -->
+                        <button @click="submitQuestion" class="w-full py-2.5 bg-[#1a73e8] text-white rounded-lg font-bold text-[13px] hover:bg-[#1557b0] shadow-sm transition-all active:scale-[0.98] flex justify-center items-center gap-1.5 z-10">
+                            <icon name="save" size="16"></icon> 确认无误，保存入库
+                        </button>
+                    </div>
+
+                    <!-- 右侧：OCR识别与预览 -->
+                    <div class="entry-side-panel flex flex-col gap-4 shrink-0">
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+                            <h3 class="text-[13px] font-bold mb-3 flex items-center gap-1.5 text-gray-800">
+                                <div class="p-1 bg-blue-50 text-blue-600 rounded"><icon name="scan-text" size="14"></icon></div>
+                                结构化 OCR 引擎
+                            </h3>
+                            <div class="drop-zone h-20 mb-3 py-2" @click="$refs.ocrInput.click()" @dragover.prevent="isDraggingOcr=true" @dragleave="isDraggingOcr=false" @drop.prevent="handleOcrDrop" :class="{'dragging': isDraggingOcr}">
+                                <input type="file" ref="ocrInput" class="hidden" accept="image/*" @change="handleOcrChange" />
+                                <div v-if="ocrLoading" class="flex flex-col items-center text-[#1a73e8]">
+                                    <icon name="loader-2" class="animate-spin mb-1" size="16"></icon>
+                                    <span class="text-[10px] font-bold">解析中...</span>
+                                </div>
+                                <div v-else class="text-center text-gray-400">
+                                    <icon name="image-plus" size="20" class="mx-auto mb-1 opacity-50"></icon>
+                                    <span class="text-[11px] font-medium">点击/拖拽图片识别</span>
+                                </div>
+                            </div>
+
+                            <div class="flex gap-1.5 mb-2">
+                                <button @click="assignOcr('stem')" class="flex-1 py-1.5 bg-gray-50 border border-gray-200 rounded text-[11px] font-bold text-gray-600 hover:bg-white hover:border-blue-300 transition-colors">送题干</button>
+                                <button @click="assignOcr('answer')" class="flex-1 py-1.5 bg-gray-50 border border-gray-200 rounded text-[11px] font-bold text-gray-600 hover:bg-white hover:border-blue-300 transition-colors">送答案</button>
+                                <button @click="assignOcr('solution')" class="flex-1 py-1.5 bg-gray-50 border border-gray-200 rounded text-[11px] font-bold text-gray-600 hover:bg-white hover:border-blue-300 transition-colors">送解析</button>
+                            </div>
+                            
+                            <textarea class="w-full h-32 p-3 bg-[#fcfcfd] border border-gray-200 rounded-lg text-[11px] font-mono outline-none focus:bg-white focus:border-blue-400 resize-none shadow-inner custom-scrollbar" style="line-height: 1.6;" v-model="ocrDraftStore.rawText" placeholder="识别文本结果..."></textarea>
+                        </div>
+                        
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex-1 flex flex-col min-h-[220px]">
+                            <h3 class="text-[13px] font-bold mb-3 text-gray-800 flex items-center gap-1.5">
+                                <div class="p-1 bg-green-50 text-green-600 rounded"><icon name="eye" size="14"></icon></div>
+                                完整题面排版预览
+                            </h3>
+                            <div class="entry-question-preview bg-[#f9fafb] rounded-lg p-3 flex-1 overflow-y-auto custom-scrollbar border border-gray-100 shadow-inner">
+                                <latex-preview :content="entryPreviewStem" :images="entryForm.images"></latex-preview>
+                                <template v-if="entryPreviewOptions && entryPreviewOptions.some(opt => String(opt || '').trim() !== '')">
+                                    <div class="gaokao-options">
+                                        <div v-for="(opt, idx) in entryPreviewOptions" :key="idx" v-show="String(opt || '').trim() !== ''" class="gaokao-option">
+                                            <span class="option-label">{{String.fromCharCode(65+idx)}}.</span>
+                                            <span class="option-content">
+                                                <latex-preview :content="opt" :images="entryForm.images"></latex-preview>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </template>
+                                <div v-if="!entryForm.stem && (!entryPreviewOptions || !entryPreviewOptions.some(opt => String(opt || '').trim() !== ''))" class="h-full min-h-[150px] flex items-center justify-center text-[12px] font-bold text-gray-300">
+                                    题干与选项会在这里合并预览
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================= 批量录题视图 ================= -->
+                <div v-show="view === 'batchImport'" class="batch-import-page animate-fade-in">
+                    <template v-if="batchImportMode === 'list'">
+                        <div class="batch-import-header">
+                            <div>
+                                <h1>批量录题</h1>
+                                <p>拖入 DOCX、PDF、图片或文本资料，系统生成题目草稿，确认后加入题库。</p>
+                            </div>
+                            <button class="material-light-btn" @click="clearBatchDraftWorkspace">清空草稿 / 重新开始</button>
+                        </div>
+
+                        <button
+                            class="batch-home-upload"
+                            :class="{dragging: isDraggingBatchFiles}"
+                            @click="openBatchCreate('mixed')"
+                            @dragover.prevent="isDraggingBatchFiles = true"
+                            @dragleave.prevent="isDraggingBatchFiles = false"
+                            @drop.prevent="handleBatchHomeDrop">
+                            <span class="batch-home-upload-icon"><icon name="file-up" size="28"></icon></span>
+                            <strong>点击或拖入 DOCX / PDF / 图片 / 文本</strong>
+                            <em>支持试卷文件、答案文件、解析文件、补充图片一起上传</em>
+                        </button>
+
+                        <section class="batch-section">
+                            <div class="batch-section-head">
+                                <h2>最近识别任务</h2>
+                                <button class="material-primary-btn" @click="openBatchCreate('mixed')"><icon name="plus" size="14"></icon> 创建任务</button>
+                            </div>
+                            <div v-if="recentBatchImportBatches.length === 0" class="batch-empty">
+                                <icon name="inbox" size="36"></icon>
+                                <span>还没有批量录题任务</span>
+                            </div>
+                            <div v-else class="batch-job-list">
+                                <div v-for="batch in recentBatchImportBatches" :key="batch.id" class="batch-job-row">
+                                    <div class="batch-job-main">
+                                        <strong>{{ batch.title || batch.sourceFileName }}</strong>
+                                        <span>{{ fileTypeText(batch.sourceType) }}｜{{ new Date(batch.createdAt).toLocaleString() }}</span>
+                                        <small v-if="batch.errorMessage" class="batch-job-error">{{ batch.errorMessage }}</small>
+                                    </div>
+                                    <div class="batch-job-status" :class="batch.status">
+                                        <div class="batch-status-line">
+                                            <span>{{ Math.round(batch.progress || 0) }}%</span>
+                                            <strong>{{ batchStatusText(batch.status) }}</strong>
+                                        </div>
+                                        <div class="batch-progress"><i :style="{width: Math.max(0, Math.min(100, batch.progress || 0)) + '%'}"></i></div>
+                                    </div>
+                                    <div class="batch-job-counts">
+                                        <span>{{ batch.totalCount || 0 }} 题</span>
+                                        <span>已确认 {{ batch.reviewedCount || 0 }}</span>
+                                        <span>已入库 {{ batch.submittedCount || 0 }}</span>
+                                    </div>
+                                    <div class="batch-job-actions">
+                                        <button v-if="batch.status === 'review' || batch.status === 'completed'" class="material-primary-btn" @click="openBatchReview(batch.id)">继续审核</button>
+                                        <button v-else-if="batch.status === 'failed'" class="material-light-btn" @click="runBatchRecognition(batch.id)">重新识别</button>
+                                        <button v-else class="material-light-btn" @click="openBatchReview(batch.id)">详情</button>
+                                        <button class="material-light-btn danger" @click="deleteBatchImport(batch.id)">删除</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </template>
+
+                    <template v-else-if="batchImportMode === 'create'">
+                        <div class="batch-import-header compact">
+                            <div>
+                                <h1>创建批量录题任务</h1>
+                                <p>上传试卷、答案或解析文件，后台会自动拆题并生成待审核草稿。</p>
+                            </div>
+                            <button class="material-light-btn" @click="openBatchList">返回列表</button>
+                        </div>
+
+                        <section class="batch-create-layout">
+                            <div class="batch-create-main">
+                                <div class="batch-step-title"><span></span>1. 文件上传与识别范围</div>
+                                <div
+                                    class="batch-upload-zone"
+                                    :class="{dragging: isDraggingBatchFiles}"
+                                    @click="openBatchFilePicker"
+                                    @dragover.prevent="isDraggingBatchFiles = true"
+                                    @dragleave.prevent="isDraggingBatchFiles = false"
+                                    @drop.prevent="handleBatchDrop">
+                                    <span class="batch-upload-icon"><icon name="file-up" size="30"></icon></span>
+                                    <strong>点击或拖拽上传 DOCX / PDF / 图片 / 文本文件</strong>
+                                    <span>可以一次上传题目文件 + 答案文件 + 解析文件 + 补充图片</span>
+                                    <small>支持 DOCX / PDF / 图片 / 文本；复杂 Word 公式会在本地自动转 PDF 后再识别。</small>
+                                    <input
+                                        ref="batchUploadInput"
+                                        class="hidden"
+                                        type="file"
+                                        multiple
+                                        accept=".docx,.pdf,.jpg,.jpeg,.png,.webp,.txt"
+                                        @change="handleBatchFileChange"
+                                    />
+                                </div>
+
+                                <div v-if="batchCreateWarning" class="batch-warning">{{ batchCreateWarning }}</div>
+
+                                <div class="batch-file-list">
+                                    <div class="batch-section-head small"><h2>已添加文件</h2><span>{{ batchCreateFiles.length }} / 10</span></div>
+                                    <div v-if="batchCreateFiles.length === 0" class="batch-empty slim">请先添加文件，并为每个文件确认用途。</div>
+                                    <div v-for="file in batchCreateFiles" :key="file.id" class="batch-file-card">
+                                        <div class="batch-file-icon"><icon :name="file.fileType === 'image' ? 'image' : 'file'" size="18"></icon></div>
+                                        <div class="batch-file-body">
+                                            <strong>{{ file.filename }}</strong>
+                                            <span>类型：{{ fileTypeText(file.fileType) }}｜大小：{{ formatFileSize(file.fileSize) }}｜用途：{{ rolesLabel(file) }}</span>
+                                            <label v-if="file.fileType === 'pdf'" class="batch-page-range">
+                                                页码范围
+                                                <input v-model="file.pageRange" placeholder="例如：1-5，8，10-12；不填则识别全部页面" />
+                                            </label>
+                                            <div v-if="file.fileType === 'pdf' && !validatePageRange(file.pageRange)" class="batch-error">页码范围格式不正确，请参考：1-5，8，10-12。</div>
+                                        </div>
+                                        <div class="batch-file-actions">
+                                            <button class="material-light-btn" @click="editBatchFilePurpose(file)">修改用途</button>
+                                            <button class="material-light-btn danger" @click="removeBatchCreateFile(file.id)">删除</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="batch-default-meta wide">
+                                    <div class="batch-step-title"><span></span>2. 整套试卷默认信息（可选）</div>
+                                    <div class="batch-meta-group">
+                                        <strong>基础属性</strong>
+                                        <div class="batch-form-grid five">
+                                            <label>学科<select v-model="batchDefaultMeta.subject"><option>数学</option></select></label>
+                                            <label>题型<select v-model="batchDefaultMeta.defaultType"><option value="">请选择题型</option><option>单选题</option><option>多选题</option><option>填空题</option><option>解答题</option><option>证明题</option></select></label>
+                                            <label>年级<select v-model="batchDefaultMeta.grade"><option value="">请选择年级</option><option>高一</option><option>高二</option><option>高三</option><option>初一</option><option>初二</option><option>初三</option></select></label>
+                                            <label>难度<select v-model="batchDefaultMeta.diff"><option value="">请选择难度</option><option>容易</option><option>中等</option><option>较难</option><option>压轴</option></select></label>
+                                            <label>年份<input v-model="batchDefaultMeta.year" placeholder="请选择年份" /></label>
+                                            <label>预计题数（可选，0表示自动识别）<input v-model.number="batchExpectedQuestionCount" type="number" min="0" step="1" placeholder="0 表示自动识别" /></label>
+                                        </div>
+                                    </div>
+                                    <div class="batch-meta-group">
+                                        <strong>归属与来源</strong>
+                                        <div class="batch-form-grid three">
+                                            <label>来源<input v-model="batchDefaultMeta.source" placeholder="请输入来源" /></label>
+                                            <label>省份<input v-model="batchDefaultMeta.province" placeholder="请选择省份" /></label>
+                                            <label>标签<input v-model="batchDefaultMeta.tags" placeholder="逗号分隔，如：函数,月考" /></label>
+                                        </div>
+                                    </div>
+                                    <div class="batch-meta-group">
+                                        <strong>智能归谱</strong>
+                                        <label>系统知识点<select v-model="batchDefaultMeta.systemKnowledge"><option value="">请选择知识点</option><option v-for="node in flatSystemKnowledge" :key="node.id" :value="node.name">{{ node.path }}</option></select></label>
+                                        <label>个人知识点<select v-model="batchDefaultMeta.personalKnowledge"><option value="">请选择个人知识点</option><option v-for="node in flatPersonalKnowledge" :key="node.id" :value="node.name">{{ node.path }}</option></select></label>
+                                    </div>
+                                </div>
+
+                                <div class="batch-create-actions">
+                                    <button class="material-primary-btn" @click="createDraftImportBatch"><icon name="sparkles" size="14"></icon> 创建识别任务</button>
+                                    <button class="material-light-btn" @click="openBatchList">查看任务列表</button>
+                                </div>
+                            </div>
+                        </section>
+                    </template>
+
+                    <template v-else-if="batchImportMode === 'review'">
+                        <div class="batch-review-shell" v-if="activeBatch">
+                            <div class="batch-review-top">
+                                <div>
+                                    <strong>{{ activeBatch.title }}｜{{ batchStatusText(activeBatch.status) }}</strong>
+                                    <span>共 {{ activeBatch.totalCount || 0 }} 题｜已确认 {{ activeBatch.reviewedCount || 0 }}｜已入库 {{ activeBatch.submittedCount || 0 }}｜有问题 {{ activeBatch.problemCount || 0 }}｜未分配图片 {{ activeBatch.unassignedImageCount || 0 }}</span>
+                                    <button v-if="unmatchedAnswers.length" class="batch-link-btn" @click="showUnmatchedAnswerList">答案文件中有 {{ unmatchedAnswers.length }} 个题号未匹配</button>
+                                </div>
+                                <div class="batch-review-top-actions">
+                                    <button v-if="unassignedDraftImages.length" class="material-light-btn" @click="unassignedImageModal = true">未分配图片 {{ unassignedDraftImages.length }}</button>
+                                    <button class="material-light-btn danger" @click="cleanupActiveBatchDisplayPollution">清理显示污染</button>
+                                    <button class="material-light-btn" @click="dedupeActiveBatchDraftsNow">清理重复题</button>
+                                    <button class="material-light-btn" @click="rerunActiveBatchRecognition">重新识别</button>
+                                    <button class="material-light-btn" @click="openBatchList">返回列表</button>
+                                </div>
+                            </div>
+
+                            <div class="batch-recognition-summary">
+                                <div class="batch-recognition-summary-head">
+                                    <strong>本次识别摘要</strong>
+                                    <span>只读统计，不影响确认和提交</span>
+                                </div>
+                                <div class="batch-recognition-summary-grid">
+                                    <span>题目总数 <b>{{ batchRecognitionSummary.total }}</b></span>
+                                    <span>有选项 <b>{{ batchRecognitionSummary.withOptions }}</b></span>
+                                    <span>有答案 <b>{{ batchRecognitionSummary.withAnswers }}</b></span>
+                                    <span>有解析 <b>{{ batchRecognitionSummary.withSolutions }}</b></span>
+                                    <span>有图片 token <b>{{ batchRecognitionSummary.withImageTokens }}</b></span>
+                                </div>
+                                <div class="batch-recognition-summary-missing">
+                                    <p>缺答案：{{ batchRecognitionSummary.missingAnswers.length ? batchRecognitionSummary.missingAnswers.join('、') : '无' }}</p>
+                                    <p>缺解析：{{ batchRecognitionSummary.missingSolutions.length ? batchRecognitionSummary.missingSolutions.join('、') : '无' }}</p>
+                                    <p>缺选项：{{ batchRecognitionSummary.missingOptions.length ? batchRecognitionSummary.missingOptions.join('、') : '无' }}</p>
+                                </div>
+                            </div>
+
+                            <div class="batch-review-grid">
+                                <aside class="batch-question-nav">
+                                    <div class="batch-filter-tabs">
+                                        <button v-for="tab in [{id:'all',name:'全部'},{id:'pending',name:'待确认'},{id:'reviewed',name:'已确认'},{id:'problems',name:'有问题'},{id:'images',name:'有图片'},{id:'submitted',name:'已入库'}]" :key="tab.id" @click="batchImportFilter = tab.id" :class="{active: batchImportFilter === tab.id}">{{ tab.name }}</button>
+                                    </div>
+                                    <button v-for="q in filteredDraftQuestions" :key="q.id" class="batch-question-nav-item" :class="{active: activeDraftQuestion?.id === q.id, submitted: q.status === 'submitted'}" @click="selectDraftQuestion(q.id)">
+                                        <span>第 {{ q.questionNumber || q.order }} 题</span>
+                                        <small>{{ q.type }}｜{{ String(q.stem || '').slice(0, 24) }}</small>
+                                        <i v-if="draftQuestionProblems(q).length"></i>
+                                    </button>
+                                </aside>
+
+                                <section class="batch-editor" v-if="activeDraftQuestion">
+                                    <div v-if="draftQuestionProblems(activeDraftQuestion).length" class="batch-problem-card">
+                                        <strong>需要检查</strong>
+                                        <p v-for="p in draftQuestionProblems(activeDraftQuestion)" :key="p">{{ p }}</p>
+                                        <div v-if="activeDraftQuestion.answerConflicts?.length" class="batch-conflict-box">
+                                            <span v-for="item in activeDraftQuestion.answerConflicts" :key="item.sourceFileId">{{ item.sourceFileName }}：{{ item.answer }}</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="batch-editor-card">
+                                        <h2>题目属性</h2>
+                                        <div class="batch-form-grid">
+                                            <label>题型<select v-model="activeDraftQuestion.type" @change="markActiveDraftUserEdited"><option>单选题</option><option>多选题</option><option>填空题</option><option>解答题</option><option>证明题</option></select></label>
+                                            <label>年级<select v-model="activeDraftQuestion.grade"><option>高一</option><option>高二</option><option>高三</option><option>初一</option><option>初二</option><option>初三</option></select></label>
+                                            <label>难度<select v-model="activeDraftQuestion.diff"><option>容易</option><option>中等</option><option>较难</option><option>压轴</option></select></label>
+                                            <label>年份<input v-model="activeDraftQuestion.year" /></label>
+                                        </div>
+                                    </div>
+
+                                    <div class="batch-editor-card">
+                                        <h2>题库与来源</h2>
+                                        <div class="batch-form-grid">
+                                            <label>来源<input v-model="activeDraftQuestion.source" /></label>
+                                            <label>省份<input v-model="activeDraftQuestion.province" /></label>
+                                            <label>标签<input :value="(activeDraftQuestion.tags || []).join(',')" @input="activeDraftQuestion.tags = $event.target.value.split(',').map(x => x.trim()).filter(Boolean)" /></label>
+                                            <label>系统知识点<select v-model="activeDraftQuestion.systemKnowledge"><option value="">不选择</option><option v-for="node in flatSystemKnowledge" :key="node.id" :value="node.name">{{ node.path }}</option></select></label>
+                                            <label>个人知识点<select v-model="activeDraftQuestion.personalKnowledge"><option value="">不选择</option><option v-for="node in flatPersonalKnowledge" :key="node.id" :value="node.name">{{ node.path }}</option></select></label>
+                                        </div>
+                                    </div>
+
+                                    <div class="batch-editor-card content">
+                                        <div class="batch-content-tabs">
+                                            <button @click="activeDraftTab='stem'" :class="{active: activeDraftTab==='stem'}">题目内容</button>
+                                            <button @click="activeDraftTab='answer'" :class="{active: activeDraftTab==='answer'}">答案内容</button>
+                                            <button @click="activeDraftTab='solution'" :class="{active: activeDraftTab==='solution'}">解析内容</button>
+                                        </div>
+                                        <div v-if="activeDraftTab === 'stem'" class="batch-stem-editor">
+                                            <label>
+                                                <div class="batch-editor-label-row">
+                                                    <span>题目 LaTeX 源码</span>
+                                                    <span v-if="activeDraftEditorDirty" class="batch-editor-unsaved">未保存</span>
+                                                </div>
+                                                <textarea
+                                                    ref="activeDraftEditorTextarea"
+                                                    v-model="activeDraftEditorBuffer"
+                                                    class="batch-latex-source-editor"
+                                                    :readonly="activeDraftQuestion?.status === 'submitted'"
+                                                    spellcheck="false"
+                                                    autocomplete="off"
+                                                    autocorrect="off"
+                                                    autocapitalize="off"
+                                                    placeholder="在这里自由编辑题干、选项和图片 LaTeX。只有点击“保存修改”时才会正式写入题目。"
+                                                    @keydown.tab.prevent="insertDraftEditorText('    ')"
+                                                    @keydown.ctrl.s.prevent="saveActiveDraftQuestion"
+                                                    @keydown.meta.s.prevent="saveActiveDraftQuestion">
+                                                </textarea>
+                                            </label>
+                                        </div>
+                                        <label v-else-if="activeDraftTab === 'answer'">答案<textarea v-model="activeDraftQuestion.answer" @input="markActiveDraftUserEdited"></textarea></label>
+                                        <label v-else>解析<textarea v-model="activeDraftQuestion.solution" @input="markActiveDraftUserEdited"></textarea></label>
+                                    </div>
+
+                                    <div class="batch-editor-actions">
+                                        <button class="material-light-btn" @click="saveActiveDraftQuestion"><icon name="save" size="14"></icon> 保存修改</button>
+                                        <button v-if="activeDraftEditorDirty" class="material-light-btn" @click="discardActiveDraftEditorChanges">放弃修改</button>
+                                        <button class="material-primary-btn" @click="markDraftReviewed"><icon name="check-circle" size="14"></icon> 标记已确认</button>
+                                        <button class="material-primary-btn" :disabled="activeDraftQuestion.status === 'submitted'" @click="submitDraftQuestion(activeDraftQuestion.id)"><icon name="send" size="14"></icon> {{ activeDraftQuestion.status === 'submitted' ? '该题已入库' : '提交入库' }}</button>
+                                    </div>
+                                </section>
+
+                                <aside class="batch-preview-panel" v-if="activeDraftQuestion">
+                                    <div class="batch-preview-card">
+                                        <div class="batch-preview-head">
+                                            <h2>题目效果预览</h2>
+                                            <button class="material-light-btn" @click="showActiveRawText">查看原文</button>
+                                        </div>
+                                        <div class="batch-question-preview-layout">
+                                            <latex-preview
+                                                class="qisi-question-flow-preview"
+                                                :content="activeDraftEditorPreview.stem"
+                                                :images="activeDraftPreviewImages"
+                                                :flow-options="false">
+                                            </latex-preview>
+                                            <div
+                                                v-if="(activeDraftQuestion.type === '单选题' || activeDraftQuestion.type === '多选题') && activeDraftEditorPreview.options && activeDraftEditorPreview.options.some(opt => String(opt || '').trim() !== '')"
+                                                class="qisi-review-preview-options">
+                                                <div
+                                                    v-for="(opt, idx) in activeDraftEditorPreview.options"
+                                                    v-show="String(opt || '').trim() !== ''"
+                                                    :key="idx"
+                                                    class="qisi-review-preview-option">
+                                                    <span class="qisi-review-preview-option-label">{{ String.fromCharCode(65 + idx) }}.</span>
+                                                    <span class="qisi-review-preview-option-content">
+                                                        <latex-preview :content="opt" :images="activeDraftPreviewImages"></latex-preview>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="batch-preview-answer"><strong>答案</strong><latex-preview :content="activeDraftQuestion.answer || '未填写'" :images="activeDraftPreviewImages"></latex-preview></div>
+                                        <div class="batch-preview-answer"><strong>解析</strong><latex-preview :content="activeDraftQuestion.solution || '未填写'" :images="activeDraftPreviewImages"></latex-preview></div>
+                                    </div>
+
+                                    <div class="batch-preview-card">
+                                        <div class="batch-preview-head">
+                                            <h2>当前题目图片</h2>
+                                            <button v-if="activeDraftRealQuestionImages.length && activeDraftQuestion.imageReviewStatus !== 'confirmed'" class="material-light-btn" @click="confirmDraftImages">我已确认图片</button>
+                                        </div>
+                                        <div v-if="activeDraftRealQuestionImages.length === 0" class="batch-empty slim">当前题暂未裁剪题图，可从来源原图中重新裁剪。</div>
+                                        <div v-for="img in activeDraftRealQuestionImages" :key="img.id" class="batch-image-item">
+                                            <img :src="img.url" />
+                                            <div>
+                                                <span>来源页码：{{ img.sourcePage || '无' }}｜置信度：{{ Math.round((img.confidence || 0) * 100) }}%</span>
+                                                <span>状态：{{ img.status === 'bound' ? '已绑定' : img.status === 'need_confirm' ? '待确认' : '低置信度' }}</span>
+                                            </div>
+                                            <div class="batch-image-actions">
+                                                <button class="material-light-btn" @click="unassignedImageModal = true">更换图片</button>
+                                                <div class="image-position-control">
+                                                    <button class="material-light-btn" @click.stop="toggleImagePositionMenu(img.id)">图片位置</button>
+                                                    <div v-if="imagePositionMenuId === img.id" class="image-position-popover" @click.stop>
+                                                        <button type="button" @click="copyDraftImagePlacementLatex(img, 'left')">靠左</button>
+                                                        <button type="button" @click="copyDraftImagePlacementLatex(img, 'center')">居中</button>
+                                                        <button type="button" @click="copyDraftImagePlacementLatex(img, 'right')">靠右</button>
+                                                    </div>
+                                                </div>
+                                                <button class="material-light-btn danger" @click="deleteDraftImage(img.id)">删除图片</button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="batch-preview-card">
+                                        <div class="batch-preview-head">
+                                            <h2>来源原图</h2>
+                                            <button v-if="activeDraftSourcePageImages.length" class="material-light-btn" @click="openSourcePageCrop(activeDraftSourcePageImages[0])">重新裁剪</button>
+                                        </div>
+                                        <div v-if="activeDraftSourcePageImages.length === 0" class="batch-empty slim">暂无来源原图。</div>
+                                        <div v-for="img in activeDraftSourcePageImages" :key="img.id" class="batch-image-item">
+                                            <img :src="img.url" />
+                                            <div>
+                                                <span>来源页码：{{ img.sourcePage || '无' }}｜置信度：{{ Math.round((img.confidence || 0) * 100) }}%</span>
+                                                <span>状态：来源整页图</span>
+                                            </div>
+                                            <div class="batch-image-actions">
+                                                <button class="material-light-btn" @click="openSourcePageCrop(img)">重新裁剪</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </aside>
+                            </div>
+
+                            <div class="batch-bottom-bar">
+                                <span>{{ activeDraftQuestion ? '当前：第 ' + (activeDraftQuestion.questionNumber || activeDraftQuestion.order) + ' 题｜' + draftQuestionStatusText(activeDraftQuestion.status) : '暂无题目' }}</span>
+                                <button class="material-primary-btn" @click="openBatchSubmitSummary">提交已确认题目</button>
+                            </div>
+                        </div>
+                    </template>
+
+                    <div v-if="cropModalOpen" class="material-modal-backdrop">
+                        <div class="material-modal batch-crop-modal">
+                            <div class="external-confirm-header">
+                                <div>
+                                    <h2>重新裁剪当前题图</h2>
+                                    <p>在来源原图上按住鼠标拖拽，框选本题需要的图片区域。</p>
+                                </div>
+                                <button class="material-light-btn" @click="closeCropModal">关闭</button>
+                            </div>
+
+                            <div
+                                class="batch-crop-stage"
+                                @mousemove.prevent="moveManualCrop"
+                                @mouseup.prevent="endManualCrop"
+                                @mouseleave.prevent="endManualCrop"
+                            >
+                                <div class="batch-crop-image-wrap">
+                                    <img
+                                        ref="cropImageRef"
+                                        :src="cropState.sourceImage?.url"
+                                        @mousedown.prevent="startManualCrop"
+                                    />
+
+                                    <div
+                                        v-if="Math.abs(cropState.w) > 0 && Math.abs(cropState.h) > 0"
+                                        class="batch-crop-selection"
+                                        :style="cropSelectionStyle"
+                                    ></div>
+                                </div>
+                            </div>
+
+                            <div class="batch-crop-actions">
+                                <span>
+                                    当前框选：
+                                    {{ Math.round(Math.abs(cropState.w)) }} × {{ Math.round(Math.abs(cropState.h)) }}
+                                </span>
+                                <div>
+                                    <button class="material-light-btn" @click="resetCropState">重新框选</button>
+                                    <button class="material-primary-btn" @click="saveManualCropToDraft">保存为当前题图</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="pendingPurposeFile" class="material-modal-backdrop">
+                        <div class="material-modal batch-purpose-modal">
+                            <div class="external-confirm-header">
+                                <div>
+                                    <h2>请确认这个文件的用途</h2>
+                                    <p>{{ pendingPurposeFile.filename }}｜{{ fileTypeText(pendingPurposeFile.fileType) }}｜{{ formatFileSize(pendingPurposeFile.fileSize) }}</p>
+                                </div>
+                            </div>
+                            <div class="batch-purpose-options">
+                                <label v-for="role in ['question','answer','solution','full','supplemental_image']" :key="role" :class="{active: pendingPurposeRoles.includes(role)}">
+                                    <input type="checkbox" :checked="pendingPurposeRoles.includes(role)" @change="togglePurposeRole(role)" />
+                                    <span>{{ roleLabel(role) }}</span>
+                                </label>
+                            </div>
+                            <div class="flex justify-end gap-2 mt-4">
+                                <button class="material-light-btn" @click="cancelBatchFilePurpose">取消上传</button>
+                                <button class="material-primary-btn" :disabled="pendingPurposeRoles.length === 0" @click="confirmBatchFilePurpose">确认添加</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="unassignedImageModal" class="material-modal-backdrop">
+                        <div class="material-modal batch-image-modal">
+                            <div class="external-confirm-header">
+                                <div><h2>未分配图片</h2><p>选择图片要绑定到哪一道题，或删除无关图片。</p></div>
+                                <button class="material-light-btn" @click="unassignedImageModal = false">关闭</button>
+                            </div>
+                            <div v-if="unassignedDraftImages.length === 0" class="batch-empty slim">暂无未分配图片。</div>
+                            <div v-for="img in unassignedDraftImages" :key="img.id" class="batch-unassigned-image">
+                                <img :src="img.url" />
+                                <select @change="bindUnassignedImage(img.id, $event.target.value); $event.target.value = ''">
+                                    <option value="">绑定到题目...</option>
+                                    <option v-for="q in batchDraftQuestions" :key="q.id" :value="q.id">第 {{ q.questionNumber || q.order }} 题</option>
+                                </select>
+                                <button class="material-light-btn danger" @click="deleteUnassignedImage(img.id)">删除</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="submitSummary" class="material-modal-backdrop">
+                        <div class="material-modal batch-purpose-modal">
+                            <div class="external-confirm-header">
+                                <div><h2>提交已确认题目</h2><p>本次将提交 {{ submitSummary.count }} 道已确认题。</p></div>
+                            </div>
+                            <div class="batch-submit-summary">
+                                <span>未确认 {{ submitSummary.pending }} 道</span>
+                                <span>缺答案 {{ submitSummary.missingAnswer }} 道</span>
+                                <span>疑似重复 {{ submitSummary.duplicate }} 道</span>
+                                <span>图片未确认 {{ submitSummary.image }} 道</span>
+                            </div>
+                            <div class="flex justify-end gap-2 mt-4">
+                                <button class="material-light-btn" @click="submitSummary = null">返回继续检查</button>
+                                <button class="material-primary-btn" :disabled="submitSummary.count === 0" @click="confirmBatchSubmit">确认提交</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="batchToast" class="batch-toast">{{ batchToast }}</div>
+                </div>
+
+                <!-- ================= 题库视图 ================= -->
+                <div v-show="view === 'library'" class="library-layout animate-fade-in">
+                    <!-- 左侧：系统/个人/外部题库筛选 -->
+                    <aside class="knowledge-sidebar library-filter-sidebar custom-scrollbar">
+                        <div class="library-filter-head material-head">
+                            <span>知识点筛选</span>
+                        </div>
+                        <div class="material-segmented">
+                            <button @click="switchLibraryKnowledgeMode('system')" :class="{active: libraryKnowledgeMode === 'system'}" title="系统：按教材/章节知识点筛选">系统知识点</button>
+                            <button @click="switchLibraryKnowledgeMode('personal')" :class="{active: libraryKnowledgeMode === 'personal'}" title="个人：按自己建立的知识点筛选">个人知识点</button>
+                            <button @click="switchLibraryKnowledgeMode('external')" :class="{active: libraryKnowledgeMode === 'external'}" title="外部：查看导入的他人题库">外部题库</button>
+                        </div>
+
+                        <div v-if="libraryKnowledgeMode !== 'external'" class="mt-3">
+                            <knowledge-tree
+                                :tree-data="activeKnowledgeTree"
+                                :counts="activeKnowledgeCounts"
+                                :active-node="activeKnowledgeType === libraryKnowledgeMode ? activeKnowledge : null"
+                                :mode="libraryKnowledgeMode"
+                                @select="handleKnowledgeSelect">
+                            </knowledge-tree>
+                        </div>
+
+                        <div v-else class="external-tree mt-3">
+                            <div class="external-tree-tip">
+                                外部题库用于临时存放他人分享的题目。题目不会自动进入个人题库，需要勾选后手动加入。
+                            </div>
+
+                            <div v-for="group in externalTeacherGroups" :key="group.teacher" class="external-teacher-group">
+                                <div class="external-teacher-name">
+                                    <icon name="user-round" size="14"></icon>
+                                    <span>{{ group.teacher }}</span>
+                                </div>
+
+                                <button
+                                    v-for="batch in group.batches"
+                                    :key="batch.id"
+                                    @click="activeExternalBatchId = batch.id; currentPage = 1"
+                                    class="external-batch-item"
+                                    :class="{active: activeExternalBatchId === batch.id}">
+                                    <div class="external-batch-title">
+                                        {{ new Date(batch.importedAt).toLocaleDateString() }} {{ batch.title || '导入题库' }}
+                                    </div>
+                                    <div class="external-batch-meta">
+                                        {{ batch.count }}题
+                                        <span v-if="batch.unprocessedCount">｜未处理 {{ batch.unprocessedCount }}</span>
+                                    </div>
+                                    <div class="external-batch-actions">
+                                        <span @click.stop="recalculateExternalBatchStatus(batch.id)">重新计算</span>
+                                        <span @click.stop="deleteExternalBatch(batch.id)">删除</span>
+                                    </div>
+                                </button>
+                            </div>
+
+                            <div v-if="failedImportBatches.length" class="external-teacher-group failed-batches">
+                                <div class="external-teacher-name">
+                                    <icon name="triangle-alert" size="14"></icon>
+                                    <span>导入失败批次</span>
+                                </div>
+                                <button
+                                    v-for="batch in failedImportBatches"
+                                    :key="batch.id"
+                                    class="external-batch-item failed">
+                                    <div class="external-batch-title">{{ batch.title || batch.fileName || '导入题库' }}</div>
+                                    <div class="external-batch-meta">未成功写入，可删除记录</div>
+                                    <div class="external-batch-actions">
+                                        <span @click.stop="deleteExternalBatch(batch.id)">删除</span>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    </aside>
+
+                    <!-- 中间：规范克制的试题流 -->
+                    <section class="question-flow custom-scrollbar">
+                        <div class="library-top-actions">
+                            <button @click="exportQuestionBankPackage" class="material-light-btn">
+                                <icon name="download" size="14"></icon>
+                                导出题库数据
+                            </button>
+
+                            <button @click="openImportBankPicker" class="material-light-btn">
+                                <icon name="upload" size="14"></icon>
+                                导入题库数据
+                            </button>
+
+                            <input ref="importBankInput" type="file" accept=".zip" class="hidden" @change="handleImportBankFileChange" />
+                        </div>
+
+                        <div class="library-search-bar">
+                            <div class="library-search-input">
+                                <icon name="search" size="14"></icon>
+                                <input v-model="librarySearchInput" placeholder="搜索题干、答案、解析" />
+                            </div>
+                            <select v-model="libraryFilters.type"><option value="">全部题型</option><option>单选题</option><option>多选题</option><option>填空题</option><option>解答题</option><option>证明题</option></select>
+                            <select v-model="libraryFilters.diff"><option value="">全部难度</option><option>容易</option><option>中等</option><option>较难</option><option>压轴</option></select>
+                            <select v-model="libraryFilters.grade"><option value="">全部年级</option><option>初一</option><option>初二</option><option>初三</option><option>高一</option><option>高二</option><option>高三</option></select>
+                            <select v-model="libraryFilters.answerState"><option value="">解析状态</option><option value="hasAnswer">有解析</option><option value="noAnswer">无解析</option></select>
+                            <select v-model="libraryFilters.imageState"><option value="">图片状态</option><option value="hasImage">有图片</option><option value="noImage">无图片</option></select>
+                            <button @click="resetLibraryFilters" class="material-light-btn">重置筛选</button>
+                        </div>
+
+                        <template v-if="libraryKnowledgeMode === 'external'">
+                            <div class="external-action-bar">
+                                <label class="material-checkbox">
+                                    <input type="checkbox" v-model="externalPickMode" />
+                                    <span>加入个人题库</span>
+                                </label>
+
+                                <div v-if="externalPickMode" class="external-pick-actions">
+                                    <span>已选择 {{ selectedExternalIds.length }} 道</span>
+                                    <button @click="selectAllExternalOnPage">全选本页</button>
+                                    <button @click="clearExternalSelection">取消选择</button>
+                                    <button class="material-primary-btn" :disabled="selectedExternalIds.length === 0" @click="openExternalConfirmPage">下一步</button>
+                                </div>
+                                <div class="external-pick-actions">
+                                    <label class="material-checkbox compact"><input type="checkbox" v-model="externalOnlyUnprocessed" /><span>只显示未处理</span></label>
+                                    <button @click="undoLatestExternalMerge">撤销最近一次加入</button>
+                                </div>
+                            </div>
+
+                            <div v-if="filteredExternalQuestions.length === 0" class="text-center py-20 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl bg-white flex flex-col items-center">
+                                <icon name="inbox" size="48" class="mb-3 text-gray-200"></icon>
+                                <span class="font-bold text-sm">暂无外部导入题目</span>
+                            </div>
+
+                            <div v-else>
+                                <div class="flex justify-between items-center mb-3 px-1">
+                                    <span class="text-[13px] font-bold text-gray-500">共 {{ filteredExternalQuestions.length }} 道外部题目</span>
+                                    <span class="text-[12px] text-gray-400">第 {{ currentPage }} / {{ externalTotalPages }} 页</span>
+                                </div>
+
+                                <question-card
+                                    v-for="q in paginatedExternalQuestions"
+                                    :key="q.id"
+                                    :q="q"
+                                    :external-mode="true"
+                                    :pick-mode="externalPickMode"
+                                    :checked="selectedExternalIds.includes(q.id)"
+                                    :external-status="getExternalStatus(q)"
+                                    @toggle-pick="toggleExternalPick">
+                                </question-card>
+
+                                <div class="flex justify-center items-center gap-3 py-4" v-if="externalTotalPages > 1">
+                                    <button :disabled="currentPage===1" @click="currentPage--" class="px-3 py-1 border rounded disabled:opacity-40 font-bold text-[12px] bg-white text-gray-600 hover:bg-gray-50">上一页</button>
+                                    <span class="text-[12px] font-bold text-gray-500">{{ currentPage }} / {{ externalTotalPages }}</span>
+                                    <button :disabled="currentPage===externalTotalPages" @click="currentPage++" class="px-3 py-1 border rounded disabled:opacity-40 font-bold text-[12px] bg-white text-gray-600 hover:bg-gray-50">下一页</button>
+                                </div>
+                            </div>
+                        </template>
+
+                        <template v-else>
+                            <div v-if="filteredQuestions.length === 0" class="text-center py-20 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl bg-white flex flex-col items-center">
+                                <icon name="box" size="48" class="mb-3 text-gray-200"></icon>
+                                <span class="font-bold text-sm">该节点下暂无收录题目</span>
+                            </div>
+                            <div v-else>
+                                <div class="flex justify-between items-center mb-3 px-1">
+                                    <span class="text-[13px] font-bold text-gray-500">共 {{filteredQuestions.length}} 道试题</span>
+                                    <span class="text-[12px] text-gray-400">第 {{currentPage}} / {{totalPages}} 页</span>
+                                </div>
+                                
+                                <question-card 
+                                    v-for="q in paginatedQuestions" :key="q.id" 
+                                    :q="q" :is-selected="cart.includes(q.id)" 
+                                    :flat-knowledge="flatKnowledge"
+                                    :flat-personal-knowledge="flatPersonalKnowledge"
+                                    @toggle-cart="toggleCart" @edit="saveEditedQuestion" @delete="deleteQuestion">
+                                </question-card>
+                                
+                                <div class="flex justify-center items-center gap-3 py-4" v-if="totalPages > 1">
+                                    <button :disabled="currentPage===1" @click="currentPage--" class="px-3 py-1 border rounded disabled:opacity-40 font-bold text-[12px] bg-white text-gray-600 hover:bg-gray-50">上一页</button>
+                                    <span class="text-[12px] font-bold text-gray-500">{{currentPage}} / {{totalPages}}</span>
+                                    <button :disabled="currentPage===totalPages" @click="currentPage++" class="px-3 py-1 border rounded disabled:opacity-40 font-bold text-[12px] bg-white text-gray-600 hover:bg-gray-50">下一页</button>
+                                </div>
+                            </div>
+                        </template>
+                    </section>
+                </div>
+
+                <div v-if="pendingImportPreview" class="material-modal-backdrop">
+                    <div class="material-modal import-preview-modal">
+                        <div class="external-confirm-header import-preview-head">
+                            <div>
+                                <h2>导入题库数据预览</h2>
+                                <p>确认后才会写入外部题库暂存区</p>
+                            </div>
+                            <button @click="cancelImportPreview" class="material-light-btn">关闭</button>
+                        </div>
+                        <div class="import-preview-grid">
+                            <div><span>来源教师</span><strong>{{ pendingImportPreview.sourceTeacher }}</strong></div>
+                            <div><span>批次标题</span><strong>{{ pendingImportPreview.batchTitle }}</strong></div>
+                            <div><span>题目数量</span><strong>{{ pendingImportPreview.rawQuestions.length }}</strong></div>
+                            <div><span>图片数量</span><strong>{{ pendingImportPreview.imagePayloads.length }}</strong></div>
+                            <div><span>导出时间</span><strong>{{ pendingImportPreview.exportedAt || '未提供' }}</strong></div>
+                            <div><span>数据包版本</span><strong>{{ pendingImportPreview.schemaVersion }}</strong></div>
+                        </div>
+                        <div v-if="pendingImportPreview.mayDuplicate" class="confirm-warning">
+                            这份题库数据可能已经导入过，请确认是否继续。
+                        </div>
+                        <div class="external-confirm-footer">
+                            <button @click="cancelImportPreview" class="material-light-btn">取消</button>
+                            <button @click="confirmImportBankPreview" class="material-primary-btn">确认导入</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================= 加入个人题库确认 ================= -->
+                <div v-show="view === 'externalConfirm'" class="external-confirm-page animate-fade-in">
+                    <div class="external-confirm-header">
+                        <div>
+                            <h2>加入个人题库确认</h2>
+                            <p>
+                                已选择 {{ confirmItems.length }} 道题
+                                <span>新题 {{ confirmItems.filter(i => i.status === 'new').length }} 道</span>
+                                <span>可补全 {{ confirmItems.filter(i => i.status === 'fillable').length }} 道</span>
+                                <span>疑似同题 {{ confirmItems.filter(i => i.status === 'similar').length }} 道</span>
+                                <span>答案冲突 {{ confirmItems.filter(i => i.status === 'answerConflict').length }} 道</span>
+                            </p>
+                        </div>
+
+                        <div class="external-confirm-header-actions">
+                            <button @click="view = 'library'" class="material-light-btn">返回选择</button>
+                            <button @click="confirmAddExternalToPersonal" class="material-primary-btn">确认加入</button>
+                        </div>
+                    </div>
+
+                    <div class="confirm-filter-bar">
+                        <button
+                            v-for="option in confirmStatusOptions"
+                            :key="option.value"
+                            @click="confirmStatusFilter = option.value"
+                            :class="{active: confirmStatusFilter === option.value}">
+                            {{ option.label }}
+                            <span>{{ confirmStatusCount(option.value) }}</span>
+                        </button>
+                        <em>确认加入将处理全部已选择题目，不只处理当前筛选结果。</em>
+                    </div>
+
+                    <div class="batch-setting-card">
+                        <h3>批量设置</h3>
+
+                        <div class="batch-setting-grid">
+                            <div class="material-field">
+                                <label>个人知识点</label>
+                                <select v-model="batchPersonalKnowledge">
+                                    <option value="">不选择</option>
+                                    <option v-for="node in flatPersonalKnowledge" :key="node.id" :value="node.name">
+                                        {{ node.path }}
+                                    </option>
+                                </select>
+                            </div>
+                            <button @click="applyBatchKnowledge('personal')" class="material-light-btn">应用到全部</button>
+
+                            <div class="material-field">
+                                <label>系统知识点</label>
+                                <select v-model="batchSystemKnowledge">
+                                    <option value="">不选择</option>
+                                    <option v-for="node in flatSystemKnowledge" :key="node.id" :value="node.name">
+                                        {{ node.path }}
+                                    </option>
+                                </select>
+                            </div>
+                            <button @click="applyBatchKnowledge('system')" class="material-light-btn">应用到全部</button>
+                        </div>
+                    </div>
+
+                    <div class="confirm-question-list">
+                        <div
+                            v-for="item in filteredConfirmItems"
+                            :key="item.externalId"
+                            class="confirm-question-card"
+                            :class="{'needs-confirm': item.status === 'similar' || item.status === 'answerConflict'}">
+
+                            <div class="confirm-question-main">
+                                <div class="confirm-question-title">
+                                    <span class="material-status-chip" :class="externalStatusClass(item.status)" :title="item.reason">
+                                        {{ externalStatusLabel(item.status) }}
+                                    </span>
+                                    <span>{{ item.question.type || '解答题' }}</span>
+                                    <span>｜</span>
+                                    <span>{{ item.question.diff || item.question.meta?.diff || '中等' }}</span>
+                                    <button class="confirm-expand-btn" @click="item.expanded = !item.expanded">{{ item.expanded ? '收起' : '展开' }}</button>
+                                </div>
+
+                                <div class="confirm-question-preview" :class="{'expanded': item.expanded}">
+                                    <latex-preview :content="item.question.stem" :images="item.question.images"></latex-preview>
+                                    <div v-if="item.expanded && (item.question.type === '单选题' || item.question.type === '多选题') && item.question.options && item.question.options.some(opt => String(opt || '').trim() !== '')" class="gaokao-options">
+                                        <div v-for="(opt, idx) in item.question.options" :key="idx" class="gaokao-option">
+                                            <span class="option-label">{{String.fromCharCode(65+idx)}}.</span>
+                                            <span class="option-content">
+                                                <latex-preview :content="opt" :images="item.question.images"></latex-preview>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div v-if="item.expanded && (item.question.answer || item.question.solution)" class="confirm-answer-block">
+                                        <div v-if="item.question.answer">
+                                            <strong>参考答案</strong>
+                                            <latex-preview :content="item.question.answer" :images="item.question.images"></latex-preview>
+                                        </div>
+                                        <div v-if="item.question.solution">
+                                            <strong>解析</strong>
+                                            <latex-preview :content="item.question.solution" :images="item.question.images"></latex-preview>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div v-if="item.status === 'similar' || item.status === 'answerConflict'" class="confirm-warning">
+                                    {{ item.reason }}。请人工确认处理方式，默认建议跳过。
+                                </div>
+
+                                <div v-if="item.status === 'similar' || item.status === 'answerConflict'" class="question-compare-grid">
+                                    <div class="compare-panel">
+                                        <h4>外部题</h4>
+                                        <latex-preview :content="item.question.stem" :images="item.question.images"></latex-preview>
+                                        <div v-if="item.question.options && item.question.options.some(opt => String(opt || '').trim() !== '')" class="compare-options">
+                                            <div v-for="(opt, idx) in item.question.options" :key="idx">{{ String.fromCharCode(65+idx) }}. {{ opt }}</div>
+                                        </div>
+                                        <div v-if="item.status === 'answerConflict'" class="compare-answer external">外部答案：{{ item.question.answer || '未提供' }}</div>
+                                    </div>
+                                    <div class="compare-panel">
+                                        <h4>本地匹配题</h4>
+                                        <template v-if="item.matchedQuestion">
+                                            <latex-preview :content="item.matchedQuestion.stem" :images="item.matchedQuestion.images"></latex-preview>
+                                            <div v-if="item.matchedQuestion.options && item.matchedQuestion.options.some(opt => String(opt || '').trim() !== '')" class="compare-options">
+                                                <div v-for="(opt, idx) in item.matchedQuestion.options" :key="idx">{{ String.fromCharCode(65+idx) }}. {{ opt }}</div>
+                                            </div>
+                                            <div v-if="item.status === 'answerConflict'" class="compare-answer local">本地答案：{{ item.matchedQuestion.answer || '未提供' }}</div>
+                                            <div v-if="item.status === 'similar'" class="compare-note">选项存在差异，请人工确认。</div>
+                                            <div v-if="!item.matchedQuestion.solution && item.question.solution" class="compare-note">可补全解析。</div>
+                                        </template>
+                                        <div v-else class="compare-note">未找到本地匹配题。</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="confirm-question-controls">
+                                <div class="material-field">
+                                    <label>个人知识点</label>
+                                    <select v-model="item.personalKnowledge">
+                                        <option value="">不选择</option>
+                                        <option v-for="node in flatPersonalKnowledge" :key="node.id" :value="node.name">
+                                            {{ node.path }}
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <div class="material-field">
+                                    <label>系统知识点</label>
+                                    <select v-model="item.systemKnowledge">
+                                        <option value="">不选择</option>
+                                        <option v-for="node in flatSystemKnowledge" :key="node.id" :value="node.name">
+                                            {{ node.path }}
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <div class="material-field">
+                                    <label>处理方式</label>
+                                    <select v-model="item.action">
+                                        <option value="add">加入为新题</option>
+                                        <option value="fill">补全已有题</option>
+                                        <option value="skip">跳过此题</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="external-confirm-footer">
+                        <button @click="view = 'library'" class="material-light-btn">返回选择</button>
+                        <button @click="confirmAddExternalToPersonal" class="material-primary-btn">确认加入</button>
+                    </div>
+                </div>
+
+                <!-- ================= 个人知识点管理 ================= -->
+                <div v-show="view === 'personal'" class="personal-layout flex flex-col gap-4 animate-fade-in">
+                    <div class="personal-tree-card bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+                        <h2 class="text-[18px] font-bold text-gray-800 flex items-center gap-2">
+                            <icon name="folder-tree" size="18" class="text-green-600"></icon>
+                            个人知识点管理
+                        </h2>
+                        <div class="personal-tree-add">
+                            <input class="input-base entry-compact-control" v-model="personalL1Name" @keyup.enter="createPersonalL1" placeholder="如：函数" />
+                            <button @click="createPersonalL1" class="px-4 py-2 bg-[#22a039] text-white rounded text-[12px] font-bold shrink-0 shadow-sm hover:bg-[#1b802d] transition-colors">添加知识点</button>
+                        </div>
+                    </div>
+
+                    <div class="personal-tree-table bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div class="personal-tree-header">
+                            <div>知识点名称</div>
+                            <div>排序</div>
+                            <div>操作</div>
+                        </div>
+                        <div v-if="personalKnowledgeTree.length === 0" class="text-center text-gray-400 text-[12px] py-16 bg-white">暂无知识点</div>
+                        <div v-else class="personal-tree-body">
+                            <div v-for="row in personalTreeRows" :key="row.node.id" class="personal-tree-row" :class="'level-' + row.level">
+                                <div class="personal-tree-name" :style="{ paddingLeft: (18 + (row.level - 1) * 28) + 'px' }">
+                                    <button v-if="row.hasChildren" @click="togglePersonalExpanded(row.node)" class="personal-tree-toggle" :class="{expanded: row.node.expanded !== false}">
+                                        <icon :name="row.node.expanded === false ? 'plus' : 'minus'" size="13"></icon>
+                                    </button>
+                                    <span v-else class="personal-tree-toggle placeholder"><icon name="plus" size="13"></icon></span>
+                                    <span class="font-bold truncate">{{row.node.name}}</span>
+                                </div>
+                                <div class="personal-tree-order">{{row.node.sort || 0}}</div>
+                                <div class="personal-tree-actions">
+                                    <button v-if="row.level < 3" @click="addPersonalChild(row)" class="tree-action text-blue-600">新增子节点</button>
+                                    <button @click="renamePersonalNode(row.node)" class="tree-action text-blue-600">修改</button>
+                                    <button @click="deletePersonalRow(row)" class="tree-action text-red-500">删除</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================= 组卷视图 ================= -->
+                <div v-show="view === 'exam'" class="exam-builder h-[calc(100vh-40px)] animate-fade-in">
+                    <section class="exam-workbench bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
+                            <div>
+                                <h1 class="text-[20px] font-black text-gray-900">快速组卷</h1>
+                                <div class="text-[12px] font-bold text-gray-400 mt-1">已选 {{cart.length}} 题，总分 {{cartQuestionsOrdered.reduce((s,q)=>s+Number(examQuestionMeta[q.id]?.points||0),0)}} 分</div>
+                            </div>
+                            <div class="flex gap-2">
+                                <button @click="resetExamOrder" class="px-3 py-1.5 border border-gray-200 rounded text-[12px] font-bold text-gray-600 hover:bg-gray-50">重置排序</button>
+                            </div>
+                        </div>
+
+                        <div class="exam-question-list custom-scrollbar">
+                            <div v-if="cart.length === 0" class="h-full flex flex-col items-center justify-center text-gray-400">
+                                <icon name="shopping-basket" size="48" class="mb-3 opacity-20"></icon>
+                                <p class="text-[13px]">试卷为空，请去题库挑选题目</p>
+                            </div>
+                            <section v-for="group in activeExamGroups" :key="group.type" class="exam-group-block">
+                                <div class="exam-group-editor">
+                                    <input class="input-base entry-compact-control font-bold" v-model="examGroupConfig[group.type].text" @focus="syncExamGroups" />
+                                </div>
+                                <template v-for="q in group.items" :key="q.id">
+                                <article v-if="examQuestionMeta[q.id]"
+                                    :data-exam-qid="q.id"
+                                    @pointerdown="startExamPointerDrag(q.id, $event)"
+                                    :class="['exam-edit-card group', draggingExamQuestionId === q.id ? 'dragging' : '', dragOverExamQuestionId === q.id && draggingExamQuestionId !== q.id ? 'drag-over' : '']">
+                                    <div class="exam-card-tools">
+                                        <button @click.stop="moveCartQuestion(q.id, -1)" class="icon-tool" title="上移"><icon name="arrow-up" size="13"></icon></button>
+                                        <button @click.stop="moveCartQuestion(q.id, 1)" class="icon-tool" title="下移"><icon name="arrow-down" size="13"></icon></button>
+                                    </div>
+                                    <div class="exam-index">{{examDisplayIndex(q.id)}}</div>
+                                    <div class="flex-1 min-w-0">
+                                        <latex-preview :content="q?.stem" :images="q?.images || []"></latex-preview>
+                                        <div v-if="(q?.type === '单选题' || q?.type === '多选题') && q?.options && q.options.some(opt => String(opt || '').trim() !== '')" class="gaokao-options">
+                                            <div v-for="(opt, idx) in q.options" :key="idx" class="gaokao-option">
+                                                <span class="option-label">{{String.fromCharCode(65+idx)}}.</span>
+                                                <span class="option-content"><latex-preview :content="opt" :images="q.images"></latex-preview></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button @click.stop="toggleCart(q.id)" class="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-500 transition-all self-start rounded" title="移除此题"><icon name="x" size="14"></icon></button>
+                                </article>
+                                </template>
+                            </section>
+                        </div>
+                    </section>
+
+                    <aside class="exam-config-panel bg-white rounded-xl shadow-sm border border-gray-200">
+                        <div class="p-5 border-b border-gray-100">
+                            <label class="text-[11px] font-bold text-gray-500 mb-1.5 block">选择模板</label>
+                            <select class="input-base" v-model="selectedExamTemplate">
+                                <option v-for="(tpl, key) in examPresets" :key="key" :value="key">{{tpl.name}}</option>
+                            </select>
+                            <p class="text-[11px] text-gray-400 mt-2">{{selectedExamPreset.desc}}</p>
+                        </div>
+
+                        <div class="p-5 space-y-4 overflow-y-auto custom-scrollbar flex-1">
+                            <div class="config-title"><span></span>模板配置<span></span></div>
+                            <div class="space-y-1.5">
+                                <label class="config-label">试卷标题</label>
+                                <input class="input-base" v-model="examConfig.title" />
+                            </div>
+                            <div class="space-y-1.5">
+                                <label class="config-label">副标题 / 学科</label>
+                                <input class="input-base" v-model="examConfig.subtitle" />
+                            </div>
+                            <div class="space-y-1.5">
+                                <label class="config-label">组卷人</label>
+                                <input class="input-base" v-model="examConfig.organizer" />
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div class="space-y-1.5">
+                                    <label class="config-label">页面类型</label>
+                                    <select class="input-base" v-model="examConfig.paperSize"><option>A4</option><option>A3</option></select>
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="config-label">字号</label>
+                                    <select class="input-base" v-model="examConfig.fontSize"><option>小四</option><option>五号</option></select>
+                                </div>
+                            </div>
+                            <div class="space-y-1.5">
+                                <label class="config-label">试卷类型</label>
+                                <select class="input-base" v-model="examConfig.paperType"><option>普通试卷</option><option>教师版</option><option>学生版</option></select>
+                            </div>
+                            <div class="space-y-1.5">
+                                <label class="config-label">字体</label>
+                                <select class="input-base" v-model="examConfig.fontFamily"><option>思源宋体</option><option>霞鹜文楷</option></select>
+                            </div>
+                            <div class="space-y-1.5">
+                                <label class="config-label">主题色</label>
+                                <input type="color" class="w-12 h-8 p-0 border border-gray-200 rounded" v-model="examConfig.themeColor" />
+                            </div>
+                            <div class="config-title"><span></span>显示内容<span></span></div>
+                            <div class="space-y-1.5">
+                                <label class="config-label">导出方式</label>
+                                <div class="grid grid-cols-1 gap-2">
+                                    <button @click="exportMode='questions'" :class="['py-2 border rounded text-[12px] font-bold transition-all', exportMode==='questions' ? 'border-[#22a039] bg-green-50 text-[#22a039]' : 'border-gray-200 text-gray-500 hover:bg-gray-50']">只打印题目</button>
+                                    <button @click="exportMode='withAnswers'" :class="['py-2 border rounded text-[12px] font-bold transition-all', exportMode==='withAnswers' ? 'border-[#22a039] bg-green-50 text-[#22a039]' : 'border-gray-200 text-gray-500 hover:bg-gray-50']">一份 PDF：题目后另起新页印答案</button>
+                                    <button @click="exportMode='split'" :class="['py-2 border rounded text-[12px] font-bold transition-all', exportMode==='split' ? 'border-[#22a039] bg-green-50 text-[#22a039]' : 'border-gray-200 text-gray-500 hover:bg-gray-50']">两份 PDF：题目和答案分开</button>
+                                </div>
+                            </div>
+                            <div class="config-title"><span></span>模板特性<span></span></div>
+                            <label v-for="item in templateFeatureOptions" :key="item.key" class="config-check">
+                                <input type="checkbox" v-model="examConfig[item.key]" /> {{item.label}}
+                            </label>
+                            <div v-if="selectedExamTemplate === 'quizSheet' && examConfig.showAnswerGrid" class="grid grid-cols-3 gap-2">
+                                <div class="space-y-1.5">
+                                    <label class="config-label">答题表题数</label>
+                                    <input type="number" min="1" max="20" class="input-base" v-model.number="examConfig.answerGridCount" />
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="config-label">下划线起号</label>
+                                    <input type="number" min="1" max="99" class="input-base" v-model.number="examConfig.answerLineStart" />
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="config-label">下划线数量</label>
+                                    <input type="number" min="0" max="10" class="input-base" v-model.number="examConfig.answerLineCount" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="p-5 border-t border-gray-100 bg-white">
+                            <button @click="finishExamBuild" :disabled="printBusy" :class="['w-full py-3 text-white rounded text-[14px] font-bold shadow-sm transition-colors', printBusy ? 'bg-gray-400 cursor-wait' : 'bg-[#22a039] hover:bg-[#1b802d]']">{{printBusy ? '正在准备打印...' : '打印 PDF'}}</button>
+                        </div>
+                    </aside>
+                </div>
+
+                <!-- ================= 模板视图 ================= -->
+                <div v-show="view === 'template'" class="template-layout flex flex-col xl:flex-row gap-5 animate-fade-in">
+                    <div class="w-full xl:w-[400px] bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
+                        <h2 class="text-[16px] font-bold mb-4 flex items-center gap-1.5"><icon name="layout-template" class="text-blue-600" size="18"></icon> 模板预设库</h2>
+                        <div class="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                            <div v-for="tpl in allTemplateCards" :key="tpl.id" @click="selectTemplateCard(tpl)" :class="['p-3 rounded-lg border cursor-pointer transition-all relative group', currentPresetKey === tpl.id ? 'border-[#1a73e8] bg-[#f8faff]' : 'border-gray-100 hover:border-gray-300 hover:bg-gray-50']">
+                                <h3 :class="['font-bold text-[12px] flex items-center gap-1.5 pr-5', currentPresetKey === tpl.id ? 'text-[#1a73e8]' : 'text-gray-800']">
+                                    <icon :name="tpl.system ? 'layout-template' : 'code-2'" size="14"></icon>
+                                    {{tpl.name}}
+                                </h3>
+                                <button v-if="!tpl.system" @click.stop="deleteCustomTemplate(tpl.id)" class="absolute right-1.5 top-1.5 p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded shadow-sm border border-gray-100">
+                                    <icon name="trash-2" size="12"></icon>
+                                </button>
+                            </div>
+
+                            <!-- 新建按钮移到底部 -->
+                            <button @click="triggerNewCustomTemplate" class="w-full py-2 border border-dashed border-gray-300 text-gray-500 rounded-lg font-bold text-[12px] flex items-center justify-center gap-1.5 hover:border-[#1a73e8] hover:text-[#1a73e8] hover:bg-blue-50 transition-colors">
+                                <icon name="plus" size="14"></icon> 新建模板
+                            </button>
+
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-gray-100">
+                            <button @click="setGlobalTemplate" class="w-full py-2 bg-[#1a73e8] text-white rounded-lg font-bold text-[12px] shadow-sm hover:bg-[#1557b0] transition-all flex items-center justify-center gap-1.5">
+                                <icon name="save" size="14"></icon> 设为全局排版配置
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex-1 bg-white p-6 rounded-xl border flex flex-col min-w-0">
+                        <div class="flex justify-between items-end mb-4">
+                            <h3 class="text-[16px] font-bold flex items-center gap-1.5"><icon name="code-2" class="text-gray-400" size="18"></icon> 高级源码编辑器</h3>
+                            <div class="flex items-center gap-2">
+                                <input class="w-40 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded text-[12px] font-bold outline-none focus:border-orange-400" placeholder="模板名称" v-model="editTplName" />
+                                <button @click="editMode === 'new' ? saveNewCustomTemplate() : updateExistingCustomTemplate()" class="bg-orange-500 text-white px-3 py-1.5 rounded text-[12px] font-bold flex items-center gap-1">
+                                    <icon name="save" size="14"></icon> {{editMode === 'new' ? '保存为新模板' : '更新当前模板'}}
+                                </button>
+                            </div>
+                        </div>
+                        <div class="flex-1 bg-[#1e1e1e] rounded-xl border overflow-hidden relative">
+                            <div class="absolute top-3 right-3 flex gap-1.5 z-10">
+                                <span class="text-[9px] font-mono bg-gray-700 px-1.5 py-0.5 rounded text-gray-300" v-pre>{{EXAM_TITLE}}</span>
+                                <span class="text-[9px] font-mono bg-gray-700 px-1.5 py-0.5 rounded text-gray-300" v-pre>{{QUESTIONS}}</span>
+                                <span class="text-[9px] font-mono bg-gray-700 px-1.5 py-0.5 rounded text-gray-300" v-pre>{{ANSWERS}}</span>
+                            </div>
+                            <textarea class="absolute inset-0 w-full h-full bg-transparent text-[#e5e7eb] font-mono text-[13px] p-6 pt-10 outline-none resize-none custom-scrollbar leading-loose" v-model="latexTemplate" @input="handleCodeInput" spellcheck="false"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </main>
+            
+            <!-- 悬浮贴边：试卷篮浮动按钮 -->
+            <div v-if="cartPanelAvailable" @click="isCartOpen = true" class="fixed right-0 top-1/2 -translate-y-1/2 bg-[#22a039] text-white w-12 h-14 rounded-l-[12px] shadow-[-4px_0_15px_rgba(34,160,57,0.3)] flex flex-col items-center justify-center cursor-pointer hover:bg-[#1b802d] hover:-translate-x-1 transition-all z-30 group border-y border-l border-white/20" title="打开试卷篮">
+                <icon name="shopping-basket" size="20" class="group-hover:scale-110 transition-transform ml-1"></icon>
+                <div v-if="cart.length > 0" class="absolute -top-2 -left-2 bg-red-500 text-white text-[10px] font-bold min-w-[20px] px-1 h-5 rounded-full flex items-center justify-center border border-white shadow-sm animate-in zoom-in duration-300">
+                    {{cart.length}}
+                </div>
+            </div>
+
+            <!-- 右侧滑动弹出：试卷篮侧边抽屉 -->
+            <div v-if="cartPanelAvailable" v-show="isCartOpen" class="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-40 transition-opacity duration-300" @click="isCartOpen = false"></div>
+            
+            <div v-if="cartPanelAvailable" class="fixed top-0 right-0 h-full w-[340px] bg-[#f8f9fa] shadow-[-10px_0_40px_rgba(0,0,0,0.1)] z-50 flex flex-col transition-transform duration-300 ease-out border-l border-white/40"
+                 :style="{ transform: isCartOpen ? 'translateX(0)' : 'translateX(100%)' }">
+                
+                <div class="px-4 py-3 bg-white border-b border-gray-100 flex justify-between items-center shrink-0">
+                    <h3 class="text-[15px] font-black flex items-center gap-1.5 text-gray-800">
+                        <div class="p-1.5 bg-green-100 text-green-600 rounded-lg"><icon name="shopping-basket" size="16"></icon></div> 
+                        试卷篮
+                        <span class="text-[11px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full border border-green-100 ml-1">{{cart.length}}</span>
+                    </h3>
+                    <div class="flex items-center gap-1.5">
+                        <button v-if="cart.length > 0" @click="clearCart" class="px-2 py-1 text-[11px] font-bold text-red-500 hover:bg-red-50 rounded transition-colors">全部移除</button>
+                        <button @click="isCartOpen = false" class="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors">
+                            <icon name="x" size="18"></icon>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto p-3 custom-scrollbar relative">
+                    <div v-if="cart.length === 0" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
+                        <icon name="inbox" size="40" class="mb-2 opacity-20"></icon>
+                        <p class="text-[12px] font-medium tracking-widest text-gray-400">尚未添加试题</p>
+                    </div>
+                    <div v-else class="space-y-2">
+                        <div v-for="(q, idx) in cartQuestions" :key="q.id" class="bg-white border border-gray-200 rounded-lg p-2.5 relative group hover:border-red-200 hover:shadow-sm transition-colors">
+                            <div class="flex justify-between items-center mb-1.5">
+                                <span class="text-[11px] font-bold text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded">{{idx+1}}. {{q?.type}}</span>
+                                <button @click="toggleCart(q.id)" class="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" title="移除此题">
+                                    <icon name="trash-2" size="12"></icon>
+                                </button>
+                            </div>
+                            <div class="text-[12px] text-gray-700 max-h-[50px] overflow-hidden relative">
+                                <latex-preview :content="q?.stem" :images="q?.images || []"></latex-preview>
+                                <div class="absolute bottom-0 left-0 right-0 h-5 bg-gradient-to-t from-white to-transparent"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-4 bg-white border-t border-gray-100 flex flex-col gap-2 shrink-0">
+                    <div class="flex justify-between items-center px-1">
+                        <span class="text-gray-500 font-bold text-[12px]">合计：<span class="text-[#22a039] text-[16px] mx-1">{{cart.length}}</span> 题</span>
+                    </div>
+                    <button @click="openExamBuilder" class="w-full py-2 bg-[#22a039] text-white rounded-lg text-[13px] font-bold shadow-md shadow-green-200 hover:bg-[#1b802d] transition-all flex items-center justify-center gap-1.5">
+                        前往排版 <icon name="arrow-right" size="14"></icon>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
+    <script src="./qisi-config.js?v=foundation-01"></script>
+    <script src="./qisi-runtime.js?v=foundation-01"></script>
+    <script src="./qisi-utils.js?v=foundation-01"></script>
+    <script src="./qisi-db.js?v=foundation-01"></script>
+    <script src="./qisi-backup.js?v=foundation-01"></script>
+    <script src="./qisi-components.js?v=foundation-01"></script>
+    <script src="./qisi-batch-importer.js?v=foundation-01"></script>
+    <script src="./qisi-support-parser.js?v=stage1a-support-parser-04"></script>
+    <script src="./qisi-support-repair.js?v=stage1a-support-repair-01"></script>
+    <script src="./qisi-pdf-support-aligner.js?v=stageC5A-pdf-support-aligner-01"></script>
+    <script src="./qisi-pdf-support-block-parser.js?v=stageC7E-block-parser-01"></script>
+    <script src="./qisi-pdf-support-controlled-write.js?v=stageC7T-field-write-01"></script>
+    <script src="./app.js?v=latex-display-options-guard-01"></script>
+</body>
+</html>
