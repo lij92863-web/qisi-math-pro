@@ -84,6 +84,25 @@ Mock gate result:
 
 `qisi-support-parser.js` was inspected but not modified because the failure reproduced and repaired in the block parser layer.
 
+## P6 Real-Run Outcome
+
+After commit `f8096dd`, one authorized real-run was executed:
+
+- Attempt: 5
+- Result: `pass-safe-partial`
+- Question count: 12
+- Answer count: 12
+- Draft solution count: 1
+- `supportRawPageCount`: 4
+- `supportBlockCount`: 1
+- `answerBlockCount`: 1
+- `solutionBlockCount`: 1
+- `supportDetectedNumbers`: 7
+- Align mode: `fail-closed`
+- Missing solutions: 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 15
+
+This proves the parser marker coverage fix moved the real chain from zero support blocks to one support block, but it did not complete case02. Per P6, the task stops here and must return to fixture-first parser coverage rather than continuing real runs.
+
 ## Forbidden Fixes
 
 - No semantic guessing.
