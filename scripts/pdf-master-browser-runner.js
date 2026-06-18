@@ -15,6 +15,8 @@ const STAGE6_REPORT_PATH = path.join(
     'testing',
     'PDF_MASTER_STAGE6_REAL_VALIDATION_REPORT.md'
 );
+const WRITE_STAGE6_REPORT =
+    process.env.QISI_WRITE_STAGE6_REPORT === '1';
 const QUESTION_PDF = path.join(
     ROOT,
     'local-test-materials',
@@ -379,6 +381,84 @@ const installPdfSupportSolutionDiagnostics = async page => {
             });
             return counts;
         };
+        const rawTextFromPageValue = value => {
+            if (typeof value === 'string') return value;
+            if (!value || typeof value !== 'object') return '';
+
+            return String(
+                value.text ||
+                value.rawText ||
+                value.content ||
+                value.markdown ||
+                value.pageMarkdown ||
+                ''
+            );
+        };
+        const rawTextPagesFromParserConfig = config => {
+            const pages = [];
+            (config?.rawTextPages || []).forEach(value => {
+                const text =
+                    rawTextFromPageValue(value);
+                if (text) pages.push(text);
+            });
+            [...(config?.answers || []), ...(config?.solutions || [])]
+                .forEach(item => {
+                    const trace =
+                        item?.sourceTrace || {};
+                    const text =
+                        rawTextFromPageValue(
+                            trace.pageText ||
+                            item?.pageText ||
+                            item?.sourceText ||
+                            ''
+                        );
+                    if (text) pages.push(text);
+                });
+
+            const seen = new Set();
+            return pages.filter(text => {
+                if (seen.has(text)) return false;
+                seen.add(text);
+                return true;
+            });
+        };
+        const markerLineFingerprint = line => {
+            const text =
+                String(line || '').trim();
+            const looksLikeSupportMarker =
+                /答案|解析|详解|参考|第\s*[0-9０-９]{1,3}\s*题/.test(text) ||
+                /^[0-9０-９]{1,3}\s*[.、)）]/.test(text) ||
+                /绛|瑙|棰|銆|瓟|妗/.test(text);
+
+            if (!looksLikeSupportMarker) return '';
+
+            return text
+                .replace(/[0-9０-９]+/g, '#')
+                .replace(/[A-Za-z]+/g, 'A')
+                .replace(/[\u4e00-\u9fff]+/g, 'C')
+                .replace(/\s+/g, '_')
+                .slice(0, 80);
+        };
+        const collectSolutionMarkerForms = config => {
+            const counts = new Map();
+            rawTextPagesFromParserConfig(config)
+                .flatMap(text => String(text || '').replace(/\r/g, '\n').split('\n'))
+                .map(markerLineFingerprint)
+                .filter(Boolean)
+                .forEach(form => {
+                    counts.set(form, (counts.get(form) || 0) + 1);
+                });
+
+            const forms =
+                [...counts.entries()]
+                .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+                .slice(0, 40)
+                .map(([form, count]) => `${form} x${count}`);
+
+            return forms.length
+                ? forms
+                : ['none-detected-from-sanitized-fingerprint'];
+        };
 
         window.__qisiPdfSupportSolutionDiag = {
             parserGate: null,
@@ -397,6 +477,8 @@ const installPdfSupportSolutionDiagnostics = async page => {
             controlled.buildPdfSupportFieldLevelControlledWrite;
 
         controlled.buildPdfSupportParserGate = function (...args) {
+            const parserConfig =
+                args[0] || {};
             const result =
                 originalParserGate.apply(this, args);
             const parserResult =
@@ -479,7 +561,7 @@ const installPdfSupportSolutionDiagnostics = async page => {
                 failClosedReason:
                     result?.failClosed ? unique(report.reasons || []) : [],
                 solutionMarkerForms:
-                    ['not-collected-without-raw-text'],
+                    collectSolutionMarkerForms(parserConfig),
                 writableSolutionNumbers:
                     numbersFromItems(result?.solutions || []),
                 blockedSolutionNumbers:
@@ -1101,7 +1183,9 @@ const runRealRun = async () => {
             };
 
         await writeArtifacts(report, ledgerEntry);
-        await appendStage6Report(report);
+        if (WRITE_STAGE6_REPORT) {
+            await appendStage6Report(report);
+        }
         return report;
     }
 
@@ -1465,7 +1549,9 @@ const runRealRun = async () => {
             };
 
         await writeArtifacts(report, ledgerEntry);
-        await appendStage6Report(report);
+        if (WRITE_STAGE6_REPORT) {
+            await appendStage6Report(report);
+        }
         return report;
     } catch (error) {
         warnings.push('real-run-exception');
@@ -1501,7 +1587,9 @@ const runRealRun = async () => {
             };
 
         await writeArtifacts(report, ledgerEntry);
-        await appendStage6Report(report);
+        if (WRITE_STAGE6_REPORT) {
+            await appendStage6Report(report);
+        }
         return report;
     } finally {
         if (browser) {

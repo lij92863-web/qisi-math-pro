@@ -16,6 +16,7 @@ const {
     require('../qisi-pdf-support-block-parser.js');
 
 const {
+    buildPdfSupportParserGate,
     buildPdfSupportFieldLevelControlledWrite,
     normalizeObjectiveAnswerToLabels
 } =
@@ -26,6 +27,11 @@ const pdfKnownBad =
 
 const docxStable =
     require('./fixtures/docx-docx-stable.js');
+
+const {
+    case02SolutionDiagnostic
+} =
+    require('./fixtures/pdf-real-case-minimal.js');
 
 const AI_ENDPOINTS =
     ['/api/ai/ocr', '/api/ai/chat'];
@@ -536,6 +542,94 @@ test(
         assert.equal(byQuestion.get('8').answer, '');
         assert.equal(byQuestion.get('8').solution, '');
         assert.ok(byQuestion.get('8').warnings.includes('pdf-support-sequence-unreliable'));
+    }
+);
+
+test(
+    'case02 diagnostic mock keeps full answers but only safe solution 1',
+    () => {
+        const restore =
+            installAiEndpointGuards();
+
+        try {
+            const fixture =
+                case02SolutionDiagnostic;
+            const parserGate =
+                buildPdfSupportParserGate({
+                    parsePdfSupportBlocks,
+                    alignPdfSupport,
+                    expectedQuestionNumbers:
+                        fixture.expectedQuestionNumbers,
+                    rawTextPages:
+                        fixture.parserRawTextPages
+                });
+            const controlled =
+                buildPdfSupportFieldLevelControlledWrite({
+                    drafts:
+                        fixture.questionItems,
+                    legacySafeAnswerItems:
+                        fixture.legacySafeAnswerItems,
+                    legacySafeSolutionItems:
+                        fixture.legacySafeSolutionItems,
+                    parserSafeAnswerItems:
+                        parserGate.answers,
+                    parserSafeSolutionItems:
+                        parserGate.solutions,
+                    parserFusedQuestionNumbers:
+                        parserGate.fusedQuestionNumbers
+                });
+            const solutionByQuestion =
+                indexSupportItems(controlled.effectiveSolutionItems);
+            const fused =
+                new Set(parserGate.fusedQuestionNumbers);
+            const draftItems =
+                fixture.questionItems.map(item => {
+                    const question =
+                        normalizeSupportQuestionNumber(item.question);
+
+                    return {
+                        ...item,
+                        solution:
+                            solutionByQuestion.get(question)?.solution || '',
+                        warnings:
+                            fused.has(question)
+                                ? ['pdf-support-sequence-unreliable']
+                                : []
+                    };
+                });
+            const missingSolutions =
+                draftItems
+                    .filter(item => !item.solution)
+                    .map(item => item.question);
+
+            assert.equal(draftItems.length, fixture.expected.questionCount);
+            assert.equal(
+                draftItems.filter(item => item.answer).length,
+                fixture.expected.answerCount
+            );
+            assert.equal(
+                draftItems.filter(item => item.solution).length,
+                fixture.expected.solutionCount
+            );
+            assert.deepEqual(
+                missingSolutions,
+                fixture.expected.missingSolutions
+            );
+            assert.equal(parserGate.mode, fixture.expected.mode);
+            assert.equal(parserGate.failClosed, true);
+            assert.equal(
+                parserGate.parserResult.blocks.length,
+                fixture.expected.supportBlockCount
+            );
+            assert.deepEqual(
+                controlled.solutionQuestionNumbers,
+                fixture.expected.writableSolutionNumbers
+            );
+            assert.equal(fixture.expected.coverageState, 'incomplete');
+            assert.equal(fixture.expected.targetState, 'complete');
+        } finally {
+            restore();
+        }
     }
 );
 

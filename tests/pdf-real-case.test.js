@@ -22,7 +22,9 @@ const {
 
 const {
     missingAnswerWithSolution,
-    parserStricterThanLegacy
+    parserStricterThanLegacy,
+    case02SolutionDiagnostic,
+    objectRawTextPageParserGate
 } =
     require('./fixtures/pdf-real-case-minimal.js');
 
@@ -168,6 +170,160 @@ test(
                 decision.field === 'answer' &&
                 decision.source === 'legacy'
             )
+        );
+    }
+);
+
+test(
+    'parser gate preserves object raw text pages before support alignment',
+    () => {
+        const fixture =
+            objectRawTextPageParserGate;
+        const parserGate =
+            buildPdfSupportParserGate({
+                parsePdfSupportBlocks,
+                alignPdfSupport,
+                file: {
+                    id:
+                        fixture.id,
+                    filename:
+                        'SANITIZED_SUPPORT.pdf'
+                },
+                expectedQuestionNumbers:
+                    fixture.expectedQuestionNumbers,
+                rawTextPages:
+                    fixture.rawTextPages
+            });
+
+        assert.equal(
+            parserGate.rawTextPagesCount,
+            fixture.expected.rawTextPagesCount
+        );
+        assert.equal(
+            parserGate.parserResult.blocks.length,
+            fixture.expected.supportBlockCount
+        );
+        assert.equal(
+            parserGate.mode,
+            fixture.expected.parserMode
+        );
+        assert.deepEqual(
+            parserGate.answers.map(item => item.question),
+            fixture.expected.answerQuestionNumbers
+        );
+        assert.deepEqual(
+            parserGate.solutions.map(item => item.question),
+            fixture.expected.solutionQuestionNumbers
+        );
+        assert.deepEqual(
+            parserGate.fusedQuestionNumbers,
+            fixture.expected.fusedQuestionNumbers
+        );
+    }
+);
+
+test(
+    'case02 diagnostic fixture keeps answer-full solution-partial state fail-closed',
+    () => {
+        const fixture =
+            case02SolutionDiagnostic;
+        const parserGate =
+            buildPdfSupportParserGate({
+                parsePdfSupportBlocks,
+                alignPdfSupport,
+                file: {
+                    id:
+                        fixture.id,
+                    filename:
+                        'SANITIZED_SUPPORT.pdf'
+                },
+                expectedQuestionNumbers:
+                    fixture.expectedQuestionNumbers,
+                rawTextPages:
+                    fixture.parserRawTextPages
+            });
+
+        assert.equal(
+            fixture.questionItems.length,
+            fixture.expected.questionCount
+        );
+        assert.equal(
+            fixture.questionItems.filter(item => item.answer).length,
+            fixture.expected.answerCount
+        );
+        assert.equal(
+            parserGate.rawTextPagesCount,
+            fixture.expected.supportRawPageCount
+        );
+        assert.equal(
+            parserGate.parserResult.blocks.length,
+            fixture.expected.supportBlockCount
+        );
+        assert.deepEqual(
+            parserGate.parserResult.answerItems.map(item => item.question),
+            fixture.expected.answerDetectedNumbers
+        );
+        assert.deepEqual(
+            parserGate.parserResult.solutionItems.map(item => item.question),
+            fixture.expected.solutionDetectedNumbers
+        );
+        assert.equal(
+            parserGate.mode,
+            fixture.expected.mode
+        );
+        assert.equal(
+            parserGate.failClosed,
+            fixture.expected.failClosed
+        );
+        assert.ok(
+            parserGate.report.reasons.includes(
+                'support-question-set-not-equal-expected'
+            )
+        );
+        assert.deepEqual(
+            parserGate.fusedQuestionNumbers,
+            fixture.expected.fusedQuestionNumbers
+        );
+
+        const controlled =
+            buildPdfSupportFieldLevelControlledWrite({
+                drafts:
+                    fixture.questionItems,
+                legacySafeAnswerItems:
+                    fixture.legacySafeAnswerItems,
+                legacySafeSolutionItems:
+                    fixture.legacySafeSolutionItems,
+                parserSafeAnswerItems:
+                    parserGate.answers,
+                parserSafeSolutionItems:
+                    parserGate.solutions,
+                parserFusedQuestionNumbers:
+                    parserGate.fusedQuestionNumbers
+            });
+
+        assert.deepEqual(
+            controlled.solutionQuestionNumbers,
+            fixture.expected.writableSolutionNumbers
+        );
+        assert.equal(
+            controlled.solutionQuestionNumbers.length,
+            fixture.expected.solutionCount
+        );
+        assert.deepEqual(
+            fixture.expected.rejectedSolutionNumbers,
+            []
+        );
+        assert.deepEqual(
+            fixture.expected.outOfRangeNumbers,
+            []
+        );
+        assert.equal(
+            fixture.expected.coverageState,
+            'incomplete'
+        );
+        assert.equal(
+            fixture.expected.targetState,
+            'complete'
         );
     }
 );

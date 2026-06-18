@@ -292,6 +292,41 @@ test(
 );
 
 test(
+    'raw support pages with no block markers remain incomplete and safe',
+    () => {
+        const result =
+            parsePdfSupportBlocks({
+                rawTextPages: [
+                    'CASE02_SANITIZED_UNPARSED_SUPPORT_PAGE_1',
+                    'CASE02_SANITIZED_UNPARSED_SUPPORT_PAGE_2',
+                    'CASE02_SANITIZED_UNPARSED_SUPPORT_PAGE_3',
+                    'CASE02_SANITIZED_UNPARSED_SUPPORT_PAGE_4'
+                ],
+                expectedQuestionNumbers:
+                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 15],
+                sourceFileId:
+                    'case02-sanitized-support'
+            });
+
+        assert.equal(result.blocks.length, 0);
+        assert.deepEqual(result.answerItems, []);
+        assert.deepEqual(result.solutionItems, []);
+        assert.deepEqual(
+            result.coverageReport.missingBlocks,
+            ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15']
+        );
+        assert.deepEqual(
+            result.coverageReport.missingSolutions,
+            result.coverageReport.missingBlocks
+        );
+        assert.deepEqual(
+            result.sequenceReport.questionNumbers,
+            []
+        );
+    }
+);
+
+test(
     'exports marker and raw page helpers',
     () => {
         assert.deepEqual(

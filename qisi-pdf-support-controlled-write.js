@@ -9,6 +9,15 @@
     const cleanText = value =>
         String(value ?? '').replace(/\r\n?/g, '\n').trim();
 
+    const positiveNumberOr = (value, fallback) => {
+        const number =
+            Number(value);
+
+        return Number.isFinite(number) && number > 0
+            ? number
+            : fallback;
+    };
+
     const stripMathShell = value =>
         cleanText(value)
             .replace(/^\s*\$+|\$+\s*$/g, '')
@@ -272,14 +281,42 @@
         });
 
         (providedRawTextPages || []).forEach((value, index) => {
-            const text = cleanText(value);
+            const text =
+                cleanText(
+                    typeof value === 'string'
+                        ? value
+                        : (
+                            value?.text ||
+                            value?.rawText ||
+                            value?.content ||
+                            value?.markdown ||
+                            value?.pageMarkdown ||
+                            ''
+                        )
+                );
             if (!text) return;
 
-            const pageNo = index + 1;
+            const fallbackPageNo =
+                index + 1;
+            const pageNo =
+                positiveNumberOr(
+                    value?.sourceOrder ||
+                    value?.pageIndex ||
+                    value?.sourcePage ||
+                    value?.pageNo,
+                    fallbackPageNo
+                );
+            const pageIndex =
+                positiveNumberOr(
+                    value?.pageIndex ||
+                    value?.sourcePage ||
+                    value?.pageNo,
+                    pageNo
+                );
             const key = `${file?.id || ''}:provided:${pageNo}`;
             if (!pageMap.has(key)) {
                 pageMap.set(key, {
-                    pageIndex: pageNo,
+                    pageIndex,
                     sourceOrder: pageNo,
                     text
                 });

@@ -255,6 +255,34 @@ test(
 );
 
 test(
+    'case02 empty parser output fails closed with expected draft numbers fused',
+    () => {
+        const expectedQuestionNumbers =
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 15];
+        const result =
+            alignPdfSupport({
+                answerItems: [],
+                solutionItems: [],
+                expectedQuestionNumbers
+            });
+
+        assert.equal(result.mode, 'fail-closed');
+        assert.equal(result.reliable, false);
+        assert.deepEqual(result.safeAnswerItems, []);
+        assert.deepEqual(result.safeSolutionItems, []);
+        assert.deepEqual(
+            result.fusedQuestionNumbers,
+            expectedQuestionNumbers.map(String)
+        );
+        assert.ok(
+            result.report.reasons.includes(
+                'support-question-set-not-equal-expected'
+            )
+        );
+    }
+);
+
+test(
     'normalizes fullwidth and labelled question numbers',
     () => {
         assert.equal(
