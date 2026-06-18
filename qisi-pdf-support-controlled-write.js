@@ -53,7 +53,7 @@
             .join('');
     };
 
-    const normalizeStructuralObjectiveLabelAnswer = (answerRaw, draft) => {
+    const inspectStructuralObjectiveLabelAnswer = (answerRaw, draft) => {
         const raw =
             stripMathShell(answerRaw);
 
@@ -61,7 +61,10 @@
             !/(^\s*\}|_)/.test(raw) ||
             /[0-9+\-=^]/.test(raw)
         ) {
-            return null;
+            return {
+                candidate: false,
+                reason: 'not-structural-label-shell'
+            };
         }
 
         const commands =
@@ -95,7 +98,12 @@
                 unsafeMathCommands.has(command.toLowerCase())
             )
         ) {
-            return null;
+            return {
+                ok: false,
+                candidate: true,
+                answer: '',
+                reason: 'unsafe-math-command'
+            };
         }
 
         const compact =
@@ -105,7 +113,10 @@
                 .toUpperCase();
 
         if (!/^[A-F]+$/.test(compact)) {
-            return null;
+            return {
+                candidate: true,
+                reason: 'non-label-payload'
+            };
         }
 
         const options =
@@ -120,6 +131,7 @@
         return allValid
             ? {
                 ok: true,
+                candidate: true,
                 answer:
                     compact,
                 reason:
@@ -129,12 +141,26 @@
             }
             : {
                 ok: false,
+                candidate: true,
                 answer: '',
                 reason:
                     'invalid-structural-option-label',
                 originalAnswer:
                     raw
             };
+    };
+
+    const normalizeStructuralObjectiveLabelAnswer = (answerRaw, draft) => {
+        const inspected =
+            inspectStructuralObjectiveLabelAnswer(answerRaw, draft);
+
+        return (
+            inspected.ok ||
+            inspected.reason === 'unsafe-math-command' ||
+            inspected.reason === 'invalid-structural-option-label'
+        )
+            ? inspected
+            : null;
     };
 
     const normalizeQuestionNumber = value => {
@@ -609,10 +635,19 @@
                         }));
                         fieldDecisions.push({ questionNumber, field: 'answer', source: 'parser', reason: normalized.reason });
                     } else {
+                        const structuralDiagnostic =
+                            inspectStructuralObjectiveLabelAnswer(
+                                getItemAnswer(parserAnswerItem),
+                                draft
+                            );
                         warnings.push({
                             questionNumber,
                             code: 'parser-objective-answer-rejected',
                             reason: normalized.reason,
+                            structuralCandidate:
+                                Boolean(structuralDiagnostic.candidate),
+                            structuralReason:
+                                structuralDiagnostic.reason || '',
                             originalAnswer:
                                 normalized.originalAnswer || getItemAnswer(parserAnswerItem)
                         });

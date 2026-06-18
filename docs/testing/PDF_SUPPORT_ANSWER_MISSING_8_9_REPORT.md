@@ -195,6 +195,40 @@ Updated structural option-label normalization:
 
 This keeps the repair focused on OCR structural shells and avoids converting ordinary formula variables into answers.
 
+## Real Verification Attempt 11
+
+- Runner: `node scripts/pdf-master-browser-runner.js --mode=real-run`
+- Attempt number: 11
+- New real API attempts used this task so far: 3
+- Result: `pass-safe-partial`
+- Question count: 12
+- Draft answer count: 10
+- Draft solution count: 12
+- Missing answers: 8, 9
+- Missing solutions: none
+- Parser support blocks: 12
+- Parser answer items: 12
+- Parser solution items: 12
+- Aligner output mode: `full`
+- Controlled-write solution count: 12
+
+Attempt 11 confirmed the third repair did not change the real draft outcome:
+
+- `rejectedAnswerNumbers`: 2, 8, 9
+- Missing draft answers remained 8 and 9.
+- Answers 8 and 9 still had reason `multiple-option-value-rejected`.
+- Answers 8 and 9 still had structural answer fingerprints shaped like `}A_\A{A}`.
+- Browser-side direct evaluation of the updated module accepts the sanitized sample `}A_\A{A}`, so the real raw answer has additional structure not represented by the existing fingerprint.
+
+## Fourth Fixture-First Diagnostic Repair
+
+Do not broaden answer writing yet. Instead, add a sanitized structural diagnostic to rejected objective-answer warnings:
+
+- `structuralCandidate`
+- `structuralReason`
+
+This is intentionally diagnostic-only. It should explain why the real answer 8 and 9 values do not enter structural label normalization before any broader write rule is considered.
+
 ## Disallowed Fixes
 
 Not used:

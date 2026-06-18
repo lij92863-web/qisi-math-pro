@@ -474,6 +474,39 @@ test(
         assert.equal(result.draftItems[0].solution, 'safe parser solution');
         assert.equal(result.field.warnings[0].code, 'parser-objective-answer-rejected');
         assert.equal(result.field.warnings[0].reason, 'ambiguous-option-value');
+        assert.equal(result.field.warnings[0].structuralCandidate, false);
+        assert.equal(
+            result.field.warnings[0].structuralReason,
+            'not-structural-label-shell'
+        );
+    }
+);
+
+test(
+    'field-level controlled write reports structural objective reject diagnostics',
+    () => {
+        const result =
+            mergePdfSupportFieldLevelMock({
+                questionItems: [
+                    {
+                        question: '1',
+                        type: 'multiple',
+                        options: ['A. VALUE_A', 'B. VALUE_B', 'C. VALUE_C', 'D. VALUE_D']
+                    }
+                ],
+                expectedQuestionNumbers: [1],
+                legacyAnswerItems: [],
+                legacySolutionItems: [],
+                parserAnswerItems: [{ question: '1', answer: 'A_\\frac{B}' }],
+                parserSolutionItems: [{ question: '1', solution: 'safe parser solution' }]
+            });
+
+        assert.equal(result.draftItems[0].answer, '');
+        assert.equal(result.draftItems[0].solution, 'safe parser solution');
+        assert.equal(result.field.warnings[0].code, 'parser-objective-answer-rejected');
+        assert.equal(result.field.warnings[0].reason, 'unsafe-math-command');
+        assert.equal(result.field.warnings[0].structuralCandidate, true);
+        assert.equal(result.field.warnings[0].structuralReason, 'unsafe-math-command');
     }
 );
 
@@ -596,7 +629,7 @@ test(
         assert.equal(rejectedFormula.ok, false);
         assert.equal(
             rejectedFormula.reason,
-            'multiple-option-value-rejected'
+            'unsafe-math-command'
         );
     }
 );

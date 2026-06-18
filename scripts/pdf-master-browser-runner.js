@@ -999,6 +999,10 @@ const installPdfSupportSolutionDiagnostics = async page => {
                             normalizeNumber(warning?.questionNumber),
                         reason:
                             warning?.reason || '',
+                        structuralCandidate:
+                            Boolean(warning?.structuralCandidate),
+                        structuralReason:
+                            warning?.structuralReason || '',
                         originalAnswerShape:
                             lineShapeFingerprint(warning?.originalAnswer || '')
                     }));
