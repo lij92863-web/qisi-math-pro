@@ -35,6 +35,24 @@
             .replace(/^\{|\}$/g, '')
             .toLowerCase();
 
+    const splitObjectiveAnswerValueSegments = value =>
+        stripMathShell(value)
+            .split(/[，,、;；]+/)
+            .map(segment => segment.trim())
+            .filter(Boolean);
+
+    const sortLabelsByOptionOrder = (labels, options) => {
+        const order =
+            new Map(options.map((option, index) => [option.label, index]));
+
+        return [...labels]
+            .sort((left, right) =>
+                (order.get(left) ?? 999) -
+                (order.get(right) ?? 999)
+            )
+            .join('');
+    };
+
     const normalizeQuestionNumber = value => {
         const match =
             String(value ?? '').match(/\d{1,3}/);
@@ -125,7 +143,52 @@
             };
         }
 
+        const target =
+            normalizeComparableMathText(raw);
+
         if (isMultipleDraft(draft)) {
+            const segments =
+                splitObjectiveAnswerValueSegments(raw);
+
+            if (segments.length >= 2) {
+                const labels = [];
+
+                for (const segment of segments) {
+                    const segmentTarget =
+                        normalizeComparableMathText(segment);
+                    const segmentMatches =
+                        options.filter(option =>
+                            normalizeComparableMathText(option.text) === segmentTarget
+                        );
+
+                    if (segmentMatches.length !== 1) {
+                        return {
+                            ok: false,
+                            answer: '',
+                            reason:
+                                segmentMatches.length > 1
+                                    ? 'ambiguous-multiple-option-value'
+                                    : 'multiple-option-value-not-matched',
+                            originalAnswer: raw
+                        };
+                    }
+
+                    labels.push(segmentMatches[0].label);
+                }
+
+                if (new Set(labels).size === labels.length) {
+                    return {
+                        ok: true,
+                        answer:
+                            sortLabelsByOptionOrder(labels, options),
+                        reason:
+                            'multiple-option-values-converted',
+                        originalAnswer:
+                            raw
+                    };
+                }
+            }
+
             return {
                 ok: false,
                 answer: '',
@@ -134,8 +197,6 @@
             };
         }
 
-        const target =
-            normalizeComparableMathText(raw);
         const matches =
             options.filter(option =>
                 normalizeComparableMathText(option.text) === target

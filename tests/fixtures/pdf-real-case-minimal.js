@@ -408,6 +408,105 @@ const attempt7ResidualMarkerFixture =
         }
     };
 
+const case02AnswerMissing89QuestionItems =
+    case02QuestionNumbers.map(number => {
+        if (number === 8) {
+            return {
+                question: '8',
+                questionNumber: '8',
+                stem: 'CASE02_SANITIZED_STEM_8',
+                type: 'multiple',
+                options: [
+                    'A. VALUE_8_A',
+                    'B. VALUE_8_B',
+                    'C. VALUE_8_C',
+                    'D. VALUE_8_D'
+                ]
+            };
+        }
+
+        if (number === 9) {
+            return {
+                question: '9',
+                questionNumber: '9',
+                stem: 'CASE02_SANITIZED_STEM_9',
+                type: 'multiple',
+                options: [
+                    'A. VALUE_9_A',
+                    'B. VALUE_9_B',
+                    'C. VALUE_9_C',
+                    'D. VALUE_9_D'
+                ]
+            };
+        }
+
+        return {
+            ...case02QuestionItems.find(item =>
+                String(item.question) === String(number)
+            ),
+            answer:
+                ''
+        };
+    });
+
+const case02AnswerMissing89Fixture =
+    {
+        id: 'case02-answer-missing-8-9-controlled-write',
+        description:
+            'Sanitized answer-side fixture: parser and aligner are full, solutions stay full, but multiple-choice answer values for 8 and 9 require safe segmented option-value conversion.',
+        expectedQuestionNumbers:
+            case02QuestionNumbers,
+        questionItems:
+            case02AnswerMissing89QuestionItems,
+        rawTextPages:
+            attempt7ResidualMarkerFixture.rawTextPages.map(page => {
+                const text =
+                    typeof page === 'string'
+                        ? page
+                        : page.text;
+                const nextText =
+                    String(text)
+                        .replace('A8', 'VALUE_8_A、VALUE_8_C')
+                        .replace('A9', 'VALUE_9_B;VALUE_9_D');
+
+                return typeof page === 'string'
+                    ? nextText
+                    : {
+                        ...page,
+                        text:
+                            nextText
+                    };
+            }),
+        expected: {
+            supportBlockCount:
+                12,
+            answerBlockCount:
+                12,
+            solutionBlockCount:
+                12,
+            answerDetectedNumbers:
+                ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
+            solutionDetectedNumbers:
+                ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
+            effectiveAnswerNumbers:
+                ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
+            effectiveSolutionNumbers:
+                ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
+            normalizedAnswers: {
+                8:
+                    'AC',
+                9:
+                    'BD'
+            },
+            missingAnswers:
+                [],
+            missingSolutions:
+                [],
+            convertedReason:
+                'multiple-option-values-converted'
+        }
+    };
+
 module.exports =
     {
         expectedQuestionNumbers,
@@ -418,5 +517,6 @@ module.exports =
         objectRawTextPageParserGate,
         markerCoverageFixture,
         realStyleSectionFixture,
-        attempt7ResidualMarkerFixture
+        attempt7ResidualMarkerFixture,
+        case02AnswerMissing89Fixture
     };

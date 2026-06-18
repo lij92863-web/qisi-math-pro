@@ -16,7 +16,8 @@ const {
 const {
     markerCoverageFixture,
     realStyleSectionFixture,
-    attempt7ResidualMarkerFixture
+    attempt7ResidualMarkerFixture,
+    case02AnswerMissing89Fixture
 } =
     require('./fixtures/pdf-real-case-minimal.js');
 
@@ -513,6 +514,44 @@ test(
             result.solutionItems[3].solution.includes(
                 'SOLUTION_4_LINE_2_CROSS_PAGE'
             )
+        );
+    }
+);
+
+test(
+    'case02 answer 8 and 9 fixture keeps parser answer and solution coverage full',
+    () => {
+        const fixture =
+            case02AnswerMissing89Fixture;
+        const result =
+            parsePdfSupportBlocks({
+                rawTextPages:
+                    fixture.rawTextPages,
+                expectedQuestionNumbers:
+                    fixture.expectedQuestionNumbers,
+                sourceFileId:
+                    fixture.id
+            });
+
+        assert.equal(
+            result.blocks.length,
+            fixture.expected.supportBlockCount
+        );
+        assert.deepEqual(
+            result.answerItems.map(item => item.question),
+            fixture.expected.answerDetectedNumbers
+        );
+        assert.deepEqual(
+            result.solutionItems.map(item => item.question),
+            fixture.expected.solutionDetectedNumbers
+        );
+        assert.equal(
+            result.coverageReport.missingAnswers.length,
+            0
+        );
+        assert.equal(
+            result.coverageReport.missingSolutions.length,
+            0
         );
     }
 );

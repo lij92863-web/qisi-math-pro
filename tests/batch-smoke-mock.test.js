@@ -32,7 +32,8 @@ const {
     case02SolutionDiagnostic,
     markerCoverageFixture,
     realStyleSectionFixture,
-    attempt7ResidualMarkerFixture
+    attempt7ResidualMarkerFixture,
+    case02AnswerMissing89Fixture
 } =
     require('./fixtures/pdf-real-case-minimal.js');
 
@@ -514,6 +515,49 @@ test(
 );
 
 test(
+    'field-level controlled write converts clearly segmented multiple-choice option values',
+    () => {
+        const result =
+            mergePdfSupportFieldLevelMock({
+                questionItems: [
+                    {
+                        question: '1',
+                        type: 'multiple',
+                        options: [
+                            'A. VALUE_A',
+                            'B. VALUE_B',
+                            'C. VALUE_C',
+                            'D. VALUE_D'
+                        ]
+                    }
+                ],
+                expectedQuestionNumbers: [1],
+                parserAnswerItems: [
+                    {
+                        question: '1',
+                        answer: 'VALUE_A、VALUE_C'
+                    }
+                ],
+                parserSolutionItems: [
+                    {
+                        question: '1',
+                        solution: 'safe parser solution'
+                    }
+                ]
+            });
+
+        assert.equal(result.draftItems[0].answer, 'AC');
+        assert.equal(result.draftItems[0].solution, 'safe parser solution');
+        assert.deepEqual(result.field.warnings, []);
+        assert.ok(
+            result.field.fieldDecisions.some(decision =>
+                decision.reason === 'multiple-option-values-converted'
+            )
+        );
+    }
+);
+
+test(
     'field-level controlled write does not write fused parser questions',
     () => {
         const result =
@@ -793,6 +837,68 @@ test(
             assert.deepEqual(
                 field.solutionQuestionNumbers,
                 fixture.expected.solutionDetectedNumbers
+            );
+            assert.deepEqual(
+                field.fusedQuestionNumbers,
+                []
+            );
+        } finally {
+            restore();
+        }
+    }
+);
+
+test(
+    'case02 answer 8 and 9 mock writes full answers and preserves twelve solutions',
+    () => {
+        const restore =
+            installAiEndpointGuards();
+
+        try {
+            const fixture =
+                case02AnswerMissing89Fixture;
+            const parserGate =
+                buildPdfSupportParserGate({
+                    parsePdfSupportBlocks,
+                    alignPdfSupport,
+                    expectedQuestionNumbers:
+                        fixture.expectedQuestionNumbers,
+                    rawTextPages:
+                        fixture.rawTextPages
+                });
+            const field =
+                buildPdfSupportFieldLevelControlledWrite({
+                    drafts:
+                        fixture.questionItems,
+                    parserSafeAnswerItems:
+                        parserGate.answers,
+                    parserSafeSolutionItems:
+                        parserGate.solutions,
+                    parserFusedQuestionNumbers:
+                        parserGate.fusedQuestionNumbers
+                });
+            const answerByQuestion =
+                indexSupportItems(field.effectiveAnswerItems);
+
+            assert.equal(
+                parserGate.mode,
+                'full'
+            );
+            assert.deepEqual(
+                field.answerQuestionNumbers,
+                fixture.expected.effectiveAnswerNumbers
+            );
+            assert.deepEqual(
+                field.solutionQuestionNumbers,
+                fixture.expected.effectiveSolutionNumbers
+            );
+            assert.equal(
+                answerByQuestion.get('8').answer,
+                fixture.expected.normalizedAnswers[8]
+            );
+            assert.equal(
+                answerByQuestion.get('9').answer,
+                fixture.expected.normalizedAnswers[9]
             );
             assert.deepEqual(
                 field.fusedQuestionNumbers,

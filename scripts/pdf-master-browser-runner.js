@@ -983,6 +983,25 @@ const installPdfSupportSolutionDiagnostics = async page => {
                         decision?.field === 'solution' &&
                         decision?.source === 'none'
                     );
+            const answerNoneDecisions =
+                (result?.fieldDecisions || [])
+                    .filter(decision =>
+                        decision?.field === 'answer' &&
+                        decision?.source === 'none'
+                    );
+            const rejectedAnswerWarnings =
+                (result?.warnings || [])
+                    .filter(warning =>
+                        warning?.code === 'parser-objective-answer-rejected'
+                    )
+                    .map(warning => ({
+                        questionNumber:
+                            normalizeNumber(warning?.questionNumber),
+                        reason:
+                            warning?.reason || '',
+                        originalAnswerShape:
+                            lineShapeFingerprint(warning?.originalAnswer || '')
+                    }));
 
             window.__qisiPdfSupportSolutionDiag.samples.controlledWriteCalls += 1;
             window.__qisiPdfSupportSolutionDiag.controlledWrite = {
@@ -994,6 +1013,12 @@ const installPdfSupportSolutionDiagnostics = async page => {
                     unique(result?.fusedQuestionNumbers || []),
                 warningCodes:
                     warningCodes(result?.warnings),
+                rejectedAnswerNumbers:
+                    unique(answerNoneDecisions.map(decision => decision.questionNumber)),
+                rejectedAnswerReasons:
+                    unique(answerNoneDecisions.map(decision => decision.reason)),
+                rejectedAnswerWarnings:
+                    rejectedAnswerWarnings,
                 rejectedSolutionNumbers:
                     unique(solutionNoneDecisions.map(decision => decision.questionNumber)),
                 rejectedSolutionReasons:

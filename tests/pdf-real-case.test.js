@@ -27,7 +27,8 @@ const {
     objectRawTextPageParserGate,
     markerCoverageFixture,
     realStyleSectionFixture,
-    attempt7ResidualMarkerFixture
+    attempt7ResidualMarkerFixture,
+    case02AnswerMissing89Fixture
 } =
     require('./fixtures/pdf-real-case-minimal.js');
 
@@ -487,6 +488,92 @@ test(
         assert.deepEqual(
             parserGate.solutions.map(item => item.question),
             fixture.expected.solutionDetectedNumbers
+        );
+    }
+);
+
+test(
+    'case02 answer 8 and 9 fixture keeps full solutions and writes segmented multiple-choice answers',
+    () => {
+        const fixture =
+            case02AnswerMissing89Fixture;
+        const parserGate =
+            buildPdfSupportParserGate({
+                parsePdfSupportBlocks,
+                alignPdfSupport,
+                file: {
+                    id:
+                        fixture.id,
+                    filename:
+                        'SANITIZED_SUPPORT.pdf'
+                },
+                expectedQuestionNumbers:
+                    fixture.expectedQuestionNumbers,
+                rawTextPages:
+                    fixture.rawTextPages
+            });
+
+        assert.equal(
+            parserGate.parserResult.blocks.length,
+            fixture.expected.supportBlockCount
+        );
+        assert.equal(
+            parserGate.parserResult.answerItems.length,
+            fixture.expected.answerBlockCount
+        );
+        assert.equal(
+            parserGate.parserResult.solutionItems.length,
+            fixture.expected.solutionBlockCount
+        );
+        assert.equal(
+            parserGate.mode,
+            'full'
+        );
+
+        const controlled =
+            buildPdfSupportFieldLevelControlledWrite({
+                drafts:
+                    fixture.questionItems,
+                parserSafeAnswerItems:
+                    parserGate.answers,
+                parserSafeSolutionItems:
+                    parserGate.solutions,
+                parserFusedQuestionNumbers:
+                    parserGate.fusedQuestionNumbers
+            });
+        const answerByQuestion =
+            new Map(
+                controlled.effectiveAnswerItems.map(item => [
+                    item.question,
+                    item.answer
+                ])
+            );
+
+        assert.deepEqual(
+            controlled.answerQuestionNumbers,
+            fixture.expected.effectiveAnswerNumbers
+        );
+        assert.deepEqual(
+            controlled.solutionQuestionNumbers,
+            fixture.expected.effectiveSolutionNumbers
+        );
+        assert.equal(
+            answerByQuestion.get('8'),
+            fixture.expected.normalizedAnswers[8]
+        );
+        assert.equal(
+            answerByQuestion.get('9'),
+            fixture.expected.normalizedAnswers[9]
+        );
+        assert.deepEqual(
+            controlled.warnings,
+            []
+        );
+        assert.ok(
+            controlled.fieldDecisions.some(decision =>
+                decision.questionNumber === '8' &&
+                decision.reason === fixture.expected.convertedReason
+            )
         );
     }
 );
