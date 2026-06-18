@@ -229,6 +229,31 @@ Do not broaden answer writing yet. Instead, add a sanitized structural diagnosti
 
 This is intentionally diagnostic-only. It should explain why the real answer 8 and 9 values do not enter structural label normalization before any broader write rule is considered.
 
+## Real Verification Attempt 12
+
+- Runner: `node scripts/pdf-master-browser-runner.js --mode=real-run`
+- Attempt number: 12
+- New real API attempts used this task so far: 4
+- Result: `pass-safe-partial`
+- Question count: 12
+- Draft answer count: 12
+- Draft solution count: 2
+- Missing answers: none
+- Missing solutions: 3, 4, 5, 6, 7, 8, 9, 10, 13, 15
+- Parser support blocks: 8
+- Parser answer items: 8
+- Parser solution items: 8
+- Aligner output mode: `prefix`
+- Controlled-write solution count: 2
+
+Attempt 12 is not complete. The answer side reached 12/12, but the support parse was discontinuous and safely cut to prefix 1, 2:
+
+- `rejectReasons`: `support-question-set-not-equal-expected`, `answer-question-not-continuous`, `solution-question-not-continuous`
+- `safeQuestionNumbers`: 1, 2
+- Missing solutions were caused by `pdf-support-sequence-unreliable`.
+
+Per the stop conditions, no complete baseline, freeze note, or release audit should be produced from this run.
+
 ## Disallowed Fixes
 
 Not used:
