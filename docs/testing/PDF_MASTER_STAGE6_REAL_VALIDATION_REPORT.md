@@ -1,56 +1,26 @@
 # PDF Master Stage 6 Real Validation Report
 
-## Stage 6A Implementation
-
-Stage 6A implemented the controlled `real-run` browser workflow in:
-
-```text
-scripts/pdf-master-browser-runner.js
-```
-
-The runner can now:
-
-- open the local app in Chromium through Playwright
-- upload only the authorized case02 question PDF and support PDF
-- assign the question PDF role as `question`
-- assign the support PDF roles as `answer` and `solution`
-- trigger batch recognition
-- wait for review or failure status
-- collect only sanitized draft counts, missing-field lists, warning codes, and result classification
-- write attempt ledger under ignored `local-run-artifacts/`
-- update this report without raw OCR text or API key material
-
-## Stage 6A Non-Real Validation
-
-Commands:
-
-```bat
-node scripts/pdf-master-browser-runner.js --mode=preflight
-node scripts/pdf-master-browser-runner.js --mode=dry-run
-```
-
-Result:
-
-```text
-preflight: pass
-dry-run: pass
-```
-
-Real API called:
-
-```text
-false
-```
-
-Underlying API call count:
-
-```text
-0
-```
-
 ## Latest Attempt
 
-No real attempt has been executed yet in this report revision.
+Attempt number: 1
+Time: 2026-06-18T09:19:33.788Z
+Question PDF: local-test-materials/case02-pdf-pdf-real/01-question.pdf
+Support PDF: local-test-materials/case02-pdf-pdf-real/02-support-answer-solution.pdf
+Real API called: true
+Underlying API call count if known: 9
+Question item count: 12
+Answer item count: 12
+Solution item count: 1
+Align mode: fail-closed
+Warnings: ui-review-warning, pdf-support-sequence-unreliable, missing_answer, missing_solution
+Missing answers: none
+Missing solutions: 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 15
+Fail-closed: yes
+Prefix: yes
+Wrong attach risk: not-detected-by-sanitized-warnings
+Result classification: pass-safe-partial
+Next action: Proceed to Stage 7 final regression
+Runner phase: read-sanitized-result
 
 ## Safety
 

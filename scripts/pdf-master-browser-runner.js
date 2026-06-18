@@ -186,9 +186,50 @@ const countRealAttempts = async () => {
     }
 };
 
+const sanitizeWarningForReport = warning => {
+    const text =
+        String(warning || '');
+
+    if (/pdf-support-sequence-unreliable/.test(text)) {
+        return 'pdf-support-sequence-unreliable';
+    }
+    if (/pdf-support-prefix-only/.test(text)) {
+        return 'pdf-support-prefix-only';
+    }
+    if (/missing_answer/.test(text)) {
+        return 'missing_answer';
+    }
+    if (/missing_solution/.test(text)) {
+        return 'missing_solution';
+    }
+    if (/answerConflict/.test(text)) {
+        return 'answerConflict';
+    }
+    if (/zero-draft-result/.test(text)) {
+        return 'zero-draft-result';
+    }
+    if (/real-run-exception/.test(text)) {
+        return 'real-run-exception';
+    }
+    if (/batch-status-failed/.test(text)) {
+        return 'batch-status-failed';
+    }
+    if (/batch-error-message-present/.test(text)) {
+        return 'batch-error-message-present';
+    }
+
+    return 'ui-review-warning';
+};
+
 const appendStage6Report = async report => {
     const attempt =
         report?.ledgerEntry || {};
+    const reportWarnings =
+        [
+            ...new Set(
+                (attempt.warnings || []).map(sanitizeWarningForReport)
+            )
+        ];
     const lines = [
         '# PDF Master Stage 6 Real Validation Report',
         '',
@@ -204,7 +245,7 @@ const appendStage6Report = async report => {
         `Answer item count: ${attempt.answerItemCount ?? 'N/A'}`,
         `Solution item count: ${attempt.solutionItemCount ?? 'N/A'}`,
         `Align mode: ${attempt.alignMode || 'N/A'}`,
-        `Warnings: ${(attempt.warnings || []).join(', ') || 'none'}`,
+        `Warnings: ${reportWarnings.join(', ') || 'none'}`,
         `Missing answers: ${(report.missingAnswers || []).join(', ') || 'none'}`,
         `Missing solutions: ${(report.missingSolutions || []).join(', ') || 'none'}`,
         `Fail-closed: ${report.failClosed ? 'yes' : 'no'}`,
@@ -212,6 +253,7 @@ const appendStage6Report = async report => {
         `Wrong attach risk: ${attempt.wrongAttachRisk || 'not-evaluated'}`,
         `Result classification: ${attempt.result || 'N/A'}`,
         `Next action: ${attempt.nextAction || ''}`,
+        `Runner phase: ${report.phase || 'N/A'}`,
         '',
         '## Safety',
         '',
@@ -224,6 +266,63 @@ const appendStage6Report = async report => {
     ];
 
     await fsp.writeFile(STAGE6_REPORT_PATH, `${lines.join('\n')}\n`, 'utf8');
+};
+
+const waitForAppBoot = async page => {
+    const deadline =
+        Date.now() + 120000;
+    let lastState = null;
+
+    while (Date.now() < deadline) {
+        lastState =
+            await page.evaluate(() => {
+                const hasDb =
+                    (() => {
+                        try {
+                            return typeof db !== 'undefined';
+                        } catch (_) {
+                            return false;
+                        }
+                    })();
+
+                return {
+                    readyState: document.readyState,
+                    hasVue: Boolean(window.Vue),
+                    hasDb,
+                    hasBatchNav:
+                        [...document.querySelectorAll('button')]
+                            .some(item => item.textContent.includes('\u6279\u91cf\u5f55\u9898')),
+                    title: document.title || ''
+                };
+            });
+
+        if (lastState.hasVue && lastState.hasDb && lastState.hasBatchNav) {
+            return lastState;
+        }
+
+        await wait(1000);
+    }
+
+    throw new Error(`app boot timeout: ${JSON.stringify(lastState)}`);
+};
+
+const clickButtonByText = async (page, textFragment) => {
+    await page.waitForFunction(fragment => {
+        return [...document.querySelectorAll('button')]
+            .some(item => item.textContent.includes(fragment));
+    }, textFragment, { timeout: 90000 });
+
+    await page.evaluate(fragment => {
+        const button =
+            [...document.querySelectorAll('button')]
+                .find(item => item.textContent.includes(fragment));
+
+        if (!button) {
+            throw new Error(`button not found: ${fragment}`);
+        }
+
+        button.click();
+    }, textFragment);
 };
 
 const fetchJson = async url => {
@@ -702,6 +801,7 @@ const runRealRun = async () => {
     let draftSnapshot = [];
     let result = 'fail-environment';
     let nextAction = 'Inspect real-run failure and retry only after a code or environment change';
+    let phase = 'start';
 
     try {
         let health =
@@ -724,6 +824,23 @@ const runRealRun = async () => {
             await chromium.launch({ headless: true });
         const page =
             await browser.newPage();
+        await page.route('**/*', route => {
+            const request =
+                route.request();
+            const url =
+                request.url();
+            const type =
+                request.resourceType();
+
+            if (
+                type === 'font' ||
+                /fonts\.(?:gstatic|googleapis)\.com/i.test(url)
+            ) {
+                return route.abort();
+            }
+
+            return route.continue();
+        });
         const aiPathPattern =
             new RegExp('/api/' + 'ai/(?:chat|ocr)');
 
@@ -736,81 +853,140 @@ const runRealRun = async () => {
 
         page.on('dialog', dialog => dialog.accept().catch(() => {}));
 
+        phase = 'open-main-page';
         await page.goto(`${APP_URL}/main.html`, {
-            waitUntil: 'load',
+            waitUntil: 'domcontentloaded',
             timeout: 60000
         });
-        await page.waitForFunction(
-            () => Boolean(document.querySelector('#app')?.__vue_app__?._instance?.proxy),
-            null,
-            { timeout: 60000 }
-        );
+        phase = 'wait-app-boot';
+        await waitForAppBoot(page);
 
-        await page.evaluate(() => {
-            const proxy =
-                document.querySelector('#app').__vue_app__._instance.proxy;
-            proxy.view = 'batchImport';
-            proxy.openBatchCreate('mixed');
+        phase = 'open-batch-create';
+        await clickButtonByText(page, '\u6279\u91cf\u5f55\u9898');
+        await page.waitForSelector('.batch-home-upload', {
+            state: 'visible',
+            timeout: 60000
+        });
+        await page.locator('.batch-home-upload').click();
+        await page.waitForSelector('input[type="file"][multiple]', {
+            state: 'attached',
+            timeout: 60000
         });
 
+        phase = 'upload-real-pdfs';
         const input =
             page.locator('input[type="file"][multiple]').first();
         await input.setInputFiles([QUESTION_PDF, SUPPORT_PDF]);
 
-        const confirmPendingFile = async (filenamePart, roles) => {
+        const confirmPendingFile = async (filenamePart, roleIndexes) => {
+            phase = `confirm-purpose-${filenamePart}`;
             await page.waitForFunction(
-                part => {
-                    const proxy =
-                        document.querySelector('#app')?.__vue_app__?._instance?.proxy;
-                    return Boolean(proxy?.pendingPurposeFile?.filename?.includes(part));
-                },
+                part => Boolean(
+                    document.querySelector('.batch-purpose-modal')?.textContent.includes(part)
+                ),
                 filenamePart,
-                { timeout: 60000 }
+                { timeout: 90000 }
             );
-            await page.evaluate(({ roles: nextRoles }) => {
-                const proxy =
-                    document.querySelector('#app').__vue_app__._instance.proxy;
-                proxy.pendingPurposeRoles = [];
-                nextRoles.forEach(role => proxy.togglePurposeRole(role));
-                proxy.confirmBatchFilePurpose();
-            }, { roles });
+            const roleLabels =
+                page.locator('.batch-purpose-options label');
+
+            for (const index of roleIndexes) {
+                await roleLabels.nth(index).click();
+            }
+
+            await page.locator('.batch-purpose-modal .material-primary-btn').click();
         };
 
-        await confirmPendingFile('01-question.pdf', ['question']);
-        await confirmPendingFile('02-support-answer-solution.pdf', ['answer', 'solution']);
+        await confirmPendingFile('01-question.pdf', [0]);
+        await confirmPendingFile('02-support-answer-solution.pdf', [1, 2]);
 
+        phase = 'wait-file-list';
         await page.waitForFunction(() => {
-            const proxy =
-                document.querySelector('#app')?.__vue_app__?._instance?.proxy;
-            return Array.isArray(proxy?.batchCreateFiles) && proxy.batchCreateFiles.length === 2;
-        }, null, { timeout: 60000 });
+            return document.querySelectorAll('.batch-file-card').length === 2;
+        }, null, { timeout: 90000 });
 
-        await page.evaluate(() => {
-            const proxy =
-                document.querySelector('#app').__vue_app__._instance.proxy;
-            proxy.createDraftImportBatch();
-        });
+        const runStartedAt =
+            Date.now();
 
-        await page.waitForFunction(() => {
-            const proxy =
-                document.querySelector('#app')?.__vue_app__?._instance?.proxy;
-            const batch = proxy?.activeBatch;
-            return Boolean(batch && ['review', 'failed', 'completed'].includes(batch.status));
-        }, null, {
-            timeout:
-                Math.max(60000, Number(process.env.QISI_REAL_RUN_TIMEOUT_MS || 900000))
-        });
+        phase = 'create-recognition-task';
+        await page.locator('.batch-create-actions .material-primary-btn').first().click();
 
+        phase = 'wait-batch-record';
+        let batchId = '';
+        const batchRecordDeadline =
+            Date.now() + 90000;
+
+        while (!batchId && Date.now() < batchRecordDeadline) {
+            batchId =
+                await page.evaluate(async startedAt => {
+                    const batches =
+                        await db.draftImportBatches
+                            .where('createdAt')
+                            .aboveOrEqual(startedAt)
+                            .toArray();
+                    const matched =
+                        batches
+                            .filter(batch => String(batch.sourceFileName || '').includes('01-question.pdf'))
+                            .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))[0];
+
+                    return matched?.id || '';
+                }, runStartedAt - 1000);
+
+            if (!batchId) {
+                await wait(1000);
+            }
+        }
+
+        if (!batchId) {
+            throw new Error('batch record was not created');
+        }
+
+        await page.evaluate(id => {
+            window.__qisiRealRunBatchId = id;
+        }, batchId);
+
+        phase = 'wait-recognition-finish';
+        const recognitionDeadline =
+            Date.now() + Math.max(60000, Number(process.env.QISI_REAL_RUN_TIMEOUT_MS || 900000));
+
+        while (Date.now() < recognitionDeadline) {
+            const status =
+                await page.evaluate(async id => {
+                    const batch =
+                        await db.draftImportBatches.get(id);
+                    return batch?.status || '';
+                }, batchId);
+
+            if (['review', 'failed', 'completed'].includes(status)) {
+                break;
+            }
+
+            await wait(1000);
+        }
+
+        const finalBatchStatus =
+            await page.evaluate(async id => {
+                const batch =
+                    await db.draftImportBatches.get(id);
+                return batch?.status || '';
+            }, batchId);
+
+        if (!['review', 'failed', 'completed'].includes(finalBatchStatus)) {
+            throw new Error(`recognition did not finish, status=${finalBatchStatus || 'missing'}`);
+        }
+
+        phase = 'read-sanitized-result';
         const sanitized =
-            await page.evaluate(async () => {
-                const proxy =
-                    document.querySelector('#app').__vue_app__._instance.proxy;
-                await proxy.openBatchReview(proxy.activeBatchId);
+            await page.evaluate(async id => {
                 const clean = value => String(value || '').trim();
                 const questionNo = (draft, index) =>
                     String(draft.questionNumber || draft.question || draft.order || index + 1);
+                const batch =
+                    await db.draftImportBatches.get(id);
+                const rawDrafts =
+                    await db.draftQuestions.where('batchId').equals(id).sortBy('order');
                 const drafts =
-                    (proxy.batchDraftQuestions || []).map((draft, index) => {
+                    (rawDrafts || []).map((draft, index) => {
                         const warnings =
                             [
                                 ...(Array.isArray(draft.warnings) ? draft.warnings : []),
@@ -831,35 +1007,37 @@ const runRealRun = async () => {
 
                 return {
                     batch:
-                        proxy.activeBatch
+                        batch
                             ? {
-                                id: proxy.activeBatch.id || '',
-                                status: proxy.activeBatch.status || '',
-                                totalCount: proxy.activeBatch.totalCount || 0,
-                                problemCount: proxy.activeBatch.problemCount || 0,
-                                errorMessage: proxy.activeBatch.errorMessage || ''
+                                id: batch.id || '',
+                                status: batch.status || '',
+                                totalCount: batch.totalCount || 0,
+                                problemCount: batch.problemCount || 0,
+                                errorMessage: batch.errorMessage || ''
                             }
                             : null,
                     summary:
-                        proxy.batchRecognitionSummary
-                            ? {
-                                total: proxy.batchRecognitionSummary.total || 0,
-                                withAnswers: proxy.batchRecognitionSummary.withAnswers || 0,
-                                withSolutions: proxy.batchRecognitionSummary.withSolutions || 0,
-                                missingAnswers: proxy.batchRecognitionSummary.missingAnswers || [],
-                                missingSolutions: proxy.batchRecognitionSummary.missingSolutions || []
-                            }
-                            : null,
+                        {
+                            total: drafts.length,
+                            withAnswers: drafts.filter(draft => draft.hasAnswer).length,
+                            withSolutions: drafts.filter(draft => draft.hasSolution).length,
+                            missingAnswers: drafts.filter(draft => !draft.hasAnswer).map(draft => draft.question),
+                            missingSolutions: drafts.filter(draft => !draft.hasSolution).map(draft => draft.question)
+                        },
                     drafts
                 };
-            });
+            }, batchId);
 
         batchSnapshot =
             sanitized.batch;
         draftSnapshot =
             sanitized.drafts || [];
 
-        if (batchSnapshot?.status === 'failed') {
+        if (!draftSnapshot.length && batchSnapshot?.status !== 'failed') {
+            warnings.push('zero-draft-result');
+            result = 'fail-environment';
+            nextAction = 'Fix runner completion wait or recognition startup before retrying';
+        } else if (batchSnapshot?.status === 'failed') {
             warnings.push('batch-status-failed');
             if (batchSnapshot.errorMessage) {
                 warnings.push('batch-error-message-present');
@@ -874,7 +1052,7 @@ const runRealRun = async () => {
                 ];
             const unsafe =
                 allWarnings.some(warning =>
-                    /answerConflict|错挂|断号后继续|回跳后继续|重复题号后继续|answer\/solution/.test(warning)
+                    /answerConflict|wrong-attach|jump-back|duplicate|answer\/solution/i.test(warning)
                 );
             const sequenceGuarded =
                 allWarnings.some(warning =>
@@ -941,6 +1119,7 @@ const runRealRun = async () => {
             {
                 mode: 'real-run',
                 ok: result === 'pass-full' || result === 'pass-safe-partial',
+                phase,
                 serverStarted,
                 batch:
                     batchSnapshot,
@@ -981,6 +1160,7 @@ const runRealRun = async () => {
                 ok: false,
                 error:
                     error?.message || String(error),
+                phase,
                 realApiCalled:
                     apiRequestStarted,
                 underlyingApiCallCount:
