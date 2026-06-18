@@ -26,7 +26,8 @@ const {
     case02SolutionDiagnostic,
     objectRawTextPageParserGate,
     markerCoverageFixture,
-    realStyleSectionFixture
+    realStyleSectionFixture,
+    attempt7ResidualMarkerFixture
 } =
     require('./fixtures/pdf-real-case-minimal.js');
 
@@ -438,6 +439,54 @@ test(
         assert.deepEqual(
             parserGate.fusedQuestionNumbers,
             []
+        );
+    }
+);
+
+test(
+    'attempt 7 residual marker fixture reaches full parser gate coverage',
+    () => {
+        const fixture =
+            attempt7ResidualMarkerFixture;
+        const parserGate =
+            buildPdfSupportParserGate({
+                parsePdfSupportBlocks,
+                alignPdfSupport,
+                file: {
+                    id:
+                        fixture.id,
+                    filename:
+                        'SANITIZED_SUPPORT.pdf'
+                },
+                expectedQuestionNumbers:
+                    fixture.expectedQuestionNumbers,
+                rawTextPages:
+                    fixture.rawTextPages
+            });
+
+        assert.equal(
+            parserGate.parserResult.blocks.length,
+            fixture.expected.supportBlockCount
+        );
+        assert.equal(
+            parserGate.parserResult.answerItems.length,
+            fixture.expected.answerBlockCount
+        );
+        assert.equal(
+            parserGate.parserResult.solutionItems.length,
+            fixture.expected.solutionBlockCount
+        );
+        assert.equal(
+            parserGate.mode,
+            'full'
+        );
+        assert.deepEqual(
+            parserGate.answers.map(item => item.question),
+            fixture.expected.answerDetectedNumbers
+        );
+        assert.deepEqual(
+            parserGate.solutions.map(item => item.question),
+            fixture.expected.solutionDetectedNumbers
         );
     }
 );

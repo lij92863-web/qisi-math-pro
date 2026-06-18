@@ -129,6 +129,12 @@
             };
         };
 
+        const enhancedLabelLeadPattern =
+            /^(?:\\[A-Za-z]+\s*\{\s*)?(?:\u3010|\u9286|绛|瑙|鍙|閵|鐟|缁)/;
+
+        const looksLikeEnhancedLabelLead = value =>
+            enhancedLabelLeadPattern.test(String(value || '').trim());
+
         const unwrapStructuralCommand = value => {
             let source =
                 String(value ?? '').trim();
@@ -142,12 +148,24 @@
                 const next =
                     source
                         .replace(/^\\(?:noindent|par)\b\s*/i, '')
-                        .replace(/^\\[A-Za-z]+\s*_\s*/, '')
                         .trim();
 
                 if (next !== source) {
                     source =
                         next;
+                    changed =
+                        true;
+                }
+
+                const commandUnderscoreMatch =
+                    source.match(/^\\[A-Za-z]+\s*_\s*([\s\S]*)$/);
+
+                if (
+                    commandUnderscoreMatch &&
+                    looksLikeEnhancedLabelLead(commandUnderscoreMatch[1])
+                ) {
+                    source =
+                        commandUnderscoreMatch[1].trim();
                     changed =
                         true;
                 }
@@ -168,6 +186,19 @@
                 if (commandPrefixMatch) {
                     source =
                         `${commandPrefixMatch[1]}${commandPrefixMatch[2]}`.trim();
+                    changed =
+                        true;
+                }
+
+                const bareCommandLabelMatch =
+                    source.match(/^\\[A-Za-z]+\s*([\s\S]*)$/);
+
+                if (
+                    bareCommandLabelMatch &&
+                    looksLikeEnhancedLabelLead(bareCommandLabelMatch[1])
+                ) {
+                    source =
+                        bareCommandLabelMatch[1].trim();
                     changed =
                         true;
                 }
@@ -213,13 +244,19 @@
                 .trim();
 
         const enhancedAnswerLabelRules = [
+            /^(?:\u9286\u600c\u9286\u6149)/,
             /^(?:【\s*(?:参考答案|答案|答)\s*】|(?:参考答案|答案|答)\s*[:：.]?)/,
             /^(?:銆愮瓟妗堛€?|銆怌銆慉?)/,
             /^(?:绛旀|鍙傝€冪瓟妗?)[：:锛歖]?/,
             /^(?:【答案】|答案|参考答案|答)[：:]?/
         ];
 
+        const enhancedPrioritySolutionLabelRules = [
+            /^(?:\u9286\u600c\u9286\u614d)/
+        ];
+
         const enhancedSolutionLabelRules = [
+            ...enhancedPrioritySolutionLabelRules,
             /^(?:【\s*(?:解析|详解|解答|证明|说明|解)\s*】|(?:解析|详解|解答|证明|说明|解)\s*[:：.]?)/,
             /^(?:銆愯В鏋愩€?|銆怌銆慡?)/,
             /^(?:瑙ｆ瀽|璇﹁В|瑙ｇ瓟|璇佹槑)[：:锛歖]?/,
@@ -227,6 +264,19 @@
         ];
 
         const parseEnhancedLabelMarker = line => {
+            const prioritySolution =
+                stripLabelRule(line, enhancedPrioritySolutionLabelRules);
+
+            if (prioritySolution) {
+                return {
+                    type: 'solution',
+                    label:
+                        prioritySolution.label,
+                    rest:
+                        prioritySolution.rest
+                };
+            }
+
             const answer =
                 stripLabelRule(line, enhancedAnswerLabelRules);
 

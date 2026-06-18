@@ -322,6 +322,92 @@ const realStyleSectionFixture =
         }
     };
 
+const residualMarkerAnswerLabel =
+    '\u9286\u600c\u9286\u6149';
+
+const residualMarkerSolutionLabel =
+    '\u9286\u600c\u9286\u614d';
+
+const attempt7ResidualMarkerFixture =
+    {
+        id: 'case02-attempt7-residual-marker-forms',
+        description:
+            'Sanitized attempt 7 residual marker forms with command-prefixed answer and solution labels.',
+        expectedQuestionNumbers:
+            case02QuestionNumbers,
+        questionItems:
+            case02QuestionItems,
+        rawTextPages: [
+            {
+                pageIndex: 0,
+                sourceOrder: 0,
+                text: [
+                    'NOISE_PAGE_2026_SCORE_12.5',
+                    `\\A_${residualMarkerAnswerLabel}A1`,
+                    `\\A${residualMarkerSolutionLabel}SOLUTION_1`,
+                    '\\A_(6.0,7.5)--(8.0,9.5);',
+                    `\\A_${residualMarkerAnswerLabel}A2`,
+                    `\\A${residualMarkerSolutionLabel}$FORMULA_2_\\A{1}{2}$`,
+                    'step 2.5 is continuation, not a question',
+                    `\\A_${residualMarkerAnswerLabel}A3`,
+                    `\\A${residualMarkerSolutionLabel}SOLUTION_3`,
+                    `\\A_${residualMarkerAnswerLabel}A4`,
+                    `\\A${residualMarkerSolutionLabel}SOLUTION_4_LINE_1`
+                ].join('\n')
+            },
+            [
+                'SOLUTION_4_LINE_2_CROSS_PAGE',
+                `\\A_${residualMarkerAnswerLabel}A5`,
+                `\\A${residualMarkerSolutionLabel}SOLUTION_5`,
+                `\\A_${residualMarkerAnswerLabel}A6`,
+                `\\A${residualMarkerSolutionLabel}SOLUTION_6`,
+                `\\A{7${residualMarkerAnswerLabel}A7}`,
+                `${residualMarkerSolutionLabel}SOLUTION_7`
+            ].join('\n'),
+            {
+                pageIndex: 2,
+                sourceOrder: 2,
+                text: [
+                    `\\A_\\A{${residualMarkerAnswerLabel}A8}`,
+                    `\\A_\\A{${residualMarkerSolutionLabel}SOLUTION_8}`,
+                    `\\A_\\A{${residualMarkerAnswerLabel}A9}`,
+                    `\\A_\\A{${residualMarkerSolutionLabel}SOLUTION_9}`,
+                    `\\A_\\A{${residualMarkerAnswerLabel}A10}`,
+                    `\\A_\\A{${residualMarkerSolutionLabel}SOLUTION_10}`,
+                    `\\A_\\A{${residualMarkerAnswerLabel}A13}`,
+                    `\\A_\\A{${residualMarkerSolutionLabel}SOLUTION_13}`
+                ].join('\n')
+            },
+            {
+                pageIndex: 3,
+                sourceOrder: 3,
+                text: [
+                    `\\A_\\A{${residualMarkerAnswerLabel}A15}`,
+                    `\\A_\\A{${residualMarkerSolutionLabel}SOLUTION_15}`,
+                    `\\A_\\A{${residualMarkerAnswerLabel}EXTRA_19}`,
+                    `\\A_\\A{${residualMarkerSolutionLabel}SHOULD_NOT_ATTACH_19}`,
+                    '\\A[A](6.0,7.5)--(8.0,9.5)--NOISE;'
+                ].join('\n')
+            }
+        ],
+        expected: {
+            supportBlockCount:
+                12,
+            answerBlockCount:
+                12,
+            solutionBlockCount:
+                12,
+            supportDetectedNumbers:
+                ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
+            answerDetectedNumbers:
+                ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
+            solutionDetectedNumbers:
+                ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
+            exhaustedImplicitMarkers:
+                2
+        }
+    };
+
 module.exports =
     {
         expectedQuestionNumbers,
@@ -331,5 +417,6 @@ module.exports =
         case02SolutionDiagnostic,
         objectRawTextPageParserGate,
         markerCoverageFixture,
-        realStyleSectionFixture
+        realStyleSectionFixture,
+        attempt7ResidualMarkerFixture
     };

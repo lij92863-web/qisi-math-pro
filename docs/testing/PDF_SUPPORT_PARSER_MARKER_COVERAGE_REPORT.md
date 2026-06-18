@@ -215,6 +215,81 @@ This confirms the previous fixture covered a real class of marker form but not a
 
 The next parser fixture must target the remaining un-emitted section-label forms. It must still avoid semantic guessing, unknown block forced ownership, and fail-closed relaxation.
 
+## FIX-3 Stage A Attempt 7 Marker Extraction
+
+Attempt 7 sanitized diagnostics remain parser-layer evidence only:
+
+- `supportBlockCount`: 2.
+- Detected set: `{1,7}`.
+- `answerBlockCount`: 1.
+- `solutionBlockCount`: 2.
+- `answerItems count`: 1.
+- `solutionItems count`: 2.
+- `markerCandidateCount`: 35.
+- `answerMarkerCandidateCount`: 12.
+- `solutionMarkerCandidateCount`: 13.
+
+Already emitted marker forms:
+
+- Expected-sequence solution label emitted question 1.
+- Explicit number plus answer label emitted question 7, e.g. `\A{#...}`.
+
+Remaining unmatched marker-form classes:
+
+- Answer labels without numbers: frequent `\A_...` forms.
+- Wrapped answer labels without numbers: frequent `\A_\A{...}` forms.
+- Solution labels directly preceded by a command token, e.g. `\A...`, which the block parser did not unwrap as a structural label prefix.
+- Wrapped solution labels with formula-heavy payloads.
+- Candidate markers without numbers that are valid section labels and should advance by `expectedQuestionNumbers` only when a clear answer/solution label is present.
+
+Noise forms that must not become question markers:
+
+- Coordinate-like and geometry-like forms, e.g. `(#.#,#.#)--...`.
+- Formula lines containing many `\A{#}` fragments.
+- Decimal, score, year, page, and step-like numeric fragments.
+
+Out-of-range handling:
+
+- Source question numbers `13` and `15` are part of the current expected real draft set and must not be treated as out-of-range for case02.
+- Other exhausted/extra labels after the expected sequence must warn and must not be forced onto the nearest question.
+
+Next fixture design:
+
+- Add a sanitized attempt-7 residual fixture using placeholder payloads only.
+- Cover bare-command label wrappers such as `\A<answer-label>` / `\A<solution-label>`.
+- Cover wrapped labels such as `\A_\A{<label>...}`.
+- Assert detected set grows beyond `{1,7}` and answer/solution item counts grow beyond attempt 7.
+- Preserve known-bad fail-closed behavior and noise rejection.
+
+## FIX-3 Stage B/C Fixture-First Repair Result
+
+Added sanitized fixture `case02-attempt7-residual-marker-forms` to cover the remaining attempt-7 marker classes without using real OCR text:
+
+- Bare command-prefixed answer labels such as `\A_<answer-label>...`.
+- Bare command-prefixed solution labels such as `\A<solution-label>...`.
+- Wrapped labels such as `\A_\A{<answer-label>...}` and `\A_\A{<solution-label>...}`.
+- Explicit compact question marker for question 7.
+- Formula-like, coordinate-like, decimal, score, page, and step noise.
+- Expected sequence with real case02 gaps: `1,2,3,4,5,6,7,8,9,10,13,15`.
+- Exhausted extra labels after expected sequence completion.
+
+Parser repair stayed in `qisi-pdf-support-block-parser.js`:
+
+- Added centralized residual answer/solution marker rules for the sanitized attempt-7 label forms.
+- Guarded structural `\A_` unwrapping so it only runs when the remaining text begins like a known label shape.
+- Added guarded bare-command label unwrapping for `\A<label>` forms.
+- Kept coordinate and formula-like command fragments from becoming question markers.
+- Prioritized the exact residual solution label before answer rules, then kept broader solution rules after answer rules so shared mojibake prefixes do not swallow answer labels.
+
+Fixture verification after repair:
+
+- Parser `supportBlockCount`: 12.
+- Parser detected set: `{1,2,3,4,5,6,7,8,9,10,13,15}`.
+- Parser `answerItems count`: 12.
+- Parser `solutionItems count`: 12.
+- Batch mock controlled-write solution count: 12.
+- Existing focused parser, real-case parser, and batch mock safety tests remain passing.
+
 ## Forbidden Fixes
 
 - No semantic guessing.
