@@ -158,6 +158,43 @@ Updated controlled-write normalization:
 - Rejects math commands such as `\frac{A}{B}` so formula variables cannot become option labels.
 - Keeps all existing sequence, aligner, and solution gates unchanged.
 
+## Real Verification Attempt 10
+
+- Runner: `node scripts/pdf-master-browser-runner.js --mode=real-run`
+- Attempt number: 10
+- New real API attempts used this task so far: 2
+- Result: `pass-safe-partial`
+- Question count: 12
+- Draft answer count: 10
+- Draft solution count: 12
+- Missing answers: 8, 9
+- Missing solutions: none
+- Parser support blocks: 12
+- Parser answer items: 12
+- Parser solution items: 12
+- Aligner output mode: `full`
+- Controlled-write solution count: 12
+
+Attempt 10 confirmed the second repair was still too narrow:
+
+- `rejectedAnswerNumbers`: 2, 8, 9
+- Missing draft answers remained 8 and 9.
+- Answers 8 and 9 still had reason `multiple-option-value-rejected`.
+- Answers 8 and 9 still had structural answer fingerprints shaped like `}A_\A{A}`.
+
+The remaining gap is that real OCR wrappers can use command names outside the first whitelist while still producing a short structural option-label shell.
+
+## Third Fixture-First Repair
+
+Updated structural option-label normalization:
+
+- It now only runs when the raw answer has a leading residual brace or underscore wrapper.
+- It rejects known math commands such as `\frac`, `\sqrt`, trigonometric commands, vector/angle wrappers, and operator-like math commands.
+- It allows other OCR/text wrapper commands only if the remaining compact payload is made exclusively of valid A-F labels.
+- Added a regression assertion that `A_\frac{B}` is rejected and cannot become `AB`.
+
+This keeps the repair focused on OCR structural shells and avoids converting ordinary formula variables into answers.
+
 ## Disallowed Fixes
 
 Not used:

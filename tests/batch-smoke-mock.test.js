@@ -575,7 +575,7 @@ test(
             );
         const rejectedFormula =
             normalizeObjectiveAnswerToLabels(
-                '\\frac{A}{B}',
+                'A_\\frac{B}',
                 {
                     type: 'multiple',
                     options: [

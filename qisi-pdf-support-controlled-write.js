@@ -58,7 +58,7 @@
             stripMathShell(answerRaw);
 
         if (
-            !/[\\{}_]/.test(raw) ||
+            !/(^\s*\}|_)/.test(raw) ||
             /[0-9+\-=^]/.test(raw)
         ) {
             return null;
@@ -66,13 +66,33 @@
 
         const commands =
             [...raw.matchAll(/\\([A-Za-z]+)/g)].map(match => match[1]);
-        const safeCommands =
-            new Set(['text', 'mathrm', 'mathbf', 'textbf']);
+        const unsafeMathCommands =
+            new Set([
+                'frac',
+                'sqrt',
+                'sin',
+                'cos',
+                'tan',
+                'log',
+                'ln',
+                'sum',
+                'int',
+                'lim',
+                'overline',
+                'underline',
+                'vec',
+                'bar',
+                'hat',
+                'dot',
+                'angle',
+                'triangle',
+                'cdot',
+                'times'
+            ]);
 
         if (
             commands.some(command =>
-                command.length > 1 &&
-                !safeCommands.has(command.toLowerCase())
+                unsafeMathCommands.has(command.toLowerCase())
             )
         ) {
             return null;
