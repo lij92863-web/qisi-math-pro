@@ -160,3 +160,77 @@ Stop decision:
 - Do not continue real-run attempts.
 - Do not write a complete baseline.
 - The next cycle must return to fixture-first parser repair for the remaining un-emitted answer/solution label forms, especially forms counted as `candidate-not-emitted-by-parser` and `candidate-without-number`.
+
+## FIX-3 Marker Coverage Verification Attempt 8
+
+- Stage: `PDF-SUPPORT-PARSER-MARKER-COVERAGE-FIX-3` / Stage G real-run verification
+- Runner: `node scripts/pdf-master-browser-runner.js --mode=real-run`
+- Attempt number: 8
+- New real API attempts used this task: 1
+- Raw OCR text committed: no
+- API key printed: no
+- Real PDF/DOCX committed: no
+
+Preflight:
+
+- `git status --short`: clean before real-run.
+- `git branch --show-current`: `master`.
+- `DASHSCOPE_API_KEY`: exists, value not printed.
+- Runner preflight: pass.
+- Runner dry-run: pass.
+
+Result:
+
+- Status: `pass-safe-partial`
+- Quality level: solution-complete, answer-incomplete
+- Question count: 12
+- Draft answer count: 10
+- Draft solution count: 12
+- Missing answers: 8, 9
+- Missing solutions: none
+- Top-level fail-closed flag: yes
+- Prefix flag: yes
+- Wrong attach risk: not detected by sanitized warnings
+- Underlying real API call count: 9
+
+Parser coverage after FIX-3:
+
+- `supportRawPageCount`: 4
+- `supportBlockCount`: 12
+- `answerBlockCount`: 12
+- `solutionBlockCount`: 12
+- `answerItems count`: 12
+- `solutionItems count`: 12
+- Detected set: `{1,2,3,4,5,6,7,8,9,10,13,15}`
+- `markerCandidateCount`: 35
+- `questionMarkerCandidateCount`: 0
+- `answerMarkerCandidateCount`: 12
+- `solutionMarkerCandidateCount`: 13
+- Remaining boundary rejects: `candidate-without-number x11`, `candidate-not-emitted-by-parser x3`, `candidate-noise-shape x1`
+
+Alignment and controlled-write:
+
+- Aligner input expected, answer, and solution sets all matched `{1,2,3,4,5,6,7,8,9,10,13,15}`.
+- Aligner output mode: `full`.
+- Aligner output fail-closed: false.
+- Safe answer count: 12.
+- Safe solution count: 12.
+- Controlled-write writable solution numbers: `{1,2,3,4,5,6,7,8,9,10,13,15}`.
+- Controlled-write solution count: 12.
+- Controlled-write rejected objective answer values for answers 8 and 9; this is answer-side safety, not a solution parser blocker.
+
+Layer diagnosis:
+
+- `block-parser`: no longer the blocking layer for the case02 solution chain; it emits all expected support blocks and all expected solution items.
+- `support-parser`: integration received full answer and solution item sets from the block parser.
+- `aligner`: allowed full solution coverage after parser sets matched the expected draft set.
+- `controlled-write`: wrote all parser-safe solutions and continued to reject unsafe objective answers.
+- `runner/report`: captured parser, aligner, controlled-write, draft, review, and sanitized marker diagnostics.
+
+Stop decision:
+
+- Stage H1 no longer applies: parser output is sufficient and solution item count is 12.
+- Stage H2 no longer applies: draft solution count is 12.
+- Stage H4 complete does not apply because missing answers remain 8 and 9.
+- Do not enter Stage L/M and do not write a complete baseline.
+- Stop this task after recording the real-run result, because the current parser/solution objective is complete and answer repair is a separate task.
