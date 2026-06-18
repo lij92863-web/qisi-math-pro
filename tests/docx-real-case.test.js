@@ -9,7 +9,7 @@ const fixture =
     require('./fixtures/docx-real-case-minimal.js');
 
 test(
-    'C9B fixture records image-prefixed DOCX marker gap',
+    'parses image-prefixed DOCX support markers',
     () => {
         const parsed =
             parseExplicitSupportBlocks({
@@ -28,7 +28,7 @@ test(
             parsed.blocks.map(
                 block => block.questionNumber
             ),
-            ['1']
+            ['1', '2']
         );
 
         assert.ok(

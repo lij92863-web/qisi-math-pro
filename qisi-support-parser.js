@@ -496,6 +496,14 @@
                 // Continue consuming consecutive layout prefixes.
             }
 
+            while (
+                consume(
+                    /^\[\[IMAGE(?::[^\]\r\n]+)?\]\]\s*/
+                )
+            ) {
+                // DOCX image placeholders can precede the visible support marker.
+            }
+
             return {
                 source,
                 rest,
@@ -761,6 +769,9 @@
                     source
                 ) &&
                 (
+                    /^\s*(?:\[\[IMAGE(?::[^\]\r\n]+)?\]\]\s*)+(?:\\textbf\b|\*\*|\\item\b|(?:第\s*)?[0-9０-９]{1,3})/.test(
+                        source
+                    ) ||
                     /\\textbf\b/i.test(source) ||
                     /^\s*\*\*/.test(source) ||
                     /^\s*\\item\b/.test(source) ||

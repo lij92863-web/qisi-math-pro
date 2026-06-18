@@ -148,13 +148,33 @@
         .replace(/\n{3,}/g, '\n\n')
         .trim();
 
+    const consumeLeadingImageTokens = (value = '') => {
+        const source =
+            String(value || '');
+
+        const match =
+            source.match(
+                /^(?:\s*\[\[IMAGE(?::[^\]\r\n]+)?\]\]\s*)+/
+            );
+
+        return match
+            ? match[0].length
+            : 0;
+    };
+
     const parseLeadingQuestionMarker = (
         value = ''
     ) => {
         const source =
             normalizeDocxText(value);
 
-        const match = source.match(
+        const imagePrefixLength =
+            consumeLeadingImageTokens(source);
+
+        const markerSource =
+            source.slice(imagePrefixLength);
+
+        const match = markerSource.match(
             /^\s*((?:\d\s*){1,3})[.\uFF0E\u3001\u3002)\uFF09]\s*/
         );
         if (!match) {
@@ -191,9 +211,9 @@
             questionNumber:
                 String(numericValue),
             markerLength:
-                match[0].length,
+                imagePrefixLength + match[0].length,
             rawMarker:
-                match[0]
+                source.slice(0, imagePrefixLength + match[0].length)
         };
     };
 
