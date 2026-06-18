@@ -32,3 +32,6 @@ CODEX_TASK.local.md
 
 # local real test materials
 local-test-materials/
+
+# local real-run artifacts
+local-run-artifacts/
