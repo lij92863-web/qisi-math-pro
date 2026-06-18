@@ -237,6 +237,15 @@
         });
     };
 
+    const nonNegativeNumberOr = (value, fallback) => {
+        const number =
+            Number(value);
+
+        return Number.isFinite(number) && number >= 0
+            ? number
+            : fallback;
+    };
+
     const buildPdfSupportParserGate = ({
         parsePdfSupportBlocks,
         alignPdfSupport,
@@ -297,19 +306,19 @@
             if (!text) return;
 
             const fallbackPageNo =
-                index + 1;
+                index;
             const pageNo =
-                positiveNumberOr(
-                    value?.sourceOrder ||
-                    value?.pageIndex ||
-                    value?.sourcePage ||
+                nonNegativeNumberOr(
+                    value?.sourceOrder ??
+                    value?.pageIndex ??
+                    value?.sourcePage ??
                     value?.pageNo,
                     fallbackPageNo
                 );
             const pageIndex =
-                positiveNumberOr(
-                    value?.pageIndex ||
-                    value?.sourcePage ||
+                nonNegativeNumberOr(
+                    value?.pageIndex ??
+                    value?.sourcePage ??
                     value?.pageNo,
                     pageNo
                 );

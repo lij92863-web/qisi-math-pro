@@ -25,7 +25,8 @@ const {
     parserStricterThanLegacy,
     case02SolutionDiagnostic,
     objectRawTextPageParserGate,
-    markerCoverageFixture
+    markerCoverageFixture,
+    realStyleSectionFixture
 } =
     require('./fixtures/pdf-real-case-minimal.js');
 
@@ -385,6 +386,58 @@ test(
         assert.deepEqual(
             parserGate.solutions.map(item => item.question),
             fixture.expected.solutionDetectedNumbers
+        );
+    }
+);
+
+test(
+    'real-style section fixture reaches full parser gate coverage',
+    () => {
+        const fixture =
+            realStyleSectionFixture;
+        const parserGate =
+            buildPdfSupportParserGate({
+                parsePdfSupportBlocks,
+                alignPdfSupport,
+                file: {
+                    id:
+                        fixture.id,
+                    filename:
+                        'SANITIZED_SUPPORT.pdf'
+                },
+                expectedQuestionNumbers:
+                    fixture.expectedQuestionNumbers,
+                rawTextPages:
+                    fixture.rawTextPages
+            });
+
+        assert.equal(
+            parserGate.parserResult.blocks.length,
+            fixture.expected.supportBlockCount
+        );
+        assert.equal(
+            parserGate.parserResult.answerItems.length,
+            fixture.expected.answerBlockCount
+        );
+        assert.equal(
+            parserGate.parserResult.solutionItems.length,
+            fixture.expected.solutionBlockCount
+        );
+        assert.equal(
+            parserGate.mode,
+            'full'
+        );
+        assert.deepEqual(
+            parserGate.answers.map(item => item.question),
+            fixture.expected.answerDetectedNumbers
+        );
+        assert.deepEqual(
+            parserGate.solutions.map(item => item.question),
+            fixture.expected.solutionDetectedNumbers
+        );
+        assert.deepEqual(
+            parserGate.fusedQuestionNumbers,
+            []
         );
     }
 );

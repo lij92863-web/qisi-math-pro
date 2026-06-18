@@ -151,6 +151,50 @@ These fields use numeric structure, counts, source/page order, marker kind, and 
 
 Next fixture design must be based on the diagnostic real-run output from these fields, especially unmatched marker forms and block-boundary reject reasons.
 
+## Full-Chain Stage C/D/J Repair Result
+
+Attempt 6 showed the missing real structure without exposing OCR raw text:
+
+- Candidate markers: 24.
+- Question marker candidates: 0.
+- Answer label candidates: 12.
+- Solution label candidates: 12.
+- Parser output: only question 7.
+- Main unhit shapes: answer/solution section labels without inline question numbers, including wrapped forms such as `\A_...` and `\A_\A{...}`.
+
+Fixture-first repair added `case02-real-style-section-sequence`:
+
+- Mixed raw page inputs: string pages and `{ text, pageIndex, sourceOrder }` object pages.
+- Multi-page support raw text.
+- Answer and solution label sections without semantic ownership.
+- Compact explicit number+answer marker for question 7.
+- Cross-page solution continuation.
+- Noise numbers for page/year/score/decimal/coordinate-like forms.
+- Expected source sequence with gaps: `1,2,3,4,5,6,7,8,9,10,13,15`.
+- Extra label markers after expected sequence exhaustion must warn and must not attach.
+
+Parser repair:
+
+- Added proper Chinese `【答案】`, `【解析】`, `答案：`, `解析：` marker rules to the centralized label rule tables.
+- Added fullwidth digit normalization.
+- Extended structural command unwrapping for command-prefix and open-command OCR shapes.
+- Added expected-sequence label block creation only when explicit answer/solution labels are present and `expectedQuestionNumbers` is available.
+- Preserved fail-closed warnings for exhausted implicit sequence labels instead of forcing ownership.
+
+Integration repair:
+
+- `qisi-pdf-support-controlled-write.js` now preserves zero-based `pageIndex/sourceOrder` for provided raw text pages, preventing mixed string/object page collisions.
+- `qisi-pdf-support-aligner.js` now treats the supplied `expectedQuestionNumbers` order as the continuity contract. For case02-style expected gaps, full coverage of `1..10,13,15` is reliable; missing, duplicate, jump-back, mismatch, or wrong start still fail closed or prefix.
+
+Mock result after repair:
+
+- Fixture `supportBlockCount`: 12.
+- Fixture `answerItems count`: 12.
+- Fixture `solutionItems count`: 12.
+- Parser gate mode: `full`.
+- Controlled write solution count: 12.
+- Known-bad and semantic-guessing protections remain covered by tests.
+
 ## Forbidden Fixes
 
 - No semantic guessing.

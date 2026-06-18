@@ -45,6 +45,33 @@ test(
 );
 
 test(
+    'expected sequence with source gaps is reliable full when fully covered',
+    () => {
+        const expected =
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 15];
+        const result =
+            alignPdfSupport({
+                answerItems:
+                    makeItems(expected),
+                solutionItems:
+                    makeItems(expected),
+                expectedQuestionNumbers:
+                    expected
+            });
+
+        assert.equal(result.reliable, true);
+        assert.equal(result.mode, 'full');
+        assert.deepEqual(
+            result.safeQuestionNumbers,
+            expected.map(String)
+        );
+        assert.deepEqual(result.fusedQuestionNumbers, []);
+        assert.equal(result.safeAnswerItems.length, 12);
+        assert.equal(result.safeSolutionItems.length, 12);
+    }
+);
+
+test(
     'prefix 1 then missing 2 only returns question 1',
     () => {
         const result =

@@ -25,6 +25,11 @@
                             ch.charCodeAt(0) - 0xFEE0
                         )
                     )
+                    .replace(/[０-９]/g, ch =>
+                        String.fromCharCode(
+                            ch.charCodeAt(0) - 0xFEE0
+                        )
+                    )
                     .trim();
 
             const match =
@@ -123,6 +128,10 @@
             );
         };
 
+        const sameOrderedValues = (left = [], right = []) =>
+            left.length === right.length &&
+            left.every((value, index) => value === right[index]);
+
         const normalizeExpected = values =>
             (values || [])
                 .map(normalizeSupportQuestionNumber)
@@ -176,20 +185,6 @@
             }
 
             if (
-                answerSequence.values.length &&
-                !isContinuous(answerSequence.values)
-            ) {
-                reasons.push('answer-question-not-continuous');
-            }
-
-            if (
-                solutionSequence.values.length &&
-                !isContinuous(solutionSequence.values)
-            ) {
-                reasons.push('solution-question-not-continuous');
-            }
-
-            if (
                 expectedValues.length &&
                 (
                     !sameNumberSet(
@@ -203,6 +198,42 @@
                 )
             ) {
                 reasons.push('support-question-set-not-equal-expected');
+            }
+
+            if (expectedValues.length) {
+                if (
+                    answerSequence.values.length &&
+                    !sameOrderedValues(
+                        answerSequence.values,
+                        expectedValues
+                    )
+                ) {
+                    reasons.push('answer-question-not-continuous');
+                }
+
+                if (
+                    solutionSequence.values.length &&
+                    !sameOrderedValues(
+                        solutionSequence.values,
+                        expectedValues
+                    )
+                ) {
+                    reasons.push('solution-question-not-continuous');
+                }
+            } else {
+                if (
+                    answerSequence.values.length &&
+                    !isContinuous(answerSequence.values)
+                ) {
+                    reasons.push('answer-question-not-continuous');
+                }
+
+                if (
+                    solutionSequence.values.length &&
+                    !isContinuous(solutionSequence.values)
+                ) {
+                    reasons.push('solution-question-not-continuous');
+                }
             }
 
             return {

@@ -30,7 +30,8 @@ const docxStable =
 
 const {
     case02SolutionDiagnostic,
-    markerCoverageFixture
+    markerCoverageFixture,
+    realStyleSectionFixture
 } =
     require('./fixtures/pdf-real-case-minimal.js');
 
@@ -683,6 +684,58 @@ test(
             );
             assert.ok(
                 field.solutionQuestionNumbers.length > 1
+            );
+            assert.deepEqual(
+                field.solutionQuestionNumbers,
+                fixture.expected.solutionDetectedNumbers
+            );
+            assert.deepEqual(
+                field.fusedQuestionNumbers,
+                []
+            );
+        } finally {
+            restore();
+        }
+    }
+);
+
+test(
+    'real-style section mock writes twelve parser-approved solutions',
+    () => {
+        const restore =
+            installAiEndpointGuards();
+
+        try {
+            const fixture =
+                realStyleSectionFixture;
+            const parserGate =
+                buildPdfSupportParserGate({
+                    parsePdfSupportBlocks,
+                    alignPdfSupport,
+                    expectedQuestionNumbers:
+                        fixture.expectedQuestionNumbers,
+                    rawTextPages:
+                        fixture.rawTextPages
+                });
+            const field =
+                buildPdfSupportFieldLevelControlledWrite({
+                    drafts:
+                        fixture.questionItems,
+                    parserSafeAnswerItems:
+                        parserGate.answers,
+                    parserSafeSolutionItems:
+                        parserGate.solutions,
+                    parserFusedQuestionNumbers:
+                        parserGate.fusedQuestionNumbers
+                });
+
+            assert.equal(
+                parserGate.mode,
+                'full'
+            );
+            assert.equal(
+                field.solutionQuestionNumbers.length,
+                12
             );
             assert.deepEqual(
                 field.solutionQuestionNumbers,

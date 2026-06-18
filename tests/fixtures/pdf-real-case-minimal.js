@@ -240,6 +240,88 @@ const markerCoverageFixture =
         }
     };
 
+const realStyleSectionFixture =
+    {
+        id: 'case02-real-style-section-sequence',
+        description:
+            'Sanitized real-style support pages with answer/solution labels ordered by expected question numbers.',
+        expectedQuestionNumbers:
+            case02QuestionNumbers,
+        questionItems:
+            case02QuestionItems,
+        rawTextPages: [
+            {
+                pageIndex: 0,
+                sourceOrder: 0,
+                text: [
+                    'UNKNOWN_HEADER_2026_PAGE_1_SCORE_12.5',
+                    '\\A_\u3010\u7b54\u6848\u3011A1',
+                    '\\A{\u3010\u89e3\u6790\u3011SOLUTION_1_LINE_1}',
+                    '\\A_\u3010\u7b54\u6848\u3011A2',
+                    '\\A{\u3010\u89e3\u6790\u3011SOLUTION_2}',
+                    'formula (1,2) and 2024 should stay continuation',
+                    '\\A_\u3010\u7b54\u6848\u3011A3',
+                    '\\A{\u3010\u89e3\u6790\u3011SOLUTION_3}',
+                    '\\A_\u3010\u7b54\u6848\u3011A4',
+                    '\\A{\u3010\u89e3\u6790\u3011SOLUTION_4_LINE_1'
+                ].join('\n')
+            },
+            [
+                'SOLUTION_4_LINE_2_CROSS_PAGE',
+                '\\A_\u3010\u7b54\u6848\u3011A5',
+                '\\A{\u3010\u89e3\u6790\u3011SOLUTION_5}',
+                '\\A_\u3010\u7b54\u6848\u3011A6',
+                '\\A{\u3010\u89e3\u6790\u3011SOLUTION_6}',
+                '\\A{7\u3010\u7b54\u6848\u3011A7}',
+                '\\A{\u3010\u89e3\u6790\u3011SOLUTION_7}'
+            ].join('\n'),
+            {
+                pageIndex: 2,
+                sourceOrder: 2,
+                text: [
+                    '\\A_\\A{\u3010\u7b54\u6848\u3011}A8',
+                    '\\A_\\A{\u3010\u89e3\u6790\u3011}SOLUTION_8',
+                    '\\A_\\A{\u3010\u7b54\u6848\u3011}A9',
+                    '\\A_\\A{\u3010\u89e3\u6790\u3011}SOLUTION_9',
+                    '\\A_\\A{\u3010\u7b54\u6848\u3011}A10',
+                    '\\A_\\A{\u3010\u89e3\u6790\u3011}SOLUTION_10',
+                    '\\A_\\A{\u3010\u7b54\u6848\u3011}A13',
+                    '\\A_\\A{\u3010\u89e3\u6790\u3011}SOLUTION_13'
+                ].join('\n')
+            },
+            {
+                pageIndex: 3,
+                sourceOrder: 3,
+                text: [
+                    '\\A_\\A{\u3010\u7b54\u6848\u3011}A15',
+                    '\\A_\\A{\u3010\u89e3\u6790\u3011}SOLUTION_15',
+                    '\\A_\\A{\u3010\u7b54\u6848\u3011}OUT_OF_RANGE_19',
+                    '\\A_\\A{\u3010\u89e3\u6790\u3011}SHOULD_NOT_ATTACH_19'
+                ].join('\n')
+            }
+        ],
+        expected: {
+            supportBlockCount:
+                12,
+            safeSupportBlockCount:
+                12,
+            answerBlockCount:
+                12,
+            solutionBlockCount:
+                12,
+            supportDetectedNumbers:
+                ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
+            answerDetectedNumbers:
+                ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
+            solutionDetectedNumbers:
+                ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
+            outOfRangeNumbers:
+                [],
+            exhaustedImplicitMarkers:
+                2
+        }
+    };
+
 module.exports =
     {
         expectedQuestionNumbers,
@@ -248,5 +330,6 @@ module.exports =
         parserStricterThanLegacy,
         case02SolutionDiagnostic,
         objectRawTextPageParserGate,
-        markerCoverageFixture
+        markerCoverageFixture,
+        realStyleSectionFixture
     };

@@ -88,3 +88,41 @@ Conclusion:
 - The remaining case02 failure is still parser coverage: raw support pages are present, but parser block detection emits 0 blocks.
 - Fail-closed behavior is preserved; no semantic guessing or unsafe answer/solution attachment was introduced.
 - The task must stop here because the real attempt cap has been reached. The next task should build a fixture from the sanitized marker-form fingerprints and repair marker parsing fixture-first.
+
+## Full-Chain Repair Addendum
+
+The next task executed one additional diagnostic real-run after runner diagnostics were expanded:
+
+- Attempt: 6
+- Real API called: yes
+- Result: not-complete, safe partial
+- Question count: 12
+- Answer count: 12
+- Solution count: 1
+- Parser support blocks: 1
+- Detected parser set: `{7}`
+
+The new sanitized diagnostics showed:
+
+- 24 marker candidates in support raw pages.
+- 12 answer label candidates.
+- 12 solution label candidates.
+- 0 question marker candidates.
+- Only the explicit question 7 marker was emitted as a parser block.
+
+Repairs completed fixture-first:
+
+- Added a real-style sanitized fixture with 12 expected source-order labels.
+- Expanded parser marker grammar for proper Chinese answer/solution labels and wrapped OCR command forms.
+- Added expected-sequence label block creation guarded by `expectedQuestionNumbers`.
+- Preserved warnings when label markers exceed the expected sequence.
+- Preserved zero-based page/source order in parser gate raw page handling.
+- Updated aligner continuity to honor the provided expected sequence, including source gaps such as `13` and `15`, without weakening duplicate, jump-back, mismatch, or fail-closed rules.
+
+Mock verification result:
+
+- Parser fixture: 12 answer items and 12 solution items.
+- Parser gate: `full`.
+- Controlled write: 12 parser-approved solutions.
+- No app glue changes.
+- No DOCX stable-chain changes.

@@ -25,6 +25,11 @@
                             ch.charCodeAt(0) - 0xFEE0
                         )
                     )
+                    .replace(/[０-９]/g, ch =>
+                        String.fromCharCode(
+                            ch.charCodeAt(0) - 0xFEE0
+                        )
+                    )
                     .trim();
             const match =
                 source.match(/\d{1,3}/);
@@ -156,6 +161,26 @@
                     changed =
                         true;
                 }
+
+                const commandPrefixMatch =
+                    source.match(/^\\[A-Za-z]+\s*\{([^{}]*)\}\s*([\s\S]+)$/);
+
+                if (commandPrefixMatch) {
+                    source =
+                        `${commandPrefixMatch[1]}${commandPrefixMatch[2]}`.trim();
+                    changed =
+                        true;
+                }
+
+                const openCommandMatch =
+                    source.match(/^\\[A-Za-z]+\s*\{([\s\S]*)$/);
+
+                if (openCommandMatch) {
+                    source =
+                        openCommandMatch[1].trim();
+                    changed =
+                        true;
+                }
             }
 
             return source;
@@ -188,12 +213,14 @@
                 .trim();
 
         const enhancedAnswerLabelRules = [
+            /^(?:【\s*(?:参考答案|答案|答)\s*】|(?:参考答案|答案|答)\s*[:：.]?)/,
             /^(?:銆愮瓟妗堛€?|銆怌銆慉?)/,
             /^(?:绛旀|鍙傝€冪瓟妗?)[：:锛歖]?/,
             /^(?:【答案】|答案|参考答案|答)[：:]?/
         ];
 
         const enhancedSolutionLabelRules = [
+            /^(?:【\s*(?:解析|详解|解答|证明|说明|解)\s*】|(?:解析|详解|解答|证明|说明|解)\s*[:：.]?)/,
             /^(?:銆愯В鏋愩€?|銆怌銆慡?)/,
             /^(?:瑙ｆ瀽|璇﹁В|瑙ｇ瓟|璇佹槑)[：:锛歖]?/,
             /^(?:【解析】|【详解】|【解答】|解析|详解|解答|证明|解)[：:]?/
@@ -259,6 +286,33 @@
 
             const normalized =
                 unwrapStructuralCommand(source);
+            const standardMatch =
+                normalized.match(
+                    /^\s*(?:第\s*([0-9０-９]{1,3})\s*题|[\[【(（]?\s*([0-9０-９]{1,3})\s*[\]】)）]?\s*[.、:：]?)(.*)$/
+                );
+
+            if (standardMatch) {
+                const question =
+                    normalizeQuestionNumber(
+                        standardMatch[1] || standardMatch[2]
+                    );
+
+                if (!question) return null;
+
+                return {
+                    type: 'question',
+                    question,
+                    originalNumber:
+                        standardMatch[1] || standardMatch[2],
+                    normalizedNumber:
+                        question,
+                    markerType:
+                        'question-marker',
+                    rest:
+                        cleanMarkerRest(standardMatch[3])
+                };
+            }
+
             const match =
                 normalized.match(
                     /^\s*(?:(?:銆怽s*绗?|绗?|第)\s*([0-9０-９锛?锛橾]{1,3})\s*(?:棰榎s*銆?|棰?|题)\s*|(?:銆憒绗琝s*|\[|【)\s*([0-9０-９锛?锛橾]{1,3})\s*(?:棰榺?|\]|】)\s*|[\[(（]?\s*([0-9０-９锛?锛橾]{1,3})\s*[\])）]?\s*(?:[.銆乚、．。)]\s*)?)(.*)$/
@@ -302,9 +356,17 @@
             pageIndex,
             sourceOrder,
             sourceFileId,
-            mode
+            mode,
+            markerType = '',
+            sectionType = ''
         }) => ({
             question,
+            originalNumber:
+                question,
+            normalizedNumber:
+                question,
+            markerType,
+            sectionType,
             answer: '',
             solution: '',
             body: '',
@@ -381,12 +443,18 @@
                         .map(normalizeQuestionNumber)
                         .filter(Boolean)
                 );
+            const expectedValues =
+                (expectedQuestionNumbers || [])
+                    .map(normalizeQuestionNumber)
+                    .filter(Boolean);
             const blocks = [];
             const warnings = [];
             const seen =
                 new Set();
             let current =
                 null;
+            let implicitExpectedIndex =
+                0;
             let currentSection =
                 mode === 'answer' || mode === 'solution'
                     ? mode
@@ -408,6 +476,100 @@
                 }
             };
 
+            const nextImplicitQuestion = () => {
+                while (
+                    implicitExpectedIndex < expectedValues.length &&
+                    seen.has(expectedValues[implicitExpectedIndex])
+                ) {
+                    implicitExpectedIndex += 1;
+                }
+
+                return expectedValues[implicitExpectedIndex] || '';
+            };
+
+            const syncImplicitQuestion = question => {
+                const index =
+                    expectedValues.indexOf(question);
+
+                if (index >= implicitExpectedIndex) {
+                    implicitExpectedIndex =
+                        index + 1;
+                }
+            };
+
+            const startQuestionBlock = ({
+                question,
+                page,
+                markerType = '',
+                sectionType = ''
+            }) => {
+                const value =
+                    Number(question);
+
+                current =
+                    makeBlock({
+                        question,
+                        pageIndex:
+                            page.pageIndex,
+                        sourceOrder:
+                            page.sourceOrder,
+                        sourceFileId,
+                        mode,
+                        markerType,
+                        sectionType
+                    });
+                currentSection =
+                    mode === 'answer' || mode === 'solution'
+                        ? mode
+                        : sectionType || 'body';
+
+                if (
+                    expectedSet.size &&
+                    !expectedSet.has(question)
+                ) {
+                    current.warnings.push('unknown-question-marker');
+                    warn(
+                        'unknown-question-marker',
+                        {
+                            question
+                        }
+                    );
+                }
+
+                if (seen.has(question)) {
+                    current.warnings.push('duplicate-question-marker');
+                    warn(
+                        'duplicate-question-marker',
+                        {
+                            question
+                        }
+                    );
+                } else {
+                    seen.add(question);
+                    syncImplicitQuestion(question);
+                }
+
+                if (
+                    previousNumber &&
+                    value < previousNumber
+                ) {
+                    current.warnings.push('jump-back-question-marker');
+                    warn(
+                        'jump-back-question-marker',
+                        {
+                            question,
+                            previousQuestion:
+                                String(previousNumber)
+                        }
+                    );
+                }
+
+                previousNumber =
+                    value;
+
+                return current;
+            };
+
             for (const page of pages) {
                 const lines =
                     String(page.text || '')
@@ -426,70 +588,15 @@
                     if (questionMarker?.type === 'question') {
                         finishCurrent();
 
-                        const value =
-                            Number(questionMarker.question);
-
-                        current =
-                            makeBlock({
-                                question:
-                                    questionMarker.question,
-                                pageIndex:
-                                    page.pageIndex,
-                                sourceOrder:
-                                    page.sourceOrder,
-                                sourceFileId,
-                                mode
-                            });
-                        currentSection =
-                            mode === 'answer' || mode === 'solution'
-                                ? mode
-                                : 'body';
-
-                        if (
-                            expectedSet.size &&
-                            !expectedSet.has(questionMarker.question)
-                        ) {
-                            current.warnings.push('unknown-question-marker');
-                            warn(
-                                'unknown-question-marker',
-                                {
-                                    question:
-                                        questionMarker.question
-                                }
-                            );
-                        }
-
-                        if (seen.has(questionMarker.question)) {
-                            current.warnings.push('duplicate-question-marker');
-                            warn(
-                                'duplicate-question-marker',
-                                {
-                                    question:
-                                        questionMarker.question
-                                }
-                            );
-                        } else {
-                            seen.add(questionMarker.question);
-                        }
-
-                        if (
-                            previousNumber &&
-                            value < previousNumber
-                        ) {
-                            current.warnings.push('jump-back-question-marker');
-                            warn(
-                                'jump-back-question-marker',
-                                {
-                                    question:
-                                        questionMarker.question,
-                                    previousQuestion:
-                                        String(previousNumber)
-                                }
-                            );
-                        }
-
-                        previousNumber =
-                            value;
+                        startQuestionBlock({
+                            question:
+                                questionMarker.question,
+                            page,
+                            markerType:
+                                questionMarker.markerType || 'question-marker',
+                            sectionType:
+                                'body'
+                        });
 
                         currentSection =
                             appendQuestionRest(
@@ -506,9 +613,60 @@
 
                     if (
                         labelMarker &&
-                        labelMarker.type !== 'question' &&
-                        current
+                        labelMarker.type !== 'question'
                     ) {
+                        const shouldStartImplicit =
+                            expectedValues.length &&
+                            (
+                                !current ||
+                                (
+                                    labelMarker.type === 'answer' &&
+                                    (
+                                        current.answer ||
+                                        current.solution
+                                    )
+                                )
+                            );
+
+                        if (shouldStartImplicit) {
+                            finishCurrent();
+
+                            const implicitQuestion =
+                                nextImplicitQuestion();
+
+                            if (!implicitQuestion) {
+                                warn(
+                                    'implicit-question-marker-exhausted',
+                                    {
+                                        section:
+                                            labelMarker.type
+                                    }
+                                );
+                                continue;
+                            }
+
+                            startQuestionBlock({
+                                question:
+                                    implicitQuestion,
+                                page,
+                                markerType:
+                                    'expected-sequence-label',
+                                sectionType:
+                                    labelMarker.type
+                            });
+                        }
+
+                        if (!current) {
+                            warn(
+                                'label-marker-without-question',
+                                {
+                                    section:
+                                        labelMarker.type
+                                }
+                            );
+                            continue;
+                        }
+
                         currentSection =
                             labelMarker.type;
                         appendText(

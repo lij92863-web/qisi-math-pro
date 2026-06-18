@@ -14,7 +14,8 @@ const {
     require('../qisi-pdf-support-block-parser.js');
 
 const {
-    markerCoverageFixture
+    markerCoverageFixture,
+    realStyleSectionFixture
 } =
     require('./fixtures/pdf-real-case-minimal.js');
 
@@ -387,6 +388,77 @@ test(
         assert.deepEqual(
             result.coverageReport.expectedQuestionNumbers,
             fixture.expectedQuestionNumbers.map(String)
+        );
+    }
+);
+
+test(
+    'real-style section labels advance by expected sequence without semantic guessing',
+    () => {
+        const fixture =
+            realStyleSectionFixture;
+        const result =
+            parsePdfSupportBlocks({
+                rawTextPages:
+                    fixture.rawTextPages,
+                expectedQuestionNumbers:
+                    fixture.expectedQuestionNumbers,
+                sourceFileId:
+                    fixture.id
+            });
+
+        assert.equal(
+            result.blocks.length,
+            fixture.expected.supportBlockCount
+        );
+        assert.deepEqual(
+            result.sequenceReport.questionNumbers,
+            fixture.expected.supportDetectedNumbers
+        );
+        assert.deepEqual(
+            result.answerItems.map(item => item.question),
+            fixture.expected.answerDetectedNumbers
+        );
+        assert.deepEqual(
+            result.solutionItems.map(item => item.question),
+            fixture.expected.solutionDetectedNumbers
+        );
+        assert.equal(
+            result.answerItems.length,
+            fixture.expected.answerBlockCount
+        );
+        assert.equal(
+            result.solutionItems.length,
+            fixture.expected.solutionBlockCount
+        );
+        assert.deepEqual(
+            result.coverageReport.expectedQuestionNumbers,
+            fixture.expectedQuestionNumbers.map(String)
+        );
+        assert.deepEqual(
+            result.coverageReport.missingAnswers,
+            []
+        );
+        assert.deepEqual(
+            result.coverageReport.missingSolutions,
+            []
+        );
+        assert.deepEqual(
+            result.warnings
+                .filter(warning => warning.code === 'unknown-question-marker')
+                .map(warning => warning.question),
+            fixture.expected.outOfRangeNumbers
+        );
+        assert.equal(
+            result.warnings
+                .filter(warning => warning.code === 'implicit-question-marker-exhausted')
+                .length,
+            fixture.expected.exhaustedImplicitMarkers
+        );
+        assert.ok(
+            result.solutionItems[3].solution.includes(
+                'SOLUTION_4_LINE_2_CROSS_PAGE'
+            )
         );
     }
 );
