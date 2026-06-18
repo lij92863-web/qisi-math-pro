@@ -9,6 +9,12 @@ const ROOT = path.resolve(__dirname, '..');
 const ARTIFACT_DIR = path.join(ROOT, 'local-run-artifacts', 'pdf-master');
 const LEDGER_PATH = path.join(ARTIFACT_DIR, 'attempt-ledger.jsonl');
 const REPORT_PATH = path.join(ARTIFACT_DIR, 'latest-sanitized-report.json');
+const STAGE6_REPORT_PATH = path.join(
+    ROOT,
+    'docs',
+    'testing',
+    'PDF_MASTER_STAGE6_REAL_VALIDATION_REPORT.md'
+);
 const QUESTION_PDF = path.join(
     ROOT,
     'local-test-materials',
@@ -157,6 +163,67 @@ const writeArtifacts = async (report, ledgerEntry) => {
         `${JSON.stringify(ledgerEntry)}\n`,
         'utf8'
     );
+};
+
+const countRealAttempts = async () => {
+    try {
+        const text =
+            await fsp.readFile(LEDGER_PATH, 'utf8');
+        return text
+            .split(/\r?\n/)
+            .filter(Boolean)
+            .map(line => {
+                try {
+                    return JSON.parse(line);
+                } catch (_) {
+                    return null;
+                }
+            })
+            .filter(item => item?.mode === 'real-run' && item.realApiCalled)
+            .length;
+    } catch (_) {
+        return 0;
+    }
+};
+
+const appendStage6Report = async report => {
+    const attempt =
+        report?.ledgerEntry || {};
+    const lines = [
+        '# PDF Master Stage 6 Real Validation Report',
+        '',
+        '## Latest Attempt',
+        '',
+        `Attempt number: ${attempt.attemptNumber ?? 0}`,
+        `Time: ${attempt.time || ''}`,
+        `Question PDF: ${attempt.questionPdfPath || ''}`,
+        `Support PDF: ${attempt.supportPdfPath || ''}`,
+        `Real API called: ${attempt.realApiCalled ? 'true' : 'false'}`,
+        `Underlying API call count if known: ${attempt.underlyingApiCallCount ?? 0}`,
+        `Question item count: ${attempt.questionItemCount ?? 'N/A'}`,
+        `Answer item count: ${attempt.answerItemCount ?? 'N/A'}`,
+        `Solution item count: ${attempt.solutionItemCount ?? 'N/A'}`,
+        `Align mode: ${attempt.alignMode || 'N/A'}`,
+        `Warnings: ${(attempt.warnings || []).join(', ') || 'none'}`,
+        `Missing answers: ${(report.missingAnswers || []).join(', ') || 'none'}`,
+        `Missing solutions: ${(report.missingSolutions || []).join(', ') || 'none'}`,
+        `Fail-closed: ${report.failClosed ? 'yes' : 'no'}`,
+        `Prefix: ${report.prefix ? 'yes' : 'no'}`,
+        `Wrong attach risk: ${attempt.wrongAttachRisk || 'not-evaluated'}`,
+        `Result classification: ${attempt.result || 'N/A'}`,
+        `Next action: ${attempt.nextAction || ''}`,
+        '',
+        '## Safety',
+        '',
+        '- API key value printed: no',
+        '- Full OCR raw text saved: no',
+        '- Real PDF/DOCX committed: no',
+        '- Formal question bank submitted: no',
+        '- local-run-artifacts committed: no',
+        ''
+    ];
+
+    await fsp.writeFile(STAGE6_REPORT_PATH, `${lines.join('\n')}\n`, 'utf8');
 };
 
 const fetchJson = async url => {
@@ -589,41 +656,351 @@ const runRealRun = async () => {
         await fileStat(SUPPORT_PDF);
     const deps =
         dependencyStatus();
-    const warnings =
-        ['real-run-blocked-in-stage5b-runner-not-ready'];
-    const ledgerEntry =
-        makeLedgerEntry({
-            mode:
-                'real-run',
-            questionPdf,
-            supportPdf,
-            result:
-                'fail-environment',
-            nextAction:
-                'Complete dry-run browser automation before consuming a real API attempt',
-            warnings
+    const warnings = [];
+
+    if (!String(process.env[API_KEY_ENV_NAME] || '').trim()) {
+        warnings.push('api-key-env-missing');
+    }
+
+    if (!deps.some(item => item.name === 'playwright' && item.available)) {
+        warnings.push('playwright-missing');
+    }
+
+    if (warnings.length) {
+        const ledgerEntry =
+            makeLedgerEntry({
+                mode: 'real-run',
+                questionPdf,
+                supportPdf,
+                result: 'fail-environment',
+                nextAction: 'Fix runner environment before retrying',
+                warnings
+            });
+        const report =
+            {
+                mode: 'real-run',
+                ok: false,
+                realApiCalled: false,
+                underlyingApiCallCount: 0,
+                warnings,
+                ledgerEntry
+            };
+
+        await writeArtifacts(report, ledgerEntry);
+        await appendStage6Report(report);
+        return report;
+    }
+
+    const { chromium } =
+        require('playwright');
+    let serverProcess = null;
+    let serverStarted = false;
+    let browser = null;
+    let localApiCallCount = 0;
+    let apiRequestStarted = false;
+    let batchSnapshot = null;
+    let draftSnapshot = [];
+    let result = 'fail-environment';
+    let nextAction = 'Inspect real-run failure and retry only after a code or environment change';
+
+    try {
+        let health =
+            await waitForHealth(1000);
+
+        if (!health.ok) {
+            serverProcess =
+                startLocalServer();
+            serverStarted =
+                true;
+            health =
+                await waitForHealth(10000);
+        }
+
+        if (!health.ok) {
+            throw new Error('local service unavailable');
+        }
+
+        browser =
+            await chromium.launch({ headless: true });
+        const page =
+            await browser.newPage();
+        const aiPathPattern =
+            new RegExp('/api/' + 'ai/(?:chat|ocr)');
+
+        page.on('request', request => {
+            if (aiPathPattern.test(request.url())) {
+                localApiCallCount += 1;
+                apiRequestStarted = true;
+            }
         });
-    const report =
-        {
-            mode:
-                'real-run',
-            ok:
-                false,
-            blocked:
-                true,
-            realApiCalled:
-                false,
-            underlyingApiCallCount:
-                0,
-            reason:
-                'Browser-chain runner is not established until dry-run passes with an automation dependency.',
-            automationDependencies:
-                deps,
-            ledgerEntry
+
+        page.on('dialog', dialog => dialog.accept().catch(() => {}));
+
+        await page.goto(`${APP_URL}/main.html`, {
+            waitUntil: 'load',
+            timeout: 60000
+        });
+        await page.waitForFunction(
+            () => Boolean(document.querySelector('#app')?.__vue_app__?._instance?.proxy),
+            null,
+            { timeout: 60000 }
+        );
+
+        await page.evaluate(() => {
+            const proxy =
+                document.querySelector('#app').__vue_app__._instance.proxy;
+            proxy.view = 'batchImport';
+            proxy.openBatchCreate('mixed');
+        });
+
+        const input =
+            page.locator('input[type="file"][multiple]').first();
+        await input.setInputFiles([QUESTION_PDF, SUPPORT_PDF]);
+
+        const confirmPendingFile = async (filenamePart, roles) => {
+            await page.waitForFunction(
+                part => {
+                    const proxy =
+                        document.querySelector('#app')?.__vue_app__?._instance?.proxy;
+                    return Boolean(proxy?.pendingPurposeFile?.filename?.includes(part));
+                },
+                filenamePart,
+                { timeout: 60000 }
+            );
+            await page.evaluate(({ roles: nextRoles }) => {
+                const proxy =
+                    document.querySelector('#app').__vue_app__._instance.proxy;
+                proxy.pendingPurposeRoles = [];
+                nextRoles.forEach(role => proxy.togglePurposeRole(role));
+                proxy.confirmBatchFilePurpose();
+            }, { roles });
         };
 
-    await writeArtifacts(report, ledgerEntry);
-    return report;
+        await confirmPendingFile('01-question.pdf', ['question']);
+        await confirmPendingFile('02-support-answer-solution.pdf', ['answer', 'solution']);
+
+        await page.waitForFunction(() => {
+            const proxy =
+                document.querySelector('#app')?.__vue_app__?._instance?.proxy;
+            return Array.isArray(proxy?.batchCreateFiles) && proxy.batchCreateFiles.length === 2;
+        }, null, { timeout: 60000 });
+
+        await page.evaluate(() => {
+            const proxy =
+                document.querySelector('#app').__vue_app__._instance.proxy;
+            proxy.createDraftImportBatch();
+        });
+
+        await page.waitForFunction(() => {
+            const proxy =
+                document.querySelector('#app')?.__vue_app__?._instance?.proxy;
+            const batch = proxy?.activeBatch;
+            return Boolean(batch && ['review', 'failed', 'completed'].includes(batch.status));
+        }, null, {
+            timeout:
+                Math.max(60000, Number(process.env.QISI_REAL_RUN_TIMEOUT_MS || 900000))
+        });
+
+        const sanitized =
+            await page.evaluate(async () => {
+                const proxy =
+                    document.querySelector('#app').__vue_app__._instance.proxy;
+                await proxy.openBatchReview(proxy.activeBatchId);
+                const clean = value => String(value || '').trim();
+                const questionNo = (draft, index) =>
+                    String(draft.questionNumber || draft.question || draft.order || index + 1);
+                const drafts =
+                    (proxy.batchDraftQuestions || []).map((draft, index) => {
+                        const warnings =
+                            [
+                                ...(Array.isArray(draft.warnings) ? draft.warnings : []),
+                                ...(Array.isArray(draft.mergeWarnings) ? draft.mergeWarnings : [])
+                            ].map(String);
+
+                        return {
+                            question:
+                                questionNo(draft, index),
+                            hasAnswer:
+                                Boolean(clean(draft.answer)),
+                            hasSolution:
+                                Boolean(clean(draft.solution)),
+                            warnings:
+                                [...new Set(warnings)]
+                        };
+                    });
+
+                return {
+                    batch:
+                        proxy.activeBatch
+                            ? {
+                                id: proxy.activeBatch.id || '',
+                                status: proxy.activeBatch.status || '',
+                                totalCount: proxy.activeBatch.totalCount || 0,
+                                problemCount: proxy.activeBatch.problemCount || 0,
+                                errorMessage: proxy.activeBatch.errorMessage || ''
+                            }
+                            : null,
+                    summary:
+                        proxy.batchRecognitionSummary
+                            ? {
+                                total: proxy.batchRecognitionSummary.total || 0,
+                                withAnswers: proxy.batchRecognitionSummary.withAnswers || 0,
+                                withSolutions: proxy.batchRecognitionSummary.withSolutions || 0,
+                                missingAnswers: proxy.batchRecognitionSummary.missingAnswers || [],
+                                missingSolutions: proxy.batchRecognitionSummary.missingSolutions || []
+                            }
+                            : null,
+                    drafts
+                };
+            });
+
+        batchSnapshot =
+            sanitized.batch;
+        draftSnapshot =
+            sanitized.drafts || [];
+
+        if (batchSnapshot?.status === 'failed') {
+            warnings.push('batch-status-failed');
+            if (batchSnapshot.errorMessage) {
+                warnings.push('batch-error-message-present');
+            }
+            result = 'fail-environment';
+        } else {
+            const allWarnings =
+                [
+                    ...new Set(
+                        draftSnapshot.flatMap(draft => draft.warnings || [])
+                    )
+                ];
+            const unsafe =
+                allWarnings.some(warning =>
+                    /answerConflict|错挂|断号后继续|回跳后继续|重复题号后继续|answer\/solution/.test(warning)
+                );
+            const sequenceGuarded =
+                allWarnings.some(warning =>
+                    /pdf-support-sequence-unreliable|missing_answer|missing_solution/.test(warning)
+                );
+            const missingAny =
+                draftSnapshot.some(draft => !draft.hasAnswer || !draft.hasSolution);
+
+            warnings.push(...allWarnings);
+
+            if (unsafe) {
+                result = 'fail-unsafe';
+                nextAction = 'Convert sanitized warning shape to fixture before any retry';
+            } else if (missingAny || sequenceGuarded) {
+                result = 'pass-safe-partial';
+                nextAction = 'Proceed to Stage 7 final regression';
+            } else {
+                result = 'pass-full';
+                nextAction = 'Proceed to Stage 7 final regression';
+            }
+        }
+
+        const missingAnswers =
+            draftSnapshot.filter(draft => !draft.hasAnswer).map(draft => draft.question);
+        const missingSolutions =
+            draftSnapshot.filter(draft => !draft.hasSolution).map(draft => draft.question);
+        const failClosed =
+            warnings.some(warning => /pdf-support-sequence-unreliable/.test(warning));
+        const prefix =
+            warnings.some(warning => /pdf-support-prefix-only|pdf-support-sequence-unreliable/.test(warning));
+        const alignMode =
+            failClosed
+                ? 'fail-closed'
+                : prefix
+                    ? 'prefix'
+                    : result === 'pass-full'
+                        ? 'full'
+                        : 'unknown';
+        const realAttemptCount =
+            (await countRealAttempts()) + (apiRequestStarted ? 1 : 0);
+        const ledgerEntry =
+            makeLedgerEntry({
+                mode: 'real-run',
+                questionPdf,
+                supportPdf,
+                result,
+                nextAction,
+                warnings: [...new Set(warnings)].slice(0, 80),
+                realApiCalled: apiRequestStarted,
+                underlyingApiCallCount: localApiCallCount,
+                questionItemCount: draftSnapshot.length,
+                answerItemCount: draftSnapshot.filter(draft => draft.hasAnswer).length,
+                solutionItemCount: draftSnapshot.filter(draft => draft.hasSolution).length,
+                alignMode,
+                wrongAttachRisk:
+                    result === 'fail-unsafe'
+                        ? 'detected'
+                        : 'not-detected-by-sanitized-warnings'
+            });
+        ledgerEntry.attemptNumber =
+            apiRequestStarted ? realAttemptCount : 0;
+
+        const report =
+            {
+                mode: 'real-run',
+                ok: result === 'pass-full' || result === 'pass-safe-partial',
+                serverStarted,
+                batch:
+                    batchSnapshot,
+                draftCount:
+                    draftSnapshot.length,
+                missingAnswers,
+                missingSolutions,
+                failClosed,
+                prefix,
+                realApiCalled:
+                    apiRequestStarted,
+                underlyingApiCallCount:
+                    localApiCallCount,
+                ledgerEntry
+            };
+
+        await writeArtifacts(report, ledgerEntry);
+        await appendStage6Report(report);
+        return report;
+    } catch (error) {
+        warnings.push('real-run-exception');
+        const ledgerEntry =
+            makeLedgerEntry({
+                mode: 'real-run',
+                questionPdf,
+                supportPdf,
+                result: 'fail-environment',
+                nextAction: 'Fix runner real-run environment before retrying',
+                warnings,
+                realApiCalled: apiRequestStarted,
+                underlyingApiCallCount: localApiCallCount
+            });
+        ledgerEntry.attemptNumber =
+            apiRequestStarted ? (await countRealAttempts()) + 1 : 0;
+        const report =
+            {
+                mode: 'real-run',
+                ok: false,
+                error:
+                    error?.message || String(error),
+                realApiCalled:
+                    apiRequestStarted,
+                underlyingApiCallCount:
+                    localApiCallCount,
+                missingAnswers: [],
+                missingSolutions: [],
+                failClosed: false,
+                prefix: false,
+                ledgerEntry
+            };
+
+        await writeArtifacts(report, ledgerEntry);
+        await appendStage6Report(report);
+        return report;
+    } finally {
+        if (browser) {
+            await browser.close().catch(() => {});
+        }
+        stopLocalServer(serverProcess);
+    }
 };
 
 const main = async () => {
