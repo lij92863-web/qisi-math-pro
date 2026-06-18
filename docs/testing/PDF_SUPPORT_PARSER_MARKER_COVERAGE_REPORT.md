@@ -195,6 +195,26 @@ Mock result after repair:
 - Controlled write solution count: 12.
 - Known-bad and semantic-guessing protections remain covered by tests.
 
+## Full-Chain Stage H Attempt 7 Result
+
+Repair verification against the real PDFs improved parser coverage but did not complete the chain:
+
+- `supportBlockCount`: 2.
+- Detected set: `{1,7}`.
+- `answerBlockCount`: 1.
+- `solutionBlockCount`: 2.
+- Draft solution count: 1.
+- Aligner mode: `fail-closed`.
+
+This confirms the previous fixture covered a real class of marker form but not all real marker boundaries. Remaining real diagnostics show:
+
+- `markerCandidateCount`: 35.
+- `answerMarkerCandidateCount`: 12.
+- `solutionMarkerCandidateCount`: 13.
+- Unresolved reject classes include `candidate-not-emitted-by-parser`, `candidate-without-number`, and `candidate-noise-shape`.
+
+The next parser fixture must target the remaining un-emitted section-label forms. It must still avoid semantic guessing, unknown block forced ownership, and fail-closed relaxation.
+
 ## Forbidden Fixes
 
 - No semantic guessing.
