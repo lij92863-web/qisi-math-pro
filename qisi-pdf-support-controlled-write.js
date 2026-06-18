@@ -53,6 +53,70 @@
             .join('');
     };
 
+    const normalizeStructuralObjectiveLabelAnswer = (answerRaw, draft) => {
+        const raw =
+            stripMathShell(answerRaw);
+
+        if (
+            !/[\\{}_]/.test(raw) ||
+            /[0-9+\-=^]/.test(raw)
+        ) {
+            return null;
+        }
+
+        const commands =
+            [...raw.matchAll(/\\([A-Za-z]+)/g)].map(match => match[1]);
+        const safeCommands =
+            new Set(['text', 'mathrm', 'mathbf', 'textbf']);
+
+        if (
+            commands.some(command =>
+                command.length > 1 &&
+                !safeCommands.has(command.toLowerCase())
+            )
+        ) {
+            return null;
+        }
+
+        const compact =
+            raw
+                .replace(/\\[A-Za-z]+\s*/g, '')
+                .replace(/[{}\[\]().,，、;；:_\s]/g, '')
+                .toUpperCase();
+
+        if (!/^[A-F]+$/.test(compact)) {
+            return null;
+        }
+
+        const options =
+            getDraftOptions(draft);
+        const optionLabels =
+            new Set(options.map(option => option.label));
+        const labels =
+            compact.split('');
+        const allValid =
+            labels.every(label => optionLabels.has(label));
+
+        return allValid
+            ? {
+                ok: true,
+                answer:
+                    compact,
+                reason:
+                    'structural-option-label-normalized',
+                originalAnswer:
+                    raw
+            }
+            : {
+                ok: false,
+                answer: '',
+                reason:
+                    'invalid-structural-option-label',
+                originalAnswer:
+                    raw
+            };
+    };
+
     const normalizeQuestionNumber = value => {
         const match =
             String(value ?? '').match(/\d{1,3}/);
@@ -132,6 +196,13 @@
             return allValid
                 ? { ok: true, answer: compact, reason: 'already-option-label' }
                 : { ok: false, answer: '', reason: 'invalid-option-label' };
+        }
+
+        const structuralLabel =
+            normalizeStructuralObjectiveLabelAnswer(raw, draft);
+
+        if (structuralLabel) {
+            return structuralLabel;
         }
 
         if (!options.length) {

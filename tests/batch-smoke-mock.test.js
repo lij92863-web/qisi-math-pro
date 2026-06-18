@@ -558,6 +558,50 @@ test(
 );
 
 test(
+    'field-level controlled write normalizes short structural option-label shells only',
+    () => {
+        const normalized =
+            normalizeObjectiveAnswerToLabels(
+                '}B_\\A{D}',
+                {
+                    type: 'multiple',
+                    options: [
+                        'A. VALUE_A',
+                        'B. VALUE_B',
+                        'C. VALUE_C',
+                        'D. VALUE_D'
+                    ]
+                }
+            );
+        const rejectedFormula =
+            normalizeObjectiveAnswerToLabels(
+                '\\frac{A}{B}',
+                {
+                    type: 'multiple',
+                    options: [
+                        'A. VALUE_A',
+                        'B. VALUE_B',
+                        'C. VALUE_C',
+                        'D. VALUE_D'
+                    ]
+                }
+            );
+
+        assert.equal(normalized.ok, true);
+        assert.equal(normalized.answer, 'BD');
+        assert.equal(
+            normalized.reason,
+            'structural-option-label-normalized'
+        );
+        assert.equal(rejectedFormula.ok, false);
+        assert.equal(
+            rejectedFormula.reason,
+            'multiple-option-value-rejected'
+        );
+    }
+);
+
+test(
     'field-level controlled write does not write fused parser questions',
     () => {
         const result =

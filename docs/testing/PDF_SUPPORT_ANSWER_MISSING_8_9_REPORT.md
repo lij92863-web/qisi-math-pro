@@ -117,6 +117,47 @@ Focused tests passed:
 - `npm.cmd test -- tests/pdf-real-case.test.js`
 - `npm.cmd test -- tests/batch-smoke-mock.test.js`
 
+## Real Verification Attempt 9
+
+- Runner: `node scripts/pdf-master-browser-runner.js --mode=real-run`
+- Attempt number: 9
+- New real API attempts used this task so far: 1
+- Result: `pass-safe-partial`
+- Question count: 12
+- Draft answer count: 10
+- Draft solution count: 12
+- Missing answers: 8, 9
+- Missing solutions: none
+- Parser support blocks: 12
+- Parser answer items: 12
+- Parser solution items: 12
+- Aligner output mode: `full`
+- Controlled-write solution count: 12
+
+Attempt 9 confirmed the first fixture repair was incomplete. The new runner diagnostics showed:
+
+- `rejectedAnswerNumbers`: 2, 3, 4, 5, 6, 8, 9
+- Missing draft answers remained only 8 and 9 because other answers were already present from safer draft/question-side evidence.
+- Answers 8 and 9 had reason `multiple-option-value-rejected`.
+- Answers 8 and 9 had structural answer fingerprints shaped like `}A_\A{A}`.
+
+This means the remaining blocker is not segmented multiple-choice option values. It is short structural wrapper noise around option-label evidence.
+
+## Second Fixture-First Repair
+
+Updated the fixture to model the attempt 9 shape:
+
+- Answer 8 placeholder raw form: `}B_\A{D}`
+- Answer 9 placeholder raw form: `}A_\A{C}`
+- Expected normalized answers: 8 -> `BD`, 9 -> `AC`
+
+Updated controlled-write normalization:
+
+- Allows short structural wrappers around A-F option labels.
+- Allows only single-letter OCR wrapper commands or explicit text/math font wrappers such as `\text`, `\mathrm`, `\mathbf`, `\textbf`.
+- Rejects math commands such as `\frac{A}{B}` so formula variables cannot become option labels.
+- Keeps all existing sequence, aligner, and solution gates unchanged.
+
 ## Disallowed Fixes
 
 Not used:

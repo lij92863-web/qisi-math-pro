@@ -466,8 +466,8 @@ const case02AnswerMissing89Fixture =
                         : page.text;
                 const nextText =
                     String(text)
-                        .replace('A8', 'VALUE_8_A、VALUE_8_C')
-                        .replace('A9', 'VALUE_9_B;VALUE_9_D');
+                        .replace('A8', '}B_\\A{D}')
+                        .replace('A9', '}A_\\A{C}');
 
                 return typeof page === 'string'
                     ? nextText
@@ -494,16 +494,16 @@ const case02AnswerMissing89Fixture =
                 ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
             normalizedAnswers: {
                 8:
-                    'AC',
+                    'BD',
                 9:
-                    'BD'
+                    'AC'
             },
             missingAnswers:
                 [],
             missingSolutions:
                 [],
             convertedReason:
-                'multiple-option-values-converted'
+                'structural-option-label-normalized'
         }
     };
 
