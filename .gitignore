@@ -26,3 +26,6 @@ Thumbs.db
 # local generated backups
 *.bak
 *.tmp
+
+# local Codex task input
+CODEX_TASK.local.md
