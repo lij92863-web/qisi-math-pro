@@ -8,6 +8,9 @@ Use the commands already defined in `package.json`.
 npm run check
 npm test
 npm run smoke:batch:mock
+npm run verify:docx-stable
+npm run verify:pdf-known-bad
+npm run verify:batch-safety
 npm run verify:safe
 npm run verify:no-real-ai
 npm run verify:diff-scope
@@ -39,6 +42,20 @@ Use after editing any module or test.
 Runs batch-import mock smoke tests.
 
 This is mandatory for batch import, DOCX, PDF support, and review-related logic.
+
+### `npm run verify:docx-stable`
+
+Runs the current DOCX stable smoke entrypoint.
+
+### `npm run verify:pdf-known-bad`
+
+Runs PDF support known-bad and fail-closed regression entrypoints.
+
+### `npm run verify:batch-safety`
+
+Runs DOCX stable, PDF known-bad, no-real-AI, and batch mock smoke checks.
+
+This command is intentionally not part of `verify:safe` yet to avoid duplicate heavy runs.
 
 ### `npm run verify:safe`
 
@@ -89,6 +106,10 @@ Default tests must not call:
 - paid OCR/vision APIs
 
 If a task requires these calls, create a separate real-test task.
+
+`local-test-materials/` is a local-only real material directory. It is ignored by Git and must not enter default automated tests.
+
+Real DOCX/PDF file verification requires a separate real-file task.
 
 ## 4. Test writing rules
 

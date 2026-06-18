@@ -100,10 +100,15 @@ Such jump-back behavior must not attach later wrong answers.
 Run:
 
 ```bash
+npm run verify:pdf-known-bad
 npm test
 npm run smoke:batch:mock
 npm run verify:safe
 ```
+
+`verify:pdf-known-bad` wraps the current PDF support known-bad and fail-closed regression entrypoints.
+
+`local-test-materials/` is local-only and must not be read by default PDF safety checks. Real PDF file verification requires a separate real-file task.
 
 When changing parser/alignment logic, include or preserve tests for:
 

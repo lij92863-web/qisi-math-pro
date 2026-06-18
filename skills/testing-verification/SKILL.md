@@ -17,6 +17,9 @@ Use this order:
 npm run check
 npm test
 npm run smoke:batch:mock
+npm run verify:docx-stable
+npm run verify:pdf-known-bad
+npm run verify:batch-safety
 npm run verify:no-real-ai
 npm run verify:safe
 ```
@@ -42,6 +45,16 @@ npm.cmd run verify:diff-scope
 
 In Windows PowerShell, prefer `npm.cmd` when execution policy blocks `npm`.
 
+Use focused batch safety entrypoints when relevant:
+
+```bash
+npm run verify:docx-stable
+npm run verify:pdf-known-bad
+npm run verify:batch-safety
+```
+
+`verify:batch-safety` is not part of `verify:safe` yet, to avoid duplicate heavy runs.
+
 ## Mock smoke policy
 
 Mock smoke must not call real AI/OCR.
@@ -54,6 +67,8 @@ If any test path reaches:
 - paid upstream API
 
 then the test must fail unless the task is explicitly a real-AI/OCR task.
+
+`local-test-materials/` is ignored by Git and excluded from default automated tests. Real DOCX/PDF file verification requires a separate real-file task.
 
 ## Fixture policy
 

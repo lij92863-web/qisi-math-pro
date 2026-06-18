@@ -70,9 +70,14 @@ Do not:
 At minimum:
 
 ```bash
+npm run verify:docx-stable
 npm run smoke:batch:mock
 npm run verify:safe
 ```
+
+`verify:docx-stable` wraps the current DOCX stable mock smoke entrypoint.
+
+`local-test-materials/` is local-only and must not be read by default DOCX stable checks. Real DOCX file verification requires a separate real-file task.
 
 If changing `qisi-batch-importer.js`:
 

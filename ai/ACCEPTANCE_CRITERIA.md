@@ -63,8 +63,11 @@ Batch import changes require:
 - DOCX stable chain still passes.
 - PDF known-bad behavior still fails closed.
 - No real AI/OCR call in mock tests.
+- `verify:docx-stable`, `verify:pdf-known-bad`, and `verify:batch-safety` pass when the task touches batch safety.
 - Draft questions preserve `questionNumber`, `stem`, `options`, `answer`, `solution`, `images`, `warnings`, and source trace where applicable.
 - Review page still displays recognition summary and problem filters.
+
+`local-test-materials/` is local-only, ignored by Git, and excluded from default automated tests. Real DOCX/PDF material verification requires a separate real-file task.
 
 ## 5. PDF support acceptance
 
