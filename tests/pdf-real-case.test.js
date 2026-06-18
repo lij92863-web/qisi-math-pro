@@ -24,7 +24,8 @@ const {
     missingAnswerWithSolution,
     parserStricterThanLegacy,
     case02SolutionDiagnostic,
-    objectRawTextPageParserGate
+    objectRawTextPageParserGate,
+    markerCoverageFixture
 } =
     require('./fixtures/pdf-real-case-minimal.js');
 
@@ -324,6 +325,66 @@ test(
         assert.equal(
             fixture.expected.targetState,
             'complete'
+        );
+    }
+);
+
+test(
+    'sanitized marker-form fixture raises parser gate solution coverage',
+    () => {
+        const fixture =
+            markerCoverageFixture;
+        const parserGate =
+            buildPdfSupportParserGate({
+                parsePdfSupportBlocks,
+                alignPdfSupport,
+                file: {
+                    id:
+                        fixture.id,
+                    filename:
+                        'SANITIZED_SUPPORT.pdf'
+                },
+                expectedQuestionNumbers:
+                    fixture.expectedQuestionNumbers,
+                rawTextPages:
+                    fixture.rawTextPages
+            });
+
+        assert.equal(
+            parserGate.rawTextPagesCount,
+            fixture.rawTextPages.length
+        );
+        assert.equal(
+            parserGate.parserResult.blocks.length,
+            fixture.expected.supportBlockCount
+        );
+        assert.equal(
+            parserGate.parserResult.answerItems.length,
+            fixture.expected.answerBlockCount
+        );
+        assert.equal(
+            parserGate.parserResult.solutionItems.length,
+            fixture.expected.solutionBlockCount
+        );
+        assert.deepEqual(
+            parserGate.parserResult.answerItems.map(item => item.question),
+            fixture.expected.answerDetectedNumbers
+        );
+        assert.deepEqual(
+            parserGate.parserResult.solutionItems.map(item => item.question),
+            fixture.expected.solutionDetectedNumbers
+        );
+        assert.equal(
+            parserGate.mode,
+            'full'
+        );
+        assert.deepEqual(
+            parserGate.answers.map(item => item.question),
+            fixture.expected.answerDetectedNumbers
+        );
+        assert.deepEqual(
+            parserGate.solutions.map(item => item.question),
+            fixture.expected.solutionDetectedNumbers
         );
     }
 );

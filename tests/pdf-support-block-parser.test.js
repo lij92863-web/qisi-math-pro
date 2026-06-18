@@ -13,6 +13,11 @@ const {
 } =
     require('../qisi-pdf-support-block-parser.js');
 
+const {
+    markerCoverageFixture
+} =
+    require('./fixtures/pdf-real-case-minimal.js');
+
 test(
     'parses normal 1-3 answer and solution blocks',
     () => {
@@ -322,6 +327,66 @@ test(
         assert.deepEqual(
             result.sequenceReport.questionNumbers,
             []
+        );
+    }
+);
+
+test(
+    'sanitized marker-form fixture parses wrapped answer and solution blocks',
+    () => {
+        const fixture =
+            markerCoverageFixture;
+        const result =
+            parsePdfSupportBlocks({
+                rawTextPages:
+                    fixture.rawTextPages,
+                expectedQuestionNumbers:
+                    fixture.expectedQuestionNumbers,
+                sourceFileId:
+                    fixture.id
+            });
+
+        assert.equal(
+            result.blocks.length,
+            fixture.expected.supportBlockCount
+        );
+        assert.deepEqual(
+            result.sequenceReport.questionNumbers,
+            fixture.expected.supportDetectedNumbers
+        );
+        assert.deepEqual(
+            result.answerItems.map(item => item.question),
+            fixture.expected.answerDetectedNumbers
+        );
+        assert.deepEqual(
+            result.solutionItems.map(item => item.question),
+            fixture.expected.solutionDetectedNumbers
+        );
+        assert.equal(
+            result.answerItems.length,
+            fixture.expected.answerBlockCount
+        );
+        assert.equal(
+            result.solutionItems.length,
+            fixture.expected.solutionBlockCount
+        );
+        assert.deepEqual(
+            result.warnings
+                .filter(warning => warning.code === 'unknown-question-marker')
+                .map(warning => warning.question),
+            fixture.expected.outOfRangeNumbers
+        );
+        assert.deepEqual(
+            result.coverageReport.missingAnswers,
+            []
+        );
+        assert.deepEqual(
+            result.coverageReport.missingSolutions,
+            []
+        );
+        assert.deepEqual(
+            result.coverageReport.expectedQuestionNumbers,
+            fixture.expectedQuestionNumbers.map(String)
         );
     }
 );

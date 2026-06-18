@@ -185,6 +185,61 @@ const objectRawTextPageParserGate =
         }
     };
 
+const markerCoverageQuestionNumbers =
+    [1, 2, 3, 4];
+
+const markerCoverageFixture =
+    {
+        id: 'case02-marker-form-coverage',
+        description:
+            'Sanitized marker-form fixture for LaTeX/list wrapped support markers without real OCR text.',
+        expectedQuestionNumbers:
+            markerCoverageQuestionNumbers,
+        rawTextPages: [
+            {
+                pageIndex: 1,
+                sourceOrder: 1,
+                text: [
+                    '\\item[1] 銆愮瓟妗堛€慉1',
+                    '\\A{銆愯В鏋愩€慡OLUTION_1}',
+                    '\\A{2銆愮瓟妗堛€態2}',
+                    '\\A{銆愯В鏋愩€慡OLUTION_2}'
+                ].join('\n')
+            },
+            {
+                pageIndex: 2,
+                sourceOrder: 2,
+                text: [
+                    '\\textbf{3 銆愮瓟妗堛€慍3}',
+                    '\\A_銆愯В鏋愩€慡OLUTION_3',
+                    '[4] 銆愮瓟妗堛€慏4',
+                    '\\A{銆愯В鏋愩€慡OLUTION_4}',
+                    '\\A{13銆愮瓟妗堛€態AD_OUT_OF_RANGE}',
+                    '\\A{銆愯В鏋愩€慡HOULD_NOT_ATTACH}',
+                    '(15) 銆愮瓟妗堛€慉LSO_OUT_OF_RANGE'
+                ].join('\n')
+            }
+        ],
+        expected: {
+            supportBlockCount:
+                6,
+            safeSupportBlockCount:
+                4,
+            answerBlockCount:
+                4,
+            solutionBlockCount:
+                4,
+            supportDetectedNumbers:
+                ['1', '2', '3', '4', '13', '15'],
+            answerDetectedNumbers:
+                ['1', '2', '3', '4'],
+            solutionDetectedNumbers:
+                ['1', '2', '3', '4'],
+            outOfRangeNumbers:
+                ['13', '15']
+        }
+    };
+
 module.exports =
     {
         expectedQuestionNumbers,
@@ -192,5 +247,6 @@ module.exports =
         missingAnswerWithSolution,
         parserStricterThanLegacy,
         case02SolutionDiagnostic,
-        objectRawTextPageParserGate
+        objectRawTextPageParserGate,
+        markerCoverageFixture
     };

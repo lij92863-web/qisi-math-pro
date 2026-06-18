@@ -124,10 +124,178 @@
             };
         };
 
-        const parseSupportBlockMarkers = line =>
+        const unwrapStructuralCommand = value => {
+            let source =
+                String(value ?? '').trim();
+            let changed =
+                true;
+
+            while (changed) {
+                changed =
+                    false;
+
+                const next =
+                    source
+                        .replace(/^\\(?:noindent|par)\b\s*/i, '')
+                        .replace(/^\\[A-Za-z]+\s*_\s*/, '')
+                        .trim();
+
+                if (next !== source) {
+                    source =
+                        next;
+                    changed =
+                        true;
+                }
+
+                const commandMatch =
+                    source.match(/^\\[A-Za-z]+\s*\{([\s\S]*)\}\s*$/);
+
+                if (commandMatch) {
+                    source =
+                        commandMatch[1].trim();
+                    changed =
+                        true;
+                }
+            }
+
+            return source;
+        };
+
+        const stripLabelRule = (value, rules) => {
+            const source =
+                unwrapStructuralCommand(value);
+
+            for (const rule of rules) {
+                const match =
+                    rule.exec(source);
+
+                if (match) {
+                    return {
+                        label:
+                            match[0],
+                        rest:
+                            source.slice(match[0].length).trim()
+                    };
+                }
+            }
+
+            return null;
+        };
+
+        const cleanMarkerRest = value =>
+            String(value || '')
+                .replace(/^[.、．。)\]）]\s*/, '')
+                .trim();
+
+        const enhancedAnswerLabelRules = [
+            /^(?:銆愮瓟妗堛€?|銆怌銆慉?)/,
+            /^(?:绛旀|鍙傝€冪瓟妗?)[：:锛歖]?/,
+            /^(?:【答案】|答案|参考答案|答)[：:]?/
+        ];
+
+        const enhancedSolutionLabelRules = [
+            /^(?:銆愯В鏋愩€?|銆怌銆慡?)/,
+            /^(?:瑙ｆ瀽|璇﹁В|瑙ｇ瓟|璇佹槑)[：:锛歖]?/,
+            /^(?:【解析】|【详解】|【解答】|解析|详解|解答|证明|解)[：:]?/
+        ];
+
+        const parseEnhancedLabelMarker = line => {
+            const answer =
+                stripLabelRule(line, enhancedAnswerLabelRules);
+
+            if (answer) {
+                return {
+                    type: 'answer',
+                    label:
+                        answer.label,
+                    rest:
+                        answer.rest
+                };
+            }
+
+            const solution =
+                stripLabelRule(line, enhancedSolutionLabelRules);
+
+            if (solution) {
+                return {
+                    type: 'solution',
+                    label:
+                        solution.label,
+                    rest:
+                        solution.rest
+                };
+            }
+
+            return null;
+        };
+
+        const parseEnhancedQuestionMarker = line => {
+            const source =
+                String(line ?? '');
+            const itemMatch =
+                source.match(
+                    /^\s*\\item\s*(?:\[\s*([0-9０-９锛?锛橾]{1,3})\s*(?:[.銆乚、)\]）])?\s*\])?\s*(.*)$/
+                );
+
+            if (itemMatch && itemMatch[1]) {
+                const question =
+                    normalizeQuestionNumber(itemMatch[1]);
+
+                if (!question) return null;
+
+                return {
+                    type: 'question',
+                    question,
+                    originalNumber:
+                        itemMatch[1],
+                    normalizedNumber:
+                        question,
+                    markerType:
+                        'latex-item',
+                    rest:
+                        cleanMarkerRest(itemMatch[2])
+                };
+            }
+
+            const normalized =
+                unwrapStructuralCommand(source);
+            const match =
+                normalized.match(
+                    /^\s*(?:(?:銆怽s*绗?|绗?|第)\s*([0-9０-９锛?锛橾]{1,3})\s*(?:棰榎s*銆?|棰?|题)\s*|(?:銆憒绗琝s*|\[|【)\s*([0-9０-９锛?锛橾]{1,3})\s*(?:棰榺?|\]|】)\s*|[\[(（]?\s*([0-9０-９锛?锛橾]{1,3})\s*[\])）]?\s*(?:[.銆乚、．。)]\s*)?)(.*)$/
+                );
+
+            if (!match) return null;
+
+            const question =
+                normalizeQuestionNumber(
+                    match[1] || match[2] || match[3]
+                );
+
+            if (!question) return null;
+
+            return {
+                type: 'question',
+                question,
+                originalNumber:
+                    match[1] || match[2] || match[3],
+                normalizedNumber:
+                    question,
+                markerType:
+                    'question-marker',
+                rest:
+                    cleanMarkerRest(match[4])
+            };
+        };
+
+        const parseEnhancedSupportBlockMarker = line =>
+            parseEnhancedQuestionMarker(line) ||
+            parseEnhancedLabelMarker(line) ||
             parseQuestionMarker(line) ||
             parseLabelMarker(line) ||
             null;
+
+        const parseSupportBlockMarkers = line =>
+            parseEnhancedSupportBlockMarker(line);
 
         const makeBlock = ({
             question,
@@ -178,9 +346,9 @@
             if (!block || !rest) return fallbackSection;
 
             const labelMarker =
-                parseLabelMarker(rest);
+                parseSupportBlockMarkers(rest);
 
-            if (labelMarker) {
+            if (labelMarker && labelMarker.type !== 'question') {
                 appendText(
                     block,
                     labelMarker.type,
@@ -253,9 +421,9 @@
                     if (!line) continue;
 
                     const questionMarker =
-                        parseQuestionMarker(line);
+                        parseSupportBlockMarkers(line);
 
-                    if (questionMarker) {
+                    if (questionMarker?.type === 'question') {
                         finishCurrent();
 
                         const value =
@@ -334,9 +502,13 @@
                     }
 
                     const labelMarker =
-                        parseLabelMarker(line);
+                        parseSupportBlockMarkers(line);
 
-                    if (labelMarker && current) {
+                    if (
+                        labelMarker &&
+                        labelMarker.type !== 'question' &&
+                        current
+                    ) {
                         currentSection =
                             labelMarker.type;
                         appendText(

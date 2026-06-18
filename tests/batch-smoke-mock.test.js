@@ -29,7 +29,8 @@ const docxStable =
     require('./fixtures/docx-docx-stable.js');
 
 const {
-    case02SolutionDiagnostic
+    case02SolutionDiagnostic,
+    markerCoverageFixture
 } =
     require('./fixtures/pdf-real-case-minimal.js');
 
@@ -627,6 +628,70 @@ test(
             );
             assert.equal(fixture.expected.coverageState, 'incomplete');
             assert.equal(fixture.expected.targetState, 'complete');
+        } finally {
+            restore();
+        }
+    }
+);
+
+test(
+    'sanitized marker-form mock improves parser solution coverage safely',
+    () => {
+        const restore =
+            installAiEndpointGuards();
+
+        try {
+            const fixture =
+                markerCoverageFixture;
+            const parserGate =
+                buildPdfSupportParserGate({
+                    parsePdfSupportBlocks,
+                    alignPdfSupport,
+                    expectedQuestionNumbers:
+                        fixture.expectedQuestionNumbers,
+                    rawTextPages:
+                        fixture.rawTextPages
+                });
+            const field =
+                buildPdfSupportFieldLevelControlledWrite({
+                    drafts:
+                        fixture.expectedQuestionNumbers.map(number => ({
+                            question:
+                                String(number),
+                            type:
+                                'subjective'
+                        })),
+                    parserSafeAnswerItems:
+                        parserGate.answers,
+                    parserSafeSolutionItems:
+                        parserGate.solutions,
+                    parserFusedQuestionNumbers:
+                        parserGate.fusedQuestionNumbers
+                });
+
+            assert.equal(
+                parserGate.parserResult.blocks.length,
+                fixture.expected.supportBlockCount
+            );
+            assert.equal(
+                parserGate.parserResult.answerItems.length,
+                fixture.expected.answerBlockCount
+            );
+            assert.equal(
+                parserGate.parserResult.solutionItems.length,
+                fixture.expected.solutionBlockCount
+            );
+            assert.ok(
+                field.solutionQuestionNumbers.length > 1
+            );
+            assert.deepEqual(
+                field.solutionQuestionNumbers,
+                fixture.expected.solutionDetectedNumbers
+            );
+            assert.deepEqual(
+                field.fusedQuestionNumbers,
+                []
+            );
         } finally {
             restore();
         }
