@@ -325,6 +325,321 @@ const clickButtonByText = async (page, textFragment) => {
     }, textFragment);
 };
 
+const installPdfSupportSolutionDiagnostics = async page => {
+    await page.waitForFunction(
+        () => Boolean(
+            window.Qisi?.PdfSupportControlledWrite?.buildPdfSupportParserGate &&
+            window.Qisi?.PdfSupportControlledWrite?.buildPdfSupportFieldLevelControlledWrite
+        ),
+        null,
+        { timeout: 90000 }
+    );
+
+    await page.evaluate(() => {
+        if (window.__qisiPdfSupportSolutionDiagInstalled) return;
+
+        const normalizeNumber = value => {
+            const match =
+                String(value ?? '').match(/\d{1,3}/);
+            return match ? String(Number(match[0])) : '';
+        };
+        const numbersFromItems = items =>
+            (items || [])
+                .map(item =>
+                    normalizeNumber(
+                        item?.question ??
+                        item?.questionNumber ??
+                        item?.number ??
+                        item?.sourceTrace?.questionNumber ??
+                        ''
+                    )
+                )
+                .filter(Boolean);
+        const unique = values =>
+            [...new Set((values || []).filter(Boolean).map(String))];
+        const warningCodes = warnings =>
+            unique(
+                (warnings || []).map(warning =>
+                    typeof warning === 'string'
+                        ? warning
+                        : warning?.code || warning?.reason || ''
+                )
+            );
+        const collectReasonCounts = decisions => {
+            const counts = {};
+            (decisions || []).forEach(decision => {
+                const key =
+                    [
+                        decision?.field || 'field',
+                        decision?.source || 'source',
+                        decision?.reason || 'reason'
+                    ].join(':');
+                counts[key] =
+                    (counts[key] || 0) + 1;
+            });
+            return counts;
+        };
+
+        window.__qisiPdfSupportSolutionDiag = {
+            parserGate: null,
+            controlledWrite: null,
+            samples: {
+                parserGateCalls: 0,
+                controlledWriteCalls: 0
+            }
+        };
+
+        const controlled =
+            window.Qisi.PdfSupportControlledWrite;
+        const originalParserGate =
+            controlled.buildPdfSupportParserGate;
+        const originalControlledWrite =
+            controlled.buildPdfSupportFieldLevelControlledWrite;
+
+        controlled.buildPdfSupportParserGate = function (...args) {
+            const result =
+                originalParserGate.apply(this, args);
+            const parserResult =
+                result?.parserResult || {};
+            const coverage =
+                parserResult.coverageReport || {};
+            const sequence =
+                parserResult.sequenceReport || {};
+            const report =
+                result?.report || {};
+            const blocks =
+                parserResult.blocks || [];
+            const unknownWarnings =
+                (parserResult.warnings || [])
+                    .filter(warning => warning?.code === 'unknown-question-marker');
+
+            window.__qisiPdfSupportSolutionDiag.samples.parserGateCalls += 1;
+            window.__qisiPdfSupportSolutionDiag.parserGate = {
+                supportRawPageCount:
+                    Number(result?.rawTextPagesCount || 0),
+                supportBlockCount:
+                    blocks.length,
+                answerBlockCount:
+                    (parserResult.answerItems || []).length,
+                solutionBlockCount:
+                    (parserResult.solutionItems || []).length,
+                supportDetectedNumbers:
+                    unique(sequence.questionNumbers || []),
+                answerDetectedNumbers:
+                    unique(coverage.answerQuestionNumbers || numbersFromItems(parserResult.answerItems)),
+                solutionDetectedNumbers:
+                    unique(coverage.solutionQuestionNumbers || numbersFromItems(parserResult.solutionItems)),
+                missingAnswerNumbers:
+                    unique(coverage.missingAnswers || []),
+                missingSolutionNumbers:
+                    unique(coverage.missingSolutions || []),
+                outOfRangeNumbers:
+                    unique(unknownWarnings.map(warning => warning.question)),
+                duplicateNumbers:
+                    unique(sequence.duplicates || []),
+                jumpBackNumbers:
+                    (sequence.jumpBacks || []).map(row => ({
+                        question:
+                            normalizeNumber(row?.question),
+                        previousQuestion:
+                            normalizeNumber(row?.previousQuestion)
+                    })),
+                unknownBlockCount:
+                    unknownWarnings.length,
+                parserWarningCodes:
+                    warningCodes(parserResult.warnings),
+                alignInputSummary: {
+                    expectedValues:
+                        unique(report.expectedValues || []),
+                    answerValues:
+                        unique(report.answerSequence?.values || []),
+                    solutionValues:
+                        unique(report.solutionSequence?.values || [])
+                },
+                alignOutputSummary: {
+                    mode:
+                        result?.mode || '',
+                    failClosed:
+                        Boolean(result?.failClosed),
+                    safeQuestionNumbers:
+                        unique(result?.safeQuestionNumbers || []),
+                    fusedQuestionNumbers:
+                        unique(result?.fusedQuestionNumbers || []),
+                    safeAnswerCount:
+                        (result?.answers || []).length,
+                    safeSolutionCount:
+                        (result?.solutions || []).length
+                },
+                rejectReasons:
+                    unique(report.reasons || []),
+                unsafeSequenceReason:
+                    unique(report.reasons || []),
+                prefixCutoffAt:
+                    unique(result?.safeQuestionNumbers || []).slice(-1)[0] || '',
+                failClosedReason:
+                    result?.failClosed ? unique(report.reasons || []) : [],
+                solutionMarkerForms:
+                    ['not-collected-without-raw-text'],
+                writableSolutionNumbers:
+                    numbersFromItems(result?.solutions || []),
+                blockedSolutionNumbers:
+                    unique(result?.fusedQuestionNumbers || [])
+            };
+
+            return result;
+        };
+
+        controlled.buildPdfSupportFieldLevelControlledWrite = function (...args) {
+            const result =
+                originalControlledWrite.apply(this, args);
+            const solutionNoneDecisions =
+                (result?.fieldDecisions || [])
+                    .filter(decision =>
+                        decision?.field === 'solution' &&
+                        decision?.source === 'none'
+                    );
+
+            window.__qisiPdfSupportSolutionDiag.samples.controlledWriteCalls += 1;
+            window.__qisiPdfSupportSolutionDiag.controlledWrite = {
+                answerQuestionNumbers:
+                    unique(result?.answerQuestionNumbers || []),
+                solutionQuestionNumbers:
+                    unique(result?.solutionQuestionNumbers || []),
+                fusedQuestionNumbers:
+                    unique(result?.fusedQuestionNumbers || []),
+                warningCodes:
+                    warningCodes(result?.warnings),
+                rejectedSolutionNumbers:
+                    unique(solutionNoneDecisions.map(decision => decision.questionNumber)),
+                rejectedSolutionReasons:
+                    unique(solutionNoneDecisions.map(decision => decision.reason)),
+                fieldDecisionReasonCounts:
+                    collectReasonCounts(result?.fieldDecisions),
+                writableSolutionNumbers:
+                    unique(result?.solutionQuestionNumbers || []),
+                blockedSolutionNumbers:
+                    unique([
+                        ...(result?.fusedQuestionNumbers || []),
+                        ...solutionNoneDecisions.map(decision => decision.questionNumber)
+                    ])
+            };
+
+            return result;
+        };
+
+        window.__qisiPdfSupportSolutionDiagInstalled = true;
+    });
+};
+
+const buildSolutionDiagnostics = ({
+    browserDiagnostics = {},
+    missingSolutions = [],
+    draftSnapshot = []
+} = {}) => {
+    const parserGate =
+        browserDiagnostics?.parserGate || {};
+    const controlledWrite =
+        browserDiagnostics?.controlledWrite || {};
+    const draftSolutionNumbers =
+        (draftSnapshot || [])
+            .filter(draft => draft.hasSolution)
+            .map(draft => String(draft.question || ''))
+            .filter(Boolean);
+    const missingSet =
+        new Set((missingSolutions || []).map(String));
+    const fused =
+        new Set([
+            ...(parserGate.blockedSolutionNumbers || []),
+            ...(controlledWrite.fusedQuestionNumbers || [])
+        ].map(String));
+    const rejected =
+        new Map(
+            (controlledWrite.rejectedSolutionNumbers || [])
+                .map(number => [
+                    String(number),
+                    (controlledWrite.rejectedSolutionReasons || []).join(',') ||
+                        'controlled-write-no-safe-solution'
+                ])
+        );
+    const missingSolutionReasons = {};
+
+    missingSet.forEach(number => {
+        if (rejected.has(number)) {
+            missingSolutionReasons[number] =
+                rejected.get(number);
+        } else if (fused.has(number)) {
+            missingSolutionReasons[number] =
+                'pdf-support-sequence-unreliable';
+        } else {
+            missingSolutionReasons[number] =
+                'not-collected-before-stage-b-diagnostics';
+        }
+    });
+
+    return {
+        supportRawPageCount:
+            parserGate.supportRawPageCount ?? null,
+        supportBlockCount:
+            parserGate.supportBlockCount ?? null,
+        answerBlockCount:
+            parserGate.answerBlockCount ?? null,
+        solutionBlockCount:
+            parserGate.solutionBlockCount ?? null,
+        supportDetectedNumbers:
+            parserGate.supportDetectedNumbers || [],
+        answerDetectedNumbers:
+            parserGate.answerDetectedNumbers || [],
+        solutionDetectedNumbers:
+            parserGate.solutionDetectedNumbers || [],
+        rejectedSolutionNumbers:
+            controlledWrite.rejectedSolutionNumbers || [],
+        rejectReasons:
+            [
+                ...new Set([
+                    ...(parserGate.rejectReasons || []),
+                    ...(controlledWrite.rejectedSolutionReasons || [])
+                ])
+            ],
+        alignInputSummary:
+            parserGate.alignInputSummary || null,
+        alignOutputSummary:
+            parserGate.alignOutputSummary || null,
+        controlledWriteSummary:
+            controlledWrite || null,
+        missingSolutionReasons,
+        unsafeSequenceReason:
+            parserGate.unsafeSequenceReason || [],
+        prefixCutoffAt:
+            parserGate.prefixCutoffAt || '',
+        failClosedReason:
+            parserGate.failClosedReason || [],
+        solutionMarkerForms:
+            parserGate.solutionMarkerForms || [],
+        outOfRangeNumbers:
+            parserGate.outOfRangeNumbers || [],
+        duplicateNumbers:
+            parserGate.duplicateNumbers || [],
+        jumpBackNumbers:
+            parserGate.jumpBackNumbers || [],
+        unknownBlockCount:
+            parserGate.unknownBlockCount ?? null,
+        writableSolutionNumbers:
+            controlledWrite.writableSolutionNumbers ||
+            parserGate.writableSolutionNumbers ||
+            [],
+        blockedSolutionNumbers:
+            controlledWrite.blockedSolutionNumbers ||
+            parserGate.blockedSolutionNumbers ||
+            [],
+        draftSolutionCount:
+            draftSolutionNumbers.length,
+        reviewPageSolutionCount:
+            draftSolutionNumbers.length,
+        diagnosticSamples:
+            browserDiagnostics?.samples || {}
+    };
+};
+
 const fetchJson = async url => {
     const response =
         await fetch(url);
@@ -861,6 +1176,9 @@ const runRealRun = async () => {
         phase = 'wait-app-boot';
         await waitForAppBoot(page);
 
+        phase = 'install-solution-diagnostics';
+        await installPdfSupportSolutionDiagnostics(page);
+
         phase = 'open-batch-create';
         await clickButtonByText(page, '\u6279\u91cf\u5f55\u9898');
         await page.waitForSelector('.batch-home-upload', {
@@ -1024,7 +1342,9 @@ const runRealRun = async () => {
                             missingAnswers: drafts.filter(draft => !draft.hasAnswer).map(draft => draft.question),
                             missingSolutions: drafts.filter(draft => !draft.hasSolution).map(draft => draft.question)
                         },
-                    drafts
+                    drafts,
+                    diagnostics:
+                        window.__qisiPdfSupportSolutionDiag || null
                 };
             }, batchId);
 
@@ -1079,6 +1399,13 @@ const runRealRun = async () => {
             draftSnapshot.filter(draft => !draft.hasAnswer).map(draft => draft.question);
         const missingSolutions =
             draftSnapshot.filter(draft => !draft.hasSolution).map(draft => draft.question);
+        const solutionDiagnostics =
+            buildSolutionDiagnostics({
+                browserDiagnostics:
+                    sanitized.diagnostics,
+                missingSolutions,
+                draftSnapshot
+            });
         const failClosed =
             warnings.some(warning => /pdf-support-sequence-unreliable/.test(warning));
         const prefix =
@@ -1133,6 +1460,7 @@ const runRealRun = async () => {
                     apiRequestStarted,
                 underlyingApiCallCount:
                     localApiCallCount,
+                solutionDiagnostics,
                 ledgerEntry
             };
 
