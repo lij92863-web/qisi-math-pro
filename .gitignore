@@ -29,3 +29,6 @@ Thumbs.db
 
 # local Codex task input
 CODEX_TASK.local.md
+
+# local real test materials
+local-test-materials/
