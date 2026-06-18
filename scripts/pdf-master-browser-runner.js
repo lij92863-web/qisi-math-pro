@@ -407,6 +407,8 @@ const runDryRun = async () => {
             status:
                 0,
             hasBatchEntry:
+                false,
+            checkedByBrowser:
                 false
         };
 
@@ -420,12 +422,85 @@ const runDryRun = async () => {
                 status:
                     page.status,
                 hasBatchEntry:
-                    /batchImport|openBatchCreate|批量/.test(page.text)
+                    /batchImport|openBatchCreate|批量/.test(page.text),
+                checkedByBrowser:
+                    false
             };
     }
 
     const automationAvailable =
         deps.some(item => item.available);
+    let browserChain =
+        {
+            ok:
+                false,
+            opened:
+                false,
+            title:
+                '',
+            hasBatchEntry:
+                false,
+            error:
+                ''
+        };
+
+    if (automationAvailable && health.ok) {
+        try {
+            const { chromium } =
+                require('playwright');
+            const browser =
+                await chromium.launch({ headless: true });
+            const page =
+                await browser.newPage();
+            await page.goto(`${APP_URL}/main.html`, {
+                waitUntil:
+                    'domcontentloaded',
+                timeout:
+                    30000
+            });
+            const title =
+                await page.title();
+            const hasBatchEntry =
+                await page.evaluate(() => {
+                    const text =
+                        document.body?.innerText || '';
+                    const html =
+                        document.documentElement?.innerHTML || '';
+                    return /批量|batchImport|openBatchCreate/.test(`${text}\n${html}`);
+                });
+            await browser.close();
+            browserChain =
+                {
+                    ok:
+                        Boolean(hasBatchEntry),
+                    opened:
+                        true,
+                    title,
+                    hasBatchEntry:
+                        Boolean(hasBatchEntry),
+                    error:
+                        ''
+                };
+            appPage.checkedByBrowser =
+                true;
+            appPage.hasBatchEntry =
+                Boolean(appPage.hasBatchEntry && hasBatchEntry);
+        } catch (error) {
+            browserChain =
+                {
+                    ok:
+                        false,
+                    opened:
+                        false,
+                    title:
+                        '',
+                    hasBatchEntry:
+                        false,
+                    error:
+                        error?.message || String(error)
+                };
+        }
+    }
 
     if (!automationAvailable) {
         warnings.push('browser-automation-dependency-missing');
@@ -442,8 +517,13 @@ const runDryRun = async () => {
         gaps.push('The app page could not be inspected through a real browser automation chain.');
     }
 
+    if (automationAvailable && !browserChain.ok) {
+        warnings.push('browser-chain-open-page-failed');
+        gaps.push('Playwright was available, but the runner could not prove the app page and batch entry through Chromium.');
+    }
+
     const ok =
-        Boolean(health.ok && appPage.ok && appPage.hasBatchEntry && automationAvailable);
+        Boolean(health.ok && appPage.ok && appPage.hasBatchEntry && automationAvailable && browserChain.ok);
     const result =
         ok ? 'pass' : 'fail-environment';
     const nextAction =
@@ -478,6 +558,7 @@ const runDryRun = async () => {
                         health.health?.data?.service || ''
                 },
             appPage,
+            browserChain,
             pdfInputs:
                 {
                     questionPdf,
