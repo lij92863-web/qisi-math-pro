@@ -23,6 +23,10 @@ No real AI/OCR calls in ordinary development.
 
 Default safe tests must use mocks and fixtures.
 
+`verify:no-real-ai` is included in `verify:safe` to guard ordinary development paths against forbidden real AI/OCR markers.
+
+The `verify:diff-scope` command can be used with `QISI_ALLOWED_DIFF` to confirm that a task only changed its allowed files.
+
 ## Explicit real-test requirement
 
 A real AI/OCR task must specify:

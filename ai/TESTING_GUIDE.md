@@ -9,6 +9,8 @@ npm run check
 npm test
 npm run smoke:batch:mock
 npm run verify:safe
+npm run verify:no-real-ai
+npm run verify:diff-scope
 npm run verify
 ```
 
@@ -43,10 +45,31 @@ This is mandatory for batch import, DOCX, PDF support, and review-related logic.
 Runs safe full verification:
 
 ```text
-check + test + smoke:batch:mock
+check + test + smoke:batch:mock + verify:no-real-ai
 ```
 
 Use before final report and before commit.
+
+### `npm run verify:no-real-ai`
+
+Scans ordinary development paths for forbidden real AI/OCR call markers.
+
+This command is part of `verify:safe`.
+
+### `npm run verify:diff-scope`
+
+Checks current Git diff against `QISI_ALLOWED_DIFF`.
+
+Example:
+
+```powershell
+$env:QISI_ALLOWED_DIFF="package.json,scripts/**,ai/**,skills/**"
+npm.cmd run verify:diff-scope
+```
+
+Use this for task-specific allowed-file verification. It is not part of `verify:safe`.
+
+In Windows PowerShell, prefer `npm.cmd` when execution policy blocks `npm`.
 
 ### `npm run test:ai-proxy`
 

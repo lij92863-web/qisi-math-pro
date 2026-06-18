@@ -77,6 +77,16 @@ Run narrow tests first, then:
 npm run verify:safe
 ```
 
+`verify:safe` includes `verify:no-real-ai`.
+
+For task-specific allowed-file checks, set `QISI_ALLOWED_DIFF` and run:
+
+```bash
+npm run verify:diff-scope
+```
+
+In Windows PowerShell, prefer `npm.cmd` if direct `npm` is blocked by execution policy.
+
 ### Step 7: Report
 
 Report:

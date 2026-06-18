@@ -17,6 +17,7 @@ Use this order:
 npm run check
 npm test
 npm run smoke:batch:mock
+npm run verify:no-real-ai
 npm run verify:safe
 ```
 
@@ -29,6 +30,17 @@ npm run verify:safe
 ```
 
 Do not replace it with a weaker command.
+
+`verify:safe` includes `verify:no-real-ai`.
+
+Use `verify:diff-scope` with `QISI_ALLOWED_DIFF` when a task defines an allowed file set:
+
+```powershell
+$env:QISI_ALLOWED_DIFF="package.json,scripts/**,ai/**,skills/**"
+npm.cmd run verify:diff-scope
+```
+
+In Windows PowerShell, prefer `npm.cmd` when execution policy blocks `npm`.
 
 ## Mock smoke policy
 

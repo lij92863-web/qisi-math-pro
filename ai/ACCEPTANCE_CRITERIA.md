@@ -46,6 +46,16 @@ npm run verify:safe
 
 Documentation-only changes still run safe verification because they should not affect runtime and the project should remain green.
 
+`verify:safe` includes `verify:no-real-ai`, which checks ordinary development paths for forbidden real AI/OCR markers.
+
+For task-specific file-scope checks, set `QISI_ALLOWED_DIFF` and run:
+
+```bash
+npm run verify:diff-scope
+```
+
+In Windows PowerShell, prefer `npm.cmd` for these commands when execution policy blocks `npm`.
+
 ## 4. Batch import acceptance
 
 Batch import changes require:
