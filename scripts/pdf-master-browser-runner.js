@@ -422,6 +422,57 @@ const installPdfSupportSolutionDiagnostics = async page => {
                 return true;
             });
         };
+        const rawPageRowsFromParserConfig = config => {
+            const rows = [];
+            (config?.rawTextPages || []).forEach((value, index) => {
+                const text =
+                    rawTextFromPageValue(value);
+                if (!text) return;
+                rows.push({
+                    pageIndex:
+                        value && typeof value === 'object'
+                            ? value.pageIndex ?? value.sourcePage ?? value.pageNo ?? index
+                            : index,
+                    sourceOrder:
+                        value && typeof value === 'object'
+                            ? value.sourceOrder ?? index
+                            : index,
+                    source:
+                        'rawTextPages',
+                    text
+                });
+            });
+            [...(config?.answers || []), ...(config?.solutions || [])]
+                .forEach((item, index) => {
+                    const trace =
+                        item?.sourceTrace || {};
+                    const pageValue =
+                        trace.pageText ||
+                        item?.pageText ||
+                        item?.sourceText ||
+                        '';
+                    const text =
+                        rawTextFromPageValue(pageValue);
+                    if (!text) return;
+                    rows.push({
+                        pageIndex:
+                            trace.pageIndex ?? trace.sourcePage ?? item?.pageIndex ?? index,
+                        sourceOrder:
+                            trace.sourceOrder ?? item?.sourceOrder ?? index,
+                        source:
+                            item?.role || item?.sourceRole || 'supportItem',
+                        text
+                    });
+                });
+
+            const seen = new Set();
+            return rows.filter(row => {
+                const key = `${row.source}|${row.pageIndex}|${row.sourceOrder}|${row.text}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+        };
         const markerLineFingerprint = line => {
             const text =
                 String(line || '').trim();
@@ -459,6 +510,318 @@ const installPdfSupportSolutionDiagnostics = async page => {
                 ? forms
                 : ['none-detected-from-sanitized-fingerprint'];
         };
+        const normalizeCandidateNumber = value => {
+            const map = {
+                '０': '0',
+                '１': '1',
+                '２': '2',
+                '３': '3',
+                '４': '4',
+                '５': '5',
+                '６': '6',
+                '７': '7',
+                '８': '8',
+                '９': '9'
+            };
+            const normalized =
+                String(value || '').replace(/[０-９]/g, ch => map[ch] || ch);
+            const match =
+                normalized.match(/[0-9]{1,3}/);
+            return match ? Number(match[0]) : null;
+        };
+        const lineShapeFingerprint = line => {
+            const text =
+                String(line || '').trim();
+            if (!text) return '';
+            return text
+                .replace(/[0-9０-９]+/g, '#')
+                .replace(/[A-Za-z]+/g, 'A')
+                .replace(/[\u4e00-\u9fff]+/g, 'C')
+                .replace(/\s+/g, '_')
+                .slice(0, 80);
+        };
+        const classifyMarkerCandidate = line => {
+            const text =
+                String(line || '').trim();
+            if (!text) return null;
+            const compact =
+                text.replace(/\s+/g, '');
+            const supportForm =
+                markerLineFingerprint(text);
+            const hasAnswerLabel =
+                /答案|参考答案|答[:：.]?|銆愮瓟妗堛€|绛旀|鍙傝€冪瓟妗/.test(compact);
+            const hasSolutionLabel =
+                /解析|详解|解答|证明|说明|解[:：.]?|銆愯В鏋愩€|瑙ｆ瀽|璇﹁В|瑙ｇ瓟/.test(compact);
+            const hasQuestionLabel =
+                /第\s*[0-9０-９]{1,3}\s*题/.test(compact);
+            const structuralQuestion =
+                /^(?:\\[A-Za-z]+\s*)?(?:\\item\s*)?(?:[\[(（【]?\s*[0-9０-９]{1,3}\s*[\])）】]|[0-9０-９]{1,3}\s*[.、:：])/.test(compact) ||
+                /^\\[A-Za-z]+\{?\s*[0-9０-９]{1,3}/.test(compact);
+            const noiseNumber =
+                /(?:20[0-9]{2}|[0-9]+[.][0-9]+|\([0-9０-９]+[,，]\s*[0-9０-９]+\)|[0-9０-９]+\s*分|第\s*[0-9０-９]+\s*页)/.test(compact);
+
+            if (!supportForm && !hasAnswerLabel && !hasSolutionLabel && !hasQuestionLabel && !structuralQuestion && !noiseNumber) {
+                return null;
+            }
+
+            const number =
+                normalizeCandidateNumber(text);
+            let kind = 'noise';
+            if (hasSolutionLabel) {
+                kind = 'solution';
+            } else if (hasAnswerLabel) {
+                kind = 'answer';
+            } else if (hasQuestionLabel || structuralQuestion) {
+                kind = 'question';
+            }
+
+            return {
+                kind,
+                number,
+                form:
+                    supportForm || lineShapeFingerprint(text),
+                lineShape:
+                    lineShapeFingerprint(text)
+            };
+        };
+        const topCountEntries = (values, limit = 20) => {
+            const counts = new Map();
+            values.filter(Boolean).forEach(value => {
+                counts.set(value, (counts.get(value) || 0) + 1);
+            });
+            return [...counts.entries()]
+                .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+                .slice(0, limit)
+                .map(([value, count]) => `${value} x${count}`);
+        };
+        const numberOrNull = value => {
+            const parsed =
+                Number(value);
+            return Number.isFinite(parsed) ? parsed : null;
+        };
+        const summarizeParserInput = (config, parserResult = {}) => {
+            const pages =
+                rawPageRowsFromParserConfig(config);
+            const outputNumbers =
+                new Set([
+                    ...numbersFromItems(parserResult.blocks || []),
+                    ...numbersFromItems(parserResult.answerItems || []),
+                    ...numbersFromItems(parserResult.solutionItems || [])
+                ].map(String));
+            const candidates = [];
+            const firstMatchedByPage = new Map();
+            const lineShapes = [];
+            let totalLines = 0;
+            let nonEmptyLines = 0;
+
+            pages.forEach((page, pagePosition) => {
+                const lines =
+                    String(page.text || '').replace(/\r/g, '\n').split('\n');
+                totalLines += lines.length;
+                lines.forEach((line, lineIndex) => {
+                    const shape =
+                        lineShapeFingerprint(line);
+                    if (shape) {
+                        nonEmptyLines += 1;
+                        lineShapes.push(shape);
+                    }
+                    const candidate =
+                        classifyMarkerCandidate(line);
+                    if (!candidate) return;
+                    const matched =
+                        candidate.number !== null &&
+                        outputNumbers.has(String(candidate.number));
+                    const row = {
+                        pageIndex:
+                            numberOrNull(page.pageIndex),
+                        sourceOrder:
+                            numberOrNull(page.sourceOrder),
+                        pagePosition,
+                        lineIndex,
+                        kind:
+                            candidate.kind,
+                        number:
+                            candidate.number,
+                        form:
+                            candidate.form,
+                        matched
+                    };
+                    candidates.push(row);
+                    if (matched && !firstMatchedByPage.has(pagePosition)) {
+                        firstMatchedByPage.set(pagePosition, {
+                            pageIndex:
+                                row.pageIndex,
+                            sourceOrder:
+                                row.sourceOrder,
+                            kind:
+                                row.kind,
+                            number:
+                                row.number,
+                            form:
+                                row.form
+                        });
+                    }
+                });
+            });
+
+            const lengths =
+                pages.map(page => String(page.text || '').length);
+            const lengthSum =
+                lengths.reduce((sum, length) => sum + length, 0);
+            const matchedForms =
+                topCountEntries(candidates.filter(row => row.matched).map(row => row.form), 40);
+            const unmatchedForms =
+                topCountEntries(candidates.filter(row => !row.matched).map(row => row.form), 60);
+
+            return {
+                rawPageCount:
+                    pages.length,
+                nonEmptyPageCount:
+                    lengths.filter(length => length > 0).length,
+                pageTextLengthStats: {
+                    min:
+                        lengths.length ? Math.min(...lengths) : 0,
+                    max:
+                        lengths.length ? Math.max(...lengths) : 0,
+                    avg:
+                        lengths.length ? Math.round(lengthSum / lengths.length) : 0
+                },
+                markerCandidateCount:
+                    candidates.length,
+                questionMarkerCandidateCount:
+                    candidates.filter(row => row.kind === 'question').length,
+                answerMarkerCandidateCount:
+                    candidates.filter(row => row.kind === 'answer').length,
+                solutionMarkerCandidateCount:
+                    candidates.filter(row => row.kind === 'solution').length,
+                matchedMarkerForms:
+                    matchedForms.length ? matchedForms : ['none'],
+                unmatchedMarkerForms:
+                    unmatchedForms.length ? unmatchedForms : ['none'],
+                firstMatchedMarkerPerPage:
+                    [...firstMatchedByPage.values()],
+                supportBlockBoundaryCandidates:
+                    candidates.slice(0, 80).map(row => ({
+                        pageIndex:
+                            row.pageIndex,
+                        sourceOrder:
+                            row.sourceOrder,
+                        lineIndex:
+                            row.lineIndex,
+                        kind:
+                            row.kind,
+                        number:
+                            row.number,
+                        form:
+                            row.form,
+                        matched:
+                            row.matched
+                    })),
+                supportBlockBoundaryRejectReasons:
+                    topCountEntries(candidates
+                        .filter(row => !row.matched)
+                        .map(row => row.kind === 'noise'
+                            ? 'candidate-noise-shape'
+                            : row.number === null
+                                ? 'candidate-without-number'
+                                : 'candidate-not-emitted-by-parser'), 20),
+                lineShapeStats: {
+                    totalLines,
+                    nonEmptyLines,
+                    topLineShapes:
+                        topCountEntries(lineShapes, 30)
+                },
+                pageOrderSummary:
+                    pages.map((page, index) => ({
+                        index,
+                        pageIndex:
+                            numberOrNull(page.pageIndex),
+                        sourceOrder:
+                            numberOrNull(page.sourceOrder),
+                        textLength:
+                            String(page.text || '').length
+                    })),
+                sourceOrderSummary:
+                    pages.map((page, index) => ({
+                        index,
+                        source:
+                            page.source,
+                        sourceOrder:
+                            numberOrNull(page.sourceOrder)
+                    })),
+                parserInputPageShape:
+                    pages.map((page, index) => {
+                        const lines =
+                            String(page.text || '').replace(/\r/g, '\n').split('\n');
+                        return {
+                            index,
+                            pageIndex:
+                                numberOrNull(page.pageIndex),
+                            sourceOrder:
+                                numberOrNull(page.sourceOrder),
+                            textLength:
+                                String(page.text || '').length,
+                            lineCount:
+                                lines.length,
+                            nonEmptyLineCount:
+                                lines.filter(line => String(line || '').trim()).length
+                        };
+                    })
+            };
+        };
+        const summarizeParserOutput = parserResult => {
+            const blocks =
+                parserResult?.blocks || [];
+            const itemSummary = items =>
+                (items || []).map((item, index) => ({
+                    index,
+                    questionNumber:
+                        normalizeNumber(item?.questionNumber || item?.question),
+                    originalNumber:
+                        item?.originalNumber || '',
+                    normalizedNumber:
+                        normalizeNumber(item?.normalizedNumber || item?.questionNumber || item?.question),
+                    markerType:
+                        item?.markerType || '',
+                    sectionType:
+                        item?.sectionType || '',
+                    sourceOrder:
+                        numberOrNull(item?.sourceOrder),
+                    pageIndex:
+                        numberOrNull(item?.pageIndex),
+                    blockIndex:
+                        numberOrNull(item?.blockIndex)
+                }));
+
+            return {
+                parserOutputBlockSummary:
+                    blocks.map((block, index) => ({
+                        index,
+                        questionNumber:
+                            normalizeNumber(block?.questionNumber || block?.question),
+                        originalNumber:
+                            block?.originalNumber || '',
+                        normalizedNumber:
+                            normalizeNumber(block?.normalizedNumber || block?.questionNumber || block?.question),
+                        markerType:
+                            block?.markerType || '',
+                        sectionType:
+                            block?.sectionType || '',
+                        sourceOrder:
+                            numberOrNull(block?.sourceOrder),
+                        pageIndex:
+                            numberOrNull(block?.pageIndex),
+                        blockIndex:
+                            numberOrNull(block?.blockIndex ?? index)
+                    })),
+                parserOutputItemSummary: {
+                    answers:
+                        itemSummary(parserResult?.answerItems || []),
+                    solutions:
+                        itemSummary(parserResult?.solutionItems || [])
+                }
+            };
+        };
 
         window.__qisiPdfSupportSolutionDiag = {
             parserGate: null,
@@ -494,6 +857,10 @@ const installPdfSupportSolutionDiagnostics = async page => {
             const unknownWarnings =
                 (parserResult.warnings || [])
                     .filter(warning => warning?.code === 'unknown-question-marker');
+            const parserInputSummary =
+                summarizeParserInput(parserConfig, parserResult);
+            const parserOutputSummary =
+                summarizeParserOutput(parserResult);
 
             window.__qisiPdfSupportSolutionDiag.samples.parserGateCalls += 1;
             window.__qisiPdfSupportSolutionDiag.parserGate = {
@@ -562,6 +929,42 @@ const installPdfSupportSolutionDiagnostics = async page => {
                     result?.failClosed ? unique(report.reasons || []) : [],
                 solutionMarkerForms:
                     collectSolutionMarkerForms(parserConfig),
+                rawPageCount:
+                    parserInputSummary.rawPageCount,
+                nonEmptyPageCount:
+                    parserInputSummary.nonEmptyPageCount,
+                pageTextLengthStats:
+                    parserInputSummary.pageTextLengthStats,
+                markerCandidateCount:
+                    parserInputSummary.markerCandidateCount,
+                questionMarkerCandidateCount:
+                    parserInputSummary.questionMarkerCandidateCount,
+                answerMarkerCandidateCount:
+                    parserInputSummary.answerMarkerCandidateCount,
+                solutionMarkerCandidateCount:
+                    parserInputSummary.solutionMarkerCandidateCount,
+                matchedMarkerForms:
+                    parserInputSummary.matchedMarkerForms,
+                unmatchedMarkerForms:
+                    parserInputSummary.unmatchedMarkerForms,
+                firstMatchedMarkerPerPage:
+                    parserInputSummary.firstMatchedMarkerPerPage,
+                supportBlockBoundaryCandidates:
+                    parserInputSummary.supportBlockBoundaryCandidates,
+                supportBlockBoundaryRejectReasons:
+                    parserInputSummary.supportBlockBoundaryRejectReasons,
+                lineShapeStats:
+                    parserInputSummary.lineShapeStats,
+                pageOrderSummary:
+                    parserInputSummary.pageOrderSummary,
+                sourceOrderSummary:
+                    parserInputSummary.sourceOrderSummary,
+                parserInputPageShape:
+                    parserInputSummary.parserInputPageShape,
+                parserOutputBlockSummary:
+                    parserOutputSummary.parserOutputBlockSummary,
+                parserOutputItemSummary:
+                    parserOutputSummary.parserOutputItemSummary,
                 writableSolutionNumbers:
                     numbersFromItems(result?.solutions || []),
                 blockedSolutionNumbers:
@@ -697,6 +1100,42 @@ const buildSolutionDiagnostics = ({
             parserGate.failClosedReason || [],
         solutionMarkerForms:
             parserGate.solutionMarkerForms || [],
+        rawPageCount:
+            parserGate.rawPageCount ?? null,
+        nonEmptyPageCount:
+            parserGate.nonEmptyPageCount ?? null,
+        pageTextLengthStats:
+            parserGate.pageTextLengthStats || null,
+        markerCandidateCount:
+            parserGate.markerCandidateCount ?? null,
+        questionMarkerCandidateCount:
+            parserGate.questionMarkerCandidateCount ?? null,
+        answerMarkerCandidateCount:
+            parserGate.answerMarkerCandidateCount ?? null,
+        solutionMarkerCandidateCount:
+            parserGate.solutionMarkerCandidateCount ?? null,
+        matchedMarkerForms:
+            parserGate.matchedMarkerForms || [],
+        unmatchedMarkerForms:
+            parserGate.unmatchedMarkerForms || [],
+        firstMatchedMarkerPerPage:
+            parserGate.firstMatchedMarkerPerPage || [],
+        supportBlockBoundaryCandidates:
+            parserGate.supportBlockBoundaryCandidates || [],
+        supportBlockBoundaryRejectReasons:
+            parserGate.supportBlockBoundaryRejectReasons || [],
+        lineShapeStats:
+            parserGate.lineShapeStats || null,
+        pageOrderSummary:
+            parserGate.pageOrderSummary || [],
+        sourceOrderSummary:
+            parserGate.sourceOrderSummary || [],
+        parserInputPageShape:
+            parserGate.parserInputPageShape || [],
+        parserOutputBlockSummary:
+            parserGate.parserOutputBlockSummary || [],
+        parserOutputItemSummary:
+            parserGate.parserOutputItemSummary || null,
         outOfRangeNumbers:
             parserGate.outOfRangeNumbers || [],
         duplicateNumbers:

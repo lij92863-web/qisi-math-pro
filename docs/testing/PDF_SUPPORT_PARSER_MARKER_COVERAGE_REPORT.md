@@ -103,6 +103,54 @@ After commit `f8096dd`, one authorized real-run was executed:
 
 This proves the parser marker coverage fix moved the real chain from zero support blocks to one support block, but it did not complete case02. Per P6, the task stops here and must return to fixture-first parser coverage rather than continuing real runs.
 
+## Full-Chain Stage A Diagnosis
+
+The latest available real evidence is still incomplete for fixture-first repair:
+
+- Real `supportRawPageCount`: 4.
+- Real `supportBlockCount`: 1.
+- Real detected set: `{7}`.
+- Real `answerBlockCount`: 1.
+- Real `solutionBlockCount`: 1.
+- Fixture `case02-marker-form-coverage` reaches `supportBlockCount = 6`, but the real run still reaches only 1.
+
+The gap is diagnostic, not a reason to relax safety. The fixture covered wrapper and label forms already known from the previous sanitized marker list. The real run only exposed top marker-form fingerprints, not page-level candidate counts, first matched marker per page, or candidate reject reasons. Therefore it cannot yet explain whether the missing real blocks are:
+
+- marker candidates that were never classified,
+- candidates classified as noise,
+- candidates found but not emitted as block boundaries,
+- page/source-order shape mismatch,
+- or parser output summarization loss.
+
+The only safe next step is Stage B runner diagnostics, followed by one diagnostic real-run. No aligner, controlled-write, or app glue change is justified while parser output remains one detected question.
+
+## Full-Chain Stage B Runner Diagnostic Expansion
+
+Updated `scripts/pdf-master-browser-runner.js` to collect additional sanitized structure only:
+
+- `rawPageCount`
+- `nonEmptyPageCount`
+- `pageTextLengthStats`
+- `markerCandidateCount`
+- `questionMarkerCandidateCount`
+- `answerMarkerCandidateCount`
+- `solutionMarkerCandidateCount`
+- `matchedMarkerForms`
+- `unmatchedMarkerForms`
+- `firstMatchedMarkerPerPage`
+- `supportBlockBoundaryCandidates`
+- `supportBlockBoundaryRejectReasons`
+- `lineShapeStats`
+- `pageOrderSummary`
+- `sourceOrderSummary`
+- `parserInputPageShape`
+- `parserOutputBlockSummary`
+- `parserOutputItemSummary`
+
+These fields use numeric structure, counts, source/page order, marker kind, and marker-form fingerprints. They do not write OCR raw text, API keys, real PDF contents, or case02 semantic content into Git.
+
+Next fixture design must be based on the diagnostic real-run output from these fields, especially unmatched marker forms and block-boundary reject reasons.
+
 ## Forbidden Fixes
 
 - No semantic guessing.
