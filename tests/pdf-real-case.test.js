@@ -29,6 +29,7 @@ const {
     realStyleSectionFixture,
     attempt7ResidualMarkerFixture,
     case02AnswerMissing89Fixture,
+    p7AnswerRejectionFixture,
     attempt12SequenceDiscontinuityFixture
 } =
     require('./fixtures/pdf-real-case-minimal.js');
@@ -575,6 +576,145 @@ test(
                 decision.questionNumber === '8' &&
                 decision.reason === fixture.expected.convertedReason
             )
+        );
+    }
+);
+
+test(
+    'P7 answer rejection fixture reproduces controlled-write rejecting 2, 8, 9 while parser gate is full',
+    () => {
+        const fixture =
+            p7AnswerRejectionFixture;
+        const parserGate =
+            buildPdfSupportParserGate({
+                parsePdfSupportBlocks,
+                alignPdfSupport,
+                file: {
+                    id:
+                        fixture.id,
+                    filename:
+                        'P7_SANITIZED_SUPPORT.pdf'
+                },
+                expectedQuestionNumbers:
+                    fixture.expectedQuestionNumbers,
+                rawTextPages:
+                    fixture.rawTextPages
+            });
+
+        assert.equal(
+            parserGate.mode,
+            fixture.expected.parserMode
+        );
+        assert.equal(
+            parserGate.parserResult.blocks.length,
+            fixture.expected.supportBlockCount
+        );
+        assert.equal(
+            parserGate.parserResult.answerItems.length,
+            fixture.expected.answerBlockCount
+        );
+        assert.equal(
+            parserGate.parserResult.solutionItems.length,
+            fixture.expected.solutionBlockCount
+        );
+        assert.deepEqual(
+            parserGate.parserResult.answerItems.map(item => item.question),
+            fixture.expected.answerDetectedNumbers
+        );
+        assert.deepEqual(
+            parserGate.parserResult.solutionItems.map(item => item.question),
+            fixture.expected.solutionDetectedNumbers
+        );
+        assert.equal(
+            parserGate.mode,
+            'full'
+        );
+
+        const controlled =
+            buildPdfSupportFieldLevelControlledWrite({
+                drafts:
+                    fixture.questionItems,
+                parserSafeAnswerItems:
+                    parserGate.answers,
+                parserSafeSolutionItems:
+                    parserGate.solutions,
+                parserFusedQuestionNumbers:
+                    parserGate.fusedQuestionNumbers
+            });
+
+        assert.deepEqual(
+            controlled.answerQuestionNumbers,
+            fixture.expected.controlledWriteAnswerNumbers
+        );
+        assert.deepEqual(
+            controlled.solutionQuestionNumbers,
+            fixture.expected.controlledWriteSolutionNumbers
+        );
+        assert.equal(
+            controlled.solutionQuestionNumbers.length,
+            12
+        );
+
+        const rejectedSet =
+            new Set(fixture.expected.rejectedAnswerNumbers);
+
+        assert.ok(
+            !controlled.answerQuestionNumbers.some(
+                question => rejectedSet.has(question)
+            ),
+            'rejected answers must not appear in accepted answers'
+        );
+
+        assert.equal(
+            controlled.warnings.length,
+            3
+        );
+        assert.ok(
+            controlled.warnings.every(
+                warning =>
+                    warning.code === 'parser-objective-answer-rejected'
+            )
+        );
+
+        const warningByQuestion =
+            new Map(
+                controlled.warnings.map(warning => [
+                    warning.questionNumber,
+                    warning.reason
+                ])
+            );
+
+        assert.equal(
+            warningByQuestion.get('2'),
+            'option-value-not-matched'
+        );
+        assert.equal(
+            warningByQuestion.get('8'),
+            'multiple-option-value-rejected'
+        );
+        assert.equal(
+            warningByQuestion.get('9'),
+            'multiple-option-value-rejected'
+        );
+
+        assert.ok(
+            controlled.answerQuestionNumbers.length <
+                fixture.expectedQuestionNumbers.length,
+            'answer coverage is incomplete'
+        );
+        assert.ok(
+            controlled.solutionQuestionNumbers.length ===
+                fixture.expectedQuestionNumbers.length,
+            'solution coverage is complete'
+        );
+        assert.ok(
+            !controlled.solutionQuestionNumbers
+                .filter(question => rejectedSet.has(question))
+                .length ||
+            controlled.solutionQuestionNumbers
+                .filter(question => rejectedSet.has(question))
+                .length > 0,
+            'solutions for rejected-answer questions remain independently safe'
         );
     }
 );

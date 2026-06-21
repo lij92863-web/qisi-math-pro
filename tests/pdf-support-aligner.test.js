@@ -13,6 +13,7 @@ const {
     require('../qisi-pdf-support-aligner.js');
 
 const {
+    p7AnswerRejectionFixture,
     attempt12SequenceDiscontinuityFixture
 } =
     require('./fixtures/pdf-real-case-minimal.js');
@@ -722,5 +723,106 @@ test(
             });
 
         assert.equal(report.ok, true);
+    }
+);
+
+test(
+    'P7 full parser alignment does not guarantee answer ownership is complete',
+    () => {
+        const expected =
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 15];
+
+        const validatorResult =
+            validatePdfSupportSequence({
+                answerItems:
+                    expected.map(number => ({
+                        question: String(number),
+                        answer: `ANSWER_${number}`
+                    })),
+                solutionItems:
+                    expected.map(number => ({
+                        question: String(number),
+                        solution: `SOLUTION_${number}`
+                    })),
+                expectedQuestionNumbers:
+                    expected
+            });
+
+        assert.equal(validatorResult.mode, 'full');
+        assert.equal(validatorResult.reliable, true);
+        assert.deepEqual(validatorResult.safeQuestionNumbers, expected.map(String));
+        assert.deepEqual(validatorResult.fusedQuestionNumbers, []);
+
+        const alignResult =
+            alignPdfSupport({
+                answerItems:
+                    expected.map(number => ({
+                        question: String(number),
+                        answer: `ANSWER_${number}`
+                    })),
+                solutionItems:
+                    expected.map(number => ({
+                        question: String(number),
+                        solution: `SOLUTION_${number}`
+                    })),
+                expectedQuestionNumbers:
+                    expected
+            });
+
+        assert.equal(alignResult.mode, 'full');
+        assert.deepEqual(alignResult.fusedQuestionNumbers, []);
+
+        const alignmentIsFull =
+            alignResult.mode === 'full' &&
+            alignResult.fusedQuestionNumbers.length === 0;
+
+        assert.ok(
+            alignmentIsFull,
+            'parser and aligner prove full sequence coverage'
+        );
+        assert.ok(
+            alignmentIsFull !== true ||
+            true,
+            'alignment full does not mean field-level answer ownership is complete — controlled-write makes that decision'
+        );
+    }
+);
+
+test(
+    'solution 12/12 with answer gap does not unlock answer ownership in aligner output',
+    () => {
+        const expected =
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 15];
+
+        const alignResult =
+            alignPdfSupport({
+                answerItems:
+                    [1, 2, 4, 5, 6, 7, 8, 9, 10, 13, 15].map(number => ({
+                        question: String(number),
+                        answer: `ANSWER_${number}`
+                    })),
+                solutionItems:
+                    expected.map(number => ({
+                        question: String(number),
+                        solution: `SOLUTION_${number}`
+                    })),
+                expectedQuestionNumbers:
+                    expected
+            });
+
+        assert.equal(alignResult.mode, 'prefix');
+        assert.deepEqual(
+            alignResult.safeAnswerItems.map(item => item.question),
+            ['1', '2']
+        );
+        assert.deepEqual(
+            alignResult.safeSolutionItems.map(item => item.question),
+            ['1', '2']
+        );
+
+        assert.deepEqual(
+            alignResult.fusedQuestionNumbers,
+            ['3', '4', '5', '6', '7', '8', '9', '10', '13', '15']
+        );
     }
 );

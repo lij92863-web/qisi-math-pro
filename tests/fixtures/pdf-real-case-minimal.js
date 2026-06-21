@@ -507,6 +507,129 @@ const case02AnswerMissing89Fixture =
         }
     };
 
+const p7AnswerRejectionQuestionItems =
+    case02QuestionNumbers.map(number => {
+        if (number === 2) {
+            return {
+                question: '2',
+                questionNumber: '2',
+                stem: 'P7_SANITIZED_STEM_2',
+                type: '单选题',
+                options: [
+                    'A. P7_OPTION_2_A',
+                    'B. P7_OPTION_2_B',
+                    'C. P7_OPTION_2_C',
+                    'D. P7_OPTION_2_D'
+                ]
+            };
+        }
+
+        if (number === 8) {
+            return {
+                question: '8',
+                questionNumber: '8',
+                stem: 'P7_SANITIZED_STEM_8',
+                type: 'multiple',
+                options: [
+                    'A. P7_OPTION_8_A',
+                    'B. P7_OPTION_8_B',
+                    'C. P7_OPTION_8_C',
+                    'D. P7_OPTION_8_D'
+                ]
+            };
+        }
+
+        if (number === 9) {
+            return {
+                question: '9',
+                questionNumber: '9',
+                stem: 'P7_SANITIZED_STEM_9',
+                type: 'multiple',
+                options: [
+                    'A. P7_OPTION_9_A',
+                    'B. P7_OPTION_9_B',
+                    'C. P7_OPTION_9_C',
+                    'D. P7_OPTION_9_D'
+                ]
+            };
+        }
+
+        return {
+            question: String(number),
+            questionNumber: String(number),
+            stem: `P7_SANITIZED_STEM_${number}`,
+            type: 'subjective',
+            options: []
+        };
+    });
+
+const p7AnswerRejectionFixture =
+    {
+        id: 'p7-answer-rejection-2-8-9',
+        description:
+            'P7 shape: parser/aligner full (12/12), controlled-write rejects answers 2 (option-value-not-matched, single-choice) and 8/9 (multiple-option-value-rejected, non-label-payload structural shell). Solution 12/12 does not unlock answer ownership. pass-safe-partial, not complete.',
+        expectedQuestionNumbers:
+            case02QuestionNumbers,
+        questionItems:
+            p7AnswerRejectionQuestionItems,
+        rawTextPages:
+            attempt7ResidualMarkerFixture.rawTextPages.map(page => {
+                const text =
+                    typeof page === 'string'
+                        ? page
+                        : page.text;
+                const nextText =
+                    String(text)
+                        .replace(/A2(?=\\n|$)/, 'P7_MISMATCHED_ANSWER_2')
+                        .replace(/A8(?=\})/, '}X_\\A{Y}')
+                        .replace(/A9(?=\})/, '}P_\\A{Q}');
+
+                return typeof page === 'string'
+                    ? nextText
+                    : {
+                        ...page,
+                        text:
+                            nextText
+                    };
+            }),
+        expected: {
+            parserMode:
+                'full',
+            supportBlockCount:
+                12,
+            answerBlockCount:
+                12,
+            solutionBlockCount:
+                12,
+            answerDetectedNumbers:
+                ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
+            solutionDetectedNumbers:
+                ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
+            controlledWriteAnswerNumbers:
+                ['1', '3', '4', '5', '6', '7', '10', '13', '15'],
+            controlledWriteSolutionNumbers:
+                ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
+            rejectedAnswerNumbers:
+                ['2', '8', '9'],
+            rejectedAnswerReasons: {
+                '2':
+                    'option-value-not-matched',
+                '8':
+                    'multiple-option-value-rejected',
+                '9':
+                    'multiple-option-value-rejected'
+            },
+            missingAnswersFromControlledWrite:
+                ['2', '8', '9'],
+            result:
+                'pass-safe-partial',
+            solutionCompleteDoesNotUnlockAnswer:
+                true,
+            controlledWriteWarningCode:
+                'parser-objective-answer-rejected'
+        }
+    };
+
 const attempt12SequenceDiscontinuityFixture =
     {
         id: 'attempt12-sequence-discontinuity',
@@ -592,5 +715,6 @@ module.exports =
         realStyleSectionFixture,
         attempt7ResidualMarkerFixture,
         case02AnswerMissing89Fixture,
+        p7AnswerRejectionFixture,
         attempt12SequenceDiscontinuityFixture
     };

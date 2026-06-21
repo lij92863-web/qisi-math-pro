@@ -34,6 +34,7 @@ const {
     realStyleSectionFixture,
     attempt7ResidualMarkerFixture,
     case02AnswerMissing89Fixture,
+    p7AnswerRejectionFixture,
     attempt12SequenceDiscontinuityFixture
 } =
     require('./fixtures/pdf-real-case-minimal.js');
@@ -1062,6 +1063,89 @@ test(
             assert.deepEqual(
                 field.fusedQuestionNumbers,
                 []
+            );
+        } finally {
+            restore();
+        }
+    }
+);
+
+test(
+    'P7 answer rejection mock rejects answers 2, 8, 9 while keeping solution 12/12',
+    () => {
+        const restore =
+            installAiEndpointGuards();
+
+        try {
+            const fixture =
+                p7AnswerRejectionFixture;
+            const parserGate =
+                buildPdfSupportParserGate({
+                    parsePdfSupportBlocks,
+                    alignPdfSupport,
+                    expectedQuestionNumbers:
+                        fixture.expectedQuestionNumbers,
+                    rawTextPages:
+                        fixture.rawTextPages
+                });
+            const field =
+                buildPdfSupportFieldLevelControlledWrite({
+                    drafts:
+                        fixture.questionItems,
+                    parserSafeAnswerItems:
+                        parserGate.answers,
+                    parserSafeSolutionItems:
+                        parserGate.solutions,
+                    parserFusedQuestionNumbers:
+                        parserGate.fusedQuestionNumbers
+                });
+
+            assert.equal(
+                parserGate.mode,
+                'full'
+            );
+            assert.equal(
+                parserGate.parserResult.answerItems.length,
+                12
+            );
+            assert.equal(
+                parserGate.parserResult.solutionItems.length,
+                12
+            );
+
+            assert.deepEqual(
+                field.answerQuestionNumbers,
+                fixture.expected.controlledWriteAnswerNumbers
+            );
+            assert.equal(
+                field.solutionQuestionNumbers.length,
+                12
+            );
+
+            assert.equal(
+                field.warnings.length,
+                3
+            );
+            assert.ok(
+                field.warnings.every(
+                    warning =>
+                        warning.code === 'parser-objective-answer-rejected'
+                )
+            );
+
+            const rejected =
+                new Set(fixture.expected.rejectedAnswerNumbers);
+
+            assert.ok(
+                !field.answerQuestionNumbers.some(
+                    question => rejected.has(question)
+                )
+            );
+            assert.ok(
+                field.solutionQuestionNumbers.some(
+                    question => rejected.has(question)
+                ),
+                'solutions for rejected-answer questions remain accepted'
             );
         } finally {
             restore();
