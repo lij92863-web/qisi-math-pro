@@ -30,6 +30,7 @@ const {
     attempt7ResidualMarkerFixture,
     case02AnswerMissing89Fixture,
     p7AnswerRejectionFixture,
+    p8gAttempt1FailureSignatureFixture,
     attempt12SequenceDiscontinuityFixture
 } =
     require('./fixtures/pdf-real-case-minimal.js');

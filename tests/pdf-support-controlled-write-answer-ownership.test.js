@@ -24,6 +24,7 @@ const {
 
 const {
     p7AnswerRejectionFixture,
+    p8gAttempt1FailureSignatureFixture,
     attempt12SequenceDiscontinuityFixture,
     case02AnswerMissing89Fixture
 } =
@@ -1121,5 +1122,267 @@ test(
             taxonomy.normalizedCandidate ||
             typeof taxonomy.normalizedCandidate === 'string'
         );
+    }
+);
+
+test(
+    'P9B P8G attempt 1 failure signature: only 5/12 answers accepted by controlled-write',
+    () => {
+        const fixture =
+            p8gAttempt1FailureSignatureFixture;
+        const parserGate =
+            buildPdfSupportParserGate({
+                parsePdfSupportBlocks,
+                alignPdfSupport,
+                file: {
+                    id: fixture.id,
+                    filename: 'P8G_SANITIZED_SUPPORT.pdf'
+                },
+                expectedQuestionNumbers:
+                    fixture.expectedQuestionNumbers,
+                rawTextPages:
+                    fixture.rawTextPages
+            });
+        const controlled =
+            buildPdfSupportFieldLevelControlledWrite({
+                drafts:
+                    fixture.questionItems,
+                parserSafeAnswerItems:
+                    parserGate.answers,
+                parserSafeSolutionItems:
+                    parserGate.solutions,
+                parserFusedQuestionNumbers:
+                    parserGate.fusedQuestionNumbers
+            });
+
+        assert.equal(parserGate.mode, 'full');
+        assert.deepEqual(
+            controlled.answerQuestionNumbers,
+            fixture.expected.controlledWriteAcceptedAnswerNumbers
+        );
+        assert.equal(
+            controlled.answerQuestionNumbers.length,
+            5
+        );
+        assert.deepEqual(
+            controlled.solutionQuestionNumbers,
+            fixture.expected.controlledWriteSolutionNumbers
+        );
+        assert.equal(
+            controlled.solutionQuestionNumbers.length,
+            12
+        );
+        assert.equal(
+            controlled.warnings.length,
+            7
+        );
+
+        const rejectedSet =
+            new Set(fixture.expected.controlledWriteRejectedAnswerNumbers);
+
+        for (const question of rejectedSet) {
+            assert.ok(
+                !controlled.answerQuestionNumbers.includes(question),
+                `answer ${question} must be rejected`
+            );
+        }
+
+        for (const question of fixture.expected.controlledWriteAcceptedAnswerNumbers) {
+            assert.ok(
+                controlled.answerQuestionNumbers.includes(question),
+                `answer ${question} must be accepted`
+            );
+        }
+    }
+);
+
+test(
+    'P9B baseline candidate equals controlled-write accepted ∩ draft snapshot, not draft snapshot alone',
+    () => {
+        const fixture =
+            p8gAttempt1FailureSignatureFixture;
+        const parserGate =
+            buildPdfSupportParserGate({
+                parsePdfSupportBlocks,
+                alignPdfSupport,
+                file: {
+                    id: fixture.id,
+                    filename: 'P8G_SANITIZED_SUPPORT.pdf'
+                },
+                expectedQuestionNumbers:
+                    fixture.expectedQuestionNumbers,
+                rawTextPages:
+                    fixture.rawTextPages
+            });
+        const controlled =
+            buildPdfSupportFieldLevelControlledWrite({
+                drafts:
+                    fixture.questionItems,
+                parserSafeAnswerItems:
+                    parserGate.answers,
+                parserSafeSolutionItems:
+                    parserGate.solutions,
+                parserFusedQuestionNumbers:
+                    parserGate.fusedQuestionNumbers
+            });
+
+        const draftSnapshotAnswers =
+            fixture.expected.draftSnapshotAnswerNumbers;
+
+        const baselineCandidate =
+            draftSnapshotAnswers.filter(
+                question =>
+                    controlled.answerQuestionNumbers.includes(question)
+            );
+
+        assert.deepEqual(
+            baselineCandidate,
+            fixture.expected.baselineCandidateAnswerNumbers
+        );
+        assert.equal(
+            baselineCandidate.length,
+            fixture.expected.baselineCandidateCount
+        );
+        assert.equal(
+            baselineCandidate.length,
+            5
+        );
+
+        assert.notDeepEqual(
+            baselineCandidate,
+            draftSnapshotAnswers,
+            'baseline candidate must differ from draft snapshot'
+        );
+        assert.ok(
+            draftSnapshotAnswers.includes('2'),
+            'draft snapshot includes answer 2 (from repair path)'
+        );
+        assert.ok(
+            !baselineCandidate.includes('2'),
+            'baseline candidate must not include rejected answer 2'
+        );
+
+        for (const question of fixture.expected.controlledWriteRejectedAnswerNumbers) {
+            assert.ok(
+                !baselineCandidate.includes(question),
+                `rejected answer ${question} must not be in baseline candidate`
+            );
+        }
+    }
+);
+
+test(
+    'P9B pass-safe-partial: 5/12 baseline is not complete',
+    () => {
+        const fixture =
+            p8gAttempt1FailureSignatureFixture;
+        const parserGate =
+            buildPdfSupportParserGate({
+                parsePdfSupportBlocks,
+                alignPdfSupport,
+                file: {
+                    id: fixture.id,
+                    filename: 'P8G_SANITIZED_SUPPORT.pdf'
+                },
+                expectedQuestionNumbers:
+                    fixture.expectedQuestionNumbers,
+                rawTextPages:
+                    fixture.rawTextPages
+            });
+        const controlled =
+            buildPdfSupportFieldLevelControlledWrite({
+                drafts:
+                    fixture.questionItems,
+                parserSafeAnswerItems:
+                    parserGate.answers,
+                parserSafeSolutionItems:
+                    parserGate.solutions,
+                parserFusedQuestionNumbers:
+                    parserGate.fusedQuestionNumbers
+            });
+
+        const hasMissingAnswers =
+            controlled.answerQuestionNumbers.length <
+            fixture.expectedQuestionNumbers.length;
+
+        assert.ok(hasMissingAnswers);
+        assert.equal(
+            controlled.answerQuestionNumbers.length,
+            5
+        );
+
+        const hasRejectedAnswers =
+            controlled.warnings.length > 0;
+
+        assert.ok(hasRejectedAnswers);
+
+        const isCompleteBaselineCandidate =
+            !hasMissingAnswers &&
+            !hasRejectedAnswers &&
+            controlled.warnings.length === 0;
+
+        assert.ok(
+            !isCompleteBaselineCandidate,
+            '5/12 with 7 rejections must not be complete baseline'
+        );
+
+        assert.equal(
+            fixture.expected.result,
+            'pass-safe-partial'
+        );
+    }
+);
+
+test(
+    'P9B solution 12/12 does not determine baseline: answers still rejected',
+    () => {
+        const fixture =
+            p8gAttempt1FailureSignatureFixture;
+        const parserGate =
+            buildPdfSupportParserGate({
+                parsePdfSupportBlocks,
+                alignPdfSupport,
+                file: {
+                    id: fixture.id,
+                    filename: 'P8G_SANITIZED_SUPPORT.pdf'
+                },
+                expectedQuestionNumbers:
+                    fixture.expectedQuestionNumbers,
+                rawTextPages:
+                    fixture.rawTextPages
+            });
+        const controlled =
+            buildPdfSupportFieldLevelControlledWrite({
+                drafts:
+                    fixture.questionItems,
+                parserSafeAnswerItems:
+                    parserGate.answers,
+                parserSafeSolutionItems:
+                    parserGate.solutions,
+                parserFusedQuestionNumbers:
+                    parserGate.fusedQuestionNumbers
+            });
+
+        assert.equal(
+            controlled.solutionQuestionNumbers.length,
+            12,
+            'solutions are complete'
+        );
+        assert.equal(
+            controlled.answerQuestionNumbers.length,
+            5,
+            'but answers are only 5/12'
+        );
+
+        for (const question of ['8', '9']) {
+            assert.ok(
+                controlled.solutionQuestionNumbers.includes(question),
+                `solution ${question} is written`
+            );
+            assert.ok(
+                !controlled.answerQuestionNumbers.includes(question),
+                `answer ${question} is NOT written despite solution existing`
+            );
+        }
     }
 );

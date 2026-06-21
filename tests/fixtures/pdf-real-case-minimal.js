@@ -703,6 +703,109 @@ const attempt12SequenceDiscontinuityFixture =
         }
     };
 
+const p8gAttempt1QuestionItems =
+    case02QuestionNumbers.map(number => {
+        if (number >= 2 && number <= 6) {
+            return {
+                question: String(number),
+                questionNumber: String(number),
+                stem: `P8G_SANITIZED_STEM_${number}`,
+                type: '单选题',
+                options: [
+                    `A. P8G_OPTION_${number}_A`,
+                    `B. P8G_OPTION_${number}_B`,
+                    `C. P8G_OPTION_${number}_C`,
+                    `D. P8G_OPTION_${number}_D`
+                ]
+            };
+        }
+
+        if (number === 8 || number === 9) {
+            return {
+                question: String(number),
+                questionNumber: String(number),
+                stem: `P8G_SANITIZED_STEM_${number}`,
+                type: 'multiple',
+                options: [
+                    `A. P8G_OPTION_${number}_A`,
+                    `B. P8G_OPTION_${number}_B`,
+                    `C. P8G_OPTION_${number}_C`,
+                    `D. P8G_OPTION_${number}_D`
+                ]
+            };
+        }
+
+        return {
+            question: String(number),
+            questionNumber: String(number),
+            stem: `P8G_SANITIZED_STEM_${number}`,
+            type: 'subjective',
+            options: []
+        };
+    });
+
+const p8gAttempt1FailureSignatureFixture =
+    {
+        id: 'p8g-attempt1-failure-signature',
+        description:
+            'Sanitized P8G attempt 1 failure shape: controlled-write accepts only 5/12 answers (1,7,10,13,15), rejects 7/12 (2-6 as option-value-not-matched, 8-9 as multiple-option-value-rejected). Solutions 12/12. Draft snapshot has 10/12 from repair path. Baseline candidate is 5/12. pass-safe-partial, not complete.',
+        expectedQuestionNumbers:
+            case02QuestionNumbers,
+        questionItems:
+            p8gAttempt1QuestionItems,
+        rawTextPages:
+            attempt7ResidualMarkerFixture.rawTextPages.map(page => {
+                const text =
+                    typeof page === 'string'
+                        ? page
+                        : page.text;
+                const nextText =
+                    String(text)
+                        .replace(/A2(?=\n|$)/, 'P8G_UNMATCHED_VALUE')
+                        .replace(/A3(?=\n|$)/, 'P8G_UNMATCHED_VALUE')
+                        .replace(/A4(?=\n|$)/, 'P8G_UNMATCHED_VALUE')
+                        .replace(/A5(?=\n|$)/, 'P8G_UNMATCHED_VALUE')
+                        .replace(/A6(?=\n|$)/, 'P8G_UNMATCHED_VALUE')
+                        .replace(/A8(?=\})/, '}X_\\A{Y}')
+                        .replace(/A9(?=\})/, '}P_\\A{Q}');
+
+                return typeof page === 'string'
+                    ? nextText
+                    : {
+                        ...page,
+                        text: nextText
+                    };
+            }),
+        expected: {
+            parserMode:
+                'full',
+            supportBlockCount:
+                12,
+            answerBlockCount:
+                12,
+            solutionBlockCount:
+                12,
+            controlledWriteAcceptedAnswerNumbers:
+                ['1', '7', '10', '13', '15'],
+            controlledWriteRejectedAnswerNumbers:
+                ['2', '3', '4', '5', '6', '8', '9'],
+            controlledWriteSolutionNumbers:
+                ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
+            draftSnapshotAnswerNumbers:
+                ['1', '2', '3', '4', '5', '6', '7', '10', '13', '15'],
+            missingAnswersFromDraft:
+                ['8', '9'],
+            baselineCandidateAnswerNumbers:
+                ['1', '7', '10', '13', '15'],
+            result:
+                'pass-safe-partial',
+            solutionCompleteDoesNotDetermineBaseline:
+                true,
+            baselineCandidateCount:
+                5
+        }
+    };
+
 module.exports =
     {
         expectedQuestionNumbers,
@@ -716,5 +819,6 @@ module.exports =
         attempt7ResidualMarkerFixture,
         case02AnswerMissing89Fixture,
         p7AnswerRejectionFixture,
+        p8gAttempt1FailureSignatureFixture,
         attempt12SequenceDiscontinuityFixture
     };
