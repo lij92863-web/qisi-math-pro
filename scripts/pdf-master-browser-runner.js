@@ -17,6 +17,16 @@ const {
         return { classifyAnswerExtractionQuality: null };
     }
 })();
+
+const {
+    buildAnswerOnlyExtractionShadow: buildAoeShadow
+} = (() => {
+    try {
+        return require(path.join(ROOT, 'qisi-pdf-answer-only-extraction.js'));
+    } catch (_) {
+        return { buildAnswerOnlyExtractionShadow: null };
+    }
+})();
 const LEDGER_PATH = path.join(ARTIFACT_DIR, 'attempt-ledger.jsonl');
 const REPORT_PATH = path.join(ARTIFACT_DIR, 'latest-sanitized-report.json');
 const STAGE6_REPORT_PATH = path.join(
@@ -2327,6 +2337,23 @@ const runRealRun = async () => {
                 answerExtractionQualityShadow;
         }
 
+        let answerOnlyExtractionShadow =
+            null;
+
+        if (typeof buildAoeShadow === 'function') {
+            answerOnlyExtractionShadow =
+                buildAoeShadow(
+                    solutionDiagnostics.parserInputPageShape ||
+                    [],
+                    EXPECTED_QUESTION_NUMBERS
+                );
+
+            if (answerOnlyExtractionShadow) {
+                ledgerEntry.answerOnlyExtractionShadow =
+                    answerOnlyExtractionShadow;
+            }
+        }
+
         ledgerEntry.attemptNumber =
             apiRequestStarted ? realAttemptCount : 0;
 
@@ -2387,6 +2414,8 @@ const runRealRun = async () => {
                     ledgerEntry.controlledWriteSummary,
                 answerExtractionQualityShadow:
                     ledgerEntry.answerExtractionQualityShadow || null,
+                answerOnlyExtractionShadow:
+                    ledgerEntry.answerOnlyExtractionShadow || null,
                 draftCleanup,
                 reportSource:
                     ledgerEntry.reportSource,

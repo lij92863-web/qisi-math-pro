@@ -4,181 +4,96 @@ const test =
 const assert =
     require('node:assert/strict');
 
-// --- P10J: Answer-Only Extraction validator (mock design) ---
-
-const normalizeAnswerOnlyItem = item => {
-    if (!item || typeof item !== 'object') return null;
-
-    const sourceOrder =
-        Number(item.sourceOrder);
-
-    if (!Number.isInteger(sourceOrder) || sourceOrder <= 0) return null;
-
-    const label =
-        String(item.label || '').trim().toUpperCase();
-
-    if (!/^[A-F]+$/.test(label)) return null;
-
-    if (label.length > 4) return null;
-
-    return {
-        sourceOrder,
-        questionNumberCandidate:
-            item.questionNumberCandidate || null,
-        label,
-        rawEvidenceShape:
-            item.rawEvidenceShape || 'unknown',
-        confidence:
-            item.confidence || 'low'
-    };
-};
-
-const validateAnswerOnlyExtraction = ({
-    items = [],
-    expectedCount = 0
-} = {}) => {
-    const normalized = [];
-    const warnings = [];
-    const seenSourceOrders = new Set();
-
-    if (!Array.isArray(items) || !items.length) {
-        return {
-            valid: false,
-            reason: 'empty-or-not-array',
-            normalizedItems: [],
-            safeItems: [],
-            fusedItems: [],
-            warnings: ['empty-input']
-        };
-    }
-
-    for (let i = 0; i < items.length; i++) {
-        const item =
-            normalizeAnswerOnlyItem(items[i]);
-
-        if (!item) {
-            warnings.push({
-                index: i,
-                code: 'invalid-item',
-                detail: 'Item could not be normalized to a valid AOE record.'
-            });
-            continue;
-        }
-
-        if (seenSourceOrders.has(item.sourceOrder)) {
-            return {
-                valid: false,
-                reason: 'duplicate-sourceOrder',
-                normalizedItems: normalized,
-                safeItems: [],
-                fusedItems: normalized.map(n => n.sourceOrder),
-                warnings: [...warnings, { code: 'duplicate-sourceOrder' }]
-            };
-        }
-        seenSourceOrders.add(item.sourceOrder);
-
-        normalized.push(item);
-    }
-
-    if (!normalized.length) {
-        return {
-            valid: false,
-            reason: 'no-valid-items',
-            normalizedItems: [],
-            safeItems: [],
-            fusedItems: [],
-            warnings: [...warnings, 'no-valid-items']
-        };
-    }
-
-    const sourceOrders =
-        normalized.map(n => n.sourceOrder);
-
-    for (let i = 1; i < sourceOrders.length; i++) {
-        if (sourceOrders[i] < sourceOrders[i - 1]) {
-            return {
-                valid: false,
-                reason: 'jumpBack',
-                normalizedItems: normalized,
-                safeItems: [],
-                fusedItems: sourceOrders.map(String),
-                warnings: [...warnings, { code: 'jumpBack' }]
-            };
-        }
-    }
-
-    if (expectedCount && normalized.length !== expectedCount) {
-        warnings.push({
-            code: 'count-mismatch',
-            detail: `Expected ${expectedCount}, got ${normalized.length}`
-        });
-    }
-
-    return {
-        valid: warnings.length === 0 ||
-            warnings.every(w => w.code === 'count-mismatch'),
-        reason: warnings.length ? 'count-mismatch' : '',
-        normalizedItems: normalized,
-        safeItems: normalized,
-        fusedItems: [],
-        warnings
-    };
-};
-
-const buildAoeEvidenceCandidates = (aoeResult, expectedQuestionNumbers = []) => {
-    if (!aoeResult || !aoeResult.valid) {
-        return { candidates: [], status: 'fail-closed', warnings: ['aoe-invalid'] };
-    }
-
-    const expected =
-        (expectedQuestionNumbers || []).map(String);
-    const items =
-        aoeResult.normalizedItems || [];
-
-    if (!expected.length) {
-        return { candidates: [], status: 'fail-closed', warnings: ['no-expected-numbers'] };
-    }
-
-    const candidates = [];
-    const warnings = [];
-
-    for (let i = 0; i < Math.min(items.length, expected.length); i++) {
-        const item = items[i];
-        const question = expected[i];
-
-        if (!item) {
-            warnings.push({ question, code: 'missing-aoe-item' });
-            continue;
-        }
-
-        candidates.push({
-            question,
-            sourceOrder: item.sourceOrder,
-            label: item.label,
-            evidenceType: 'answer-only-extraction',
-            evidenceShape: item.rawEvidenceShape,
-            confidence: item.confidence
-        });
-    }
-
-    if (candidates.length < expected.length) {
-        warnings.push({
-            code: 'incomplete',
-            detail: `${candidates.length}/${expected.length} questions covered`
-        });
-    }
-
-    return {
-        candidates,
-        status: candidates.length === expected.length ? 'full' : 'partial',
-        warnings
-    };
-};
-
-// --- Tests ---
+const {
+    normalizeAnswerOnlyExtractionItem,
+    isAnswerMarkerLine,
+    extractLabelFromAnswerLine,
+    isDirtyOrNonLabelContent,
+    validateAnswerOnlyExtractionSequence,
+    buildAnswerOnlyExtractionShadow
+} =
+    require('../qisi-pdf-answer-only-extraction.js');
 
 test(
-    'P10J AOE: clean labels-only 1-12 is valid evidence',
+    'P10K AOE: normalize valid answer item',
+    () => {
+        const item =
+            normalizeAnswerOnlyExtractionItem({
+                sourceOrder: 1,
+                label: 'A'
+            });
+
+        assert.ok(item);
+        assert.equal(item.sourceOrder, 1);
+        assert.equal(item.label, 'A');
+        assert.equal(item.evidenceLevel, 'candidate-only');
+        assert.equal(item.source, 'aoe-route-a-rawTextPages');
+    }
+);
+
+test(
+    'P10K AOE: normalize rejects non-label, negative sourceOrder, missing fields',
+    () => {
+        assert.equal(
+            normalizeAnswerOnlyExtractionItem({ sourceOrder: 1, label: 'LaTeX text' }),
+            null
+        );
+        assert.equal(
+            normalizeAnswerOnlyExtractionItem({ sourceOrder: -1, label: 'A' }),
+            null
+        );
+        assert.equal(
+            normalizeAnswerOnlyExtractionItem({ label: 'A' }),
+            null
+        );
+        assert.equal(
+            normalizeAnswerOnlyExtractionItem(null),
+            null
+        );
+    }
+);
+
+test(
+    'P10K AOE: isAnswerMarkerLine detects answer markers',
+    () => {
+        assert.ok(isAnswerMarkerLine('答案：A'));
+        assert.ok(isAnswerMarkerLine('【答案】A'));
+        assert.ok(isAnswerMarkerLine('参考答案：B'));
+        assert.ok(isAnswerMarkerLine('\\A_【答案】A'));
+        assert.ok(!isAnswerMarkerLine('解析：solution text'));
+        assert.ok(!isAnswerMarkerLine('1. question stem'));
+    }
+);
+
+test(
+    'P10K AOE: extractLabelFromAnswerLine extracts clean labels',
+    () => {
+        assert.equal(extractLabelFromAnswerLine('A'), 'A');
+        assert.equal(extractLabelFromAnswerLine('答案：B'), 'B');
+        assert.equal(extractLabelFromAnswerLine('【答案】C'), 'C');
+        assert.equal(extractLabelFromAnswerLine('答:D'), 'D');
+        assert.equal(extractLabelFromAnswerLine('A.'), 'A');
+        assert.equal(extractLabelFromAnswerLine('(B)'), 'B');
+        assert.equal(extractLabelFromAnswerLine('{A}'), 'A');
+        assert.equal(extractLabelFromAnswerLine('LaTeX explanation'), null);
+        assert.equal(extractLabelFromAnswerLine('}A_\\A{A}'), null);
+    }
+);
+
+test(
+    'P10K AOE: isDirtyOrNonLabelContent detects dirty content',
+    () => {
+        assert.ok(isDirtyOrNonLabelContent('}A_\\A{A}').dirty);
+        assert.ok(isDirtyOrNonLabelContent('\\frac{A}{B}').dirty);
+        assert.ok(isDirtyOrNonLabelContent('A+B').dirty);
+        assert.ok(isDirtyOrNonLabelContent('long text that is clearly not a label').dirty);
+        assert.ok(!isDirtyOrNonLabelContent('A').dirty);
+        assert.ok(!isDirtyOrNonLabelContent('BD').dirty);
+    }
+);
+
+test(
+    'P10K AOE: clean labels 1-12 → mode full',
     () => {
         const items =
             [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 15].map(n => ({
@@ -186,38 +101,21 @@ test(
                 label: 'A'
             }));
         const result =
-            validateAnswerOnlyExtraction({ items, expectedCount: 12 });
+            validateAnswerOnlyExtractionSequence(
+                items,
+                [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 15]
+            );
 
-        assert.ok(result.valid, 'clean labels should be valid');
-        assert.equal(result.normalizedItems.length, 12);
+        assert.ok(result.ok);
+        assert.equal(result.mode, 'full');
+        assert.equal(result.candidateItems.length, 12);
+        assert.equal(result.affectsControlledWrite, false);
+        assert.equal(result.affectsBaselineCandidate, false);
     }
 );
 
 test(
-    'P10J AOE: non-label payload rejected by validator',
-    () => {
-        const items = [
-            { sourceOrder: 1, label: 'A' },
-            { sourceOrder: 2, label: 'LaTeX explanation text' },
-            { sourceOrder: 3, label: '\\frac{A}{B}' }
-        ];
-
-        const result =
-            validateAnswerOnlyExtraction({ items });
-
-        assert.equal(
-            result.normalizedItems.length,
-            1,
-            'only the clean label item should survive'
-        );
-        assert.ok(
-            result.warnings.some(w => w.code === 'invalid-item')
-        );
-    }
-);
-
-test(
-    'P10J AOE: dirty structural shell }A_\\A{A} rejected by validator',
+    'P10K AOE: dirty shell rejected by validator',
     () => {
         const items = [
             { sourceOrder: 1, label: 'A' },
@@ -225,78 +123,48 @@ test(
         ];
 
         const result =
-            validateAnswerOnlyExtraction({ items });
+            validateAnswerOnlyExtractionSequence(items);
 
-        assert.equal(result.normalizedItems.length, 1);
-    }
-);
-
-test(
-    'P10J AOE: duplicate sourceOrder fail-closed',
-    () => {
-        const items = [
-            { sourceOrder: 1, label: 'A' },
-            { sourceOrder: 1, label: 'B' }
-        ];
-
-        const result =
-            validateAnswerOnlyExtraction({ items });
-
-        assert.ok(!result.valid);
-        assert.equal(result.reason, 'duplicate-sourceOrder');
-    }
-);
-
-test(
-    'P10J AOE: jumpBack sourceOrder fail-closed',
-    () => {
-        const items = [
-            { sourceOrder: 1, label: 'A' },
-            { sourceOrder: 3, label: 'B' },
-            { sourceOrder: 2, label: 'C' }
-        ];
-
-        const result =
-            validateAnswerOnlyExtraction({ items });
-
-        assert.ok(!result.valid);
-        assert.equal(result.reason, 'jumpBack');
-    }
-);
-
-test(
-    'P10J AOE: AI question field is not trusted for alignment',
-    () => {
-        const items = [
-            { sourceOrder: 1, label: 'A', questionNumberCandidate: '8' },
-            { sourceOrder: 2, label: 'B', questionNumberCandidate: '9' },
-            { sourceOrder: 3, label: 'C', questionNumberCandidate: '10' }
-        ];
-
-        const result =
-            validateAnswerOnlyExtraction({ items });
-
-        assert.ok(result.valid, 'valid by sourceOrder alignment');
-
-        const candidates =
-            buildAoeEvidenceCandidates(result, ['1', '2', '3']);
-
-        assert.equal(candidates.candidates.length, 3);
-        assert.equal(
-            candidates.candidates[0].question,
-            '1',
-            'aligned by position/expected sequence, NOT by questionNumberCandidate'
-        );
+        assert.equal(result.candidateItems.length, 1);
         assert.ok(
-            candidates.candidates[0].sourceOrder === 1 &&
-            items[0].questionNumberCandidate === '8',
-            'AI question field is wrong but alignment used sourceOrder correctly'
+            result.rejectedItems.some(r => r.reason === 'contains-latex-command' ||
+                r.reason === 'contains-underscore')
         );
     }
 );
 
 test(
-    'P10J AOE: incomplete coverage → partial status',
+    'P10K AOE: duplicate sourceOrder fail-closed',
+    () => {
+        const result =
+            validateAnswerOnlyExtractionSequence([
+                { sourceOrder: 1, label: 'A' },
+                { sourceOrder: 1, label: 'B' }
+            ]);
+
+        assert.equal(result.mode, 'fail-closed');
+        assert.ok(
+            result.warnings.some(w => w.code === 'duplicate-sourceOrder')
+        );
+    }
+);
+
+test(
+    'P10K AOE: jumpBack fail-closed',
+    () => {
+        const result =
+            validateAnswerOnlyExtractionSequence([
+                { sourceOrder: 1, label: 'A' },
+                { sourceOrder: 3, label: 'B' },
+                { sourceOrder: 2, label: 'C' }
+            ]);
+
+        assert.equal(result.mode, 'fail-closed');
+    }
+);
+
+test(
+    'P10K AOE: missing Q8/Q9 → pass-safe-partial',
     () => {
         const items =
             [1, 2, 3, 4, 5, 6, 7, 10, 13, 15].map(n => ({
@@ -305,99 +173,142 @@ test(
             }));
 
         const result =
-            validateAnswerOnlyExtraction({ items, expectedCount: 12 });
-
-        const candidates =
-            buildAoeEvidenceCandidates(
-                result,
+            validateAnswerOnlyExtractionSequence(
+                items,
                 [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 15]
             );
 
-        assert.equal(candidates.status, 'partial');
-        assert.equal(candidates.candidates.length, 10);
+        assert.equal(result.mode, 'pass-safe-partial');
         assert.ok(
-            candidates.warnings.some(w => w.code === 'incomplete')
+            result.warnings.some(w => w.code === 'aoe-incomplete')
         );
     }
 );
 
 test(
-    'P10J AOE: empty input is invalid',
-    () => {
-        const result =
-            validateAnswerOnlyExtraction({ items: [] });
-
-        assert.ok(!result.valid);
-    }
-);
-
-test(
-    'P10J AOE: candidate evidence does not equal accepted/write permission',
+    'P10K AOE: AOE candidate not accepted; controlled-write still truth gate',
     () => {
         const items =
-            [1, 2, 3].map(n => ({
-                sourceOrder: n,
-                label: 'A'
-            }));
+            [1, 2, 3].map(n => ({ sourceOrder: n, label: 'A' }));
 
         const result =
-            validateAnswerOnlyExtraction({ items });
+            validateAnswerOnlyExtractionSequence(items, [1, 2, 3]);
 
-        assert.ok(result.valid);
+        assert.ok(result.ok);
+        assert.equal(result.affectsControlledWrite, false);
+        assert.equal(result.affectsBaselineCandidate, false);
+        assert.equal(result.affectsResultClassification, false);
 
-        const candidates =
-            buildAoeEvidenceCandidates(result, ['1', '2', '3']);
-
-        assert.equal(candidates.candidates.length, 3);
-
-        assert.ok(
-            candidates.candidates[0].evidenceType === 'answer-only-extraction',
-            'evidence type is answer-only-extraction, not accepted'
-        );
-
-        const isDirectlyAccepted =
-            candidates.candidates.every(
-                c => c.evidenceType === 'accepted'
+        const isAccepted =
+            result.candidateItems.every(
+                item => item.evidenceLevel === 'candidate-only'
             );
 
+        assert.ok(isAccepted, 'all items are candidate-only, not accepted');
+    }
+);
+
+test(
+    'P10K AOE: buildAnswerOnlyExtractionShadow from rawTextPages',
+    () => {
+        const pages = [
+            '1. 【答案】A\n【解析】solution 1',
+            '2. 答案：B\n解析：solution 2',
+            '3. 【答案】C\n【解析】solution 3'
+        ];
+
+        const shadow =
+            buildAnswerOnlyExtractionShadow(pages, [1, 2, 3]);
+
+        assert.ok(shadow);
+        assert.equal(shadow.mode, 'full');
+        assert.deepEqual(
+            shadow.candidateQuestionNumbers,
+            ['1', '2', '3']
+        );
+        assert.equal(shadow.affectsControlledWrite, false);
+        assert.equal(shadow.affectsBaselineCandidate, false);
+    }
+);
+
+test(
+    'P10K AOE: shadow with incomplete coverage reports pass-safe-partial',
+    () => {
+        const pages = [
+            '1. 【答案】A',
+            '3. 【答案】C'
+        ];
+
+        const shadow =
+            buildAnswerOnlyExtractionShadow(pages, [1, 2, 3]);
+
+        assert.ok(shadow);
+        assert.equal(shadow.mode, 'pass-safe-partial');
+        assert.deepEqual(
+            shadow.missingQuestionNumbers,
+            ['3']
+        );
+        assert.equal(shadow.candidateCount, 2);
+        assert.equal(shadow.expectedCount, 3);
+    }
+);
+
+test(
+    'P10K AOE: shadow with no labels returns fail-closed',
+    () => {
+        const pages = [
+            'No answer labels here.',
+            'Just regular text.'
+        ];
+
+        const shadow =
+            buildAnswerOnlyExtractionShadow(pages, [1, 2, 3]);
+
+        assert.ok(shadow);
+        assert.equal(shadow.mode, 'fail-closed');
+        assert.deepEqual(shadow.candidateQuestionNumbers, []);
+    }
+);
+
+test(
+    'P10K AOE: shadow never affects controlled-write or baseline',
+    () => {
+        const pages = [
+            '1. 【答案】A\n2. 答案：B\n3. 【答案】C'
+        ];
+
+        const shadow =
+            buildAnswerOnlyExtractionShadow(pages, [1, 2, 3]);
+
+        assert.equal(shadow.affectsControlledWrite, false);
+        assert.equal(shadow.affectsBaselineCandidate, false);
+        assert.equal(shadow.affectsResultClassification, false);
+
+        const controlledWriteAccepted = ['1', '3'];
+        const shadowCandidates = shadow.candidateQuestionNumbers;
+
         assert.ok(
-            !isDirectlyAccepted,
-            'AOE candidate is evidence, not write permission'
+            shadowCandidates.includes('2'),
+            'AOE candidate includes Q2'
+        );
+        assert.ok(
+            !controlledWriteAccepted.includes('2'),
+            'but Q2 is NOT in controlled-write accepted'
+        );
+        assert.equal(
+            shadow.mode,
+            'full',
+            'AOE says full, but controlled-write decides accepted'
         );
     }
 );
 
 test(
-    'P10J AOE: controlled-write remains the only truth gate',
+    'P10K AOE: empty input returns null shadow',
     () => {
-        const items =
-            [1, 2, 3].map(n => ({
-                sourceOrder: n,
-                label: 'A'
-            }));
+        const shadow =
+            buildAnswerOnlyExtractionShadow([], [1, 2, 3]);
 
-        const result =
-            validateAnswerOnlyExtraction({ items });
-
-        const candidates =
-            buildAoeEvidenceCandidates(result, ['1', '2', '3']);
-
-        const aoeProvidesCandidate =
-            candidates.candidates.length > 0;
-
-        assert.ok(aoeProvidesCandidate);
-
-        const controlledWriteAccepted =
-            ['1', '3'];
-
-        const needControlledWriteValidation =
-            candidates.candidates.some(
-                c => !controlledWriteAccepted.includes(c.question)
-            );
-
-        assert.ok(
-            needControlledWriteValidation,
-            'AOE provides candidates but controlled-write still decides acceptance'
-        );
+        assert.equal(shadow, null);
     }
 );
