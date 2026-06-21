@@ -110,9 +110,32 @@
             }
         };
 
+        const runtimeDependencies = {};
+
+        const getRuntimeDependency = name => {
+            if (runtimeDependencies.hasOwnProperty(name)) {
+                return runtimeDependencies[name];
+            }
+
+            const root = globalThis.Qisi || {};
+
+            if (root[name]) return root[name];
+
+            return null;
+        };
+
+        const setRuntimeDependency = (name, value) => {
+            if (runtimeDependencies.hasOwnProperty(name)) {
+                throw new Error(`Runtime dependency already registered: ${name}`);
+            }
+            runtimeDependencies[name] = value;
+        };
+
         const Runtime = {
             assertDependencies,
             assertQisiModules,
+            getRuntimeDependency,
+            setRuntimeDependency,
             showFatalError,
             boot
         };
