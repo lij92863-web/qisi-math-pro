@@ -34,18 +34,53 @@ const APP_URL = String(
     'http://127.0.0.1:3000'
 ).replace(/\/+$/, '');
 const API_KEY_ENV_NAME = 'DASH' + 'SCOPE_API_KEY';
+const REAL_RUN_ALLOWED_ENV_NAME =
+    'QISI_PDF_MASTER_REAL_RUN_ALLOWED';
+const EXPECTED_QUESTION_NUMBERS =
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'];
 
-const parseMode = () => {
+const parseMode = (argv = process.argv) => {
     const raw =
-        process.argv.find(arg => arg.startsWith('--mode=')) || '';
+        argv.find(arg => arg.startsWith('--mode=')) || '';
+    const positional =
+        argv.slice(2).find(arg => ['preflight', 'dry-run', 'real-run'].includes(arg)) || '';
     const mode =
-        raw.split('=').slice(1).join('=').trim() || 'preflight';
+        raw
+            ? raw.split('=').slice(1).join('=').trim()
+            : positional || 'preflight';
 
     if (!['preflight', 'dry-run', 'real-run'].includes(mode)) {
         throw new Error(`Unsupported mode: ${mode}`);
     }
 
     return mode;
+};
+
+const assertRealRunAllowed = mode => {
+    if (
+        mode === 'real-run' &&
+        process.env[REAL_RUN_ALLOWED_ENV_NAME] !== '1'
+    ) {
+        throw new Error(
+            `real-run requires ${REAL_RUN_ALLOWED_ENV_NAME}=1`
+        );
+    }
+};
+
+const createRunContext = (mode, now = new Date()) => {
+    const stamp =
+        now.toISOString();
+    const compact =
+        stamp.replace(/[^0-9]/g, '').slice(0, 14);
+
+    return {
+        runId:
+            `pdf-master-${mode}-${compact}`,
+        attemptId:
+            `${mode}-${compact}`,
+        startedAt:
+            stamp
+    };
 };
 
 const rel = value =>
@@ -113,6 +148,7 @@ const dependencyStatus = () => {
 
 const makeLedgerEntry = ({
     mode,
+    runContext = createRunContext(mode),
     questionPdf,
     supportPdf,
     result,
@@ -124,8 +160,26 @@ const makeLedgerEntry = ({
     answerItemCount = null,
     solutionItemCount = null,
     alignMode = null,
-    wrongAttachRisk = 'not-evaluated'
+    wrongAttachRisk = 'not-evaluated',
+    detectedQuestionNumbers = [],
+    detectedAnswerNumbers = [],
+    detectedSolutionNumbers = [],
+    safeAnswerNumbers = [],
+    safeSolutionNumbers = [],
+    fusedQuestionNumbers = [],
+    prefixCutoffReason = '',
+    parserWarnings = [],
+    alignerReportReasons = [],
+    controlledWriteSummary = null,
+    draftCleanup = null,
+    reportSource = 'current-run-only'
 }) => ({
+    runId:
+        runContext.runId,
+    attemptId:
+        runContext.attemptId,
+    startedAt:
+        runContext.startedAt,
     attemptNumber:
         mode === 'real-run' && realApiCalled ? null : 0,
     mode,
@@ -135,6 +189,25 @@ const makeLedgerEntry = ({
         questionPdf?.path || safePath(QUESTION_PDF),
     supportPdfPath:
         supportPdf?.path || safePath(SUPPORT_PDF),
+    inputFiles:
+        [
+            questionPdf?.path || safePath(QUESTION_PDF),
+            supportPdf?.path || safePath(SUPPORT_PDF)
+        ],
+    expectedQuestionNumbers:
+        EXPECTED_QUESTION_NUMBERS,
+    detectedQuestionNumbers,
+    detectedAnswerNumbers,
+    detectedSolutionNumbers,
+    safeAnswerNumbers,
+    safeSolutionNumbers,
+    fusedQuestionNumbers,
+    prefixCutoffReason,
+    parserWarnings,
+    alignerReportReasons,
+    controlledWriteSummary,
+    draftCleanup,
+    reportSource,
     questionPdfSize:
         questionPdf?.bytes || 0,
     supportPdfSize:
@@ -1175,6 +1248,8 @@ const buildSolutionDiagnostics = ({
             parserGate.unknownBlockCount ?? null,
         writableSolutionNumbers:
             controlledWrite.writableSolutionNumbers ||
+            controlledWrite.solutionQuestionNumbers ||
+            controlledWrite.controlledWriteSummary?.solutionQuestionNumbers ||
             parserGate.writableSolutionNumbers ||
             [],
         blockedSolutionNumbers:
@@ -1303,6 +1378,8 @@ const stopLocalServer = child => {
 };
 
 const runPreflight = async () => {
+    const runContext =
+        createRunContext('preflight');
     const checks = [];
     const warnings = [];
     const questionPdf =
@@ -1380,6 +1457,7 @@ const runPreflight = async () => {
         makeLedgerEntry({
             mode:
                 'preflight',
+            runContext,
             questionPdf,
             supportPdf,
             result,
@@ -1390,10 +1468,26 @@ const runPreflight = async () => {
         {
             mode:
                 'preflight',
+            runId:
+                runContext.runId,
+            attemptId:
+                runContext.attemptId,
+            startedAt:
+                runContext.startedAt,
             ok,
             appUrl:
                 APP_URL,
             checks,
+            expectedQuestionNumbers:
+                EXPECTED_QUESTION_NUMBERS,
+            inputFiles:
+                ledgerEntry.inputFiles,
+            reportSource:
+                ledgerEntry.reportSource,
+            realApiCalled:
+                false,
+            underlyingApiCallCount:
+                0,
             ledgerEntry,
             artifactPaths:
                 {
@@ -1409,6 +1503,8 @@ const runPreflight = async () => {
 };
 
 const runDryRun = async () => {
+    const runContext =
+        createRunContext('dry-run');
     const warnings = [];
     const gaps = [];
     const questionPdf =
@@ -1559,12 +1655,13 @@ const runDryRun = async () => {
         ok ? 'pass' : 'fail-environment';
     const nextAction =
         ok
-            ? 'Stage 6 real-run may be attempted with explicit cap'
+            ? 'Stop before P7 until a separate explicit real-run task is authorized'
             : 'Add a browser automation dependency and rerun dry-run before Stage 6';
     const ledgerEntry =
         makeLedgerEntry({
             mode:
                 'dry-run',
+            runContext,
             questionPdf,
             supportPdf,
             result,
@@ -1575,6 +1672,12 @@ const runDryRun = async () => {
         {
             mode:
                 'dry-run',
+            runId:
+                runContext.runId,
+            attemptId:
+                runContext.attemptId,
+            startedAt:
+                runContext.startedAt,
             ok,
             appUrl:
                 APP_URL,
@@ -1595,6 +1698,38 @@ const runDryRun = async () => {
                     questionPdf,
                     supportPdf
                 },
+            inputFiles:
+                ledgerEntry.inputFiles,
+            expectedQuestionNumbers:
+                EXPECTED_QUESTION_NUMBERS,
+            detectedQuestionNumbers:
+                [],
+            detectedAnswerNumbers:
+                [],
+            detectedSolutionNumbers:
+                [],
+            safeAnswerNumbers:
+                [],
+            safeSolutionNumbers:
+                [],
+            fusedQuestionNumbers:
+                [],
+            prefixCutoffReason:
+                '',
+            parserWarnings:
+                [],
+            alignerReportReasons:
+                [],
+            controlledWriteSummary:
+                null,
+            draftCleanup:
+                null,
+            reportSource:
+                ledgerEntry.reportSource,
+            realApiCalled:
+                false,
+            underlyingApiCallCount:
+                0,
             automationDependencies:
                 deps,
             gaps,
@@ -1614,6 +1749,8 @@ const runDryRun = async () => {
 };
 
 const runRealRun = async () => {
+    const runContext =
+        createRunContext('real-run');
     const questionPdf =
         await fileStat(QUESTION_PDF);
     const supportPdf =
@@ -1621,6 +1758,17 @@ const runRealRun = async () => {
     const deps =
         dependencyStatus();
     const warnings = [];
+    let draftCleanup =
+        {
+            beforeRun:
+                false,
+            beforeCount:
+                null,
+            afterCount:
+                null,
+            ok:
+                false
+        };
 
     if (!String(process.env[API_KEY_ENV_NAME] || '').trim()) {
         warnings.push('api-key-env-missing');
@@ -1634,19 +1782,34 @@ const runRealRun = async () => {
         const ledgerEntry =
             makeLedgerEntry({
                 mode: 'real-run',
+                runContext,
                 questionPdf,
                 supportPdf,
                 result: 'fail-environment',
                 nextAction: 'Fix runner environment before retrying',
-                warnings
+                warnings,
+                draftCleanup
             });
         const report =
             {
                 mode: 'real-run',
+                runId:
+                    runContext.runId,
+                attemptId:
+                    runContext.attemptId,
+                startedAt:
+                    runContext.startedAt,
                 ok: false,
                 realApiCalled: false,
                 underlyingApiCallCount: 0,
                 warnings,
+                inputFiles:
+                    ledgerEntry.inputFiles,
+                expectedQuestionNumbers:
+                    EXPECTED_QUESTION_NUMBERS,
+                draftCleanup,
+                reportSource:
+                    ledgerEntry.reportSource,
                 ledgerEntry
             };
 
@@ -1727,6 +1890,31 @@ const runRealRun = async () => {
         });
         phase = 'wait-app-boot';
         await waitForAppBoot(page);
+
+        phase = 'draft-cleanup-before-run';
+        draftCleanup =
+            await page.evaluate(async () => {
+                const beforeCount =
+                    await db.draftQuestions.count();
+
+                await db.draftQuestions.clear();
+
+                const afterCount =
+                    await db.draftQuestions.count();
+
+                return {
+                    beforeRun:
+                        true,
+                    beforeCount,
+                    afterCount,
+                    ok:
+                        afterCount === 0
+                };
+            });
+
+        if (!draftCleanup.ok) {
+            throw new Error('draft cleanup before run failed');
+        }
 
         phase = 'install-solution-diagnostics';
         await installPdfSupportSolutionDiagnostics(page);
@@ -1975,6 +2163,7 @@ const runRealRun = async () => {
         const ledgerEntry =
             makeLedgerEntry({
                 mode: 'real-run',
+                runContext,
                 questionPdf,
                 supportPdf,
                 result,
@@ -1986,6 +2175,27 @@ const runRealRun = async () => {
                 answerItemCount: draftSnapshot.filter(draft => draft.hasAnswer).length,
                 solutionItemCount: draftSnapshot.filter(draft => draft.hasSolution).length,
                 alignMode,
+                detectedQuestionNumbers:
+                    solutionDiagnostics.supportDetectedNumbers,
+                detectedAnswerNumbers:
+                    solutionDiagnostics.answerDetectedNumbers,
+                detectedSolutionNumbers:
+                    solutionDiagnostics.solutionDetectedNumbers,
+                safeAnswerNumbers:
+                    draftSnapshot.filter(draft => draft.hasAnswer).map(draft => draft.question),
+                safeSolutionNumbers:
+                    draftSnapshot.filter(draft => draft.hasSolution).map(draft => draft.question),
+                fusedQuestionNumbers:
+                    solutionDiagnostics.controlledWriteSummary?.fusedQuestionNumbers || [],
+                prefixCutoffReason:
+                    solutionDiagnostics.prefixCutoffAt || '',
+                parserWarnings:
+                    solutionDiagnostics.failClosedReason || [],
+                alignerReportReasons:
+                    solutionDiagnostics.rejectReasons || [],
+                controlledWriteSummary:
+                    solutionDiagnostics.controlledWriteSummary,
+                draftCleanup,
                 wrongAttachRisk:
                     result === 'fail-unsafe'
                         ? 'detected'
@@ -1997,6 +2207,12 @@ const runRealRun = async () => {
         const report =
             {
                 mode: 'real-run',
+                runId:
+                    runContext.runId,
+                attemptId:
+                    runContext.attemptId,
+                startedAt:
+                    runContext.startedAt,
                 ok: result === 'pass-full' || result === 'pass-safe-partial',
                 phase,
                 serverStarted,
@@ -2013,6 +2229,33 @@ const runRealRun = async () => {
                 underlyingApiCallCount:
                     localApiCallCount,
                 solutionDiagnostics,
+                expectedQuestionNumbers:
+                    EXPECTED_QUESTION_NUMBERS,
+                detectedQuestionNumbers:
+                    ledgerEntry.detectedQuestionNumbers,
+                detectedAnswerNumbers:
+                    ledgerEntry.detectedAnswerNumbers,
+                detectedSolutionNumbers:
+                    ledgerEntry.detectedSolutionNumbers,
+                safeAnswerNumbers:
+                    ledgerEntry.safeAnswerNumbers,
+                safeSolutionNumbers:
+                    ledgerEntry.safeSolutionNumbers,
+                fusedQuestionNumbers:
+                    ledgerEntry.fusedQuestionNumbers,
+                prefixCutoffReason:
+                    ledgerEntry.prefixCutoffReason,
+                parserWarnings:
+                    ledgerEntry.parserWarnings,
+                alignerReportReasons:
+                    ledgerEntry.alignerReportReasons,
+                controlledWriteSummary:
+                    ledgerEntry.controlledWriteSummary,
+                draftCleanup,
+                reportSource:
+                    ledgerEntry.reportSource,
+                inputFiles:
+                    ledgerEntry.inputFiles,
                 ledgerEntry
             };
 
@@ -2026,13 +2269,15 @@ const runRealRun = async () => {
         const ledgerEntry =
             makeLedgerEntry({
                 mode: 'real-run',
+                runContext,
                 questionPdf,
                 supportPdf,
                 result: 'fail-environment',
                 nextAction: 'Fix runner real-run environment before retrying',
                 warnings,
                 realApiCalled: apiRequestStarted,
-                underlyingApiCallCount: localApiCallCount
+                underlyingApiCallCount: localApiCallCount,
+                draftCleanup
             });
         ledgerEntry.attemptNumber =
             apiRequestStarted ? (await countRealAttempts()) + 1 : 0;
@@ -2043,6 +2288,12 @@ const runRealRun = async () => {
                 error:
                     error?.message || String(error),
                 phase,
+                runId:
+                    runContext.runId,
+                attemptId:
+                    runContext.attemptId,
+                startedAt:
+                    runContext.startedAt,
                 realApiCalled:
                     apiRequestStarted,
                 underlyingApiCallCount:
@@ -2051,6 +2302,13 @@ const runRealRun = async () => {
                 missingSolutions: [],
                 failClosed: false,
                 prefix: false,
+                expectedQuestionNumbers:
+                    EXPECTED_QUESTION_NUMBERS,
+                draftCleanup,
+                reportSource:
+                    ledgerEntry.reportSource,
+                inputFiles:
+                    ledgerEntry.inputFiles,
                 ledgerEntry
             };
 
@@ -2070,6 +2328,7 @@ const runRealRun = async () => {
 const main = async () => {
     const mode =
         parseMode();
+    assertRealRunAllowed(mode);
     const report =
         mode === 'preflight'
             ? await runPreflight()
@@ -2084,18 +2343,30 @@ const main = async () => {
     }
 };
 
-main().catch(error => {
-    console.error(
-        JSON.stringify(
-            {
-                ok:
-                    false,
-                error:
-                    error?.message || String(error)
-            },
-            null,
-            2
-        )
-    );
-    process.exitCode = 1;
-});
+if (require.main === module) {
+    main().catch(error => {
+        console.error(
+            JSON.stringify(
+                {
+                    ok:
+                        false,
+                    error:
+                        error?.message || String(error)
+                },
+                null,
+                2
+            )
+        );
+        process.exitCode = 1;
+    });
+}
+
+module.exports = {
+    EXPECTED_QUESTION_NUMBERS,
+    REAL_RUN_ALLOWED_ENV_NAME,
+    assertRealRunAllowed,
+    buildSolutionDiagnostics,
+    createRunContext,
+    makeLedgerEntry,
+    parseMode
+};
