@@ -1070,6 +1070,162 @@ test(
 );
 
 test(
+    'solution complete mock does not expand unsafe answer ownership',
+    () => {
+        const restore =
+            installAiEndpointGuards();
+
+        try {
+            const fixture =
+                attempt12SequenceDiscontinuityFixture;
+            const answerGapAlignment =
+                alignPdfSupport({
+                    answerItems:
+                        [1, 2, 4, 5, 6, 7, 8, 9, 10, 13, 15].map(number => ({
+                            question:
+                                String(number),
+                            answer:
+                                `ANSWER_${number}`
+                        })),
+                    solutionItems:
+                        fixture.expectedQuestionNumbers.map(number => ({
+                            question:
+                                String(number),
+                            solution:
+                                `SOLUTION_${number}`
+                        })),
+                    expectedQuestionNumbers:
+                        fixture.expectedQuestionNumbers
+                });
+            const field =
+                buildPdfSupportFieldLevelControlledWrite({
+                    drafts:
+                        fixture.questionItems,
+                    legacySafeSolutionItems:
+                        fixture.expectedQuestionNumbers.map(number => ({
+                            question:
+                                String(number),
+                            solution:
+                                `LEGACY_SOLUTION_${number}`
+                        })),
+                    parserSafeAnswerItems:
+                        answerGapAlignment.safeAnswerItems,
+                    parserSafeSolutionItems:
+                        answerGapAlignment.safeSolutionItems,
+                    parserFusedQuestionNumbers:
+                        answerGapAlignment.fusedQuestionNumbers
+                });
+
+            assert.equal(
+                answerGapAlignment.mode,
+                'prefix'
+            );
+            assert.deepEqual(
+                field.answerQuestionNumbers,
+                ['1', '2']
+            );
+            assert.deepEqual(
+                field.solutionQuestionNumbers,
+                fixture.expected.effectiveAnswerQuestionNumbers
+            );
+            assert.ok(
+                !field.answerQuestionNumbers.includes('3')
+            );
+        } finally {
+            restore();
+        }
+    }
+);
+
+test(
+    'stale runner draft data must not count as current run success',
+    () => {
+        const currentRunId =
+            'run-current';
+        const staleRunId =
+            'run-stale';
+        const expectedQuestionNumbers =
+            ['1', '2'];
+        const drafts = [
+            {
+                runId:
+                    staleRunId,
+                question:
+                    '1',
+                answer:
+                    'STALE_A1',
+                solution:
+                    'STALE_S1'
+            },
+            {
+                runId:
+                    staleRunId,
+                question:
+                    '2',
+                answer:
+                    'STALE_A2',
+                solution:
+                    'STALE_S2'
+            },
+            {
+                runId:
+                    currentRunId,
+                question:
+                    '1',
+                answer:
+                    'CURRENT_A1',
+                solution:
+                    'CURRENT_S1'
+            },
+            {
+                runId:
+                    currentRunId,
+                question:
+                    '2',
+                answer:
+                    'CURRENT_A2',
+                solution:
+                    ''
+            }
+        ];
+        const currentReport = {
+            runId:
+                currentRunId,
+            expectedQuestionNumbers,
+            safeAnswerNumbers:
+                ['1', '2'],
+            safeSolutionNumbers:
+                ['1']
+        };
+
+        const currentDrafts =
+            drafts.filter(draft => draft.runId === currentRunId);
+        const staleDrafts =
+            drafts.filter(draft => draft.runId === staleRunId);
+        const currentComplete =
+            currentReport.runId === currentRunId &&
+            currentDrafts.length === expectedQuestionNumbers.length &&
+            currentDrafts.every(draft => draft.answer && draft.solution);
+        const staleWouldLookComplete =
+            staleDrafts.length === expectedQuestionNumbers.length &&
+            staleDrafts.every(draft => draft.answer && draft.solution);
+
+        assert.equal(
+            staleWouldLookComplete,
+            true
+        );
+        assert.equal(
+            currentComplete,
+            false
+        );
+        assert.deepEqual(
+            currentReport.safeSolutionNumbers,
+            ['1']
+        );
+    }
+);
+
+test(
     'DOCX+DOCX stable mock keeps the normal support chain intact',
     () => {
         const restore =

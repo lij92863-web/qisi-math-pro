@@ -183,6 +183,137 @@ test(
 );
 
 test(
+    'answer complete must not expand unsafe solution ownership',
+    () => {
+        const expected =
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 15];
+        const result =
+            alignPdfSupport({
+                answerItems:
+                    makeItems(expected),
+                solutionItems:
+                    makeItems([1, 2, 4, 5, 6, 7, 8, 9, 10, 13, 15]),
+                expectedQuestionNumbers:
+                    expected
+            });
+
+        assert.equal(result.mode, 'prefix');
+        assert.deepEqual(
+            result.safeSolutionItems.map(item => item.question),
+            ['1', '2']
+        );
+        assert.deepEqual(
+            result.fusedQuestionNumbers,
+            ['3', '4', '5', '6', '7', '8', '9', '10', '13', '15']
+        );
+        assert.ok(
+            result.report.reasons.includes(
+                'solution-question-not-continuous'
+            )
+        );
+    }
+);
+
+test(
+    'solution complete must not expand unsafe answer ownership',
+    () => {
+        const expected =
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 15];
+        const result =
+            alignPdfSupport({
+                answerItems:
+                    makeItems([1, 2, 4, 5, 6, 7, 8, 9, 10, 13, 15]),
+                solutionItems:
+                    makeItems(expected),
+                expectedQuestionNumbers:
+                    expected
+            });
+
+        assert.equal(result.mode, 'prefix');
+        assert.deepEqual(
+            result.safeAnswerItems.map(item => item.question),
+            ['1', '2']
+        );
+        assert.deepEqual(
+            result.fusedQuestionNumbers,
+            ['3', '4', '5', '6', '7', '8', '9', '10', '13', '15']
+        );
+        assert.ok(
+            result.report.reasons.includes(
+                'answer-question-not-continuous'
+            )
+        );
+    }
+);
+
+test(
+    'answer and solution sequence must be validated independently then intersected safely',
+    () => {
+        const result =
+            alignPdfSupport({
+                answerItems:
+                    makeItems([1, 2, 3, 4, 9]),
+                solutionItems:
+                    makeItems([1, 2, 3, 5, 6]),
+                expectedQuestionNumbers:
+                    [1, 2, 3, 4, 5, 6, 7, 8, 9]
+            });
+
+        assert.equal(result.mode, 'prefix');
+        assert.deepEqual(
+            result.safeQuestionNumbers,
+            ['1', '2', '3']
+        );
+        assert.deepEqual(
+            result.safeAnswerItems.map(item => item.question),
+            ['1', '2', '3']
+        );
+        assert.deepEqual(
+            result.safeSolutionItems.map(item => item.question),
+            ['1', '2', '3']
+        );
+        assert.ok(
+            result.report.reasons.includes(
+                'answer-solution-question-set-mismatch'
+            )
+        );
+    }
+);
+
+test(
+    'out-of-range expected numbers are reported and not silently accepted',
+    () => {
+        const result =
+            alignPdfSupport({
+                answerItems:
+                    makeItems([1, 2, 13]),
+                solutionItems:
+                    makeItems([1, 2, 13]),
+                expectedQuestionNumbers:
+                    [1, 2, 3]
+            });
+
+        assert.equal(result.mode, 'prefix');
+        assert.deepEqual(
+            result.safeQuestionNumbers,
+            ['1', '2']
+        );
+        assert.deepEqual(
+            result.safeAnswerItems.map(item => item.question),
+            ['1', '2']
+        );
+        assert.ok(
+            !result.safeAnswerItems.some(item => item.question === '13')
+        );
+        assert.ok(
+            result.report.reasons.includes(
+                'support-question-set-not-equal-expected'
+            )
+        );
+    }
+);
+
+test(
     'reliable prefix 1-4 returns prefix mode',
     () => {
         const answerItems =
