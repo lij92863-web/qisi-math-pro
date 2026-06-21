@@ -301,31 +301,32 @@
                     return roles.map(roleLabel).join(' + ') || '未设置';
                 };
 
-                const fileTypeText = (type) => ({
-                    pdf: 'PDF',
-                    docx: 'Word',
-                    image: '图片',
-                    text: '文本',
-                    excel: 'Excel',
-                    unknown: '未知'
-                }[type] || '未知');
+                const fileTypeText = (window.Qisi && window.Qisi.FileDispatcher)
+                    ? window.Qisi.FileDispatcher.fileTypeText
+                    : (type) => ({ pdf: 'PDF', docx: 'Word', image: '图片', text: '文本', excel: 'Excel', unknown: '未知' }[type] || '未知');
 
-                const getFileType = (fileName = '') => {
-                    const ext = String(fileName).split('.').pop()?.toLowerCase() || '';
-                    if (ext === 'pdf') return 'pdf';
-                    if (ext === 'docx' || ext === 'doc') return 'docx';
-                    if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) return 'image';
-                    if (['xlsx', 'xls', 'csv'].includes(ext)) return 'excel';
-                    if (ext === 'txt') return 'text';
-                    return 'unknown';
-                };
+                const getFileType = (window.Qisi && window.Qisi.FileDispatcher)
+                    ? window.Qisi.FileDispatcher.getFileType
+                    : (fileName = '') => {
+                        const ext = String(fileName).split('.').pop()?.toLowerCase() || '';
+                        if (ext === 'pdf') return 'pdf';
+                        if (ext === 'docx' || ext === 'doc') return 'docx';
+                        if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) return 'image';
+                        if (['xlsx', 'xls', 'csv'].includes(ext)) return 'excel';
+                        if (ext === 'txt') return 'text';
+                        return 'unknown';
+                    };
 
-                const formatFileSize = (size = 0) => {
-                    if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
-                    return `${Math.max(1, Math.round(size / 1024))} KB`;
-                };
+                const formatFileSize = (window.Qisi && window.Qisi.FileDispatcher)
+                    ? window.Qisi.FileDispatcher.formatFileSize
+                    : (size = 0) => {
+                        if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
+                        return `${Math.max(1, Math.round(size / 1024))} KB`;
+                    };
 
-                const makeBatchId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                const makeBatchId = (window.Qisi && window.Qisi.FileDispatcher)
+                    ? window.Qisi.FileDispatcher.makeBatchId
+                    : (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
                 const showBatchToast = (message) => {
                     batchToast.value = message;
