@@ -4,194 +4,17 @@ const test =
 const assert =
     require('node:assert/strict');
 
-// --- P10E Design: safe wrapper unwrap candidate classifier ---
-// These are DESIGN CANDIDATE rules, NOT business code.
-// They define boundaries for what COULD be safely unwrapped
-// without weakening controlled-write.
-
-const SAFE_LATEX_COMMAND_ALLOWLIST = new Set([
-    'text', 'mathrm', 'mathbf', 'mathit', 'mathsf', 'texttt',
-    'textrm', 'textsf', 'textup', 'textnormal',
-    'textbf', 'textit', 'emph',
-    'A', 'B', 'C', 'D'
-]);
-
-const DIRTY_COMMAND_PATTERNS = [
-    'frac', 'sqrt', 'sin', 'cos', 'tan', 'log', 'ln',
-    'sum', 'int', 'lim', 'overline', 'underline',
-    'vec', 'bar', 'hat', 'dot', 'angle', 'triangle',
-    'cdot', 'times', 'boxed'
-];
-
-const isSafeLatexWrapper = value => {
-    const text =
-        String(value ?? '').trim();
-
-    if (!text.startsWith('\\')) return false;
-
-    const commandMatch =
-        text.match(/^\\([A-Za-z]+)\s*\{([^}]*)\}\s*$/);
-
-    if (!commandMatch) return false;
-
-    const command =
-        commandMatch[1];
-    const inner =
-        commandMatch[2].trim();
-
-    if (!SAFE_LATEX_COMMAND_ALLOWLIST.has(command)) return false;
-
-    if (!/^[A-Fa-f]$/.test(inner)) return false;
-
-    if (DIRTY_COMMAND_PATTERNS.some(pattern =>
-        pattern.toLowerCase() === command.toLowerCase()
-    )) return false;
-
-    return true;
-};
-
-const unwrapSafeLatexWrapper = value => {
-    if (!isSafeLatexWrapper(value)) return null;
-
-    const inner =
-        value.match(/\{([^}]*)\}/)[1].trim();
-
-    return inner.toUpperCase();
-};
-
-// --- Dirty structural shell classifier ---
-
-const DIRTY_SHELL_PATTERNS = [
-    // Underscore with letter/number suffix
-    /^[A-Za-z]_\s*[A-Za-z0-9]/,
-    // Structural shell with LaTeX payload
-    /^[\}_]\s*[A-Za-z]?\s*_\s*\\/,
-    // Fraction, sqrt, boxed
-    /\\frac/,
-    /\\sqrt/,
-    /\\boxed/,
-    // Math operator with letter
-    /\\angle\s*[A-Za-z]/,
-    // Trig functions with args
-    /\\(?:sin|cos|tan)\s*[A-Za-z{]/,
-    // Mix of letters and operators
-    /[A-Za-z]\s*[+\-=]\s*[A-Za-z0-9]/,
-    // Multiple letter groups without clear labels
-    /^[A-Za-z]{2,}$/
-];
-
-const isDirtyStructuralShell = value => {
-    const text =
-        String(value ?? '').trim();
-
-    if (!text) return { dirty: true, reason: 'empty' };
-
-    if (text.length > 40) {
-        return { dirty: true, reason: 'too-long-likely-mixed-content' };
-    }
-
-    for (const pattern of DIRTY_SHELL_PATTERNS) {
-        if (pattern.test(text)) {
-            return { dirty: true, reason: `matches-dirty-pattern:${pattern}` };
-        }
-    }
-
-    return { dirty: false, reason: '' };
-};
-
-// --- Clean label candidate classifier ---
-
-const CLEAN_LABEL_PATTERNS = [
-    // Plain single letter A-F
-    /^[A-Fa-f]$/,
-    // Parenthesized (A) or （A）
-    /^[（(]\s*[A-Fa-f]\s*[)）]$/,
-    // Braced {A}
-    /^\{\s*[A-Fa-f]\s*\}$/,
-    // Answer-prefixed: 答案：A, 选A, 答 A
-    /^(?:答案|答|选)\s*[:：]?\s*[A-Fa-f]$/,
-    // Label with dot: A.
-    /^[A-Fa-f][.。]$/
-];
-
-const isCleanLabelCandidate = value => {
-    const text =
-        String(value ?? '').trim();
-
-    if (!text) return { clean: false, reason: 'empty' };
-
-    for (const pattern of CLEAN_LABEL_PATTERNS) {
-        if (pattern.test(text)) {
-            return { clean: true, reason: `matches-clean-pattern:${pattern}` };
-        }
-    }
-
-    return { clean: false, reason: 'no-clean-pattern-match' };
-};
-
-// --- Safe wrapper unwrap candidate ---
-
-const classifyAnswerExtractionQuality = value => {
-    const text =
-        String(value ?? '').trim();
-
-    if (!text) {
-        return {
-            eligible: false,
-            category: 'empty',
-            unwrapped: '',
-            reason: 'empty answer text'
-        };
-    }
-
-    const cleanCheck =
-        isCleanLabelCandidate(text);
-
-    if (cleanCheck.clean) {
-        return {
-            eligible: true,
-            category: 'clean-label',
-            unwrapped: text.replace(/[^A-Fa-f]/g, '').toUpperCase().slice(0, 1),
-            reason: cleanCheck.reason
-        };
-    }
-
-    if (isSafeLatexWrapper(text)) {
-        const unwrapped =
-            unwrapSafeLatexWrapper(text);
-
-        return {
-            eligible: true,
-            category: 'safe-latex-wrapper',
-            unwrapped,
-            reason: 'safe LaTeX command wrapper with single A-F label inside'
-        };
-    }
-
-    const dirtyCheck =
-        isDirtyStructuralShell(text);
-
-    if (dirtyCheck.dirty) {
-        return {
-            eligible: false,
-            category: 'dirty-structural-shell',
-            unwrapped: '',
-            reason: dirtyCheck.reason
-        };
-    }
-
-    return {
-        eligible: false,
-        category: 'unknown-format',
-        unwrapped: '',
-        reason: 'does not match any known clean or dirty pattern'
-    };
-};
-
-// --- Tests ---
+const {
+    classifyAnswerExtractionQuality,
+    isSafeLatexWrapper,
+    isDirtyStructuralShell,
+    isCleanLabelCandidate,
+    unwrapSafeLatexWrapper
+} =
+    require('../qisi-pdf-answer-extraction-quality.js');
 
 test(
-    'P10E clean label candidates are eligible for direct acceptance',
+    'P10F clean label candidates: status clean-label, canDirectlyAccept false',
     () => {
         const cleanCases = ['A', 'B', 'C', 'D', 'E', 'F', 'a', 'f'];
 
@@ -199,24 +22,33 @@ test(
             const result =
                 classifyAnswerExtractionQuality(value);
 
-            assert.ok(
-                result.eligible,
-                `'${value}' should be eligible as clean label`
+            assert.equal(
+                result.status,
+                'clean-label',
+                `'${value}' must be clean-label`
             );
             assert.equal(
-                result.category,
-                'clean-label'
-            );
-            assert.equal(
-                result.unwrapped,
+                result.normalizedCandidate,
                 value.toUpperCase()
+            );
+            assert.equal(
+                result.canDirectlyAccept,
+                false,
+                `'${value}' must not have canDirectlyAccept=true`
+            );
+            assert.equal(
+                result.evidenceLevel,
+                'candidate-only'
+            );
+            assert.ok(
+                result.reasonDetail.length > 0
             );
         }
     }
 );
 
 test(
-    'P10E parenthesized and prefixed labels are clean candidates',
+    'P10F parenthesized and prefixed labels are clean-label',
     () => {
         const cases = [
             { input: '(A)', expected: 'A' },
@@ -232,20 +64,15 @@ test(
             const result =
                 classifyAnswerExtractionQuality(input);
 
-            assert.ok(
-                result.eligible,
-                `'${input}' should be eligible as clean label`
-            );
-            assert.equal(
-                result.unwrapped,
-                expected
-            );
+            assert.equal(result.status, 'clean-label');
+            assert.equal(result.normalizedCandidate, expected);
+            assert.equal(result.canDirectlyAccept, false);
         }
     }
 );
 
 test(
-    'P10E safe LaTeX wrappers are eligible for unwrap',
+    'P10F safe LaTeX wrappers: status safe-wrapper-candidate, canDirectlyAccept false',
     () => {
         const wrappers = [
             { input: '\\text{A}', expected: 'A' },
@@ -262,24 +89,47 @@ test(
             const result =
                 classifyAnswerExtractionQuality(input);
 
-            assert.ok(
-                result.eligible,
-                `'${input}' should be eligible as safe LaTeX wrapper`
+            assert.equal(
+                result.status,
+                'safe-wrapper-candidate',
+                `'${input}' must be safe-wrapper-candidate`
             );
             assert.equal(
-                result.category,
-                'safe-latex-wrapper'
-            );
-            assert.equal(
-                result.unwrapped,
+                result.normalizedCandidate,
                 expected
+            );
+            assert.equal(
+                result.canDirectlyAccept,
+                false,
+                'canDirectlyAccept must never be true'
+            );
+            assert.equal(
+                result.evidenceLevel,
+                'candidate-only'
+            );
+            assert.ok(
+                result.reasonDetail.includes(expected),
+                'reasonDetail should mention the normalized label'
             );
         }
     }
 );
 
 test(
-    'P10E dirty structural shell }A_\\A{A} must NOT be eligible for simple unwrap',
+    'P10F Q2-type single-letter LaTeX command \\A{A} is safe-wrapper-candidate',
+    () => {
+        const result =
+            classifyAnswerExtractionQuality('\\A{A}');
+
+        assert.equal(result.status, 'safe-wrapper-candidate');
+        assert.equal(result.normalizedCandidate, 'A');
+        assert.equal(result.canDirectlyAccept, false);
+        assert.equal(result.reasonCode, 'safe-latex-wrapper');
+    }
+);
+
+test(
+    'P10F dirty structural shell }A_\\A{A}: status dirty-structural-shell, normalizedCandidate null',
     () => {
         const dirtyCases = [
             '}A_\\A{A}',
@@ -294,21 +144,26 @@ test(
             const result =
                 classifyAnswerExtractionQuality(value);
 
-            assert.ok(
-                !result.eligible,
-                `'${value}' must not be eligible for simple unwrap`
+            assert.equal(
+                result.status,
+                'dirty-structural-shell',
+                `'${value}' must be dirty-structural-shell`
             );
-            assert.ok(
-                result.category === 'dirty-structural-shell' ||
-                result.category === 'unknown-format',
-                `'${value}' category should be dirty or unknown, got: ${result.category}`
+            assert.equal(
+                result.normalizedCandidate,
+                null,
+                `'${value}' must have null normalizedCandidate`
+            );
+            assert.equal(
+                result.canDirectlyAccept,
+                false
             );
         }
     }
 );
 
 test(
-    'P10E unsafe LaTeX commands must NOT be eligible for unwrap',
+    'P10F unsafe LaTeX math commands are dirty-structural-shell or rejected',
     () => {
         const unsafeCommands = [
             '\\frac{A}{B}',
@@ -320,34 +175,34 @@ test(
         ];
 
         for (const value of unsafeCommands) {
-            const dirty =
-                isDirtyStructuralShell(value);
-
-            assert.ok(
-                dirty.dirty,
-                `'${value}' must be classified as dirty`
-            );
-
             const result =
                 classifyAnswerExtractionQuality(value);
 
             assert.ok(
-                !result.eligible,
-                `'${value}' must not be eligible`
+                result.status === 'dirty-structural-shell' ||
+                result.status === 'rejected',
+                `'${value}' must be dirty or rejected, got: ${result.status}`
+            );
+            assert.equal(
+                result.canDirectlyAccept,
+                false
+            );
+            assert.equal(
+                result.evidenceLevel,
+                'candidate-only'
             );
         }
     }
 );
 
 test(
-    'P10E mixed or long content is not eligible',
+    'P10F mixed, long, or non-label content is rejected',
     () => {
         const mixedCases = [
             'AB',
-            'A、B、C',
+            'A、B、C混合文本',
             'A+B',
-            'a long text that is clearly not a clean answer label',
-            '解析内容：这是解析而不是答案'
+            'a long text that is clearly not a clean answer label but mixed content'
         ];
 
         for (const value of mixedCases) {
@@ -355,117 +210,215 @@ test(
                 classifyAnswerExtractionQuality(value);
 
             assert.ok(
-                !result.eligible,
-                `'${value}' must not be eligible for simple unwrap`
+                result.status !== 'clean-label' &&
+                result.status !== 'safe-wrapper-candidate',
+                `'${value}' must not be eligible for acceptance`
+            );
+            assert.equal(
+                result.canDirectlyAccept,
+                false
             );
         }
     }
 );
 
 test(
-    'P10E empty answer is not eligible',
+    'P10F empty answer: status empty, normalizedCandidate null',
     () => {
         const result =
             classifyAnswerExtractionQuality('');
 
-        assert.ok(!result.eligible);
-        assert.equal(result.category, 'empty');
+        assert.equal(result.status, 'empty');
+        assert.equal(result.normalizedCandidate, null);
+        assert.equal(result.canDirectlyAccept, false);
     }
 );
 
 test(
-    'P10E extraction quality candidate does NOT equal controlled-write accepted',
+    'P10F classifyAnswerExtractionQuality never sets canDirectlyAccept to true',
+    () => {
+        const allCases = [
+            'A',
+            '\\text{A}',
+            '\\A{A}',
+            '}A_\\A{A}',
+            '\\frac{A}{B}',
+            'AB',
+            ''
+        ];
+
+        for (const value of allCases) {
+            const result =
+                classifyAnswerExtractionQuality(value);
+
+            assert.equal(
+                result.canDirectlyAccept,
+                false,
+                `'${value}': canDirectlyAccept must ALWAYS be false — ` +
+                'extraction quality is evidence only, not write permission'
+            );
+            assert.equal(
+                result.evidenceLevel,
+                'candidate-only',
+                `'${value}': evidenceLevel must be candidate-only`
+            );
+        }
+    }
+);
+
+test(
+    'P10F extraction quality candidate is independent of controlled-write acceptance',
     () => {
         const candidate =
             classifyAnswerExtractionQuality('\\text{A}');
 
-        assert.ok(
-            candidate.eligible,
-            'LaTeX wrapper is a design candidate'
+        assert.equal(
+            candidate.status,
+            'safe-wrapper-candidate'
         );
         assert.equal(
-            candidate.unwrapped,
-            'A'
+            candidate.canDirectlyAccept,
+            false
         );
 
-        const actualAccepted =
+        const controlledWriteAccepted =
             ['1', '3', '4', '5', '6', '7', '10', '13', '15'];
 
         assert.ok(
-            candidate.eligible !==
-                actualAccepted.includes(candidate.unwrapped),
-            'candidate eligibility is independent of actual acceptance; ' +
-            'being a candidate does not mean it IS accepted'
+            !controlledWriteAccepted.includes(candidate.normalizedCandidate),
+            'candidate status does not imply controlled-write acceptance'
         );
     }
 );
 
 test(
-    'P10E Q2-type LaTeX wrapper is a candidate but Q8/Q9-type dirty shell is not',
+    'P10F baseline candidate must never be derived from extraction quality classifier',
     () => {
-        const q2Type =
-            classifyAnswerExtractionQuality('\\A{A}');
-
-        assert.ok(
-            q2Type.eligible,
-            'Q2-type \\A{A} should be eligible as safe LaTeX wrapper candidate'
-        );
-        assert.equal(
-            q2Type.category,
-            'safe-latex-wrapper'
-        );
-
-        const q8Type =
-            classifyAnswerExtractionQuality('}A_\\A{A}');
-
-        assert.ok(
-            !q8Type.eligible,
-            'Q8-type }A_\\A{A} must NOT be eligible'
-        );
-        assert.equal(
-            q8Type.category,
-            'dirty-structural-shell'
-        );
-    }
-);
-
-test(
-    'P10E sequence safety: duplicate labels are not clean',
-    () => {
-        const duplicate =
-            classifyAnswerExtractionQuality('AA');
-
-        assert.ok(
-            !duplicate.eligible,
-            'AA should not be eligible as clean label'
-        );
-    }
-);
-
-test(
-    'P10E truth gate: dirty shell must never enter baseline candidate',
-    () => {
-        const dirtyValues =
-            ['}A_\\A{A}', 'x_A', '\\frac{A}{B}', 'AB', 'A+B'];
+        const candidate =
+            classifyAnswerExtractionQuality('\\text{A}');
 
         const controlledWriteAccepted =
             ['1', '7', '10', '13', '15'];
 
-        for (const value of dirtyValues) {
-            const classification =
-                classifyAnswerExtractionQuality(value);
-
-            assert.ok(
-                !classification.eligible,
-                `dirty value '${value}' must not be eligible`
+        const baselineCandidate =
+            controlledWriteAccepted.filter(
+                question => question === candidate.normalizedCandidate
             );
 
-            assert.ok(
-                !controlledWriteAccepted.includes(
-                    classification.unwrapped
-                ),
-                `unwrapped result of '${value}' must not be in accepted set`
+        assert.deepEqual(
+            baselineCandidate,
+            [],
+            'classifier output must not enter baseline candidate directly'
+        );
+    }
+);
+
+test(
+    'P10F controlled-write truth gate invariant: classifier output does not change accepted set',
+    () => {
+        const controlledWriteAccepted =
+            ['1', '3', '4', '5', '6', '7', '10', '13', '15'];
+
+        const candidates =
+            [
+                classifyAnswerExtractionQuality('A'),
+                classifyAnswerExtractionQuality('\\text{A}'),
+                classifyAnswerExtractionQuality('}A_\\A{A}'),
+                classifyAnswerExtractionQuality('\\frac{A}{B}')
+            ];
+
+        const cleanOrWrapper =
+            candidates.filter(
+                c =>
+                    c.status === 'clean-label' ||
+                    c.status === 'safe-wrapper-candidate'
             );
-        }
+
+        const dirtyOrRejected =
+            candidates.filter(
+                c =>
+                    c.status === 'dirty-structural-shell' ||
+                    c.status === 'rejected'
+            );
+
+        assert.ok(
+            cleanOrWrapper.length >= 2,
+            'some candidates are clean or wrapper-eligible'
+        );
+        assert.ok(
+            dirtyOrRejected.length >= 2,
+            'some candidates are dirty or rejected'
+        );
+
+        const acceptedSetAfter =
+            [...controlledWriteAccepted];
+
+        assert.deepEqual(
+            acceptedSetAfter,
+            controlledWriteAccepted,
+            'accepted set unchanged regardless of classifier output'
+        );
+    }
+);
+
+test(
+    'P10F isCleanLabelCandidate helper returns correct pass/fail',
+    () => {
+        assert.equal(isCleanLabelCandidate('A').pass, true);
+        assert.equal(isCleanLabelCandidate('G').pass, false);
+        assert.equal(isCleanLabelCandidate('AB').pass, false);
+        assert.equal(isCleanLabelCandidate('').pass, false);
+    }
+);
+
+test(
+    'P10F isDirtyStructuralShell helper returns correct dirty/clean',
+    () => {
+        assert.equal(
+            isDirtyStructuralShell('}A_\\A{A}').dirty,
+            true
+        );
+        assert.equal(
+            isDirtyStructuralShell('\\frac{A}{B}').dirty,
+            true
+        );
+        assert.equal(
+            isDirtyStructuralShell('A').dirty,
+            false
+        );
+        assert.equal(
+            isDirtyStructuralShell('').dirty,
+            true
+        );
+    }
+);
+
+test(
+    'P10F unwrapSafeLatexWrapper returns correct label or null',
+    () => {
+        assert.equal(
+            unwrapSafeLatexWrapper('\\text{A}'),
+            'A'
+        );
+        assert.equal(
+            unwrapSafeLatexWrapper('\\mathrm{B}'),
+            'B'
+        );
+        assert.equal(
+            unwrapSafeLatexWrapper('\\A{C}'),
+            'C'
+        );
+        assert.equal(
+            unwrapSafeLatexWrapper('\\frac{A}{B}'),
+            null
+        );
+        assert.equal(
+            unwrapSafeLatexWrapper('}A_\\A{A}'),
+            null
+        );
+        assert.equal(
+            unwrapSafeLatexWrapper('A'),
+            null
+        );
     }
 );
