@@ -17,7 +17,8 @@ const {
     markerCoverageFixture,
     realStyleSectionFixture,
     attempt7ResidualMarkerFixture,
-    case02AnswerMissing89Fixture
+    case02AnswerMissing89Fixture,
+    attempt12SequenceDiscontinuityFixture
 } =
     require('./fixtures/pdf-real-case-minimal.js');
 
@@ -552,6 +553,40 @@ test(
         assert.equal(
             result.coverageReport.missingSolutions.length,
             0
+        );
+    }
+);
+
+test(
+    'attempt 12 fixture parses full answers but reports missing solution 3',
+    () => {
+        const fixture =
+            attempt12SequenceDiscontinuityFixture;
+        const result =
+            parsePdfSupportBlocks({
+                rawTextPages:
+                    fixture.rawTextPages,
+                expectedQuestionNumbers:
+                    fixture.expectedQuestionNumbers,
+                sourceFileId:
+                    fixture.id
+            });
+
+        assert.deepEqual(
+            result.answerItems.map(item => item.question),
+            fixture.expected.answerDetectedNumbers
+        );
+        assert.deepEqual(
+            result.solutionItems.map(item => item.question),
+            fixture.expected.solutionDetectedNumbers
+        );
+        assert.deepEqual(
+            result.coverageReport.missingAnswers,
+            []
+        );
+        assert.deepEqual(
+            result.coverageReport.missingSolutions,
+            fixture.expected.missingSolutions
         );
     }
 );

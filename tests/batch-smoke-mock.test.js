@@ -33,7 +33,8 @@ const {
     markerCoverageFixture,
     realStyleSectionFixture,
     attempt7ResidualMarkerFixture,
-    case02AnswerMissing89Fixture
+    case02AnswerMissing89Fixture,
+    attempt12SequenceDiscontinuityFixture
 } =
     require('./fixtures/pdf-real-case-minimal.js');
 
@@ -980,6 +981,87 @@ test(
             assert.deepEqual(
                 field.fusedQuestionNumbers,
                 []
+            );
+        } finally {
+            restore();
+        }
+    }
+);
+
+test(
+    'attempt 12 mock keeps answer complete but does not expand unsafe solution ownership',
+    () => {
+        const restore =
+            installAiEndpointGuards();
+
+        try {
+            const fixture =
+                attempt12SequenceDiscontinuityFixture;
+            const parserGate =
+                buildPdfSupportParserGate({
+                    parsePdfSupportBlocks,
+                    alignPdfSupport,
+                    expectedQuestionNumbers:
+                        fixture.expectedQuestionNumbers,
+                    rawTextPages:
+                        fixture.rawTextPages
+                });
+            const field =
+                buildPdfSupportFieldLevelControlledWrite({
+                    drafts:
+                        fixture.questionItems,
+                    legacySafeAnswerItems:
+                        fixture.legacySafeAnswerItems,
+                    legacySafeSolutionItems:
+                        fixture.legacySafeSolutionItems,
+                    parserSafeAnswerItems:
+                        parserGate.answers,
+                    parserSafeSolutionItems:
+                        parserGate.solutions,
+                    parserFusedQuestionNumbers:
+                        parserGate.fusedQuestionNumbers
+                });
+            const solutionByQuestion =
+                indexSupportItems(field.effectiveSolutionItems);
+            const draftItems =
+                fixture.questionItems.map(item => {
+                    const question =
+                        normalizeSupportQuestionNumber(item.question);
+
+                    return {
+                        ...item,
+                        solution:
+                            solutionByQuestion.get(question)?.solution || ''
+                    };
+                });
+            const missingSolutions =
+                draftItems
+                    .filter(item => !item.solution)
+                    .map(item => item.question);
+
+            assert.notEqual(
+                parserGate.mode,
+                'full'
+            );
+            assert.deepEqual(
+                parserGate.solutions.map(item => item.question),
+                fixture.expected.safeSolutionQuestionNumbers
+            );
+            assert.deepEqual(
+                field.answerQuestionNumbers,
+                fixture.expected.effectiveAnswerQuestionNumbers
+            );
+            assert.deepEqual(
+                field.solutionQuestionNumbers,
+                fixture.expected.effectiveSolutionQuestionNumbers
+            );
+            assert.deepEqual(
+                missingSolutions,
+                fixture.expected.unsafeSolutionQuestionNumbers
+            );
+            assert.deepEqual(
+                field.fusedQuestionNumbers,
+                fixture.expected.fusedQuestionNumbers
             );
         } finally {
             restore();

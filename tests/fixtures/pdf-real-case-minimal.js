@@ -507,6 +507,79 @@ const case02AnswerMissing89Fixture =
         }
     };
 
+const attempt12SequenceDiscontinuityFixture =
+    {
+        id: 'attempt12-sequence-discontinuity',
+        description:
+            'Sanitized Attempt 12 shape: answer coverage is 12/12, but solution ownership is only safe for prefix 1,2 because solution 3 is missing while later solution markers continue.',
+        expectedQuestionNumbers:
+            case02QuestionNumbers,
+        questionItems:
+            case02QuestionItems,
+        rawTextPages: [
+            [
+                '1. 【答案】ATTEMPT12_ANSWER_1',
+                '【解析】ATTEMPT12_SOLUTION_1',
+                '2. 【答案】ATTEMPT12_ANSWER_2',
+                '【解析】ATTEMPT12_SOLUTION_2',
+                '3. 【答案】ATTEMPT12_ANSWER_3',
+                '4. 【答案】ATTEMPT12_ANSWER_4',
+                '【解析】ATTEMPT12_SOLUTION_4',
+                '5. 【答案】ATTEMPT12_ANSWER_5',
+                '【解析】ATTEMPT12_SOLUTION_5',
+                '6. 【答案】ATTEMPT12_ANSWER_6',
+                '【解析】ATTEMPT12_SOLUTION_6'
+            ].join('\n'),
+            [
+                '7. 【答案】ATTEMPT12_ANSWER_7',
+                '【解析】ATTEMPT12_SOLUTION_7',
+                '8. 【答案】ATTEMPT12_ANSWER_8',
+                '【解析】ATTEMPT12_SOLUTION_8',
+                '9. 【答案】ATTEMPT12_ANSWER_9',
+                '【解析】ATTEMPT12_SOLUTION_9',
+                '10. 【答案】ATTEMPT12_ANSWER_10',
+                '【解析】ATTEMPT12_SOLUTION_10',
+                '13. 【答案】ATTEMPT12_ANSWER_13',
+                '【解析】ATTEMPT12_SOLUTION_13',
+                '15. 【答案】ATTEMPT12_ANSWER_15',
+                '【解析】ATTEMPT12_SOLUTION_15'
+            ].join('\n')
+        ],
+        legacySafeAnswerItems:
+            case02QuestionNumbers.map(number => ({
+                question:
+                    String(number),
+                answer:
+                    `ATTEMPT12_LEGACY_ANSWER_${number}`
+            })),
+        legacySafeSolutionItems:
+            [],
+        expected: {
+            questionCount:
+                12,
+            answerDetectedNumbers:
+                ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
+            solutionDetectedNumbers:
+                ['1', '2', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
+            safeSolutionQuestionNumbers:
+                ['1', '2'],
+            effectiveAnswerQuestionNumbers:
+                ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
+            effectiveSolutionQuestionNumbers:
+                ['1', '2'],
+            unsafeSolutionQuestionNumbers:
+                ['3', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
+            missingSolutions:
+                ['3'],
+            fusedQuestionNumbers:
+                ['3', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
+            parserMode:
+                'prefix',
+            runnerStatus:
+                'pass-safe-partial'
+        }
+    };
+
 module.exports =
     {
         expectedQuestionNumbers,
@@ -518,5 +591,6 @@ module.exports =
         markerCoverageFixture,
         realStyleSectionFixture,
         attempt7ResidualMarkerFixture,
-        case02AnswerMissing89Fixture
+        case02AnswerMissing89Fixture,
+        attempt12SequenceDiscontinuityFixture
     };

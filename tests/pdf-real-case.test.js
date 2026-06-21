@@ -28,7 +28,8 @@ const {
     markerCoverageFixture,
     realStyleSectionFixture,
     attempt7ResidualMarkerFixture,
-    case02AnswerMissing89Fixture
+    case02AnswerMissing89Fixture,
+    attempt12SequenceDiscontinuityFixture
 } =
     require('./fixtures/pdf-real-case-minimal.js');
 
@@ -575,5 +576,97 @@ test(
                 decision.reason === fixture.expected.convertedReason
             )
         );
+    }
+);
+
+test(
+    'attempt 12 sequence discontinuity keeps only safe solution prefix',
+    () => {
+        const fixture =
+            attempt12SequenceDiscontinuityFixture;
+        const parserGate =
+            buildPdfSupportParserGate({
+                parsePdfSupportBlocks,
+                alignPdfSupport,
+                file: {
+                    id:
+                        fixture.id,
+                    filename:
+                        'ATTEMPT12_SANITIZED_SUPPORT.pdf'
+                },
+                expectedQuestionNumbers:
+                    fixture.expectedQuestionNumbers,
+                rawTextPages:
+                    fixture.rawTextPages
+            });
+
+        assert.equal(
+            fixture.questionItems.length,
+            fixture.expected.questionCount
+        );
+        assert.notEqual(
+            parserGate.mode,
+            'full'
+        );
+        assert.equal(
+            parserGate.mode,
+            fixture.expected.parserMode
+        );
+        assert.deepEqual(
+            parserGate.parserResult.answerItems.map(item => item.question),
+            fixture.expected.answerDetectedNumbers
+        );
+        assert.deepEqual(
+            parserGate.parserResult.solutionItems.map(item => item.question),
+            fixture.expected.solutionDetectedNumbers
+        );
+        assert.deepEqual(
+            parserGate.parserResult.coverageReport.missingSolutions,
+            fixture.expected.missingSolutions
+        );
+        assert.deepEqual(
+            parserGate.solutions.map(item => item.question),
+            fixture.expected.safeSolutionQuestionNumbers
+        );
+        assert.deepEqual(
+            parserGate.fusedQuestionNumbers,
+            fixture.expected.fusedQuestionNumbers
+        );
+
+        const controlled =
+            buildPdfSupportFieldLevelControlledWrite({
+                drafts:
+                    fixture.questionItems,
+                legacySafeAnswerItems:
+                    fixture.legacySafeAnswerItems,
+                legacySafeSolutionItems:
+                    fixture.legacySafeSolutionItems,
+                parserSafeAnswerItems:
+                    parserGate.answers,
+                parserSafeSolutionItems:
+                    parserGate.solutions,
+                parserFusedQuestionNumbers:
+                    parserGate.fusedQuestionNumbers
+            });
+
+        assert.deepEqual(
+            controlled.answerQuestionNumbers,
+            fixture.expected.effectiveAnswerQuestionNumbers
+        );
+        assert.deepEqual(
+            controlled.solutionQuestionNumbers,
+            fixture.expected.effectiveSolutionQuestionNumbers
+        );
+        assert.deepEqual(
+            controlled.fusedQuestionNumbers,
+            fixture.expected.fusedQuestionNumbers
+        );
+
+        for (const question of fixture.expected.unsafeSolutionQuestionNumbers) {
+            assert.ok(
+                !controlled.solutionQuestionNumbers.includes(question),
+                `unsafe solution ${question} must not be written`
+            );
+        }
     }
 );
