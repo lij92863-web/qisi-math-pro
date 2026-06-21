@@ -422,3 +422,166 @@ test(
         );
     }
 );
+
+// --- P10H: Answer-Only Extraction schema validation (mock) ---
+
+const validateAnswerOnlyExtractionOutput = answers => {
+    if (!Array.isArray(answers)) {
+        return { valid: false, reason: 'not-array' };
+    }
+
+    if (!answers.length) {
+        return { valid: false, reason: 'empty' };
+    }
+
+    const seenSourceOrders = new Set();
+    const seenLabels = new Map();
+
+    for (let i = 0; i < answers.length; i++) {
+        const answer = answers[i];
+
+        if (!answer || typeof answer !== 'object') {
+            return { valid: false, reason: `item-${i}-not-object` };
+        }
+
+        if (typeof answer.sourceOrder !== 'number' || answer.sourceOrder <= 0) {
+            return { valid: false, reason: `item-${i}-invalid-sourceOrder` };
+        }
+
+        if (seenSourceOrders.has(answer.sourceOrder)) {
+            return { valid: false, reason: `duplicate-sourceOrder-${answer.sourceOrder}` };
+        }
+        seenSourceOrders.add(answer.sourceOrder);
+
+        const label = String(answer.label || '').trim().toUpperCase();
+
+        if (!/^[A-F]+$/.test(label)) {
+            return { valid: false, reason: `item-${i}-non-label-payload:${label}` };
+        }
+
+        if (label.length > 4) {
+            return { valid: false, reason: `item-${i}-label-too-long:${label}` };
+        }
+
+        if (i > 0 && answer.sourceOrder < answers[i - 1].sourceOrder) {
+            return { valid: false, reason: 'jumpBack' };
+        }
+    }
+
+    return { valid: true, reason: '' };
+};
+
+test(
+    'P10H answer-only extraction: clean labels-only output is valid',
+    () => {
+        const result =
+            validateAnswerOnlyExtractionOutput([
+                { sourceOrder: 1, label: 'A' },
+                { sourceOrder: 2, label: 'B' },
+                { sourceOrder: 3, label: 'C' },
+                { sourceOrder: 4, label: 'D' }
+            ]);
+
+        assert.ok(result.valid, 'clean labels-only should be valid');
+    }
+);
+
+test(
+    'P10H answer-only extraction: multi-choice labels are valid',
+    () => {
+        const result =
+            validateAnswerOnlyExtractionOutput([
+                { sourceOrder: 1, label: 'A' },
+                { sourceOrder: 2, label: 'ACD' },
+                { sourceOrder: 3, label: 'BD' }
+            ]);
+
+        assert.ok(result.valid, 'multi-choice labels should be valid');
+    }
+);
+
+test(
+    'P10H answer-only extraction: non-label payload is rejected',
+    () => {
+        const result =
+            validateAnswerOnlyExtractionOutput([
+                { sourceOrder: 1, label: 'A' },
+                { sourceOrder: 2, label: 'LaTeX explanation text' },
+                { sourceOrder: 3, label: '\\frac{A}{B}' }
+            ]);
+
+        assert.ok(!result.valid, 'non-label content must be rejected');
+        assert.ok(
+            result.reason.includes('non-label-payload')
+        );
+    }
+);
+
+test(
+    'P10H answer-only extraction: duplicate sourceOrder fail-closed',
+    () => {
+        const result =
+            validateAnswerOnlyExtractionOutput([
+                { sourceOrder: 1, label: 'A' },
+                { sourceOrder: 1, label: 'B' }
+            ]);
+
+        assert.ok(!result.valid);
+        assert.ok(result.reason.includes('duplicate'));
+    }
+);
+
+test(
+    'P10H answer-only extraction: jumpBack sourceOrder fail-closed',
+    () => {
+        const result =
+            validateAnswerOnlyExtractionOutput([
+                { sourceOrder: 1, label: 'A' },
+                { sourceOrder: 3, label: 'B' },
+                { sourceOrder: 2, label: 'C' }
+            ]);
+
+        assert.ok(!result.valid);
+        assert.equal(result.reason, 'jumpBack');
+    }
+);
+
+test(
+    'P10H answer-only extraction: empty array is invalid',
+    () => {
+        const result =
+            validateAnswerOnlyExtractionOutput([]);
+
+        assert.ok(!result.valid);
+        assert.equal(result.reason, 'empty');
+    }
+);
+
+test(
+    'P10H answer-only extraction: AI question field not used for alignment',
+    () => {
+        const answersWithWrongQuestion = [
+            { sourceOrder: 1, label: 'A', questionNumberCandidate: '8' },
+            { sourceOrder: 2, label: 'B', questionNumberCandidate: '9' },
+            { sourceOrder: 3, label: 'C', questionNumberCandidate: '10' }
+        ];
+
+        const alignedBySourceOrder =
+            answersWithWrongQuestion.sort(
+                (a, b) => a.sourceOrder - b.sourceOrder
+            );
+
+        assert.equal(alignedBySourceOrder[0].sourceOrder, 1);
+        assert.equal(alignedBySourceOrder[0].questionNumberCandidate, '8');
+        assert.notEqual(
+            alignedBySourceOrder[0].questionNumberCandidate,
+            String(alignedBySourceOrder[0].sourceOrder),
+            'AI question field is wrong but alignment uses sourceOrder, not question field'
+        );
+
+        const result =
+            validateAnswerOnlyExtractionOutput(alignedBySourceOrder);
+
+        assert.ok(result.valid, 'alignment by sourceOrder is valid despite wrong AI question');
+    }
+);
