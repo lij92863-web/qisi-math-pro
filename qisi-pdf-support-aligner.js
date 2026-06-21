@@ -318,8 +318,64 @@
             return result;
         };
 
-        const alignPdfSupport = ({
-            questionItems = [],
+        const buildJumpBacks = values =>
+            (values || [])
+                .map((value, index) => ({
+                    value,
+                    previous:
+                        index > 0
+                            ? values[index - 1]
+                            : 0
+                }))
+                .filter(row =>
+                    row.previous &&
+                    row.value < row.previous
+                )
+                .map(row => ({
+                    question:
+                        String(row.value),
+                    previousQuestion:
+                        String(row.previous)
+                }));
+
+        const valuesOutOfExpected = (values = [], expectedValues = []) => {
+            if (!expectedValues.length) return [];
+
+            const expectedSet =
+                new Set(expectedValues);
+
+            return [
+                ...new Set(
+                    values.filter(value =>
+                        Number.isInteger(value) &&
+                        value > 0 &&
+                        !expectedSet.has(value)
+                    )
+                )
+            ].map(String);
+        };
+
+        const missingExpectedValues = ({
+            expectedValues = [],
+            answerValues = [],
+            solutionValues = []
+        } = {}) => {
+            if (!expectedValues.length) return [];
+
+            const answerSet =
+                new Set(answerValues);
+            const solutionSet =
+                new Set(solutionValues);
+
+            return expectedValues
+                .filter(value =>
+                    !answerSet.has(value) ||
+                    !solutionSet.has(value)
+                )
+                .map(String);
+        };
+
+        const validatePdfSupportSequence = ({
             answerItems = [],
             solutionItems = [],
             expectedQuestionNumbers = []
@@ -330,8 +386,97 @@
                     solutionItems,
                     expectedQuestionNumbers
                 });
+            const expectedValues =
+                normalizeExpected(expectedQuestionNumbers);
+            const answerValues =
+                report.answerSequence.values;
+            const solutionValues =
+                report.solutionSequence.values;
+            const prefix =
+                isSupportSequenceReliable(report)
+                    ? answerValues
+                    : findReliablePrefix(report, expectedValues);
+            const fusedQuestionNumbers =
+                isSupportSequenceReliable(report)
+                    ? []
+                    : valuesAfterPrefix({
+                        prefixLength:
+                            prefix.length,
+                        expectedValues,
+                        answerValues,
+                        solutionValues
+                    });
+            const mode =
+                isSupportSequenceReliable(report)
+                    ? 'full'
+                    : (
+                        prefix.length
+                            ? 'prefix'
+                            : 'fail-closed'
+                    );
 
-            if (isSupportSequenceReliable(report)) {
+            return {
+                reliable:
+                    mode === 'full',
+                mode,
+                empty:
+                    !answerValues.length &&
+                    !solutionValues.length,
+                invalidQuestions:
+                    [
+                        ...report.answerSequence.invalidRows.map(row => row.raw),
+                        ...report.solutionSequence.invalidRows.map(row => row.raw)
+                    ].filter(Boolean),
+                duplicateQuestions:
+                    [
+                        ...new Set([
+                            ...report.answerSequence.duplicates,
+                            ...report.solutionSequence.duplicates
+                        ])
+                    ].map(String),
+                jumpBacks: [
+                    ...buildJumpBacks(answerValues),
+                    ...buildJumpBacks(solutionValues)
+                ],
+                gaps:
+                    missingExpectedValues({
+                        expectedValues,
+                        answerValues,
+                        solutionValues
+                    }),
+                outOfRangeNumbers: [
+                    ...new Set([
+                        ...valuesOutOfExpected(answerValues, expectedValues),
+                        ...valuesOutOfExpected(solutionValues, expectedValues)
+                    ])
+                ],
+                answerSolutionSetMismatch:
+                    !sameNumberSet(answerValues, solutionValues),
+                prefixCutoffIndex:
+                    prefix.length,
+                safeQuestionNumbers:
+                    prefix.map(String),
+                fusedQuestionNumbers,
+                report
+            };
+        };
+
+        const alignPdfSupport = ({
+            questionItems = [],
+            answerItems = [],
+            solutionItems = [],
+            expectedQuestionNumbers = []
+        } = {}) => {
+            const validation =
+                validatePdfSupportSequence({
+                    answerItems,
+                    solutionItems,
+                    expectedQuestionNumbers
+                });
+            const report =
+                validation.report;
+
+            if (validation.mode === 'full') {
                 return {
                     reliable: true,
                     mode: 'full',
@@ -346,33 +491,18 @@
                 };
             }
 
-            const expected =
-                normalizeExpected(expectedQuestionNumbers);
-            const prefix =
-                findReliablePrefix(report, expected);
-            const fusedQuestionNumbers =
-                valuesAfterPrefix({
-                    prefixLength:
-                        prefix.length,
-                    expectedValues:
-                        expected,
-                    answerValues:
-                        report.answerSequence.values,
-                    solutionValues:
-                        report.solutionSequence.values
-                });
-
-            if (prefix.length) {
+            if (validation.mode === 'prefix') {
                 return {
                     reliable: false,
                     mode: 'prefix',
                     safeAnswerItems:
-                        (answerItems || []).slice(0, prefix.length),
+                        (answerItems || []).slice(0, validation.prefixCutoffIndex),
                     safeSolutionItems:
-                        (solutionItems || []).slice(0, prefix.length),
+                        (solutionItems || []).slice(0, validation.prefixCutoffIndex),
                     safeQuestionNumbers:
-                        prefix.map(String),
-                    fusedQuestionNumbers,
+                        validation.safeQuestionNumbers,
+                    fusedQuestionNumbers:
+                        validation.fusedQuestionNumbers,
                     fusedWarnings:
                         [
                             'pdf-support-sequence-unreliable',
@@ -392,15 +522,7 @@
                 safeSolutionItems: [],
                 safeQuestionNumbers: [],
                 fusedQuestionNumbers:
-                    valuesAfterPrefix({
-                        prefixLength: 0,
-                        expectedValues:
-                            expected,
-                        answerValues:
-                            report.answerSequence.values,
-                        solutionValues:
-                            report.solutionSequence.values
-                    }),
+                    validation.fusedQuestionNumbers,
                 fusedWarnings:
                     [
                         'pdf-support-sequence-unreliable',
@@ -417,6 +539,7 @@
             normalizeSupportQuestionNumber,
             normalizeSupportSequence,
             buildSupportSequenceReport,
+            validatePdfSupportSequence,
             isSupportSequenceReliable,
             findReliablePrefix,
             alignPdfSupport

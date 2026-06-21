@@ -7,9 +7,15 @@ const assert =
 const {
     normalizeSupportQuestionNumber,
     buildSupportSequenceReport,
+    validatePdfSupportSequence,
     alignPdfSupport
 } =
     require('../qisi-pdf-support-aligner.js');
+
+const {
+    attempt12SequenceDiscontinuityFixture
+} =
+    require('./fixtures/pdf-real-case-minimal.js');
 
 const makeItems = values =>
     values.map(value => ({
@@ -68,6 +74,125 @@ test(
         assert.deepEqual(result.fusedQuestionNumbers, []);
         assert.equal(result.safeAnswerItems.length, 12);
         assert.equal(result.safeSolutionItems.length, 12);
+    }
+);
+
+test(
+    'validator returns full for normal expected sequence',
+    () => {
+        const expected =
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 15];
+        const result =
+            validatePdfSupportSequence({
+                answerItems:
+                    makeItems(expected),
+                solutionItems:
+                    makeItems(expected),
+                expectedQuestionNumbers:
+                    expected
+            });
+
+        assert.equal(result.mode, 'full');
+        assert.equal(result.reliable, true);
+        assert.deepEqual(
+            result.safeQuestionNumbers,
+            expected.map(String)
+        );
+        assert.deepEqual(result.fusedQuestionNumbers, []);
+        assert.deepEqual(result.outOfRangeNumbers, []);
+    }
+);
+
+test(
+    'validator returns prefix for missing middle number',
+    () => {
+        const result =
+            validatePdfSupportSequence({
+                answerItems:
+                    makeItems([1, 2, 4, 5]),
+                solutionItems:
+                    makeItems([1, 2, 4, 5]),
+                expectedQuestionNumbers:
+                    [1, 2, 3, 4, 5]
+            });
+
+        assert.equal(result.mode, 'prefix');
+        assert.deepEqual(result.safeQuestionNumbers, ['1', '2']);
+        assert.deepEqual(result.fusedQuestionNumbers, ['3', '4', '5']);
+        assert.deepEqual(result.gaps, ['3']);
+        assert.ok(
+            result.report.reasons.includes(
+                'answer-question-not-continuous'
+            )
+        );
+    }
+);
+
+test(
+    'validator returns prefix or fail-closed for duplicate and jumpBack',
+    () => {
+        const duplicate =
+            validatePdfSupportSequence({
+                answerItems:
+                    makeItems([1, 2, 2, 3]),
+                solutionItems:
+                    makeItems([1, 2, 2, 3]),
+                expectedQuestionNumbers:
+                    [1, 2, 3, 4]
+            });
+        const jumpBack =
+            validatePdfSupportSequence({
+                answerItems:
+                    makeItems([1, 3, 4, 2]),
+                solutionItems:
+                    makeItems([1, 3, 4, 2]),
+                expectedQuestionNumbers:
+                    [1, 2, 3, 4]
+            });
+
+        assert.ok(['prefix', 'fail-closed'].includes(duplicate.mode));
+        assert.deepEqual(duplicate.duplicateQuestions, ['2']);
+        assert.ok(['prefix', 'fail-closed'].includes(jumpBack.mode));
+        assert.deepEqual(
+            jumpBack.jumpBacks,
+            [
+                { question: '2', previousQuestion: '4' },
+                { question: '2', previousQuestion: '4' }
+            ]
+        );
+    }
+);
+
+test(
+    'validator reports out-of-range numbers and does not silently accept 13 or 15',
+    () => {
+        const outOfRange =
+            validatePdfSupportSequence({
+                answerItems:
+                    makeItems([1, 2, 13, 15]),
+                solutionItems:
+                    makeItems([1, 2, 13, 15]),
+                expectedQuestionNumbers:
+                    [1, 2, 3, 4]
+            });
+        const expectedGap =
+            validatePdfSupportSequence({
+                answerItems:
+                    makeItems([1, 2, 13, 15]),
+                solutionItems:
+                    makeItems([1, 2, 13, 15]),
+                expectedQuestionNumbers:
+                    [1, 2, 13, 15]
+            });
+
+        assert.deepEqual(outOfRange.outOfRangeNumbers, ['13', '15']);
+        assert.deepEqual(outOfRange.safeQuestionNumbers, ['1', '2']);
+        assert.equal(expectedGap.mode, 'full');
+        assert.deepEqual(expectedGap.outOfRangeNumbers, []);
+        assert.deepEqual(
+            expectedGap.safeQuestionNumbers,
+            ['1', '2', '13', '15']
+        );
     }
 );
 
@@ -205,6 +330,46 @@ test(
         assert.deepEqual(
             result.fusedQuestionNumbers,
             ['3', '4', '5', '6', '7', '8', '9', '10', '13', '15']
+        );
+        assert.ok(
+            result.report.reasons.includes(
+                'solution-question-not-continuous'
+            )
+        );
+    }
+);
+
+test(
+    'validator keeps attempt 12 safe solution numbers as 1 and 2',
+    () => {
+        const fixture =
+            attempt12SequenceDiscontinuityFixture;
+        const result =
+            validatePdfSupportSequence({
+                answerItems:
+                    fixture.expected.answerDetectedNumbers.map(question => ({
+                        question,
+                        answer:
+                            `A${question}`
+                    })),
+                solutionItems:
+                    fixture.expected.solutionDetectedNumbers.map(question => ({
+                        question,
+                        solution:
+                            `S${question}`
+                    })),
+                expectedQuestionNumbers:
+                    fixture.expectedQuestionNumbers
+            });
+
+        assert.equal(result.mode, 'prefix');
+        assert.deepEqual(
+            result.safeQuestionNumbers,
+            fixture.expected.safeSolutionQuestionNumbers
+        );
+        assert.deepEqual(
+            result.fusedQuestionNumbers,
+            fixture.expected.fusedQuestionNumbers
         );
         assert.ok(
             result.report.reasons.includes(
