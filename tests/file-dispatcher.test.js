@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { classifyFileType, buildDispatchPlan, getFileType, fileTypeText, formatFileSize, makeBatchId } = require('../qisi-file-dispatcher.js');
+const { classifyFileType, buildDispatchPlan, getFileType, fileTypeText, formatFileSize, makeBatchId, getBatchFileRoles, batchHasQuestionRole, batchHasAnswerRole, batchHasSolutionRole, batchIsFullRole, batchIsSupplementalImage } = require('../qisi-file-dispatcher.js');
 
 test('BM23: getFileType classifies all extensions', () => {
     assert.equal(getFileType('test.pdf'), 'pdf');
@@ -42,4 +42,36 @@ test('BM23: buildDispatchPlan original', () => {
     const p = buildDispatchPlan([{ name: 'q.docx' }, { name: 's.pdf' }]);
     assert.ok(p.questions);
     assert.ok(p.answers);
+});
+
+test('BM24: getBatchFileRoles extracts roles', () => {
+    assert.deepEqual(getBatchFileRoles({ roles: ['question', 'answer'] }), ['question', 'answer']);
+    assert.deepEqual(getBatchFileRoles({ role: 'full' }), ['full']);
+    assert.deepEqual(getBatchFileRoles({ roles: [] }), []);
+    assert.deepEqual(getBatchFileRoles({}), []);
+    assert.deepEqual(getBatchFileRoles(null), []);
+});
+
+test('BM24: batchHasQuestionRole detects question', () => {
+    assert.ok(batchHasQuestionRole({ roles: ['question'] }));
+    assert.ok(batchHasQuestionRole({ roles: ['full'] }));
+    assert.ok(!batchHasQuestionRole({ roles: ['answer'] }));
+});
+
+test('BM24: batchHasAnswerRole detects answer', () => {
+    assert.ok(batchHasAnswerRole({ roles: ['answer'] }));
+    assert.ok(batchHasAnswerRole({ roles: ['full'] }));
+    assert.ok(!batchHasAnswerRole({ roles: ['question'] }));
+});
+
+test('BM24: batchHasSolutionRole detects solution', () => {
+    assert.ok(batchHasSolutionRole({ roles: ['solution'] }));
+    assert.ok(!batchHasSolutionRole({ roles: ['answer'] }));
+});
+
+test('BM24: batchIsFullRole and batchIsSupplementalImage', () => {
+    assert.ok(batchIsFullRole({ roles: ['full'] }));
+    assert.ok(!batchIsFullRole({ roles: ['question'] }));
+    assert.ok(batchIsSupplementalImage({ roles: ['supplemental_image'] }));
+    assert.ok(!batchIsSupplementalImage({ roles: ['question'] }));
 });

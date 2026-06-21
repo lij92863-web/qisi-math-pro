@@ -350,32 +350,13 @@
                     });
                 };
 
-                const getBatchFileRoles = (file) => {
-                    const roles = Array.isArray(file?.roles) ? file.roles.filter(Boolean) : [];
-                    if (roles.length) return [...new Set(roles)];
-                    return file?.role ? [file.role] : [];
-                };
-
-                const batchHasRole = (file, role) => getBatchFileRoles(file).includes(role);
-
-                const batchHasQuestionRole = (file) => {
-                    const roles = getBatchFileRoles(file);
-                    return roles.includes('question') || roles.includes('full');
-                };
-
-                const batchHasAnswerRole = (file) => {
-                    const roles = getBatchFileRoles(file);
-                    return roles.includes('answer') || roles.includes('full');
-                };
-
-                const batchHasSolutionRole = (file) => {
-                    const roles = getBatchFileRoles(file);
-                    return roles.includes('solution') || roles.includes('full');
-                };
-
-                const batchIsFullRole = (file) => getBatchFileRoles(file).includes('full');
-
-                const batchIsSupplementalImage = (file) => getBatchFileRoles(file).includes('supplemental_image');
+                const getBatchFileRoles = window.Qisi.FileDispatcher.getBatchFileRoles;
+                const batchHasRole = window.Qisi.FileDispatcher.batchHasRole;
+                const batchHasQuestionRole = window.Qisi.FileDispatcher.batchHasQuestionRole;
+                const batchHasAnswerRole = window.Qisi.FileDispatcher.batchHasAnswerRole;
+                const batchHasSolutionRole = window.Qisi.FileDispatcher.batchHasSolutionRole;
+                const batchIsFullRole = window.Qisi.FileDispatcher.batchIsFullRole;
+                const batchIsSupplementalImage = window.Qisi.FileDispatcher.batchIsSupplementalImage;
 
                 const openBatchCreate = (type = 'mixed') => {
                     batchImportMode.value = 'create';
