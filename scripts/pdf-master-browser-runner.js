@@ -7,6 +7,16 @@ const { spawn } = require('child_process');
 
 const ROOT = path.resolve(__dirname, '..');
 const ARTIFACT_DIR = path.join(ROOT, 'local-run-artifacts', 'pdf-master');
+
+const {
+    classifyAnswerExtractionQuality
+} = (() => {
+    try {
+        return require(path.join(ROOT, 'qisi-pdf-answer-extraction-quality.js'));
+    } catch (_) {
+        return { classifyAnswerExtractionQuality: null };
+    }
+})();
 const LEDGER_PATH = path.join(ARTIFACT_DIR, 'attempt-ledger.jsonl');
 const REPORT_PATH = path.join(ARTIFACT_DIR, 'latest-sanitized-report.json');
 const STAGE6_REPORT_PATH = path.join(
@@ -1290,6 +1300,47 @@ const buildSolutionDiagnostics = ({
     };
 };
 
+const buildAnswerExtractionQualityShadow = (controlledWriteSummary = {}) => {
+    if (typeof classifyAnswerExtractionQuality !== 'function') {
+        return null;
+    }
+
+    const rejectedWarnings =
+        controlledWriteSummary.rejectedAnswerWarnings || [];
+
+    if (!rejectedWarnings.length) {
+        return null;
+    }
+
+    const shadow = {};
+
+    rejectedWarnings.forEach(warning => {
+        const questionNumber =
+            String(warning.questionNumber || '');
+        const originalAnswer =
+            warning.originalAnswerShape || warning.originalAnswer || '';
+
+        if (!questionNumber) return;
+
+        const classification =
+            classifyAnswerExtractionQuality(originalAnswer);
+
+        shadow[questionNumber] = {
+            originalAnswerShape: originalAnswer,
+            status: classification.status,
+            normalizedCandidate: classification.normalizedCandidate,
+            reasonCode: classification.reasonCode,
+            reasonDetail: classification.reasonDetail,
+            evidenceLevel: classification.evidenceLevel,
+            canDirectlyAccept: classification.canDirectlyAccept,
+            affectsControlledWrite: false,
+            affectsBaselineCandidate: false
+        };
+    });
+
+    return shadow;
+};
+
 const fetchJson = async url => {
     const response =
         await fetch(url);
@@ -2265,6 +2316,17 @@ const runRealRun = async () => {
                         ? 'detected'
                         : 'not-detected-by-sanitized-warnings'
             });
+
+        const answerExtractionQualityShadow =
+            buildAnswerExtractionQualityShadow(
+                solutionDiagnostics.controlledWriteSummary
+            );
+
+        if (answerExtractionQualityShadow) {
+            ledgerEntry.answerExtractionQualityShadow =
+                answerExtractionQualityShadow;
+        }
+
         ledgerEntry.attemptNumber =
             apiRequestStarted ? realAttemptCount : 0;
 
@@ -2323,6 +2385,8 @@ const runRealRun = async () => {
                     ledgerEntry.alignerReportReasons,
                 controlledWriteSummary:
                     ledgerEntry.controlledWriteSummary,
+                answerExtractionQualityShadow:
+                    ledgerEntry.answerExtractionQualityShadow || null,
                 draftCleanup,
                 reportSource:
                     ledgerEntry.reportSource,
@@ -2440,5 +2504,6 @@ module.exports = {
     buildSolutionDiagnostics,
     createRunContext,
     makeLedgerEntry,
-    parseMode
+    parseMode,
+    buildAnswerExtractionQualityShadow
 };

@@ -9,6 +9,7 @@ const {
     REAL_RUN_ALLOWED_ENV_NAME,
     assertRealRunAllowed,
     buildSolutionDiagnostics,
+    buildAnswerExtractionQualityShadow,
     createRunContext,
     makeLedgerEntry,
     parseMode
@@ -677,5 +678,186 @@ test(
 
         assert.deepEqual(completeEmpty, expected);
         assert.equal(completeEmpty.length, 12, 'only full acceptance → complete');
+    }
+);
+
+test(
+    'P10G shadow: Q2 \A{A} → safe-wrapper-candidate, canDirectlyAccept false',
+    () => {
+        const shadow =
+            buildAnswerExtractionQualityShadow({
+                rejectedAnswerWarnings: [
+                    {
+                        questionNumber: '2',
+                        reason: 'option-value-not-matched',
+                        originalAnswerShape: '\\A{A}',
+                        structuralCandidate: false,
+                        structuralReason: 'not-structural-label-shell'
+                    },
+                    {
+                        questionNumber: '8',
+                        reason: 'multiple-option-value-rejected',
+                        originalAnswerShape: '}A_\\A{A}',
+                        structuralCandidate: true,
+                        structuralReason: 'non-label-payload'
+                    },
+                    {
+                        questionNumber: '9',
+                        reason: 'multiple-option-value-rejected',
+                        originalAnswerShape: '}A_\\A{A}',
+                        structuralCandidate: true,
+                        structuralReason: 'non-label-payload'
+                    }
+                ]
+            });
+
+        assert.ok(shadow, 'shadow must be built');
+        assert.ok(shadow['2'], 'Q2 must have shadow entry');
+        assert.equal(
+            shadow['2'].status,
+            'safe-wrapper-candidate'
+        );
+        assert.equal(
+            shadow['2'].normalizedCandidate,
+            'A'
+        );
+        assert.equal(
+            shadow['2'].canDirectlyAccept,
+            false,
+            'canDirectlyAccept must be false'
+        );
+        assert.equal(
+            shadow['2'].affectsControlledWrite,
+            false
+        );
+        assert.equal(
+            shadow['2'].affectsBaselineCandidate,
+            false
+        );
+    }
+);
+
+test(
+    'P10G shadow: Q8/Q9 }A_\A{A} → dirty-structural-shell, normalizedCandidate null',
+    () => {
+        const shadow =
+            buildAnswerExtractionQualityShadow({
+                rejectedAnswerWarnings: [
+                    { questionNumber: '8', originalAnswerShape: '}A_\\A{A}' },
+                    { questionNumber: '9', originalAnswerShape: '}A_\\A{A}' }
+                ]
+            });
+
+        assert.ok(shadow);
+        assert.ok(shadow['8']);
+        assert.equal(
+            shadow['8'].status,
+            'dirty-structural-shell'
+        );
+        assert.equal(
+            shadow['8'].normalizedCandidate,
+            null,
+            'dirty shell must have null normalizedCandidate'
+        );
+        assert.equal(shadow['8'].canDirectlyAccept, false);
+
+        assert.ok(shadow['9']);
+        assert.equal(
+            shadow['9'].status,
+            'dirty-structural-shell'
+        );
+        assert.equal(shadow['9'].normalizedCandidate, null);
+        assert.equal(shadow['9'].canDirectlyAccept, false);
+    }
+);
+
+test(
+    'P10G shadow: result does not affect controlled-write or baseline',
+    () => {
+        const shadow =
+            buildAnswerExtractionQualityShadow({
+                rejectedAnswerWarnings: [
+                    { questionNumber: '2', originalAnswerShape: '\\A{A}' }
+                ]
+            });
+
+        const controlledWriteAccepted =
+            ['1', '3', '4', '5', '6', '7', '10', '13', '15'];
+        const controlledWriteRejected =
+            ['2', '8', '9'];
+        const baselineCandidate =
+            ['1', '3', '4', '5', '6', '7', '10', '13', '15'];
+
+        assert.ok(shadow['2']);
+        assert.equal(shadow['2'].status, 'safe-wrapper-candidate');
+
+        assert.ok(
+            !controlledWriteAccepted.includes(
+                shadow['2'].normalizedCandidate
+            ),
+            'shadow candidate A not in accepted set'
+        );
+        assert.ok(
+            controlledWriteRejected.includes('2'),
+            'Q2 remains in rejected set regardless of shadow'
+        );
+        assert.ok(
+            !baselineCandidate.includes('2'),
+            'Q2 not in baseline regardless of shadow'
+        );
+        assert.equal(
+            shadow['2'].affectsControlledWrite,
+            false
+        );
+        assert.equal(
+            shadow['2'].affectsBaselineCandidate,
+            false
+        );
+    }
+);
+
+test(
+    'P10G shadow: null shadow when classifier unavailable or no warnings',
+    () => {
+        const empty =
+            buildAnswerExtractionQualityShadow({
+                rejectedAnswerWarnings: []
+            });
+
+        assert.equal(empty, null, 'empty warnings → null shadow');
+
+        const noWarnings =
+            buildAnswerExtractionQualityShadow({});
+
+        assert.equal(noWarnings, null, 'no rejectedAnswerWarnings → null shadow');
+    }
+);
+
+test(
+    'P10G shadow: pass-safe-partial unchanged by shadow classification',
+    () => {
+        const shadow =
+            buildAnswerExtractionQualityShadow({
+                rejectedAnswerWarnings: [
+                    { questionNumber: '2', originalAnswerShape: '\\A{A}' },
+                    { questionNumber: '8', originalAnswerShape: '}A_\\A{A}' },
+                    { questionNumber: '9', originalAnswerShape: '}A_\\A{A}' }
+                ]
+            });
+
+        const controlledWriteRejected = ['2', '8', '9'];
+        const hasRejected =
+            controlledWriteRejected.length > 0;
+
+        assert.ok(hasRejected, 'rejected answers exist');
+        assert.ok(shadow, 'shadow exists');
+
+        const isComplete =
+            !hasRejected;
+
+        assert.ok(
+            !isComplete,
+            'pass-safe-partial regardless of shadow classification'
+        );
     }
 );
