@@ -1,6 +1,30 @@
 # PDF Support Real-Run Ledger
 
-## Attempt 1
+## Attempt 2 (P10C diagnostic)
+
+| Field | Value |
+| --- | --- |
+| attemptNo | 2 |
+| commit | `8371dda stage P10B add answer path trace fixture` |
+| runId | `pdf-master-real-run-20260621182218` |
+| real AI/OCR call count | 10 |
+| purpose | Diagnostic trace capture |
+| answer coverage | 10/12 (draft) |
+| solution coverage | 12/12 |
+| missing answers | 8, 9 |
+| accepted answers (cw) | 1, 3, 4, 5, 6, 7, 10, 13, 15 |
+| rejected answers (cw) | 2, 8, 9 |
+| baseline candidate | 1, 3, 4, 5, 6, 7, 10, 13, 15 (9/12) |
+| Q2 ocrRawShape | label-shell (LaTeX cmd wrapping) |
+| Q2 originalAnswerShape | `\A{A}` |
+| Q8 ocrRawShape | label-shell (structural, non-label-payload) |
+| Q8 originalAnswerShape | `}A_\A{A}` |
+| Q9 ocrRawShape | label-shell (structural, non-label-payload) |
+| Q9 originalAnswerShape | `}A_\A{A}` |
+| decision | pass-safe-partial |
+| next action | P10D causality decision |
+
+## Attempt 1 (P8G)
 
 | Field | Value |
 | --- | --- |
