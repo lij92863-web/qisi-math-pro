@@ -104,6 +104,42 @@ test(
 );
 
 test(
+    'aligner follows validator full result',
+    () => {
+        const expected =
+            [1, 2, 3, 4];
+        const validator =
+            validatePdfSupportSequence({
+                answerItems:
+                    makeItems(expected),
+                solutionItems:
+                    makeItems(expected),
+                expectedQuestionNumbers:
+                    expected
+            });
+        const aligned =
+            alignPdfSupport({
+                answerItems:
+                    makeItems(expected),
+                solutionItems:
+                    makeItems(expected),
+                expectedQuestionNumbers:
+                    expected
+            });
+
+        assert.equal(aligned.mode, validator.mode);
+        assert.deepEqual(
+            aligned.safeQuestionNumbers,
+            validator.safeQuestionNumbers
+        );
+        assert.deepEqual(
+            aligned.fusedQuestionNumbers,
+            validator.fusedQuestionNumbers
+        );
+    }
+);
+
+test(
     'validator returns prefix for missing middle number',
     () => {
         const result =
@@ -124,6 +160,72 @@ test(
             result.report.reasons.includes(
                 'answer-question-not-continuous'
             )
+        );
+    }
+);
+
+test(
+    'aligner follows validator prefix result',
+    () => {
+        const answerItems =
+            makeItems([1, 2, 4, 5]);
+        const solutionItems =
+            makeItems([1, 2, 4, 5]);
+        const expectedQuestionNumbers =
+            [1, 2, 3, 4, 5];
+        const validator =
+            validatePdfSupportSequence({
+                answerItems,
+                solutionItems,
+                expectedQuestionNumbers
+            });
+        const aligned =
+            alignPdfSupport({
+                answerItems,
+                solutionItems,
+                expectedQuestionNumbers
+            });
+
+        assert.equal(aligned.mode, validator.mode);
+        assert.deepEqual(
+            aligned.safeQuestionNumbers,
+            validator.safeQuestionNumbers
+        );
+        assert.deepEqual(
+            aligned.fusedQuestionNumbers,
+            validator.fusedQuestionNumbers
+        );
+    }
+);
+
+test(
+    'aligner follows validator fail-closed result',
+    () => {
+        const answerItems =
+            makeItems([2, 3, 4]);
+        const solutionItems =
+            makeItems([2, 3, 4]);
+        const expectedQuestionNumbers =
+            [1, 2, 3, 4];
+        const validator =
+            validatePdfSupportSequence({
+                answerItems,
+                solutionItems,
+                expectedQuestionNumbers
+            });
+        const aligned =
+            alignPdfSupport({
+                answerItems,
+                solutionItems,
+                expectedQuestionNumbers
+            });
+
+        assert.equal(validator.mode, 'fail-closed');
+        assert.equal(aligned.mode, validator.mode);
+        assert.deepEqual(aligned.safeAnswerItems, []);
+        assert.deepEqual(
+            aligned.fusedQuestionNumbers,
+            validator.fusedQuestionNumbers
         );
     }
 );
