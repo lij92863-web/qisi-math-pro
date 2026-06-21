@@ -242,3 +242,157 @@ test(
         );
     }
 );
+
+test(
+    'P8D diagnostics expose controlled-write accepted and rejected answer numbers',
+    () => {
+        const diagnostics =
+            buildSolutionDiagnostics({
+                browserDiagnostics:
+                    {
+                        parserGate:
+                            {
+                                supportDetectedNumbers:
+                                    ['1', '2'],
+                                answerDetectedNumbers:
+                                    ['1', '2'],
+                                solutionDetectedNumbers:
+                                    ['1', '2']
+                            },
+                        controlledWrite:
+                            {
+                                answerQuestionNumbers:
+                                    ['1'],
+                                rejectedAnswerNumbers:
+                                    ['2'],
+                                rejectedAnswerReasons:
+                                    ['option-value-not-matched'],
+                                solutionQuestionNumbers:
+                                    ['1', '2']
+                            }
+                    },
+                missingSolutions:
+                    [],
+                draftSnapshot:
+                    [
+                        { question: '1', hasSolution: true },
+                        { question: '2', hasSolution: true }
+                    ]
+            });
+
+        assert.deepEqual(
+            diagnostics.controlledWriteAcceptedAnswerNumbers,
+            ['1']
+        );
+        assert.deepEqual(
+            diagnostics.controlledWriteRejectedAnswerNumbers,
+            ['2']
+        );
+        assert.deepEqual(
+            diagnostics.controlledWriteAcceptedSolutionNumbers,
+            ['1', '2']
+        );
+    }
+);
+
+test(
+    'P8D baseline candidate answer numbers exclude controlled-write rejected answers',
+    () => {
+        const controlledWriteAccepted =
+            ['1', '3', '4', '5', '6', '7', '10', '13', '15'];
+        const draftSnapshotAnswers =
+            ['1', '2', '3', '4', '5', '6', '7', '10', '13', '15'];
+        const controlledWriteRejected =
+            ['2', '8', '9'];
+
+        const baselineCandidate =
+            draftSnapshotAnswers.filter(
+                question => controlledWriteAccepted.includes(question)
+            );
+
+        assert.deepEqual(
+            baselineCandidate,
+            ['1', '3', '4', '5', '6', '7', '10', '13', '15']
+        );
+        assert.ok(
+            !baselineCandidate.includes('2'),
+            'answer 2 controlled-write rejected must not be in baseline candidate'
+        );
+        assert.ok(
+            !baselineCandidate.includes('8'),
+            'answer 8 controlled-write rejected must not be in baseline candidate'
+        );
+        assert.ok(
+            !baselineCandidate.includes('9'),
+            'answer 9 controlled-write rejected must not be in baseline candidate'
+        );
+
+        for (const question of controlledWriteRejected) {
+            assert.ok(
+                !baselineCandidate.includes(question),
+                `rejected answer ${question} must not appear in baseline candidate`
+            );
+        }
+
+        const completeBaselineCandidate =
+            baselineCandidate.length === 12 &&
+            controlledWriteRejected.length === 0;
+
+        assert.ok(
+            !completeBaselineCandidate,
+            'with rejected answers, cannot be complete baseline'
+        );
+
+        assert.ok(
+            draftSnapshotAnswers.includes('2'),
+            'answer 2 may be in draft snapshot (from another path)'
+        );
+        assert.ok(
+            !baselineCandidate.includes('2'),
+            'but answer 2 must not be in baseline candidate'
+        );
+    }
+);
+
+test(
+    'P8D ledger includes controlled-write and baseline candidate fields',
+    () => {
+        const runContext =
+            createRunContext('real-run', new Date('2026-06-22T00:00:00.000Z'));
+        const ledger =
+            makeLedgerEntry({
+                mode: 'real-run',
+                runContext,
+                result: 'pass-safe-partial',
+                nextAction: 'fixture-first',
+                controlledWriteAcceptedAnswerNumbers:
+                    ['1', '3', '4', '5', '6', '7', '10', '13', '15'],
+                controlledWriteRejectedAnswerNumbers:
+                    ['2', '8', '9'],
+                draftSnapshotAnswerNumbers:
+                    ['1', '2', '3', '4', '5', '6', '7', '10', '13', '15'],
+                baselineCandidateAnswerNumbers:
+                    ['1', '3', '4', '5', '6', '7', '10', '13', '15']
+            });
+
+        assert.deepEqual(
+            ledger.controlledWriteAcceptedAnswerNumbers,
+            ['1', '3', '4', '5', '6', '7', '10', '13', '15']
+        );
+        assert.deepEqual(
+            ledger.controlledWriteRejectedAnswerNumbers,
+            ['2', '8', '9']
+        );
+        assert.deepEqual(
+            ledger.draftSnapshotAnswerNumbers,
+            ['1', '2', '3', '4', '5', '6', '7', '10', '13', '15']
+        );
+        assert.deepEqual(
+            ledger.baselineCandidateAnswerNumbers,
+            ['1', '3', '4', '5', '6', '7', '10', '13', '15']
+        );
+        assert.ok(
+            !ledger.baselineCandidateAnswerNumbers.includes('2')
+        );
+    }
+);

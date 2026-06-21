@@ -171,6 +171,10 @@ const makeLedgerEntry = ({
     parserWarnings = [],
     alignerReportReasons = [],
     controlledWriteSummary = null,
+    controlledWriteAcceptedAnswerNumbers = [],
+    controlledWriteRejectedAnswerNumbers = [],
+    draftSnapshotAnswerNumbers = [],
+    baselineCandidateAnswerNumbers = [],
     draftCleanup = null,
     reportSource = 'current-run-only'
 }) => ({
@@ -206,6 +210,10 @@ const makeLedgerEntry = ({
     parserWarnings,
     alignerReportReasons,
     controlledWriteSummary,
+    controlledWriteAcceptedAnswerNumbers,
+    controlledWriteRejectedAnswerNumbers,
+    draftSnapshotAnswerNumbers,
+    baselineCandidateAnswerNumbers,
     draftCleanup,
     reportSource,
     questionPdfSize:
@@ -320,6 +328,10 @@ const appendStage6Report = async report => {
         `Answer item count: ${attempt.answerItemCount ?? 'N/A'}`,
         `Solution item count: ${attempt.solutionItemCount ?? 'N/A'}`,
         `Align mode: ${attempt.alignMode || 'N/A'}`,
+        `Controlled-write accepted answers: ${(attempt.controlledWriteAcceptedAnswerNumbers || []).join(', ') || 'none'}`,
+        `Controlled-write rejected answers: ${(attempt.controlledWriteRejectedAnswerNumbers || []).join(', ') || 'none'}`,
+        `Draft snapshot answers: ${(attempt.draftSnapshotAnswerNumbers || []).join(', ') || 'none'}`,
+        `Baseline candidate answers: ${(attempt.baselineCandidateAnswerNumbers || []).join(', ') || 'none'}`,
         `Warnings: ${reportWarnings.join(', ') || 'none'}`,
         `Missing answers: ${(report.missingAnswers || []).join(', ') || 'none'}`,
         `Missing solutions: ${(report.missingSolutions || []).join(', ') || 'none'}`,
@@ -1261,7 +1273,20 @@ const buildSolutionDiagnostics = ({
         reviewPageSolutionCount:
             draftSolutionNumbers.length,
         diagnosticSamples:
-            browserDiagnostics?.samples || {}
+            browserDiagnostics?.samples || {},
+        controlledWriteAcceptedAnswerNumbers:
+            controlledWrite.answerQuestionNumbers ||
+            controlledWrite.controlledWriteSummary?.answerQuestionNumbers ||
+            [],
+        controlledWriteRejectedAnswerNumbers:
+            controlledWrite.rejectedAnswerNumbers || [],
+        controlledWriteAcceptedSolutionNumbers:
+            controlledWrite.solutionQuestionNumbers ||
+            controlledWrite.controlledWriteSummary?.solutionQuestionNumbers ||
+            controlledWrite.writableSolutionNumbers ||
+            [],
+        controlledWriteRejectedSolutionNumbers:
+            controlledWrite.rejectedSolutionNumbers || []
     };
 };
 
@@ -2146,6 +2171,27 @@ const runRealRun = async () => {
                 missingSolutions,
                 draftSnapshot
             });
+
+        const controlledWriteAcceptedAnswers =
+            solutionDiagnostics.controlledWriteAcceptedAnswerNumbers || [];
+        const controlledWriteRejectedAnswers =
+            solutionDiagnostics.controlledWriteRejectedAnswerNumbers || [];
+
+        const draftSnapshotAnswerNumbers =
+            draftSnapshot.filter(draft => draft.hasAnswer).map(draft => draft.question);
+        const draftSnapshotSolutionNumbers =
+            draftSnapshot.filter(draft => draft.hasSolution).map(draft => draft.question);
+
+        const baselineCandidateAnswerNumbers =
+            draftSnapshotAnswerNumbers.filter(
+                question => controlledWriteAcceptedAnswers.includes(question)
+            );
+
+        const controlledWriteHasRejections =
+            controlledWriteRejectedAnswers.length > 0;
+        const controlledWriteHasFused =
+            (solutionDiagnostics.controlledWriteSummary?.fusedQuestionNumbers || []).length > 0;
+
         const failClosed =
             warnings.some(warning => /pdf-support-sequence-unreliable/.test(warning));
         const prefix =
@@ -2155,9 +2201,21 @@ const runRealRun = async () => {
                 ? 'fail-closed'
                 : prefix
                     ? 'prefix'
-                    : result === 'pass-full'
+                    : (result === 'pass-full' && !controlledWriteHasRejections && !controlledWriteHasFused)
                         ? 'full'
-                        : 'unknown';
+                        : result === 'pass-full'
+                            ? 'prefix'
+                            : 'unknown';
+
+        if (result === 'pass-full' && controlledWriteHasRejections) {
+            result = 'pass-safe-partial';
+            nextAction = 'Controlled-write has rejected answers; return to fixture-first diagnostics';
+        }
+
+        if (result === 'pass-full' && missingAnswers.length > 0) {
+            result = 'pass-safe-partial';
+            nextAction = 'Draft snapshot has missing answers; return to fixture-first diagnostics';
+        }
         const realAttemptCount =
             (await countRealAttempts()) + (apiRequestStarted ? 1 : 0);
         const ledgerEntry =
@@ -2182,9 +2240,9 @@ const runRealRun = async () => {
                 detectedSolutionNumbers:
                     solutionDiagnostics.solutionDetectedNumbers,
                 safeAnswerNumbers:
-                    draftSnapshot.filter(draft => draft.hasAnswer).map(draft => draft.question),
+                    controlledWriteAcceptedAnswers,
                 safeSolutionNumbers:
-                    draftSnapshot.filter(draft => draft.hasSolution).map(draft => draft.question),
+                    draftSnapshotSolutionNumbers,
                 fusedQuestionNumbers:
                     solutionDiagnostics.controlledWriteSummary?.fusedQuestionNumbers || [],
                 prefixCutoffReason:
@@ -2195,6 +2253,12 @@ const runRealRun = async () => {
                     solutionDiagnostics.rejectReasons || [],
                 controlledWriteSummary:
                     solutionDiagnostics.controlledWriteSummary,
+                controlledWriteAcceptedAnswerNumbers:
+                    controlledWriteAcceptedAnswers,
+                controlledWriteRejectedAnswerNumbers:
+                    controlledWriteRejectedAnswers,
+                draftSnapshotAnswerNumbers,
+                baselineCandidateAnswerNumbers,
                 draftCleanup,
                 wrongAttachRisk:
                     result === 'fail-unsafe'
@@ -2241,6 +2305,14 @@ const runRealRun = async () => {
                     ledgerEntry.safeAnswerNumbers,
                 safeSolutionNumbers:
                     ledgerEntry.safeSolutionNumbers,
+                controlledWriteAcceptedAnswerNumbers:
+                    ledgerEntry.controlledWriteAcceptedAnswerNumbers,
+                controlledWriteRejectedAnswerNumbers:
+                    ledgerEntry.controlledWriteRejectedAnswerNumbers,
+                draftSnapshotAnswerNumbers:
+                    ledgerEntry.draftSnapshotAnswerNumbers,
+                baselineCandidateAnswerNumbers:
+                    ledgerEntry.baselineCandidateAnswerNumbers,
                 fusedQuestionNumbers:
                     ledgerEntry.fusedQuestionNumbers,
                 prefixCutoffReason:
