@@ -6,6 +6,38 @@
         root.Qisi.PdfSupportControlledWrite = factory();
     }
 })(typeof globalThis !== 'undefined' ? globalThis : window, function () {
+    const getAnswerExtractionQualityClassifier = () => {
+        try {
+            if (
+                typeof require !== 'undefined' &&
+                typeof module !== 'undefined' &&
+                module.exports
+            ) {
+                const mod =
+                    require('./qisi-pdf-answer-extraction-quality.js');
+                return mod?.classifyAnswerExtractionQuality || null;
+            }
+        } catch (_) { /* not available */ }
+
+        try {
+            const root =
+                typeof globalThis !== 'undefined'
+                    ? globalThis
+                    : window;
+            return root?.Qisi?.PdfAnswerExtractionQuality
+                ?.classifyAnswerExtractionQuality || null;
+        } catch (_) { return null; }
+    };
+
+    const cleanupForNormalization = value => {
+        const text =
+            cleanText(value);
+
+        if (!text) return '';
+
+        return text.replace(/^\s*\\[A-Za-z]+\s*\{([^}]*)\}\s*$/, '$1').trim();
+    };
+
     const cleanText = value =>
         String(value ?? '').replace(/\r\n?/g, '\n').trim();
 
@@ -776,13 +808,78 @@
                                 getItemAnswer(parserAnswerItem),
                                 draft
                             );
-                        const rejectionTaxonomy = classifyObjectiveAnswerRejection(
-                            normalized.reason,
-                            structuralDiagnostic,
-                            parserAnswerItem,
-                            draft
-                        );
-                        warnings.push({
+                        const rawAnswer =
+                            normalized.originalAnswer || getItemAnswer(parserAnswerItem);
+
+                        let extractionEnriched =
+                            false;
+                        let enrichedAnswer =
+                            null;
+                        let enrichedReason =
+                            '';
+
+                        const classifyFn =
+                            getAnswerExtractionQualityClassifier();
+
+                        if (typeof classifyFn === 'function') {
+                            const qualityResult =
+                                classifyFn(rawAnswer, {
+                                    allowedLabels:
+                                        (getDraftOptions(draft) || [])
+                                            .map(option => option.label)
+                                });
+
+                            if (
+                                (
+                                    qualityResult.status === 'clean-label' ||
+                                    qualityResult.status === 'safe-wrapper-candidate'
+                                ) &&
+                                qualityResult.normalizedCandidate
+                            ) {
+                                const reNormalized =
+                                    normalizeObjectiveAnswerToLabels(
+                                        qualityResult.normalizedCandidate,
+                                        draft
+                                    );
+
+                                if (reNormalized.ok) {
+                                    extractionEnriched =
+                                        true;
+                                    enrichedAnswer =
+                                        reNormalized.answer;
+                                    enrichedReason =
+                                        `extraction-enrichment:${qualityResult.status}:${qualityResult.reasonCode}`;
+
+                                    effectiveAnswerItems.push(
+                                        cloneWithAnswer(
+                                            parserAnswerItem,
+                                            enrichedAnswer,
+                                            {
+                                                normalizedFromParserObjectiveAnswer: true,
+                                                originalParserAnswer: rawAnswer,
+                                                normalizeReason: enrichedReason,
+                                                extractionQualityCandidate: true
+                                            }
+                                        )
+                                    );
+                                    fieldDecisions.push({
+                                        questionNumber,
+                                        field: 'answer',
+                                        source: 'parser',
+                                        reason: enrichedReason
+                                    });
+                                }
+                            }
+                        }
+
+                        if (!extractionEnriched) {
+                            const rejectionTaxonomy = classifyObjectiveAnswerRejection(
+                                normalized.reason,
+                                structuralDiagnostic,
+                                parserAnswerItem,
+                                draft
+                            );
+                            warnings.push({
                             questionNumber,
                             code: 'parser-objective-answer-rejected',
                             reason: normalized.reason,
@@ -802,6 +899,7 @@
                                 rejectionTaxonomy.answerEvidence
                         });
                         fieldDecisions.push({ questionNumber, field: 'answer', source: 'none', reason: normalized.reason });
+                        }
                     }
                 }
             } else if (parserAnswerItem && getItemAnswer(parserAnswerItem)) {
