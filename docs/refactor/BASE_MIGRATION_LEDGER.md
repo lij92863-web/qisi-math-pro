@@ -22,4 +22,8 @@
 | BM17 | — | pending | — | Legacy cleanup |
 | BM18 | — | pending | — | Script order |
 | BM19 | — | pending | — | Full regression |
-| BM20 | — | pending | — | Handoff + tag |
+| BM20 | `aa2d436` | scaffold | doc + tag | Handoff + tag |
+| BM21 | `b60e833` | complete | audit doc | Integrity audit — verdict: SCAFFOLD_ONLY |
+| BM22 | (pending) | in-progress | status docs | Reset migration status |
+
+**BM21 Verdict: B — ACCEPT_AS_SCAFFOLD_ONLY. Real migration starts at BM23.**
