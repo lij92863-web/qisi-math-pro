@@ -1126,6 +1126,79 @@ test(
 );
 
 test(
+    'P9J truth gate: rejection taxonomy is diagnostic only and cannot change accepted/rejected result',
+    () => {
+        const fixture =
+            p7AnswerRejectionFixture;
+        const parserGate =
+            buildPdfSupportParserGate({
+                parsePdfSupportBlocks,
+                alignPdfSupport,
+                file: { id: fixture.id, filename: 'SANITIZED.pdf' },
+                expectedQuestionNumbers: fixture.expectedQuestionNumbers,
+                rawTextPages: fixture.rawTextPages
+            });
+        const controlled =
+            buildPdfSupportFieldLevelControlledWrite({
+                drafts: fixture.questionItems,
+                parserSafeAnswerItems: parserGate.answers,
+                parserSafeSolutionItems: parserGate.solutions,
+                parserFusedQuestionNumbers: parserGate.fusedQuestionNumbers
+            });
+
+        const acceptedBeforeTaxonomy =
+            [...controlled.answerQuestionNumbers];
+        const rejectedBeforeTaxonomy =
+            controlled.warnings
+                .filter(w => w.code === 'parser-objective-answer-rejected')
+                .map(w => w.questionNumber);
+
+        assert.deepEqual(
+            acceptedBeforeTaxonomy,
+            fixture.expected.controlledWriteAnswerNumbers
+        );
+
+        for (const warning of controlled.warnings) {
+            assert.ok(
+                warning.rejectionCode,
+                'rejectionCode exists (taxonomy applied)'
+            );
+            assert.ok(
+                warning.rejectionDetail,
+                'rejectionDetail exists (taxonomy applied)'
+            );
+        }
+
+        assert.deepEqual(
+            controlled.answerQuestionNumbers,
+            acceptedBeforeTaxonomy,
+            'accepted answers unchanged by taxonomy enrichment'
+        );
+
+        const rejectedAfterTaxonomy =
+            controlled.warnings
+                .filter(w => w.code === 'parser-objective-answer-rejected')
+                .map(w => w.questionNumber);
+
+        assert.deepEqual(
+            rejectedAfterTaxonomy,
+            rejectedBeforeTaxonomy,
+            'rejected answers unchanged by taxonomy enrichment'
+        );
+
+        const isCompleteWithTaxonomy =
+            controlled.answerQuestionNumbers.length ===
+                fixture.expectedQuestionNumbers.length &&
+            controlled.warnings.length === 0;
+
+        assert.ok(
+            !isCompleteWithTaxonomy,
+            'taxonomy cannot make incomplete look complete'
+        );
+    }
+);
+
+test(
     'P9B P8G attempt 1 failure signature: only 5/12 answers accepted by controlled-write',
     () => {
         const fixture =

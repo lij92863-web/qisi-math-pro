@@ -396,3 +396,286 @@ test(
         );
     }
 );
+
+test(
+    'P9J truth gate: parserGate full alone does not determine complete',
+    () => {
+        const expectedFull =
+            ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'];
+
+        const parserGateIsFull = true;
+        const alignerIsFull = true;
+
+        const controlledWriteAcceptedAnswers =
+            ['1', '7', '10', '13', '15'];
+        const controlledWriteRejectedAnswers =
+            ['2', '3', '4', '5', '6', '8', '9'];
+
+        const hasRejected =
+            controlledWriteRejectedAnswers.length > 0;
+
+        const parserSaysComplete =
+            parserGateIsFull && alignerIsFull;
+
+        const controlledWriteSaysComplete =
+            controlledWriteAcceptedAnswers.length === expectedFull.length &&
+            controlledWriteRejectedAnswers.length === 0;
+
+        assert.ok(
+            parserSaysComplete,
+            'parser and aligner report full'
+        );
+        assert.ok(
+            !controlledWriteSaysComplete,
+            'controlled-write reports incomplete'
+        );
+        assert.ok(
+            parserSaysComplete !== controlledWriteSaysComplete,
+            'parser gate full does not equal controlled-write complete'
+        );
+    }
+);
+
+test(
+    'P9J truth gate: complete baseline requires all acceptances and no rejections',
+    () => {
+        const expectedQuestionNumbers =
+            ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'];
+
+        const computeComplete = ({
+            controlledWriteAcceptedAnswers = [],
+            controlledWriteRejectedAnswers = [],
+            fusedQuestionNumbers = [],
+            parserGateMode = 'full',
+            acceptedSolutions = [],
+            expected = expectedQuestionNumbers
+        } = {}) => {
+            const answerCoversAll =
+                expected.every(
+                    question =>
+                        controlledWriteAcceptedAnswers.includes(question)
+                );
+            const solutionCoversAll =
+                expected.every(
+                    question =>
+                        acceptedSolutions.includes(question)
+                );
+            const noRejected =
+                controlledWriteRejectedAnswers.length === 0;
+            const noFused =
+                fusedQuestionNumbers.length === 0;
+            const parserFull =
+                parserGateMode === 'full';
+
+            return (
+                answerCoversAll &&
+                solutionCoversAll &&
+                noRejected &&
+                noFused &&
+                parserFull
+            );
+        };
+
+        const complete =
+            computeComplete({
+                controlledWriteAcceptedAnswers:
+                    expectedQuestionNumbers,
+                controlledWriteRejectedAnswers:
+                    [],
+                fusedQuestionNumbers:
+                    [],
+                acceptedSolutions:
+                    expectedQuestionNumbers
+            });
+
+        assert.ok(complete, 'all criteria met → complete');
+
+        const missingAnswer =
+            computeComplete({
+                controlledWriteAcceptedAnswers:
+                    ['1', '2', '3', '4', '5', '6', '7', '10', '13', '15'],
+                controlledWriteRejectedAnswers:
+                    ['8', '9'],
+                fusedQuestionNumbers:
+                    [],
+                acceptedSolutions:
+                    expectedQuestionNumbers
+            });
+
+        assert.ok(!missingAnswer, 'missing answers → not complete');
+
+        const hasRejected =
+            computeComplete({
+                controlledWriteAcceptedAnswers:
+                    ['1', '2', '3', '4', '5', '6', '7', '10', '13', '15'],
+                controlledWriteRejectedAnswers:
+                    ['8', '9'],
+                fusedQuestionNumbers:
+                    [],
+                acceptedSolutions:
+                    expectedQuestionNumbers
+            });
+
+        assert.ok(!hasRejected, 'has rejected answers → not complete');
+
+        const hasFused =
+            computeComplete({
+                controlledWriteAcceptedAnswers:
+                    expectedQuestionNumbers,
+                controlledWriteRejectedAnswers:
+                    [],
+                fusedQuestionNumbers:
+                    ['2', '3'],
+                acceptedSolutions:
+                    expectedQuestionNumbers
+            });
+
+        assert.ok(!hasFused, 'has fused numbers → not complete');
+
+        const parserNotFull =
+            computeComplete({
+                controlledWriteAcceptedAnswers:
+                    expectedQuestionNumbers,
+                controlledWriteRejectedAnswers:
+                    [],
+                fusedQuestionNumbers:
+                    [],
+                parserGateMode:
+                    'prefix',
+                acceptedSolutions:
+                    expectedQuestionNumbers
+            });
+
+        assert.ok(!parserNotFull, 'parser not full → not complete');
+
+        const p8gCase =
+            computeComplete({
+                controlledWriteAcceptedAnswers:
+                    ['1', '7', '10', '13', '15'],
+                controlledWriteRejectedAnswers:
+                    ['2', '3', '4', '5', '6', '8', '9'],
+                fusedQuestionNumbers:
+                    ['2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'],
+                acceptedSolutions:
+                    expectedQuestionNumbers
+            });
+
+        assert.ok(!p8gCase, 'P8G case → not complete');
+    }
+);
+
+test(
+    'P9J truth gate: draft snapshot larger than controlled-write accepted must not determine baseline',
+    () => {
+        const expected =
+            ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'];
+
+        const controlledWriteAccepted =
+            ['1', '7', '10', '13', '15'];
+        const draftSnapshotAnswers =
+            ['1', '2', '3', '4', '5', '6', '7', '10', '13', '15'];
+
+        assert.ok(
+            draftSnapshotAnswers.length > controlledWriteAccepted.length,
+            'draft has more answers than controlled-write accepted'
+        );
+
+        const baselineFromDraft =
+            draftSnapshotAnswers.filter(
+                question => expected.includes(question)
+            );
+
+        assert.deepEqual(
+            baselineFromDraft,
+            draftSnapshotAnswers,
+            'draft snapshot covers 10/12 expected questions'
+        );
+        assert.ok(
+            baselineFromDraft.length === 10 &&
+                baselineFromDraft.length < expected.length,
+            'draft snapshot is 10/12 — partial, not complete'
+        );
+
+        const baselineFromControlledWrite =
+            draftSnapshotAnswers.filter(
+                question => controlledWriteAccepted.includes(question)
+            );
+
+        assert.deepEqual(
+            baselineFromControlledWrite,
+            ['1', '7', '10', '13', '15']
+        );
+        assert.equal(
+            baselineFromControlledWrite.length,
+            5,
+            'true baseline from controlled-write is only 5/12'
+        );
+
+        assert.ok(
+            baselineFromDraft.length !== baselineFromControlledWrite.length,
+            'draft-based baseline differs from controlled-write-based baseline'
+        );
+        assert.ok(
+            baselineFromControlledWrite.length < baselineFromDraft.length,
+            'controlled-write baseline is stricter (5 < 10)'
+        );
+    }
+);
+
+test(
+    'P9J truth gate: controlledWriteAcceptedAnswerNumbers is the only truth source for baseline',
+    () => {
+        const expected =
+            ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '13', '15'];
+
+        const p7ControlledWriteAccepted =
+            ['1', '3', '4', '5', '6', '7', '10', '13', '15'];
+
+        const baselineCandidate =
+            p7ControlledWriteAccepted.filter(
+                question => expected.includes(question)
+            );
+
+        assert.deepEqual(
+            baselineCandidate,
+            p7ControlledWriteAccepted
+        );
+        assert.equal(
+            baselineCandidate.length,
+            9
+        );
+        assert.ok(
+            !baselineCandidate.includes('2'),
+            'P7 answer 2 rejected → not in baseline'
+        );
+        assert.ok(
+            !baselineCandidate.includes('8'),
+            'P7 answer 8 rejected → not in baseline'
+        );
+
+        const p8gControlledWriteAccepted =
+            ['1', '7', '10', '13', '15'];
+
+        const baselineCandidate2 =
+            p8gControlledWriteAccepted.filter(
+                question => expected.includes(question)
+            );
+
+        assert.equal(
+            baselineCandidate2.length,
+            5
+        );
+        assert.ok(
+            !baselineCandidate2.includes('2'),
+            'P8G answer 2 rejected → not in baseline'
+        );
+
+        const completeEmpty =
+            expected.filter(
+                question => expected.includes(question)
+            );
+
+        assert.deepEqual(completeEmpty, expected);
+        assert.equal(completeEmpty.length, 12, 'only full acceptance → complete');
+    }
+);
