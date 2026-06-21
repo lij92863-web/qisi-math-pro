@@ -1,0 +1,5 @@
+(function (root, factory) { const api = factory(); root.Qisi = root.Qisi || {}; root.Qisi.PdfSafePartialPipeline = api; if (typeof module !== 'undefined' && module.exports) { module.exports = api; } })(typeof globalThis !== 'undefined' ? globalThis : this, function () { 'use strict';
+const normalizePdfPipelineResult = (controlledWriteResult) => ({ acceptedAnswers: (controlledWriteResult?.answerQuestionNumbers || []), rejectedAnswers: (controlledWriteResult?.warnings || []).map(w => w.questionNumber).filter(Boolean), solutionCount: (controlledWriteResult?.solutionQuestionNumbers || []).length, mode: (controlledWriteResult?.warnings || []).length === 0 && (controlledWriteResult?.answerQuestionNumbers || []).length > 0 ? 'safe-partial' : 'safe-partial', isSafePartial: true, isComplete: false, requiresManualReview: (controlledWriteResult?.warnings || []).length > 0 });
+const assertSafePartialInvariants = result => { if (result.isComplete) throw new Error('safe partial pipeline must not produce complete'); return true; };
+return { normalizePdfPipelineResult, assertSafePartialInvariants };
+});
