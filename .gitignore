@@ -10,9 +10,13 @@ node_modules/
 tmp/
 uploads/
 converted/
+dist/
+build/
+coverage/
 
 # logs
 *.log
+*.cache
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -26,12 +30,23 @@ Thumbs.db
 # local generated backups
 *.bak
 *.tmp
+*.zip
+*.7z
+*.rar
+*.local.*
 
 # local Codex task input
 CODEX_TASK.local.md
 
 # local real test materials
 local-test-materials/
+local-test-materials/real/
+local-test-materials/private/
+local-test-materials/large/
 
 # local real-run artifacts
 local-run-artifacts/
+
+# test reports
+playwright-report/
+test-results/
