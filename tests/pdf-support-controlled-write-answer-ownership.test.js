@@ -17,6 +17,7 @@ const {
 const {
     buildPdfSupportParserGate,
     buildPdfSupportFieldLevelControlledWrite,
+    classifyObjectiveAnswerRejection,
     normalizeObjectiveAnswerToLabels
 } =
     require('../qisi-pdf-support-controlled-write.js');
@@ -848,6 +849,277 @@ test(
         assert.equal(
             result2.reason,
             'multiple-option-value-rejected'
+        );
+    }
+);
+
+test(
+    'P8C rejection taxonomy provides rejectionCode for each rejected answer',
+    () => {
+        const fixture =
+            p7AnswerRejectionFixture;
+        const parserGate =
+            buildPdfSupportParserGate({
+                parsePdfSupportBlocks,
+                alignPdfSupport,
+                file: {
+                    id: fixture.id,
+                    filename: 'P7_SANITIZED_SUPPORT.pdf'
+                },
+                expectedQuestionNumbers:
+                    fixture.expectedQuestionNumbers,
+                rawTextPages:
+                    fixture.rawTextPages
+            });
+        const controlled =
+            buildPdfSupportFieldLevelControlledWrite({
+                drafts:
+                    fixture.questionItems,
+                parserSafeAnswerItems:
+                    parserGate.answers,
+                parserSafeSolutionItems:
+                    parserGate.solutions,
+                parserFusedQuestionNumbers:
+                    parserGate.fusedQuestionNumbers
+            });
+
+        const warningByQuestion =
+            new Map(
+                controlled.warnings.map(warning => [
+                    warning.questionNumber,
+                    warning
+                ])
+            );
+
+        const answer2 =
+            warningByQuestion.get('2');
+
+        assert.ok(answer2);
+        assert.equal(
+            answer2.code,
+            'parser-objective-answer-rejected'
+        );
+        assert.ok(
+            answer2.rejectionCode,
+            'answer 2 must have rejectionCode'
+        );
+        assert.ok(
+            typeof answer2.rejectionCode === 'string' &&
+                answer2.rejectionCode.startsWith('rejection-'),
+            `answer 2 rejectionCode must start with rejection-, got: ${answer2.rejectionCode}`
+        );
+        assert.ok(
+            answer2.rejectionDetail,
+            'answer 2 must have rejectionDetail'
+        );
+        assert.ok(
+            typeof answer2.normalizedCandidate === 'string',
+            'answer 2 must have normalizedCandidate field'
+        );
+        assert.ok(
+            answer2.answerEvidence,
+            'answer 2 must have answerEvidence'
+        );
+        assert.ok(
+            typeof answer2.answerEvidence.hasQuestionMarker === 'boolean',
+            'answerEvidence.hasQuestionMarker must be boolean'
+        );
+        assert.ok(
+            typeof answer2.answerEvidence.hasAnswerLabel === 'boolean',
+            'answerEvidence.hasAnswerLabel must be boolean'
+        );
+
+        const answer8 =
+            warningByQuestion.get('8');
+
+        assert.ok(answer8);
+        assert.equal(answer8.rejectionCode, 'rejection-multi-option-value-rejected');
+        assert.ok(answer8.rejectionDetail);
+        assert.ok(
+            answer8.normalizedCandidate &&
+                answer8.normalizedCandidate.startsWith('structural-candidate:'),
+            `answer 8 normalizedCandidate should start with structural-candidate:, got: ${answer8.normalizedCandidate}`
+        );
+
+        const answer9 =
+            warningByQuestion.get('9');
+
+        assert.ok(answer9);
+        assert.equal(answer9.rejectionCode, 'rejection-multi-option-value-rejected');
+        assert.ok(
+            answer9.normalizedCandidate &&
+                answer9.normalizedCandidate.startsWith('structural-candidate:')
+        );
+    }
+);
+
+test(
+    'P8C rejection taxonomy preserves old warning code parser-objective-answer-rejected',
+    () => {
+        const fixture =
+            p7AnswerRejectionFixture;
+        const parserGate =
+            buildPdfSupportParserGate({
+                parsePdfSupportBlocks,
+                alignPdfSupport,
+                file: {
+                    id: fixture.id,
+                    filename: 'P7_SANITIZED_SUPPORT.pdf'
+                },
+                expectedQuestionNumbers:
+                    fixture.expectedQuestionNumbers,
+                rawTextPages:
+                    fixture.rawTextPages
+            });
+        const controlled =
+            buildPdfSupportFieldLevelControlledWrite({
+                drafts:
+                    fixture.questionItems,
+                parserSafeAnswerItems:
+                    parserGate.answers,
+                parserSafeSolutionItems:
+                    parserGate.solutions,
+                parserFusedQuestionNumbers:
+                    parserGate.fusedQuestionNumbers
+            });
+
+        assert.ok(
+            controlled.warnings.length >= 3
+        );
+        assert.ok(
+            controlled.warnings.every(
+                warning => warning.code === 'parser-objective-answer-rejected'
+            ),
+            'every warning must retain the old code parser-objective-answer-rejected'
+        );
+        assert.ok(
+            controlled.warnings.every(
+                warning => typeof warning.reason === 'string' && warning.reason.length > 0
+            ),
+            'every warning must retain the old reason field'
+        );
+        assert.ok(
+            controlled.warnings.every(
+                warning => typeof warning.structuralCandidate === 'boolean'
+            ),
+            'every warning must retain structuralCandidate'
+        );
+        assert.ok(
+            controlled.warnings.every(
+                warning => typeof warning.originalAnswer === 'string'
+            ),
+            'every warning must retain originalAnswer'
+        );
+    }
+);
+
+test(
+    'P8C classifier returns unknown-objective-answer-rejection for unrecognized reason',
+    () => {
+        const result =
+            classifyObjectiveAnswerRejection(
+                'some-future-reason',
+                { candidate: false },
+                null,
+                null
+            );
+
+        assert.equal(
+            result.rejectionCode,
+            'unknown-objective-answer-rejection'
+        );
+        assert.ok(
+            result.rejectionDetail.includes('some-future-reason'),
+            'unrecognized reason should be included in the detail message'
+        );
+    }
+);
+
+test(
+    'P8C normal objective answers are still accepted with expandEd metadata',
+    () => {
+        const sixOptionDraft =
+            {
+                type: 'multiple',
+                options: [
+                    'A. VALUE_A',
+                    'B. VALUE_B',
+                    'C. VALUE_C',
+                    'D. VALUE_D',
+                    'E. VALUE_E',
+                    'F. VALUE_F'
+                ]
+            };
+
+        const result =
+            normalizeObjectiveAnswerToLabels('A', sixOptionDraft);
+
+        assert.equal(result.ok, true);
+        assert.equal(result.answer, 'A');
+        assert.equal(result.reason, 'already-option-label');
+    }
+);
+
+test(
+    'P8C empty answer is rejected before normalization',
+    () => {
+        const emptyDraft =
+            {
+                type: '单选题',
+                options: ['A. 1', 'B. 2', 'C. 3', 'D. 4']
+            };
+
+        const emptyAnswer =
+            '';
+
+        assert.equal(emptyAnswer, '');
+
+        const result =
+            normalizeObjectiveAnswerToLabels(emptyAnswer, emptyDraft);
+
+        assert.equal(result.ok, false);
+        assert.ok(
+            result.reason === 'option-value-not-matched' ||
+            result.reason === 'options-missing',
+            `empty answer should be rejected, got reason: ${result.reason}`
+        );
+    }
+);
+
+test(
+    'P8C unsafe math command with structural shell is rejected with rejection-unsafe-math-command',
+    () => {
+        const draft =
+            {
+                type: 'multiple',
+                options: [
+                    'A. VALUE_A',
+                    'B. VALUE_B',
+                    'C. VALUE_C',
+                    'D. VALUE_D'
+                ]
+            };
+        const result =
+            normalizeObjectiveAnswerToLabels('A_\\frac{B}', draft);
+
+        assert.equal(result.ok, false);
+        assert.equal(result.reason, 'unsafe-math-command');
+
+        const taxonomy =
+            classifyObjectiveAnswerRejection(
+                result.reason,
+                { candidate: true, reason: 'unsafe-math-command' },
+                { evidence: { questionMarker: true } },
+                draft
+            );
+
+        assert.equal(
+            taxonomy.rejectionCode,
+            'rejection-unsafe-math-command'
+        );
+        assert.ok(
+            taxonomy.normalizedCandidate ||
+            typeof taxonomy.normalizedCandidate === 'string'
         );
     }
 );

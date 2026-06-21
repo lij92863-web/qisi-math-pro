@@ -585,6 +585,120 @@
         };
     };
 
+    const OBJECTIVE_ANSWER_REJECTION_CLASSIFICATION = {
+        'option-value-not-matched': {
+            rejectionCode:
+                'rejection-option-value-not-matched',
+            rejectionDetail:
+                'Answer text does not match any option value and is not a structural label shell.'
+        },
+        'ambiguous-option-value': {
+            rejectionCode:
+                'rejection-ambiguous-option-value',
+            rejectionDetail:
+                'Answer text matches more than one option value and cannot be safely disambiguated without semantic guessing.'
+        },
+        'options-missing': {
+            rejectionCode:
+                'rejection-options-missing',
+            rejectionDetail:
+                'The question draft has no options defined, so the objective answer cannot be normalized to a label.'
+        },
+        'unsafe-math-command': {
+            rejectionCode:
+                'rejection-unsafe-math-command',
+            rejectionDetail:
+                'Structural label shell detected but the payload contains an unsafe LaTeX math command.'
+        },
+        'invalid-option-label': {
+            rejectionCode:
+                'rejection-invalid-option-label',
+            rejectionDetail:
+                'The answer text looks like an option label (A-F) but one or more characters are not valid for the current question options.'
+        },
+        'invalid-structural-option-label': {
+            rejectionCode:
+                'rejection-invalid-structural-label',
+            rejectionDetail:
+                'Structural label shell detected and compacted to apparent labels, but one or more labels are not valid for the question options.'
+        },
+        'not-structural-label-shell': {
+            rejectionCode:
+                'rejection-not-structural-shell',
+            rejectionDetail:
+                'The answer text does not match the structural label shell pattern and is not a plain option label.'
+        },
+        'multiple-option-value-rejected': {
+            rejectionCode:
+                'rejection-multi-option-value-rejected',
+            rejectionDetail:
+                'Multiple-choice question: the answer value could not be safely segmented into individual option values, or the structural candidate yielded a non-label payload.'
+        },
+        'multiple-option-value-not-matched': {
+            rejectionCode:
+                'rejection-multi-value-not-matched',
+            rejectionDetail:
+                'Multiple-choice question: one or more segmented option values do not uniquely match a question option.'
+        },
+        'ambiguous-multiple-option-value': {
+            rejectionCode:
+                'rejection-ambiguous-multi-value',
+            rejectionDetail:
+                'Multiple-choice question: one or more segmented option values match more than one question option.'
+        }
+    };
+
+    const classifyObjectiveAnswerRejection = (
+        reason,
+        structuralDiagnostic,
+        answerItem,
+        draft
+    ) => {
+        const entry =
+            OBJECTIVE_ANSWER_REJECTION_CLASSIFICATION[reason] || {
+                rejectionCode:
+                    'unknown-objective-answer-rejection',
+                rejectionDetail:
+                    `Answer rejected during objective normalization with unrecognized reason: ${reason || 'none'}`
+            };
+
+        const normalizedCandidate =
+            structuralDiagnostic?.candidate
+                ? (
+                    structuralDiagnostic.answer
+                        ? `structural-candidate:${structuralDiagnostic.reason}:${structuralDiagnostic.answer}`
+                        : `structural-candidate:${structuralDiagnostic.reason || 'unknown'}`
+                )
+                : '';
+
+        const evidence =
+            answerItem?.evidence || {};
+        const sourceTrace =
+            answerItem?.sourceTrace || {};
+
+        const answerEvidence = {
+            hasQuestionMarker:
+                Boolean(evidence.questionMarker),
+            hasAnswerLabel:
+                Boolean(evidence.labelMarker),
+            evidenceLevel:
+                evidence.evidenceLevel || 'unknown',
+            sourceTraceAvailable:
+                Boolean(sourceTrace.rawBlockExcerpt),
+            label:
+                evidence.label || ''
+        };
+
+        return {
+            rejectionCode:
+                entry.rejectionCode,
+            rejectionDetail:
+                entry.rejectionDetail,
+            normalizedCandidate,
+            answerEvidence
+        };
+    };
+
     const buildPdfSupportFieldLevelControlledWrite = ({
         drafts = [],
         legacySafeAnswerItems = [],
@@ -662,16 +776,30 @@
                                 getItemAnswer(parserAnswerItem),
                                 draft
                             );
+                        const rejectionTaxonomy = classifyObjectiveAnswerRejection(
+                            normalized.reason,
+                            structuralDiagnostic,
+                            parserAnswerItem,
+                            draft
+                        );
                         warnings.push({
                             questionNumber,
                             code: 'parser-objective-answer-rejected',
                             reason: normalized.reason,
+                            rejectionCode:
+                                rejectionTaxonomy.rejectionCode,
+                            rejectionDetail:
+                                rejectionTaxonomy.rejectionDetail,
                             structuralCandidate:
                                 Boolean(structuralDiagnostic.candidate),
                             structuralReason:
                                 structuralDiagnostic.reason || '',
                             originalAnswer:
-                                normalized.originalAnswer || getItemAnswer(parserAnswerItem)
+                                normalized.originalAnswer || getItemAnswer(parserAnswerItem),
+                            normalizedCandidate:
+                                rejectionTaxonomy.normalizedCandidate || '',
+                            answerEvidence:
+                                rejectionTaxonomy.answerEvidence
                         });
                         fieldDecisions.push({ questionNumber, field: 'answer', source: 'none', reason: normalized.reason });
                     }
@@ -722,6 +850,7 @@
     return {
         buildPdfSupportParserGate,
         buildPdfSupportFieldLevelControlledWrite,
+        classifyObjectiveAnswerRejection,
         getDraftOptions,
         isObjectiveDraft,
         isUsableSolutionText,
