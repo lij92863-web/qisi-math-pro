@@ -407,9 +407,13 @@
             sourceOrder,
             sourceFileId,
             mode,
+            blockIndex,
+            lineIndex = null,
+            rawLine = '',
             markerType = '',
             sectionType = ''
         }) => ({
+            blockIndex,
             question,
             originalNumber:
                 question,
@@ -429,16 +433,33 @@
             mode:
                 mode || 'support',
             warnings: [],
+            rawBlockLines:
+                rawLine
+                    ? [String(rawLine)]
+                    : [],
+            sectionRanges: {
+                answer: null,
+                solution: null
+            },
+            sectionLabels: {
+                answer: '',
+                solution: ''
+            },
             sourceTrace: {
                 questionNumber: question,
+                blockIndex,
                 pageIndex,
                 sourceOrder,
+                sectionStartLine:
+                    lineIndex,
+                sectionEndLine:
+                    lineIndex,
                 sourceFileId:
                     sourceFileId || ''
             }
         });
 
-        const appendText = (block, section, text) => {
+        const appendText = (block, section, text, meta = {}) => {
             if (!block || !text) return;
 
             const key =
@@ -447,6 +468,41 @@
                     ? section
                     : 'body';
 
+            if (meta.rawLine) {
+                block.rawBlockLines.push(String(meta.rawLine));
+            }
+
+            if (
+                key === 'answer' ||
+                key === 'solution'
+            ) {
+                const range =
+                    block.sectionRanges[key] || {
+                        pageIndex:
+                            meta.pageIndex,
+                        sourceOrder:
+                            meta.sourceOrder,
+                        startLine:
+                            meta.lineIndex,
+                        endLine:
+                            meta.lineIndex
+                    };
+
+                range.endLine =
+                    meta.lineIndex;
+                range.pageEnd =
+                    meta.pageIndex;
+                range.sourceOrderEnd =
+                    meta.sourceOrder;
+                block.sectionRanges[key] =
+                    range;
+
+                if (meta.label) {
+                    block.sectionLabels[key] =
+                        meta.label;
+                }
+            }
+
             block[key] =
                 [block[key], text]
                     .filter(Boolean)
@@ -454,7 +510,7 @@
                     .trim();
         };
 
-        const appendQuestionRest = (block, rest, fallbackSection) => {
+        const appendQuestionRest = (block, rest, fallbackSection, meta = {}) => {
             if (!block || !rest) return fallbackSection;
 
             const labelMarker =
@@ -464,7 +520,12 @@
                 appendText(
                     block,
                     labelMarker.type,
-                    labelMarker.rest
+                    labelMarker.rest,
+                    {
+                        ...meta,
+                        label:
+                            labelMarker.label || labelMarker.type
+                    }
                 );
 
                 return labelMarker.type;
@@ -473,7 +534,8 @@
             appendText(
                 block,
                 fallbackSection,
-                rest
+                rest,
+                meta
             );
 
             return fallbackSection;
@@ -510,6 +572,8 @@
                     ? mode
                     : 'body';
             let previousNumber =
+                0;
+            let nextBlockIndex =
                 0;
 
             const warn = (code, detail = {}) => {
@@ -550,6 +614,8 @@
             const startQuestionBlock = ({
                 question,
                 page,
+                lineIndex,
+                rawLine,
                 markerType = '',
                 sectionType = ''
             }) => {
@@ -565,6 +631,10 @@
                             page.sourceOrder,
                         sourceFileId,
                         mode,
+                        blockIndex:
+                            nextBlockIndex++,
+                        lineIndex,
+                        rawLine,
                         markerType,
                         sectionType
                     });
@@ -626,7 +696,9 @@
                         .replace(/\r/g, '\n')
                         .split('\n');
 
-                for (const rawLine of lines) {
+                for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+                    const rawLine =
+                        lines[lineIndex];
                     const line =
                         String(rawLine || '').trim();
 
@@ -642,6 +714,8 @@
                             question:
                                 questionMarker.question,
                             page,
+                            lineIndex,
+                            rawLine,
                             markerType:
                                 questionMarker.markerType || 'question-marker',
                             sectionType:
@@ -652,7 +726,15 @@
                             appendQuestionRest(
                                 current,
                                 questionMarker.rest,
-                                currentSection
+                                currentSection,
+                                {
+                                    pageIndex:
+                                        page.pageIndex,
+                                    sourceOrder:
+                                        page.sourceOrder,
+                                    lineIndex,
+                                    rawLine
+                                }
                             );
 
                         continue;
@@ -699,6 +781,8 @@
                                 question:
                                     implicitQuestion,
                                 page,
+                                lineIndex,
+                                rawLine,
                                 markerType:
                                     'expected-sequence-label',
                                 sectionType:
@@ -722,7 +806,17 @@
                         appendText(
                             current,
                             currentSection,
-                            labelMarker.rest
+                            labelMarker.rest,
+                            {
+                                pageIndex:
+                                    page.pageIndex,
+                                sourceOrder:
+                                    page.sourceOrder,
+                                lineIndex,
+                                rawLine,
+                                label:
+                                    labelMarker.label || labelMarker.type
+                            }
                         );
                         current.pageEnd =
                             page.pageIndex;
@@ -735,7 +829,15 @@
                         appendText(
                             current,
                             currentSection,
-                            line
+                            line,
+                            {
+                                pageIndex:
+                                    page.pageIndex,
+                                sourceOrder:
+                                    page.sourceOrder,
+                                lineIndex,
+                                rawLine
+                            }
                         );
                         current.pageEnd =
                             page.pageIndex;
@@ -753,28 +855,65 @@
             };
         };
 
-        const itemFromBlock = (block, field) => ({
-            question:
-                block.question,
-            [field]:
-                block[field],
-            sourceTrace: {
-                questionNumber:
+        const itemFromBlock = (block, field) => {
+            const sectionRange =
+                block.sectionRanges?.[field] || {};
+            const label =
+                block.sectionLabels?.[field] || '';
+            const rawBlockExcerpt =
+                (block.rawBlockLines || [])
+                    .join('\n')
+                    .slice(0, 500);
+
+            return {
+                question:
                     block.question,
-                pageStart:
-                    block.pageStart,
-                pageEnd:
-                    block.pageEnd,
-                sourceOrderStart:
-                    block.sourceOrderStart,
-                sourceOrderEnd:
-                    block.sourceOrderEnd,
-                sourceFileId:
-                    block.sourceFileId
-            },
-            warnings:
-                [...(block.warnings || [])]
-        });
+                [field]:
+                    block[field],
+                sourceTrace: {
+                    questionNumber:
+                        block.question,
+                    pageIndex:
+                        sectionRange.pageIndex ?? block.pageStart,
+                    pageStart:
+                        block.pageStart,
+                    pageEnd:
+                        block.pageEnd,
+                    sourceOrder:
+                        sectionRange.sourceOrder ?? block.sourceOrderStart,
+                    sourceOrderStart:
+                        block.sourceOrderStart,
+                    sourceOrderEnd:
+                        block.sourceOrderEnd,
+                    blockIndex:
+                        block.blockIndex,
+                    sectionStartLine:
+                        sectionRange.startLine ?? block.sourceTrace?.sectionStartLine ?? null,
+                    sectionEndLine:
+                        sectionRange.endLine ?? block.sourceTrace?.sectionEndLine ?? null,
+                    rawBlockExcerpt,
+                    sourceFileId:
+                        block.sourceFileId
+                },
+                evidence: {
+                    questionMarker:
+                        Boolean(block.markerType),
+                    labelMarker:
+                        Boolean(label),
+                    label,
+                    evidenceLevel:
+                        block.warnings?.length
+                            ? 'unsafe'
+                            : (
+                                block.markerType === 'expected-sequence-label'
+                                    ? 'section-marker'
+                                    : 'explicit-marker'
+                            )
+                },
+                warnings:
+                    [...(block.warnings || [])]
+            };
+        };
 
         const buildCoverageReport = ({
             blocks = [],

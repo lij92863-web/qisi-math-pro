@@ -58,6 +58,58 @@ test(
 );
 
 test(
+    'normal answer and solution items include sourceTrace and evidence metadata',
+    () => {
+        const result =
+            parsePdfSupportBlocks({
+                rawTextPages: [
+                    {
+                        pageIndex:
+                            7,
+                        sourceOrder:
+                            3,
+                        text:
+                            '1. 【答案】A\n【解析】solution 1'
+                    }
+                ],
+                expectedQuestionNumbers:
+                    [1],
+                sourceFileId:
+                    'metadata-pdf'
+            });
+        const answer =
+            result.answerItems[0];
+        const solution =
+            result.solutionItems[0];
+
+        assert.equal(answer.question, '1');
+        assert.equal(answer.answer, 'A');
+        assert.equal(answer.sourceTrace.pageIndex, 7);
+        assert.equal(answer.sourceTrace.sourceOrder, 3);
+        assert.equal(answer.sourceTrace.blockIndex, 0);
+        assert.equal(answer.sourceTrace.sectionStartLine, 0);
+        assert.ok(
+            answer.sourceTrace.rawBlockExcerpt.includes('【答案】A')
+        );
+        assert.deepEqual(
+            answer.evidence,
+            {
+                questionMarker: true,
+                labelMarker: true,
+                label: '【答案】',
+                evidenceLevel: 'explicit-marker'
+            }
+        );
+
+        assert.equal(solution.question, '1');
+        assert.equal(solution.solution, 'solution 1');
+        assert.equal(solution.sourceTrace.sectionStartLine, 1);
+        assert.equal(solution.evidence.label, '【解析】');
+        assert.equal(solution.evidence.evidenceLevel, 'explicit-marker');
+    }
+);
+
+test(
     'recognizes 第1题 with bracketed answer and solution labels',
     () => {
         const result =
@@ -108,6 +160,54 @@ test(
             result.solutionItems[0].sourceTrace.pageEnd,
             1
         );
+        assert.equal(
+            result.solutionItems[0].sourceTrace.pageIndex,
+            0
+        );
+        assert.equal(
+            result.solutionItems[0].sourceTrace.sectionEndLine,
+            0
+        );
+        assert.ok(
+            result.solutionItems[0].sourceTrace.rawBlockExcerpt.includes(
+                'second line'
+            )
+        );
+    }
+);
+
+test(
+    'duplicate jump-back and unknown blocks carry diagnostic warnings and evidence',
+    () => {
+        const split =
+            splitPdfSupportBlocks({
+                rawTextPages: [
+                    '1. 【答案】A\n2. 【答案】B\n1. 【答案】C\n4. 【答案】D'
+                ],
+                expectedQuestionNumbers:
+                    [1, 2, 3],
+                sourceFileId:
+                    'diagnostic-pdf'
+            });
+        const duplicate =
+            split.blocks.find((block, index) =>
+                index > 0 &&
+                block.question === '1'
+            );
+        const unknown =
+            split.blocks.find(block => block.question === '4');
+
+        assert.ok(
+            duplicate.warnings.includes('duplicate-question-marker')
+        );
+        assert.ok(
+            duplicate.warnings.includes('jump-back-question-marker')
+        );
+        assert.equal(duplicate.sourceTrace.blockIndex, 2);
+        assert.ok(
+            unknown.warnings.includes('unknown-question-marker')
+        );
+        assert.equal(unknown.sourceTrace.sourceFileId, 'diagnostic-pdf');
     }
 );
 
@@ -587,6 +687,16 @@ test(
         assert.deepEqual(
             result.coverageReport.missingSolutions,
             fixture.expected.missingSolutions
+        );
+        assert.deepEqual(
+            result.solutionItems.map(item => item.sourceTrace.blockIndex),
+            [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        );
+        assert.ok(
+            result.solutionItems.every(item =>
+                item.evidence.evidenceLevel === 'explicit-marker' &&
+                item.sourceTrace.rawBlockExcerpt
+            )
         );
     }
 );
