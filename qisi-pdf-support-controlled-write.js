@@ -362,6 +362,23 @@
         return map;
     };
 
+    const buildSafeItemMap = (items, fusedQuestionNumbers = []) => {
+        const fused =
+            new Set((fusedQuestionNumbers || []).map(String));
+        const map =
+            new Map();
+
+        (items || []).forEach(item => {
+            const question =
+                getQuestionNumber(item);
+            if (question && !fused.has(question) && !map.has(question)) {
+                map.set(question, item);
+            }
+        });
+
+        return map;
+    };
+
     const getItemAnswer = item =>
         cleanText(item?.answer ?? item?.answerRaw ?? item?.content ?? '');
 
@@ -585,13 +602,18 @@
                 ])
             );
         const legacyAnswerMap =
-            buildItemMap(legacySafeAnswerItems);
+            buildSafeItemMap(legacySafeAnswerItems, legacyFusedQuestionNumbers);
         const legacySolutionMap =
-            buildItemMap(legacySafeSolutionItems);
+            buildSafeItemMap(legacySafeSolutionItems, legacyFusedQuestionNumbers);
         const parserAnswerMap =
-            buildItemMap(parserSafeAnswerItems);
+            buildSafeItemMap(parserSafeAnswerItems, parserFusedQuestionNumbers);
         const parserSolutionMap =
-            buildItemMap(parserSafeSolutionItems);
+            buildSafeItemMap(parserSafeSolutionItems, parserFusedQuestionNumbers);
+        const fusedQuestionNumbers =
+            Array.from(new Set([
+                ...(legacyFusedQuestionNumbers || []),
+                ...(parserFusedQuestionNumbers || [])
+            ])).map(String);
         const allSafeQuestionNumbers =
             Array.from(new Set([
                 ...legacyAnswerMap.keys(),
@@ -676,17 +698,24 @@
         return {
             effectiveAnswerItems,
             effectiveSolutionItems,
-            fusedQuestionNumbers:
-                Array.from(new Set([
-                    ...(legacyFusedQuestionNumbers || []),
-                    ...(parserFusedQuestionNumbers || [])
-                ])).map(String),
+            fusedQuestionNumbers,
             warnings,
             fieldDecisions,
             answerQuestionNumbers:
                 effectiveAnswerItems.map(getQuestionNumber).filter(Boolean),
             solutionQuestionNumbers:
-                effectiveSolutionItems.map(getQuestionNumber).filter(Boolean)
+                effectiveSolutionItems.map(getQuestionNumber).filter(Boolean),
+            controlledWriteSummary: {
+                answerQuestionNumbers:
+                    effectiveAnswerItems.map(getQuestionNumber).filter(Boolean),
+                solutionQuestionNumbers:
+                    effectiveSolutionItems.map(getQuestionNumber).filter(Boolean),
+                fusedQuestionNumbers,
+                warningCount:
+                    warnings.length,
+                fieldDecisionCount:
+                    fieldDecisions.length
+            }
         };
     };
 

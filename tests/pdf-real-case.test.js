@@ -661,6 +661,14 @@ test(
             controlled.fusedQuestionNumbers,
             fixture.expected.fusedQuestionNumbers
         );
+        assert.deepEqual(
+            controlled.controlledWriteSummary.solutionQuestionNumbers,
+            fixture.expected.effectiveSolutionQuestionNumbers
+        );
+        assert.deepEqual(
+            controlled.controlledWriteSummary.fusedQuestionNumbers,
+            fixture.expected.fusedQuestionNumbers
+        );
 
         for (const question of fixture.expected.unsafeSolutionQuestionNumbers) {
             assert.ok(
@@ -668,5 +676,18 @@ test(
                 `unsafe solution ${question} must not be written`
             );
         }
+
+        const safeSolution =
+            controlled.effectiveSolutionItems.find(item => item.question === '1');
+
+        assert.ok(
+            safeSolution.sourceTrace.rawBlockExcerpt.includes(
+                'ATTEMPT12_SOLUTION_1'
+            )
+        );
+        assert.deepEqual(
+            safeSolution.warnings,
+            []
+        );
     }
 );

@@ -671,6 +671,87 @@ test(
 );
 
 test(
+    'field-level controlled write blocks parser items that are outside parser ownership',
+    () => {
+        const field =
+            buildPdfSupportFieldLevelControlledWrite({
+                drafts: [
+                    {
+                        question:
+                            '1',
+                        type:
+                            'subjective'
+                    },
+                    {
+                        question:
+                            '2',
+                        type:
+                            'subjective'
+                    }
+                ],
+                parserSafeAnswerItems: [
+                    {
+                        question:
+                            '1',
+                        answer:
+                            'SAFE_A1'
+                    },
+                    {
+                        question:
+                            '2',
+                        answer:
+                            'UNSAFE_A2'
+                    }
+                ],
+                parserSafeSolutionItems: [
+                    {
+                        question:
+                            '1',
+                        solution:
+                            'SAFE_S1'
+                    },
+                    {
+                        question:
+                            '2',
+                        solution:
+                            'UNSAFE_S2'
+                    }
+                ],
+                parserFusedQuestionNumbers:
+                    ['2']
+            });
+
+        assert.deepEqual(
+            field.answerQuestionNumbers,
+            ['1']
+        );
+        assert.deepEqual(
+            field.solutionQuestionNumbers,
+            ['1']
+        );
+        assert.deepEqual(
+            field.fusedQuestionNumbers,
+            ['2']
+        );
+        assert.deepEqual(
+            field.controlledWriteSummary,
+            {
+                answerQuestionNumbers:
+                    ['1'],
+                solutionQuestionNumbers:
+                    ['1'],
+                fusedQuestionNumbers:
+                    ['2'],
+                warningCount:
+                    0,
+                fieldDecisionCount:
+                    2
+            }
+        );
+    }
+);
+
+test(
     'case02 diagnostic mock keeps full answers but only safe solution 1',
     () => {
         const restore =
