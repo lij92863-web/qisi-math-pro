@@ -2,7 +2,7 @@
 
 - **Stage:** BM-AUTO-GROUPED-HELPER-CHAIN-B-DOC-AUDIT
 - **Branch:** main
-- **Audit commit:** pending
+- **Audit commit:** `b0513e6`
 
 ## Why this audit was needed
 
