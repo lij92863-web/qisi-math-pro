@@ -2120,24 +2120,6 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     return countValidOptions(q.options) < 4;
                 };
 
-                const cleanFormulaOcrText = (text) => {
-                    let s = cleanRecognizedText(text || '')
-                        .replace(/^```(?:latex)?/i, '')
-                        .replace(/```$/g, '')
-                        .replace(/^\$\$|\$\$$/g, '')
-                        .replace(/^\$|\$$/g, '')
-                        .trim();
-
-                    if (!s) return '';
-
-                    // 必须像真实 LaTeX，才允许进入文本字段
-                    if (!/[\\_^{}=+\-*/]|\\frac|\\sqrt|\\angle|\\theta|\\pi|\\sin|\\cos|\\tan|\\log|\\ln/.test(s)) {
-                        return '';
-                    }
-
-                    return `$${s}$`;
-                };
-
                 const recognizeFormulaImageToLatex = async (imageUrl) => {
                     if (!imageUrl) return '';
                     try {
