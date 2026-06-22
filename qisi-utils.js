@@ -260,6 +260,30 @@
             }, 0);
         };
 
+        const extractRelevanceTokens = (text) => {
+            const source = cleanRecognizedText(text);
+            const stopWords = new Set(['因为', '所以', '则', '若', '已知', '求', '下列', '正确', '错误', '答案', '选项', '其中', '关于', '可以', '得到', '可得', '故选', '一个', '存在', '满足', '分别', '如下', '如图', '设为', '的是', '三角', '角A', '角B', '角C', '正弦', '余弦', '定理']);
+            const genericMathTokens = new Set(['ABC', 'A', 'B', 'C', 'D', '\\sin', '\\cos', '\\tan', '\\angle', '\\triangle', 'sin', 'cos', 'tan', 'alpha', 'beta']);
+            const tokens = [];
+            const pushToken = (token) => {
+                const clean = String(token || '').trim();
+                if (!clean || stopWords.has(clean) || genericMathTokens.has(clean)) return;
+                if ((clean.length >= 2 || /^[xyzmnkpqrst]$/i.test(clean))) tokens.push(clean);
+            };
+            (source.match(/\\[a-zA-Z]+/g) || []).forEach(pushToken);
+            (source.match(/(?<![A-Za-z])[a-zxyzmnkpqrst](?![A-Za-z])/gi) || []).forEach(token => {
+                if (!/^[A-D]$/i.test(token)) pushToken(token.toLowerCase());
+            });
+            (source.match(/[A-Z][A-Z_0-9]{0,3}/g) || []).forEach(token => {
+                if (!/^[A-D]$/.test(token)) pushToken(token);
+            });
+            (source.match(/[一-龥]{2,}/g) || []).forEach(phrase => {
+                if (phrase.length <= 6) pushToken(phrase);
+                for (let idx = 0; idx < phrase.length - 1; idx += 1) pushToken(phrase.slice(idx, idx + 2));
+            });
+            return [...new Set(tokens)];
+        };
+
         const normalizeLatexText = (text) => {
             if (!text) return '';
             let out = String(text);
@@ -391,6 +415,7 @@
 
         const api = {
             cleanRecognizedText,
+            extractRelevanceTokens,
             mathSignalCount,
             protectLatexMathSegments,
             restoreLatexMathSegments,
