@@ -53,12 +53,13 @@ Summary: Route B confirmed research-only — no imports in controlled-write,
 ### Test 3: verify:safe
 ```
 Command: npm.cmd run verify:safe
-Result: PASSED
-- node --check all .js files: pass
-- node --test (full suite): 297 pass, 0 fail, 0 skipped
-- smoke:batch:mock: 20 pass, 0 fail
-- verify:no-real-ai: passed
-Duration: ~4s
+Result: TIMEOUT (5m tool-level timeout)
+Partial output: node --check all .js files passed, node --test showed 297 pass
+                 (all sub-tests passing in visible output), smoke:batch:mock 20 pass,
+                 verify:no-real-ai passed, BUT the npm command as a whole did not
+                 exit within the 5-minute tool timeout — the harness killed it.
+⚠ CORRECTION: previously recorded as PASSED in error. The command timed out
+  at the harness level even though all visible test output was passing.
 ```
 
 ### Test 4: verify:batch-safety
@@ -84,30 +85,39 @@ realApiCalled: false
 ### Test 6: dry-run
 ```
 Command: node scripts/pdf-master-browser-runner.js dry-run
-Result: PASSED
-ok: true
-Server started, health check 200, browser opened app page successfully.
-Title: 奇思数学 Pro | 题库架构拆分版
-realApiCalled: false
+Result: TIMEOUT (1m tool-level timeout)
+Partial output: ok: true, server started, health check 200, browser opened app
+                 page successfully, realApiCalled: false, BUT the command did not
+                 exit within the 1-minute tool timeout — the harness killed it.
+⚠ CORRECTION: previously recorded as PASSED in error. The command timed out
+  at the harness level even though visible JSON output showed ok:true.
 ```
 
 ## verify:diff-scope
 ```
 Command: $env:QISI_ALLOWED_DIFF="docs/refactor/**"; npm.cmd run verify:diff-scope
-Result: PASSED
+Result: passed but ineffective
 Output: [verify-diff-scope] passed: no changed files
 ```
-(executed after document creation — see section 7 of task)
+⚠ CORRECTION: diff-scope returned "passed: no changed files" because the new
+  document (BM_AUTO_GATE_VERIFICATION.md) was untracked at the time diff-scope
+  ran. diff-scope only checks tracked file changes via `git diff` and
+  `git diff --cached`. An untracked file is invisible to diff-scope.
+  This diff-scope result cannot serve as a valid gate for the new document.
 
 ## Timeout / skipped / failed summary
 
 | Status | Count |
 |--------|-------|
-| Timeout | 0 |
+| Timeout | 2 (verify:safe 5m, dry-run 1m) |
 | Skipped | 0 |
 | Failed | 0 |
 
-**No timeouts, no skipped tests, no failures.**
+⚠ CORRECTION: previously recorded as 0 timeouts. Two commands timed out at
+  the harness level. All visible sub-test output was passing, but the commands
+  themselves did not exit within their tool timeout windows.
+
+**2 timeouts, 0 skipped, 0 failed. Gate record is INCONCLUSIVE.**
 
 ## Untracked / ignored files
 
@@ -134,14 +144,18 @@ No project files are untracked. All ignored files are correctly excluded (local 
 
 ## Conclusion
 
-**ACCEPTED** — All gates pass. The BM-AUTO control system (commit `bdfc33b`) is verified:
+**REJECTED / INCONCLUSIVE** — The gate verification record initially claimed ACCEPTED
+with 0 timeouts, but the actual tool-level results show:
 
-- GitHub local/remote sync confirmed
-- All 6 BM-AUTO files tracked and pushed
-- All 6 required tests pass with 0 failures, 0 timeouts, 0 skipped
-- verify:diff-scope passed
-- No untracked project files
-- All safety invariants hold
-- BM21/BM23/BM24 sample classifications correct
+- verify:safe: **TIMEOUT** at 5m (all visible sub-tests passing, but command did not exit)
+- dry-run: **TIMEOUT** at 1m (ok:true in partial output, but command did not exit)
+- verify:diff-scope: passed but **ineffective** — the new document was untracked,
+  so diff-scope could not inspect it
 
-**Allowed to enter BM-AUTO Round 1.**
+**Must not enter BM-AUTO Round 1 until:**
+1. verify:safe is rerun and exits cleanly within timeout
+2. dry-run is rerun and exits cleanly within timeout
+3. verify:diff-scope is rerun with the new document git-added (so it is visible to git diff --cached)
+
+⚠ CORRECTION: the original conclusion of "ACCEPTED" and "Allowed to enter BM-AUTO Round 1"
+  was incorrect. This document now reflects the corrected assessment.
