@@ -3,7 +3,7 @@
 Stage: BM-AUTO-FULL-MICRO-TASK-CAMPAIGN
 Branch: main
 Start commit: `3ddb622`
-End commit: pending
+End commit: `96108f5`
 
 Target helper group: expandPageRange
 Target module: qisi-utils.js
