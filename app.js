@@ -1918,66 +1918,13 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     return text;
                 };
 
-                // ================================
-                // 批量录题媒体 token 安全清理
-                // 保存层必须保留 [[IMAGE:id]]、[[FORMULA_IMAGE:id]]、\includegraphics{...}
-                // ================================
-
                 const INLINE_FORMULA_IMAGE_TOKEN = (id) => `[[FORMULA_IMAGE:${id}]]`;
                 const BLOCK_IMAGE_TOKEN = (id) => `[[IMAGE:${id}]]`;
-
-                const BATCH_MEDIA_TOKEN_RE =
-                    /(\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\]|\\includegraphics(?:\[[^\]]*\])?\{[^}]+\})/g;
-
-                // 只清理真正的垃圾提示，不清理合法媒体 token。
-                const BATCH_BAD_PLACEHOLDER_RE =
-                    /(\[IMAGE:[^\]]+\]|\[公式图片(?::[^\]]+)?\]|\[公式图片待识别\]|\[公式图片识别\]|\[公?式图片\s*待识别\]|\[图片选项待转换[^\]]*\]|\[公式图片选项待转换[^\]]*\]|\[公式图片选项暂不支持预览[^\]]*\])/g;
-
-                const protectBatchMediaTokens = (text = '') => {
-                    const tokens = [];
-                    const protectedText = String(text || '').replace(BATCH_MEDIA_TOKEN_RE, (match) => {
-                        const key = `__QISI_MEDIA_TOKEN_${tokens.length}__`;
-                        tokens.push(match);
-                        return key;
-                    });
-                    return { protectedText, tokens };
-                };
-
-                const restoreBatchMediaTokens = (text = '', tokens = []) => {
-                    return String(text || '').replace(/__QISI_MEDIA_TOKEN_(\d+)__/g, (_, idx) => {
-                        return tokens[Number(idx)] || '';
-                    });
-                };
-
-                const hasBatchMediaToken = (text = '') => {
-                    BATCH_MEDIA_TOKEN_RE.lastIndex = 0;
-                    return BATCH_MEDIA_TOKEN_RE.test(String(text || ''));
-                };
-
-                const hasBatchImagePlaceholder = (text = '') => {
-                    BATCH_BAD_PLACEHOLDER_RE.lastIndex = 0;
-                    return BATCH_BAD_PLACEHOLDER_RE.test(String(text || '')) || hasBatchMediaToken(text);
-                };
-
-                // 名字沿用旧函数，但语义改为：只删坏占位，保留合法媒体 token。
-                const stripBatchImagePlaceholders = (text) => {
-                    const raw = String(text || '');
-                    const { protectedText, tokens } = protectBatchMediaTokens(raw);
-
-                    const cleaned = protectedText
-                        .replace(BATCH_BAD_PLACEHOLDER_RE, '')
-                        .replace(/[ \t]{2,}/g, ' ')
-                        .replace(/\n{3,}/g, '\n\n')
-                        .replace(/\s+([，。；：,.、])/g, '$1')
-                        .trim();
-
-                    return restoreBatchMediaTokens(cleaned, tokens).trim();
-                };
 
                 const cleanDisplayTextForBatchSave = (text) => {
                     const raw = window.Qisi.Utils.cleanRecognizedText(text);
                     if (!raw) return '';
-                    return stripBatchImagePlaceholders(raw);
+                    return window.Qisi.Utils.stripBatchImagePlaceholders(raw);
                 };
 
                 const cleanDisplayOptionsForBatchSave = (options) => {
@@ -1990,8 +1937,8 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         const cleaned = cleanDisplayTextForBatchSave(raw);
 
                         // 关键：纯图片选项也必须保留，不能返回空。
-                        if (!cleaned && hasBatchMediaToken(raw)) {
-                            const mediaTokens = raw.match(BATCH_MEDIA_TOKEN_RE) || [];
+                        if (!cleaned && window.Qisi.Utils.hasBatchMediaToken(raw)) {
+                            const mediaTokens = raw.match(window.Qisi.Utils.BATCH_MEDIA_TOKEN_RE) || [];
                             return mediaTokens.join(' ').trim();
                         }
 
@@ -2018,7 +1965,7 @@ const cleanDisplayFieldsOnly = (q) => {
                 const optionTextHasContent = (value = '') => {
                     const text = cleanDisplayTextForBatchSave(value);
                     if (!text) return false;
-                    if (hasBatchMediaToken(text)) return true;
+                    if (window.Qisi.Utils.hasBatchMediaToken(text)) return true;
 
                     const compact = text
                         .replace(/^[\s　]*[（(]?\s*[A-DＡ-Ｄ]\s*[\.\．、:：\)）]?\s*/i, '')
@@ -10011,7 +9958,7 @@ ${rawBlock}
 
                     // 合法媒体 token 不是未转换错误。
                     const { protectedText } = typeof protectBatchMediaTokens === 'function'
-                        ? protectBatchMediaTokens(raw)
+                        ? window.Qisi.Utils.protectBatchMediaTokens(raw)
                         : { protectedText: raw };
 
                     return /公式图片选项待转换|图片选项待转换|待转换[:：]?(?:wmf|emf|ole|bin)|\[object Object\]|\bundefined\b|\bnull\b/i
@@ -16036,7 +15983,7 @@ ${source}`;
                     const raw = window.Qisi.Utils.cleanRecognizedText(text || '');
                     if (!raw) return '';
 
-                    const { protectedText, tokens } = protectBatchMediaTokens(raw);
+                    const { protectedText, tokens } = window.Qisi.Utils.protectBatchMediaTokens(raw);
 
                     const cleaned = protectedText
                         .replace(/\[公式图片待识别\]|\[公式图片识别\]|\[公?式图片\s*待识别\]/g, '')
@@ -16045,7 +15992,7 @@ ${source}`;
                         .replace(/\s+([，。；：,.、])/g, '$1')
                         .trim();
 
-                    return restoreBatchMediaTokens(cleaned, tokens).trim();
+                    return window.Qisi.Utils.restoreBatchMediaTokens(cleaned, tokens).trim();
                 };
 
                 const cleanDocxImporterOptionsForV2 = (options = []) => {
@@ -16815,7 +16762,7 @@ ${source}`;
                                     const optionOk = Array.isArray(draft.options) &&
                                         draft.options.some(opt =>
                                             window.Qisi.Utils.cleanRecognizedText(opt || '') ||
-                                            hasBatchMediaToken(opt || '') ||
+                                            window.Qisi.Utils.hasBatchMediaToken(opt || '') ||
                                             hasDocxFormulaPlaceholderForV2(opt || '')
                                         );
                                     return stemOk || optionOk;

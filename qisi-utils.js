@@ -607,7 +607,55 @@
             };
         };
 
+        const BATCH_MEDIA_TOKEN_RE =
+            /(\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\]|\\includegraphics(?:\[[^\]]*\])?\{[^}]+\})/g;
+
+        const BATCH_BAD_PLACEHOLDER_RE =
+            /(\[IMAGE:[^\]]+\]|\[公式图片(?::[^\]]+)?\]|\[公式图片待识别\]|\[公式图片识别\]|\[公?式图片\s*待识别\]|\[图片选项待转换[^\]]*\]|\[公式图片选项待转换[^\]]*\]|\[公式图片选项暂不支持预览[^\]]*\])/g;
+
+        const protectBatchMediaTokens = (text = '') => {
+            const tokens = [];
+            const protectedText = String(text || '').replace(BATCH_MEDIA_TOKEN_RE, (match) => {
+                const key = `__QISI_MEDIA_TOKEN_${tokens.length}__`;
+                tokens.push(match);
+                return key;
+            });
+            return { protectedText, tokens };
+        };
+
+        const restoreBatchMediaTokens = (text = '', tokens = []) => {
+            return String(text || '').replace(/__QISI_MEDIA_TOKEN_(\d+)__/g, (_, idx) => {
+                return tokens[Number(idx)] || '';
+            });
+        };
+
+        const hasBatchMediaToken = (text = '') => {
+            BATCH_MEDIA_TOKEN_RE.lastIndex = 0;
+            return BATCH_MEDIA_TOKEN_RE.test(String(text || ''));
+        };
+
+        const hasBatchImagePlaceholder = (text = '') => {
+            BATCH_BAD_PLACEHOLDER_RE.lastIndex = 0;
+            return BATCH_BAD_PLACEHOLDER_RE.test(String(text || '')) || hasBatchMediaToken(text);
+        };
+
+        const stripBatchImagePlaceholders = (text) => {
+            const raw = String(text || '');
+            const { protectedText, tokens } = protectBatchMediaTokens(raw);
+
+            const cleaned = protectedText
+                .replace(BATCH_BAD_PLACEHOLDER_RE, '')
+                .replace(/[ \t]{2,}/g, ' ')
+                .replace(/\n{3,}/g, '\n\n')
+                .replace(/\s+([，。；：,.、])/g, '$1')
+                .trim();
+
+            return restoreBatchMediaTokens(cleaned, tokens).trim();
+        };
+
         const api = {
+            BATCH_BAD_PLACEHOLDER_RE,
+            BATCH_MEDIA_TOKEN_RE,
             bboxIntersectionArea,
             cleanFormulaOcrText,
             cleanRecognizedText,
@@ -615,14 +663,19 @@
             extractRelevanceTokens,
             findNode,
             finalChoiceAnswerText,
+            hasBatchImagePlaceholder,
+            hasBatchMediaToken,
             isFatalQwenServiceError,
             mathSignalCount,
             normalizeAnswerSolutionSource,
             normalizeFigureBbox,
             preserveRawEvidence,
+            protectBatchMediaTokens,
             protectLatexMathSegments,
+            restoreBatchMediaTokens,
             restoreLatexMathSegments,
             splitAnswerSolutionSections,
+            stripBatchImagePlaceholders,
             splitQuestionForStorage,
             stripAnswerSolution,
             validatePageRange
