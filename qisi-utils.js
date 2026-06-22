@@ -582,6 +582,31 @@
             return q;
         };
 
+        const normalizeAnswerSolutionSource = (text) => cleanRecognizedText(text)
+            .replace(/\r/g, '\n')
+            .replace(/　/g, ' ')
+            .replace(/[ \t]+/g, ' ')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+
+        const splitAnswerSolutionSections = (text) => {
+            const source = normalizeAnswerSolutionSource(text);
+
+            const solutionHeader = source.match(/(^|\n)\s*(?:参考)?(?:解析|详解|解答过程|解答|分析)\s*[:：]?\s*/);
+
+            if (!solutionHeader) {
+                return {
+                    answerPart: source,
+                    solutionPart: source
+                };
+            }
+
+            return {
+                answerPart: source.slice(0, solutionHeader.index).trim(),
+                solutionPart: source.slice(solutionHeader.index + solutionHeader[0].length).trim()
+            };
+        };
+
         const api = {
             bboxIntersectionArea,
             cleanFormulaOcrText,
@@ -592,10 +617,12 @@
             finalChoiceAnswerText,
             isFatalQwenServiceError,
             mathSignalCount,
+            normalizeAnswerSolutionSource,
             normalizeFigureBbox,
             preserveRawEvidence,
             protectLatexMathSegments,
             restoreLatexMathSegments,
+            splitAnswerSolutionSections,
             splitQuestionForStorage,
             stripAnswerSolution,
             validatePageRange

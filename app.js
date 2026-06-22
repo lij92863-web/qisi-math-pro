@@ -5235,32 +5235,8 @@ const cleanDisplayFieldsOnly = (q) => {
                     return normalizeMathTextForLatexSafe(raw);
                 };
 
-                const normalizeAnswerSolutionSource = (text) => window.Qisi.Utils.cleanRecognizedText(text)
-                    .replace(/\r/g, '\n')
-                    .replace(/\u3000/g, ' ')
-                    .replace(/[ \t]+/g, ' ')
-                    .replace(/\n{3,}/g, '\n\n')
-                    .trim();
 
-                const splitAnswerSolutionSections = (text) => {
-                    const source = normalizeAnswerSolutionSource(text);
-
-                    const solutionHeader = source.match(/(^|\n)\s*(?:参考)?(?:解析|详解|解答过程|解答|分析)\s*[:：]?\s*/);
-
-                    if (!solutionHeader) {
-                        return {
-                            answerPart: source,
-                            solutionPart: source
-                        };
-                    }
-
-                    return {
-                        answerPart: source.slice(0, solutionHeader.index).trim(),
-                        solutionPart: source.slice(solutionHeader.index + solutionHeader[0].length).trim()
-                    };
-                };
-
-                const pushUniqueQuestionItem = (list, item, valueKey) => {
+const pushUniqueQuestionItem = (list, item, valueKey) => {
                     const question = normalizeQuestionKey(item.question);
                     const value = window.Qisi.Utils.cleanRecognizedText(item[valueKey]);
 
@@ -5287,8 +5263,8 @@ const cleanDisplayFieldsOnly = (q) => {
                 };
 
                 const parseAnswerItemsFromText = (text, sourceFile) => {
-                    const source = normalizeAnswerSolutionSource(text);
-                    const { answerPart } = splitAnswerSolutionSections(source);
+                    const source = window.Qisi.Utils.normalizeAnswerSolutionSource(text);
+                    const { answerPart } = window.Qisi.Utils.splitAnswerSolutionSections(source);
                     const answers = [];
 
                     const addAnswer = (question, answer, confidence = 0.86) => {
@@ -5337,7 +5313,7 @@ const cleanDisplayFieldsOnly = (q) => {
                 };
 
                 const parseNumberedSolutionBlocks = (section, sourceFile) => {
-                    const source = normalizeAnswerSolutionSource(section);
+                    const source = window.Qisi.Utils.normalizeAnswerSolutionSource(section);
 
                     const markerRegex = /(^|\n)\s*(?:第\s*)?([0-9０-９]{1,3})(?:\s*题)?[\.:：、．\)）]\s*/g;
 
@@ -5391,7 +5367,7 @@ const cleanDisplayFieldsOnly = (q) => {
                 };
 
                 const parseInlineAnswerSolutionBlocks = (text, sourceFile) => {
-                    const source = normalizeAnswerSolutionSource(text);
+                    const source = window.Qisi.Utils.normalizeAnswerSolutionSource(text);
 
                     const markerRegex = /(^|\n)\s*(?:第\s*)?([0-9０-９]{1,3})(?:\s*题)?[\.:：、．\)）]?\s*/g;
                     const marks = [];
@@ -5459,8 +5435,8 @@ const cleanDisplayFieldsOnly = (q) => {
                 };
 
                 const parseSolutionItemsFromText = (text, sourceFile) => {
-                    const source = normalizeAnswerSolutionSource(text);
-                    const { solutionPart } = splitAnswerSolutionSections(source);
+                    const source = window.Qisi.Utils.normalizeAnswerSolutionSource(text);
+                    const { solutionPart } = window.Qisi.Utils.splitAnswerSolutionSections(source);
 
                     const fromGlobalSection = parseNumberedSolutionBlocks(solutionPart, sourceFile);
                     if (fromGlobalSection.length) return fromGlobalSection;
