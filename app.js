@@ -829,17 +829,6 @@
                     return { stem, options };
                 };
 
-                const normalizeDraftPreviewOptions = (question) => {
-                    const options = Array.isArray(question?.options)
-                        ? question.options.slice(0, 4).map(option => String(option || ''))
-                        : [];
-
-                    const normalized = [0, 1, 2, 3].map(index => options[index] || '');
-                    return normalized.some(option => option.trim())
-                        ? normalized
-                        : ['', '', '', ''];
-                };
-
                 const buildDraftEditorProjection = (source, question) => {
                     const text = normalizeDraftEditorNewlines(source);
                     const type = String(question?.type || '解答题').trim();
@@ -867,7 +856,7 @@
 
                     return {
                         stem: text,
-                        options: normalizeDraftPreviewOptions(question),
+                        options: window.Qisi.ReviewDraftState.normalizeDraftPreviewOptions(question),
                         type,
                         parsedOptions: false
                     };
