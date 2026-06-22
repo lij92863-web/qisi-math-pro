@@ -122,6 +122,9 @@ function classify(argv) {
 
     const appCallsNewModule = moduleName ? appCallsModule(afterPath, moduleName) : false;
     const moduleHasFunctions = modulePath ? moduleExportsFunctions(modulePath, oldNames) : false;
+    // Global scope migration: functions removed from app.js and present in module,
+    // accessible via script loading order (qisi-*.js loaded before app.js in main.html)
+    const functionsMigratedToModule = !oldDefinitionsStillPresent && moduleHasFunctions;
     const routeBIntegrated = checkRouteBIntegrated(afterPath);
 
     const reasons = [];
@@ -140,7 +143,7 @@ function classify(argv) {
             delta !== null &&
             delta <= -10 &&
             !oldDefinitionsStillPresent &&
-            appCallsNewModule &&
+            (appCallsNewModule || functionsMigratedToModule) &&
             moduleHasFunctions
         ) {
             classification = 'REAL_MIGRATION';

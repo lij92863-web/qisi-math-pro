@@ -187,6 +187,49 @@
             return output;
         };
 
+        const cleanRecognizedText = (value) => {
+            if (value === false || value === true || value === null || value === undefined) return '';
+            if (Array.isArray(value)) return value.map(cleanRecognizedText).filter(Boolean).join('\n');
+            if (typeof value === 'object') return '';
+
+            let s = String(value);
+            const {
+                protectedText,
+                chunks: latexBlocks,
+                issues
+            } = protectLatexMathSegments(s);
+            if (issues.length) {
+                console.warn('[TEXT_CLEAN][delimiter-issues]', { source: s, issues });
+            }
+            s = protectedText;
+
+            s = s
+                .replace(/<w:br\s*\/?>/g, '\n')
+                .replace(/<\/w:p>/g, '\n')
+                .replace(/<\/w:tr>/g, '\n')
+                .replace(/<w:[^>]+\/>/g, '')
+                .replace(/<[^>]+>/g, '')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .replace(/&amp;/g, '&')
+                .replace(/&quot;/g, '"')
+                .replace(/&apos;/g, "'")
+                .replace(/&#39;/g, "'")
+                .replace(/ /g, ' ')
+                .replace(/[ \t]+\n/g, '\n')
+                .replace(/[ \t]{2,}/g, ' ')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+
+            s = restoreLatexMathSegments(s, latexBlocks);
+
+            return s
+                .replace(/(?<!\\)\b(triangle|angle|vec|frac|sqrt|overline|cdot|parallel|perp)(?=\s|\{)/g, '\\$1')
+                .replace(/\bfalse\b/gi, '')
+                .replace(/\btrue\b/gi, '')
+                .replace(/\s+([，。；：,.])/g, '$1')
+                .trim();
+        };
 
         const normalizeLatexText = (text) => {
             if (!text) return '';
@@ -316,3 +359,19 @@
             const nextType = choiceTypes.includes(type) ? type : '单选题';
             return { stem: split.stem, options: split.options, type: nextType };
         };
+
+        const api = {
+            cleanRecognizedText,
+            protectLatexMathSegments,
+            restoreLatexMathSegments,
+            splitQuestionForStorage
+        };
+
+        if (typeof globalThis !== 'undefined') {
+            globalThis.Qisi = globalThis.Qisi || {};
+            globalThis.Qisi.Utils = api;
+        }
+
+        if (typeof module !== 'undefined' && module.exports) {
+            module.exports = api;
+        }
