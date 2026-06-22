@@ -1999,24 +1999,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     });
                 };
 
-                const preserveRawEvidence = (q) => {
-                    if (!q) return q;
-
-                    q.rawTextOriginal = q.rawTextOriginal || q.rawText || '';
-                    q.rawBlockOriginal = q.rawBlockOriginal || q.rawBlock || '';
-                    q.pageTextOriginal = q.pageTextOriginal || q.pageText || '';
-                    q.sourceTextOriginal = q.sourceTextOriginal || q.sourceText || '';
-
-                    if (q.sourceTrace) {
-                        q.sourceTrace.rawBlockOriginal = q.sourceTrace.rawBlockOriginal || q.sourceTrace.rawBlock || '';
-                        q.sourceTrace.pageTextOriginal = q.sourceTrace.pageTextOriginal || q.sourceTrace.pageText || '';
-                        q.sourceTrace.sourceTextOriginal = q.sourceTrace.sourceTextOriginal || q.sourceTrace.sourceText || '';
-                    }
-
-                    return q;
-                };
-
-                const cleanDisplayFieldsOnly = (q) => {
+const cleanDisplayFieldsOnly = (q) => {
                     if (!q) return q;
 
                     q.stem = cleanDisplayTextForBatchSave(q.stem);
@@ -3843,7 +3826,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                 const attachSourceTraceToDraftQuestion = (q, files = []) => {
                     if (!q) return q;
-                    preserveRawEvidence(q);
+                    window.Qisi.Utils.preserveRawEvidence(q);
                     const sourceFileId = q.sourceFileId || q.sourceQuestionFileId || q.sourceTrace?.sourceFileId || '';
                     const sourceFile = files.find(file => file.id === sourceFileId) || {};
                     const imageIds = [
@@ -19162,7 +19145,7 @@ ${source}`;
                             if (sourceFileForDraft?.fileType === 'docx' && draft.sourceTrace?.source !== 'docx-importer') {
                                 addWarningOnce(draft, DOCX_TEXT_ONLY_WARNING);
                             }
-                            preserveRawEvidence(draft);
+                            window.Qisi.Utils.preserveRawEvidence(draft);
                             cleanDisplayFieldsOnly(draft);
 
                             // 只允许从当前题 rawBlock/rawText 中提取选项，不跨题、不编造。
@@ -19723,7 +19706,7 @@ ${source}`;
                 const cleanSingleDraftForSave = (q) => {
                     if (!q) return q;
 
-                    preserveRawEvidence(q);
+                    window.Qisi.Utils.preserveRawEvidence(q);
 
                     // 只清理显示字段
                     cleanDisplayFieldsOnly(q);
@@ -20146,7 +20129,7 @@ ${source}`;
                     });
 
                     // 1. 保留原始依据，不能覆盖 raw/source 字段
-                    preserveRawEvidence(q);
+                    window.Qisi.Utils.preserveRawEvidence(q);
 
                     if (typeof attachSourceTraceToDraftQuestion === 'function') {
                         attachSourceTraceToDraftQuestion(q);
@@ -20478,7 +20461,7 @@ ${source}`;
                             solution: q.solution
                         });
 
-                        preserveRawEvidence(q);
+                        window.Qisi.Utils.preserveRawEvidence(q);
                         cleanDisplayFieldsOnly(q);
 
                         const after = JSON.stringify({

@@ -565,6 +565,23 @@
             return (x2 - x1) * (y2 - y1);
         };
 
+        const preserveRawEvidence = (q) => {
+            if (!q) return q;
+
+            q.rawTextOriginal = q.rawTextOriginal || q.rawText || '';
+            q.rawBlockOriginal = q.rawBlockOriginal || q.rawBlock || '';
+            q.pageTextOriginal = q.pageTextOriginal || q.pageText || '';
+            q.sourceTextOriginal = q.sourceTextOriginal || q.sourceText || '';
+
+            if (q.sourceTrace) {
+                q.sourceTrace.rawBlockOriginal = q.sourceTrace.rawBlockOriginal || q.sourceTrace.rawBlock || '';
+                q.sourceTrace.pageTextOriginal = q.sourceTrace.pageTextOriginal || q.sourceTrace.pageText || '';
+                q.sourceTrace.sourceTextOriginal = q.sourceTrace.sourceTextOriginal || q.sourceTrace.sourceText || '';
+            }
+
+            return q;
+        };
+
         const api = {
             bboxIntersectionArea,
             cleanFormulaOcrText,
@@ -576,6 +593,7 @@
             isFatalQwenServiceError,
             mathSignalCount,
             normalizeFigureBbox,
+            preserveRawEvidence,
             protectLatexMathSegments,
             restoreLatexMathSegments,
             splitQuestionForStorage,
