@@ -10630,25 +10630,8 @@ ${rawBlock}
                     return QUESTION_FIGURE_CUE_RE.test(window.Qisi.Utils.cleanRecognizedText(text));
                 };
 
-                const normalizeFigureBbox = (bbox) => {
-                    if (!Array.isArray(bbox) || bbox.length !== 4) return [];
-
-                    const values = bbox.map(Number);
-                    if (values.some(value => !Number.isFinite(value))) return [];
-
-                    const [rawX1, rawY1, rawX2, rawY2] = values;
-                    const x1 = Math.min(rawX1, rawX2);
-                    const y1 = Math.min(rawY1, rawY2);
-                    const x2 = Math.max(rawX1, rawX2);
-                    const y2 = Math.max(rawY1, rawY2);
-
-                    if (x2 <= x1 || y2 <= y1) return [];
-
-                    return [x1, y1, x2, y2];
-                };
-
-                const bboxAreaForQuestionFigure = (bbox) => {
-                    const normalized = normalizeFigureBbox(bbox);
+const bboxAreaForQuestionFigure = (bbox) => {
+                    const normalized = window.Qisi.Utils.normalizeFigureBbox(bbox);
                     if (!normalized.length) return 0;
 
                     const [x1, y1, x2, y2] = normalized;
@@ -10656,8 +10639,8 @@ ${rawBlock}
                 };
 
                 const bboxIntersectionArea = (left, right) => {
-                    const a = normalizeFigureBbox(left);
-                    const b = normalizeFigureBbox(right);
+                    const a = window.Qisi.Utils.normalizeFigureBbox(left);
+                    const b = window.Qisi.Utils.normalizeFigureBbox(right);
                     if (!a.length || !b.length) return 0;
 
                     const x1 = Math.max(a[0], b[0]);
@@ -10671,7 +10654,7 @@ ${rawBlock}
                 };
 
                 const normalizeRecognizedFigureDescriptor = (raw = {}) => {
-                    const bbox = normalizeFigureBbox(
+                    const bbox = window.Qisi.Utils.normalizeFigureBbox(
                         raw.image_bbox ||
                         raw.imageBbox ||
                         raw.bbox ||
@@ -10716,7 +10699,7 @@ ${rawBlock}
                         }
                     }
 
-                    const normalizedQuestionBbox = normalizeFigureBbox(questionBbox);
+                    const normalizedQuestionBbox = window.Qisi.Utils.normalizeFigureBbox(questionBbox);
                     if (normalizedQuestionBbox.length) {
                         const questionArea = bboxAreaForQuestionFigure(normalizedQuestionBbox);
                         if (questionArea > 0) {

@@ -533,6 +533,23 @@
             return [...pages].sort((a, b) => a - b);
         };
 
+        const normalizeFigureBbox = (bbox) => {
+            if (!Array.isArray(bbox) || bbox.length !== 4) return [];
+
+            const values = bbox.map(Number);
+            if (values.some(value => !Number.isFinite(value))) return [];
+
+            const [rawX1, rawY1, rawX2, rawY2] = values;
+            const x1 = Math.min(rawX1, rawX2);
+            const y1 = Math.min(rawY1, rawY2);
+            const x2 = Math.max(rawX1, rawX2);
+            const y2 = Math.max(rawY1, rawY2);
+
+            if (x2 <= x1 || y2 <= y1) return [];
+
+            return [x1, y1, x2, y2];
+        };
+
         const api = {
             cleanFormulaOcrText,
             cleanRecognizedText,
@@ -542,6 +559,7 @@
             finalChoiceAnswerText,
             isFatalQwenServiceError,
             mathSignalCount,
+            normalizeFigureBbox,
             protectLatexMathSegments,
             restoreLatexMathSegments,
             splitQuestionForStorage,
