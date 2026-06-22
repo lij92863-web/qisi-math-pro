@@ -13538,26 +13538,6 @@ answers=${JSON.stringify(answers)}
                     return drafts;
                 };
 
-                const finalChoiceAnswerText = (value = '') => {
-                    const raw = cleanRecognizedText(value)
-                        .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
-                        .toUpperCase();
-
-                    const compact = raw
-                        .replace(/\\[A-Z]+/g, '')
-                        .replace(/[.\s、，。:：；;()（）【】\[\]{}]/g, '');
-
-                    if (/^[A-D]{1,4}$/.test(compact)) return compact;
-
-                    const direct = raw.match(/(?:答案|故选|选|应选|正确答案|为|是)\s*[:：]?\s*([A-D]{1,4})(?![A-Z])/);
-                    if (direct?.[1]) return direct[1];
-
-                    const tail = raw.match(/([A-D]{1,4})\s*$/);
-                    if (tail?.[1] && tail[1].length <= 4) return tail[1];
-
-                    return '';
-                };
-
                 const finalDraftLooksLikeChoice = (draft) => {
                     if (!draft) return false;
 
