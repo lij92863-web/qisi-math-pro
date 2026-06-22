@@ -498,6 +498,23 @@
             );
         };
 
+        const stripAnswerSolution = (text) => {
+            let stem = String(text || '');
+            let answer = '';
+            let solution = '';
+            const solutionMatch = stem.match(/(?:【(?:解析|详解|解答|分析)】|(?:解析|详解|解答|分析|解)\s*[:：])([\s\S]*)/);
+            if (solutionMatch) {
+                solution = solutionMatch[1].trim();
+                stem = stem.slice(0, solutionMatch.index).trim();
+            }
+            const answerMatch = stem.match(/(?:【答案】|参考答案[:：]|答案[:：])\s*([A-DＡ-Ｄ]+|[\s\S]{1,80})/);
+            if (answerMatch) {
+                answer = answerMatch[1].split('\n')[0].trim();
+                stem = stem.slice(0, answerMatch.index).trim();
+            }
+            return { stem, answer, solution };
+        };
+
         const api = {
             cleanFormulaOcrText,
             cleanRecognizedText,
@@ -509,6 +526,7 @@
             protectLatexMathSegments,
             restoreLatexMathSegments,
             splitQuestionForStorage,
+            stripAnswerSolution,
             validatePageRange
         };
 

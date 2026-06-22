@@ -4722,23 +4722,6 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     return images;
                 };
 
-                const stripAnswerSolution = (text) => {
-                    let stem = String(text || '');
-                    let answer = '';
-                    let solution = '';
-                    const solutionMatch = stem.match(/(?:【(?:解析|详解|解答|分析)】|(?:解析|详解|解答|分析|解)\s*[:：])([\s\S]*)/);
-                    if (solutionMatch) {
-                        solution = solutionMatch[1].trim();
-                        stem = stem.slice(0, solutionMatch.index).trim();
-                    }
-                    const answerMatch = stem.match(/(?:【答案】|参考答案[:：]|答案[:：])\s*([A-DＡ-Ｄ]+|[\s\S]{1,80})/);
-                    if (answerMatch) {
-                        answer = answerMatch[1].split('\n')[0].trim();
-                        stem = stem.slice(0, answerMatch.index).trim();
-                    }
-                    return { stem, answer, solution };
-                };
-
                 const prepareQuestionRecognitionText = (text) => {
                     let source = window.Qisi.Utils.cleanRecognizedText(text)
                         .replace(/\r/g, '\n')
@@ -4832,7 +4815,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     })) : [{ question: '1', text: source }];
 
                     const result = segments.filter(seg => seg.text && !/^(一|二|三|四)[、.．]/.test(seg.text)).map((seg, idx) => {
-                        const split = stripAnswerSolution(stripQuestionSectionNoise(seg.text));
+                        const split = window.Qisi.Utils.stripAnswerSolution(stripQuestionSectionNoise(seg.text));
                         const answer = includeInlineAnswer ? window.Qisi.Utils.cleanRecognizedText(split.answer) : '';
                         const prepared = splitQuestionForStorage(split.stem, batchDefaultMeta.defaultType, ['', '', '', '']);
                         const repaired = repairChoiceOptions(prepared.stem || split.stem, prepared.options, prepared.type);
