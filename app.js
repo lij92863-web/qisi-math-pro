@@ -324,21 +324,6 @@
                     }, 1800);
                 };
 
-                const validatePageRange = (value) => {
-                    const text = String(value || '').trim();
-                    if (!text) return true;
-                    if (/[，；、\s]/.test(text)) return false;
-                    const parts = text.split(',');
-                    return parts.every(part => {
-                        if (/^\d+$/.test(part)) return Number(part) > 0;
-                        const range = part.match(/^(\d+)-(\d+)$/);
-                        if (!range) return false;
-                        const start = Number(range[1]);
-                        const end = Number(range[2]);
-                        return start > 0 && end > 0 && start <= end;
-                    });
-                };
-
                 const getBatchFileRoles = window.Qisi.FileDispatcher.getBatchFileRoles;
                 const batchHasRole = window.Qisi.FileDispatcher.batchHasRole;
                 const batchHasQuestionRole = window.Qisi.FileDispatcher.batchHasQuestionRole;
@@ -1008,7 +993,7 @@
                         batchCreateWarning.value = '请至少上传一个题目文件，系统需要先识别题目内容。';
                         return;
                     }
-                    const invalidPdf = batchCreateFiles.value.find(file => file.fileType === 'pdf' && !validatePageRange(file.pageRange));
+                    const invalidPdf = batchCreateFiles.value.find(file => file.fileType === 'pdf' && !window.Qisi.Utils.validatePageRange(file.pageRange));
                     if (invalidPdf) {
                         batchCreateWarning.value = '页码范围格式不正确，请参考：1-5，8，10-12。';
                         return;

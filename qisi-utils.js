@@ -462,6 +462,21 @@
             return null;
         };
 
+        const validatePageRange = (value) => {
+            const text = String(value || '').trim();
+            if (!text) return true;
+            if (/[，；、\s]/.test(text)) return false;
+            const parts = text.split(',');
+            return parts.every(part => {
+                if (/^\d+$/.test(part)) return Number(part) > 0;
+                const range = part.match(/^(\d+)-(\d+)$/);
+                if (!range) return false;
+                const start = Number(range[1]);
+                const end = Number(range[2]);
+                return start > 0 && end > 0 && start <= end;
+            });
+        };
+
         const api = {
             cleanFormulaOcrText,
             cleanRecognizedText,
@@ -471,7 +486,8 @@
             mathSignalCount,
             protectLatexMathSegments,
             restoreLatexMathSegments,
-            splitQuestionForStorage
+            splitQuestionForStorage,
+            validatePageRange
         };
 
         if (typeof globalThis !== 'undefined') {
