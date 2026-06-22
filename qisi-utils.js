@@ -451,10 +451,22 @@
             return { stem: split.stem, options: split.options, type: nextType };
         };
 
+        const findNode = (nodes, name) => {
+            for (const node of nodes || []) {
+                if (node?.name === name) return node;
+                if (node?.children) {
+                    const found = findNode(node.children, name);
+                    if (found) return found;
+                }
+            }
+            return null;
+        };
+
         const api = {
             cleanFormulaOcrText,
             cleanRecognizedText,
             extractRelevanceTokens,
+            findNode,
             finalChoiceAnswerText,
             mathSignalCount,
             protectLatexMathSegments,

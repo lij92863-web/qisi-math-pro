@@ -226,19 +226,8 @@
                         };
                         
                         let targetNode = null;
-                        const findNode = (nodes, name) => {
-                            for(let n of nodes) {
-                                if(n.name === name) return n;
-                                if(n.children) {
-                                    let found = findNode(n.children, name);
-                                    if(found) return found;
-                                }
-                            }
-                            return null;
-                        };
-                        
                         const sourceTree = activeKnowledgeType.value === 'personal' ? personalKnowledgeTree.value : knowledgeTree;
-                        targetNode = findNode(sourceTree, activeKnowledge.value);
+                        targetNode = window.Qisi.Utils.findNode(sourceTree, activeKnowledge.value);
                         
                         if (targetNode) {
                             const allowedNames = getAllChildrenNames(targetNode);
