@@ -3,7 +3,7 @@
 Stage: BM-AUTO-MIMO-RESUME-INTERRUPTED-ROUND
 Branch: main
 Start commit: `143debe`
-End commit: pending (will be set after commit)
+End commit: `d2fdf70`
 
 Target helper group: stripAnswerSolution
 Target module: qisi-utils.js
@@ -35,7 +35,7 @@ Target module: qisi-utils.js
 
 ### app.js explicit call sites
 
-Line ~4832: `window.Qisi.Utils.stripAnswerSolution(stripQuestionSectionNoise(seg.text))` — single call site, prefixed.
+Line 4818: `window.Qisi.Utils.stripAnswerSolution(stripQuestionSectionNoise(seg.text))` — single call site, prefixed.
 
 ### Before / After / Delta
 
