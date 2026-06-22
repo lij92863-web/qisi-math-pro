@@ -231,6 +231,35 @@
                 .trim();
         };
 
+        const mathSignalCount = (text = '') => {
+            const source = cleanRecognizedText(text);
+            if (!source) return 0;
+
+            const patterns = [
+                /\\frac/g,
+                /\\sqrt/g,
+                /\\vec/g,
+                /\\overrightarrow/g,
+                /\\angle/g,
+                /\\triangle/g,
+                /\\sin/g,
+                /\\cos/g,
+                /\\tan/g,
+                /\\theta/g,
+                /\\alpha/g,
+                /\\beta/g,
+                /\\lambda/g,
+                /\$/g,
+                /[_^=]/g,
+                /[≤≥≠∈⊂⊆∪∩√π]/g
+            ];
+
+            return patterns.reduce((sum, re) => {
+                const matches = source.match(re);
+                return sum + (matches ? matches.length : 0);
+            }, 0);
+        };
+
         const normalizeLatexText = (text) => {
             if (!text) return '';
             let out = String(text);
@@ -362,6 +391,7 @@
 
         const api = {
             cleanRecognizedText,
+            mathSignalCount,
             protectLatexMathSegments,
             restoreLatexMathSegments,
             splitQuestionForStorage
