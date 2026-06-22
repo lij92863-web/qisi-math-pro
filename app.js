@@ -10638,22 +10638,7 @@ const bboxAreaForQuestionFigure = (bbox) => {
                     return Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
                 };
 
-                const bboxIntersectionArea = (left, right) => {
-                    const a = window.Qisi.Utils.normalizeFigureBbox(left);
-                    const b = window.Qisi.Utils.normalizeFigureBbox(right);
-                    if (!a.length || !b.length) return 0;
-
-                    const x1 = Math.max(a[0], b[0]);
-                    const y1 = Math.max(a[1], b[1]);
-                    const x2 = Math.min(a[2], b[2]);
-                    const y2 = Math.min(a[3], b[3]);
-
-                    if (x2 <= x1 || y2 <= y1) return 0;
-
-                    return (x2 - x1) * (y2 - y1);
-                };
-
-                const normalizeRecognizedFigureDescriptor = (raw = {}) => {
+const normalizeRecognizedFigureDescriptor = (raw = {}) => {
                     const bbox = window.Qisi.Utils.normalizeFigureBbox(
                         raw.image_bbox ||
                         raw.imageBbox ||
@@ -10704,7 +10689,7 @@ const bboxAreaForQuestionFigure = (bbox) => {
                         const questionArea = bboxAreaForQuestionFigure(normalizedQuestionBbox);
                         if (questionArea > 0) {
                             const figureToQuestionRatio = figureArea / questionArea;
-                            const intersection = bboxIntersectionArea(figureBbox, normalizedQuestionBbox);
+                            const intersection = window.Qisi.Utils.bboxIntersectionArea(figureBbox, normalizedQuestionBbox);
                             const figureInsideQuestionRatio = intersection / figureArea;
 
                             if (figureToQuestionRatio >= 0.78 && figureInsideQuestionRatio >= 0.9) {

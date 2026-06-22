@@ -550,7 +550,23 @@
             return [x1, y1, x2, y2];
         };
 
+        const bboxIntersectionArea = (left, right) => {
+            const a = normalizeFigureBbox(left);
+            const b = normalizeFigureBbox(right);
+            if (!a.length || !b.length) return 0;
+
+            const x1 = Math.max(a[0], b[0]);
+            const y1 = Math.max(a[1], b[1]);
+            const x2 = Math.min(a[2], b[2]);
+            const y2 = Math.min(a[3], b[3]);
+
+            if (x2 <= x1 || y2 <= y1) return 0;
+
+            return (x2 - x1) * (y2 - y1);
+        };
+
         const api = {
+            bboxIntersectionArea,
             cleanFormulaOcrText,
             cleanRecognizedText,
             expandPageRange,
