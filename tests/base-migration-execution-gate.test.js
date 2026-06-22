@@ -103,14 +103,21 @@ test('BM-AUTO score: eligible functions must have no risk markers', () => {
 
 test('BM-AUTO verify: SCAFFOLD_ONLY — app.js unchanged + new module added', () => {
     // Simulate: before == after (no change), module exists but app doesn't call it
+    // Use a temp file without window.Qisi.Utils references to test SCAFFOLD_ONLY
     const { classify } = require(verifyPath);
+    const appContent = fs.readFileSync(path.join(rootDir, 'app.js'), 'utf8');
+    // Remove all window.Qisi.Utils references to simulate an app that doesn't call the module
+    const stripped = appContent.replace(/window\.Qisi\.Utils\./g, '');
+    writeTemp('.bm_test_scaffold_app.js', stripped);
+
     const args = [
-        '--before', 'app.js',
-        '--after', 'app.js',
+        '--before', '.bm_test_scaffold_app.js',
+        '--after', '.bm_test_scaffold_app.js',
         '--module', 'qisi-utils.js',
         '--old-names', 'someHelperThatDoesNotExist'
     ];
     const result = classify(args);
+    removeTemp('.bm_test_scaffold_app.js');
     assert.equal(result.classification, 'SCAFFOLD_ONLY');
 });
 
@@ -265,4 +272,106 @@ test('BM-AUTO score: estimatedRemovedAppLines < 10 is not eligible', () => {
     };
     const scored = scoreCandidate(smallFunc);
     assert.equal(scored.eligible, false, 'function with < 10 lines should not be eligible');
+});
+
+// ─── Strict verifier tests ───
+
+test('BM-AUTO verify: rejects global-scope-only migration without explicit app module call', () => {
+    const { classify } = require(verifyPath);
+
+    const before = `
+const migratedHelper = () => {
+  const a = 1;
+  const b = 2;
+  const c = 3;
+  const d = 4;
+  const e = 5;
+  const f = 6;
+  const g = 7;
+  const h = 8;
+  const i = 9;
+  return a + b + c + d + e + f + g + h + i;
+};
+`;
+
+    const after = `
+const result = migratedHelper();
+`;
+
+    const mod = `
+const migratedHelper = () => 45;
+module.exports = { migratedHelper };
+`;
+
+    writeTemp('.bm_test_global_before.js', before);
+    writeTemp('.bm_test_global_after.js', after);
+    writeTemp('.bm_test_global_module.js', mod);
+
+    const result = classify([
+        '--before', '.bm_test_global_before.js',
+        '--after', '.bm_test_global_after.js',
+        '--module', '.bm_test_global_module.js',
+        '--old-names', 'migratedHelper'
+    ]);
+
+    removeTemp('.bm_test_global_before.js');
+    removeTemp('.bm_test_global_after.js');
+    removeTemp('.bm_test_global_module.js');
+
+    assert.equal(result.oldDefinitionsStillPresent, false);
+    assert.equal(result.moduleExportsMovedFunctions, true);
+    assert.equal(result.appCallsNewModule, false);
+    assert.notEqual(result.classification, 'REAL_MIGRATION');
+    assert.equal(result.classification, 'SCAFFOLD_ONLY');
+});
+
+test('BM-AUTO verify: qisi-utils migrated helpers are explicit REAL_MIGRATION sample', () => {
+    const { classify, appCallsModule, moduleExportsFunctions } = require(verifyPath);
+
+    const appPath = path.join(rootDir, 'app.js');
+    const modulePath = path.join(rootDir, 'qisi-utils.js');
+    const oldNames = [
+        'cleanRecognizedText',
+        'mathSignalCount',
+        'extractRelevanceTokens',
+        'finalChoiceAnswerText',
+        'cleanFormulaOcrText'
+    ];
+
+    assert.equal(appCallsModule(appPath, 'qisi-utils.js'), true, 'app.js should explicitly call window.Qisi.Utils');
+    assert.equal(moduleExportsFunctions(modulePath, oldNames), true, 'qisi-utils.js should export migrated helpers');
+
+    const appContent = fs.readFileSync(appPath, 'utf8');
+    let beforeExtra = '';
+    for (const name of oldNames) {
+        beforeExtra += `
+const ${name} = (value) => {
+  const text = String(value || '');
+  const a = text.trim();
+  const b = a.replace(/\\s+/g, ' ');
+  const c = b.replace(/<[^>]+>/g, '');
+  const d = c.replace(/&amp;/g, '&');
+  const e = d.replace(/&lt;/g, '<');
+  const f = e.replace(/&gt;/g, '>');
+  return f;
+};
+`;
+    }
+
+    writeTemp('.bm_test_qisi_utils_before.js', appContent + beforeExtra);
+
+    const result = classify([
+        '--before', '.bm_test_qisi_utils_before.js',
+        '--after', 'app.js',
+        '--module', 'qisi-utils.js',
+        '--old-names', oldNames.join(',')
+    ]);
+
+    removeTemp('.bm_test_qisi_utils_before.js');
+
+    assert.equal(result.oldDefinitionsStillPresent, false);
+    assert.equal(result.appCallsNewModule, true);
+    assert.equal(result.moduleExportsMovedFunctions, true);
+    assert.ok(result.delta <= -10, `delta ${result.delta} should be <= -10`);
+    assert.equal(result.classification, 'REAL_MIGRATION');
 });

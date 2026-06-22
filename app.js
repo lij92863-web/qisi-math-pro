@@ -968,12 +968,12 @@
                         const questionNo = draftSummaryQuestionNo(q, index);
                         const optionCount = countValidOptions(q?.options);
                         if (optionCount > 0) withOptions += 1;
-                        if (cleanRecognizedText(q?.answer)) {
+                        if (window.Qisi.Utils.cleanRecognizedText(q?.answer)) {
                             withAnswers += 1;
                         } else {
                             missingAnswers.push(questionNo);
                         }
-                        if (cleanRecognizedText(q?.solution)) {
+                        if (window.Qisi.Utils.cleanRecognizedText(q?.solution)) {
                             withSolutions += 1;
                         } else {
                             missingSolutions.push(questionNo);
@@ -1478,12 +1478,12 @@
                 const toBatchDebugQuestion = (item = {}) => ({
                     question: item.question ?? item.questionNumber ?? item.no ?? item.index ?? item.题号 ?? '',
                     type: item.type ?? item.题型 ?? '',
-                    stem: cleanRecognizedText(item.stem ?? item.questionText ?? item.question_text ?? item.content ?? item.text ?? item.题干 ?? item.题目内容 ?? '').slice(0, 600),
-                    options: normalizeRecognizedOptions(extractItemOptions ? extractItemOptions(item) : item.options).map(opt => cleanRecognizedText(opt).slice(0, 200)),
-                    optionCount: normalizeRecognizedOptions(extractItemOptions ? extractItemOptions(item) : item.options).filter(opt => cleanRecognizedText(opt)).length,
-                    answer: cleanRecognizedText(item.answer ?? item.答案 ?? item.correctAnswer ?? item.correct_answer ?? '').slice(0, 160),
-                    solution: cleanRecognizedText(item.solution ?? item.analysis ?? item.explanation ?? item.解析 ?? item.详解 ?? item.解答 ?? '').slice(0, 600),
-                    rawText: cleanRecognizedText(item.rawText ?? item.raw_text ?? item.rawBlock ?? item.sourceText ?? '').slice(0, 800)
+                    stem: window.Qisi.Utils.cleanRecognizedText(item.stem ?? item.questionText ?? item.question_text ?? item.content ?? item.text ?? item.题干 ?? item.题目内容 ?? '').slice(0, 600),
+                    options: normalizeRecognizedOptions(extractItemOptions ? extractItemOptions(item) : item.options).map(opt => window.Qisi.Utils.cleanRecognizedText(opt).slice(0, 200)),
+                    optionCount: normalizeRecognizedOptions(extractItemOptions ? extractItemOptions(item) : item.options).filter(opt => window.Qisi.Utils.cleanRecognizedText(opt)).length,
+                    answer: window.Qisi.Utils.cleanRecognizedText(item.answer ?? item.答案 ?? item.correctAnswer ?? item.correct_answer ?? '').slice(0, 160),
+                    solution: window.Qisi.Utils.cleanRecognizedText(item.solution ?? item.analysis ?? item.explanation ?? item.解析 ?? item.详解 ?? item.解答 ?? '').slice(0, 600),
+                    rawText: window.Qisi.Utils.cleanRecognizedText(item.rawText ?? item.raw_text ?? item.rawBlock ?? item.sourceText ?? '').slice(0, 800)
                 });
                 const batchDebugLog = (label, payload) => {
                     if (!batchDebugEnabled) return;
@@ -1702,7 +1702,7 @@
                         await assertQwenResponseOk(resp, 'Qwen OCR Markdown 请求');
 
                         const text = extractAssistantText(await resp.json());
-                        return cleanRecognizedText(text);
+                        return window.Qisi.Utils.cleanRecognizedText(text);
                     } catch (error) {
                         if (isFatalQwenServiceError(error)) throw error;
                         console.warn('compatible-mode 整页 OCR Markdown 失败，尝试 OCR document_parsing', error);
@@ -1710,7 +1710,7 @@
 
                     try {
                         const text = await callDashScopeOcrTask(imageUrl, 'document_parsing');
-                        return cleanRecognizedText(text);
+                        return window.Qisi.Utils.cleanRecognizedText(text);
                     } catch (error) {
                         if (isFatalQwenServiceError(error)) throw error;
                         console.warn('整页 OCR Markdown 失败', error);
@@ -1728,12 +1728,12 @@
 
                     const questionSummaries = (questions || []).map(q => ({
                         question: String(q.question || q.questionNumber || q.order || '').trim(),
-                        stem: cleanRecognizedText(q.stem || '').slice(0, 260),
+                        stem: window.Qisi.Utils.cleanRecognizedText(q.stem || '').slice(0, 260),
                         options: Array.isArray(q.options)
-                            ? q.options.map(opt => cleanRecognizedText(opt || '').slice(0, 120))
+                            ? q.options.map(opt => window.Qisi.Utils.cleanRecognizedText(opt || '').slice(0, 120))
                             : [],
                         hasFigureCue: /图|如图|图中|图甲|图乙|示意图|统计图|函数图|几何图|折扇|圆弧|扇形/.test(
-                            cleanRecognizedText([
+                            window.Qisi.Utils.cleanRecognizedText([
                                 q.stem,
                                 ...(Array.isArray(q.options) ? q.options : [])
                             ].join('\n'))
@@ -1821,7 +1821,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                                 : (Array.isArray(parsed?.figures) ? parsed.figures : []);
 
                             const normalized = rows.map(row => ({
-                                question: cleanRecognizedText(
+                                question: window.Qisi.Utils.cleanRecognizedText(
                                     row.question ??
                                     row.questionNumber ??
                                     row.no ??
@@ -1834,7 +1834,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                                     row.bbox ||
                                     row.图片区域 ||
                                     [],
-                                image_description: cleanRecognizedText(
+                                image_description: window.Qisi.Utils.cleanRecognizedText(
                                     row.image_description ||
                                     row.description ||
                                     row.图像说明 ||
@@ -2033,7 +2033,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 };
 
                 const cleanDisplayTextForBatchSave = (text) => {
-                    const raw = cleanRecognizedText(text);
+                    const raw = window.Qisi.Utils.cleanRecognizedText(text);
                     if (!raw) return '';
                     return stripBatchImagePlaceholders(raw);
                 };
@@ -2042,7 +2042,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     const arr = Array.isArray(options) ? options : ['', '', '', ''];
 
                     return [0, 1, 2, 3].map(idx => {
-                        const raw = cleanRecognizedText(arr[idx] || '');
+                        const raw = window.Qisi.Utils.cleanRecognizedText(arr[idx] || '');
                         if (!raw) return '';
 
                         const cleaned = cleanDisplayTextForBatchSave(raw);
@@ -2124,7 +2124,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     if (!imageUrl) return '';
                     try {
                         const text = await callDashScopeOcrTask(imageUrl, 'formula_recognition');
-                        return cleanFormulaOcrText(text);
+                        return window.Qisi.Utils.cleanFormulaOcrText(text);
                     } catch (error) {
                         console.warn('公式图片 OCR 失败，保留为图片 token，不删除。', error);
                         return '';
@@ -2159,7 +2159,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 };
 
                 const normalizeMathTextForLatex = (value) => {
-                    const raw = cleanRecognizedText(value);
+                    const raw = window.Qisi.Utils.cleanRecognizedText(value);
                     if (!raw) return '';
                     const superscriptMap = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
                     const normalizeSymbols = (text) => text
@@ -2210,7 +2210,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 const normalizeMathTextForLatexSafe = (value) => normalizeMathTextForLatex(repairCommonLatexOcrErrors(value));
 
                 const normalizeMathTextForBatchSafe = (value) => {
-                    let s = cleanRecognizedText(value);
+                    let s = window.Qisi.Utils.cleanRecognizedText(value);
                     if (!s) return '';
 
                     // 只修明显 OCR 错误，不主动把整段文本里的零碎字母数字包成 $...$
@@ -2226,7 +2226,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     return s;
                 };
 
-                const stripLeadingOptionLabel = (value) => cleanRecognizedText(value)
+                const stripLeadingOptionLabel = (value) => window.Qisi.Utils.cleanRecognizedText(value)
                     .replace(/^[\s　]*[（(]?\s*([A-DＡ-Ｄ])\s*[\.\．、:：\)）]\s*/i, '')
                     .trim();
 
@@ -2252,7 +2252,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 };
 
                 const optionLooksLikeLabelResidue = (value) => {
-                    const text = cleanRecognizedText(value)
+                    const text = window.Qisi.Utils.cleanRecognizedText(value)
                         .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
                         .replace(/[.\s、，。:：；;()（）]/g, '')
                         .toUpperCase();
@@ -2278,13 +2278,13 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     .map(opt => optionHasSubstance(opt) ? normalizeMathTextForLatexSafe(opt) : '');
 
                 const solutionLooksFormulaPoor = (stem = '', solution = '') => {
-                    const cleanStem = cleanRecognizedText(stem);
-                    const cleanSolution = cleanRecognizedText(solution);
+                    const cleanStem = window.Qisi.Utils.cleanRecognizedText(stem);
+                    const cleanSolution = window.Qisi.Utils.cleanRecognizedText(solution);
 
                     if (!cleanSolution) return true;
 
-                    const stemSignal = mathSignalCount(cleanStem);
-                    const solutionSignal = mathSignalCount(cleanSolution);
+                    const stemSignal = window.Qisi.Utils.mathSignalCount(cleanStem);
+                    const solutionSignal = window.Qisi.Utils.mathSignalCount(cleanSolution);
 
                     // 题干数学信号明显，但解析完全没有数学信号，基本就是被普通文字化了。
                     if (stemSignal >= 2 && solutionSignal === 0) return true;
@@ -2304,8 +2304,8 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     if (!next) return old;
                     if (!old) return next;
 
-                    const nextSignal = mathSignalCount(next);
-                    const oldSignal = mathSignalCount(old);
+                    const nextSignal = window.Qisi.Utils.mathSignalCount(next);
+                    const oldSignal = window.Qisi.Utils.mathSignalCount(old);
 
                     if (nextSignal > oldSignal) return next;
 
@@ -2313,7 +2313,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     if (oldSignal > 0 && nextSignal === 0) return old;
 
                     // 如果题干数学信号很强，而新解析没有公式，不覆盖。
-                    if (mathSignalCount(stem) >= 2 && nextSignal === 0) return old;
+                    if (window.Qisi.Utils.mathSignalCount(stem) >= 2 && nextSignal === 0) return old;
 
                     // 同等公式密度时，才允许更长版本覆盖。
                     if (nextSignal === oldSignal && next.length > old.length * 1.15) return next;
@@ -2322,7 +2322,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 };
 
                 const hasChoiceLabelSignal = (text = '') => {
-                    const source = cleanRecognizedText(text)
+                    const source = window.Qisi.Utils.cleanRecognizedText(text)
                         .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248));
 
                     return /(?:^|[\n\r\s　])A\s*[\.\．、:：\)）]/.test(source) &&
@@ -2352,7 +2352,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     };
                 };
 
-                const stripQuestionSectionNoise = (text) => cleanRecognizedText(text)
+                const stripQuestionSectionNoise = (text) => window.Qisi.Utils.cleanRecognizedText(text)
                     .replace(/\[\[TYPE:[^\]]+\]\]/g, '\n')
                     .replace(/(?:^|\n|\s)(?:[一二三四五六七八九十]+[、.．]\s*)?(?:单项选择题|单选题|多项选择题|多选题|填空题|解答题|证明题)\s*[：:]?[^0-9\n]{0,90}(?=\n|$)/g, '\n')
                     .replace(/(?:本题|本大题|本小题)[^。\n]{0,120}(?:分|分。|。)?/g, '')
@@ -2363,12 +2363,12 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     .trim();
 
                 const normalizeQuestionType = (rawType, stem = '', options = [], answer = '', fallback = '') => {
-                    const raw = cleanRecognizedText(rawType);
-                    const sourceStem = cleanRecognizedText(stem);
+                    const raw = window.Qisi.Utils.cleanRecognizedText(rawType);
+                    const sourceStem = window.Qisi.Utils.cleanRecognizedText(stem);
                     const haystack = `${raw}\n${sourceStem}`;
 
-                    const optionCount = (options || []).filter(opt => cleanRecognizedText(opt)).length;
-                    const ans = cleanRecognizedText(answer)
+                    const optionCount = (options || []).filter(opt => window.Qisi.Utils.cleanRecognizedText(opt)).length;
+                    const ans = window.Qisi.Utils.cleanRecognizedText(answer)
                         .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
                         .replace(/[.\s、，。:：；;()（）]/g, '')
                         .toUpperCase();
@@ -2414,7 +2414,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         return '解答题';
                     }
 
-                    if (/_{2,}|（\s*）|\(\s*\)/.test(sourceStem) && cleanRecognizedText(answer) && cleanRecognizedText(answer).length <= 30) {
+                    if (/_{2,}|（\s*）|\(\s*\)/.test(sourceStem) && window.Qisi.Utils.cleanRecognizedText(answer) && window.Qisi.Utils.cleanRecognizedText(answer).length <= 30) {
                         return '填空题';
                     }
 
@@ -2458,7 +2458,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     const conflicts = new Map();
                     (items || []).forEach((item, idx) => {
                         const key = matchByOrder ? `#${idx + 1}` : (normalizeQuestionKey(item.question) || `#${idx + 1}`);
-                        const value = cleanRecognizedText(item[valueKey]);
+                        const value = window.Qisi.Utils.cleanRecognizedText(item[valueKey]);
                         if (!value) return;
                         const next = { ...item, matchKey: key, [valueKey]: value };
                         const existing = map.get(key);
@@ -2466,7 +2466,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             map.set(key, next);
                         } else if (!sameTextLoose(existing[valueKey], value)) {
                             conflicts.set(key, [existing, next]);
-                            if (value.length > cleanRecognizedText(existing[valueKey]).length) map.set(key, next);
+                            if (value.length > window.Qisi.Utils.cleanRecognizedText(existing[valueKey]).length) map.set(key, next);
                         }
                     });
                     return { map, conflicts };
@@ -2529,8 +2529,8 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     };
 
                     const betterText = (a, b) => {
-                        const aa = cleanRecognizedText(a || '');
-                        const bb = cleanRecognizedText(b || '');
+                        const aa = window.Qisi.Utils.cleanRecognizedText(a || '');
+                        const bb = window.Qisi.Utils.cleanRecognizedText(b || '');
                         return bb.length > aa.length ? b : a;
                     };
 
@@ -2558,12 +2558,12 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                         const itemSolution = cleanDisplayTextForBatchSave(item.solution || '');
                         const fallbackSolution = cleanDisplayTextForBatchSave(fallback.solution || '');
-                        const mergedSolution = cleanRecognizedText(fallbackSolution).length > cleanRecognizedText(itemSolution).length
+                        const mergedSolution = window.Qisi.Utils.cleanRecognizedText(fallbackSolution).length > window.Qisi.Utils.cleanRecognizedText(itemSolution).length
                             ? fallbackSolution
                             : itemSolution;
 
-                        const itemRawText = cleanRecognizedText(item.rawText || item.rawBlock || '');
-                        const fallbackRawText = cleanRecognizedText(fallback.rawText || fallback.rawBlock || '');
+                        const itemRawText = window.Qisi.Utils.cleanRecognizedText(item.rawText || item.rawBlock || '');
+                        const fallbackRawText = window.Qisi.Utils.cleanRecognizedText(fallback.rawText || fallback.rawBlock || '');
 
                         const mergedImages = [
                             ...(Array.isArray(item.images) ? item.images : []),
@@ -2573,7 +2573,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         const mergedType = mergedOptionCount >= 2
                             ? (
                                 /^[A-D]{2,4}$/.test(
-                                    cleanRecognizedText(mergedAnswer)
+                                    window.Qisi.Utils.cleanRecognizedText(mergedAnswer)
                                         .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
                                         .replace(/[.\s、，。:：；;()（）]/g, '')
                                         .toUpperCase()
@@ -2588,21 +2588,21 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             ...item,
 
                             type: mergedType || item.type || fallback.type,
-                            stem: cleanRecognizedText(item.stem) ? item.stem : fallback.stem,
+                            stem: window.Qisi.Utils.cleanRecognizedText(item.stem) ? item.stem : fallback.stem,
                             options: mergedOptions,
                             answer: mergedAnswer,
                             solution: mergedSolution,
 
                             images: mergedImages,
                             rawText: fallbackRawText.length > itemRawText.length ? fallbackRawText : (item.rawText || fallback.rawText || ''),
-                            rawBlock: cleanRecognizedText(item.rawBlock || item.rawText || fallback.rawBlock || fallback.rawText || ''),
-                            pageText: cleanRecognizedText(item.pageText || fallback.pageText || ''),
-                            sourceText: cleanRecognizedText(item.sourceText || fallback.sourceText || ''),
+                            rawBlock: window.Qisi.Utils.cleanRecognizedText(item.rawBlock || item.rawText || fallback.rawBlock || fallback.rawText || ''),
+                            pageText: window.Qisi.Utils.cleanRecognizedText(item.pageText || fallback.pageText || ''),
+                            sourceText: window.Qisi.Utils.cleanRecognizedText(item.sourceText || fallback.sourceText || ''),
 
                             sourceTrace: {
                                 ...(fallback.sourceTrace || {}),
                                 ...(item.sourceTrace || {}),
-                                rawBlock: cleanRecognizedText(
+                                rawBlock: window.Qisi.Utils.cleanRecognizedText(
                                     item.sourceTrace?.rawBlock ||
                                     item.rawBlock ||
                                     fallback.sourceTrace?.rawBlock ||
@@ -2610,7 +2610,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                                     fallback.rawText ||
                                     ''
                                 ),
-                                pageText: cleanRecognizedText(
+                                pageText: window.Qisi.Utils.cleanRecognizedText(
                                     item.sourceTrace?.pageText ||
                                     item.pageText ||
                                     fallback.sourceTrace?.pageText ||
@@ -2618,7 +2618,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                                     fallback.sourceText ||
                                     ''
                                 ),
-                                sourceText: cleanRecognizedText(
+                                sourceText: window.Qisi.Utils.cleanRecognizedText(
                                     item.sourceTrace?.sourceText ||
                                     item.sourceText ||
                                     fallback.sourceTrace?.sourceText ||
@@ -2655,14 +2655,14 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     const cleanOptions = sanitizeChoiceOptions(options);
                     const optionCount = cleanOptions.filter(Boolean).length;
                     if (optionCount < 4) return '选择题选项未识别完整，请补全 A/B/C/D。';
-                    const letters = [...new Set(cleanRecognizedText(answer).replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248)).toUpperCase().match(/[A-D]/g) || [])];
+                    const letters = [...new Set(window.Qisi.Utils.cleanRecognizedText(answer).replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248)).toUpperCase().match(/[A-D]/g) || [])];
                     const missingLetters = letters.filter(letter => !cleanOptions[letter.charCodeAt(0) - 65]);
                     if (missingLetters.length) return `答案包含 ${missingLetters.join('、')}，但对应选项未识别，请先补全选项。`;
                     return '';
                 };
 
                 const forceExtractOptionsFromText = (text) => {
-                    const source = cleanRecognizedText(text)
+                    const source = window.Qisi.Utils.cleanRecognizedText(text)
                         .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248));
                     if (!source) return null;
 
@@ -2738,7 +2738,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         .sort((a, b) => b.options.filter(Boolean).length - a.options.filter(Boolean).length)[0];
                     if (!extracted || extracted.options.filter(Boolean).length <= sanitizeChoiceOptions(q.options).filter(Boolean).length) return false;
 
-                    if (extracted.stem && (!cleanRecognizedText(q.stem) || extracted.stem.length >= cleanRecognizedText(q.stem).length * 0.45)) {
+                    if (extracted.stem && (!window.Qisi.Utils.cleanRecognizedText(q.stem) || extracted.stem.length >= window.Qisi.Utils.cleanRecognizedText(q.stem).length * 0.45)) {
                         q.stem = extracted.stem;
                     }
                     q.options = extracted.options;
@@ -2797,7 +2797,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 };
 
                 const splitPageMarkdownIntoQuestionBlocks = (markdown = '') => {
-                    const text = cleanRecognizedText(markdown)
+                    const text = window.Qisi.Utils.cleanRecognizedText(markdown)
                         .replace(/\r/g, '\n')
                         .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
                         .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248));
@@ -2860,7 +2860,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 };
 
                 const parseOptionsFromBlock = (block = '') => {
-                    const source = cleanRecognizedText(block)
+                    const source = window.Qisi.Utils.cleanRecognizedText(block)
                         .replace(/\r/g, '\n')
                         .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
                         .replace(/([A-D])\s*[．.、:：]\s*/g, '$1. ')
@@ -2961,7 +2961,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     });
 
                     const validCount = options.filter(opt => {
-                        const s = cleanRecognizedText(opt).replace(/[.\s、，。:：；;()（）]/g, '');
+                        const s = window.Qisi.Utils.cleanRecognizedText(opt).replace(/[.\s、，。:：；;()（）]/g, '');
                         return s && !/^[A-D]$/i.test(s);
                     }).length;
 
@@ -2979,7 +2979,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 };
 
                 const normalizeDocxOptionEvidenceText = (text = '') => {
-                    return cleanRecognizedText(text)
+                    return window.Qisi.Utils.cleanRecognizedText(text)
                         .replace(/\r/g, '\n')
                         .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
                         .replace(/[①②③④]/g, m => ({ '①': 'A.', '②': 'B.', '③': 'C.', '④': 'D.' }[m] || m))
@@ -3042,7 +3042,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                                 });
 
                                 const validCount = options.filter(opt => {
-                                    const s = cleanRecognizedText(opt).replace(/[.\s、，。:：；;()（）]/g, '');
+                                    const s = window.Qisi.Utils.cleanRecognizedText(opt).replace(/[.\s、，。:：；;()（）]/g, '');
                                     return s && !/^[A-D]$/i.test(s);
                                 }).length;
 
@@ -3069,7 +3069,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                                 cleanDisplayTextForBatchSave(match[4])
                             ];
 
-                            const validCount = options.filter(opt => cleanRecognizedText(opt)).length;
+                            const validCount = options.filter(opt => window.Qisi.Utils.cleanRecognizedText(opt)).length;
 
                             candidates.push({
                                 stem: cleanDisplayTextForBatchSave(source.slice(0, match.index).trim()),
@@ -3118,7 +3118,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                                 });
 
                                 const stemLines = lines.slice(0, ordered[0].lineIndex);
-                                const validCount = options.filter(opt => cleanRecognizedText(opt)).length;
+                                const validCount = options.filter(opt => window.Qisi.Utils.cleanRecognizedText(opt)).length;
 
                                 candidates.push({
                                     stem: cleanDisplayTextForBatchSave(stemLines.join('\n')),
@@ -3180,7 +3180,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                             if (isLabelRow && valueCells.length >= 4) {
                                 const options = valueCells.slice(0, 4).map(cleanDisplayTextForBatchSave);
-                                const validCount = options.filter(opt => cleanRecognizedText(opt)).length;
+                                const validCount = options.filter(opt => window.Qisi.Utils.cleanRecognizedText(opt)).length;
 
                                 if (validCount >= 2) {
                                     candidates.push({
@@ -3204,7 +3204,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                             const values = lines.slice(i + 4, i + 8);
                             const options = values.map(cleanDisplayTextForBatchSave);
-                            const validCount = options.filter(opt => cleanRecognizedText(opt)).length;
+                            const validCount = options.filter(opt => window.Qisi.Utils.cleanRecognizedText(opt)).length;
 
                             if (validCount >= 2) {
                                 candidates.push({
@@ -3236,7 +3236,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         const raw = String(opt || '').trim();
                         if (!raw) return false;
                         if (/^\[\[IMAGE:[^\]]+\]\]$/.test(raw)) return true;
-                        return Boolean(cleanRecognizedText(raw));
+                        return Boolean(window.Qisi.Utils.cleanRecognizedText(raw));
                     }).length
                     : 0;
 
@@ -3303,7 +3303,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                                 index,
                                 visualQ: visual?.question || visual?.questionNumber || visual?.order,
                                 visualOptionCount: visualCount,
-                                visualStemHead: cleanRecognizedText(visual?.stem || '').slice(0, 120)
+                                visualStemHead: window.Qisi.Utils.cleanRecognizedText(visual?.stem || '').slice(0, 120)
                             });
                         }
 
@@ -3336,7 +3336,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         console.log('existingOptions =', item.options);
 
                         console.table(fields.map(([name, value]) => {
-                            const text = cleanRecognizedText(value || '');
+                            const text = window.Qisi.Utils.cleanRecognizedText(value || '');
                             return {
                                 field: name,
                                 length: text.length,
@@ -3352,7 +3352,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     }
 
                     const existingOptions = Array.isArray(item.options)
-                        ? item.options.filter(opt => cleanRecognizedText(opt)).length
+                        ? item.options.filter(opt => window.Qisi.Utils.cleanRecognizedText(opt)).length
                         : 0;
 
                     if (existingOptions >= 2) return false;
@@ -3368,7 +3368,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         item.sourceTrace?.sourceText,
                         item.sourceTrace?.docxFullText,
                         item.stem
-                    ].map(x => cleanRecognizedText(x || '')).filter(Boolean);
+                    ].map(x => window.Qisi.Utils.cleanRecognizedText(x || '')).filter(Boolean);
 
                     for (const evidence of evidenceList) {
                         const parsed = parseDocxOptionsFromText(evidence);
@@ -3378,11 +3378,11 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         console.log('evidenceHead =', evidence.slice(0, 800));
                         console.log('parsed =', parsed);
                         console.log('parsedOptions =', parsed?.options);
-                        console.log('parsedCount =', Array.isArray(parsed?.options) ? parsed.options.filter(opt => cleanRecognizedText(opt)).length : 0);
+                        console.log('parsedCount =', Array.isArray(parsed?.options) ? parsed.options.filter(opt => window.Qisi.Utils.cleanRecognizedText(opt)).length : 0);
                         console.groupEnd();
 
                         const options = cleanDisplayOptionsForBatchSave(parsed?.options || []);
-                        const count = options.filter(opt => cleanRecognizedText(opt)).length;
+                        const count = options.filter(opt => window.Qisi.Utils.cleanRecognizedText(opt)).length;
 
                         if (count >= 2) {
                             item.options = options;
@@ -3463,7 +3463,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     if (!item) return item;
 
                     const next = { ...item };
-                    const text = cleanRecognizedText(fullText || sourceFile?.docxFullText || sourceFile?.pageText || sourceFile?.sourceText || '');
+                    const text = window.Qisi.Utils.cleanRecognizedText(fullText || sourceFile?.docxFullText || sourceFile?.pageText || sourceFile?.sourceText || '');
 
                     next.sourceFileId = next.sourceFileId || sourceFile.id;
                     next.sourceFileName = next.sourceFileName || sourceFile.filename || '';
@@ -3577,11 +3577,11 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         draft.type = '单选题';
                     }
 
-                    if (best.stem && best.stem.length >= 8 && best.stem.length < cleanRecognizedText(draft.stem).length * 1.5) {
+                    if (best.stem && best.stem.length >= 8 && best.stem.length < window.Qisi.Utils.cleanRecognizedText(draft.stem).length * 1.5) {
                         draft.stem = best.stem;
                     }
 
-                    const normalizedAnswer = cleanRecognizedText(draft.answer)
+                    const normalizedAnswer = window.Qisi.Utils.cleanRecognizedText(draft.answer)
                         .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
                         .replace(/[.\s、，。:：；;()（）]/g, '')
                         .toUpperCase();
@@ -3817,9 +3817,9 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         let score = optionCount * 100;
 
                         if (hasChoiceLabelSignal(block)) score += 30;
-                        score += Math.min(20, mathSignalCount(block) * 2);
+                        score += Math.min(20, window.Qisi.Utils.mathSignalCount(block) * 2);
 
-                        const stemHead = cleanRecognizedText(q.stem || '').slice(0, 20);
+                        const stemHead = window.Qisi.Utils.cleanRecognizedText(q.stem || '').slice(0, 20);
                         if (stemHead && block.includes(stemHead)) score += 10;
 
                         return score;
@@ -3858,7 +3858,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     ].map(cleanRecognizedText).filter(Boolean);
 
                     const answerLooksChoice = /^[A-D]{1,4}$/.test(
-                        cleanRecognizedText(q.answer)
+                        window.Qisi.Utils.cleanRecognizedText(q.answer)
                             .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
                             .replace(/[.\s、，。:：；;()（）]/g, '')
                             .toUpperCase()
@@ -3885,12 +3885,12 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     if (extractedCount > existingCount && extractedCount >= 2) {
                         q.options = extracted;
 
-                        if (best.stem && best.stem.length >= 8 && best.stem.length >= cleanRecognizedText(q.stem).length * 0.35) {
+                        if (best.stem && best.stem.length >= 8 && best.stem.length >= window.Qisi.Utils.cleanRecognizedText(q.stem).length * 0.35) {
                             q.stem = cleanDisplayTextForBatchSave(best.stem);
                         }
 
                         if (!['单选题', '多选题'].includes(q.type)) {
-                            q.type = cleanRecognizedText(q.answer).replace(/\s/g, '').length >= 2 ? '多选题' : '单选题';
+                            q.type = window.Qisi.Utils.cleanRecognizedText(q.answer).replace(/\s/g, '').length >= 2 ? '多选题' : '单选题';
                         }
 
                         addWarningOnce(q, `已从当前题原始证据中提取 ${extractedCount}/4 个选项，请核对。`);
@@ -3928,10 +3928,10 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     return q;
                 };
 
-                const extractNumberTokens = (text) => [...new Set((cleanRecognizedText(text).match(/(?<![A-Za-z])\d+(?:\.\d+)?(?![A-Za-z])/g) || []).slice(0, 12))];
+                const extractNumberTokens = (text) => [...new Set((window.Qisi.Utils.cleanRecognizedText(text).match(/(?<![A-Za-z])\d+(?:\.\d+)?(?![A-Za-z])/g) || []).slice(0, 12))];
 
                 const extractAnchorTokens = (text) => {
-                    const source = cleanRecognizedText(text)
+                    const source = window.Qisi.Utils.cleanRecognizedText(text)
                         .replace(/[Ａ-Ｚ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248));
                     const anchors = [];
                     (source.match(/\b[A-Z]{2,5}\b/g) || []).forEach(token => {
@@ -3945,7 +3945,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 };
 
                 const mathDomainTags = (text) => {
-                    const source = cleanRecognizedText(text);
+                    const source = window.Qisi.Utils.cleanRecognizedText(text);
                     const tags = new Set();
                     if (/复数|虚部|实部|共轭|(?:^|[^a-zA-Z])i(?:$|[^a-zA-Z])/.test(source)) tags.add('complex');
                     if (/向量|\\vec|\\overrightarrow|\\cdot|·|点积|数量积|共线|线性表示/.test(source)) tags.add('vector');
@@ -3959,7 +3959,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 };
 
                 const solutionLooksBroken = (solution) => {
-                    const source = cleanRecognizedText(solution);
+                    const source = window.Qisi.Utils.cleanRecognizedText(solution);
                     if (!source) return false;
                     if (/[，,、；;]\s*[，,、；;]/.test(source)) return true;
                     if (/(因为|由于|即|则|所以|解得|可得)\s*[，,、；;]\s*(?=(且|则|所以|解得|故|$))/.test(source)) return true;
@@ -3969,14 +3969,14 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 };
 
                 const solutionQualityIssue = (stem, options, solution) => {
-                    const cleanSolution = cleanRecognizedText(solution);
+                    const cleanSolution = window.Qisi.Utils.cleanRecognizedText(solution);
                     if (!cleanSolution) return '';
                     if (solutionLooksBroken(cleanSolution)) return '解析内容缺少关键公式或结论，疑似 OCR 残缺。';
                     return solutionMatchesQuestionContext(stem, options, cleanSolution) ? '' : '解析与题干关键词差异较大，请核对是否串题。';
                 };
 
                 const solutionMatchesQuestionContext = (stem, options, solution) => {
-                    const cleanSolution = cleanRecognizedText(solution);
+                    const cleanSolution = window.Qisi.Utils.cleanRecognizedText(solution);
                     if (!cleanSolution || cleanSolution.length < 18) return true;
                     const context = [stem, ...(Array.isArray(options) ? options : [])].map(cleanRecognizedText).join('\n');
                     if (!context.trim()) return true;
@@ -3989,8 +3989,8 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     const contextAnchors = extractAnchorTokens(context);
                     const solutionAnchors = new Set(extractAnchorTokens(cleanSolution));
                     const sharedAnchors = contextAnchors.filter(token => solutionAnchors.has(token));
-                    const contextTokens = extractRelevanceTokens(context);
-                    const solutionTokens = new Set(extractRelevanceTokens(cleanSolution));
+                    const contextTokens = window.Qisi.Utils.extractRelevanceTokens(context);
+                    const solutionTokens = new Set(window.Qisi.Utils.extractRelevanceTokens(cleanSolution));
                     const sharedTokens = contextTokens.filter(token => solutionTokens.has(token));
                     const contextNumbers = extractNumberTokens(context);
                     const solutionNumbers = new Set(extractNumberTokens(cleanSolution));
@@ -4066,11 +4066,11 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         if (fallback) parts.push(fallback);
                     }
 
-                    return cleanRecognizedText(parts.join(' '));
+                    return window.Qisi.Utils.cleanRecognizedText(parts.join(' '));
                 };
 
                 const normalizeDocxOptionCellText = (text = '') => {
-                    return cleanRecognizedText(String(text || '')
+                    return window.Qisi.Utils.cleanRecognizedText(String(text || '')
                         .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
                         .replace(/^[A-D]\s*[.．、:：)）]\s*/i, '')
                         .replace(/\s+/g, ' ')
@@ -4669,7 +4669,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                             const docxTableText = extractDocxTableTextFallback(doc || '');
 
-                            if (cleanRecognizedText(docxTableText)) {
+                            if (window.Qisi.Utils.cleanRecognizedText(docxTableText)) {
                                 text = [
                                     text,
                                     '\n\n【DOCX表格文本兜底】\n',
@@ -4687,8 +4687,8 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                             if (hasDocxXmlLeak) {
                                 const stripped = xmlText(text || '');
-                                const strippedCleanLen = cleanRecognizedText(stripped).length;
-                                const currentCleanLen = cleanRecognizedText(text).length;
+                                const strippedCleanLen = window.Qisi.Utils.cleanRecognizedText(stripped).length;
+                                const currentCleanLen = window.Qisi.Utils.cleanRecognizedText(text).length;
 
                                 if (strippedCleanLen >= Math.max(20, currentCleanLen * 0.25)) {
                                     console.warn('[BATCH_DEBUG][docx-xml-leak-cleaned]', {
@@ -4748,7 +4748,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     if (file.fileType === 'pdf') {
                         try {
                             const pdfText = await extractPdfTextWithPdfJs(file);
-                            if (cleanRecognizedText(pdfText).length > 20) return pdfText;
+                            if (window.Qisi.Utils.cleanRecognizedText(pdfText).length > 20) return pdfText;
                         } catch (error) {
                             console.warn('PDF.js 文本提取失败，回退原始 Tj 解析', error);
                         }
@@ -4798,7 +4798,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 };
 
                 const prepareQuestionRecognitionText = (text) => {
-                    let source = cleanRecognizedText(text)
+                    let source = window.Qisi.Utils.cleanRecognizedText(text)
                         .replace(/\r/g, '\n')
                         .replace(/\u3000/g, ' ')
                         .replace(/[ \t]+/g, ' ')
@@ -4821,7 +4821,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 };
 
                 const splitQuestionBlocksByNumber = (text) => {
-                    const source = cleanRecognizedText(text)
+                    const source = window.Qisi.Utils.cleanRecognizedText(text)
                         .replace(/\r/g, '\n')
                         .replace(/\u3000/g, ' ')
                         .replace(/\n{3,}/g, '\n\n');
@@ -4891,7 +4891,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                     const result = segments.filter(seg => seg.text && !/^(一|二|三|四)[、.．]/.test(seg.text)).map((seg, idx) => {
                         const split = stripAnswerSolution(stripQuestionSectionNoise(seg.text));
-                        const answer = includeInlineAnswer ? cleanRecognizedText(split.answer) : '';
+                        const answer = includeInlineAnswer ? window.Qisi.Utils.cleanRecognizedText(split.answer) : '';
                         const prepared = splitQuestionForStorage(split.stem, batchDefaultMeta.defaultType, ['', '', '', '']);
                         const repaired = repairChoiceOptions(prepared.stem || split.stem, prepared.options, prepared.type);
                         const options = repaired.options;
@@ -4901,7 +4901,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             stem,
                             options,
                             answer,
-                            solution: includeInlineAnswer ? cleanRecognizedText(split.solution) : '',
+                            solution: includeInlineAnswer ? window.Qisi.Utils.cleanRecognizedText(split.solution) : '',
                             type: normalizeQuestionType(seg.type || prepared.type, stem, options, answer, batchDefaultMeta.defaultType),
                             images: Array.isArray(sourceFile.images) ? sourceFile.images : [],
                             question_bbox: [],
@@ -4978,7 +4978,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 };
 
                 const normalizeDocxTextSpace = (value = '') => {
-                    return cleanRecognizedText(String(value || '')
+                    return window.Qisi.Utils.cleanRecognizedText(String(value || '')
                         .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
                         .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
                         .replace(/\u00A0/g, ' ')
@@ -5151,7 +5151,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                                 .trim()
                         );
 
-                        if (cleanRecognizedText(textOption)) {
+                        if (window.Qisi.Utils.cleanRecognizedText(textOption)) {
                             options[optionIndex] = textOption;
                             continue;
                         }
@@ -5309,7 +5309,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 const solutionLabelPattern = '(?:【(?:解析|详解|解答|分析)】|(?:解析|详解|解答过程|解答|分析|解)\\s*[:：])';
 
                 const normalizeAnswerValue = (answer) => {
-                    const raw = cleanRecognizedText(answer)
+                    const raw = window.Qisi.Utils.cleanRecognizedText(answer)
                         .replace(new RegExp(`${solutionLabelPattern}[\\s\\S]*$`), '')
                         .split(/\n/)[0]
                         .replace(/[。；;，,、]+$/g, '')
@@ -5327,7 +5327,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     return normalizeMathTextForLatexSafe(raw);
                 };
 
-                const normalizeAnswerSolutionSource = (text) => cleanRecognizedText(text)
+                const normalizeAnswerSolutionSource = (text) => window.Qisi.Utils.cleanRecognizedText(text)
                     .replace(/\r/g, '\n')
                     .replace(/\u3000/g, ' ')
                     .replace(/[ \t]+/g, ' ')
@@ -5354,7 +5354,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                 const pushUniqueQuestionItem = (list, item, valueKey) => {
                     const question = normalizeQuestionKey(item.question);
-                    const value = cleanRecognizedText(item[valueKey]);
+                    const value = window.Qisi.Utils.cleanRecognizedText(item[valueKey]);
 
                     if (!question || !value) return;
 
@@ -5369,7 +5369,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         return;
                     }
 
-                    if (value.length > cleanRecognizedText(list[existingIndex][valueKey]).length) {
+                    if (value.length > window.Qisi.Utils.cleanRecognizedText(list[existingIndex][valueKey]).length) {
                         list[existingIndex] = {
                             ...item,
                             question,
@@ -5514,7 +5514,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         let answerBlock = block;
 
                         if (solutionMatch) {
-                            solution = cleanRecognizedText(solutionMatch[1]);
+                            solution = window.Qisi.Utils.cleanRecognizedText(solutionMatch[1]);
                             answerBlock = block.slice(0, solutionMatch.index).trim();
                         }
 
@@ -5757,7 +5757,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     const mergeByQuestion = (localItems = [], aiItems = [], valueKey) => {
                         const map = new Map();
                         [...localItems, ...aiItems].forEach(item => {
-                            const question = cleanRecognizedText(item.question);
+                            const question = window.Qisi.Utils.cleanRecognizedText(item.question);
                             const value =
                                 normalizeRecognizedSupportLatex(
                                     item[valueKey],
@@ -5767,7 +5767,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                                 );
                             if (!question || !value) return;
                             const existing = map.get(question);
-                            if (!existing || value.length > cleanRecognizedText(existing[valueKey]).length) {
+                            if (!existing || value.length > window.Qisi.Utils.cleanRecognizedText(existing[valueKey]).length) {
                                 map.set(question, { ...item, question, [valueKey]: value });
                             }
                         });
@@ -5847,7 +5847,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     );
 
                 const extractChoiceAnswerFromSolution = (solution) => {
-                    const source = cleanRecognizedText(solution)
+                    const source = window.Qisi.Utils.cleanRecognizedText(solution)
                         .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248));
                     const match = source.match(/(?:故选|答案为|选)\s*[:：]?\s*([A-D]{1,4})(?=$|[。．\s])/i);
                     return match ? match[1].toUpperCase() : '';
@@ -5891,7 +5891,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             }
 
                             if (entry && typeof entry === 'object') {
-                                const label = cleanRecognizedText(entry.label || entry.key || entry.name || entry.option || '');
+                                const label = window.Qisi.Utils.cleanRecognizedText(entry.label || entry.key || entry.name || entry.option || '');
                                 const text = entry.text ?? entry.content ?? entry.value ?? entry.内容 ?? '';
                                 const normalizedLabel = label
                                     .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
@@ -6660,10 +6660,10 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                         const rawOptions = extractItemOptions(item);
                         const rawOptionText = rawOptions
-                            .map((opt, optIdx) => cleanRecognizedText(opt) ? `${String.fromCharCode(65 + optIdx)}. ${cleanRecognizedText(opt)}` : '')
+                            .map((opt, optIdx) => window.Qisi.Utils.cleanRecognizedText(opt) ? `${String.fromCharCode(65 + optIdx)}. ${window.Qisi.Utils.cleanRecognizedText(opt)}` : '')
                             .filter(Boolean)
                             .join('\n');
-                        const rawBlock = cleanRecognizedText(
+                        const rawBlock = window.Qisi.Utils.cleanRecognizedText(
                             item.rawText ||
                             item.raw_text ||
                             item.rawBlock ||
@@ -6697,7 +6697,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             fallbackType || batchDefaultMeta.defaultType
                         );
 
-                        const questionNumber = cleanRecognizedText(
+                        const questionNumber = window.Qisi.Utils.cleanRecognizedText(
                             item.questionNumber ??
                             item.question ??
                             item.no ??
@@ -6731,10 +6731,10 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             sourceFileId: sourceFile.id,
                             sourceFileName: sourceFile.filename || '',
                             pageIndex: item.pageIndex || item.sourcePage || sourceFile.pageIndex || sourceFile.sourcePage || 0,
-                            rawText: rawBlock || cleanRecognizedText(sourceFile.pageText || sourceFile.sourceText || rawStem || ''),
+                            rawText: rawBlock || window.Qisi.Utils.cleanRecognizedText(sourceFile.pageText || sourceFile.sourceText || rawStem || ''),
                             rawBlock: rawBlock || '',
-                            pageText: cleanRecognizedText(sourceFile.pageText || sourceFile.sourceText || ''),
-                            sourceText: cleanRecognizedText(sourceFile.sourceText || sourceFile.pageText || ''),
+                            pageText: window.Qisi.Utils.cleanRecognizedText(sourceFile.pageText || sourceFile.sourceText || ''),
+                            sourceText: window.Qisi.Utils.cleanRecognizedText(sourceFile.sourceText || sourceFile.pageText || ''),
                             recognitionRaw: item,
                             sourceTrace: {
                                 sourceFileId: sourceFile.id || '',
@@ -6743,7 +6743,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                                 sourcePage: item.sourcePage || sourceFile.sourcePage || 0,
                                 sourcePageImage: sourceFile.sourcePageImage || '',
                                 rawBlock: rawBlock || '',
-                                pageText: cleanRecognizedText(sourceFile.pageText || sourceFile.sourceText || ''),
+                                pageText: window.Qisi.Utils.cleanRecognizedText(sourceFile.pageText || sourceFile.sourceText || ''),
                                 imageIds: []
                             }
                         };
@@ -6823,7 +6823,7 @@ ${source}`;
                                 .filter(Boolean)
                         );
 
-                    const source = cleanRecognizedText(text).slice(0, 24000);
+                    const source = window.Qisi.Utils.cleanRecognizedText(text).slice(0, 24000);
                     if (!source || source.length < 8) return { answers: [], solutions: [] };
                     const prompt = `你是高中数学答案解析提取助手。请从材料中提取每道题的答案和解析，并输出严格 JSON。
 
@@ -6896,7 +6896,7 @@ ${source}`;
                     const rawAnswers = extractAnswerArray(parsed);
                     const rawSolutions = extractSolutionArray(parsed);
                     const answers = Array.isArray(rawAnswers) ? rawAnswers.map(item => ({
-                        question: cleanRecognizedText(item.question),
+                        question: window.Qisi.Utils.cleanRecognizedText(item.question),
                         answer: normalizeAnswerForLatex(item.answer),
                         confidence: Number(item.confidence || 0.82),
                         warnings: [],
@@ -6904,7 +6904,7 @@ ${source}`;
                         sourceFileName: sourceFile.filename
                     })).filter(item => item.question && item.answer) : [];
                     const solutions = Array.isArray(rawSolutions) ? rawSolutions.map(item => ({
-                        question: cleanRecognizedText(item.question),
+                        question: window.Qisi.Utils.cleanRecognizedText(item.question),
                         solution:
                             normalizeRecognizedSupportLatex(
                                 item.solution,
@@ -7067,18 +7067,18 @@ ${source}`;
                         const optionCount = cleanDisplayOptionsForBatchSave(q.options).filter(Boolean).length;
                         const needOptions =
                             ['单选题', '多选题'].includes(q.type) && optionCount < 4 ||
-                            /^[A-D]{1,4}$/.test(cleanRecognizedText(q.answer).replace(/[.\s、，。:：；;()（）]/g, '').toUpperCase()) && optionCount < 4;
+                            /^[A-D]{1,4}$/.test(window.Qisi.Utils.cleanRecognizedText(q.answer).replace(/[.\s、，。:：；;()（）]/g, '').toUpperCase()) && optionCount < 4;
 
                         const needSolution =
-                            cleanRecognizedText(q.solution) &&
+                            window.Qisi.Utils.cleanRecognizedText(q.solution) &&
                             solutionLooksFormulaPoor(q.stem, q.solution);
 
                         return {
                             index: idx,
                             question: q.question || q.questionNumber || String(idx + 1),
                             type: q.type,
-                            stem: cleanRecognizedText(q.stem).slice(0, 500),
-                            answer: cleanRecognizedText(q.answer),
+                            stem: window.Qisi.Utils.cleanRecognizedText(q.stem).slice(0, 500),
+                            answer: window.Qisi.Utils.cleanRecognizedText(q.answer),
                             optionCount,
                             needOptions,
                             needSolution
@@ -7199,7 +7199,7 @@ ${pageMarkdown || '空'}
                                     }
                                 }
 
-                                const rawBlock = cleanRecognizedText(patch.rawBlock || patch.rawText || patch.原文 || '');
+                                const rawBlock = window.Qisi.Utils.cleanRecognizedText(patch.rawBlock || patch.rawText || patch.原文 || '');
                                 if (rawBlock) {
                                     next.rawBlock = rawBlock;
                                     next.rawText = next.rawText || rawBlock;
@@ -7218,8 +7218,8 @@ ${pageMarkdown || '空'}
                                 question: q.question,
                                 type: q.type,
                                 optionCount: (q.options || []).filter(Boolean).length,
-                                solutionMathSignal: mathSignalCount(q.solution),
-                                solutionHead: cleanRecognizedText(q.solution).slice(0, 120)
+                                solutionMathSignal: window.Qisi.Utils.mathSignalCount(q.solution),
+                                solutionHead: window.Qisi.Utils.cleanRecognizedText(q.solution).slice(0, 120)
                             })));
                             console.groupEnd();
 
@@ -7396,7 +7396,7 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                             }));
 
                             const answers = Array.isArray(rawAnswers) ? rawAnswers.map(item => ({
-                                question: cleanRecognizedText(item.question ?? item.题号 ?? item.no ?? item.index),
+                                question: window.Qisi.Utils.cleanRecognizedText(item.question ?? item.题号 ?? item.no ?? item.index),
                                 answer: normalizeAnswerForLatex(item.answer ?? item.答案 ?? item.correctAnswer ?? item.correct_answer),
                                 confidence: Number(item.confidence || item.score || 0.82),
                                 sourceFileId: file.id,
@@ -7409,7 +7409,7 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                             })).filter(item => item.question && item.answer) : [];
 
                             const solutions = Array.isArray(rawSolutions) ? rawSolutions.map(item => ({
-                                question: cleanRecognizedText(item.question ?? item.题号 ?? item.no ?? item.index),
+                                question: window.Qisi.Utils.cleanRecognizedText(item.question ?? item.题号 ?? item.no ?? item.index),
                                 solution: cleanDisplayTextForBatchSave(item.solution ?? item.analysis ?? item.解析 ?? item.详解 ?? item.explanation ?? ''),
                                 confidence: Number(item.confidence || item.score || 0.82),
                                 sourceFileId: file.id,
@@ -7587,7 +7587,7 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                             imageConfidence >= 0.9
                                 ? 'bound'
                                 : (imageConfidence >= 0.75 ? 'need_confirm' : 'low_confidence');
-                        const description = cleanRecognizedText(figure.image_description || '题中图形');
+                        const description = window.Qisi.Utils.cleanRecognizedText(figure.image_description || '题中图形');
                         const filename = `page_${sourcePage}_q${draft.questionNumber || draft.order}_figure_${index + 1}.jpg`;
 
                         const imageRow = {
@@ -8304,7 +8304,7 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                             });
 
                             const rawText =
-                                cleanRecognizedText(
+                                window.Qisi.Utils.cleanRecognizedText(
                                     await recognizePageAsDocumentText(
                                         page.imageUrl
                                     )
@@ -8502,7 +8502,7 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                         }
 
                         const rawBlock =
-                            cleanRecognizedText(
+                            window.Qisi.Utils.cleanRecognizedText(
                                 request.rawBlock ||
                                 ''
                             ).slice(
@@ -8698,7 +8698,7 @@ ${rawBlock}
                                 : '';
 
                         const repairEvidence =
-                            cleanRecognizedText(
+                            window.Qisi.Utils.cleanRecognizedText(
                                 parsed.evidence ||
                                 ''
                             ).slice(
@@ -10172,7 +10172,7 @@ ${rawBlock}
 
                 const optionCountForGolden = (options = []) =>
                     (Array.isArray(options) ? options : [])
-                        .filter(opt => cleanRecognizedText(opt || '') && !hasUnconvertedImagePlaceholder(opt))
+                        .filter(opt => window.Qisi.Utils.cleanRecognizedText(opt || '') && !hasUnconvertedImagePlaceholder(opt))
                         .length;
 
                 const validateDocxVisualItems = (items = [], expectedQuestionCount = 0) => {
@@ -10182,14 +10182,14 @@ ${rawBlock}
                         const options = cleanDisplayOptionsForBatchSave(item.options || []);
                         const optionCount = optionCountForGolden(options);
                         const hasPlaceholder = itemHasUnconvertedImagePlaceholder({ ...item, options });
-                        const stemLength = cleanRecognizedText(item.stem || '').length;
+                        const stemLength = window.Qisi.Utils.cleanRecognizedText(item.stem || '').length;
                         const latexErrorCount = [item.stem, ...options, item.answer, item.solution]
                             .reduce((sum, text) => sum + (typeof latexErrorCountForText === 'function' ? latexErrorCountForText(text) : 0), 0);
                         const failures = [];
 
                         if (!stemLength) failures.push('题干为空');
                         options.forEach((opt, optIdx) => {
-                            if (!cleanRecognizedText(opt || '') || hasUnconvertedImagePlaceholder(opt)) {
+                            if (!window.Qisi.Utils.cleanRecognizedText(opt || '') || hasUnconvertedImagePlaceholder(opt)) {
                                 failures.push(`${String.fromCharCode(65 + optIdx)} 选项为空或无效`);
                             }
                         });
@@ -10242,7 +10242,7 @@ ${rawBlock}
                 const UNCONVERTED_OPTION_PLACEHOLDER_RE =
                     /\[(?:公式图片|图片)选项待转换[:：]?\s*(?:wmf|emf|ole|bin|unknown)?\]/i;
 
-                const cleanOptionTextForCheck = (value) => cleanRecognizedText(String(value || ''))
+                const cleanOptionTextForCheck = (value) => window.Qisi.Utils.cleanRecognizedText(String(value || ''))
                     .replace(/^选项\s*[A-D]\s*[:：.．、)]?\s*/i, '')
                     .trim();
 
@@ -10276,7 +10276,7 @@ ${rawBlock}
                     type === '单选题' || type === '多选题';
 
                 const normalizeStrictQuestionType = (item = {}) => {
-                    const rawType = cleanRecognizedText(
+                    const rawType = window.Qisi.Utils.cleanRecognizedText(
                         item.type ||
                         item.questionType ||
                         item.题型 ||
@@ -10290,7 +10290,7 @@ ${rawBlock}
                     if (/解答|计算|应用/.test(rawType)) return '解答题';
                     if (STRICT_QUESTION_TYPES.has(rawType)) return rawType;
 
-                    const stem = cleanRecognizedText(item.stem || '');
+                    const stem = window.Qisi.Utils.cleanRecognizedText(item.stem || '');
                     const options = normalizeFourOptionsForCheck(item.options || []);
                     const validOptionCount = options.filter(option => !isBadChoiceOption(option)).length;
 
@@ -10321,13 +10321,13 @@ ${rawBlock}
                     }
 
                     list.forEach((item, index) => {
-                        const questionNumber = cleanRecognizedText(
+                        const questionNumber = window.Qisi.Utils.cleanRecognizedText(
                             item.questionNumber ||
                             item.question ||
                             item.no ||
                             String(index + 1)
                         );
-                        const stem = cleanRecognizedText(item.stem || '');
+                        const stem = window.Qisi.Utils.cleanRecognizedText(item.stem || '');
                         const type = normalizeStrictQuestionType(item);
                         const options = normalizeFourOptionsForCheck(item.options || []);
                         const failures = [];
@@ -10416,8 +10416,8 @@ ${rawBlock}
                 };
 
                 const chooseBetterStrictText = (a = '', b = '') => {
-                    const left = cleanRecognizedText(a);
-                    const right = cleanRecognizedText(b);
+                    const left = window.Qisi.Utils.cleanRecognizedText(a);
+                    const right = window.Qisi.Utils.cleanRecognizedText(b);
 
                     if (!left) return right;
                     if (!right) return left;
@@ -10434,7 +10434,7 @@ ${rawBlock}
 
                         const item = {
                             ...rawItem,
-                            questionNumber: cleanRecognizedText(
+                            questionNumber: window.Qisi.Utils.cleanRecognizedText(
                                 rawItem.questionNumber ||
                                 rawItem.question ||
                                 rawItem.no ||
@@ -10574,7 +10574,7 @@ ${rawBlock}
                                     'missing-explicit-question-number',
                                 questionNumber: '',
                                 stemHead:
-                                    cleanRecognizedText(
+                                    window.Qisi.Utils.cleanRecognizedText(
                                         rawItem.stem || ''
                                     ).slice(0, 160),
                                 sourcePage:
@@ -10591,7 +10591,7 @@ ${rawBlock}
                                     'question-number-not-in-docx-skeleton',
                                 questionNumber,
                                 stemHead:
-                                    cleanRecognizedText(
+                                    window.Qisi.Utils.cleanRecognizedText(
                                         rawItem.stem || ''
                                     ).slice(0, 160),
                                 sourcePage:
@@ -10720,7 +10720,7 @@ ${rawBlock}
                         ...(Array.isArray(item.options) ? item.options : [])
                     ].join('\n');
 
-                    return QUESTION_FIGURE_CUE_RE.test(cleanRecognizedText(text));
+                    return QUESTION_FIGURE_CUE_RE.test(window.Qisi.Utils.cleanRecognizedText(text));
                 };
 
                 const normalizeFigureBbox = (bbox) => {
@@ -10775,7 +10775,7 @@ ${rawBlock}
 
                     return {
                         image_bbox: bbox,
-                        image_description: cleanRecognizedText(
+                        image_description: window.Qisi.Utils.cleanRecognizedText(
                             raw.image_description ||
                             raw.description ||
                             raw.图像说明 ||
@@ -11802,7 +11802,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                                 const figuresByQuestion = new Map();
 
                                 for (const rawFigure of locatedFigures || []) {
-                                    const questionNumber = cleanRecognizedText(
+                                    const questionNumber = window.Qisi.Utils.cleanRecognizedText(
                                         rawFigure.question ||
                                         rawFigure.questionNumber ||
                                         rawFigure.no ||
@@ -11822,7 +11822,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                                 }
 
                                 for (const item of pageItems) {
-                                    const questionNumber = cleanRecognizedText(
+                                    const questionNumber = window.Qisi.Utils.cleanRecognizedText(
                                         item.questionNumber ||
                                         item.question ||
                                         item.no ||
@@ -12985,7 +12985,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                                 answer:
                                     item.answer,
                                 mathSignal:
-                                    mathSignalCount(
+                                    window.Qisi.Utils.mathSignalCount(
                                         item.answer || ''
                                     ),
                                 sourcePage:
@@ -13004,7 +13004,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                                         item.solution || ''
                                     ).length,
                                 mathSignal:
-                                    mathSignalCount(
+                                    window.Qisi.Utils.mathSignalCount(
                                         item.solution || ''
                                     ),
                                 sourcePage:
@@ -13101,7 +13101,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                             const rawAnswers = extractAnswerArray(parsed);
                             const rawSolutions = extractSolutionArray(parsed);
                             const answers = Array.isArray(rawAnswers) ? rawAnswers.map(item => ({
-                                question: cleanRecognizedText(item.question ?? item.题号 ?? item.no ?? item.index),
+                                question: window.Qisi.Utils.cleanRecognizedText(item.question ?? item.题号 ?? item.no ?? item.index),
                                 answer: normalizeAnswerForLatex(item.answer ?? item.答案 ?? item.correctAnswer ?? item.correct_answer),
                                 confidence: Number(item.confidence || 0.82),
                                 warnings: [],
@@ -13109,7 +13109,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                                 sourceFileName: file.filename
                             })).filter(item => item.question && item.answer) : [];
                             const solutions = Array.isArray(rawSolutions) ? rawSolutions.map(item => ({
-                                question: cleanRecognizedText(item.question ?? item.题号 ?? item.no ?? item.index),
+                                question: window.Qisi.Utils.cleanRecognizedText(item.question ?? item.题号 ?? item.no ?? item.index),
                                 solution:
                                     normalizeRecognizedSupportLatex(
                                         item.solution ??
@@ -13166,7 +13166,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                 };
 
                 const recognizedItemsScore = (items) => (items || []).reduce((score, item) => {
-                    const optionScore = (item.options || []).filter(opt => cleanRecognizedText(opt)).length * 2;
+                    const optionScore = (item.options || []).filter(opt => window.Qisi.Utils.cleanRecognizedText(opt)).length * 2;
                     const formulaScore = /\\frac|\\sqrt|\\sum|\\int|\$/.test(`${item.stem || ''}\n${(item.options || []).join('\n')}`) ? 3 : 0;
                     const imageScore = (item.images || []).length ? 2 : 0;
                     return score + 3 + optionScore + formulaScore + imageScore;
@@ -13208,7 +13208,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                             if (choiceOptionCount(existing) < 4 && choiceOptionCount(item) >= 4) {
                                 existing.options = item.options;
                             }
-                            if ((textHasSuspiciousMath(existing.stem) || textHasBrokenMathSlot(existing.stem)) && !(textHasSuspiciousMath(item.stem) || textHasBrokenMathSlot(item.stem)) && cleanRecognizedText(item.stem).length >= cleanRecognizedText(existing.stem).length * 0.75) {
+                            if ((textHasSuspiciousMath(existing.stem) || textHasBrokenMathSlot(existing.stem)) && !(textHasSuspiciousMath(item.stem) || textHasBrokenMathSlot(item.stem)) && window.Qisi.Utils.cleanRecognizedText(item.stem).length >= window.Qisi.Utils.cleanRecognizedText(existing.stem).length * 0.75) {
                                 existing.stem = item.stem;
                             }
                         }
@@ -13225,7 +13225,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                     return recognizedItemsScore(visualItems) > recognizedItemsScore(textItems) + 2;
                 };
 
-                const choiceOptionCount = (q) => (q?.options || []).filter(opt => cleanRecognizedText(opt)).length;
+                const choiceOptionCount = (q) => (q?.options || []).filter(opt => window.Qisi.Utils.cleanRecognizedText(opt)).length;
 
                 const textHasSuspiciousMath = (text) => {
                     const source = String(text || '');
@@ -13236,7 +13236,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                 };
 
                 const textHasBrokenMathSlot = (text) => {
-                    const source = cleanRecognizedText(text);
+                    const source = window.Qisi.Utils.cleanRecognizedText(text);
                     if (!source) return false;
 
                     return (
@@ -13354,7 +13354,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                     const currentOptionCount = choiceOptionCount(draft);
                     const repairedOptionCount = choiceOptionCount(repaired);
                     const repairedStem = normalizeMathTextForLatex(repaired.stem);
-                    const currentStem = cleanRecognizedText(draft.stem);
+                    const currentStem = window.Qisi.Utils.cleanRecognizedText(draft.stem);
                     const currentLooksBroken = textHasSuspiciousMath(draft.stem) || textHasBrokenMathSlot(draft.stem);
                     if (repairedStem && (currentLooksBroken || repairedStem.length > currentStem.length * 0.65)) {
                         draft.stem = repairedStem;
@@ -13364,14 +13364,14 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                         draft.options = sanitizeChoiceOptions(repaired.options);
                         changed = true;
                     }
-                    const repairedAnswer = cleanRecognizedText(repaired.answer);
-                    if (repairedAnswer && !cleanRecognizedText(draft.answer)) {
+                    const repairedAnswer = window.Qisi.Utils.cleanRecognizedText(repaired.answer);
+                    if (repairedAnswer && !window.Qisi.Utils.cleanRecognizedText(draft.answer)) {
                         draft.answer = repairedAnswer;
                         changed = true;
                     }
                     const repairedSolution = normalizeMathTextForLatex(repaired.solution);
                     const repairedSolutionIssue = solutionQualityIssue(draft.stem, draft.options, repairedSolution);
-                    if (repairedSolution && (!cleanRecognizedText(draft.solution) || repairedSolution.length > cleanRecognizedText(draft.solution).length * 1.25)) {
+                    if (repairedSolution && (!window.Qisi.Utils.cleanRecognizedText(draft.solution) || repairedSolution.length > window.Qisi.Utils.cleanRecognizedText(draft.solution).length * 1.25)) {
                         draft.solution = repairedSolution;
                         changed = true;
                         if (repairedSolutionIssue) {
@@ -13419,7 +13419,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                     const canUseAnswerOrder = answerItems.length && Math.abs(answerItems.length - drafts.length) <= 1;
                     const canUseSolutionOrder = solutionItems.length && Math.abs(solutionItems.length - drafts.length) <= 1;
                     drafts.forEach((draft, idx) => {
-                        if (canUseAnswerOrder && !cleanRecognizedText(draft.answer) && cleanRecognizedText(answerItems[idx]?.answer)) {
+                        if (canUseAnswerOrder && !window.Qisi.Utils.cleanRecognizedText(draft.answer) && window.Qisi.Utils.cleanRecognizedText(answerItems[idx]?.answer)) {
                             draft.answer = normalizeAnswerForLatex(answerItems[idx].answer);
                             draft.sourceAnswerFileId = answerItems[idx].sourceFileId || draft.sourceAnswerFileId;
                             draft.answerSource = answerItems[idx].sourceFileName || draft.answerSource;
@@ -13427,7 +13427,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                             draft.warnings = (draft.warnings || []).filter(w => !String(w).includes('未在答案文件中匹配'));
                             draft.warnings.push('本题答案已按题目顺序自动匹配，请快速核对。');
                         }
-                        if (canUseSolutionOrder && cleanRecognizedText(solutionItems[idx]?.solution)) {
+                        if (canUseSolutionOrder && window.Qisi.Utils.cleanRecognizedText(solutionItems[idx]?.solution)) {
                             const solution = cleanDisplayTextForBatchSave(solutionItems[idx].solution);
                             const preferred = preferFormulaRichSolution(solution, draft.solution, draft.stem);
 
@@ -13451,7 +13451,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
 
                 const repairDraftAnswersWithQwen = async (drafts, answerItems, solutionItems) => {
                     const needsRepair = drafts.some(draft => {
-                        if (['单选题', '多选题', '填空题'].includes(draft.type) && !cleanRecognizedText(draft.answer)) return true;
+                        if (['单选题', '多选题', '填空题'].includes(draft.type) && !window.Qisi.Utils.cleanRecognizedText(draft.answer)) return true;
                         return false;
                     });
 
@@ -13462,14 +13462,14 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                         index: idx + 1,
                         question: q.questionNumber || String(idx + 1),
                         type: q.type,
-                        stem: cleanRecognizedText(q.stem).slice(0, 260),
+                        stem: window.Qisi.Utils.cleanRecognizedText(q.stem).slice(0, 260),
                         options: normalizeRecognizedOptions(q.options),
                         answer: normalizeAnswerForLatex(q.answer)
                     }));
 
                     const answers = answerItems.map((item, idx) => ({
                         index: idx + 1,
-                        question: cleanRecognizedText(item.question),
+                        question: window.Qisi.Utils.cleanRecognizedText(item.question),
                         answer: normalizeAnswerForLatex(item.answer)
                     })).filter(item => item.answer);
 
@@ -13509,7 +13509,7 @@ answers=${JSON.stringify(answers)}
                         if (!draft) return;
 
                         const answer = normalizeAnswerForLatex(patch.answer);
-                        if (answer && !cleanRecognizedText(draft.answer)) {
+                        if (answer && !window.Qisi.Utils.cleanRecognizedText(draft.answer)) {
                             draft.answer = answer;
                             draft.mergeWarnings = (draft.mergeWarnings || []).filter(item => item !== 'missing_answer');
                             draft.warnings = (draft.warnings || []).filter(w => !String(w).includes('未在答案文件中匹配'));
@@ -13523,16 +13523,16 @@ answers=${JSON.stringify(answers)}
                 const finalDraftLooksLikeChoice = (draft) => {
                     if (!draft) return false;
 
-                    const type = cleanRecognizedText(draft.type);
+                    const type = window.Qisi.Utils.cleanRecognizedText(draft.type);
                     if (type === '单选题' || type === '多选题') return true;
 
-                    const answer = finalChoiceAnswerText(draft.answer);
+                    const answer = window.Qisi.Utils.finalChoiceAnswerText(draft.answer);
                     if (/^[A-D]{1,4}$/.test(answer)) return true;
 
-                    const stem = cleanRecognizedText(draft.stem);
-                    const solution = cleanRecognizedText(draft.solution);
-                    const warnings = cleanRecognizedText((draft.warnings || []).join('\n'));
-                    const mergeWarnings = cleanRecognizedText((draft.mergeWarnings || []).join('\n'));
+                    const stem = window.Qisi.Utils.cleanRecognizedText(draft.stem);
+                    const solution = window.Qisi.Utils.cleanRecognizedText(draft.solution);
+                    const warnings = window.Qisi.Utils.cleanRecognizedText((draft.warnings || []).join('\n'));
+                    const mergeWarnings = window.Qisi.Utils.cleanRecognizedText((draft.mergeWarnings || []).join('\n'));
 
                     if (/选择题|单选|多选|选项|故选|正确的是|错误的是|下列|选择|missing_options/.test(
                         stem + '\n' + solution + '\n' + warnings + '\n' + mergeWarnings
@@ -13571,14 +13571,14 @@ answers=${JSON.stringify(answers)}
 
                     if (!imageUrl) return false;
 
-                    const answer = cleanRecognizedText(draft.answer);
+                    const answer = window.Qisi.Utils.cleanRecognizedText(draft.answer);
                     if (!answer) return false;
 
                     // 纯选择题答案 A/B/C/D 不需要公式修复。
-                    if (/^[A-D]{1,4}$/.test(finalChoiceAnswerText(answer))) return false;
+                    if (/^[A-D]{1,4}$/.test(window.Qisi.Utils.finalChoiceAnswerText(answer))) return false;
 
-                    const answerSignal = mathSignalCount(answer);
-                    const stemSignal = mathSignalCount(draft.stem);
+                    const answerSignal = window.Qisi.Utils.mathSignalCount(answer);
+                    const stemSignal = window.Qisi.Utils.mathSignalCount(draft.stem);
 
                     // 只要题干有数学，答案却没有公式信号，就送去视觉模型复核。
                     return stemSignal >= 1 && answerSignal === 0;
@@ -13596,11 +13596,11 @@ answers=${JSON.stringify(answers)}
 
                     if (!imageUrl) return false;
 
-                    const solution = cleanRecognizedText(draft.solution);
+                    const solution = window.Qisi.Utils.cleanRecognizedText(draft.solution);
                     if (!solution) return false;
 
-                    const solutionSignal = mathSignalCount(solution);
-                    const stemSignal = mathSignalCount(draft.stem);
+                    const solutionSignal = window.Qisi.Utils.mathSignalCount(solution);
+                    const stemSignal = window.Qisi.Utils.mathSignalCount(draft.stem);
 
                     // 只要题干数学信号明显，而解析只有中文或公式信号很弱，就送去视觉模型复核。
                     if (stemSignal >= 1 && solutionSignal === 0) return true;
@@ -13731,7 +13731,7 @@ ${JSON.stringify(targets, null, 2)}
                                         ),
                                     rawText:
                                         compactDebugText(
-                                            cleanRecognizedText(
+                                            window.Qisi.Utils.cleanRecognizedText(
                                                 rawText
                                             ),
                                             {
@@ -13767,8 +13767,8 @@ ${JSON.stringify(targets, null, 2)}
                         if (raw.length && typeof raw[0] === 'object') {
                             const arr = ['', '', '', ''];
                             raw.forEach(item => {
-                                const label = cleanRecognizedText(item.label || item.key || item.name || '').toUpperCase();
-                                const content = cleanRecognizedText(item.content || item.text || item.value || item.option || '');
+                                const label = window.Qisi.Utils.cleanRecognizedText(item.label || item.key || item.name || '').toUpperCase();
+                                const content = window.Qisi.Utils.cleanRecognizedText(item.content || item.text || item.value || item.option || '');
                                 const idx = ['A', 'B', 'C', 'D'].indexOf(label);
                                 if (idx >= 0) arr[idx] = content;
                             });
@@ -13828,14 +13828,14 @@ ${JSON.stringify(targets, null, 2)}
                         if (mode === 'question' && patchedOptionCount > oldOptionCount && patchedOptionCount >= 2) {
                             draft.options = patchedOptions;
 
-                            const answer = finalChoiceAnswerText(draft.answer);
+                            const answer = window.Qisi.Utils.finalChoiceAnswerText(draft.answer);
                             draft.type = answer.length >= 2 ? '多选题' : '单选题';
 
                             draft.mergeWarnings = (draft.mergeWarnings || []).filter(item => item !== 'missing_options');
                             draft.warnings = (draft.warnings || []).filter(w => !String(w).includes('选择题仅识别到'));
 
                             const patchedStem = cleanDisplayTextForBatchSave(patch.stem || patch.题干 || '');
-                            if (patchedStem && patchedStem.length >= 8 && patchedStem.length >= cleanRecognizedText(draft.stem).length * 0.35) {
+                            if (patchedStem && patchedStem.length >= 8 && patchedStem.length >= window.Qisi.Utils.cleanRecognizedText(draft.stem).length * 0.35) {
                                 draft.stem = patchedStem;
                             }
 
@@ -13846,12 +13846,12 @@ ${JSON.stringify(targets, null, 2)}
                         const patchedAnswer = cleanDisplayTextForBatchSave(patch.answer || patch.答案 || '');
                         if (mode === 'answer_solution' && patchedAnswer) {
                             const oldAnswer = cleanDisplayTextForBatchSave(draft.answer);
-                            const nextSignal = mathSignalCount(patchedAnswer);
-                            const oldSignal = mathSignalCount(oldAnswer);
+                            const nextSignal = window.Qisi.Utils.mathSignalCount(patchedAnswer);
+                            const oldSignal = window.Qisi.Utils.mathSignalCount(oldAnswer);
 
                             // 选择题答案 A/B/C/D 不要用长文本覆盖。
-                            const oldChoice = finalChoiceAnswerText(oldAnswer);
-                            const newChoice = finalChoiceAnswerText(patchedAnswer);
+                            const oldChoice = window.Qisi.Utils.finalChoiceAnswerText(oldAnswer);
+                            const newChoice = window.Qisi.Utils.finalChoiceAnswerText(patchedAnswer);
 
                             if (oldChoice && newChoice && oldChoice === newChoice) {
                                 // 保持原选择题答案。
@@ -13876,7 +13876,7 @@ ${JSON.stringify(targets, null, 2)}
                             }
                         }
 
-                        const rawBlock = cleanRecognizedText(patch.rawBlock || patch.rawText || patch.原文 || '');
+                        const rawBlock = window.Qisi.Utils.cleanRecognizedText(patch.rawBlock || patch.rawText || patch.原文 || '');
                         if (rawBlock) {
                             draft.rawBlock = draft.rawBlock || rawBlock;
                             draft.rawText = draft.rawText || rawBlock;
@@ -13990,7 +13990,7 @@ ${JSON.stringify(targets, null, 2)}
                         type: draft.type,
                         answer: draft.answer,
                         optionCount: cleanDisplayOptionsForBatchSave(draft.options).filter(Boolean).length,
-                        finalChoiceAnswer: finalChoiceAnswerText(draft.answer),
+                        finalChoiceAnswer: window.Qisi.Utils.finalChoiceAnswerText(draft.answer),
                         needsOptionRepair: finalDraftNeedsOptionVisionRepair(draft),
                         needsAnswerRepair: finalDraftNeedsAnswerVisionRepair(draft),
                         needsSolutionRepair: finalDraftNeedsSolutionVisionRepair(draft),
@@ -14034,9 +14034,9 @@ ${JSON.stringify(targets, null, 2)}
                             '';
 
                         const optionCount = cleanDisplayOptionsForBatchSave(draft.options).filter(Boolean).length;
-                        const answerSignal = mathSignalCount(draft.answer);
-                        const solutionSignal = mathSignalCount(draft.solution);
-                        const stemSignal = mathSignalCount(draft.stem);
+                        const answerSignal = window.Qisi.Utils.mathSignalCount(draft.answer);
+                        const solutionSignal = window.Qisi.Utils.mathSignalCount(draft.solution);
+                        const stemSignal = window.Qisi.Utils.mathSignalCount(draft.stem);
 
                         const target = {
                             id: draft.id,
@@ -14044,11 +14044,11 @@ ${JSON.stringify(targets, null, 2)}
                             order: draft.order,
                             question: draft.questionNumber || draft.question || draft.order,
                             type: draft.type,
-                            stem: cleanRecognizedText(draft.stem).slice(0, 1200),
-                            answer: cleanRecognizedText(draft.answer),
-                            solution: cleanRecognizedText(draft.solution).slice(0, 1000),
+                            stem: window.Qisi.Utils.cleanRecognizedText(draft.stem).slice(0, 1200),
+                            answer: window.Qisi.Utils.cleanRecognizedText(draft.answer),
+                            solution: window.Qisi.Utils.cleanRecognizedText(draft.solution).slice(0, 1000),
                             optionCount,
-                            finalChoiceAnswer: finalChoiceAnswerText(draft.answer),
+                            finalChoiceAnswer: window.Qisi.Utils.finalChoiceAnswerText(draft.answer),
                             answerMathSignal: answerSignal,
                             solutionMathSignal: solutionSignal,
                             stemMathSignal: stemSignal,
@@ -14069,8 +14069,8 @@ ${JSON.stringify(targets, null, 2)}
                             answerSolutionImage &&
                             stemSignal >= 1 &&
                             (
-                                (cleanRecognizedText(draft.answer) && answerSignal === 0 && !/^[A-D]{1,4}$/.test(finalChoiceAnswerText(draft.answer))) ||
-                                (cleanRecognizedText(draft.solution) && solutionSignal === 0)
+                                (window.Qisi.Utils.cleanRecognizedText(draft.answer) && answerSignal === 0 && !/^[A-D]{1,4}$/.test(window.Qisi.Utils.finalChoiceAnswerText(draft.answer))) ||
+                                (window.Qisi.Utils.cleanRecognizedText(draft.solution) && solutionSignal === 0)
                             )
                         ) {
                             pushTarget(answerSolutionTargetsByImage, answerSolutionImage, target);
@@ -14106,10 +14106,10 @@ ${JSON.stringify(targets, null, 2)}
                                     q: draft.questionNumber || draft.order,
                                     type: draft.type,
                                     optionCount: cleanDisplayOptionsForBatchSave(draft.options).filter(Boolean).length,
-                                    answerMathSignal: mathSignalCount(draft.answer),
-                                    solutionMathSignal: mathSignalCount(draft.solution),
-                                    answerHead: cleanRecognizedText(draft.answer).slice(0, 80),
-                                    solutionHead: cleanRecognizedText(draft.solution).slice(0, 120)
+                                    answerMathSignal: window.Qisi.Utils.mathSignalCount(draft.answer),
+                                    solutionMathSignal: window.Qisi.Utils.mathSignalCount(draft.solution),
+                                    answerHead: window.Qisi.Utils.cleanRecognizedText(draft.answer).slice(0, 80),
+                                    solutionHead: window.Qisi.Utils.cleanRecognizedText(draft.solution).slice(0, 120)
                                 })));
                                 console.groupEnd();
 
@@ -14133,11 +14133,11 @@ ${JSON.stringify(targets, null, 2)}
                         q: draft.questionNumber || draft.order,
                         type: draft.type,
                         answer: draft.answer,
-                        finalChoiceAnswer: finalChoiceAnswerText(draft.answer),
+                        finalChoiceAnswer: window.Qisi.Utils.finalChoiceAnswerText(draft.answer),
                         optionCount: cleanDisplayOptionsForBatchSave(draft.options).filter(Boolean).length,
-                        stemMathSignal: mathSignalCount(draft.stem),
-                        answerMathSignal: mathSignalCount(draft.answer),
-                        solutionMathSignal: mathSignalCount(draft.solution),
+                        stemMathSignal: window.Qisi.Utils.mathSignalCount(draft.stem),
+                        answerMathSignal: window.Qisi.Utils.mathSignalCount(draft.answer),
+                        solutionMathSignal: window.Qisi.Utils.mathSignalCount(draft.solution),
                         hasQuestionImage: Boolean(draft.sourcePageImage || draft.sourceTrace?.sourcePageImage),
                         hasAnswerImage: Boolean(draft.answerPageImage),
                         hasSolutionImage: Boolean(draft.solutionPageImage)
@@ -14148,13 +14148,13 @@ ${JSON.stringify(targets, null, 2)}
                 };
 
                 const repairChoiceOptionsWithQwen = async (q, rawText) => {
-                    const source = cleanRecognizedText(rawText || draftRawOptionSource(q)).slice(0, 12000);
+                    const source = window.Qisi.Utils.cleanRecognizedText(rawText || draftRawOptionSource(q)).slice(0, 12000);
                     if (!source || source.length < 8) return null;
 
                     const prompt = `你是高中数学选择题选项提取器。只从原始文本中提取目标题的题干和 A/B/C/D 选项，不要识别答案和解析，不要补充原文没有的内容。
 
 目标题号：${q?.questionNumber || q?.question || q?.order || ''}
-当前题干：${cleanRecognizedText(q?.stem || '').slice(0, 500)}
+当前题干：${window.Qisi.Utils.cleanRecognizedText(q?.stem || '').slice(0, 500)}
 
 要求：
 1. 如果原文有 A/B/C/D 选项，必须完整提取每个选项后面的内容，直到下一个选项标签。
@@ -14210,10 +14210,10 @@ ${source}`;
 }
 
 题号：${q.questionNumber || q.question || q.order || ''}
-题干：${cleanRecognizedText(q.stem || '').slice(0, 1000)}
-当前答案：${cleanRecognizedText(q.answer || '')}
-解析：${cleanRecognizedText(q.solution || '').slice(0, 1800)}
-原始文本：${cleanRecognizedText(draftRawOptionSource(q)).slice(0, 1800)}`;
+题干：${window.Qisi.Utils.cleanRecognizedText(q.stem || '').slice(0, 1000)}
+当前答案：${window.Qisi.Utils.cleanRecognizedText(q.answer || '')}
+解析：${window.Qisi.Utils.cleanRecognizedText(q.solution || '').slice(0, 1800)}
+原始文本：${window.Qisi.Utils.cleanRecognizedText(draftRawOptionSource(q)).slice(0, 1800)}`;
 
                     const resp = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
                         method: "POST",
@@ -14249,7 +14249,7 @@ ${source}`;
                 ) => {
                     for (const value of values) {
                         const text =
-                            cleanRecognizedText(
+                            window.Qisi.Utils.cleanRecognizedText(
                                 value || ''
                             );
 
@@ -14291,7 +14291,7 @@ ${source}`;
                     type:
                         item.type || '',
                     valueHead:
-                        cleanRecognizedText(
+                        window.Qisi.Utils.cleanRecognizedText(
                             valueKey
                                 ? (
                                     valueKey === 'answer'
@@ -14522,7 +14522,7 @@ ${source}`;
                                 .push(questionNumber);
 
                             const existingValue =
-                                cleanRecognizedText(
+                                window.Qisi.Utils.cleanRecognizedText(
                                     existing[valueKey] || ''
                                 );
 
@@ -14570,7 +14570,7 @@ ${source}`;
                                     !answerMap.has(
                                         questionNumber
                                     ) &&
-                                    !cleanRecognizedText(
+                                    !window.Qisi.Utils.cleanRecognizedText(
                                         getSupportAnswerText(
                                             questionMap.get(
                                                 questionNumber
@@ -14587,7 +14587,7 @@ ${source}`;
                                     !solutionMap.has(
                                         questionNumber
                                     ) &&
-                                    !cleanRecognizedText(
+                                    !window.Qisi.Utils.cleanRecognizedText(
                                         getSupportSolutionText(
                                             questionMap.get(
                                                 questionNumber
@@ -14855,11 +14855,11 @@ ${source}`;
                             sourceTrace.sourceFileName ||
                             files.find(f => f.id === itemSourceFileId)?.filename ||
                             '';
-                        const itemRawText = cleanRecognizedText(item.rawText || item.rawBlock || item.sourceText || item.pageText || item.stem || '');
-                        const itemRawBlock = cleanRecognizedText(item.rawBlock || item.rawText || item.stem || '');
-                        const itemPageText = cleanRecognizedText(item.pageText || item.sourceText || sourceTrace.pageText || '');
-                        const itemSourceText = cleanRecognizedText(item.sourceText || item.pageText || sourceTrace.sourceText || sourceTrace.pageText || '');
-                        const itemDocxFullText = cleanRecognizedText(
+                        const itemRawText = window.Qisi.Utils.cleanRecognizedText(item.rawText || item.rawBlock || item.sourceText || item.pageText || item.stem || '');
+                        const itemRawBlock = window.Qisi.Utils.cleanRecognizedText(item.rawBlock || item.rawText || item.stem || '');
+                        const itemPageText = window.Qisi.Utils.cleanRecognizedText(item.pageText || item.sourceText || sourceTrace.pageText || '');
+                        const itemSourceText = window.Qisi.Utils.cleanRecognizedText(item.sourceText || item.pageText || sourceTrace.sourceText || sourceTrace.pageText || '');
+                        const itemDocxFullText = window.Qisi.Utils.cleanRecognizedText(
                             item.docxFullText ||
                             sourceTrace.docxFullText ||
                             item.pageTextOriginal ||
@@ -14872,7 +14872,7 @@ ${source}`;
                             sourceTrace.sourceText ||
                             ''
                         );
-                        const itemPageTextOriginal = cleanRecognizedText(
+                        const itemPageTextOriginal = window.Qisi.Utils.cleanRecognizedText(
                             item.pageTextOriginal ||
                             sourceTrace.pageTextOriginal ||
                             item.pageText ||
@@ -14880,7 +14880,7 @@ ${source}`;
                             itemDocxFullText ||
                             ''
                         );
-                        const itemSourceTextOriginal = cleanRecognizedText(
+                        const itemSourceTextOriginal = window.Qisi.Utils.cleanRecognizedText(
                             item.sourceTextOriginal ||
                             sourceTrace.sourceTextOriginal ||
                             item.sourceText ||
@@ -14972,13 +14972,13 @@ ${source}`;
 
                         for (const questionNumber of explicitMergePlan.allowedQuestionNumbers) {
                             answerTextLengthsByNumber[questionNumber] =
-                                cleanRecognizedText(
+                                window.Qisi.Utils.cleanRecognizedText(
                                     answerMap.get(questionNumber)
                                         ?.answer || ''
                                 ).length;
 
                             solutionTextLengthsByNumber[questionNumber] =
-                                cleanRecognizedText(
+                                window.Qisi.Utils.cleanRecognizedText(
                                     solutionMap.get(questionNumber)
                                         ?.solution || ''
                                 ).length;
@@ -15007,7 +15007,7 @@ ${source}`;
                                 mergedAnswerNumbers:
                                     drafts
                                         .filter(draft =>
-                                            cleanRecognizedText(
+                                            window.Qisi.Utils.cleanRecognizedText(
                                                 draft.answer || ''
                                             )
                                         )
@@ -15019,7 +15019,7 @@ ${source}`;
                                 mergedSolutionNumbers:
                                     drafts
                                         .filter(draft =>
-                                            cleanRecognizedText(
+                                            window.Qisi.Utils.cleanRecognizedText(
                                                 draft.solution || ''
                                             )
                                         )
@@ -15031,7 +15031,7 @@ ${source}`;
                                 emptyMergedSolutions:
                                     drafts
                                         .filter(draft =>
-                                            !cleanRecognizedText(
+                                            !window.Qisi.Utils.cleanRecognizedText(
                                                 draft.solution || ''
                                             )
                                         )
@@ -15434,7 +15434,7 @@ ${source}`;
                                 expect(
                                     result.drafts.every(
                                         draft =>
-                                            cleanRecognizedText(
+                                            window.Qisi.Utils.cleanRecognizedText(
                                                 draft.solution
                                             )
                                     ),
@@ -15529,7 +15529,7 @@ ${source}`;
                                 const mergedSolutionNumbers =
                                     result.drafts
                                         .filter(draft =>
-                                            cleanRecognizedText(
+                                            window.Qisi.Utils.cleanRecognizedText(
                                                 draft.solution || ''
                                             )
                                         )
@@ -15542,7 +15542,7 @@ ${source}`;
                                 const emptyMergedSolutions =
                                     result.drafts
                                         .filter(draft =>
-                                            !cleanRecognizedText(
+                                            !window.Qisi.Utils.cleanRecognizedText(
                                                 draft.solution || ''
                                             )
                                         )
@@ -15580,13 +15580,13 @@ ${source}`;
                     if (!q) return [];
                     const problems = [];
                     if ((q.warnings || []).length) problems.push(...q.warnings);
-                    if (!cleanRecognizedText(q.stem)) problems.push('题干为空，请先补充题干。');
+                    if (!window.Qisi.Utils.cleanRecognizedText(q.stem)) problems.push('题干为空，请先补充题干。');
                     if ([q.stem, ...(Array.isArray(q.options) ? q.options : []), q.answer, q.solution].some(hasUnconvertedImagePlaceholder)) {
                         problems.push('存在未转换的 DOCX 公式图片占位，不能作为最终识别结果。');
                     }
                     const optionIssue = choiceOptionIssue(q.type, q.options, q.answer);
                     if (optionIssue) problems.push(optionIssue);
-                    if (['单选题', '多选题', '填空题'].includes(q.type) && !cleanRecognizedText(q.answer)) problems.push('答案为空，请先补充答案。');
+                    if (['单选题', '多选题', '填空题'].includes(q.type) && !window.Qisi.Utils.cleanRecognizedText(q.answer)) problems.push('答案为空，请先补充答案。');
                     const solutionIssue = solutionQualityIssue(q.stem, q.options, q.solution);
                     if (solutionIssue) problems.push(solutionIssue);
                     if (q.duplicateStatus && q.duplicateStatus !== 'none') problems.push('重复或答案冲突需要确认。');
@@ -15678,7 +15678,7 @@ ${source}`;
                         const optionCount = optionCountForGolden(options);
                         const failures = [];
 
-                        if (!cleanRecognizedText(q.stem || '')) failures.push('题干为空');
+                        if (!window.Qisi.Utils.cleanRecognizedText(q.stem || '')) failures.push('题干为空');
                         if (!['单选题', '多选题'].includes(q.type)) failures.push(`题型不是选择题：${q.type || ''}`);
                         if (optionCount < 4) failures.push(`只识别到 ${optionCount}/4 个有效选项`);
                         if (hasPlaceholder) failures.push('存在未转换公式图片占位');
@@ -15695,7 +15695,7 @@ ${source}`;
                         return {
                             order: idx + 1,
                             questionNumber: q.questionNumber || q.question || String(idx + 1),
-                            stemLength: cleanRecognizedText(q.stem || '').length,
+                            stemLength: window.Qisi.Utils.cleanRecognizedText(q.stem || '').length,
                             optionA: options[0] || '',
                             optionB: options[1] || '',
                             optionC: options[2] || '',
@@ -15716,7 +15716,7 @@ ${source}`;
                     const result = {
                         expectedQuestionCount,
                         actualQuestionCount: sorted.length,
-                        allQuestionsHaveStem: sorted.every(q => cleanRecognizedText(q.stem || '')),
+                        allQuestionsHaveStem: sorted.every(q => window.Qisi.Utils.cleanRecognizedText(q.stem || '')),
                         allChoiceQuestionsHaveFourOptions: sorted.every(q => optionCountForGolden(q.options || []) >= 4),
                         noUnconvertedImagePlaceholder: !sorted.some(q => [q.stem, ...(q.options || []), q.answer, q.solution].some(hasUnconvertedImagePlaceholder)),
                         allLatexRenderable: rows.every(row => row.latexErrorCount === 0),
@@ -15770,7 +15770,7 @@ ${source}`;
 
                 const batchFinalGateText = (value = '') => {
                     try {
-                        return cleanRecognizedText(value || '');
+                        return window.Qisi.Utils.cleanRecognizedText(value || '');
                     } catch {
                         return String(value || '').trim();
                     }
@@ -16199,7 +16199,7 @@ ${source}`;
                 };
 
                 const cleanDocxImporterTextForV2 = (text = '') => {
-                    const raw = cleanRecognizedText(text || '');
+                    const raw = window.Qisi.Utils.cleanRecognizedText(text || '');
                     if (!raw) return '';
 
                     const { protectedText, tokens } = protectBatchMediaTokens(raw);
@@ -16977,10 +16977,10 @@ ${source}`;
                             let normalizedDrafts = (result.drafts || [])
                                 .map((draft, idx) => normalizeDocxImporterDraftForV2(draft, file, batch, baseOrder + idx + 1))
                                 .filter(draft => {
-                                    const stemOk = cleanRecognizedText(draft.stem || '').length > 0;
+                                    const stemOk = window.Qisi.Utils.cleanRecognizedText(draft.stem || '').length > 0;
                                     const optionOk = Array.isArray(draft.options) &&
                                         draft.options.some(opt =>
-                                            cleanRecognizedText(opt || '') ||
+                                            window.Qisi.Utils.cleanRecognizedText(opt || '') ||
                                             hasBatchMediaToken(opt || '') ||
                                             hasDocxFormulaPlaceholderForV2(opt || '')
                                         );
@@ -17207,7 +17207,7 @@ ${source}`;
                             order: q.order,
                             questionNumber: q.questionNumber,
                             type: q.type,
-                            stemLength: cleanRecognizedText(q.stem || '').length,
+                            stemLength: window.Qisi.Utils.cleanRecognizedText(q.stem || '').length,
                             optionCount: cleanDisplayOptionsForBatchSave(q.options || []).filter(opt => String(opt || '').trim()).length,
                             hasSourcePageImage: Boolean(q.sourcePageImage)
                         })));
@@ -18874,9 +18874,9 @@ ${source}`;
                                         docxImporterItems = (docxImporterResult.drafts || [])
                                             .map(convertDocxImporterDraftToRecognitionItem)
                                             .filter(item => {
-                                                const stem = cleanRecognizedText(item?.stem || '');
+                                                const stem = window.Qisi.Utils.cleanRecognizedText(item?.stem || '');
                                                 const optionCount = Array.isArray(item?.options)
-                                                    ? item.options.filter(opt => cleanRecognizedText(opt || '')).length
+                                                    ? item.options.filter(opt => window.Qisi.Utils.cleanRecognizedText(opt || '')).length
                                                     : 0;
                                                 return stem.length > 0 || optionCount > 0;
                                             });
@@ -18945,7 +18945,7 @@ ${source}`;
                                             optionB: item.options?.[1] || '',
                                             optionC: item.options?.[2] || '',
                                             optionD: item.options?.[3] || '',
-                                            stemHead: cleanRecognizedText(item.stem).slice(0, 120),
+                                            stemHead: window.Qisi.Utils.cleanRecognizedText(item.stem).slice(0, 120),
                                             optionImageCount: Array.isArray(item.images) ? item.images.length : 0
                                         })));
                                         console.groupEnd();
@@ -19180,14 +19180,14 @@ ${source}`;
                                     'pdf-support-sequence-unreliable'
                                 );
 
-                                if (!cleanRecognizedText(draft.answer)) {
+                                if (!window.Qisi.Utils.cleanRecognizedText(draft.answer)) {
                                     addWarningOnce(
                                         draft,
                                         'missing_answer'
                                     );
                                 }
 
-                                if (!cleanRecognizedText(draft.solution)) {
+                                if (!window.Qisi.Utils.cleanRecognizedText(draft.solution)) {
                                     addWarningOnce(
                                         draft,
                                         'missing_solution'
@@ -19267,11 +19267,11 @@ ${source}`;
                             q: d.questionNumber || d.question || d.order,
                             type: d.type,
                             optionCount: Array.isArray(d.options) ? d.options.filter(Boolean).length : 0,
-                            hasAnswer: Boolean(cleanRecognizedText(d.answer)),
-                            hasSolution: Boolean(cleanRecognizedText(d.solution)),
-                            answerHead: cleanRecognizedText(d.answer).slice(0, 80),
-                            solutionHead: cleanRecognizedText(d.solution).slice(0, 160),
-                            stemHead: cleanRecognizedText(d.stem).slice(0, 120)
+                            hasAnswer: Boolean(window.Qisi.Utils.cleanRecognizedText(d.answer)),
+                            hasSolution: Boolean(window.Qisi.Utils.cleanRecognizedText(d.solution)),
+                            answerHead: window.Qisi.Utils.cleanRecognizedText(d.answer).slice(0, 80),
+                            solutionHead: window.Qisi.Utils.cleanRecognizedText(d.solution).slice(0, 160),
+                            stemHead: window.Qisi.Utils.cleanRecognizedText(d.stem).slice(0, 120)
                         })));
                         console.groupEnd();
 
@@ -19323,7 +19323,7 @@ ${source}`;
                         let unmatched = (merged.unmatched || []).filter(answer => !drafts.some(draft => sameTextLoose(draft.answer, answer.answer)));
                         const answerCoverageLooksComplete = answerItems.length
                             && Math.abs(answerItems.length - drafts.length) <= 1
-                            && drafts.filter(draft => cleanRecognizedText(draft.answer)).length >= Math.min(answerItems.length, drafts.length);
+                            && drafts.filter(draft => window.Qisi.Utils.cleanRecognizedText(draft.answer)).length >= Math.min(answerItems.length, drafts.length);
                         if (answerCoverageLooksComplete) unmatched = [];
                         await updateBatchProgress(batchId, 86, 'processing');
                         for (const file of supplementalImageFiles) {
@@ -19369,7 +19369,7 @@ ${source}`;
                                         sourcePage: draft.solutionSourcePage || 0,
                                         bbox,
                                         confidence: imageConfidence,
-                                        description: cleanRecognizedText(recognizedImage.image_description) || '解析图片',
+                                        description: window.Qisi.Utils.cleanRecognizedText(recognizedImage.image_description) || '解析图片',
                                         status: imageStatus,
                                         createdAt: Date.now()
                                     });
@@ -19533,11 +19533,11 @@ ${source}`;
                             q: d.questionNumber || d.question || d.order,
                             type: d.type,
                             optionCount: cleanDisplayOptionsForBatchSave(d.options).filter(Boolean).length,
-                            answerHead: cleanRecognizedText(d.answer).slice(0, 80),
-                            solutionHead: cleanRecognizedText(d.solution).slice(0, 120),
-                            stemMathSignal: mathSignalCount(d.stem),
-                            answerMathSignal: mathSignalCount(d.answer),
-                            solutionMathSignal: mathSignalCount(d.solution),
+                            answerHead: window.Qisi.Utils.cleanRecognizedText(d.answer).slice(0, 80),
+                            solutionHead: window.Qisi.Utils.cleanRecognizedText(d.solution).slice(0, 120),
+                            stemMathSignal: window.Qisi.Utils.mathSignalCount(d.stem),
+                            answerMathSignal: window.Qisi.Utils.mathSignalCount(d.answer),
+                            solutionMathSignal: window.Qisi.Utils.mathSignalCount(d.solution),
                             hasQuestionImage: Boolean(d.sourcePageImage || d.sourceTrace?.sourcePageImage),
                             hasAnswerImage: Boolean(d.answerPageImage),
                             hasSolutionImage: Boolean(d.solutionPageImage)
@@ -19611,11 +19611,11 @@ ${source}`;
                             q: d.questionNumber || d.question || d.order,
                             type: d.type,
                             optionCount: cleanDisplayOptionsForBatchSave(d.options).filter(Boolean).length,
-                            answerHead: cleanRecognizedText(d.answer).slice(0, 80),
-                            solutionHead: cleanRecognizedText(d.solution).slice(0, 120),
-                            stemMathSignal: mathSignalCount(d.stem),
-                            answerMathSignal: mathSignalCount(d.answer),
-                            solutionMathSignal: mathSignalCount(d.solution),
+                            answerHead: window.Qisi.Utils.cleanRecognizedText(d.answer).slice(0, 80),
+                            solutionHead: window.Qisi.Utils.cleanRecognizedText(d.solution).slice(0, 120),
+                            stemMathSignal: window.Qisi.Utils.mathSignalCount(d.stem),
+                            answerMathSignal: window.Qisi.Utils.mathSignalCount(d.answer),
+                            solutionMathSignal: window.Qisi.Utils.mathSignalCount(d.solution),
                             hasQuestionImage: Boolean(d.sourcePageImage || d.sourceTrace?.sourcePageImage),
                             hasAnswerImage: Boolean(d.answerPageImage),
                             hasSolutionImage: Boolean(d.solutionPageImage)

@@ -122,9 +122,6 @@ function classify(argv) {
 
     const appCallsNewModule = moduleName ? appCallsModule(afterPath, moduleName) : false;
     const moduleHasFunctions = modulePath ? moduleExportsFunctions(modulePath, oldNames) : false;
-    // Global scope migration: functions removed from app.js and present in module,
-    // accessible via script loading order (qisi-*.js loaded before app.js in main.html)
-    const functionsMigratedToModule = !oldDefinitionsStillPresent && moduleHasFunctions;
     const routeBIntegrated = checkRouteBIntegrated(afterPath);
 
     const reasons = [];
@@ -137,17 +134,19 @@ function classify(argv) {
         reasons.push('Route B is integrated — forbidden');
     }
 
-    // Check REAL_MIGRATION
+    // REAL_MIGRATION requires an explicit app.js reference to the target module.
+    // Do not accept global-scope-only migration where functions are merely removed
+    // from app.js and present in a loaded script.
     if (classification === 'SCAFFOLD_ONLY') {
         if (
             delta !== null &&
             delta <= -10 &&
             !oldDefinitionsStillPresent &&
-            (appCallsNewModule || functionsMigratedToModule) &&
+            appCallsNewModule &&
             moduleHasFunctions
         ) {
             classification = 'REAL_MIGRATION';
-            reasons.push('app.js delta <= -10, old definitions removed, app calls new module, module exports moved functions');
+            reasons.push('app.js delta <= -10, old definitions removed, app explicitly calls new module, module exports moved functions');
         }
     }
 
