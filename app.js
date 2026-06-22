@@ -4410,7 +4410,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                     const buffer = await (await dataUrlToBlob(file.uploadPath)).arrayBuffer();
                     const pdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
-                    const pages = expandPageRange(file.pageRange, pdf.numPages);
+                    const pages = window.Qisi.Utils.expandPageRange(file.pageRange, pdf.numPages);
                     const pageTexts = [];
 
                     for (const pageNo of pages) {
@@ -4467,7 +4467,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                     const buffer = await (await dataUrlToBlob(file.uploadPath)).arrayBuffer();
                     const pdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
-                    const pages = expandPageRange(file.pageRange, pdf.numPages);
+                    const pages = window.Qisi.Utils.expandPageRange(file.pageRange, pdf.numPages);
                     const layouts = [];
 
                     for (const pageNo of pages) {
@@ -7568,25 +7568,7 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                     }
                 };
 
-                const expandPageRange = (range, maxPage) => {
-                    const text = String(range || '').trim();
-                    if (!text) return Array.from({ length: maxPage }, (_, idx) => idx + 1);
-                    const pages = new Set();
-                    text.split(',').forEach(part => {
-                        const rangeMatch = part.match(/^(\d+)-(\d+)$/);
-                        if (rangeMatch) {
-                            const start = Number(rangeMatch[1]);
-                            const end = Number(rangeMatch[2]);
-                            for (let page = start; page <= end; page++) if (page <= maxPage) pages.add(page);
-                        } else {
-                            const page = Number(part);
-                            if (page > 0 && page <= maxPage) pages.add(page);
-                        }
-                    });
-                    return [...pages].sort((a, b) => a - b);
-                };
-
-                const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
+const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     try {
                         const label = `[BATCH_PDF_DIAG][${stage}]`;
                         const method = level === 'error'
@@ -7674,7 +7656,7 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                         }
                     }
 
-                    const pages = expandPageRange(file.pageRange, pdf.numPages);
+                    const pages = window.Qisi.Utils.expandPageRange(file.pageRange, pdf.numPages);
                     if (activeBatchCostStats) {
                         activeBatchCostStats.pages += pages.length;
                     }

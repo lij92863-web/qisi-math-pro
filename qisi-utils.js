@@ -515,9 +515,28 @@
             return { stem, answer, solution };
         };
 
+        const expandPageRange = (range, maxPage) => {
+            const text = String(range || '').trim();
+            if (!text) return Array.from({ length: maxPage }, (_, idx) => idx + 1);
+            const pages = new Set();
+            text.split(',').forEach(part => {
+                const rangeMatch = part.match(/^(\d+)-(\d+)$/);
+                if (rangeMatch) {
+                    const start = Number(rangeMatch[1]);
+                    const end = Number(rangeMatch[2]);
+                    for (let page = start; page <= end; page++) if (page <= maxPage) pages.add(page);
+                } else {
+                    const page = Number(part);
+                    if (page > 0 && page <= maxPage) pages.add(page);
+                }
+            });
+            return [...pages].sort((a, b) => a - b);
+        };
+
         const api = {
             cleanFormulaOcrText,
             cleanRecognizedText,
+            expandPageRange,
             extractRelevanceTokens,
             findNode,
             finalChoiceAnswerText,
