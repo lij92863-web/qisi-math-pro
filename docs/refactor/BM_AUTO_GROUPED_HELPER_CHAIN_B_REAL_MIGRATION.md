@@ -1,6 +1,6 @@
 # BM-AUTO Grouped Helper Chain B REAL_MIGRATION
 Stage: BM-AUTO-GROUPED-HELPER-MIGRATION-CHAIN-B | Branch: main
-Start: `58538dd` | End: pending | Gate: `58538dd`
+Start: `58538dd` | End: `dae9bec` | Gate: `58538dd`
 
 Target: normalizeAnswerSolutionSource + splitAnswerSolutionSections → qisi-utils.js
 Why grouped: normalizeAnswerSolutionSource delta alone <10; split depends on it; gate accepted Chain B
