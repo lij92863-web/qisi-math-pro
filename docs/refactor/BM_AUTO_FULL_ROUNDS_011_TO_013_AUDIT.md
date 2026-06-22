@@ -56,6 +56,8 @@ Audit correction commit: pending
 
 All commands ran with full output, no tail, no grep. Zero timeouts, zero skipped, zero failed.
 
+Note: The original campaign (R011-R013) had tool-level timeout flags on verify:safe and dry-run commands. This audit-task rerun (and later the sync-fix rerun — see BM_AUTO_FULL_ROUNDS_011_TO_013_AUDIT_SYNC_FIX.md) confirmed no actual timeouts: verify:safe completed 488/488 pass, dry-run completed ok:true within tool limits.
+
 ## Safety
 
 | Check | Status |
