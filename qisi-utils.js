@@ -477,12 +477,34 @@
             });
         };
 
+        const isFatalQwenServiceError = (error) => {
+            const message = String(error?.message || error || '').toLowerCase();
+
+            return (
+                message.includes('qwen 视觉识别接口不可用') ||
+                message.includes('dashscope 鉴权失败') ||
+                message.includes('余额不足') ||
+                message.includes('额度耗尽') ||
+                message.includes('api key 无效') ||
+                message.includes('权限不足') ||
+                message.includes('限流') ||
+                message.includes('http 429') ||
+                message.includes('quota') ||
+                message.includes('balance') ||
+                message.includes('billing') ||
+                message.includes('unauthorized') ||
+                message.includes('forbidden') ||
+                message.includes('rate limit')
+            );
+        };
+
         const api = {
             cleanFormulaOcrText,
             cleanRecognizedText,
             extractRelevanceTokens,
             findNode,
             finalChoiceAnswerText,
+            isFatalQwenServiceError,
             mathSignalCount,
             protectLatexMathSegments,
             restoreLatexMathSegments,

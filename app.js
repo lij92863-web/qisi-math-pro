@@ -1340,27 +1340,6 @@
                         }
                     );
                 };
-
-                const isFatalQwenServiceError = (error) => {
-                    const message = String(error?.message || error || '').toLowerCase();
-
-                    return (
-                        message.includes('qwen 视觉识别接口不可用') ||
-                        message.includes('dashscope 鉴权失败') ||
-                        message.includes('余额不足') ||
-                        message.includes('额度耗尽') ||
-                        message.includes('api key 无效') ||
-                        message.includes('权限不足') ||
-                        message.includes('限流') ||
-                        message.includes('http 429') ||
-                        message.includes('quota') ||
-                        message.includes('balance') ||
-                        message.includes('billing') ||
-                        message.includes('unauthorized') ||
-                        message.includes('forbidden') ||
-                        message.includes('rate limit')
-                    );
-                };
                 const OCR_MODEL = "qwen-vl-ocr-latest";
                 const OCR_IMAGE_LIMITS = {
                     min_pixels: 3072,
@@ -1619,7 +1598,7 @@
                             if (text && text.length > 8) return text;
                         } catch (error) {
                             lastError = error;
-                            if (isFatalQwenServiceError(error)) throw error;
+                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
                             console.warn(`OCR ${task} 不可用，尝试下一个任务`, error);
                         }
                     }
@@ -1667,7 +1646,7 @@
                         const text = extractAssistantText(await resp.json());
                         return window.Qisi.Utils.cleanRecognizedText(text);
                     } catch (error) {
-                        if (isFatalQwenServiceError(error)) throw error;
+                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
                         console.warn('compatible-mode 整页 OCR Markdown 失败，尝试 OCR document_parsing', error);
                     }
 
@@ -1675,7 +1654,7 @@
                         const text = await callDashScopeOcrTask(imageUrl, 'document_parsing');
                         return window.Qisi.Utils.cleanRecognizedText(text);
                     } catch (error) {
-                        if (isFatalQwenServiceError(error)) throw error;
+                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
                         console.warn('整页 OCR Markdown 失败', error);
                         return '';
                     }
@@ -1827,7 +1806,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             return normalized;
                         } catch (error) {
                             lastError = error;
-                            if (isFatalQwenServiceError(error)) throw error;
+                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
                             console.warn(`${model} 题图定位失败，尝试备用模型`, error);
                         }
                     }
@@ -1840,7 +1819,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     try {
                         return await callDashScopeOcrTask(imageUrl, 'formula_recognition');
                     } catch (error) {
-                        if (isFatalQwenServiceError(error)) throw error;
+                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
                         console.warn('OCR 公式识别任务不可用，已跳过公式补充', error);
                         return '';
                     }
@@ -7018,7 +6997,7 @@ ${source}`;
                             if (items.length || model === models.at(-1)) return items;
                         } catch (error) {
                             lastError = error;
-                            if (isFatalQwenServiceError(error)) throw error;
+                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
                             console.warn(`${model} 图片识别不可用，尝试备用模型`, error);
                         }
                     }
@@ -7189,7 +7168,7 @@ ${pageMarkdown || '空'}
                             return repaired;
                         } catch (error) {
                             lastError = error;
-                            if (isFatalQwenServiceError(error)) throw error;
+                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
                             console.warn(`${model} 页级细节修复失败，尝试下一个模型`, error);
                         }
                     }
@@ -7205,7 +7184,7 @@ ${pageMarkdown || '空'}
                         try {
                             pageMarkdown = await recognizePageMarkdownWithQwen(imageUrl);
                         } catch (error) {
-                            if (isFatalQwenServiceError(error)) throw error;
+                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
                             console.warn(`第 ${pageNo} 页 OCR Markdown 失败，继续使用视觉结构化`, error);
                             pageMarkdown = '';
                         }
@@ -7430,7 +7409,7 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                             };
                         } catch (error) {
                             lastError = error;
-                            if (isFatalQwenServiceError(error)) throw error;
+                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
                             console.warn(`${model} 整页结构化识别失败，尝试备用模型`, error);
                         }
                     }
@@ -8387,7 +8366,7 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                             );
 
                             if (
-                                isFatalQwenServiceError(
+                                window.Qisi.Utils.isFatalQwenServiceError(
                                     error
                                 )
                             ) {
@@ -9481,7 +9460,7 @@ ${rawBlock}
                     } catch (error) {
                         if (
                             strict ||
-                            isFatalQwenServiceError(error)
+                            window.Qisi.Utils.isFatalQwenServiceError(error)
                         ) {
                             throw error;
                         }
@@ -9705,7 +9684,7 @@ ${rawBlock}
                                 message: error?.message || String(error)
                             });
 
-                            if (isFatalQwenServiceError(error)) {
+                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) {
                                 throw error;
                             }
 
@@ -9822,7 +9801,7 @@ ${rawBlock}
                                 )
                             );
                         } catch (error) {
-                            if (isFatalQwenServiceError(error)) throw error;
+                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
                             console.warn(
                                 `[BATCH_DEBUG][pdf-page-recognition-failed] ${file.filename} 第${page.pageNo}页结构化识别失败，但页图已保留`,
                                 error
@@ -11096,7 +11075,7 @@ ${repairInfo ? `上一次识别结果有问题：\n${repairInfo}\n请根据原�
                             return items;
                         } catch (error) {
                             lastError = error;
-                            if (isFatalQwenServiceError(error)) throw error;
+                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
                             console.warn('[BATCH_DEBUG][docx-rendered-page-qwen-failed]', {
                                 filename: file.filename,
                                 pageNo: page.pageNo,
@@ -11556,7 +11535,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                                 message: error?.message || String(error)
                             }, 'warn');
 
-                            if (isFatalQwenServiceError(error)) throw error;
+                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
 
                             console.warn('[BATCH_DEBUG][strict-model-failed]', {
                                 filename: file.filename,
@@ -11807,7 +11786,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                                     ];
                                 }
                             } catch (error) {
-                                if (isFatalQwenServiceError(error)) throw error;
+                                if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
 
                                 console.warn('[BATCH_IMAGE][figure-locator-failed]', {
                                     filename: file.filename,
@@ -13006,7 +12985,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                         try {
                             parsed = mergeAnswerSolutionResults(parsed, await recognizeAnswerSolutionWithQwen(ocrText, file));
                         } catch (error) {
-                            if (isFatalQwenServiceError(error)) throw error;
+                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
                             console.warn('OCR 文档解析后的答案详解结构化失败，保留本地解析', error);
                         }
                         parsed.answers.forEach(item => {
@@ -13020,7 +12999,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                         });
                         if (parsed.answers.length || parsed.solutions.length) return parsed;
                     } catch (error) {
-                        if (isFatalQwenServiceError(error)) throw error;
+                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
                         console.warn('OCR 文档解析识别答案详解失败，回退视觉 JSON 识别', error);
                     }
 
@@ -13093,7 +13072,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                             if (answers.length || solutions.length || model === models.at(-1)) return { answers, solutions };
                         } catch (error) {
                             lastError = error;
-                            if (isFatalQwenServiceError(error)) throw error;
+                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
                             console.warn(`${model} 答案解析图片识别不可用，尝试备用模型`, error);
                         }
                     }
@@ -13264,7 +13243,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                         }, imageUrl, draft.sourcePage || 1);
                         if (pageResult.questions.length) return pageResult.questions[0];
                     } catch (error) {
-                        if (isFatalQwenServiceError(error)) throw error;
+                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
                         console.warn('单题整页结构化重识别失败，回退视觉 JSON 重识别', error);
                     }
 
@@ -13304,7 +13283,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                             if (repaired.length || model === models.at(-1)) return repaired[0] || null;
                         } catch (error) {
                             lastError = error;
-                            if (isFatalQwenServiceError(error)) throw error;
+                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
                             console.warn(`${model} 单题重识别不可用，尝试备用模型`, error);
                         }
                     }
@@ -13708,7 +13687,7 @@ ${JSON.stringify(targets, null, 2)}
                             return patches;
                         } catch (error) {
                             lastError = error;
-                            if (isFatalQwenServiceError(error)) throw error;
+                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
                             console.warn(`${model} 最终视觉修复失败，尝试下一个模型`, error);
                         }
                     }
@@ -17004,7 +16983,7 @@ ${source}`;
 
                             warnings.push(...(result.warnings || []));
                         } catch (error) {
-                            if (isFatalQwenServiceError(error)) throw error;
+                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
 
                             console.warn('[BATCH_V2][docx-importer-primary-failed]', {
                                 filename: file.filename,
@@ -17183,7 +17162,7 @@ ${source}`;
                         showBatchToast(`V2 批量识别完成：生成 ${drafts.length} 道草稿。`);
                     } catch (error) {
                         console.error('[BATCH_V2][batch-failed]', error);
-                        const isFatal = isFatalQwenServiceError(error);
+                        const isFatal = window.Qisi.Utils.isFatalQwenServiceError(error);
                         await db.draftImportBatches.update(batchId, {
                             status: 'failed',
                             progress: 100,
@@ -17971,7 +17950,7 @@ ${source}`;
                                         await updateBatchProgress(batchId, baseProgress + fileProgressSpan, 'processing');
                                         continue;
                                     } catch (error) {
-                                        if (isFatalQwenServiceError(error)) throw error;
+                                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
 
                                         if (error?.failureSnapshot) {
                                             console.error(
@@ -18673,7 +18652,7 @@ ${source}`;
 
                                     } catch (error) {
                                         pdfVisualError = error;
-                                        if (isFatalQwenServiceError(error)) throw error;
+                                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
                                         const renderDiagnostics =
                                             error?.renderDiagnostics ||
                                             error?.cause?.renderDiagnostics ||
@@ -18844,7 +18823,7 @@ ${source}`;
                                                 return stem.length > 0 || optionCount > 0;
                                             });
                                     } catch (error) {
-                                        if (isFatalQwenServiceError(error)) throw error;
+                                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
 
                                         console.warn('[BATCH_DEBUG][docx-importer-failed-fallback-to-text]', {
                                             filename: file.filename,
@@ -18978,7 +18957,7 @@ ${source}`;
                                     try {
                                         structuredItems = await recognizeTextQuestionsWithQwen(text, file, false, batchDefaultMeta.defaultType);
                                     } catch (error) {
-                                        if (isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
+                                        if (window.Qisi.Utils.isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
                                         console.warn('文本题目结构化失败，回退到本地切题', error);
                                     }
                                     questionItems.push(...(structuredItems.length ? structuredItems : parseQuestionItemsFromText(text, file, false)));
@@ -18988,7 +18967,7 @@ ${source}`;
                                     try {
                                         parsed = mergeAnswerSolutionResults(parsed, await recognizeAnswerSolutionWithQwen(text, file));
                                     } catch (error) {
-                                        if (isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
+                                        if (window.Qisi.Utils.isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
                                         console.warn('答案解析结构化失败，保留本地结果', error);
                                     }
                                     answerItems.push(...parsed.answers);
@@ -18999,7 +18978,7 @@ ${source}`;
                                     try {
                                         parsed = mergeAnswerSolutionResults(parsed, await recognizeAnswerSolutionWithQwen(text, file));
                                     } catch (error) {
-                                        if (isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
+                                        if (window.Qisi.Utils.isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
                                         console.warn('解析文件结构化失败，保留本地结果', error);
                                     }
                                     solutionItems.push(...parsed.solutions);
@@ -19009,7 +18988,7 @@ ${source}`;
                                     try {
                                         structuredItems = await recognizeTextQuestionsWithQwen(text, file, true, batchDefaultMeta.defaultType);
                                     } catch (error) {
-                                        if (isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
+                                        if (window.Qisi.Utils.isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
                                         console.warn('完整文件结构化失败，回退到本地切题', error);
                                     }
                                     fullItems.push(...(structuredItems.length ? structuredItems : parseQuestionItemsFromText(text, file, true)));
@@ -19017,7 +18996,7 @@ ${source}`;
                                     try {
                                         parsed = mergeAnswerSolutionResults(parsed, await recognizeAnswerSolutionWithQwen(text, file));
                                     } catch (error) {
-                                        if (isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
+                                        if (window.Qisi.Utils.isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
                                         console.warn('完整文件答案解析结构化失败，保留本地结果', error);
                                     }
                                     answerItems.push(...parsed.answers);
@@ -19028,7 +19007,7 @@ ${source}`;
                                     try {
                                         aiItems = await recognizeImageQuestionWithQwen(file);
                                     } catch (error) {
-                                        if (isFatalQwenServiceError(error)) throw error;
+                                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
                                         console.warn('图片 AI 识别不可用，已进入人工草稿', error);
                                     }
                                     if (aiItems.length) {
@@ -19218,7 +19197,7 @@ ${source}`;
                             try {
                                 await repairDraftAnswersWithQwen(drafts, answerItems, solutionItems);
                             } catch (error) {
-                                if (isFatalQwenServiceError(error)) throw error;
+                                if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
                                 console.warn('答案全局对齐失败，保留已有匹配结果', error);
                             }
                         }
