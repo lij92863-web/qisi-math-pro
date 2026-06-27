@@ -297,3 +297,84 @@ describe('integration fixtures', () => {
         assert.equal(typeof helpers.callDashScopeOcrTask, 'undefined');
     });
 });
+
+describe('qisi-utils implementation parity', () => {
+    it('[A4:impl-compare:text] qisi-utils text cleaner matches extracted app helper', () => {
+        const cases = [
+            '',
+            null,
+            undefined,
+            '  hello  ',
+            'A [鍥剧墖閫夐」寰呰浆鎹? wmf] B',
+            '[[IMAGE:abc]]',
+            '[[FORMULA_IMAGE:abc]]',
+            '\\includegraphics{fig.png}',
+            '[object Object]'
+        ];
+
+        for (const value of cases) {
+            assert.equal(
+                qisiUtils.cleanDisplayTextForBatchSave(value),
+                helpers.cleanDisplayTextForBatchSave(value)
+            );
+        }
+    });
+
+    it('[A4:impl-compare:options] qisi-utils options cleaner matches extracted app helper', () => {
+        const cases = [
+            null,
+            [],
+            ['A', 'B'],
+            ['A', 'B', 'C', 'D', 'E'],
+            ['  A  ', 'B', 'C', 'D'],
+            ['[鍥剧墖閫夐」寰呰浆鎹? wmf]', 'B', 'C', 'D'],
+            ['[[IMAGE:abc]]'],
+            ['[[FORMULA_IMAGE:abc]]'],
+            ['x [[IMAGE:abc]]'],
+            [{ x: 1 }]
+        ];
+
+        for (const value of cases) {
+            assert.deepEqual(
+                norm(qisiUtils.cleanDisplayOptionsForBatchSave(clone(value))),
+                norm(helpers.cleanDisplayOptionsForBatchSave(clone(value)))
+            );
+        }
+    });
+
+    it('[A4:impl-compare:warning] qisi-utils warning helper matches extracted app helper', () => {
+        const cases = [
+            [{}, 'a'],
+            [{ warnings: ['a'] }, 'a'],
+            [{ warnings: ['a'] }, 'b'],
+            [{ warnings: ['a', 'b'], stem: 'x' }, 'c'],
+            [{ warnings: 'ab' }, 'c'],
+            [{}, '']
+        ];
+
+        for (const [input, message] of cases) {
+            const expected = clone(input);
+            const actual = clone(input);
+            assert.equal(qisiUtils.addWarningOnce(actual, message), helpers.addWarningOnce(expected, message));
+            assert.deepEqual(norm(actual), norm(expected));
+        }
+    });
+
+    it('[A4:impl-compare:fields] qisi-utils field cleaner matches extracted app helper', () => {
+        const cases = [
+            { stem: ' A [鍥剧墖閫夐」寰呰浆鎹? wmf] ', options: [], answer: '', solution: '' },
+            { stem: '', options: [' A ', '[鍥剧墖閫夐」寰呰浆鎹? wmf]'], answer: '', solution: '' },
+            { stem: '[[IMAGE:x]]', options: ['[[FORMULA_IMAGE:y]]'], answer: ' A ', solution: ' S ' },
+            { stem: 'x', options: null, answer: '', solution: '', id: 'q1' },
+            { stem: 'PDF stem', options: [], answer: '', solution: '' }
+        ];
+
+        for (const value of cases) {
+            const expected = clone(value);
+            const actual = clone(value);
+            assert.equal(qisiUtils.cleanDisplayFieldsOnly(actual), actual);
+            assert.equal(helpers.cleanDisplayFieldsOnly(expected), expected);
+            assert.deepEqual(norm(actual), norm(expected));
+        }
+    });
+});

@@ -681,10 +681,55 @@
             return restoreBatchMediaTokens(cleaned, tokens).trim();
         };
 
+        const cleanDisplayTextForBatchSave = (text) => {
+            const raw = cleanRecognizedText(text);
+            if (!raw) return '';
+            return stripBatchImagePlaceholders(raw);
+        };
+
+        const cleanDisplayOptionsForBatchSave = (options) => {
+            const arr = Array.isArray(options) ? options : ['', '', '', ''];
+
+            return [0, 1, 2, 3].map(idx => {
+                const raw = cleanRecognizedText(arr[idx] || '');
+                if (!raw) return '';
+
+                const cleaned = cleanDisplayTextForBatchSave(raw);
+
+                // 关键：纯图片选项也必须保留，不能返回空。
+                if (!cleaned && hasBatchMediaToken(raw)) {
+                    const mediaTokens = raw.match(BATCH_MEDIA_TOKEN_RE) || [];
+                    return mediaTokens.join(' ').trim();
+                }
+
+                return cleaned;
+            });
+        };
+
+        const cleanDisplayFieldsOnly = (q) => {
+            if (!q) return q;
+
+            q.stem = cleanDisplayTextForBatchSave(q.stem);
+            q.options = cleanDisplayOptionsForBatchSave(q.options);
+            q.answer = cleanDisplayTextForBatchSave(q.answer);
+            q.solution = cleanDisplayTextForBatchSave(q.solution);
+
+            return q;
+        };
+
+        const addWarningOnce = (q, message) => {
+            if (!q || !message) return;
+            q.warnings = [...new Set([...(q.warnings || []), message])];
+        };
+
         const api = {
             BATCH_BAD_PLACEHOLDER_RE,
             BATCH_MEDIA_TOKEN_RE,
+            addWarningOnce,
             bboxIntersectionArea,
+            cleanDisplayFieldsOnly,
+            cleanDisplayOptionsForBatchSave,
+            cleanDisplayTextForBatchSave,
             cleanFormulaOcrText,
             cleanRecognizedText,
             expandPageRange,
