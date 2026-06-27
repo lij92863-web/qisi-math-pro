@@ -5,7 +5,7 @@
 Stage: BM-AUTO-CHAIN-A-BATCH-A2-MIGRATION
 Branch: main
 Start commit: f1cf1a7a79f58479fad98c170b578cff77616d0e
-End commit: pending
+End commit: 8709c6d3aeb732c3dcfc3af5b30a20f476a8596a
 A1 precondition: A1 migration, sync, and documentation audit accepted.
 Target module: qisi-utils.js
 Classification: REAL_MIGRATION
