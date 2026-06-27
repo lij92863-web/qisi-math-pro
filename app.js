@@ -9953,39 +9953,9 @@ ${rawBlock}
                     throw new Error(`未找到 DOCX 页面图 manifest。已尝试路径：${candidates.join('、')}。失败信息：${manifestFailures.join('；')}`);
                 };
 
-                const hasUnconvertedImagePlaceholder = (value = '') => {
-                    const raw = String(value || '');
-
-                    // 合法媒体 token 不是未转换错误。
-                    const { protectedText } = typeof protectBatchMediaTokens === 'function'
-                        ? window.Qisi.Utils.protectBatchMediaTokens(raw)
-                        : { protectedText: raw };
-
-                    return /公式图片选项待转换|图片选项待转换|待转换[:：]?(?:wmf|emf|ole|bin)|\[object Object\]|\bundefined\b|\bnull\b/i
-                        .test(protectedText);
-                };
-
-                const hasUnconvertedOptionPlaceholder = (q) => {
-                    const text = [
-                        q?.stem,
-                        ...(Array.isArray(q?.options) ? q.options : [])
-                    ].map(x => String(x || '')).join('\n');
-
-                    return /\[公式图片选项待转换[:：]?\s*(wmf|emf|ole|bin|unknown)\]/i.test(text) ||
-                        /\[图片选项待转换/i.test(text) ||
-                        hasUnconvertedImagePlaceholder(text);
-                };
-
-                const itemHasUnconvertedImagePlaceholder = (item = {}) => [
-                    item.stem,
-                    ...(Array.isArray(item.options) ? item.options : []),
-                    item.answer,
-                    item.solution
-                ].some(hasUnconvertedImagePlaceholder);
-
                 const optionCountForGolden = (options = []) =>
                     (Array.isArray(options) ? options : [])
-                        .filter(opt => window.Qisi.Utils.cleanRecognizedText(opt || '') && !hasUnconvertedImagePlaceholder(opt))
+                        .filter(opt => window.Qisi.Utils.cleanRecognizedText(opt || '') && !window.Qisi.Utils.hasUnconvertedImagePlaceholder(opt))
                         .length;
 
                 const validateDocxVisualItems = (items = [], expectedQuestionCount = 0) => {
@@ -9994,7 +9964,7 @@ ${rawBlock}
                     const rows = (items || []).map((item, idx) => {
                         const options = cleanDisplayOptionsForBatchSave(item.options || []);
                         const optionCount = optionCountForGolden(options);
-                        const hasPlaceholder = itemHasUnconvertedImagePlaceholder({ ...item, options });
+                        const hasPlaceholder = window.Qisi.Utils.itemHasUnconvertedImagePlaceholder({ ...item, options });
                         const stemLength = window.Qisi.Utils.cleanRecognizedText(item.stem || '').length;
                         const latexErrorCount = [item.stem, ...options, item.answer, item.solution]
                             .reduce((sum, text) => sum + (typeof latexErrorCountForText === 'function' ? latexErrorCountForText(text) : 0), 0);
@@ -10002,7 +9972,7 @@ ${rawBlock}
 
                         if (!stemLength) failures.push('题干为空');
                         options.forEach((opt, optIdx) => {
-                            if (!window.Qisi.Utils.cleanRecognizedText(opt || '') || hasUnconvertedImagePlaceholder(opt)) {
+                            if (!window.Qisi.Utils.cleanRecognizedText(opt || '') || window.Qisi.Utils.hasUnconvertedImagePlaceholder(opt)) {
                                 failures.push(`${String.fromCharCode(65 + optIdx)} 选项为空或无效`);
                             }
                         });
@@ -10167,7 +10137,7 @@ ${rawBlock}
                             }
                         }
 
-                        if (hasUnconvertedOptionPlaceholder(item)) {
+                        if (window.Qisi.Utils.hasUnconvertedOptionPlaceholder(item)) {
                             failures.push('仍包含 WMF/OLE 待转换占位符');
                         }
 
@@ -15362,7 +15332,7 @@ ${source}`;
                     const problems = [];
                     if ((q.warnings || []).length) problems.push(...q.warnings);
                     if (!window.Qisi.Utils.cleanRecognizedText(q.stem)) problems.push('题干为空，请先补充题干。');
-                    if ([q.stem, ...(Array.isArray(q.options) ? q.options : []), q.answer, q.solution].some(hasUnconvertedImagePlaceholder)) {
+                    if ([q.stem, ...(Array.isArray(q.options) ? q.options : []), q.answer, q.solution].some(window.Qisi.Utils.hasUnconvertedImagePlaceholder)) {
                         problems.push('存在未转换的 DOCX 公式图片占位，不能作为最终识别结果。');
                     }
                     const optionIssue = choiceOptionIssue(q.type, q.options, q.answer);
@@ -15454,7 +15424,7 @@ ${source}`;
                     const rows = sorted.map((q, idx) => {
                         const options = cleanDisplayOptionsForBatchSave(q.options || []);
                         const allTexts = [q.stem, ...options, q.answer, q.solution].map(x => String(x || ''));
-                        const hasPlaceholder = allTexts.some(hasUnconvertedImagePlaceholder);
+                        const hasPlaceholder = allTexts.some(window.Qisi.Utils.hasUnconvertedImagePlaceholder);
                         const latexErrorCount = allTexts.reduce((sum, text) => sum + latexErrorCountForText(text), 0);
                         const optionCount = optionCountForGolden(options);
                         const failures = [];
@@ -15499,7 +15469,7 @@ ${source}`;
                         actualQuestionCount: sorted.length,
                         allQuestionsHaveStem: sorted.every(q => window.Qisi.Utils.cleanRecognizedText(q.stem || '')),
                         allChoiceQuestionsHaveFourOptions: sorted.every(q => optionCountForGolden(q.options || []) >= 4),
-                        noUnconvertedImagePlaceholder: !sorted.some(q => [q.stem, ...(q.options || []), q.answer, q.solution].some(hasUnconvertedImagePlaceholder)),
+                        noUnconvertedImagePlaceholder: !sorted.some(q => [q.stem, ...(q.options || []), q.answer, q.solution].some(window.Qisi.Utils.hasUnconvertedImagePlaceholder)),
                         allLatexRenderable: rows.every(row => row.latexErrorCount === 0),
                         failedQuestions
                     };
@@ -18674,7 +18644,7 @@ ${source}`;
                                     }
                                     }
 
-                                    if (docxImporterItems.length > 0 && docxImporterItems.some(itemHasUnconvertedImagePlaceholder)) {
+                                    if (docxImporterItems.length > 0 && docxImporterItems.some(window.Qisi.Utils.itemHasUnconvertedImagePlaceholder)) {
                                         console.error('[BATCH_DEBUG][docx-placeholder-blocked-no-uploaded-visual]', {
                                             filename: file.filename,
                                             itemCount: docxImporterItems.length
@@ -19337,7 +19307,7 @@ ${source}`;
                                     return Boolean(d.sourcePageImage || d.sourceTrace?.sourcePageImage) &&
                                         (
                                             (isStrictChoiceType(d.type) && optionCount < 4) ||
-                                            hasUnconvertedOptionPlaceholder(d)
+                                            window.Qisi.Utils.hasUnconvertedOptionPlaceholder(d)
                                         );
                                 });
 
@@ -19370,7 +19340,7 @@ ${source}`;
                             throw error;
                         }
 
-                        const finalPlaceholderDrafts = (drafts || []).filter(hasUnconvertedOptionPlaceholder);
+                        const finalPlaceholderDrafts = (drafts || []).filter(window.Qisi.Utils.hasUnconvertedOptionPlaceholder);
 
                         if (finalPlaceholderDrafts.length) {
                             console.error('[BATCH_DEBUG][final-placeholder-blocked]', finalPlaceholderDrafts.map(q => ({
@@ -20019,7 +19989,7 @@ ${source}`;
                 const validateDraftForReview = (q) => {
                     if (!String(q?.stem || '').trim()) return '题干为空，请先补充题干。';
                     if (!String(q?.type || '').trim()) return '题型为空，请先选择题型。';
-                    if ([q.stem, ...(Array.isArray(q.options) ? q.options : []), q.answer, q.solution].some(hasUnconvertedImagePlaceholder)) {
+                    if ([q.stem, ...(Array.isArray(q.options) ? q.options : []), q.answer, q.solution].some(window.Qisi.Utils.hasUnconvertedImagePlaceholder)) {
                         return '存在未转换的 DOCX 公式图片占位，请先使用页面图视觉识别生成 LaTeX。';
                     }
                     const optionIssue = choiceOptionIssue(q.type, q.options, q.answer);

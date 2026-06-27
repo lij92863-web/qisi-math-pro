@@ -639,6 +639,34 @@
             return BATCH_BAD_PLACEHOLDER_RE.test(String(text || '')) || hasBatchMediaToken(text);
         };
 
+        const hasUnconvertedImagePlaceholder = (value = '') => {
+            const raw = String(value || '');
+
+            // Legal media tokens are not unconverted-image errors.
+            const { protectedText } = protectBatchMediaTokens(raw);
+
+            return /公式图片选项待转换|图片选项待转换|待转换[:：]?(?:wmf|emf|ole|bin)|\[object Object\]|\bundefined\b|\bnull\b/i
+                .test(protectedText);
+        };
+
+        const hasUnconvertedOptionPlaceholder = (q) => {
+            const text = [
+                q?.stem,
+                ...(Array.isArray(q?.options) ? q.options : [])
+            ].map(x => String(x || '')).join('\n');
+
+            return /\[公式图片选项待转换[:：]?\s*(wmf|emf|ole|bin|unknown)\]/i.test(text) ||
+                /\[图片选项待转换/i.test(text) ||
+                hasUnconvertedImagePlaceholder(text);
+        };
+
+        const itemHasUnconvertedImagePlaceholder = (item = {}) => [
+            item.stem,
+            ...(Array.isArray(item.options) ? item.options : []),
+            item.answer,
+            item.solution
+        ].some(hasUnconvertedImagePlaceholder);
+
         const stripBatchImagePlaceholders = (text) => {
             const raw = String(text || '');
             const { protectedText, tokens } = protectBatchMediaTokens(raw);
@@ -665,7 +693,10 @@
             finalChoiceAnswerText,
             hasBatchImagePlaceholder,
             hasBatchMediaToken,
+            hasUnconvertedImagePlaceholder,
+            hasUnconvertedOptionPlaceholder,
             isFatalQwenServiceError,
+            itemHasUnconvertedImagePlaceholder,
             mathSignalCount,
             normalizeAnswerSolutionSource,
             normalizeFigureBbox,
