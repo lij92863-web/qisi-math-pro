@@ -2349,8 +2349,8 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 };
 
                 const preferBetterOptions = (primaryOptions, fallbackOptions) => {
-                    const primary = cleanDisplayOptionsForBatchSave(primaryOptions || []);
-                    const fallback = cleanDisplayOptionsForBatchSave(fallbackOptions || []);
+                    const primary = window.Qisi.Utils.cleanDisplayOptionsForBatchSave(primaryOptions || []);
+                    const fallback = window.Qisi.Utils.cleanDisplayOptionsForBatchSave(fallbackOptions || []);
 
                     const primaryCount = primary.filter(Boolean).length;
                     const fallbackCount = fallback.filter(Boolean).length;
@@ -2363,11 +2363,11 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     if (!Array.isArray(fallbackItems) || !fallbackItems.length) return primaryItems;
 
                     const optionCountOf = (options) =>
-                        cleanDisplayOptionsForBatchSave(options || []).filter(Boolean).length;
+                        window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options || []).filter(Boolean).length;
 
                     const betterOptions = (a, b) => {
-                        const aa = cleanDisplayOptionsForBatchSave(a || []);
-                        const bb = cleanDisplayOptionsForBatchSave(b || []);
+                        const aa = window.Qisi.Utils.cleanDisplayOptionsForBatchSave(a || []);
+                        const bb = window.Qisi.Utils.cleanDisplayOptionsForBatchSave(b || []);
                         return optionCountOf(bb) > optionCountOf(aa) ? bb : aa;
                     };
 
@@ -2891,7 +2891,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                                 candidates.push({
                                     stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(source.slice(0, ordered[0].start).trim()),
-                                    options: cleanDisplayOptionsForBatchSave(options),
+                                    options: window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options),
                                     optionCount: validCount,
                                     score: validCount * 100 + Math.min(50, source.length / 20)
                                 });
@@ -2916,7 +2916,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                             candidates.push({
                                 stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(source.slice(0, match.index).trim()),
-                                options: cleanDisplayOptionsForBatchSave(options),
+                                options: window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options),
                                 optionCount: validCount,
                                 score: validCount * 90
                             });
@@ -2965,7 +2965,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                                 candidates.push({
                                     stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(stemLines.join('\n')),
-                                    options: cleanDisplayOptionsForBatchSave(options),
+                                    options: window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options),
                                     optionCount: validCount,
                                     score: validCount * 110
                                 });
@@ -3028,7 +3028,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                                 if (validCount >= 2) {
                                     candidates.push({
                                         stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(lines.slice(0, i).join('\n')),
-                                        options: cleanDisplayOptionsForBatchSave(options),
+                                        options: window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options),
                                         optionCount: validCount,
                                         score: validCount * 140 + 20,
                                         source: 'table-label-row'
