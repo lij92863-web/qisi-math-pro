@@ -1,7 +1,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { auditSource, countSections, discoverDocs } = require('../scripts/bm-a4-doc-audit');
+const { auditDocs, auditSource, countSections, discoverDocs, isCurrentCampaignDoc, markdownReport } = require('../scripts/bm-a4-doc-audit');
 
 function completeDoc(extra = '') {
     return [
@@ -114,5 +114,17 @@ describe('bm-a4-doc-audit', () => {
         const source = fs.readFileSync('docs/refactor/BM_AUTO_A4_R3_MEDIUM_WRAPPER_REMOVAL_GATE.md', 'utf8');
         const lines = source.split(/\r?\n/);
         assert.ok(lines.length >= 20, `medium gate has ${lines.length} physical lines`);
+    });
+
+    it('classifies current residual campaign docs', () => {
+        assert.equal(isCurrentCampaignDoc('BM_AUTO_A4_R3_RESIDUAL_PROOF.md'), true);
+        assert.equal(isCurrentCampaignDoc('BM_AUTO_OLD_PLAN.md'), false);
+    });
+
+    it('write-report includes file and reason', () => {
+        const result = auditDocs('docs/refactor');
+        const report = markdownReport(result);
+        assert.ok(report.includes('BM_AUTO'));
+        assert.ok(report.includes('Errors'));
     });
 });
