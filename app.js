@@ -2817,7 +2817,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                     return {
                         stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(stem || source),
-                        options: cleanDisplayOptionsForBatchSave(options)
+                        options: window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options)
                     };
                 };
 
@@ -13556,7 +13556,7 @@ ${JSON.stringify(targets, null, 2)}
                             draft.mergeWarnings = (draft.mergeWarnings || []).filter(item => item !== 'missing_options');
                             draft.warnings = (draft.warnings || []).filter(w => !String(w).includes('选择题仅识别到'));
 
-                            const patchedStem = cleanDisplayTextForBatchSave(patch.stem || patch.题干 || '');
+                            const patchedStem = window.Qisi.Utils.cleanDisplayTextForBatchSave(patch.stem || patch.题干 || '');
                             if (patchedStem && patchedStem.length >= 8 && patchedStem.length >= window.Qisi.Utils.cleanRecognizedText(draft.stem).length * 0.35) {
                                 draft.stem = patchedStem;
                             }
@@ -16930,7 +16930,7 @@ ${source}`;
                             questionNumber: q.questionNumber,
                             type: q.type,
                             stemLength: window.Qisi.Utils.cleanRecognizedText(q.stem || '').length,
-                            optionCount: cleanDisplayOptionsForBatchSave(q.options || []).filter(opt => String(opt || '').trim()).length,
+                            optionCount: window.Qisi.Utils.cleanDisplayOptionsForBatchSave(q.options || []).filter(opt => String(opt || '').trim()).length,
                             hasSourcePageImage: Boolean(q.sourcePageImage)
                         })));
                         console.groupEnd();
@@ -19272,7 +19272,7 @@ ${source}`;
                                 console.log('[BATCH_COST][skip-final-repair] cheap 模式跳过最终视觉修复');
                             } else if (recognitionMode === 'standard') {
                                 const needOptionRepair = drafts.some(d => {
-                                    const options = cleanDisplayOptionsForBatchSave(d.options);
+                                    const options = window.Qisi.Utils.cleanDisplayOptionsForBatchSave(d.options);
                                     const optionCount = options.filter(Boolean).length;
 
                                     return Boolean(d.sourcePageImage || d.sourceTrace?.sourcePageImage) &&
