@@ -35,6 +35,15 @@ function verifyShard(shardId, options = {}) {
     // Check forbidden files unchanged
     const forbiddenPatterns = /qisi-pdf-support-controlled-write\.js|qisi-pdf-support-aligner\.js|qisi-pdf-support-block-parser\.js/i;
 
+    // Check required fixture tags if provided
+    if (Array.isArray(options.requiredFixtureTags) && options.requiredFixtureTags.length > 0) {
+        for (const tag of options.requiredFixtureTags) {
+            if (!fixtureSource.includes(tag)) {
+                errors.push(`missing fixture tag: ${tag}`);
+            }
+        }
+    }
+
     // Read shard doc if exists
     const shardDocPath = `docs/refactor/BM_AUTO_A4_R3_SHARD_${shardId}.md`;
     const shardDocExists = fs.existsSync(path.resolve(__dirname, '..', shardDocPath));

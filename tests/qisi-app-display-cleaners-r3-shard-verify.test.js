@@ -15,8 +15,16 @@ describe('bm-a4-r3-shard-verify', () => {
     });
 
     it('fails replacement without fixture', () => {
-        const result = verifyShard('R3-S001');
-        assert.equal(result.shardDocExists, false);
+        const fakeShardId = `R3-TEST-NO-FIXTURE-${Date.now()}`;
+        const fakeTag = `[A4:R3:test:no-such-tag-${Date.now()}]`;
+        const result = verifyShard(fakeShardId, { requiredFixtureTags: [fakeTag] });
+        assert.equal(result.ok, false);
+        assert.ok(
+            result.errors.some((error) =>
+                /fixture|missing fixture|fixture tag|missing.*tag/i.test(String(error))
+            ),
+            'replacement without callsite-specific fixture tag must fail with fixture-related error'
+        );
     });
 
     it('fails blocked callsite replacement', () => {
