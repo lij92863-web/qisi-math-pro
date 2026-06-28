@@ -47,3 +47,13 @@ Start commit: `e828dc9`
 - If delta > -10
 - If any safety test fails
 - If dependency on unmigrated app.js functions is discovered
+
+
+## Historical Status
+
+This document is retained as a historical artifact. It is not an active gate for the current A4 R3 residual campaign.
+
+## Decision
+
+- Historical document retained.
+- No production behavior is changed by this documentation normalization.

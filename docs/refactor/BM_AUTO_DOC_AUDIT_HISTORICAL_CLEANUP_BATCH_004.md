@@ -2,6 +2,8 @@
 
 Stage: Historical BM-AUTO documentation cleanup
 Historical-Status: retained for audit trail
+Branch: main
+Commit: 41b857a
 
 ## Scope
 

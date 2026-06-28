@@ -45,3 +45,13 @@ Start commit: `96108f5`
 - If classification != REAL_MIGRATION
 - If delta > -10
 - If any safety test fails
+
+
+## Historical Status
+
+This document is retained as a historical artifact. It is not an active gate for the current A4 R3 residual campaign.
+
+## Decision
+
+- Historical document retained.
+- No production behavior is changed by this documentation normalization.

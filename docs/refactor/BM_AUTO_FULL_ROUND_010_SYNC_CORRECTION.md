@@ -39,7 +39,7 @@ Working tree before correction: clean
 
 | Correction | Status |
 |------------|--------|
-| End commit `pending` corrected to `d2fdf70` | yes |
+| End commit `not-completed` corrected to `d2fdf70` | yes |
 | Call site line number ~4832 corrected to 4818 | yes |
 
 ## Decision

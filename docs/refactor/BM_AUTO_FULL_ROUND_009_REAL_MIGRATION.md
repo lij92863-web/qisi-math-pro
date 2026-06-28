@@ -3,7 +3,7 @@
 Stage: BM-AUTO-FULL-ELIGIBLE-MIGRATION-CAMPAIGN
 Branch: main
 Start commit: `dea3cf6`
-End commit: (pending)
+End commit: (not-completed)
 Target helper group: `isFatalQwenServiceError`
 Target module: `qisi-utils.js`
 Changed files:
