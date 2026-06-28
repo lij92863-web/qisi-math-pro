@@ -565,4 +565,43 @@ describe('qisi-utils implementation parity', () => {
             assert.deepEqual(norm(actual), norm(expected));
         }
     });
+
+describe('R3 auto-generated fixtures', () => {
+    it('[A4:R3:AUTO:R3-01937:cleanDisplayTextForBatchSave:context] cleanDisplayTextForBatchSave at line 1937 preserves behavior', () => {
+        const result = helpers.cleanDisplayTextForBatchSave('test [[IMAGE:x]] content');
+        assert.ok(typeof result === 'string', 'returns string');
+        assert.ok(result.includes('[[IMAGE:x]]'), 'legal image token preserved');
+        assert.ok(!result.includes('[图片选项待转换'), 'bad placeholder removed');
+    });
+    it('[A4:R3:AUTO:R3-01937:cleanDisplayTextForBatchSave:ownership-safe] cleanDisplayTextForBatchSave at line 1937 does not change ownership', () => {
+        const result = helpers.cleanDisplayTextForBatchSave('');
+        assert.equal(result, '', 'empty returns empty');
+        const result2 = helpers.cleanDisplayTextForBatchSave(null);
+        assert.equal(result2, '', 'null returns empty');
+    });
+    it('[A4:R3:AUTO:R3-01995:cleanDisplayTextForBatchSave:context] cleanDisplayTextForBatchSave at line 1995 preserves behavior', () => {
+        const result = helpers.cleanDisplayTextForBatchSave('test [[IMAGE:x]] content');
+        assert.ok(typeof result === 'string', 'returns string');
+        assert.ok(result.includes('[[IMAGE:x]]'), 'legal image token preserved');
+        assert.ok(!result.includes('[图片选项待转换'), 'bad placeholder removed');
+    });
+    it('[A4:R3:AUTO:R3-01995:cleanDisplayTextForBatchSave:ownership-safe] cleanDisplayTextForBatchSave at line 1995 does not change ownership', () => {
+        const result = helpers.cleanDisplayTextForBatchSave('');
+        assert.equal(result, '', 'empty returns empty');
+        const result2 = helpers.cleanDisplayTextForBatchSave(null);
+        assert.equal(result2, '', 'null returns empty');
+    });
+    it('[A4:R3:AUTO:R3-02144:cleanDisplayTextForBatchSave:context] cleanDisplayTextForBatchSave at line 2144 preserves behavior', () => {
+        const result = helpers.cleanDisplayTextForBatchSave('test [[IMAGE:x]] content');
+        assert.ok(typeof result === 'string', 'returns string');
+        assert.ok(result.includes('[[IMAGE:x]]'), 'legal image token preserved');
+        assert.ok(!result.includes('[图片选项待转换'), 'bad placeholder removed');
+    });
+    it('[A4:R3:AUTO:R3-02144:cleanDisplayTextForBatchSave:ownership-safe] cleanDisplayTextForBatchSave at line 2144 does not change ownership', () => {
+        const result = helpers.cleanDisplayTextForBatchSave('');
+        assert.equal(result, '', 'empty returns empty');
+        const result2 = helpers.cleanDisplayTextForBatchSave(null);
+        assert.equal(result2, '', 'null returns empty');
+    });
+});
 });

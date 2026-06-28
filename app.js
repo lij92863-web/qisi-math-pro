@@ -1934,7 +1934,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     window.Qisi.Utils.addWarningOnce(q, message);
 
                 const optionTextHasContent = (value = '') => {
-                    const text = cleanDisplayTextForBatchSave(value);
+                    const text = window.Qisi.Utils.cleanDisplayTextForBatchSave(value);
                     if (!text) return false;
                     if (window.Qisi.Utils.hasBatchMediaToken(text)) return true;
 
@@ -1992,7 +1992,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         source = source.replace(match[0], latex || fallbackImageToken);
                     }
 
-                    return cleanDisplayTextForBatchSave(source);
+                    return window.Qisi.Utils.cleanDisplayTextForBatchSave(source);
                 };
 
                 const isLikelyBlockImageRef = (ref = {}) => {
@@ -2141,7 +2141,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 };
 
                 const preferFormulaRichSolution = (candidate = '', existing = '', stem = '') => {
-                    const next = cleanDisplayTextForBatchSave(candidate);
+                    const next = window.Qisi.Utils.cleanDisplayTextForBatchSave(candidate);
                     const old = cleanDisplayTextForBatchSave(existing);
 
                     if (!next) return old;
