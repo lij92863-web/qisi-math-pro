@@ -1,77 +1,70 @@
 # BM-AUTO A4 R3 Medium Remaining Register
 
-Stage: BM-AUTO-A4-R3-MEDIUM-REMAINING
-
+Stage: BM-AUTO-A4-R3-MEDIUM-REMAINING-REGISTER
 Branch: main
-
-Commit: 46bac8f
+Status: active register after medium campaign
 
 ## Summary
 
-After exhausting both AUTO_FIXTURE_CANDIDATE and PROVE_WITH_CONTEXT_FIXTURE pools, 40 naked A4 callsites remain in app.js that cannot be automatically replaced.
-
-| Category | Count |
-| --- | ---: |
+| Item | Count |
+| --- | --- |
 | Remaining naked callsites | 40 |
-| PROOF_REQUIRED without context fixture proof | 8 |
-| DEFER requiring stronger proof | 11 |
-| BLOCK requiring manual human review | 21 |
-| Explicit window.Qisi.Utils calls | 75 |
-| Wrappers present in app.js | 4 |
+| Deferred callsites | 19 |
+| Blocked callsites | 21 |
+| Unknown callsites | 0 |
+| Wrappers remain | 4 |
 
-## Why Each Category Cannot Be Replaced
+## Remaining Categories
 
-### PROOF_REQUIRED (8 remaining)
+| Category | Count | Meaning |
+| --- | --- | --- |
+| PROOF_REQUIRED / deferred | 19 | Requires stronger context proof before replacement. |
+| BLOCK_UNTIL_MANUAL | 21 | Not eligible for automatic replacement under current safety rules. |
+| UNKNOWN | 0 | No unknown callsites remain. |
 
-These callsites passed the candidate ranker with scores 70-84 but the proof builder could not produce a PROVE_WITH_CONTEXT_FIXTURE decision. They need stronger context analysis.
+## Ownership Risks
 
-### DEFER (11 remaining)
+The remaining callsites must not be replaced unless the next proof stage can show all of the following:
 
-These callsites scored 50-69 in the candidate ranker. The proof builder classified them as DEFER_COMPLEX_MUTATION. They touch multiple data fields or have complex mutation patterns.
-
-### BLOCK (21 remaining)
-
-These callsites scored below 50 or have explicit ownership risk markers. Each requires a human reviewer to examine surrounding context for answer ownership, solution ownership, support attachment, or PDF processing behavior changes.
-
-## Remaining by Helper
-
-| Helper | Approx Count |
-| --- | ---: |
-| cleanDisplayTextForBatchSave | 17 |
-| cleanDisplayOptionsForBatchSave | 17 |
-| addWarningOnce | 5 |
-| cleanDisplayFieldsOnly | 1 |
+- no controlled-write adjacency
+- no PDF ownership mutation
+- no support attachment mutation
+- no answer ownership mutation
+- no solution ownership mutation
+- no hidden save/draft persistence change
+- no behavior change in DOCX+DOCX stable chain
 
 ## Required Future Evidence
 
-For each remaining callsite, the following must be established:
+Each remaining callsite needs a dedicated record with:
 
-- Exact data fields read and written
-- Whether adjacent to controlled-write operations
-- Whether affecting PDF answer or solution ownership
-- Whether modifying support attachment data
-- Whether touching answer or solution fields in draft objects
-- Per-callsite fixture proving behavioral equivalence
+1. callsite id
+2. helper name
+3. source line
+4. parent function
+5. local context
+6. ownership-risk analysis
+7. fixture tag
+8. expected behavior before replacement
+9. expected behavior after replacement
+10. final replace/defer/block decision
 
 ## Validation
 
-Verified at time of this register:
-
-- verify:safe: passed with all tests green
-- Staged verifier: CALLSITE_PARTIAL explicitCount 75
-- verify:pdf-known-bad: passed
-- Controlled-write ownership: passed
+| Check | Result |
+| --- | --- |
+| staged verifier | CALLSITE_PARTIAL |
+| verify:safe | passed |
+| verify:pdf-known-bad | passed |
+| controlled-write ownership | passed |
 
 ## Safety
 
-No production code changed in this documentation stage:
-
-- app.js changed: no
-- qisi-utils.js changed: no
-- Controlled-write touched: no
-- PDF parser, aligner, block parser, runner: untouched
-- Forbidden files: untouched
+No production code is modified by this register. The register is documentation-only.
 
 ## Decision
 
-Medium candidate processing is complete. The remaining 40 callsites require manual review. Automated replacement is not safe under current tooling and safety constraints.
+- Remaining register accepted: yes.
+- Automatic replacement is not allowed for blocked callsites.
+- Wrapper removal is not allowed while 40 naked callsites remain.
+

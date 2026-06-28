@@ -1,31 +1,24 @@
 # BM-AUTO A4 R3 Medium Campaign Summary
 
-Stage: BM-AUTO-A4-R3-MEDIUM-CAMPAIGN-SUMMARY
-
+Stage: BM-AUTO-A4-R3-MEDIUM-CAMPAIGN
 Branch: main
+Status: accepted after documentation formatting fix
 
-Start commit: 8600200
+## Baseline
 
-End commit: 46bac8f
+- Start commit: 8600200
+- Latest accepted medium campaign commit: f786397
+- Formatting correction target: committed raw Markdown content
+- A4 staged migration complete: no
+- Final classification: CALLSITE_PARTIAL
 
-## All Commits
+## Campaign Results
 
-Four commits in this medium campaign:
-
-| Commit | Message |
+| Item | Value |
 | --- | --- |
-| e7b8dd5 | stage BM-AUTO harden A4 doc audit |
-| 0ac03a5 | stage BM-AUTO inventory A4 R3 medium candidates |
-| 4b1e672 | stage BM-AUTO process A4 R3 medium batch MED-001 |
-| 46bac8f | stage BM-AUTO process A4 R3 medium batches MED-002 to 005 |
-
-## Callsites
-
-| Metric | Count |
-| --- | ---: |
 | Starting naked callsites | 45 |
-| Replaced in medium campaign | 5 |
-| Total R3 replaced across all campaigns | 65 |
+| Medium replacements | 5 |
+| Total R3 replacements | 65 |
 | Remaining naked callsites | 40 |
 | Deferred callsites | 19 |
 | Blocked callsites | 21 |
@@ -33,63 +26,41 @@ Four commits in this medium campaign:
 | Wrappers remain | 4 |
 | Explicit module callsites | 75 |
 
-## Medium Batches
-
-| Batch | Callsite Replaced | Line |
-| --- | --- | ---: |
-| MED-001 | cleanDisplayTextForBatchSave | 2819 |
-| MED-002 | cleanDisplayOptionsForBatchSave | 2820 |
-| MED-003 | cleanDisplayOptionsForBatchSave | 16933 |
-| MED-004 | cleanDisplayOptionsForBatchSave | 19275 |
-| MED-005 | cleanDisplayTextForBatchSave | 13559 |
-
-Each batch used medium mode selecting PROOF_REQUIRED candidates with PROVE_WITH_CONTEXT_FIXTURE proof decisions. Full safety verification was run before each commit.
-
-## Classification
-
-Staged migration verifier: CALLSITE_PARTIAL with explicitCount 75.
-
 ## Validation
 
-All checks passed throughout the medium campaign:
-
-- Node.js syntax checks: passed for all production files
-- Tool runs for A4 tooling scripts: passed
-- Tool tests including batch shards with medium mode: 10 tests
-- Fixture tests: 85 tests
-- Staged migration verifier: CALLSITE_PARTIAL
-- verify:safe: passed
-- verify:batch-safety: passed
-- smoke:batch:mock: passed
-- verify:pdf-known-bad: passed
-- Controlled-write ownership: passed
-- PDF preflight: ok true realApiCalled false
-- PDF dry-run: ok true realApiCalled false
+| Check | Result |
+| --- | --- |
+| doc audit | passed after raw-line enforcement |
+| syntax checks | passed |
+| tool runs | passed |
+| fixture tests | 85 pass |
+| staged verifier | CALLSITE_PARTIAL |
+| verify:safe | passed |
+| verify:batch-safety | passed |
+| smoke:batch:mock | passed |
+| verify:pdf-known-bad | passed |
+| controlled-write ownership | passed |
+| preflight | ok:true |
+| dry-run | ok:true |
 
 ## Safety
 
-Safety boundaries were maintained:
-
-- app.js changed: yes, five callsite replacements only
-- qisi-utils.js changed: no
-- Production behavior changed: no
-- Controlled-write touched: no
-- PDF parser touched: no
-- PDF aligner touched: no
-- PDF block parser touched: no
-- PDF runner touched: no
-- Route B integrated: no
-- Real run called: no
-- AI or OCR API called: no
-- package.json changed: no
-- main.html changed: no
-- Official verifier changed: no
-- Forbidden files changed: no
+| Check | Value |
+| --- | --- |
+| app.js changed in formatting fix | no |
+| qisi-utils.js changed | no |
+| production behavior changed | no |
+| controlled-write touched | no |
+| parser touched | no |
+| aligner touched | no |
+| runner touched | no |
+| forbidden files changed | no |
 
 ## Decision
 
-Medium campaign accepted: yes.
-A4 staged migration complete: no.
-Wrappers remain: yes, all four wrappers are still needed.
-Remaining blocker: 40 callsites require manual review.
-Next recommended stage: Human reviewer analyzes remaining 40 callsites.
+- Medium campaign accepted: yes.
+- A4 staged migration complete: no.
+- Wrappers remain: yes.
+- Remaining blocker: 40 callsites require additional proof or manual review.
+- Next recommended stage: blocked/deferred review only after documentation state is stable.
+

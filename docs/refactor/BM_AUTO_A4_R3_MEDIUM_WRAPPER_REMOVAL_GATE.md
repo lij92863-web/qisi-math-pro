@@ -1,72 +1,54 @@
 # BM-AUTO A4 R3 Medium Wrapper Removal Gate
 
-Stage: BM-AUTO-A4-R3-MEDIUM-WRAPPER-GATE
-
+Stage: BM-AUTO-A4-R3-MEDIUM-WRAPPER-REMOVAL-GATE
 Branch: main
+Status: failed gate; wrappers remain
 
-Commit: 46bac8f
+## Gate Result
 
-## Summary
-
-This gate evaluates whether the four A4 wrapper functions in app.js can be safely removed after the medium campaign.
-
-## Wrappers Status
-
-Four wrapper functions are defined in app.js:
-
-- cleanDisplayTextForBatchSave at line 1924
-- cleanDisplayOptionsForBatchSave at line 1927
-- addWarningOnce at line 1933
-- cleanDisplayFieldsOnly at line 1930
-
-All four correctly delegate to window.Qisi.Utils equivalents.
+Wrapper removal allowed: no.
 
 ## Gate Criteria
 
 | Criterion | Status | Detail |
 | --- | --- | --- |
-| Zero naked callsites outside wrappers | FAIL | 40 remain |
-| Zero deferred callsites | FAIL | 19 deferred |
-| Zero blocked callsites | FAIL | 21 blocked |
-| Zero UNKNOWN callsites | PASS | 0 UNKNOWN |
-| All calls explicit window.Qisi.Utils | FAIL | 75 of 115 |
-| Wrappers unused by any code path | FAIL | 40 depend |
-| verify:safe passed | PASS | All green |
-| verify:batch-safety passed | PASS | All pass |
-| smoke:batch:mock passed | PASS | 20 pass |
-| verify:pdf-known-bad passed | PASS | 65 pass |
-| Controlled-write ownership passed | PASS | 21 pass |
-| PDF preflight ok true realApiCalled false | PASS | Clean |
-| PDF dry-run ok true realApiCalled false | PASS | Clean |
+| Remaining naked A4 callsites = 0 | fail | 40 remain. |
+| Deferred callsites = 0 | fail | 19 deferred. |
+| Blocked callsites = 0 | fail | 21 blocked. |
+| Unknown callsites = 0 | pass | 0 unknown. |
+| All A4 calls explicit | fail | 75 explicit module callsites, 40 naked remain. |
+| verify:safe passed | pass | passed. |
+| verify:pdf-known-bad passed | pass | passed. |
+| controlled-write ownership passed | pass | passed. |
+| preflight ok:true | pass | ok:true. |
+| dry-run ok:true | pass | ok:true. |
+
+## Safety Rationale
+
+The four wrapper functions must remain because naked A4 callsites still depend on the compatibility layer. Removing wrappers now would break unresolved callsites.
+
+## Wrapper Status
+
+| Wrapper | Status |
+| --- | --- |
+| cleanDisplayTextForBatchSave | keep |
+| cleanDisplayOptionsForBatchSave | keep |
+| addWarningOnce | keep |
+| cleanDisplayFieldsOnly | keep |
 
 ## Validation
 
-All safety checks verified before this gate evaluation:
-
-- verify:safe: passed with all production and tooling tests green
-- verify:batch-safety: passed including verify-docx-stable and verify-pdf-known-bad
-- smoke:batch:mock: passed with 20 mock batch tests
-- verify:pdf-known-bad: passed with 65 PDF safety tests
-- Controlled-write ownership: passed with 21 ownership tests
-- PDF preflight: ok true, realApiCalled false
-- PDF dry-run: ok true, realApiCalled false
-
-## Safety
-
-This gate evaluation does not modify any production code:
-
-- app.js changed: no
-- qisi-utils.js changed: no
-- Controlled-write implementation: untouched
-- PDF parser, aligner, block parser, runner: untouched
-- Route B: not integrated
-- Real run: not called
-- AI or OCR API: not called
-- package.json, main.html, app.css: unchanged
-- Forbidden files: unchanged
+| Check | Result |
+| --- | --- |
+| staged verifier | CALLSITE_PARTIAL |
+| verify:safe | passed |
+| verify:pdf-known-bad | passed |
+| controlled-write ownership | passed |
 
 ## Decision
 
-Wrapper removal is not allowed.
+- Wrapper removal allowed: no.
+- A4 staged migration complete: no.
+- Wrappers remain: yes.
+- Next action: only continue after remaining 40 callsites are resolved.
 
-The gate fails because 40 naked A4 callsites remain in app.js, 19 callsites are deferred, and 21 callsites are blocked. Wrappers must be preserved until all 115 A4 callsites are explicit window.Qisi.Utils calls and all gate criteria pass.
