@@ -2142,7 +2142,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                 const preferFormulaRichSolution = (candidate = '', existing = '', stem = '') => {
                     const next = window.Qisi.Utils.cleanDisplayTextForBatchSave(candidate);
-                    const old = cleanDisplayTextForBatchSave(existing);
+                    const old = window.Qisi.Utils.cleanDisplayTextForBatchSave(existing);
 
                     if (!next) return old;
                     if (!old) return next;
@@ -2750,7 +2750,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                     if (!candidates.length) {
                         return {
-                            stem: cleanDisplayTextForBatchSave(source),
+                            stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(source),
                             options: ['', '', '', '']
                         };
                     }
@@ -2799,7 +2799,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         const optionIndex = hit.label.charCodeAt(0) - 65;
 
                         if (optionIndex >= 0 && optionIndex < 4) {
-                            options[optionIndex] = cleanDisplayTextForBatchSave(value);
+                            options[optionIndex] = window.Qisi.Utils.cleanDisplayTextForBatchSave(value);
                         }
                     });
 
