@@ -5,10 +5,10 @@ Branch: main
 
 ## Summary
 
-Total callsites: 45.
+Total callsites: 40.
 
 - AUTO_FIXTURE_CANDIDATE: 0
-- PROOF_REQUIRED: 13
+- PROOF_REQUIRED: 8
 - DEFER_UNLESS_STRONG_FIXTURE: 11
 - BLOCK_UNTIL_MANUAL: 21
 - ALWAYS_BLOCK: 0
@@ -18,11 +18,6 @@ Total callsites: 45.
 
 | ID | Helper | Line | Score | Decision |
 | --- | --- | ---: | ---: | --- |
-| R3-02819 | cleanDisplayTextForBatchSave | 2819 | 80 | PROOF_REQUIRED |
-| R3-02820 | cleanDisplayOptionsForBatchSave | 2820 | 80 | PROOF_REQUIRED |
-| R3-16933 | cleanDisplayOptionsForBatchSave | 16933 | 80 | PROOF_REQUIRED |
-| R3-19275 | cleanDisplayOptionsForBatchSave | 19275 | 80 | PROOF_REQUIRED |
-| R3-13559 | cleanDisplayTextForBatchSave | 13559 | 75 | PROOF_REQUIRED |
 | R3-20032 | addWarningOnce | 20032 | 75 | PROOF_REQUIRED |
 | R3-02402 | cleanDisplayTextForBatchSave | 2402 | 70 | PROOF_REQUIRED |
 | R3-02403 | cleanDisplayTextForBatchSave | 2403 | 70 | PROOF_REQUIRED |
@@ -38,6 +33,11 @@ Total callsites: 45.
 | R3-19013 | cleanDisplayFieldsOnly | 19013 | 60 | DEFER_UNLESS_STRONG_FIXTURE |
 | R3-03338 | cleanDisplayOptionsForBatchSave | 3338 | 55 | DEFER_UNLESS_STRONG_FIXTURE |
 | R3-13271 | cleanDisplayOptionsForBatchSave | 13271 | 55 | DEFER_UNLESS_STRONG_FIXTURE |
+| R3-13582 | addWarningOnce | 13582 | 55 | DEFER_UNLESS_STRONG_FIXTURE |
+| R3-18247 | addWarningOnce | 18247 | 55 | DEFER_UNLESS_STRONG_FIXTURE |
+| R3-18913 | addWarningOnce | 18913 | 55 | DEFER_UNLESS_STRONG_FIXTURE |
+| R3-13570 | cleanDisplayTextForBatchSave | 13570 | 50 | DEFER_UNLESS_STRONG_FIXTURE |
+| R3-03732 | cleanDisplayTextForBatchSave | 3732 | 45 | BLOCK_UNTIL_MANUAL |
 
 ## Top 20 Most Dangerous
 

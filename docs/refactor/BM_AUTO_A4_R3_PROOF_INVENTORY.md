@@ -5,17 +5,12 @@ Branch: main
 
 ## Summary
 
-Total: 45. Replacement allowed: 12. Blocked: 30. Deferred: 3.
+Total: 40. Replacement allowed: 7. Blocked: 30. Deferred: 3.
 
 ## Replacement-Allowed (top 20)
 
 | ID | Helper | Line | Score | Proof |
 | --- | --- | ---: | ---: | --- |
-| R3-02819 | cleanDisplayTextForBatchSave | 2819 | 80 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-02820 | cleanDisplayOptionsForBatchSave | 2820 | 80 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-16933 | cleanDisplayOptionsForBatchSave | 16933 | 80 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-19275 | cleanDisplayOptionsForBatchSave | 19275 | 80 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-13559 | cleanDisplayTextForBatchSave | 13559 | 75 | PROVE_WITH_CONTEXT_FIXTURE |
 | R3-07342 | addWarningOnce | 7342 | 65 | PROVE_WITH_SYNTHETIC_FIXTURE |
 | R3-19010 | addWarningOnce | 19010 | 65 | PROVE_WITH_SYNTHETIC_FIXTURE |
 | R3-18247 | addWarningOnce | 18247 | 55 | PROVE_WITH_SYNTHETIC_FIXTURE |
@@ -51,4 +46,4 @@ Total: 45. Replacement allowed: 12. Blocked: 30. Deferred: 3.
 
 ## Decision
 
-Proof inventory complete. 12 callsites ready for fixture generation.
+Proof inventory complete. 7 callsites ready for fixture generation.

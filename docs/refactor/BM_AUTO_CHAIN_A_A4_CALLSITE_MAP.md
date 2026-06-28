@@ -61,8 +61,8 @@ High-risk callsites: 109.
 | 2753 | cleanDisplayTextForBatchSave | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(source), |
 | 2802 | cleanDisplayTextForBatchSave | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | options[optionIndex] = window.Qisi.Utils.cleanDisplayTextForBatchSave(value); |
 | 2813 | cleanDisplayTextForBatchSave | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(source), |
-| 2819 | cleanDisplayTextForBatchSave | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH, DOCX_PATH | stem: cleanDisplayTextForBatchSave(stem \|\| source), |
-| 2820 | cleanDisplayOptionsForBatchSave | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH, DOCX_PATH | options: cleanDisplayOptionsForBatchSave(options) |
+| 2819 | cleanDisplayTextForBatchSave | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH, DOCX_PATH | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(stem \|\| source), |
+| 2820 | cleanDisplayOptionsForBatchSave | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH, DOCX_PATH | options: window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options) |
 | 2883 | cleanDisplayTextForBatchSave | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | options[optionIndex] = window.Qisi.Utils.cleanDisplayTextForBatchSave(value); |
 | 2893 | cleanDisplayTextForBatchSave | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(source.slice(0, ordered[0].start).trim()), |
 | 2894 | cleanDisplayOptionsForBatchSave | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | options: window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options), |
@@ -118,7 +118,7 @@ High-risk callsites: 109.
 | 13500 | cleanDisplayOptionsForBatchSave | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | return window.Qisi.Utils.cleanDisplayOptionsForBatchSave(raw); |
 | 13504 | cleanDisplayOptionsForBatchSave | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | return window.Qisi.Utils.cleanDisplayOptionsForBatchSave([ |
 | 13547 | cleanDisplayOptionsForBatchSave | BATCH_SAVE_PATH, DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | const oldOptions = window.Qisi.Utils.cleanDisplayOptionsForBatchSave(draft.options \|\| []); |
-| 13559 | cleanDisplayTextForBatchSave | BATCH_SAVE_PATH, DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, FINAL_VALIDATION_PATH, WARNING_MUTATION_PATH, DISPLAY_ONLY_PATH | const patchedStem = cleanDisplayTextForBatchSave(patch.stem \|\| patch.题干 \|\| ''); |
+| 13559 | cleanDisplayTextForBatchSave | BATCH_SAVE_PATH, DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, FINAL_VALIDATION_PATH, WARNING_MUTATION_PATH, DISPLAY_ONLY_PATH | const patchedStem = window.Qisi.Utils.cleanDisplayTextForBatchSave(patch.stem \|\| patch.题干 \|\| ''); |
 | 13564 | addWarningOnce | BATCH_SAVE_PATH, DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, WARNING_MUTATION_PATH, DISPLAY_ONLY_PATH | addWarningOnce(draft, `已通过最终视觉修复补回 ${patchedOptionCount}/4 个选项，请核对。`); |
 | 13568 | cleanDisplayTextForBatchSave | BATCH_SAVE_PATH, DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, WARNING_MUTATION_PATH, DISPLAY_ONLY_PATH | const patchedAnswer = cleanDisplayTextForBatchSave(patch.answer \|\| patch.答案 \|\| ''); |
 | 13570 | cleanDisplayTextForBatchSave | BATCH_SAVE_PATH, DRAFT_WRITE_PATH, DISPLAY_ONLY_PATH | const oldAnswer = cleanDisplayTextForBatchSave(draft.answer); |
@@ -133,7 +133,7 @@ High-risk callsites: 109.
 | 14545 | cleanDisplayTextForBatchSave | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, WARNING_MUTATION_PATH, DISPLAY_ONLY_PATH | let cleanSolution = cleanDisplayTextForBatchSave(solution?.solution \|\| ''); |
 | 15396 | cleanDisplayOptionsForBatchSave | BATCH_SAVE_PATH, DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, VISUAL_REPAIR_PATH, DISPLAY_ONLY_PATH, DOCX_PATH | const options = cleanDisplayOptionsForBatchSave(q.options \|\| []); |
 | 15560 | cleanDisplayOptionsForBatchSave | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | return window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options \|\| []); |
-| 16933 | cleanDisplayOptionsForBatchSave | BATCH_SAVE_PATH, DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, VISUAL_REPAIR_PATH, DISPLAY_ONLY_PATH | optionCount: cleanDisplayOptionsForBatchSave(q.options \|\| []).filter(opt => String(opt \|\| '').trim()).length, |
+| 16933 | cleanDisplayOptionsForBatchSave | BATCH_SAVE_PATH, DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, VISUAL_REPAIR_PATH, DISPLAY_ONLY_PATH | optionCount: window.Qisi.Utils.cleanDisplayOptionsForBatchSave(q.options \|\| []).filter(opt => String(opt \|\| '').trim()).length, |
 | 17426 | addWarningOnce | DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, WARNING_MUTATION_PATH | window.Qisi.Utils.addWarningOnce( |
 | 17520 | addWarningOnce | DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, WARNING_MUTATION_PATH | window.Qisi.Utils.addWarningOnce( |
 | 18247 | addWarningOnce | PDF_PATH, WARNING_MUTATION_PATH | addWarningOnce( |
@@ -146,7 +146,7 @@ High-risk callsites: 109.
 | 19013 | cleanDisplayFieldsOnly | DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, WARNING_MUTATION_PATH, DISPLAY_ONLY_PATH, DOCX_PATH | cleanDisplayFieldsOnly(draft); |
 | 19212 | addWarningOnce | PDF_PATH, DRAFT_WRITE_PATH, WARNING_MUTATION_PATH | addWarningOnce(draft, 'PDF 页面图渲染失败，请检查 renderPdfFilePages 是否返回空数组。'); |
 | 19257 | cleanDisplayOptionsForBatchSave | BATCH_SAVE_PATH, DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | optionCount: cleanDisplayOptionsForBatchSave(d.options).filter(Boolean).length, |
-| 19275 | cleanDisplayOptionsForBatchSave | BATCH_SAVE_PATH, DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, VISUAL_REPAIR_PATH, DISPLAY_ONLY_PATH | const options = cleanDisplayOptionsForBatchSave(d.options); |
+| 19275 | cleanDisplayOptionsForBatchSave | BATCH_SAVE_PATH, DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, VISUAL_REPAIR_PATH, DISPLAY_ONLY_PATH | const options = window.Qisi.Utils.cleanDisplayOptionsForBatchSave(d.options); |
 | 19335 | cleanDisplayOptionsForBatchSave | BATCH_SAVE_PATH, DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | optionCount: cleanDisplayOptionsForBatchSave(d.options).filter(Boolean).length, |
 | 19351 | addWarningOnce | BATCH_SAVE_PATH, DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, FINAL_VALIDATION_PATH, WARNING_MUTATION_PATH, DISPLAY_ONLY_PATH | window.Qisi.Utils.addWarningOnce( |
 | 19361 | addWarningOnce | BATCH_SAVE_PATH, DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, FINAL_VALIDATION_PATH, WARNING_MUTATION_PATH | addWarningOnce(draft, `${solutionIssue}，请人工核对。`); |
