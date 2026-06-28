@@ -40,12 +40,12 @@ No PDF, batch save, draft write, controlled-write adjacent, UNKNOWN, MEDIUM, or 
 
 Wrappers remain in app.js.
 
-## Verification
+## Tests
 
 - staged verifier classification: CALLSITE_PARTIAL
 - node --check app.js: passed
 - node --check qisi-utils.js: passed
-- fixture tests: passed, 55 passed, 0 failed, 0 skipped, 0 todo
+- fixture tests: passed, 55 passed, 0 failed, 0 skipped
 - staged migration tests: passed, 7 passed
 - base-migration-execution-gate: passed, 15 passed
 - pdf-route-b-hold: passed, 6 passed

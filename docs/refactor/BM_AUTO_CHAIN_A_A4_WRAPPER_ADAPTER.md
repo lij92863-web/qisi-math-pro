@@ -49,7 +49,7 @@ The duplicate VM declaration was not caused by app.js wrapper business behavior.
 - addWarningOnce -> window.Qisi.Utils.addWarningOnce
 - cleanDisplayFieldsOnly -> window.Qisi.Utils.cleanDisplayFieldsOnly
 
-## Verification
+## Tests
 
 - staged verifier classification: WRAPPER_ADAPTER
 - node --check app.js: passed
@@ -57,7 +57,7 @@ The duplicate VM declaration was not caused by app.js wrapper business behavior.
 - node --check scripts/bm-a4-helper-extract.js: passed
 - node --check scripts/bm-a4-fixture-coverage-check.js: passed
 - node --check scripts/bm-a4-staged-migration-verify.js: passed
-- fixture tests: passed, 55 passed, 0 failed, 0 skipped, 0 todo
+- fixture tests: passed, 55 passed, 0 failed, 0 skipped
 - fixture coverage: passed, 51 required tags present, 0 missing
 - staged migration tests: passed, 7 passed
 - fixture coverage tests: passed, 4 passed
@@ -88,6 +88,6 @@ The duplicate VM declaration was not caused by app.js wrapper business behavior.
 
 ## Note
 
-- BM_AUTO_CHAIN_A_A4_QISI_UTILS_IMPL.md from 7e69f48 still contains Commit: pending.
-- This should be corrected in a later docs-only sync or final summary.
+- BM_AUTO_CHAIN_A_A4_QISI_UTILS_IMPL.md from 7e69f48 had an unresolved commit reference.
+- This was corrected during the deep campaign final audit (Phase 11 docs cleanup).
 

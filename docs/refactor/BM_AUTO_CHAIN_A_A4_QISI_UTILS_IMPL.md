@@ -2,7 +2,7 @@
 
 Stage: qisi-utils implementation
 Branch: main
-Commit: pending
+Commit: 7e69f48 (historical — recorded during deep campaign final audit)
 Classification: QISI_UTILS_IMPL
 
 ## Changed files
