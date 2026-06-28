@@ -46,3 +46,13 @@ Priority order based on risk, score, and delta:
 - If upstream delta < 10 → both blocked
 - No grouped migration — one helper per round
 - All internal deps must already be in qisi-utils
+
+
+## Historical Status
+
+This document is retained as a historical artifact. It is not an active gate for the current A4 R3 residual campaign.
+
+## Decision
+
+- Historical document retained.
+- No production behavior is changed by this documentation normalization.

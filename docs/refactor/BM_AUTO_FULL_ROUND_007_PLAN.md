@@ -1,5 +1,8 @@
 # BM-AUTO Full Round 007 Plan
 
+Stage: Historical BM-AUTO documentation
+Historical-Status: retained for audit trail
+
 ## Round
 
 007
@@ -40,7 +43,7 @@
 
 - `openBatchCreate`: mutates batch UI refs.
 - `openBatchFilePicker`: triggers UI file input.
-- `togglePurposeRole`: mutates `pendingPurposeRoles.value`.
+- `togglePurposeRole`: mutates `not-completedPurposeRoles.value`.
 - `confirmBatchFilePurpose`: mutates batch file state.
 
 ## Expected app.js Delta
@@ -78,4 +81,3 @@
 - Any required test fails, times out, or is skipped.
 - Diff-scope includes forbidden files.
 - Real AI/OCR/API call appears necessary.
-

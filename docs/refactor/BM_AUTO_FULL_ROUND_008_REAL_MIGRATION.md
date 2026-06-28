@@ -3,7 +3,7 @@
 Stage: BM-AUTO-FULL-ELIGIBLE-MIGRATION-CAMPAIGN
 Branch: main
 Start commit: `6af7057`
-End commit: pending
+End commit: not-completed
 Target helper group: `normalizeDraftPreviewOptions`
 Target module: `qisi-review-draft-state.js`
 Changed files:
@@ -87,4 +87,3 @@ Changed files:
 - classification: `REAL_MIGRATION`
 - accepted/rejected: accepted
 - continue next round: yes
-

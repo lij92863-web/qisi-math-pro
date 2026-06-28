@@ -50,3 +50,13 @@ Start commit: `5e7bcfd`
 ### Queue D — Deferred / Rejected
 
 Grouped-only chains, DOM, DB, async, AI/OCR, PDF safety, Route B, controlled-write, runner — all rejected.
+
+
+## Historical Status
+
+This document is retained as a historical artifact. It is not an active gate for the current A4 R3 residual campaign.
+
+## Decision
+
+- Historical document retained.
+- No production behavior is changed by this documentation normalization.

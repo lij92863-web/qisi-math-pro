@@ -3,7 +3,7 @@
 Stage: BM-AUTO-FULL-ELIGIBLE-MIGRATION-CAMPAIGN
 Branch: main
 Start commit: `ca51b17`
-End commit: pending
+End commit: not-completed
 Target helper group: `validatePageRange`
 Target module: `qisi-utils.js`
 Changed files:
@@ -25,7 +25,7 @@ Changed files:
 - why rejected nearby candidates were rejected:
   - `openBatchCreate`: mutates batch UI refs.
   - `openBatchFilePicker`: triggers UI file input.
-  - `togglePurposeRole`: mutates `pendingPurposeRoles.value`.
+  - `togglePurposeRole`: mutates `not-completedPurposeRoles.value`.
   - `confirmBatchFilePurpose`: mutates batch create state.
 
 ## Migration
@@ -87,4 +87,3 @@ Changed files:
 - classification: `REAL_MIGRATION`
 - accepted/rejected: accepted
 - continue next round: yes
-

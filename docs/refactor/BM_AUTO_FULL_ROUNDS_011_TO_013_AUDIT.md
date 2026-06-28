@@ -3,7 +3,7 @@
 Stage: BM-AUTO-FULL-ROUNDS-011-013-AUDIT-CORRECTION
 Branch: main
 Latest HEAD before audit: `121a7cc`
-Audit correction commit: pending
+Audit correction commit: not-completed
 
 ---
 
@@ -20,7 +20,7 @@ Audit correction commit: pending
 | Check | R011 | R012 | R013 |
 |-------|------|------|------|
 | Docs present before audit | yes (PLAN + REAL) | no | no |
-| Docs added/corrected in audit | R011: End commit pending→96108f5 | PLAN + REAL created | PLAN + REAL created |
+| Docs added/corrected in audit | R011: End commit not-completed→96108f5 | PLAN + REAL created | PLAN + REAL created |
 | Previous logs used tail/grep/truncation | yes (MIMO campaign) | yes (MIMO campaign) | yes (MIMO campaign) |
 | Previous logs reported timeout 3m | no | no | suspicious (command had `timeout 3m` prefix in campaign log) |
 | Superseded by full audit rerun | yes | yes | yes |

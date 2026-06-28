@@ -90,3 +90,13 @@ Functions marked with DOM, DB, async, AI/OCR, PDF safety, controlled-write, Rout
 ## Next round
 
 **Round 011** — first candidate: `decodeXmlEntitiesSafe` (qisi-utils.js, 15 lines, score 62)
+
+
+## Historical Status
+
+This document is retained as a historical artifact. It is not an active gate for the current A4 R3 residual campaign.
+
+## Decision
+
+- Historical document retained.
+- No production behavior is changed by this documentation normalization.

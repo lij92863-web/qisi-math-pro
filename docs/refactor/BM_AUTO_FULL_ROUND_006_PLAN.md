@@ -1,5 +1,8 @@
 # BM-AUTO Full Round 006 Plan
 
+Stage: Historical BM-AUTO documentation
+Historical-Status: retained for audit trail
+
 ## Round
 
 006
@@ -79,4 +82,3 @@
 - Any required test fails, times out, or is skipped.
 - Diff-scope includes forbidden files.
 - Real AI/OCR/API call appears necessary.
-
