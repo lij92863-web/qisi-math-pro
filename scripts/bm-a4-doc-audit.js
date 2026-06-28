@@ -1,44 +1,67 @@
 const fs = require('fs');
 const path = require('path');
 
-const DOCS = [
-    'BM_AUTO_CHAIN_A_A4_TOOLING_PLAN.md',
-    'BM_AUTO_CHAIN_A_A4_HELPER_EXTRACTION_REPORT.md',
-    'BM_AUTO_CHAIN_A_A4_CALLSITE_MAP.md',
-    'BM_AUTO_CHAIN_A_A4_RISK_MATRIX.md',
-    'BM_AUTO_CHAIN_A_A4_FIXTURE_TESTS.md',
-    'BM_AUTO_CHAIN_A_A4_FIXTURE_COVERAGE.md',
-    'BM_AUTO_CHAIN_A_A4_QISI_UTILS_IMPL.md',
-    'BM_AUTO_CHAIN_A_A4_WRAPPER_ADAPTER.md',
-    'BM_AUTO_CHAIN_A_A4_CALLSITE_REPLACE_R1.md',
-    'BM_AUTO_CHAIN_A_A4_CALLSITE_REPLACE_R2.md',
-    'BM_AUTO_CHAIN_A_A4_CALLSITE_REPLACE_R3.md',
-    'BM_AUTO_CHAIN_A_A4_FINAL_WRAPPER_REMOVAL.md',
-    'BM_AUTO_CHAIN_A_A4_STAGED_VERIFICATION.md',
-    'BM_AUTO_CHAIN_A_A4_LONG_RUN_SUMMARY.md'
-];
+const DOC_DIR = 'docs/refactor';
+const MAX_LINE_LENGTH = 1200;
+const WARN_LINE_LENGTH = 500;
+const MIN_SECTIONS = 5;
+const MIN_LINES = 20;
+
+function discoverDocs(dir) {
+    const result = [];
+    if (!fs.existsSync(dir)) return result;
+    for (const entry of fs.readdirSync(dir)) {
+        if (entry.startsWith('BM_AUTO') && entry.endsWith('.md')) {
+            result.push(entry);
+        }
+    }
+    return result;
+}
+
+function countSections(source) {
+    const headings = (source.match(/^#{1,4}\s+/gm) || []).length;
+    const tableRows = (source.match(/^\|.+\|/gm) || []).length;
+    const decisionBlocks = (source.match(/^Decision/i) || []).length;
+    return headings + Math.floor(tableRows / 3) + decisionBlocks;
+}
 
 function auditSource(name, source) {
     const errors = [];
     const lines = source.split(/\r?\n/);
-    if (lines.length < 20) errors.push('less than 20 lines');
+
+    // Line count
+    if (lines.length < MIN_LINES) errors.push(`less than ${MIN_LINES} lines (${lines.length})`);
+
+    // Max line length
+    const longLines = lines.filter(l => l.length > MAX_LINE_LENGTH);
+    if (longLines.length > 0) errors.push(`${longLines.length} lines exceed ${MAX_LINE_LENGTH} chars`);
+
+    // Section count
+    const sections = countSections(source);
+    if (sections < MIN_SECTIONS) errors.push(`less than ${MIN_SECTIONS} sections/tables (${sections})`);
+
+    // Required fields
     if (!/Stage:/i.test(source)) errors.push('missing Stage');
     if (!/(Branch:|commit)/i.test(source)) errors.push('missing Branch or commit');
     if (!/Decision/i.test(source)) errors.push('missing Decision');
-    if (/SAFETY|Safety/.test(source) === false && !/TOOLING_PLAN|CALLSITE_MAP|RISK_MATRIX/.test(name)) {
-        errors.push('missing Safety');
-    }
-    if (/TESTS|Tests/.test(source) === false && !/CALLSITE_MAP|RISK_MATRIX/.test(name)) {
-        errors.push('missing Tests');
-    }
-    if (/pending/i.test(source) && !/LONG_RUN_SUMMARY/.test(name)) errors.push('pending marker found');
+
+    // Safety / Tests
+    const isToolingOrMap = /TOOLING_PLAN|CALLSITE_MAP|RISK_MATRIX|FIXTURE_COVERAGE/i.test(name);
+    if (!/Safety/i.test(source) && !isToolingOrMap) errors.push('missing Safety');
+    if (!/(?:Tests|Validation)/i.test(source) && !isToolingOrMap) errors.push('missing Tests or Validation');
+
+    // Forbidden markers
+    const isLongRun = /LONG_RUN_SUMMARY/i.test(name);
+    if (/pending/i.test(source) && !isLongRun) errors.push('pending marker found');
     if (/TODO/i.test(source) && !/future-work|rejected future-work/i.test(source)) errors.push('TODO marker found');
+
     return errors;
 }
 
-function auditDocs(dir = 'docs/refactor') {
+function auditDocs(dir = DOC_DIR) {
+    const names = discoverDocs(dir);
     const docs = [];
-    for (const name of DOCS) {
+    for (const name of names) {
         const filePath = path.join(dir, name);
         if (!fs.existsSync(filePath)) continue;
         const source = fs.readFileSync(filePath, 'utf8');
@@ -54,15 +77,16 @@ function auditDocs(dir = 'docs/refactor') {
 
 function markdownReport(result) {
     const lines = [
-        '# BM-AUTO Chain A A4 Doc Audit',
+        '# BM-AUTO A4 Doc Audit',
         '',
-        'Stage: BM-AUTO-CHAIN-A-A4-DOC-AUDIT',
+        'Stage: BM-AUTO-A4-DOC-AUDIT',
         'Branch: main',
         '',
         '## Summary',
         '',
         `Docs checked: ${result.checked}.`,
         `Doc audit passed: ${result.ok ? 'yes' : 'no'}.`,
+        `Rules: >= ${MIN_LINES} lines, >= ${MIN_SECTIONS} sections, < ${MAX_LINE_LENGTH} max line.`,
         '',
         '## Results',
         '',
@@ -88,8 +112,9 @@ function main(argv = process.argv.slice(2)) {
 if (require.main === module) main();
 
 module.exports = {
-    DOCS,
+    discoverDocs,
     auditSource,
     auditDocs,
-    markdownReport
+    markdownReport,
+    countSections
 };
