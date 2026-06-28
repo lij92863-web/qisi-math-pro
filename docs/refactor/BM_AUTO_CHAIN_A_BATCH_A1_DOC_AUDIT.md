@@ -1,5 +1,8 @@
 # BM-AUTO Chain A Batch A1 DOC_AUDIT
 
+Stage: Historical BM-AUTO documentation
+Historical-Status: retained for audit trail
+
 ## Why This Audit Was Needed
 
 Batch A1 code migration was already completed in commit 59ea10b and synced in commit 8736a8d, but the migration and sync documents were still minimal one-line records. This audit expands the documentation so the accepted A1 migration can be reviewed without reconstructing facts from Git history.

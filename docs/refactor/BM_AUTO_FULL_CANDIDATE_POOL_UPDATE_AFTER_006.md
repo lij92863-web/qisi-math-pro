@@ -1,5 +1,8 @@
 # BM-AUTO Full Candidate Pool Update After Round 006
 
+Stage: Historical BM-AUTO documentation
+Historical-Status: retained for audit trail
+
 Updated: after Round 008 (commit `2d0be80`)
 Current app.js lines: 23026
 

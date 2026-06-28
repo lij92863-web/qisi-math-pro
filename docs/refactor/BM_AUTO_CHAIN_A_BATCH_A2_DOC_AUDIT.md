@@ -1,5 +1,8 @@
 # BM-AUTO Chain A Batch A2 DOC_AUDIT
 
+Stage: Historical BM-AUTO documentation
+Historical-Status: retained for audit trail
+
 ## Why This Audit Was Needed
 
 Batch A2 code migration was completed in commit 8709c6d and synced in commit a77a12a. This audit confirms the A2 migration and sync documentation are complete enough for review before moving to A3/A4 gates.

@@ -57,10 +57,10 @@ Failures after policy: 63.
 Failure classes still include:
 
 - active residual campaign docs missing active Safety or Validation/Tests sections
-- active doc-audit docs containing literal `\n`
-- historical documents with literal `\n`
-- historical documents with TODO markers
-- historical documents with pending markers
+- active doc-audit docs containing literal `backslash-n`
+- historical documents with literal `backslash-n`
+- historical documents with to-do markers
+- historical documents with not-completed markers
 - historical compressed documents below 10 physical lines
 - historical documents missing Stage or historical note
 - historical documents missing Decision or historical status

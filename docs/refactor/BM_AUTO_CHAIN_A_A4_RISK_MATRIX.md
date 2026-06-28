@@ -53,11 +53,11 @@ A4 fixture-first required: yes.
 | 2918 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(source.slice(0, match.index).trim()), |
 | 2919 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | options: window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options), |
 | 2960 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | options[idx] = window.Qisi.Utils.cleanDisplayTextForBatchSave(hit.value); |
-| 2967 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(stemLines.join('\n')), |
+| 2967 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(stemLines.join('backslash-n')), |
 | 2968 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | options: window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options), |
-| 3030 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(lines.slice(0, i).join('\n')), |
+| 3030 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(lines.slice(0, i).join('backslash-n')), |
 | 3031 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | options: window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options), |
-| 3054 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(lines.slice(0, i).join('\n')), |
+| 3054 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(lines.slice(0, i).join('backslash-n')), |
 | 3055 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | options: window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options), |
 | 3066 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(source), |
 | 3119 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, VISUAL_REPAIR_PATH, DISPLAY_ONLY_PATH | const visualOptions = window.Qisi.Utils.cleanDisplayOptionsForBatchSave(visual?.options \|\| []); |
@@ -141,4 +141,3 @@ A4 fixture-first required: yes.
 ## Decision
 
 Wrapper-first gate may proceed: yes.
-

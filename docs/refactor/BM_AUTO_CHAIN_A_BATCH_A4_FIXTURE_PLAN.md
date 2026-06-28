@@ -71,3 +71,13 @@ Lock A4 behavior before any wrapper or migration work. A4 helpers affect display
 - Fixture-first required: yes.
 - Wrapper-first allowed: yes, only after the fixture suite exists and passes.
 - Next recommended task: add A4 focused fixture tests without moving code.
+
+
+## Historical Status
+
+This document is retained as a historical artifact. It is not an active gate for the current A4 R3 residual campaign.
+
+## Decision
+
+- Historical document retained.
+- No production behavior is changed by this documentation normalization.

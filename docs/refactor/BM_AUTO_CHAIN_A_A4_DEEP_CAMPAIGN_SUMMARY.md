@@ -54,7 +54,7 @@ End commit: 8d078ec stage BM-AUTO audit A4 documentation
 - Skipped: Not allowed by Phase 8 gate.
 
 ### Doc Audit Commit (8d078ec)
-- Fixed 5 historical docs: added missing Tests/Safety sections, resolved pending/TODO markers
+- Fixed 5 historical docs: added missing Tests/Safety sections, resolved not-completed/to-do markers
 - Updated fixture coverage report generator
 - All 10 audited docs pass: ok true
 

@@ -69,3 +69,13 @@ Yes. All 3 commits in this campaign so far are safe:
 3. Proceed to Phase 11: Documentation audit.
 4. Complete Phase 12 (full verification) and Phase 13 (final summary).
 5. Future work: R3 callsite migration requires manual per-callsite safety review by a human reviewer familiar with the PDF ownership and controlled-write architecture.
+
+
+## Historical Status
+
+This document is retained as a historical artifact. It is not an active gate for the current A4 R3 residual campaign.
+
+## Decision
+
+- Historical document retained.
+- No production behavior is changed by this documentation normalization.

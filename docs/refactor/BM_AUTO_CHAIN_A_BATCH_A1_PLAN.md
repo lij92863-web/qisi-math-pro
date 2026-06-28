@@ -2,3 +2,13 @@
 Stage: BM-AUTO-CHAIN-A-BATCH-A1-MIGRATION | Start: `8643fec` | Audit: `8643fec`
 Group: BATCH_MEDIA_TOKEN_RE, BATCH_BAD_PLACEHOLDER_RE, protectBatchMediaTokens, restoreBatchMediaTokens, hasBatchMediaToken, hasBatchImagePlaceholder, stripBatchImagePlaceholders → qisi-utils.js
 Risk: DOM no | DB no | async no | AI no | PDF safety no | Route B no | mutation no
+
+
+## Historical Status
+
+This document is retained as a historical artifact. It is not an active gate for the current A4 R3 residual campaign.
+
+## Decision
+
+- Historical document retained.
+- No production behavior is changed by this documentation normalization.
