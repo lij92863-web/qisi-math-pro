@@ -3674,7 +3674,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 const extractOptionsFromCurrentBlockOnly = (q) => {
                     if (!q) return q;
 
-                    const existing = cleanDisplayOptionsForBatchSave(q.options);
+                    const existing = window.Qisi.Utils.cleanDisplayOptionsForBatchSave(q.options);
                     if (existing.filter(Boolean).length >= 4) {
                         q.options = existing;
                         return q;
@@ -3721,7 +3721,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                     if (!best) return q;
 
-                    const extracted = cleanDisplayOptionsForBatchSave(best.options);
+                    const extracted = window.Qisi.Utils.cleanDisplayOptionsForBatchSave(best.options);
                     const extractedCount = extracted.filter(Boolean).length;
                     const existingCount = existing.filter(Boolean).length;
 
@@ -13544,7 +13544,7 @@ ${JSON.stringify(targets, null, 2)}
 
                         const patchedOptions = normalizeFinalPatchOptions(patch);
                         const patchedOptionCount = patchedOptions.filter(Boolean).length;
-                        const oldOptions = cleanDisplayOptionsForBatchSave(draft.options || []);
+                        const oldOptions = window.Qisi.Utils.cleanDisplayOptionsForBatchSave(draft.options || []);
                         const oldOptionCount = oldOptions.filter(Boolean).length;
 
                         if (mode === 'question' && patchedOptionCount > oldOptionCount && patchedOptionCount >= 2) {
@@ -17423,7 +17423,7 @@ ${source}`;
                             }
 
                             draft.stem = String(fallback).trim();
-                            addWarningOnce(
+                            window.Qisi.Utils.addWarningOnce(
                                 draft,
                                 'stem-json-pollution-repaired'
                             );
@@ -17517,7 +17517,7 @@ ${source}`;
                             }
 
                             draft.options = ['', '', '', ''];
-                            addWarningOnce(
+                            window.Qisi.Utils.addWarningOnce(
                                 draft,
                                 'options-json-pollution-cleared'
                             );
@@ -19348,7 +19348,7 @@ ${source}`;
                         // repairFinalDraftDetailsWithVision 之后，不能再调用 normalizeDraftQuestionBeforeSave。
                         for (const draft of drafts) {
                             if (choiceQuestionMissingOptions(draft)) {
-                                addWarningOnce(
+                                window.Qisi.Utils.addWarningOnce(
                                     draft,
                                     `选择题仅识别到 ${countValidOptions(draft.options)}/4 个选项，请对照原图或原文人工补全。系统未自动编造选项。`
                                 );
