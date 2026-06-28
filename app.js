@@ -3052,7 +3052,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             if (validCount >= 2) {
                                 candidates.push({
                                     stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(lines.slice(0, i).join('\n')),
-                                    options: cleanDisplayOptionsForBatchSave(options),
+                                    options: window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options),
                                     optionCount: validCount,
                                     score: validCount * 135 + 15,
                                     source: 'vertical-label-then-values'
@@ -3533,8 +3533,8 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         const local = localRef.item;
                         usedLocalIndexes.add(localRef.index);
 
-                        const aiOptions = cleanDisplayOptionsForBatchSave(ai.options);
-                        const localOptions = cleanDisplayOptionsForBatchSave(local.options);
+                        const aiOptions = window.Qisi.Utils.cleanDisplayOptionsForBatchSave(ai.options);
+                        const localOptions = window.Qisi.Utils.cleanDisplayOptionsForBatchSave(local.options);
 
                         const aiCount = aiOptions.filter(Boolean).length;
                         const localCount = localOptions.filter(Boolean).length;
@@ -4922,7 +4922,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             .trim())
                     );
 
-                    return cleanDisplayOptionsForBatchSave(options);
+                    return window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options);
                 };
 
                 const parseChoiceOptionsFromDocxQuestionXml = (
@@ -5032,7 +5032,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     }
 
                     return {
-                        options: cleanDisplayOptionsForBatchSave(options),
+                        options: window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options),
                         images: localImages,
                         hasUndisplayable
                     };
@@ -5108,7 +5108,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         if (count >= 2) {
                             optionMap.set(String(block.q), {
                                 q: String(block.q),
-                                options: cleanDisplayOptionsForBatchSave(options),
+                                options: window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options),
                                 images,
                                 hasUndisplayable,
                                 blockText
@@ -13494,14 +13494,14 @@ ${JSON.stringify(targets, null, 2)}
                                 const idx = ['A', 'B', 'C', 'D'].indexOf(label);
                                 if (idx >= 0) arr[idx] = content;
                             });
-                            return cleanDisplayOptionsForBatchSave(arr);
+                            return window.Qisi.Utils.cleanDisplayOptionsForBatchSave(arr);
                         }
 
-                        return cleanDisplayOptionsForBatchSave(raw);
+                        return window.Qisi.Utils.cleanDisplayOptionsForBatchSave(raw);
                     }
 
                     if (raw && typeof raw === 'object') {
-                        return cleanDisplayOptionsForBatchSave([
+                        return window.Qisi.Utils.cleanDisplayOptionsForBatchSave([
                             raw.A || raw.a || raw['选项A'] || raw['A选项'] || '',
                             raw.B || raw.b || raw['选项B'] || raw['B选项'] || '',
                             raw.C || raw.c || raw['选项C'] || raw['C选项'] || '',
