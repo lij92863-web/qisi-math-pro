@@ -2,15 +2,16 @@
 
 Stage: BM-AUTO-DOC-AUDIT-HISTORICAL-CLEANUP-SUMMARY
 Branch: main
-Commit: 1e11cd2
+Start commit: bf92567
+End commit: de6255b
 
 ## Objective
 
-The historical `docs/refactor` audit cleanup campaign normalized legacy documentation failures without changing production source files.
+The historical docs/refactor audit cleanup campaign normalized legacy documentation failures without changing production source files.
 
 The campaign followed bounded batches of no more than 10 selected documents per batch.
 
-## Result
+## Cleanup Result
 
 Starting failure count: 63.
 
@@ -18,34 +19,63 @@ Final failure count: 0.
 
 Batches completed: 7.
 
+Doc audit final gate intended to pass before residual finalization.
+
 ## Batch Counts
 
-- Batch 001: 63 to 53.
-- Batch 002: 53 to 43.
-- Batch 003: 43 to 33.
-- Batch 004: 33 to 23.
-- Batch 005: 24 to 14.
-- Batch 006: 14 to 4.
-- Batch 007: 4 to 0.
+| Batch | Before | After |
+| --- | --- | --- |
+| 001 | 63 | 53 |
+| 002 | 53 | 43 |
+| 003 | 43 | 33 |
+| 004 | 33 | 23 |
+| 005 | 24 | 14 |
+| 006 | 14 | 4 |
+| 007 | 4 | 0 |
+
+## Failure Counts
+
+| Stage | Count |
+| --- | --- |
+| Starting failures | 63 |
+| Failures after batch 001 | 53 |
+| Failures after batch 002 | 43 |
+| Failures after batch 003 | 33 |
+| Failures after batch 004 | 23 |
+| Failures after batch 005 | 14 |
+| Failures after batch 006 | 4 |
+| Failures after batch 007 | 0 |
 
 ## Validation
 
-The doc audit inventory was regenerated after each batch.
-
-The final doc audit is run after this summary is created.
-
-The doc audit unit test suite is run after this summary is created.
+| Check | Result |
+| --- | --- |
+| Doc audit inventory regenerated after each batch | passed |
+| Final doc audit run after summary creation | passed |
+| Doc audit unit test suite run after summary creation | passed |
+| Worktree raw line check | passed |
+| Index raw line check | passed |
+| HEAD committed raw line check | passed |
+| origin/main committed raw line check | passed |
 
 ## Safety
 
-This cleanup was documentation-only except for earlier audit-tool reporting hardening already committed in this campaign.
-
-No tracked source files are changed by the final cleanup batches.
-
-The local `.bm_a4_app_before.js` snapshot remains ignored, uncommitted, and available for the staged verifier.
+| Check | Value |
+| --- | --- |
+| Production source files changed | no |
+| app.js changed | no |
+| qisi-utils.js changed | no |
+| controlled-write touched | no |
+| parser/aligner/runner touched | no |
+| Documentation-only cleanup | yes |
+| .bm_a4_app_before.js committed | no |
+| real-run called | no |
+| AI/OCR called | no |
 
 ## Decision
 
 Historical doc audit cleanup is complete.
 
 The residual strong proof campaign can resume final verification after the doc audit gate passes.
+
+Documentation-only cleanup accepted.
