@@ -28,8 +28,10 @@ function findArrowHelper(source, name) {
         throw new Error(`arrow not found for ${name}`);
     }
 
-    let bodyStart = source.indexOf('{', arrowIndex);
-    if (bodyStart < 0) {
+    let bodyStart = arrowIndex + 2;
+    while (bodyStart < source.length && /\s/.test(source[bodyStart])) bodyStart += 1;
+
+    if (source[bodyStart] !== '{') {
         const semi = source.indexOf(';', arrowIndex);
         if (semi < 0) throw new Error(`semicolon not found for ${name}`);
         return {

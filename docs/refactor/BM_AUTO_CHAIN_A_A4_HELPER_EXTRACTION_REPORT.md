@@ -11,10 +11,10 @@ Helper extraction passed: yes.
 
 | Helper | Found | Lines | Kind | Source hash |
 | --- | --- | ---: | --- | --- |
-| cleanDisplayTextForBatchSave | yes | 5 | const-arrow | sha256:77bdf23f6de657a6d1ec9889de0a7bde38b36a1a9d982140eddba1737d8544c5 |
-| cleanDisplayOptionsForBatchSave | yes | 18 | const-arrow | sha256:076c2452cb98ad9e529364537253ba95cbbd053fcfc3a3fcca6ccd1d82b5a734 |
-| addWarningOnce | yes | 4 | const-arrow | sha256:2db2f4ea4754a37a290857b4e48f4c675c7029ae0ad9ded68d7282a4dad052e0 |
-| cleanDisplayFieldsOnly | yes | 10 | const-arrow | sha256:d1644a2e08d12f1eabe10541fbaf87c78fbcc6d6919ff7712bac926aabd7cf35 |
+| cleanDisplayTextForBatchSave | yes | 2 | const-arrow | sha256:0f54d9c90c72d39fc5f8d9019606cd48757a42e2856b3012f440a8db80d82024 |
+| cleanDisplayOptionsForBatchSave | yes | 2 | const-arrow | sha256:6e38b3078056dcfd3ce8c10a4d059f9f6f89c6e326d39a430ae5107b340d080c |
+| addWarningOnce | yes | 2 | const-arrow | sha256:b0d73788178efcb8d3362415da05ca5c0c456f8223419d5bab895028d4759288 |
+| cleanDisplayFieldsOnly | yes | 2 | const-arrow | sha256:f1771ff9489041fd991c320f654762b65fa706e57d90f1e863f4f7185f9ee587 |
 
 ## Safety
 

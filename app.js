@@ -1921,46 +1921,17 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 const INLINE_FORMULA_IMAGE_TOKEN = (id) => `[[FORMULA_IMAGE:${id}]]`;
                 const BLOCK_IMAGE_TOKEN = (id) => `[[IMAGE:${id}]]`;
 
-                const cleanDisplayTextForBatchSave = (text) => {
-                    const raw = window.Qisi.Utils.cleanRecognizedText(text);
-                    if (!raw) return '';
-                    return window.Qisi.Utils.stripBatchImagePlaceholders(raw);
-                };
+                const cleanDisplayTextForBatchSave = (text) =>
+                    window.Qisi.Utils.cleanDisplayTextForBatchSave(text);
 
-                const cleanDisplayOptionsForBatchSave = (options) => {
-                    const arr = Array.isArray(options) ? options : ['', '', '', ''];
+                const cleanDisplayOptionsForBatchSave = (options) =>
+                    window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options);
 
-                    return [0, 1, 2, 3].map(idx => {
-                        const raw = window.Qisi.Utils.cleanRecognizedText(arr[idx] || '');
-                        if (!raw) return '';
+                const cleanDisplayFieldsOnly = (q) =>
+                    window.Qisi.Utils.cleanDisplayFieldsOnly(q);
 
-                        const cleaned = cleanDisplayTextForBatchSave(raw);
-
-                        // 关键：纯图片选项也必须保留，不能返回空。
-                        if (!cleaned && window.Qisi.Utils.hasBatchMediaToken(raw)) {
-                            const mediaTokens = raw.match(window.Qisi.Utils.BATCH_MEDIA_TOKEN_RE) || [];
-                            return mediaTokens.join(' ').trim();
-                        }
-
-                        return cleaned;
-                    });
-                };
-
-const cleanDisplayFieldsOnly = (q) => {
-                    if (!q) return q;
-
-                    q.stem = cleanDisplayTextForBatchSave(q.stem);
-                    q.options = cleanDisplayOptionsForBatchSave(q.options);
-                    q.answer = cleanDisplayTextForBatchSave(q.answer);
-                    q.solution = cleanDisplayTextForBatchSave(q.solution);
-
-                    return q;
-                };
-
-                const addWarningOnce = (q, message) => {
-                    if (!q || !message) return;
-                    q.warnings = [...new Set([...(q.warnings || []), message])];
-                };
+                const addWarningOnce = (q, message) =>
+                    window.Qisi.Utils.addWarningOnce(q, message);
 
                 const optionTextHasContent = (value = '') => {
                     const text = cleanDisplayTextForBatchSave(value);
