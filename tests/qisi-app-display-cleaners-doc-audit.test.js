@@ -37,6 +37,43 @@ function oneLineDoc() { return '# A4 Test Doc - Stage: TEST'; }
 
 function twoLineDoc() { return '# A4 Test Doc\nStage: TEST Branch: main'; }
 
+function activeDoc(extra = '') {
+    return completeDoc(extra);
+}
+
+function historicalDoc(extra = '') {
+    return [
+        '# Historical Doc',
+        'Stage: HISTORICAL',
+        '',
+        '## Historical note',
+        'This is a historical record.',
+        '',
+        '## Historical status',
+        'Historical status: recorded.',
+        '',
+        '## Decision',
+        'Decision: historical record kept.',
+        extra
+    ].join('\n');
+}
+
+function archivedDoc(extra = '') {
+    return [
+        '# Archived Doc',
+        'Archived-Doc-Audit-Status: archived',
+        'Archive-Reason: historical auxiliary record',
+        'Historical-Status: archived and not active',
+        '',
+        '## Historical note',
+        'This file is retained as archive evidence.',
+        '',
+        '## Decision',
+        'Decision: archived.',
+        extra
+    ].join('\n');
+}
+
 describe('bm-a4-doc-audit', () => {
     it('one-line doc fails', () => {
         const errors = auditSource('BM_AUTO_test.md', oneLineDoc());
@@ -56,7 +93,7 @@ describe('bm-a4-doc-audit', () => {
     it('document with Stage/Decision but no line breaks fails', () => {
         const doc = `Stage: TEST\nBranch: main\nCommit: abc\n## Decision\nAccepted.\n## Safety\nOK\n## Tests\nOK\n` +
             Array.from({ length: 2 }, () => 'x').join('\n');
-        const errors = auditSource('BM_AUTO_test.md', doc);
+        const errors = auditSource('BM_AUTO_A4_R3_RESIDUAL_TEST.md', doc);
         assert.ok(errors.some(e => e.includes('lines')));
     });
 
@@ -126,5 +163,84 @@ describe('bm-a4-doc-audit', () => {
         const report = markdownReport(result);
         assert.ok(report.includes('BM_AUTO'));
         assert.ok(report.includes('Errors'));
+    });
+
+    it('active doc missing Decision fails', () => {
+        const errors = auditSource('BM_AUTO_A4_R3_RESIDUAL_TEST.md', activeDoc().replace('## Decision', '## Outcome').replace('Decision: accepted.', 'Accepted.'));
+        assert.ok(errors.some(e => e.includes('missing Decision')));
+    });
+
+    it('active doc with TODO fails', () => {
+        const errors = auditSource('BM_AUTO_A4_R3_RESIDUAL_TEST.md', activeDoc('TODO: finish'));
+        assert.ok(errors.some(e => e.includes('TODO')));
+    });
+
+    it('active doc with pending fails', () => {
+        const errors = auditSource('BM_AUTO_A4_R3_RESIDUAL_TEST.md', activeDoc('End commit: pending'));
+        assert.ok(errors.some(e => e.includes('pending')));
+    });
+
+    it('active doc with literal newline fails', () => {
+        const BS = String.fromCharCode(92);
+        const compressed = activeDoc().split('\n').join(BS + 'n');
+        const errors = auditSource('BM_AUTO_A4_R3_RESIDUAL_TEST.md', compressed);
+        assert.ok(errors.some(e => e.includes('escaped')));
+    });
+
+    it('active doc with too few lines fails', () => {
+        const errors = auditSource('BM_AUTO_A4_R3_RESIDUAL_TEST.md', '# Active\nStage: X\nDecision: no');
+        assert.ok(errors.some(e => e.includes('physical lines')));
+    });
+
+    it('historical doc with TODO fails', () => {
+        const errors = auditSource('BM_AUTO_OLD_TEST.md', historicalDoc('TODO: old'));
+        assert.ok(errors.some(e => e.includes('TODO')));
+    });
+
+    it('historical doc with pending fails', () => {
+        const errors = auditSource('BM_AUTO_OLD_TEST.md', historicalDoc('Status: pending'));
+        assert.ok(errors.some(e => e.includes('pending')));
+    });
+
+    it('historical doc with literal newline fails', () => {
+        const BS = String.fromCharCode(92);
+        const errors = auditSource('BM_AUTO_OLD_TEST.md', historicalDoc().split('\n').join(BS + 'n'));
+        assert.ok(errors.some(e => e.includes('escaped')));
+    });
+
+    it('historical doc with one-line compression fails', () => {
+        const errors = auditSource('BM_AUTO_OLD_TEST.md', 'Stage: HIST Historical status: recorded Decision: kept');
+        assert.ok(errors.some(e => e.includes('physical lines')));
+    });
+
+    it('historical doc with historical status passes', () => {
+        const errors = auditSource('BM_AUTO_OLD_TEST.md', historicalDoc());
+        assert.deepEqual(errors, []);
+    });
+
+    it('archived doc without marker fails', () => {
+        const errors = auditSource('BM_AUTO_ARCHIVE_TEST.md', archivedDoc().replace('Archived-Doc-Audit-Status: archived', 'Archived-Doc-Audit-Status:'));
+        assert.ok(errors.some(e => e.includes('archive status')));
+    });
+
+    it('archived doc with marker passes', () => {
+        const errors = auditSource('BM_AUTO_ARCHIVE_TEST.md', archivedDoc());
+        assert.deepEqual(errors, []);
+    });
+
+    it('archived doc with TODO still fails', () => {
+        const errors = auditSource('BM_AUTO_ARCHIVE_TEST.md', archivedDoc('TODO: old'));
+        assert.ok(errors.some(e => e.includes('TODO')));
+    });
+
+    it('archived doc with literal newline still fails', () => {
+        const BS = String.fromCharCode(92);
+        const errors = auditSource('BM_AUTO_ARCHIVE_TEST.md', archivedDoc().split('\n').join(BS + 'n'));
+        assert.ok(errors.some(e => e.includes('escaped')));
+    });
+
+    it('json output includes total failures', () => {
+        const result = auditDocs('docs/refactor');
+        assert.equal(typeof result.failures, 'number');
     });
 });

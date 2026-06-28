@@ -40,18 +40,18 @@ function isCurrentCampaignDoc(name) {
 
 function analyzeSource(name, source) {
     const lines = source.split(/\r?\n/);
-    const escapedNlLineCount = lines.filter(l => {
-        if (l.length < 200) return false;
-        const escapedCount = (l.match(/(?<!\\)\\n/g) || []).length;
-        return escapedCount >= 2;
-    }).length;
+    const escapedNlLineCount = lines.filter(l => (l.match(/(?<!\\)\\n/g) || []).length > 0).length;
     const headingCount = (source.match(/^#{1,4}\s+/gm) || []).length;
     const maxLineLength = lines.reduce((max, line) => Math.max(max, line.length), 0);
+    const currentCampaignDoc = isCurrentCampaignDoc(name);
+    const hasArchiveIntent = /Archived-Doc-Audit-Status:|Archive-Reason:|Historical-Status:/i.test(source);
+    const archivedDoc = !currentCampaignDoc && hasArchiveIntent;
     return {
         lineCount: lines.length,
         headingCount,
         sectionCount: countSections(source),
         maxLineLength,
+        avgLineLength: lines.length > 0 ? Math.round(lines.reduce((sum, l) => sum + l.length, 0) / lines.length) : 0,
         hasLiteralNewline: escapedNlLineCount > 0,
         literalNewlineLineCount: escapedNlLineCount,
         hasTodo: /TODO/i.test(source),
@@ -61,8 +61,16 @@ function analyzeSource(name, source) {
         missingValidationOrTests: !/(?:Tests|Validation)/i.test(source),
         missingSafety: !/Safety/i.test(source),
         missingDecision: !/Decision/i.test(source),
-        currentCampaignDoc: isCurrentCampaignDoc(name),
-        historicalDoc: !isCurrentCampaignDoc(name)
+        missingHistoricalNote: !/(Stage:|Historical note|Historical-Status:)/i.test(source),
+        missingHistoricalStatus: !/(Decision|Historical status|Historical-Status:)/i.test(source),
+        missingArchiveStatus: !/Archived-Doc-Audit-Status:\s*archived/i.test(source),
+        missingArchiveReason: !/Archive-Reason:\s*\S/i.test(source),
+        missingArchiveHistoricalStatus: !/Historical-Status:\s*\S/i.test(source),
+        intentionallyBriefIndex: /Intentionally-Brief-Index:\s*yes/i.test(source),
+        currentCampaignDoc,
+        historicalDoc: !currentCampaignDoc && !archivedDoc,
+        archivedDoc,
+        policyClass: currentCampaignDoc ? 'active' : archivedDoc ? 'archived' : 'historical'
     };
 }
 
@@ -71,22 +79,31 @@ function auditSource(name, source) {
     const analysis = analyzeSource(name, source);
     const lines = source.split(/\r?\n/);
     const physicalLineCount = analysis.lineCount;
+    const isToolingOrMap = /TOOLING_PLAN|CALLSITE_MAP|RISK_MATRIX|FIXTURE_COVERAGE/i.test(name);
+
+    if (analysis.hasLiteralNewline) errors.push(`${analysis.literalNewlineLineCount} lines use escaped \\n as line separator`);
+    if (analysis.maxLineLength > MAX_LINE_LENGTH) errors.push(`${lines.filter(l => l.length > MAX_LINE_LENGTH).length} lines exceed ${MAX_LINE_LENGTH} chars`);
+    if (analysis.avgLineLength > WARN_LINE_LENGTH) errors.push(`average line length ${analysis.avgLineLength} exceeds ${WARN_LINE_LENGTH}`);
+    if (analysis.hasPending) errors.push('pending marker found');
+    if (analysis.hasTodo) errors.push('TODO marker found');
+
+    if (analysis.policyClass === 'historical') {
+        if (physicalLineCount < 10 && !analysis.intentionallyBriefIndex) errors.push(`less than 10 physical lines (${physicalLineCount})`);
+        if (analysis.missingHistoricalNote) errors.push('missing Stage or Historical note');
+        if (analysis.missingHistoricalStatus) errors.push('missing Decision or Historical status');
+        return errors;
+    }
+
+    if (analysis.policyClass === 'archived') {
+        if (physicalLineCount < 10) errors.push(`less than 10 physical lines (${physicalLineCount})`);
+        if (analysis.missingArchiveStatus) errors.push('missing archive status marker');
+        if (analysis.missingArchiveReason) errors.push('missing Archive-Reason');
+        if (analysis.missingArchiveHistoricalStatus) errors.push('missing Historical-Status');
+        return errors;
+    }
 
     // Physical line count (raw, not rendered)
     if (physicalLineCount < MIN_LINES) errors.push(`less than ${MIN_LINES} physical lines (${physicalLineCount})`);
-
-    // Max line length
-    const longLines = lines.filter(l => l.length > MAX_LINE_LENGTH);
-    if (longLines.length > 0) errors.push(`${longLines.length} lines exceed ${MAX_LINE_LENGTH} chars`);
-
-    // Average line length
-    const totalChars = lines.reduce((sum, l) => sum + l.length, 0);
-    const avgLineLen = physicalLineCount > 0 ? Math.round(totalChars / physicalLineCount) : 0;
-    if (avgLineLen > WARN_LINE_LENGTH) errors.push(`average line length ${avgLineLen} exceeds ${WARN_LINE_LENGTH}`);
-
-    // Escaped newline detection: lines containing literal \n (not \\n regex)
-    // This catches content where the entire doc is one line with \n as separator
-    if (analysis.literalNewlineLineCount > 0) errors.push(`${analysis.literalNewlineLineCount} lines use escaped \\n as line separator`);
 
     // Heading count
     const headings = analysis.headingCount;
@@ -102,14 +119,8 @@ function auditSource(name, source) {
     if (!/Decision/i.test(source)) errors.push('missing Decision');
 
     // Safety / Tests
-    const isToolingOrMap = /TOOLING_PLAN|CALLSITE_MAP|RISK_MATRIX|FIXTURE_COVERAGE/i.test(name);
     if (!/Safety/i.test(source) && !isToolingOrMap) errors.push('missing Safety');
     if (!/(?:Tests|Validation)/i.test(source) && !isToolingOrMap) errors.push('missing Tests or Validation');
-
-    // Forbidden markers
-    const isLongRun = /LONG_RUN_SUMMARY/i.test(name);
-    if (/pending/i.test(source) && !isLongRun) errors.push('pending marker found');
-    if (/TODO/i.test(source) && !/future-work|rejected future-work/i.test(source)) errors.push('TODO marker found');
 
     return errors;
 }
@@ -140,6 +151,7 @@ function recommendedAction(errors, analysis) {
     }
     if (analysis.hasTodo || analysis.hasPending) return 'fix';
     if (analysis.historicalDoc) return 'policy-exempt-with-marker';
+    if (analysis.archivedDoc) return 'fix';
     return 'investigate';
 }
 
