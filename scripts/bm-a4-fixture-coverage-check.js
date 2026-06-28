@@ -1,5 +1,18 @@
 const fs = require('fs');
 
+const R2_TAGS = [
+    '[A4:R2:option-repair:3739]',
+    '[A4:R2:option-repair:19632]',
+    '[A4:R2:option-repair:20021]',
+    '[A4:R2:option-repair:20329]',
+    '[A4:R2:final-validation:20021]',
+    '[A4:R2:visual-repair:20042]',
+    '[A4:R2:warning-mutation:3739]',
+    '[A4:R2:warning-mutation:19632]',
+    '[A4:R2:warning-mutation:20021]',
+    '[A4:R2:warning-mutation:20042]'
+];
+
 const REQUIRED_TAGS = [
     '[A4:text:empty]',
     '[A4:text:null]',
@@ -54,23 +67,33 @@ const REQUIRED_TAGS = [
     '[A4:integration:no-ai-ocr]'
 ];
 
+const ALL_TAGS = [...REQUIRED_TAGS, ...R2_TAGS];
+
 function checkFixtureCoverage(filePath = 'tests/qisi-app-display-cleaners-fixtures.test.js') {
     const errors = [];
     if (!fs.existsSync(filePath)) {
-        return { ok: false, filePath, totalRequired: REQUIRED_TAGS.length, present: [], missing: REQUIRED_TAGS, errors: ['fixture file missing'] };
+        return { ok: false, filePath, totalRequired: ALL_TAGS.length, present: [], missing: ALL_TAGS, errors: ['fixture file missing'] };
     }
     const source = fs.readFileSync(filePath, 'utf8');
-    const present = REQUIRED_TAGS.filter((tag) => source.includes(tag));
-    const missing = REQUIRED_TAGS.filter((tag) => !source.includes(tag));
+    const presentLegacy = REQUIRED_TAGS.filter((tag) => source.includes(tag));
+    const missingLegacy = REQUIRED_TAGS.filter((tag) => !source.includes(tag));
+    const presentR2 = R2_TAGS.filter((tag) => source.includes(tag));
+    const missingR2 = R2_TAGS.filter((tag) => !source.includes(tag));
+    const present = [...presentLegacy, ...presentR2];
+    const missing = [...missingLegacy, ...missingR2];
     if (/\b(?:it|test|describe)\.skip\s*\(/.test(source)) errors.push('skip marker found');
     if (/\b(?:it|test|describe)\.only\s*\(/.test(source)) errors.push('only marker found');
     if (/\btodo\b|TODO-only/i.test(source)) errors.push('todo marker found');
     return {
         ok: missing.length === 0 && errors.length === 0,
         filePath,
-        totalRequired: REQUIRED_TAGS.length,
+        totalRequired: ALL_TAGS.length,
+        legacyTotal: REQUIRED_TAGS.length,
+        r2Total: R2_TAGS.length,
         present,
         missing,
+        missingLegacy,
+        missingR2,
         errors
     };
 }
@@ -117,6 +140,7 @@ if (require.main === module) main();
 
 module.exports = {
     REQUIRED_TAGS,
+    R2_TAGS,
     checkFixtureCoverage,
     markdownReport
 };

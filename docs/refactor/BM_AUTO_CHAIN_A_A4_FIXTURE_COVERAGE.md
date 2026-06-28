@@ -6,8 +6,8 @@ Branch: main
 ## Summary
 
 Coverage passed: yes.
-Required tags: 51.
-Present tags: 51.
+Required tags: 61.
+Present tags: 61.
 Missing tags: 0.
 
 ## Missing Tags

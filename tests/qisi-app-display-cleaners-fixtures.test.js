@@ -298,6 +298,194 @@ describe('integration fixtures', () => {
     });
 });
 
+describe('R2 callsite-specific fixtures — OPTION_REPAIR_PATH', () => {
+    // --- Line 3739: addWarningOnce in option extraction context ---
+
+    it('[A4:R2:option-repair:3739] option repair warning preserves legal image token', () => {
+        const q = { stem: '[[IMAGE:abc]]', options: ['[[IMAGE:opt]]', '', '', ''], answer: '', solution: '' };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.equal(q.stem, '[[IMAGE:abc]]');
+        assert.equal(q.options[0], '[[IMAGE:opt]]');
+    });
+
+    it('[A4:R2:option-repair:3739] option repair does not infer answer', () => {
+        const q = { stem: 'x', options: ['A', 'B', 'C', 'D'], answer: '', solution: '' };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.equal(q.answer, '');
+    });
+
+    it('[A4:R2:option-repair:3739] option repair does not infer support attachment', () => {
+        const q = { stem: 'x', options: ['A'], answer: '', solution: '' };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.equal(q.solution, '');
+    });
+
+    it('[A4:R2:option-repair:3739] option repair removes bad placeholder from stem', () => {
+        const q = { stem: '[图片选项待转换: wmf] x', options: ['A'], answer: '', solution: '' };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.ok(!q.stem.includes('图片选项待转换'));
+    });
+
+    // --- Line 19632: addWarningOnce in editor projection context ---
+
+    it('[A4:R2:option-repair:19632] editor projection warning preserves legal formula token', () => {
+        const q = { warnings: [] };
+        helpers.addWarningOnce(q, '选项格式异常: [[FORMULA_IMAGE:abc]]');
+        assert.deepEqual(norm(q.warnings), ['选项格式异常: [[FORMULA_IMAGE:abc]]']);
+    });
+
+    it('[A4:R2:option-repair:19632] editor projection does not guess options', () => {
+        const q = { stem: 'x', options: [], answer: '', solution: '' };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.deepEqual(norm(q.options), ['', '', '', '']);
+    });
+
+    // --- Line 20021: addWarningOnce in batch preprocessing context ---
+
+    it('[A4:R2:option-repair:20021] batch preprocessing does not synthesize missing options', () => {
+        const q = { stem: 'x', options: ['A'], answer: '', solution: '' };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.equal(q.options[1], '');
+        assert.equal(q.options[2], '');
+        assert.equal(q.options[3], '');
+    });
+
+    it('[A4:R2:option-repair:20021] batch preprocessing does not invent answer', () => {
+        const q = { stem: 'x', options: ['A', 'B', 'C', 'D'], answer: '', solution: '' };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.equal(q.answer, '');
+    });
+
+    // --- Line 20329: cleanDisplayFieldsOnly in rows iteration ---
+
+    it('[A4:R2:option-repair:20329] display cleaning in rows preserves non-display fields', () => {
+        const q = { stem: ' x ', options: ['A'], answer: '', solution: '', id: 'q1', type: '单选题' };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.equal(q.id, 'q1');
+        assert.equal(q.type, '单选题');
+    });
+
+    it('[A4:R2:option-repair:20329] display cleaning does not attach support', () => {
+        const q = { stem: 'x', options: ['A'], answer: '', solution: '' };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.equal(q.solution, '');
+    });
+});
+
+describe('R2 callsite-specific fixtures — FINAL_VALIDATION_PATH', () => {
+    // --- Line 20021: addWarningOnce in validation context ---
+
+    it('[A4:R2:final-validation:20021] final validation does not synthesize missing answer', () => {
+        const q = { stem: 'x', options: ['A', 'B', 'C', 'D'], answer: '', solution: '' };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.equal(q.answer, '');
+    });
+
+    it('[A4:R2:final-validation:20021] final validation does not convert empty to valid', () => {
+        const q = { stem: '', options: [], answer: '', solution: '' };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.equal(q.stem, '');
+        assert.deepEqual(norm(q.options), ['', '', '', '']);
+        assert.equal(q.answer, '');
+        assert.equal(q.solution, '');
+    });
+
+    it('[A4:R2:final-validation:20021] final validation preserves legal media tokens', () => {
+        const q = { stem: '[[IMAGE:x]]', options: ['[[FORMULA_IMAGE:y]]', '', '', ''], answer: '', solution: '' };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.equal(q.stem, '[[IMAGE:x]]');
+        assert.equal(q.options[0], '[[FORMULA_IMAGE:y]]');
+    });
+
+    it('[A4:R2:final-validation:20021] final validation warning behavior preserves existing warnings', () => {
+        const q = { warnings: ['existing-warning'], stem: 'x', options: [], answer: '', solution: '' };
+        helpers.addWarningOnce(q, 'new-warning');
+        assert.deepEqual(norm(q.warnings), ['existing-warning', 'new-warning']);
+    });
+});
+
+describe('R2 callsite-specific fixtures — VISUAL_REPAIR_PATH', () => {
+    // --- Line 20042: addWarningOnce in no-source-image context ---
+
+    it('[A4:R2:visual-repair:20042] visual repair preserves legal tokens', () => {
+        const q = { stem: '[[IMAGE:p1]] visual text', options: ['A'], answer: '', solution: '' };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.ok(q.stem.includes('[[IMAGE:p1]]'));
+    });
+
+    it('[A4:R2:visual-repair:20042] visual repair removes bad placeholders only', () => {
+        const q = { stem: '[图片选项待转换: bin] good text', options: [], answer: '', solution: '' };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.ok(q.stem.includes('good text'));
+        assert.ok(!q.stem.includes('图片选项待转换'));
+    });
+
+    it('[A4:R2:visual-repair:20042] visual repair does not attach image or support', () => {
+        const q = { stem: 'visual stem', options: [], answer: '', solution: '' };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.equal(q.answer, '');
+        assert.equal(q.solution, '');
+    });
+
+    it('[A4:R2:visual-repair:20042] visual repair non-target fields preserved', () => {
+        const q = { stem: 'x', options: [], answer: '', solution: '', sourceFileId: 'f1', status: 'draft' };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.equal(q.sourceFileId, 'f1');
+        assert.equal(q.status, 'draft');
+    });
+});
+
+describe('R2 callsite-specific fixtures — WARNING_MUTATION_PATH', () => {
+    // --- Line 3739: addWarningOnce in option extraction context ---
+
+    it('[A4:R2:warning-mutation:3739] option extraction warning mutates only warnings', () => {
+        const q = { stem: 'x', options: ['A'], answer: 'A', solution: 'sol' };
+        const snapshot = clone(q);
+        helpers.addWarningOnce(q, 'test warning');
+        assert.equal(q.stem, snapshot.stem);
+        assert.deepEqual(norm(q.options), norm(snapshot.options));
+        assert.equal(q.answer, snapshot.answer);
+        assert.equal(q.solution, snapshot.solution);
+    });
+
+    it('[A4:R2:warning-mutation:3739] option extraction duplicate warning not added', () => {
+        const q = { warnings: ['test warning'] };
+        helpers.addWarningOnce(q, 'test warning');
+        assert.equal(q.warnings.length, 1);
+    });
+
+    // --- Line 19632: addWarningOnce in editor projection context ---
+
+    it('[A4:R2:warning-mutation:19632] editor projection warning preserves existing non-warning fields', () => {
+        const q = { stem: 'original stem', options: ['A'], answer: '', solution: '' };
+        helpers.addWarningOnce(q, 'format warning');
+        assert.equal(q.stem, 'original stem');
+    });
+
+    // --- Line 20021: addWarningOnce in batch preprocessing context ---
+
+    it('[A4:R2:warning-mutation:20021] batch preprocessing warning malformed warnings follows current behavior', () => {
+        const q = { warnings: null };
+        helpers.addWarningOnce(q, 'a');
+        assert.deepEqual(norm(q.warnings), ['a']);
+    });
+
+    it('[A4:R2:warning-mutation:20021] batch preprocessing warning preserves other fields', () => {
+        const q = { warnings: ['old'], answer: 'B', solution: 'sol text' };
+        helpers.addWarningOnce(q, 'new warning');
+        assert.equal(q.answer, 'B');
+        assert.equal(q.solution, 'sol text');
+    });
+
+    // --- Line 20042: addWarningOnce in no-source-image context ---
+
+    it('[A4:R2:warning-mutation:20042] visual repair warning existing warning preserved', () => {
+        const q = { warnings: ['prior'] };
+        helpers.addWarningOnce(q, 'no source image');
+        assert.equal(q.warnings[0], 'prior');
+    });
+});
+
 describe('qisi-utils implementation parity', () => {
     it('[A4:impl-compare:text] qisi-utils text cleaner matches extracted app helper', () => {
         const cases = [
