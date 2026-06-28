@@ -5,32 +5,24 @@ Branch: main
 
 ## Summary
 
-Total: 87. Replacement allowed: 54. Blocked: 30. Deferred: 3.
+Total: 45. Replacement allowed: 12. Blocked: 30. Deferred: 3.
 
 ## Replacement-Allowed (top 20)
 
 | ID | Helper | Line | Score | Proof |
 | --- | --- | ---: | ---: | --- |
-| R3-03066 | cleanDisplayTextForBatchSave | 3066 | 100 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-03466 | cleanDisplayTextForBatchSave | 3466 | 100 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-04920 | cleanDisplayTextForBatchSave | 4920 | 100 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-04974 | cleanDisplayTextForBatchSave | 4974 | 100 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-05275 | cleanDisplayTextForBatchSave | 5275 | 100 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-05342 | cleanDisplayTextForBatchSave | 5342 | 100 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-05435 | cleanDisplayTextForBatchSave | 5435 | 100 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-06521 | cleanDisplayTextForBatchSave | 6521 | 100 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-01954 | cleanDisplayOptionsForBatchSave | 1954 | 100 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-02352 | cleanDisplayOptionsForBatchSave | 2352 | 100 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-02353 | cleanDisplayOptionsForBatchSave | 2353 | 100 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-02366 | cleanDisplayOptionsForBatchSave | 2366 | 100 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-02369 | cleanDisplayOptionsForBatchSave | 2369 | 100 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-02370 | cleanDisplayOptionsForBatchSave | 2370 | 100 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-02894 | cleanDisplayOptionsForBatchSave | 2894 | 100 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-02919 | cleanDisplayOptionsForBatchSave | 2919 | 100 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-02968 | cleanDisplayOptionsForBatchSave | 2968 | 100 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-03031 | cleanDisplayOptionsForBatchSave | 3031 | 100 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-03055 | cleanDisplayOptionsForBatchSave | 3055 | 100 | PROVE_WITH_CONTEXT_FIXTURE |
-| R3-03536 | cleanDisplayOptionsForBatchSave | 3536 | 100 | PROVE_WITH_CONTEXT_FIXTURE |
+| R3-02819 | cleanDisplayTextForBatchSave | 2819 | 80 | PROVE_WITH_CONTEXT_FIXTURE |
+| R3-02820 | cleanDisplayOptionsForBatchSave | 2820 | 80 | PROVE_WITH_CONTEXT_FIXTURE |
+| R3-16933 | cleanDisplayOptionsForBatchSave | 16933 | 80 | PROVE_WITH_CONTEXT_FIXTURE |
+| R3-19275 | cleanDisplayOptionsForBatchSave | 19275 | 80 | PROVE_WITH_CONTEXT_FIXTURE |
+| R3-13559 | cleanDisplayTextForBatchSave | 13559 | 75 | PROVE_WITH_CONTEXT_FIXTURE |
+| R3-07342 | addWarningOnce | 7342 | 65 | PROVE_WITH_SYNTHETIC_FIXTURE |
+| R3-19010 | addWarningOnce | 19010 | 65 | PROVE_WITH_SYNTHETIC_FIXTURE |
+| R3-18247 | addWarningOnce | 18247 | 55 | PROVE_WITH_SYNTHETIC_FIXTURE |
+| R3-07444 | addWarningOnce | 7444 | 35 | PROVE_WITH_SYNTHETIC_FIXTURE |
+| R3-18952 | addWarningOnce | 18952 | 35 | PROVE_WITH_SYNTHETIC_FIXTURE |
+| R3-18971 | addWarningOnce | 18971 | 35 | PROVE_WITH_SYNTHETIC_FIXTURE |
+| R3-19212 | addWarningOnce | 19212 | 35 | PROVE_WITH_SYNTHETIC_FIXTURE |
 
 ## Blocked
 
@@ -59,4 +51,4 @@ Total: 87. Replacement allowed: 54. Blocked: 30. Deferred: 3.
 
 ## Decision
 
-Proof inventory complete. 54 callsites ready for fixture generation.
+Proof inventory complete. 12 callsites ready for fixture generation.
