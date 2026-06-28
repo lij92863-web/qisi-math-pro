@@ -1951,7 +1951,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                 const countValidOptions = (options) => {
                     if (!Array.isArray(options)) return 0;
-                    return cleanDisplayOptionsForBatchSave(options).filter(optionTextHasContent).length;
+                    return window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options).filter(optionTextHasContent).length;
                 };
 
                 const isChoiceDraft = (q) => {
@@ -3063,7 +3063,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                     if (!candidates.length) {
                         return {
-                            stem: cleanDisplayTextForBatchSave(source),
+                            stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(source),
                             options: ['', '', '', ''],
                             optionCount: 0
                         };
@@ -3463,7 +3463,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                         return {
                             question: item.question || String(idx + 1),
-                            stem: parsed.stem || cleanDisplayTextForBatchSave(item.block),
+                            stem: parsed.stem || window.Qisi.Utils.cleanDisplayTextForBatchSave(item.block),
                             options: parsed.options,
                             type: inferredType,
                             answer: '',
@@ -4917,7 +4917,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     if (!m) return ['', '', '', ''];
 
                     const options = [m[1], m[2], m[3], m[4]].map(x =>
-                        cleanDisplayTextForBatchSave(String(x || '')
+                        window.Qisi.Utils.cleanDisplayTextForBatchSave(String(x || '')
                             .replace(/\s+/g, ' ')
                             .trim())
                     );
@@ -4971,7 +4971,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             return '';
                         });
 
-                        const textOption = cleanDisplayTextForBatchSave(
+                        const textOption = window.Qisi.Utils.cleanDisplayTextForBatchSave(
                             textParts.join(' ')
                                 .replace(/^[A-D]\s*[.．、:：)）]\s*/i, '')
                                 .trim()
@@ -5272,7 +5272,7 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
 
                         pushUniqueQuestionItem(solutions, {
                             question: mark.question,
-                            solution: cleanDisplayTextForBatchSave(stripQuestionSectionNoise(block)),
+                            solution: window.Qisi.Utils.cleanDisplayTextForBatchSave(stripQuestionSectionNoise(block)),
                             imageRefs: extractGraphicRefs ? extractGraphicRefs(block) : [],
                             confidence: 0.86,
                             warnings: [],
@@ -5339,7 +5339,7 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                         if (solution) {
                             pushUniqueQuestionItem(solutions, {
                                 question: mark.question,
-                                solution: cleanDisplayTextForBatchSave(stripQuestionSectionNoise(solution)),
+                                solution: window.Qisi.Utils.cleanDisplayTextForBatchSave(stripQuestionSectionNoise(solution)),
                                 imageRefs: extractGraphicRefs(solution),
                                 confidence: 0.86,
                                 warnings: [],
@@ -5432,7 +5432,7 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                     field = 'solution'
                 ) => {
                     let text =
-                        cleanDisplayTextForBatchSave(
+                        window.Qisi.Utils.cleanDisplayTextForBatchSave(
                             repairCommonLatexOcrErrors(
                                 value
                             )
@@ -6518,7 +6518,7 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                             stem: repaired.stem,
                             options: repaired.options,
                             answer,
-                            solution: cleanDisplayTextForBatchSave(rawSolution),
+                            solution: window.Qisi.Utils.cleanDisplayTextForBatchSave(rawSolution),
                             type,
                             images: normalizeInlineImageList(item.inlineImages || item.imageRefs || []),
                             recognizedImages: collectValidRecognizedFigures(item),
