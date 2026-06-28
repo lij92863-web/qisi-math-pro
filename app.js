@@ -19573,7 +19573,7 @@ ${source}`;
                     window.Qisi.Utils.preserveRawEvidence(q);
 
                     // 只清理显示字段
-                    cleanDisplayFieldsOnly(q);
+                    window.Qisi.Utils.cleanDisplayFieldsOnly(q);
 
                     q.updatedAt = Date.now();
                     return q;
