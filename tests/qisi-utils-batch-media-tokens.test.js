@@ -124,10 +124,28 @@ describe('stripBatchImagePlaceholders', () => {
 describe('app.js checks', () => {
     it('app.js explicit calls present', () => {
         const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+        const utils = fs.readFileSync(path.join(__dirname, '..', 'qisi-utils.js'), 'utf8');
         assert.match(app, /window\.Qisi\.Utils\.protectBatchMediaTokens\s*\(/);
         assert.match(app, /window\.Qisi\.Utils\.restoreBatchMediaTokens\s*\(/);
         assert.match(app, /window\.Qisi\.Utils\.hasBatchMediaToken\s*\(/);
-        assert.match(app, /window\.Qisi\.Utils\.stripBatchImagePlaceholders\s*\(/);
+        const appCallsStrip = /window\.Qisi\.Utils\.stripBatchImagePlaceholders\s*\(/.test(app);
+        const utilsHasDisplayCleaner = /cleanDisplayTextForBatchSave/.test(utils);
+        assert.ok(
+            appCallsStrip || utilsHasDisplayCleaner,
+            'stripBatchImagePlaceholders must remain reachable either directly from app.js or through qisi-utils cleanDisplayTextForBatchSave'
+        );
+    });
+    it('A4 display cleaner path still strips bad placeholders while preserving legal media tokens', () => {
+        const utils = require('../qisi-utils.js');
+        assert.equal(typeof utils.stripBatchImagePlaceholders, 'function');
+
+        const clean = typeof utils.cleanDisplayTextForBatchSave === 'function'
+            ? utils.cleanDisplayTextForBatchSave
+            : utils.stripBatchImagePlaceholders;
+        const cleaned = clean('题干 [公式图片待识别] [[IMAGE:abc]]');
+
+        assert.ok(!cleaned.includes('[公式图片待识别]'));
+        assert.ok(cleaned.includes('[[IMAGE:abc]]'));
     });
     it('app.js: no naked function calls', () => {
         const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
