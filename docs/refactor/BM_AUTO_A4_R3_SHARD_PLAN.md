@@ -1,0 +1,192 @@
+# BM-AUTO A4 R3 Shard Plan
+
+Stage: BM-AUTO-A4-R3-SHARD-PLAN
+Branch: main
+
+## Summary
+
+Total remaining callsites: 105.
+Total shards: 11.
+Max shard size: 10.
+
+## Shards
+
+| Shard | Sites | Blocked | Audit | Candidate | Helpers |
+| --- | ---: | ---: | ---: | ---: | --- |
+| R3-S001 | 10 | 0 | 0 | 10 | cleanDisplayTextForBatchSave |
+| R3-S002 | 10 | 0 | 0 | 10 | cleanDisplayTextForBatchSave |
+| R3-S003 | 10 | 0 | 2 | 8 | cleanDisplayTextForBatchSave, cleanDisplayOptionsForBatchSave |
+| R3-S004 | 10 | 0 | 2 | 8 | cleanDisplayOptionsForBatchSave |
+| R3-S005 | 10 | 0 | 3 | 7 | cleanDisplayOptionsForBatchSave, addWarningOnce |
+| R3-S006 | 10 | 2 | 7 | 1 | addWarningOnce, cleanDisplayFieldsOnly, cleanDisplayTextForBatchSave |
+| R3-S007 | 10 | 4 | 6 | 0 | cleanDisplayTextForBatchSave, cleanDisplayOptionsForBatchSave |
+| R3-S008 | 10 | 7 | 3 | 0 | cleanDisplayOptionsForBatchSave, addWarningOnce |
+| R3-S009 | 10 | 10 | 0 | 0 | cleanDisplayTextForBatchSave, cleanDisplayOptionsForBatchSave |
+| R3-S010 | 10 | 10 | 0 | 0 | cleanDisplayOptionsForBatchSave, addWarningOnce, cleanDisplayFieldsOnly, cleanDisplayTextForBatchSave |
+| R3-S011 | 5 | 5 | 0 | 0 | addWarningOnce |
+
+## Shard Details
+
+### R3-S001
+
+| ID | Helper | Line | Risk | Decision |
+| --- | --- | ---: | --- | --- |
+| R3-S001-01 | cleanDisplayTextForBatchSave | 2753 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S001-02 | cleanDisplayTextForBatchSave | 2802 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S001-03 | cleanDisplayTextForBatchSave | 2813 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S001-04 | cleanDisplayTextForBatchSave | 2819 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S001-05 | cleanDisplayTextForBatchSave | 2883 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S001-06 | cleanDisplayTextForBatchSave | 2893 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S001-07 | cleanDisplayTextForBatchSave | 2909 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S001-08 | cleanDisplayTextForBatchSave | 2910 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S001-09 | cleanDisplayTextForBatchSave | 2911 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S001-10 | cleanDisplayTextForBatchSave | 2912 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+
+### R3-S002
+
+| ID | Helper | Line | Risk | Decision |
+| --- | --- | ---: | --- | --- |
+| R3-S002-01 | cleanDisplayTextForBatchSave | 2918 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S002-02 | cleanDisplayTextForBatchSave | 2960 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S002-03 | cleanDisplayTextForBatchSave | 2967 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S002-04 | cleanDisplayTextForBatchSave | 3030 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S002-05 | cleanDisplayTextForBatchSave | 3054 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S002-06 | cleanDisplayTextForBatchSave | 3066 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S002-07 | cleanDisplayTextForBatchSave | 3569 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S002-08 | cleanDisplayTextForBatchSave | 3732 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S002-09 | cleanDisplayTextForBatchSave | 4920 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S002-10 | cleanDisplayTextForBatchSave | 4974 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+
+### R3-S003
+
+| ID | Helper | Line | Risk | Decision |
+| --- | --- | ---: | --- | --- |
+| R3-S003-01 | cleanDisplayTextForBatchSave | 13559 | SAVE_DRAFT_RISK | AUDIT_REQUIRED |
+| R3-S003-02 | cleanDisplayOptionsForBatchSave | 1954 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S003-03 | cleanDisplayOptionsForBatchSave | 2352 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S003-04 | cleanDisplayOptionsForBatchSave | 2353 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S003-05 | cleanDisplayOptionsForBatchSave | 2366 | SAVE_DRAFT_RISK | AUDIT_REQUIRED |
+| R3-S003-06 | cleanDisplayOptionsForBatchSave | 2369 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S003-07 | cleanDisplayOptionsForBatchSave | 2370 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S003-08 | cleanDisplayOptionsForBatchSave | 2820 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S003-09 | cleanDisplayOptionsForBatchSave | 2894 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S003-10 | cleanDisplayOptionsForBatchSave | 2919 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+
+### R3-S004
+
+| ID | Helper | Line | Risk | Decision |
+| --- | --- | ---: | --- | --- |
+| R3-S004-01 | cleanDisplayOptionsForBatchSave | 2968 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S004-02 | cleanDisplayOptionsForBatchSave | 3031 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S004-03 | cleanDisplayOptionsForBatchSave | 3055 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S004-04 | cleanDisplayOptionsForBatchSave | 3119 | SAVE_DRAFT_RISK | AUDIT_REQUIRED |
+| R3-S004-05 | cleanDisplayOptionsForBatchSave | 3227 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S004-06 | cleanDisplayOptionsForBatchSave | 3413 | SAVE_DRAFT_RISK | AUDIT_REQUIRED |
+| R3-S004-07 | cleanDisplayOptionsForBatchSave | 3536 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S004-08 | cleanDisplayOptionsForBatchSave | 3537 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S004-09 | cleanDisplayOptionsForBatchSave | 3677 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S004-10 | cleanDisplayOptionsForBatchSave | 3724 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+
+### R3-S005
+
+| ID | Helper | Line | Risk | Decision |
+| --- | --- | ---: | --- | --- |
+| R3-S005-01 | cleanDisplayOptionsForBatchSave | 4925 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S005-02 | cleanDisplayOptionsForBatchSave | 6976 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S005-03 | cleanDisplayOptionsForBatchSave | 6977 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S005-04 | cleanDisplayOptionsForBatchSave | 13497 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S005-05 | cleanDisplayOptionsForBatchSave | 13500 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S005-06 | cleanDisplayOptionsForBatchSave | 13504 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S005-07 | cleanDisplayOptionsForBatchSave | 13547 | SAVE_DRAFT_RISK | AUDIT_REQUIRED |
+| R3-S005-08 | cleanDisplayOptionsForBatchSave | 15560 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S005-09 | addWarningOnce | 3438 | SAVE_DRAFT_RISK | AUDIT_REQUIRED |
+| R3-S005-10 | addWarningOnce | 7342 | SAVE_DRAFT_RISK | AUDIT_REQUIRED |
+
+### R3-S006
+
+| ID | Helper | Line | Risk | Decision |
+| --- | --- | ---: | --- | --- |
+| R3-S006-01 | addWarningOnce | 13564 | SAVE_DRAFT_RISK | AUDIT_REQUIRED |
+| R3-S006-02 | addWarningOnce | 17426 | SAVE_DRAFT_RISK | AUDIT_REQUIRED |
+| R3-S006-03 | addWarningOnce | 17520 | SAVE_DRAFT_RISK | AUDIT_REQUIRED |
+| R3-S006-04 | addWarningOnce | 19351 | SAVE_DRAFT_RISK | AUDIT_REQUIRED |
+| R3-S006-05 | cleanDisplayFieldsOnly | 20003 | DISPLAY_ONLY | POSSIBLE_FIXTURE_CANDIDATE |
+| R3-S006-06 | cleanDisplayTextForBatchSave | 2144 | ANSWER_SOLUTION_OWNERSHIP_RISK | AUDIT_REQUIRED |
+| R3-S006-07 | cleanDisplayTextForBatchSave | 2145 | ANSWER_SOLUTION_OWNERSHIP_RISK | AUDIT_REQUIRED |
+| R3-S006-08 | cleanDisplayTextForBatchSave | 2402 | ANSWER_SOLUTION_OWNERSHIP_RISK, SAVE_DRAFT_RISK | BLOCKED_ANSWER_SOLUTION_OWNERSHIP |
+| R3-S006-09 | cleanDisplayTextForBatchSave | 2403 | ANSWER_SOLUTION_OWNERSHIP_RISK, SAVE_DRAFT_RISK | BLOCKED_ANSWER_SOLUTION_OWNERSHIP |
+| R3-S006-10 | cleanDisplayTextForBatchSave | 3466 | ANSWER_SOLUTION_OWNERSHIP_RISK | AUDIT_REQUIRED |
+
+### R3-S007
+
+| ID | Helper | Line | Risk | Decision |
+| --- | --- | ---: | --- | --- |
+| R3-S007-01 | cleanDisplayTextForBatchSave | 5435 | ANSWER_SOLUTION_OWNERSHIP_RISK | AUDIT_REQUIRED |
+| R3-S007-02 | cleanDisplayTextForBatchSave | 6989 | ANSWER_SOLUTION_OWNERSHIP_RISK | AUDIT_REQUIRED |
+| R3-S007-03 | cleanDisplayTextForBatchSave | 6995 | ANSWER_SOLUTION_OWNERSHIP_RISK | AUDIT_REQUIRED |
+| R3-S007-04 | cleanDisplayTextForBatchSave | 7215 | ANSWER_SOLUTION_OWNERSHIP_RISK | AUDIT_REQUIRED |
+| R3-S007-05 | cleanDisplayTextForBatchSave | 13568 | ANSWER_SOLUTION_OWNERSHIP_RISK, SAVE_DRAFT_RISK | BLOCKED_ANSWER_SOLUTION_OWNERSHIP |
+| R3-S007-06 | cleanDisplayTextForBatchSave | 13570 | ANSWER_SOLUTION_OWNERSHIP_RISK, SAVE_DRAFT_RISK | BLOCKED_ANSWER_SOLUTION_OWNERSHIP |
+| R3-S007-07 | cleanDisplayTextForBatchSave | 13587 | ANSWER_SOLUTION_OWNERSHIP_RISK | AUDIT_REQUIRED |
+| R3-S007-08 | cleanDisplayTextForBatchSave | 13594 | ANSWER_SOLUTION_OWNERSHIP_RISK, SAVE_DRAFT_RISK | BLOCKED_ANSWER_SOLUTION_OWNERSHIP |
+| R3-S007-09 | cleanDisplayTextForBatchSave | 14545 | ANSWER_SOLUTION_OWNERSHIP_RISK | AUDIT_REQUIRED |
+| R3-S007-10 | cleanDisplayOptionsForBatchSave | 13714 | ANSWER_SOLUTION_OWNERSHIP_RISK, SAVE_DRAFT_RISK | BLOCKED_ANSWER_SOLUTION_OWNERSHIP |
+
+### R3-S008
+
+| ID | Helper | Line | Risk | Decision |
+| --- | --- | ---: | --- | --- |
+| R3-S008-01 | cleanDisplayOptionsForBatchSave | 13830 | ANSWER_SOLUTION_OWNERSHIP_RISK, SAVE_DRAFT_RISK | BLOCKED_ANSWER_SOLUTION_OWNERSHIP |
+| R3-S008-02 | cleanDisplayOptionsForBatchSave | 13859 | ANSWER_SOLUTION_OWNERSHIP_RISK, SAVE_DRAFT_RISK | BLOCKED_ANSWER_SOLUTION_OWNERSHIP |
+| R3-S008-03 | cleanDisplayOptionsForBatchSave | 19257 | ANSWER_SOLUTION_OWNERSHIP_RISK | AUDIT_REQUIRED |
+| R3-S008-04 | cleanDisplayOptionsForBatchSave | 19335 | ANSWER_SOLUTION_OWNERSHIP_RISK | AUDIT_REQUIRED |
+| R3-S008-05 | addWarningOnce | 13582 | ANSWER_SOLUTION_OWNERSHIP_RISK, SAVE_DRAFT_RISK | BLOCKED_ANSWER_SOLUTION_OWNERSHIP |
+| R3-S008-06 | addWarningOnce | 13596 | ANSWER_SOLUTION_OWNERSHIP_RISK, SAVE_DRAFT_RISK | BLOCKED_ANSWER_SOLUTION_OWNERSHIP |
+| R3-S008-07 | addWarningOnce | 18906 | ANSWER_SOLUTION_OWNERSHIP_RISK, SAVE_DRAFT_RISK | BLOCKED_ANSWER_SOLUTION_OWNERSHIP |
+| R3-S008-08 | addWarningOnce | 18913 | ANSWER_SOLUTION_OWNERSHIP_RISK, SAVE_DRAFT_RISK | BLOCKED_ANSWER_SOLUTION_OWNERSHIP |
+| R3-S008-09 | addWarningOnce | 19361 | ANSWER_SOLUTION_OWNERSHIP_RISK, SAVE_DRAFT_RISK | BLOCKED_ANSWER_SOLUTION_OWNERSHIP |
+| R3-S008-10 | addWarningOnce | 20032 | ANSWER_SOLUTION_OWNERSHIP_RISK | AUDIT_REQUIRED |
+
+### R3-S009
+
+| ID | Helper | Line | Risk | Decision |
+| --- | --- | ---: | --- | --- |
+| R3-S009-01 | cleanDisplayTextForBatchSave | 1937 | SUPPORT_ATTACHMENT_RISK | BLOCKED_SUPPORT_ATTACHMENT |
+| R3-S009-02 | cleanDisplayTextForBatchSave | 1995 | SUPPORT_ATTACHMENT_RISK | BLOCKED_SUPPORT_ATTACHMENT |
+| R3-S009-03 | cleanDisplayTextForBatchSave | 5275 | SUPPORT_ATTACHMENT_RISK, ANSWER_SOLUTION_OWNERSHIP_RISK | BLOCKED_SUPPORT_ATTACHMENT |
+| R3-S009-04 | cleanDisplayTextForBatchSave | 5342 | SUPPORT_ATTACHMENT_RISK, ANSWER_SOLUTION_OWNERSHIP_RISK | BLOCKED_SUPPORT_ATTACHMENT |
+| R3-S009-05 | cleanDisplayTextForBatchSave | 6521 | SUPPORT_ATTACHMENT_RISK, ANSWER_SOLUTION_OWNERSHIP_RISK | BLOCKED_SUPPORT_ATTACHMENT |
+| R3-S009-06 | cleanDisplayOptionsForBatchSave | 3338 | SUPPORT_ATTACHMENT_RISK, SAVE_DRAFT_RISK | BLOCKED_SUPPORT_ATTACHMENT |
+| R3-S009-07 | cleanDisplayOptionsForBatchSave | 5035 | SUPPORT_ATTACHMENT_RISK | BLOCKED_SUPPORT_ATTACHMENT |
+| R3-S009-08 | cleanDisplayOptionsForBatchSave | 5111 | SUPPORT_ATTACHMENT_RISK | BLOCKED_SUPPORT_ATTACHMENT |
+| R3-S009-09 | cleanDisplayOptionsForBatchSave | 6869 | SUPPORT_ATTACHMENT_RISK, ANSWER_SOLUTION_OWNERSHIP_RISK | BLOCKED_SUPPORT_ATTACHMENT |
+| R3-S009-10 | cleanDisplayOptionsForBatchSave | 9936 | SUPPORT_ATTACHMENT_RISK, SAVE_DRAFT_RISK | BLOCKED_SUPPORT_ATTACHMENT |
+
+### R3-S010
+
+| ID | Helper | Line | Risk | Decision |
+| --- | --- | ---: | --- | --- |
+| R3-S010-01 | cleanDisplayOptionsForBatchSave | 13271 | SUPPORT_ATTACHMENT_RISK, SAVE_DRAFT_RISK | BLOCKED_SUPPORT_ATTACHMENT |
+| R3-S010-02 | cleanDisplayOptionsForBatchSave | 13758 | SUPPORT_ATTACHMENT_RISK, ANSWER_SOLUTION_OWNERSHIP_RISK | BLOCKED_SUPPORT_ATTACHMENT |
+| R3-S010-03 | cleanDisplayOptionsForBatchSave | 15396 | SUPPORT_ATTACHMENT_RISK, ANSWER_SOLUTION_OWNERSHIP_RISK | BLOCKED_SUPPORT_ATTACHMENT |
+| R3-S010-04 | cleanDisplayOptionsForBatchSave | 16933 | SUPPORT_ATTACHMENT_RISK | BLOCKED_SUPPORT_ATTACHMENT |
+| R3-S010-05 | cleanDisplayOptionsForBatchSave | 19275 | SUPPORT_ATTACHMENT_RISK | BLOCKED_SUPPORT_ATTACHMENT |
+| R3-S010-06 | addWarningOnce | 7444 | SUPPORT_ATTACHMENT_RISK, SAVE_DRAFT_RISK | BLOCKED_SUPPORT_ATTACHMENT |
+| R3-S010-07 | addWarningOnce | 19010 | SUPPORT_ATTACHMENT_RISK, SAVE_DRAFT_RISK | BLOCKED_SUPPORT_ATTACHMENT |
+| R3-S010-08 | cleanDisplayFieldsOnly | 19013 | SUPPORT_ATTACHMENT_RISK, SAVE_DRAFT_RISK | BLOCKED_SUPPORT_ATTACHMENT |
+| R3-S010-09 | cleanDisplayTextForBatchSave | 13153 | PDF_OWNERSHIP_RISK, ANSWER_SOLUTION_OWNERSHIP_RISK | BLOCKED_PDF_OWNERSHIP |
+| R3-S010-10 | cleanDisplayTextForBatchSave | 13156 | PDF_OWNERSHIP_RISK, ANSWER_SOLUTION_OWNERSHIP_RISK | BLOCKED_PDF_OWNERSHIP |
+
+### R3-S011
+
+| ID | Helper | Line | Risk | Decision |
+| --- | --- | ---: | --- | --- |
+| R3-S011-01 | addWarningOnce | 18247 | PDF_PATH, ANSWER_SOLUTION_OWNERSHIP_RISK | BLOCKED_PDF_OWNERSHIP |
+| R3-S011-02 | addWarningOnce | 18900 | PDF_PATH, SAVE_DRAFT_RISK | BLOCKED_PDF_OWNERSHIP |
+| R3-S011-03 | addWarningOnce | 18952 | PDF_PATH, SAVE_DRAFT_RISK | BLOCKED_PDF_OWNERSHIP |
+| R3-S011-04 | addWarningOnce | 18971 | PDF_PATH, SAVE_DRAFT_RISK | BLOCKED_PDF_OWNERSHIP |
+| R3-S011-05 | addWarningOnce | 19212 | PDF_PATH, SAVE_DRAFT_RISK | BLOCKED_PDF_OWNERSHIP |
+
+## Decision
+
+Shard plan accepted. Proceed to ownership audit per shard.
