@@ -3736,7 +3736,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             q.type = window.Qisi.Utils.cleanRecognizedText(q.answer).replace(/\s/g, '').length >= 2 ? '多选题' : '单选题';
                         }
 
-                        addWarningOnce(q, `已从当前题原始证据中提取 ${extractedCount}/4 个选项，请核对。`);
+                        window.Qisi.Utils.addWarningOnce(q, `已从当前题原始证据中提取 ${extractedCount}/4 个选项，请核对。`);
                     }
 
                     return q;
@@ -19629,7 +19629,7 @@ ${source}`;
                     } else if (isChoice) {
                         q.stem = source;
                         q.options = ['', '', '', ''];
-                        addWarningOnce(
+                        window.Qisi.Utils.addWarningOnce(
                             q,
                             '题目编辑源码暂未识别出规范的 A/B/C/D 选项，请检查选项是否分别以行首 A.、B.、C.、D. 开始。'
                         );
@@ -20018,7 +20018,7 @@ ${source}`;
 
                     // 4. 禁止自动编造选项
                     if (choiceQuestionMissingOptions(q)) {
-                        addWarningOnce(
+                        window.Qisi.Utils.addWarningOnce(
                             q,
                             `选择题仅识别到 ${countValidOptions(q.options)}/4 个选项，请对照原图或原文人工补全。系统未自动编造选项。`
                         );
@@ -20039,7 +20039,7 @@ ${source}`;
                         (Array.isArray(q.images) && q.images.some(img => img?.url));
 
                     if (!hasSourceImage) {
-                        addWarningOnce(q, '当前题目未绑定原图，若公式或图形缺失，请回到原文件人工核对。');
+                        window.Qisi.Utils.addWarningOnce(q, '当前题目未绑定原图，若公式或图形缺失，请回到原文件人工核对。');
                     }
 
                     q.warnings = [...new Set(q.warnings || [])];
@@ -20326,7 +20326,7 @@ ${source}`;
                         });
 
                         window.Qisi.Utils.preserveRawEvidence(q);
-                        cleanDisplayFieldsOnly(q);
+                        window.Qisi.Utils.cleanDisplayFieldsOnly(q);
 
                         const after = JSON.stringify({
                             stem: q.stem,

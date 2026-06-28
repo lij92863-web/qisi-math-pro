@@ -72,7 +72,7 @@ A4 fixture-first required: yes.
 | 3677 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | const existing = cleanDisplayOptionsForBatchSave(q.options); |
 | 3724 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | const extracted = cleanDisplayOptionsForBatchSave(best.options); |
 | 3732 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | q.stem = cleanDisplayTextForBatchSave(best.stem); |
-| 3739 | addWarningOnce | MEDIUM | OPTION_REPAIR_PATH, WARNING_MUTATION_PATH, DISPLAY_ONLY_PATH | addWarningOnce(q, `已从当前题原始证据中提取 ${extractedCount}/4 个选项，请核对。`); |
+| 3739 | addWarningOnce | MEDIUM | OPTION_REPAIR_PATH, WARNING_MUTATION_PATH, DISPLAY_ONLY_PATH | window.Qisi.Utils.addWarningOnce(q, `已从当前题原始证据中提取 ${extractedCount}/4 个选项，请核对。`); |
 | 4920 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | cleanDisplayTextForBatchSave(String(x \|\| '') |
 | 4925 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, VISUAL_REPAIR_PATH, DISPLAY_ONLY_PATH, DOCX_PATH | return cleanDisplayOptionsForBatchSave(options); |
 | 4974 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | const textOption = cleanDisplayTextForBatchSave( |
@@ -131,12 +131,12 @@ A4 fixture-first required: yes.
 | 19351 | addWarningOnce | HIGH | BATCH_SAVE_PATH, DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, FINAL_VALIDATION_PATH, WARNING_MUTATION_PATH, DISPLAY_ONLY_PATH | addWarningOnce( |
 | 19361 | addWarningOnce | HIGH | BATCH_SAVE_PATH, DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, FINAL_VALIDATION_PATH, WARNING_MUTATION_PATH | addWarningOnce(draft, `${solutionIssue}，请人工核对。`); |
 | 19576 | cleanDisplayFieldsOnly | LOW | DISPLAY_ONLY_PATH | window.Qisi.Utils.cleanDisplayFieldsOnly(q); |
-| 19632 | addWarningOnce | MEDIUM | OPTION_REPAIR_PATH, WARNING_MUTATION_PATH | addWarningOnce( |
+| 19632 | addWarningOnce | MEDIUM | OPTION_REPAIR_PATH, WARNING_MUTATION_PATH | window.Qisi.Utils.addWarningOnce( |
 | 20003 | cleanDisplayFieldsOnly | HIGH | DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH, DOCX_PATH | cleanDisplayFieldsOnly(q); |
-| 20021 | addWarningOnce | MEDIUM | OPTION_REPAIR_PATH, FINAL_VALIDATION_PATH, WARNING_MUTATION_PATH, DISPLAY_ONLY_PATH | addWarningOnce( |
+| 20021 | addWarningOnce | MEDIUM | OPTION_REPAIR_PATH, FINAL_VALIDATION_PATH, WARNING_MUTATION_PATH, DISPLAY_ONLY_PATH | window.Qisi.Utils.addWarningOnce( |
 | 20032 | addWarningOnce | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, FINAL_VALIDATION_PATH, VISUAL_REPAIR_PATH, WARNING_MUTATION_PATH | addWarningOnce(q, `${solutionIssue}，请人工核对。`); |
-| 20042 | addWarningOnce | MEDIUM | VISUAL_REPAIR_PATH, WARNING_MUTATION_PATH | addWarningOnce(q, '当前题目未绑定原图，若公式或图形缺失，请回到原文件人工核对。'); |
-| 20329 | cleanDisplayFieldsOnly | MEDIUM | OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | cleanDisplayFieldsOnly(q); |
+| 20042 | addWarningOnce | MEDIUM | VISUAL_REPAIR_PATH, WARNING_MUTATION_PATH | window.Qisi.Utils.addWarningOnce(q, '当前题目未绑定原图，若公式或图形缺失，请回到原文件人工核对。'); |
+| 20329 | cleanDisplayFieldsOnly | MEDIUM | OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | window.Qisi.Utils.cleanDisplayFieldsOnly(q); |
 
 ## Decision
 
