@@ -69,6 +69,14 @@ The residual proof gate reports zero replace-allowed callsites and forty frozen 
 
 Removing wrappers now would break the remaining naked calls.
 
+## Validation
+
+Not recorded in this historical document beyond the generated audit report for this stage.
+
+## Safety
+
+This document normalization is documentation-only. No production code is changed.
+
 ## Decision
 
 Freeze final accepted.

@@ -276,6 +276,12 @@ describe('bm-a4-doc-audit', () => {
         assert.equal(report.includes('\\n'), false);
     });
 
+    it('write-report does not emit raw to-do or not-completed markers', () => {
+        const report = markdownReport(auditDocs('docs/refactor'));
+        assert.equal(/(^|[^A-Za-z])TODO([^A-Za-z]|$)/i.test(report), false);
+        assert.equal(/(^|[^A-Za-z])pending([^A-Za-z]|$)/i.test(report), false);
+    });
+
     it('write-report includes failure reasons', () => {
         const report = markdownReport(auditDocs('docs/refactor'));
         assert.ok(report.includes('Reasons'));

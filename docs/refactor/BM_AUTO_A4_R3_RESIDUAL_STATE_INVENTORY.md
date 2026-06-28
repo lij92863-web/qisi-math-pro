@@ -109,6 +109,14 @@ The current proof builder marks these blocked-by-rank warning callsites as repla
 | R3-06989 | cleanDisplayTextForBatchSave | 6989 | DEFER_UNLESS_STRONG_FIXTURE |
 | R3-14545 | cleanDisplayTextForBatchSave | 14545 | DEFER_UNLESS_STRONG_FIXTURE |
 
+## Validation
+
+Not recorded in this historical document beyond the generated audit report for this stage.
+
+## Safety
+
+This document normalization is documentation-only. No production code is changed.
+
 ## Decision
 
 Residual inventory is complete for the current baseline.

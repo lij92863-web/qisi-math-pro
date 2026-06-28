@@ -28,9 +28,9 @@ Rules:
 - hard gate
 - physical line count >= 20
 - heading count >= 4
-- no literal `\n`
-- no TODO marker
-- no pending marker
+- no literal backslash-n
+- no to-do marker
+- no not-completed marker
 - must contain `Stage`
 - must contain `Branch` or commit
 - must contain `Validation` or `Tests`
@@ -45,9 +45,9 @@ Older `BM_AUTO` documents that are not part of the active residual or doc-audit 
 
 Rules:
 
-- must not contain literal `\n`
-- must not contain TODO marker
-- must not contain pending marker
+- must not contain literal backslash-n
+- must not contain to-do marker
+- must not contain not-completed marker
 - must have at least `Stage` or a historical note
 - must have `Decision` or `Historical status`
 - must be at least 10 physical lines unless marked as an intentionally brief index
@@ -68,9 +68,9 @@ Historical-Status:
 
 Archived exception rules:
 
-- no literal `\n`
-- no TODO marker
-- no pending marker
+- no literal backslash-n
+- no to-do marker
+- no not-completed marker
 - no raw one-line compression
 - physical line count >= 10
 
@@ -82,9 +82,9 @@ Do not ignore documents by age alone.
 
 Do not ignore failures silently.
 
-Do not pass documents with literal `\n`.
+Do not pass documents with literal backslash-n.
 
-Do not pass documents with TODO or pending markers.
+Do not pass documents with to-do or not-completed markers.
 
 Do not turn the audit into a no-op.
 

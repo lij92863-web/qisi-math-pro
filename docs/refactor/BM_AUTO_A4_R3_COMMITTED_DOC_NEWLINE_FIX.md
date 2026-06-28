@@ -14,7 +14,7 @@ The Write tool writes files with LF line endings, but Git on Windows (core.autoc
 
 ## Files Changed
 
-Three medium campaign documents rewritten using `fs.writeFileSync(file, lines.join('\n') + '\n', 'utf8')`:
+Three medium campaign documents rewritten using `fs.writeFileSync(file, lines.join(newline) + newline, encoding)`:
 
 - `BM_AUTO_A4_R3_MEDIUM_CAMPAIGN_SUMMARY.md`
 - `BM_AUTO_A4_R3_MEDIUM_REMAINING_REGISTER.md`
@@ -26,7 +26,7 @@ One new fix report:
 
 ## Worktree Line Counts
 
-| Document | Lines | Headings | Max Line | Literal \n |
+| Document | Lines | Headings | Max Line | Literal backslash-n |
 | --- | ---: | ---: | ---: | ---: |
 | MEDIUM_CAMPAIGN_SUMMARY | 96 | 8 | 165 | 0 |
 | MEDIUM_REMAINING_REGISTER | 78 | 11 | 232 | 0 |
@@ -34,7 +34,7 @@ One new fix report:
 
 ## Index Line Counts
 
-| Document | Lines | Headings | Literal \n |
+| Document | Lines | Headings | Literal backslash-n |
 | --- | ---: | ---: | ---: |
 | MEDIUM_CAMPAIGN_SUMMARY | 96 | 8 | 0 |
 | MEDIUM_REMAINING_REGISTER | 78 | 11 | 0 |

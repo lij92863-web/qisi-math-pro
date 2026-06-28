@@ -47,6 +47,14 @@ All 40 residual callsites are permanent freeze candidates until future evidence 
 | SUPPORT_ATTACHMENT | 22 |
 | ANSWER_SOLUTION_OWNERSHIP | 18 |
 
+## Validation
+
+Not recorded in this historical document beyond the generated audit report for this stage.
+
+## Safety
+
+This document normalization is documentation-only. No production code is changed.
+
 ## Decision
 
 Reclassification complete.

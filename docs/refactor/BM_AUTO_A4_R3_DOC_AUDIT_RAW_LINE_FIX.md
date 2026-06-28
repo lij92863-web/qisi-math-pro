@@ -11,7 +11,7 @@ Previous medium campaign summary doc audit did not sufficiently enforce raw phys
 ## Root Cause
 
 The original `auditSource` function checked line count, section count, and required fields, but did not:
-- Check for physical lines containing literal `\n` used as line separator (escaped newline abuse)
+- Check for physical lines containing literal backslash-n used as line separator (escaped newline abuse)
 - Enforce minimum heading count
 - Check average line length
 

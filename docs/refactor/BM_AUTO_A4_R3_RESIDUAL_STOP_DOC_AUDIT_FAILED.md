@@ -14,7 +14,7 @@ node scripts/bm-a4-doc-audit.js
 
 The command exited non-zero.
 
-The reported failures are historical `docs/refactor` files outside the current residual campaign scope. The audit output included missing required sections, pending markers, TODO markers, and short document structure in older stage documents.
+The reported failures are historical `docs/refactor` files outside the current residual campaign scope. The audit output included missing required sections, not-completed markers, to-do markers, and short document structure in older stage documents.
 
 ## Latest Clean Commit
 
@@ -113,3 +113,10 @@ No production source behavior was changed.
 ## Next Recommended Action
 
 Create a focused doc-audit cleanup task for the historical `docs/refactor` files reported by `node scripts/bm-a4-doc-audit.js`, or narrow the doc audit policy to the current A4 R3 residual campaign documents if that is the intended gate.
+
+
+## Decision
+
+Stop document retained.
+
+Doc audit cleanup remains required before residual final verification can be accepted.

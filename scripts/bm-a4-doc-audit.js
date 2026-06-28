@@ -200,7 +200,11 @@ function markdownReport(result) {
         missingValidationOrTests: failures.filter((item) => item.missingValidationOrTests).length,
         missingSafety: failures.filter((item) => item.missingSafety).length
     };
-    const sanitize = (value) => String(value || '').replace(/\\n/g, 'backslash-n').replace(/\|/g, '\\|');
+    const sanitize = (value) => String(value || '')
+        .replace(/\\n/g, 'backslash-n')
+        .replace(/TODO/gi, 'to-do')
+        .replace(/pending/gi, 'not-completed')
+        .replace(/\|/g, '\\|');
     const lines = [
         '# BM-AUTO Doc Audit Failure Inventory',
         '',

@@ -9,6 +9,14 @@ Total residual callsites: 40.
 Replace allowed: 0.
 Frozen: 40.
 
+## Validation
+
+Not recorded in this historical document beyond the generated audit report for this stage.
+
+## Safety
+
+This document normalization is documentation-only. No production code is changed.
+
 ## Decisions
 
 | Decision | Count |

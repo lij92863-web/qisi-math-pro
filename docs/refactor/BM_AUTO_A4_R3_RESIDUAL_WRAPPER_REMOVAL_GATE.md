@@ -32,6 +32,14 @@ Blocked/frozen residual ownership risks remain.
 
 Not all calls are explicit `window.Qisi.Utils.*` calls.
 
+## Validation
+
+Wrapper removal gate was evaluated from the residual proof and freeze register outputs.
+
+## Safety
+
+This document normalization is documentation-only. No production code is changed.
+
 ## Decision
 
 Wrapper removal allowed: no.
