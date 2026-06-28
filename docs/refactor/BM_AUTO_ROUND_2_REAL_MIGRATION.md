@@ -3,7 +3,7 @@
 ## Stage: BM-AUTO-ROUND-2
 ## Branch: main
 ## Start commit: 6150a63
-## End commit: (pending)
+## End commit: (not-completed)
 ## Target helper group: mathSignalCount
 ## Target module: qisi-utils.js
 ## Changed files: app.js, qisi-utils.js, tests/qisi-utils-math-signal-count.test.js, docs/refactor/BM_AUTO_ROUND_2_PLAN.md
@@ -132,8 +132,8 @@ node scripts/base-migration-verify-execution.js --before .bm_app_before.js --aft
 
 ## Git
 
-- commit hash: (pending)
-- push status: (pending)
+- commit hash: (not-completed)
+- push status: (not-completed)
 
 ---
 

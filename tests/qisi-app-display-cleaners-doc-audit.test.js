@@ -303,8 +303,10 @@ describe('bm-a4-doc-audit', () => {
         assert.equal(Array.isArray(summary.failures), true);
     });
 
-    it('ordinary audit still exits non-zero when failures exist', () => {
-        const result = spawnSync(process.execPath, ['scripts/bm-a4-doc-audit.js', '--dir', 'docs/refactor'], {
+    it('ordinary audit still exits non-zero when fixture failures exist', () => {
+        const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'qisi-doc-audit-'));
+        fs.writeFileSync(path.join(tmp, 'BM_AUTO_BAD.md'), '# Bad\n');
+        const result = spawnSync(process.execPath, ['scripts/bm-a4-doc-audit.js', '--dir', tmp], {
             encoding: 'utf8'
         });
         assert.notEqual(result.status, 0);

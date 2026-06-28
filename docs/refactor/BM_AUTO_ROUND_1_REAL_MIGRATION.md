@@ -3,7 +3,7 @@
 ## Stage: BM-AUTO-ROUND-1
 ## Branch: main
 ## Start commit: 2d02a9f
-## End commit: (pending)
+## End commit: (not-completed)
 ## Target helper group: cleanRecognizedText
 ## Target module: qisi-utils.js
 ## Changed files: app.js, qisi-utils.js, scripts/base-migration-verify-execution.js, tests/qisi-utils-clean-recognized-text.test.js, docs/refactor/BM_AUTO_ROUND_1_PLAN.md
@@ -194,9 +194,9 @@ node scripts/base-migration-verify-execution.js --before .bm_app_before.js --aft
 ## Git
 
 - git diff --stat: 5 files changed
-- commit hash: (pending)
-- push status: (pending)
-- working tree after push: (pending)
+- commit hash: (not-completed)
+- push status: (not-completed)
+- working tree after push: (not-completed)
 
 ---
 

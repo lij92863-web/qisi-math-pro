@@ -74,3 +74,13 @@
 - If mathSignalCount has hidden dependencies → STOP
 - If tests fail → STOP
 - If classification != REAL_MIGRATION → STOP
+
+
+## Historical Status
+
+This document is retained as a historical artifact. It is not an active gate for the current A4 R3 residual campaign.
+
+## Decision
+
+- Historical document retained.
+- No production behavior is changed by this documentation normalization.

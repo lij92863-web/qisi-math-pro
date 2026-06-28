@@ -2,14 +2,14 @@
 
 Stage: BM-AUTO-DOC-AUDIT-FAILURE-INVENTORY
 Branch: main
-Generated at: 2026-06-28T11:02:25.394Z
+Generated at: 2026-06-28T11:03:53.813Z
 Audit command: node scripts/bm-a4-doc-audit.js --write-report docs/refactor/BM_AUTO_DOC_AUDIT_FAILURE_INVENTORY.md
 
 ## Summary
 
-Docs checked: 162.
-Total failures: 4.
-Doc audit passed: no.
+Docs checked: 165.
+Total failures: 0.
+Doc audit passed: yes.
 Rules: >= 20 lines, >= 5 sections, < 1200 max line.
 
 ## Failure Count By Class
@@ -18,27 +18,22 @@ Rules: >= 20 lines, >= 5 sections, < 1200 max line.
 | --- | ---: |
 | literalBackslashN | 0 |
 | todoMarker | 0 |
-| pendingMarker | 3 |
+| pendingMarker | 0 |
 | compressedRawLines | 0 |
 | missingStageOrHistoricalNote | 0 |
-| missingDecisionOrHistoricalStatus | 1 |
+| missingDecisionOrHistoricalStatus | 0 |
 | missingValidationOrTests | 0 |
-| missingSafety | 1 |
+| missingSafety | 0 |
 
 ## Failure Count By Policy Class
 
 | Policy Class | Count |
 | --- | ---: |
-| historical | 4 |
 
 ## Failure Table
 
 | Index | File | Policy Class | Line Count | Heading Count | Max Line Length | hasLiteralBackslashN | hasTODO | hasPending | Missing Stage Or Historical Note | Missing Decision Or Historical Status | Missing Validation Or Tests | Missing Safety | Recommended Action | Reasons |
 | ---: | --- | --- | ---: | ---: | ---: | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | BM_AUTO_ROUND_1_REAL_MIGRATION.md | historical | 209 | 38 | 283 | no | no | yes | no | no | no | no | fix | not-completed marker found |
-| 2 | BM_AUTO_ROUND_2_PLAN.md | historical | 77 | 17 | 142 | no | no | no | no | yes | no | yes | policy-exempt-with-marker | missing Decision or Historical status |
-| 3 | BM_AUTO_ROUND_2_REAL_MIGRATION.md | historical | 145 | 30 | 140 | no | no | yes | no | no | no | no | fix | not-completed marker found |
-| 4 | BM_AUTO_STRICT_RUN_CORRECTION.md | historical | 105 | 12 | 121 | no | no | yes | no | no | no | no | fix | not-completed marker found |
 
 ## Validation
 
@@ -50,5 +45,5 @@ This report is documentation-only. No production code is changed by generating i
 
 ## Decision
 
-Doc audit accepted: no.
+Doc audit accepted: yes.
 
