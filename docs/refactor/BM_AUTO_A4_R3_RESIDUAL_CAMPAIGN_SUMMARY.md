@@ -3,14 +3,14 @@
 Stage: BM-AUTO-A4-R3-RESIDUAL-CAMPAIGN-SUMMARY
 Branch: main
 Start commit: 5f258ad
-End commit: (final commit TBD after push)
+End commit: 5505afc
 
 ## Commit Chain
 
 | Commit | Description |
 | --- | --- |
 | 5f258ad | BM-AUTO force fix committed A4 R3 medium doc raw lines |
-| (this commit) | BM-AUTO finalize A4 residual docs |
+| 5505afc | BM-AUTO finalize A4 residual docs |
 
 ## Tools Created
 
