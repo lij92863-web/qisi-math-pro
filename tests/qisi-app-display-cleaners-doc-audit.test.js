@@ -1,7 +1,11 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 
-const { auditDocs, auditSource, countSections, discoverDocs, isCurrentCampaignDoc, markdownReport } = require('../scripts/bm-a4-doc-audit');
+const { auditDocs, auditSource, countSections, discoverDocs, isCurrentCampaignDoc, jsonSummary, markdownReport } = require('../scripts/bm-a4-doc-audit');
 
 function completeDoc(extra = '') {
     return [
@@ -162,7 +166,7 @@ describe('bm-a4-doc-audit', () => {
         const result = auditDocs('docs/refactor');
         const report = markdownReport(result);
         assert.ok(report.includes('BM_AUTO'));
-        assert.ok(report.includes('Errors'));
+        assert.ok(report.includes('Reasons'));
     });
 
     it('active doc missing Decision fails', () => {
@@ -242,5 +246,65 @@ describe('bm-a4-doc-audit', () => {
     it('json output includes total failures', () => {
         const result = auditDocs('docs/refactor');
         assert.equal(typeof result.failures, 'number');
+    });
+
+    it('write-report is multi-line markdown', () => {
+        const report = markdownReport(auditDocs('docs/refactor'));
+        const lines = report.split(/\r?\n/);
+        const headings = report.match(/^#{1,6}\s+/gm) || [];
+        assert.ok(lines.length >= 30);
+        assert.ok(headings.length >= 5);
+        assert.ok(report.includes('Stage:'));
+        assert.ok(report.includes('Branch:'));
+        assert.ok(report.includes('## Summary'));
+        assert.ok(report.includes('## Failure Table'));
+        assert.ok(report.includes('## Validation'));
+        assert.ok(report.includes('## Safety'));
+        assert.ok(report.includes('## Decision'));
+    });
+
+    it('write-report includes all failing files', () => {
+        const result = auditDocs('docs/refactor');
+        const report = markdownReport(result);
+        for (const doc of result.docs.filter((item) => !item.ok)) {
+            assert.ok(report.includes(doc.name), `report missing ${doc.name}`);
+        }
+    });
+
+    it('write-report contains no literal newline marker', () => {
+        const report = markdownReport(auditDocs('docs/refactor'));
+        assert.equal(report.includes('\\n'), false);
+    });
+
+    it('write-report includes failure reasons', () => {
+        const report = markdownReport(auditDocs('docs/refactor'));
+        assert.ok(report.includes('Reasons'));
+    });
+
+    it('write-report includes recommended action', () => {
+        const report = markdownReport(auditDocs('docs/refactor'));
+        assert.ok(report.includes('Recommended Action'));
+    });
+
+    it('json summary includes totalFailures and failures array', () => {
+        const summary = jsonSummary(auditDocs('docs/refactor'));
+        assert.equal(typeof summary.totalFailures, 'number');
+        assert.equal(Array.isArray(summary.failures), true);
+    });
+
+    it('ordinary audit still exits non-zero when failures exist', () => {
+        const result = spawnSync(process.execPath, ['scripts/bm-a4-doc-audit.js', '--dir', 'docs/refactor'], {
+            encoding: 'utf8'
+        });
+        assert.notEqual(result.status, 0);
+    });
+
+    it('ordinary audit exits zero when no failures exist', () => {
+        const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'qisi-doc-audit-'));
+        fs.writeFileSync(path.join(tmp, 'BM_AUTO_GOOD.md'), historicalDoc());
+        const result = spawnSync(process.execPath, ['scripts/bm-a4-doc-audit.js', '--dir', tmp], {
+            encoding: 'utf8'
+        });
+        assert.equal(result.status, 0, result.stderr || result.stdout);
     });
 });

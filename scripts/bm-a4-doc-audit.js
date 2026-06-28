@@ -54,8 +54,8 @@ function analyzeSource(name, source) {
         avgLineLength: lines.length > 0 ? Math.round(lines.reduce((sum, l) => sum + l.length, 0) / lines.length) : 0,
         hasLiteralNewline: escapedNlLineCount > 0,
         literalNewlineLineCount: escapedNlLineCount,
-        hasTodo: /TODO/i.test(source),
-        hasPending: /pending/i.test(source),
+        hasTodo: /(^|[^A-Za-z])TODO([^A-Za-z]|$)/i.test(source),
+        hasPending: /(^|[^A-Za-z])pending([^A-Za-z]|$)/i.test(source),
         missingStage: !/Stage:/i.test(source),
         missingBranchOrCommit: !/(Branch:|commit)/i.test(source),
         missingValidationOrTests: !/(?:Tests|Validation)/i.test(source),
@@ -144,6 +144,35 @@ function auditDocs(dir = DOC_DIR) {
     };
 }
 
+function failureItems(result) {
+    return result.docs.filter((doc) => !doc.ok).map((doc) => ({
+        file: doc.name,
+        filePath: doc.filePath,
+        policyClass: doc.policyClass,
+        lineCount: doc.lineCount,
+        headingCount: doc.headingCount,
+        maxLineLength: doc.maxLineLength,
+        hasLiteralBackslashN: doc.hasLiteralNewline,
+        hasTODO: doc.hasTodo,
+        hasPending: doc.hasPending,
+        missingStageOrHistoricalNote: doc.policyClass === 'active' ? doc.missingStage : doc.missingHistoricalNote,
+        missingDecisionOrHistoricalStatus: doc.policyClass === 'active' ? doc.missingDecision : doc.missingHistoricalStatus,
+        missingValidationOrTests: doc.missingValidationOrTests,
+        missingSafety: doc.missingSafety,
+        reasons: doc.errors,
+        recommendedAction: doc.recommendedAction
+    }));
+}
+
+function jsonSummary(result) {
+    return {
+        ok: result.ok,
+        totalDocs: result.checked,
+        totalFailures: result.failures,
+        failures: failureItems(result)
+    };
+}
+
 function recommendedAction(errors, analysis) {
     if (errors.length === 0) return 'none';
     if (analysis.hasLiteralNewline || analysis.maxLineLength > MAX_LINE_LENGTH || analysis.lineCount < 10) {
@@ -156,11 +185,29 @@ function recommendedAction(errors, analysis) {
 }
 
 function markdownReport(result) {
+    const failures = failureItems(result);
+    const byPolicyClass = failures.reduce((acc, item) => {
+        acc[item.policyClass] = (acc[item.policyClass] || 0) + 1;
+        return acc;
+    }, {});
+    const byClass = {
+        literalBackslashN: failures.filter((item) => item.hasLiteralBackslashN).length,
+        todoMarker: failures.filter((item) => item.hasTODO).length,
+        pendingMarker: failures.filter((item) => item.hasPending).length,
+        compressedRawLines: failures.filter((item) => item.lineCount < 10).length,
+        missingStageOrHistoricalNote: failures.filter((item) => item.missingStageOrHistoricalNote).length,
+        missingDecisionOrHistoricalStatus: failures.filter((item) => item.missingDecisionOrHistoricalStatus).length,
+        missingValidationOrTests: failures.filter((item) => item.missingValidationOrTests).length,
+        missingSafety: failures.filter((item) => item.missingSafety).length
+    };
+    const sanitize = (value) => String(value || '').replace(/\\n/g, 'backslash-n').replace(/\|/g, '\\|');
     const lines = [
-        '# BM-AUTO A4 Doc Audit',
+        '# BM-AUTO Doc Audit Failure Inventory',
         '',
-        'Stage: BM-AUTO-A4-DOC-AUDIT',
+        'Stage: BM-AUTO-DOC-AUDIT-FAILURE-INVENTORY',
         'Branch: main',
+        `Generated at: ${new Date().toISOString()}`,
+        'Audit command: node scripts/bm-a4-doc-audit.js --write-report docs/refactor/BM_AUTO_DOC_AUDIT_FAILURE_INVENTORY.md',
         '',
         '## Summary',
         '',
@@ -169,24 +216,54 @@ function markdownReport(result) {
         `Doc audit passed: ${result.ok ? 'yes' : 'no'}.`,
         `Rules: >= ${MIN_LINES} lines, >= ${MIN_SECTIONS} sections, < ${MAX_LINE_LENGTH} max line.`,
         '',
-        '## Failure Inventory',
+        '## Failure Count By Class',
         '',
-        '| File | Lines | Headings | Max Line | Literal \\n | TODO | Pending | Missing Stage | Missing Branch/Commit | Missing Validation/Tests | Missing Safety | Missing Decision | Current Campaign | Historical | Recommended Action | Errors |',
-        '| --- | ---: | ---: | ---: | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |'
+        '| Class | Count |',
+        '| --- | ---: |'
     ];
-    for (const doc of result.docs.filter((item) => !item.ok)) {
-        lines.push(`| ${doc.name} | ${doc.lineCount} | ${doc.headingCount} | ${doc.maxLineLength} | ${doc.hasLiteralNewline ? 'yes' : 'no'} | ${doc.hasTodo ? 'yes' : 'no'} | ${doc.hasPending ? 'yes' : 'no'} | ${doc.missingStage ? 'yes' : 'no'} | ${doc.missingBranchOrCommit ? 'yes' : 'no'} | ${doc.missingValidationOrTests ? 'yes' : 'no'} | ${doc.missingSafety ? 'yes' : 'no'} | ${doc.missingDecision ? 'yes' : 'no'} | ${doc.currentCampaignDoc ? 'yes' : 'no'} | ${doc.historicalDoc ? 'yes' : 'no'} | ${doc.recommendedAction} | ${doc.errors.join('; ')} |`);
+    for (const [key, value] of Object.entries(byClass)) {
+        lines.push(`| ${key} | ${value} |`);
     }
-    lines.push('', '## Decision', '', `A4 docs accepted: ${result.ok ? 'yes' : 'no'}.`, '');
+    lines.push('', '## Failure Count By Policy Class', '', '| Policy Class | Count |', '| --- | ---: |');
+    for (const [key, value] of Object.entries(byPolicyClass)) {
+        lines.push(`| ${key} | ${value} |`);
+    }
+    lines.push(
+        '',
+        '## Failure Table',
+        '',
+        '| Index | File | Policy Class | Line Count | Heading Count | Max Line Length | hasLiteralBackslashN | hasTODO | hasPending | Missing Stage Or Historical Note | Missing Decision Or Historical Status | Missing Validation Or Tests | Missing Safety | Recommended Action | Reasons |',
+        '| ---: | --- | --- | ---: | ---: | ---: | --- | --- | --- | --- | --- | --- | --- | --- | --- |'
+    );
+    failures.forEach((doc, index) => {
+        lines.push(`| ${index + 1} | ${sanitize(doc.file)} | ${doc.policyClass} | ${doc.lineCount} | ${doc.headingCount} | ${doc.maxLineLength} | ${doc.hasLiteralBackslashN ? 'yes' : 'no'} | ${doc.hasTODO ? 'yes' : 'no'} | ${doc.hasPending ? 'yes' : 'no'} | ${doc.missingStageOrHistoricalNote ? 'yes' : 'no'} | ${doc.missingDecisionOrHistoricalStatus ? 'yes' : 'no'} | ${doc.missingValidationOrTests ? 'yes' : 'no'} | ${doc.missingSafety ? 'yes' : 'no'} | ${doc.recommendedAction} | ${sanitize(doc.reasons.join('; '))} |`);
+    });
+    lines.push(
+        '',
+        '## Validation',
+        '',
+        'This report is generated by `scripts/bm-a4-doc-audit.js`.',
+        '',
+        '## Safety',
+        '',
+        'This report is documentation-only. No production code is changed by generating it.',
+        '',
+        '## Decision',
+        '',
+        `Doc audit accepted: ${result.ok ? 'yes' : 'no'}.`,
+        ''
+    );
     return `${lines.join('\n')}\n`;
 }
 
 function main(argv = process.argv.slice(2)) {
-    const result = auditDocs();
+    const dirIndex = argv.indexOf('--dir');
+    const result = auditDocs(dirIndex >= 0 ? argv[dirIndex + 1] : DOC_DIR);
     const json = argv.includes('--json');
     const reportIndex = argv.indexOf('--write-report');
     if (reportIndex >= 0) fs.writeFileSync(argv[reportIndex + 1], markdownReport(result));
-    if (json || reportIndex < 0) console.log(JSON.stringify(result, null, 2));
+    if (json) console.log(JSON.stringify(jsonSummary(result), null, 2));
+    else if (reportIndex < 0) console.log(JSON.stringify(result, null, 2));
     if (!result.ok) process.exitCode = 1;
 }
 
@@ -198,6 +275,9 @@ module.exports = {
     auditSource,
     auditDocs,
     markdownReport,
+    jsonSummary,
+    failureItems,
+    main,
     countSections,
     isCurrentCampaignDoc,
     recommendedAction
