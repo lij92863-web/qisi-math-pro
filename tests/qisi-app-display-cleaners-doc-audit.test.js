@@ -85,4 +85,34 @@ describe('bm-a4-doc-audit', () => {
         const errors = auditSource('BM_AUTO_test.md', long);
         assert.ok(errors.some(e => e.includes('lines exceed')));
     });
+
+    it('escaped newline string fails', () => {
+        // Simulate a doc compressed into one long line using literal \n as separator
+        const BS = String.fromCharCode(92);
+        const NL = BS + 'n';
+        const compressed = ['# Test Doc', 'Stage: TEST', 'Branch: main', '## Summary', 'Content.', '## Tests', 'OK.', '## Safety', 'OK.', '## Decision', 'OK.'].join(NL) + NL + Array.from({length: 10}, (_, i) => 'Line ' + i).join(NL);
+        const errors = auditSource('BM_AUTO_test.md', compressed);
+        assert.ok(errors.length > 0, 'compressed doc with escaped newlines must fail');
+    });
+
+    it('medium campaign summary has enough physical lines', () => {
+        const fs = require('node:fs');
+        const source = fs.readFileSync('docs/refactor/BM_AUTO_A4_R3_MEDIUM_CAMPAIGN_SUMMARY.md', 'utf8');
+        const lines = source.split(/\r?\n/);
+        assert.ok(lines.length >= 20, `medium summary has ${lines.length} physical lines`);
+    });
+
+    it('medium remaining register has enough physical lines', () => {
+        const fs = require('node:fs');
+        const source = fs.readFileSync('docs/refactor/BM_AUTO_A4_R3_MEDIUM_REMAINING_REGISTER.md', 'utf8');
+        const lines = source.split(/\r?\n/);
+        assert.ok(lines.length >= 20, `medium register has ${lines.length} physical lines`);
+    });
+
+    it('medium wrapper gate has enough physical lines', () => {
+        const fs = require('node:fs');
+        const source = fs.readFileSync('docs/refactor/BM_AUTO_A4_R3_MEDIUM_WRAPPER_REMOVAL_GATE.md', 'utf8');
+        const lines = source.split(/\r?\n/);
+        assert.ok(lines.length >= 20, `medium gate has ${lines.length} physical lines`);
+    });
 });

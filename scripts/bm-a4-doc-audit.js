@@ -28,13 +28,33 @@ function countSections(source) {
 function auditSource(name, source) {
     const errors = [];
     const lines = source.split(/\r?\n/);
+    const physicalLineCount = lines.length;
 
-    // Line count
-    if (lines.length < MIN_LINES) errors.push(`less than ${MIN_LINES} lines (${lines.length})`);
+    // Physical line count (raw, not rendered)
+    if (physicalLineCount < MIN_LINES) errors.push(`less than ${MIN_LINES} physical lines (${physicalLineCount})`);
 
     // Max line length
     const longLines = lines.filter(l => l.length > MAX_LINE_LENGTH);
     if (longLines.length > 0) errors.push(`${longLines.length} lines exceed ${MAX_LINE_LENGTH} chars`);
+
+    // Average line length
+    const totalChars = lines.reduce((sum, l) => sum + l.length, 0);
+    const avgLineLen = physicalLineCount > 0 ? Math.round(totalChars / physicalLineCount) : 0;
+    if (avgLineLen > WARN_LINE_LENGTH) errors.push(`average line length ${avgLineLen} exceeds ${WARN_LINE_LENGTH}`);
+
+    // Escaped newline detection: lines containing literal \n (not \\n regex)
+    // This catches content where the entire doc is one line with \n as separator
+    const escapedNlLines = lines.filter(l => {
+        if (l.length < 200) return false;
+        // Count of \n (literal backslash-n, not double backslash)
+        const escapedCount = (l.match(/(?<!\\)\\n/g) || []).length;
+        return escapedCount >= 2;
+    });
+    if (escapedNlLines.length > 0) errors.push(`${escapedNlLines.length} lines use escaped \\n as line separator`);
+
+    // Heading count
+    const headings = (source.match(/^#{1,4}\s+/gm) || []).length;
+    if (headings < 4) errors.push(`less than 4 markdown headings (${headings})`);
 
     // Section count
     const sections = countSections(source);
