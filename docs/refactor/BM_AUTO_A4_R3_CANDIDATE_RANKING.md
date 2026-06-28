@@ -5,9 +5,9 @@ Branch: main
 
 ## Summary
 
-Total callsites: 105.
+Total callsites: 87.
 
-- AUTO_FIXTURE_CANDIDATE: 60
+- AUTO_FIXTURE_CANDIDATE: 42
 - PROOF_REQUIRED: 13
 - DEFER_UNLESS_STRONG_FIXTURE: 11
 - BLOCK_UNTIL_MANUAL: 21
@@ -18,26 +18,26 @@ Total callsites: 105.
 
 | ID | Helper | Line | Score | Decision |
 | --- | --- | ---: | ---: | --- |
-| R3-01937 | cleanDisplayTextForBatchSave | 1937 | 100 | AUTO_FIXTURE_CANDIDATE |
-| R3-01995 | cleanDisplayTextForBatchSave | 1995 | 100 | AUTO_FIXTURE_CANDIDATE |
-| R3-02144 | cleanDisplayTextForBatchSave | 2144 | 100 | AUTO_FIXTURE_CANDIDATE |
-| R3-02145 | cleanDisplayTextForBatchSave | 2145 | 100 | AUTO_FIXTURE_CANDIDATE |
-| R3-02753 | cleanDisplayTextForBatchSave | 2753 | 100 | AUTO_FIXTURE_CANDIDATE |
-| R3-02802 | cleanDisplayTextForBatchSave | 2802 | 100 | AUTO_FIXTURE_CANDIDATE |
-| R3-02813 | cleanDisplayTextForBatchSave | 2813 | 100 | AUTO_FIXTURE_CANDIDATE |
-| R3-02883 | cleanDisplayTextForBatchSave | 2883 | 100 | AUTO_FIXTURE_CANDIDATE |
-| R3-02893 | cleanDisplayTextForBatchSave | 2893 | 100 | AUTO_FIXTURE_CANDIDATE |
-| R3-02909 | cleanDisplayTextForBatchSave | 2909 | 100 | AUTO_FIXTURE_CANDIDATE |
-| R3-02910 | cleanDisplayTextForBatchSave | 2910 | 100 | AUTO_FIXTURE_CANDIDATE |
-| R3-02911 | cleanDisplayTextForBatchSave | 2911 | 100 | AUTO_FIXTURE_CANDIDATE |
-| R3-02912 | cleanDisplayTextForBatchSave | 2912 | 100 | AUTO_FIXTURE_CANDIDATE |
-| R3-02918 | cleanDisplayTextForBatchSave | 2918 | 100 | AUTO_FIXTURE_CANDIDATE |
-| R3-02960 | cleanDisplayTextForBatchSave | 2960 | 100 | AUTO_FIXTURE_CANDIDATE |
-| R3-02967 | cleanDisplayTextForBatchSave | 2967 | 100 | AUTO_FIXTURE_CANDIDATE |
-| R3-03030 | cleanDisplayTextForBatchSave | 3030 | 100 | AUTO_FIXTURE_CANDIDATE |
-| R3-03054 | cleanDisplayTextForBatchSave | 3054 | 100 | AUTO_FIXTURE_CANDIDATE |
 | R3-03066 | cleanDisplayTextForBatchSave | 3066 | 100 | AUTO_FIXTURE_CANDIDATE |
 | R3-03466 | cleanDisplayTextForBatchSave | 3466 | 100 | AUTO_FIXTURE_CANDIDATE |
+| R3-04920 | cleanDisplayTextForBatchSave | 4920 | 100 | AUTO_FIXTURE_CANDIDATE |
+| R3-04974 | cleanDisplayTextForBatchSave | 4974 | 100 | AUTO_FIXTURE_CANDIDATE |
+| R3-05275 | cleanDisplayTextForBatchSave | 5275 | 100 | AUTO_FIXTURE_CANDIDATE |
+| R3-05342 | cleanDisplayTextForBatchSave | 5342 | 100 | AUTO_FIXTURE_CANDIDATE |
+| R3-05435 | cleanDisplayTextForBatchSave | 5435 | 100 | AUTO_FIXTURE_CANDIDATE |
+| R3-06521 | cleanDisplayTextForBatchSave | 6521 | 100 | AUTO_FIXTURE_CANDIDATE |
+| R3-01954 | cleanDisplayOptionsForBatchSave | 1954 | 100 | AUTO_FIXTURE_CANDIDATE |
+| R3-02352 | cleanDisplayOptionsForBatchSave | 2352 | 100 | AUTO_FIXTURE_CANDIDATE |
+| R3-02353 | cleanDisplayOptionsForBatchSave | 2353 | 100 | AUTO_FIXTURE_CANDIDATE |
+| R3-02366 | cleanDisplayOptionsForBatchSave | 2366 | 100 | AUTO_FIXTURE_CANDIDATE |
+| R3-02369 | cleanDisplayOptionsForBatchSave | 2369 | 100 | AUTO_FIXTURE_CANDIDATE |
+| R3-02370 | cleanDisplayOptionsForBatchSave | 2370 | 100 | AUTO_FIXTURE_CANDIDATE |
+| R3-02894 | cleanDisplayOptionsForBatchSave | 2894 | 100 | AUTO_FIXTURE_CANDIDATE |
+| R3-02919 | cleanDisplayOptionsForBatchSave | 2919 | 100 | AUTO_FIXTURE_CANDIDATE |
+| R3-02968 | cleanDisplayOptionsForBatchSave | 2968 | 100 | AUTO_FIXTURE_CANDIDATE |
+| R3-03031 | cleanDisplayOptionsForBatchSave | 3031 | 100 | AUTO_FIXTURE_CANDIDATE |
+| R3-03055 | cleanDisplayOptionsForBatchSave | 3055 | 100 | AUTO_FIXTURE_CANDIDATE |
+| R3-03536 | cleanDisplayOptionsForBatchSave | 3536 | 100 | AUTO_FIXTURE_CANDIDATE |
 
 ## Top 20 Most Dangerous
 
@@ -66,4 +66,4 @@ Total callsites: 105.
 
 ## Decision
 
-Safe auto-fixture candidates: 60.
+Safe auto-fixture candidates: 42.

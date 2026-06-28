@@ -5,29 +5,11 @@ Branch: main
 
 ## Summary
 
-Fixtures generated: 72.
-Tags created: 144.
+Fixtures generated: 54.
+Tags created: 108.
 
 ## Tags
 
-- [A4:R3:AUTO:R3-01937:cleanDisplayTextForBatchSave:context]
-- [A4:R3:AUTO:R3-01995:cleanDisplayTextForBatchSave:context]
-- [A4:R3:AUTO:R3-02144:cleanDisplayTextForBatchSave:context]
-- [A4:R3:AUTO:R3-02145:cleanDisplayTextForBatchSave:context]
-- [A4:R3:AUTO:R3-02753:cleanDisplayTextForBatchSave:context]
-- [A4:R3:AUTO:R3-02802:cleanDisplayTextForBatchSave:context]
-- [A4:R3:AUTO:R3-02813:cleanDisplayTextForBatchSave:context]
-- [A4:R3:AUTO:R3-02883:cleanDisplayTextForBatchSave:context]
-- [A4:R3:AUTO:R3-02893:cleanDisplayTextForBatchSave:context]
-- [A4:R3:AUTO:R3-02909:cleanDisplayTextForBatchSave:context]
-- [A4:R3:AUTO:R3-02910:cleanDisplayTextForBatchSave:context]
-- [A4:R3:AUTO:R3-02911:cleanDisplayTextForBatchSave:context]
-- [A4:R3:AUTO:R3-02912:cleanDisplayTextForBatchSave:context]
-- [A4:R3:AUTO:R3-02918:cleanDisplayTextForBatchSave:context]
-- [A4:R3:AUTO:R3-02960:cleanDisplayTextForBatchSave:context]
-- [A4:R3:AUTO:R3-02967:cleanDisplayTextForBatchSave:context]
-- [A4:R3:AUTO:R3-03030:cleanDisplayTextForBatchSave:context]
-- [A4:R3:AUTO:R3-03054:cleanDisplayTextForBatchSave:context]
 - [A4:R3:AUTO:R3-03066:cleanDisplayTextForBatchSave:context]
 - [A4:R3:AUTO:R3-03466:cleanDisplayTextForBatchSave:context]
 - [A4:R3:AUTO:R3-04920:cleanDisplayTextForBatchSave:context]
@@ -82,24 +64,6 @@ Tags created: 144.
 - [A4:R3:AUTO:R3-18952:addWarningOnce:synthetic]
 - [A4:R3:AUTO:R3-18971:addWarningOnce:synthetic]
 - [A4:R3:AUTO:R3-19212:addWarningOnce:synthetic]
-- [A4:R3:AUTO:R3-01937:cleanDisplayTextForBatchSave:ownership-safe]
-- [A4:R3:AUTO:R3-01995:cleanDisplayTextForBatchSave:ownership-safe]
-- [A4:R3:AUTO:R3-02144:cleanDisplayTextForBatchSave:ownership-safe]
-- [A4:R3:AUTO:R3-02145:cleanDisplayTextForBatchSave:ownership-safe]
-- [A4:R3:AUTO:R3-02753:cleanDisplayTextForBatchSave:ownership-safe]
-- [A4:R3:AUTO:R3-02802:cleanDisplayTextForBatchSave:ownership-safe]
-- [A4:R3:AUTO:R3-02813:cleanDisplayTextForBatchSave:ownership-safe]
-- [A4:R3:AUTO:R3-02883:cleanDisplayTextForBatchSave:ownership-safe]
-- [A4:R3:AUTO:R3-02893:cleanDisplayTextForBatchSave:ownership-safe]
-- [A4:R3:AUTO:R3-02909:cleanDisplayTextForBatchSave:ownership-safe]
-- [A4:R3:AUTO:R3-02910:cleanDisplayTextForBatchSave:ownership-safe]
-- [A4:R3:AUTO:R3-02911:cleanDisplayTextForBatchSave:ownership-safe]
-- [A4:R3:AUTO:R3-02912:cleanDisplayTextForBatchSave:ownership-safe]
-- [A4:R3:AUTO:R3-02918:cleanDisplayTextForBatchSave:ownership-safe]
-- [A4:R3:AUTO:R3-02960:cleanDisplayTextForBatchSave:ownership-safe]
-- [A4:R3:AUTO:R3-02967:cleanDisplayTextForBatchSave:ownership-safe]
-- [A4:R3:AUTO:R3-03030:cleanDisplayTextForBatchSave:ownership-safe]
-- [A4:R3:AUTO:R3-03054:cleanDisplayTextForBatchSave:ownership-safe]
 - [A4:R3:AUTO:R3-03066:cleanDisplayTextForBatchSave:ownership-safe]
 - [A4:R3:AUTO:R3-03466:cleanDisplayTextForBatchSave:ownership-safe]
 - [A4:R3:AUTO:R3-04920:cleanDisplayTextForBatchSave:ownership-safe]

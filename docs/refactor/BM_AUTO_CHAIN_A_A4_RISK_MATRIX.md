@@ -26,11 +26,11 @@ A4 fixture-first required: yes.
 | 1928 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, WARNING_MUTATION_PATH, DISPLAY_ONLY_PATH | window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options); |
 | 1931 | cleanDisplayFieldsOnly | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, WARNING_MUTATION_PATH, DISPLAY_ONLY_PATH | window.Qisi.Utils.cleanDisplayFieldsOnly(q); |
 | 1934 | addWarningOnce | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, WARNING_MUTATION_PATH, DISPLAY_ONLY_PATH | window.Qisi.Utils.addWarningOnce(q, message); |
-| 1937 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, WARNING_MUTATION_PATH, DISPLAY_ONLY_PATH | const text = cleanDisplayTextForBatchSave(value); |
+| 1937 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, WARNING_MUTATION_PATH, DISPLAY_ONLY_PATH | const text = window.Qisi.Utils.cleanDisplayTextForBatchSave(value); |
 | 1954 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, DRAFT_WRITE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | return cleanDisplayOptionsForBatchSave(options).filter(optionTextHasContent).length; |
-| 1995 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, VISUAL_REPAIR_PATH, DISPLAY_ONLY_PATH | return cleanDisplayTextForBatchSave(source); |
-| 2144 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, DISPLAY_ONLY_PATH | const next = cleanDisplayTextForBatchSave(candidate); |
-| 2145 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, DISPLAY_ONLY_PATH | const old = cleanDisplayTextForBatchSave(existing); |
+| 1995 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, VISUAL_REPAIR_PATH, DISPLAY_ONLY_PATH | return window.Qisi.Utils.cleanDisplayTextForBatchSave(source); |
+| 2144 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, DISPLAY_ONLY_PATH | const next = window.Qisi.Utils.cleanDisplayTextForBatchSave(candidate); |
+| 2145 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, DISPLAY_ONLY_PATH | const old = window.Qisi.Utils.cleanDisplayTextForBatchSave(existing); |
 | 2352 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | const primary = cleanDisplayOptionsForBatchSave(primaryOptions \|\| []); |
 | 2353 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | const fallback = cleanDisplayOptionsForBatchSave(fallbackOptions \|\| []); |
 | 2366 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | cleanDisplayOptionsForBatchSave(options \|\| []).filter(Boolean).length; |
@@ -38,26 +38,26 @@ A4 fixture-first required: yes.
 | 2370 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | const bb = cleanDisplayOptionsForBatchSave(b \|\| []); |
 | 2402 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, DISPLAY_ONLY_PATH | const itemSolution = cleanDisplayTextForBatchSave(item.solution \|\| ''); |
 | 2403 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, DISPLAY_ONLY_PATH | const fallbackSolution = cleanDisplayTextForBatchSave(fallback.solution \|\| ''); |
-| 2753 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: cleanDisplayTextForBatchSave(source), |
-| 2802 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | options[optionIndex] = cleanDisplayTextForBatchSave(value); |
-| 2813 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: cleanDisplayTextForBatchSave(source), |
+| 2753 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(source), |
+| 2802 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | options[optionIndex] = window.Qisi.Utils.cleanDisplayTextForBatchSave(value); |
+| 2813 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(source), |
 | 2819 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH, DOCX_PATH | stem: cleanDisplayTextForBatchSave(stem \|\| source), |
 | 2820 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH, DOCX_PATH | options: cleanDisplayOptionsForBatchSave(options) |
-| 2883 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | options[optionIndex] = cleanDisplayTextForBatchSave(value); |
-| 2893 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: cleanDisplayTextForBatchSave(source.slice(0, ordered[0].start).trim()), |
+| 2883 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | options[optionIndex] = window.Qisi.Utils.cleanDisplayTextForBatchSave(value); |
+| 2893 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(source.slice(0, ordered[0].start).trim()), |
 | 2894 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | options: cleanDisplayOptionsForBatchSave(options), |
-| 2909 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | cleanDisplayTextForBatchSave(match[1]), |
-| 2910 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | cleanDisplayTextForBatchSave(match[2]), |
-| 2911 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | cleanDisplayTextForBatchSave(match[3]), |
-| 2912 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | cleanDisplayTextForBatchSave(match[4]) |
-| 2918 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: cleanDisplayTextForBatchSave(source.slice(0, match.index).trim()), |
+| 2909 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | window.Qisi.Utils.cleanDisplayTextForBatchSave(match[1]), |
+| 2910 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | window.Qisi.Utils.cleanDisplayTextForBatchSave(match[2]), |
+| 2911 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | window.Qisi.Utils.cleanDisplayTextForBatchSave(match[3]), |
+| 2912 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | window.Qisi.Utils.cleanDisplayTextForBatchSave(match[4]) |
+| 2918 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(source.slice(0, match.index).trim()), |
 | 2919 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | options: cleanDisplayOptionsForBatchSave(options), |
-| 2960 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | options[idx] = cleanDisplayTextForBatchSave(hit.value); |
-| 2967 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: cleanDisplayTextForBatchSave(stemLines.join('\n')), |
+| 2960 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | options[idx] = window.Qisi.Utils.cleanDisplayTextForBatchSave(hit.value); |
+| 2967 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(stemLines.join('\n')), |
 | 2968 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | options: cleanDisplayOptionsForBatchSave(options), |
-| 3030 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: cleanDisplayTextForBatchSave(lines.slice(0, i).join('\n')), |
+| 3030 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(lines.slice(0, i).join('\n')), |
 | 3031 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | options: cleanDisplayOptionsForBatchSave(options), |
-| 3054 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: cleanDisplayTextForBatchSave(lines.slice(0, i).join('\n')), |
+| 3054 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(lines.slice(0, i).join('\n')), |
 | 3055 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | options: cleanDisplayOptionsForBatchSave(options), |
 | 3066 | cleanDisplayTextForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, DISPLAY_ONLY_PATH | stem: cleanDisplayTextForBatchSave(source), |
 | 3119 | cleanDisplayOptionsForBatchSave | HIGH | BATCH_SAVE_PATH, OPTION_REPAIR_PATH, VISUAL_REPAIR_PATH, DISPLAY_ONLY_PATH | const visualOptions = cleanDisplayOptionsForBatchSave(visual?.options \|\| []); |
