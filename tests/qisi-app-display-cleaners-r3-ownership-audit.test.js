@@ -56,7 +56,7 @@ describe('bm-a4-r3-ownership-audit', () => {
     it('auditAll returns results for all callsites', () => {
         const result = auditAll();
         assert.equal(result.ok, true);
-        assert.ok(result.totalCallsites >= 60);
-        assert.ok(result.results.length >= 60);
+        assert.ok(result.totalCallsites >= 50);
+        assert.ok(result.results.length >= 50);
     });
 });

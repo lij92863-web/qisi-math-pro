@@ -14,5 +14,5 @@ describe('bm-a4-r3-proof-builder', () => {
     it('allows simple display cleanup proof', () => { const p = buildProof(sampleSafe, appLines); assert.equal(p.replacementAllowed, true); });
     it('detects parent function', () => { const p = buildProof(sampleSafe, appLines); assert.ok(p.parentFunction && p.parentFunction.length > 0); });
     it('does not modify app.js', () => { const before = fs.readFileSync('app.js', 'utf8'); buildAll(); assert.equal(fs.readFileSync('app.js', 'utf8'), before); });
-    it('buildAll returns results', () => { const r = buildAll(); assert.ok(r.total >= 60); assert.ok(r.replacementAllowed >= 0); });
+    it('buildAll returns results', () => { const r = buildAll(); assert.ok(r.total >= 50); assert.ok(r.replacementAllowed >= 0); });
 });

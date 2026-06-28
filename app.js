@@ -3116,7 +3116,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         if (currentCount >= 2) return next;
 
                         const visual = findVisualItemForQuestion(visualItems, next, index);
-                        const visualOptions = cleanDisplayOptionsForBatchSave(visual?.options || []);
+                        const visualOptions = window.Qisi.Utils.cleanDisplayOptionsForBatchSave(visual?.options || []);
                         const visualCount = optionCountOf(visualOptions);
 
                         if (visualCount >= 2) {
@@ -3224,7 +3224,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         console.log('parsedCount =', Array.isArray(parsed?.options) ? parsed.options.filter(opt => window.Qisi.Utils.cleanRecognizedText(opt)).length : 0);
                         console.groupEnd();
 
-                        const options = cleanDisplayOptionsForBatchSave(parsed?.options || []);
+                        const options = window.Qisi.Utils.cleanDisplayOptionsForBatchSave(parsed?.options || []);
                         const count = options.filter(opt => window.Qisi.Utils.cleanRecognizedText(opt)).length;
 
                         if (count >= 2) {
@@ -3410,7 +3410,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         return draft;
                     }
 
-                    draft.options = cleanDisplayOptionsForBatchSave(best.options);
+                    draft.options = window.Qisi.Utils.cleanDisplayOptionsForBatchSave(best.options);
 
                     const repairedOptionCount = Array.isArray(draft.options)
                         ? draft.options.filter(Boolean).length
@@ -3435,7 +3435,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                     draft.mergeWarnings = (draft.mergeWarnings || []).filter(item => item !== 'missing_options');
                     draft.warnings = (draft.warnings || []).filter(w => !String(w).includes('选择题仅识别到'));
-                    addWarningOnce(draft, `已从 Word 文本层本地拆出 ${best.optionCount}/4 个选项，请核对。`);
+                    window.Qisi.Utils.addWarningOnce(draft, `已从 Word 文本层本地拆出 ${best.optionCount}/4 个选项，请核对。`);
 
                     console.groupCollapsed('[BATCH_DEBUG][docx-option-repair-applied]');
                     console.table([{
@@ -3566,7 +3566,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             next.options = localOptions;
 
                             if (local.stem && local.stem.length >= 8) {
-                                next.stem = cleanDisplayTextForBatchSave(local.stem);
+                                next.stem = window.Qisi.Utils.cleanDisplayTextForBatchSave(local.stem);
                             }
 
                             if (!['单选题', '多选题'].includes(next.type) && localCount >= 2) {
@@ -6973,8 +6973,8 @@ ${pageMarkdown || '空'}
 
                                 const next = { ...q };
 
-                                const patchedOptions = cleanDisplayOptionsForBatchSave(patch.options || patch.选项 || []);
-                                const oldOptions = cleanDisplayOptionsForBatchSave(next.options || []);
+                                const patchedOptions = window.Qisi.Utils.cleanDisplayOptionsForBatchSave(patch.options || patch.选项 || []);
+                                const oldOptions = window.Qisi.Utils.cleanDisplayOptionsForBatchSave(next.options || []);
                                 if (patchedOptions.filter(Boolean).length > oldOptions.filter(Boolean).length) {
                                     next.options = patchedOptions;
                                     if (!['单选题', '多选题'].includes(next.type)) {
@@ -15557,7 +15557,7 @@ ${source}`;
 
                 const batchFinalGateCleanOptions = (options = []) => {
                     try {
-                        return cleanDisplayOptionsForBatchSave(options || []);
+                        return window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options || []);
                     } catch {
                         const arr = Array.isArray(options) ? options : ['', '', '', ''];
                         return [0, 1, 2, 3].map(i => String(arr[i] || '').trim());
@@ -20000,7 +20000,7 @@ ${source}`;
                     }
 
                     // 2. 只清理显示字段中的污染，不动原始依据
-                    cleanDisplayFieldsOnly(q);
+                    window.Qisi.Utils.cleanDisplayFieldsOnly(q);
 
                     // DOCX 新导入器已经从原始 document.xml 建立选项；用户编辑后也不能再从 rawBlock 恢复旧内容。
                     if (!q.userEdited && q.sourceTrace?.source !== 'docx-importer') {
