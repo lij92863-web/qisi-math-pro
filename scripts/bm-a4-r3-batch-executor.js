@@ -17,11 +17,18 @@ function replaceCallsiteInApp(line, helper, appSource) {
     return { replaced: true, oldLine, newLine, source: lines.join('\n') };
 }
 
-function executeBatch(batchSize, writeFixtures, applyReplacements) {
+function executeBatch(batchSize, writeFixtures, applyReplacements, mediumMode) {
     const summary = rankAll();
     const appLines = readAppLines();
     const appSource = fs.readFileSync(path.resolve(__dirname, '..', 'app.js'), 'utf8');
-    const candidates = summary.ranked.filter(r => r.decision === 'AUTO_FIXTURE_CANDIDATE').slice(0, batchSize);
+    let candidates;
+    if (mediumMode) {
+        const medium = summary.ranked.filter(r => r.decision === 'PROOF_REQUIRED');
+        const proofs = medium.map(c => buildProof(c, appLines));
+        candidates = proofs.filter(p => p.proofDecision === 'PROVE_WITH_CONTEXT_FIXTURE' && p.replacementAllowed).slice(0, Math.min(batchSize, 1)).map(p => summary.ranked.find(r => r.line === p.line)).filter(Boolean);
+    } else {
+        candidates = summary.ranked.filter(r => r.decision === 'AUTO_FIXTURE_CANDIDATE').slice(0, batchSize);
+    }
     const proofs = candidates.map(c => buildProof(c, appLines));
     const allowed = proofs.filter(p => p.replacementAllowed);
     const replacements = [];
@@ -80,8 +87,9 @@ function main(argv = process.argv.slice(2)) {
     const batchSize = bsIdx >= 0 ? parseInt(argv[bsIdx + 1]) || 3 : 3;
     const writeFixtures = argv.includes('--write-fixtures');
     const applyReplacements = argv.includes('--apply-replacements');
-    const batchId = `AUTO-${Date.now().toString(36)}`;
-    const result = executeBatch(batchSize, writeFixtures, applyReplacements);
+    const mediumMode = argv.includes('--medium');
+    const batchId = mediumMode ? `MED-${Date.now().toString(36)}` : `AUTO-${Date.now().toString(36)}`;
+    const result = executeBatch(batchSize, writeFixtures, applyReplacements, mediumMode);
     const ri = argv.indexOf('--write-report');
     if (ri >= 0) fs.writeFileSync(argv[ri + 1], markdownReport(result, batchId));
     console.log(JSON.stringify(result, null, 2));
