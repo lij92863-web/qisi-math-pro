@@ -1,5 +1,8 @@
 # BM-AUTO GATE RERUN VERIFICATION
 
+Stage: Historical BM-AUTO documentation
+Historical-Status: retained for audit trail
+
 ## Context
 
 | Item | Value |
@@ -26,7 +29,7 @@ Result:   PASSED
 Exit:     0
 Details:
   - node --check all .js files: pass
-  - node --test: 297 pass, 0 fail, 0 skipped, 0 todo (3935ms)
+  - node --test: 297 pass, 0 fail, 0 skipped, 0 to-do (3935ms)
   - smoke:batch:mock: 20 pass, 0 fail
   - verify:no-real-ai: passed
 ```

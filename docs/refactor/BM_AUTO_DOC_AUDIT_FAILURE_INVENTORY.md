@@ -2,13 +2,13 @@
 
 Stage: BM-AUTO-DOC-AUDIT-FAILURE-INVENTORY
 Branch: main
-Generated at: 2026-06-28T11:01:40.261Z
+Generated at: 2026-06-28T11:02:25.394Z
 Audit command: node scripts/bm-a4-doc-audit.js --write-report docs/refactor/BM_AUTO_DOC_AUDIT_FAILURE_INVENTORY.md
 
 ## Summary
 
-Docs checked: 161.
-Total failures: 14.
+Docs checked: 162.
+Total failures: 4.
 Doc audit passed: no.
 Rules: >= 20 lines, >= 5 sections, < 1200 max line.
 
@@ -16,39 +16,29 @@ Rules: >= 20 lines, >= 5 sections, < 1200 max line.
 
 | Class | Count |
 | --- | ---: |
-| literalBackslashN | 1 |
-| todoMarker | 2 |
-| pendingMarker | 5 |
+| literalBackslashN | 0 |
+| todoMarker | 0 |
+| pendingMarker | 3 |
 | compressedRawLines | 0 |
-| missingStageOrHistoricalNote | 5 |
-| missingDecisionOrHistoricalStatus | 6 |
-| missingValidationOrTests | 2 |
-| missingSafety | 4 |
+| missingStageOrHistoricalNote | 0 |
+| missingDecisionOrHistoricalStatus | 1 |
+| missingValidationOrTests | 0 |
+| missingSafety | 1 |
 
 ## Failure Count By Policy Class
 
 | Policy Class | Count |
 | --- | ---: |
-| historical | 14 |
+| historical | 4 |
 
 ## Failure Table
 
 | Index | File | Policy Class | Line Count | Heading Count | Max Line Length | hasLiteralBackslashN | hasTODO | hasPending | Missing Stage Or Historical Note | Missing Decision Or Historical Status | Missing Validation Or Tests | Missing Safety | Recommended Action | Reasons |
 | ---: | --- | --- | ---: | ---: | ---: | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | BM_AUTO_FULL_STOP_NO_ELIGIBLE_LOW_RISK_HELPER.md | historical | 70 | 10 | 209 | no | no | no | yes | yes | yes | no | policy-exempt-with-marker | missing Stage or Historical note; missing Decision or Historical status |
-| 2 | BM_AUTO_GATE_CORRECTION.md | historical | 56 | 7 | 322 | no | no | no | yes | no | no | yes | policy-exempt-with-marker | missing Stage or Historical note |
-| 3 | BM_AUTO_GATE_RERUN.md | historical | 135 | 14 | 98 | no | yes | no | yes | yes | no | no | fix | to-do marker found; missing Stage or Historical note; missing Decision or Historical status |
-| 4 | BM_AUTO_GATE_VERIFICATION.md | historical | 162 | 16 | 164 | no | yes | no | yes | yes | no | no | fix | to-do marker found; missing Stage or Historical note; missing Decision or Historical status |
-| 5 | BM_AUTO_GROUPED_HELPER_CHAIN_B_PLAN.md | historical | 14 | 1 | 199 | no | no | no | no | yes | no | no | policy-exempt-with-marker | missing Decision or Historical status |
-| 6 | BM_AUTO_GROUPED_HELPER_CHAIN_B_REAL_MIGRATION.md | historical | 128 | 14 | 335 | yes | no | no | no | no | no | no | archive-normalize | 3 lines use escaped backslash-n as line separator |
-| 7 | BM_AUTO_GROUPED_HELPER_CHAIN_B_SYNC.md | historical | 28 | 4 | 100 | no | no | yes | no | no | no | yes | fix | not-completed marker found |
-| 8 | BM_AUTO_GROUPED_HELPER_GATE.md | historical | 148 | 21 | 297 | no | no | yes | no | no | yes | no | fix | not-completed marker found |
-| 9 | BM_AUTO_MIGRATION_PROTOCOL.md | historical | 199 | 19 | 150 | no | no | no | yes | no | no | no | policy-exempt-with-marker | missing Stage or Historical note |
-| 10 | BM_AUTO_ROUND_1_PLAN.md | historical | 93 | 17 | 311 | no | no | no | no | yes | no | yes | policy-exempt-with-marker | missing Decision or Historical status |
-| 11 | BM_AUTO_ROUND_1_REAL_MIGRATION.md | historical | 209 | 38 | 283 | no | no | yes | no | no | no | no | fix | not-completed marker found |
-| 12 | BM_AUTO_ROUND_2_PLAN.md | historical | 77 | 17 | 142 | no | no | no | no | yes | no | yes | policy-exempt-with-marker | missing Decision or Historical status |
-| 13 | BM_AUTO_ROUND_2_REAL_MIGRATION.md | historical | 145 | 30 | 140 | no | no | yes | no | no | no | no | fix | not-completed marker found |
-| 14 | BM_AUTO_STRICT_RUN_CORRECTION.md | historical | 105 | 12 | 121 | no | no | yes | no | no | no | no | fix | not-completed marker found |
+| 1 | BM_AUTO_ROUND_1_REAL_MIGRATION.md | historical | 209 | 38 | 283 | no | no | yes | no | no | no | no | fix | not-completed marker found |
+| 2 | BM_AUTO_ROUND_2_PLAN.md | historical | 77 | 17 | 142 | no | no | no | no | yes | no | yes | policy-exempt-with-marker | missing Decision or Historical status |
+| 3 | BM_AUTO_ROUND_2_REAL_MIGRATION.md | historical | 145 | 30 | 140 | no | no | yes | no | no | no | no | fix | not-completed marker found |
+| 4 | BM_AUTO_STRICT_RUN_CORRECTION.md | historical | 105 | 12 | 121 | no | no | yes | no | no | no | no | fix | not-completed marker found |
 
 ## Validation
 

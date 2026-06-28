@@ -1,5 +1,8 @@
 # BM-AUTO Migration Protocol
 
+Stage: Historical BM-AUTO documentation
+Historical-Status: retained for audit trail
+
 ## Purpose
 
 This document defines the operational protocol for BM-AUTO — the concrete steps, commands, and acceptance criteria for each automatic migration round.

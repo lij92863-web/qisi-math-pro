@@ -1,5 +1,8 @@
 # BM-AUTO Full Stop — NO_ELIGIBLE_LOW_RISK_HELPER
 
+Stage: Historical BM-AUTO documentation
+Historical-Status: retained for audit trail
+
 Stop reason: No independent low-risk helper with >=10 lines delta remains available.
 Latest commit: `c5e8df4`
 

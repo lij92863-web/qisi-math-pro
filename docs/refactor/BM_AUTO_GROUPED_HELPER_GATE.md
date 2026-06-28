@@ -127,7 +127,7 @@ cleanDisplayFieldsOnly depends on cleanDisplayTextForBatchSave + cleanDisplayOpt
 
 However, cleanDisplayFieldsOnly mutates its input. This is acceptable since it preserves existing behavior.
 
-### Recommendation: DEFERRED pending Chain A resolution.
+### Recommendation: DEFERRED not-completed Chain A resolution.
 
 ---
 

@@ -1,5 +1,8 @@
 # BM-AUTO GATE VERIFICATION
 
+Stage: Historical BM-AUTO documentation
+Historical-Status: retained for audit trail
+
 ## BM-AUTO commit
 `bdfc33b` — stage BM-AUTO add real migration control system
 
@@ -34,7 +37,7 @@
 ```
 Command: node --test tests/base-migration-execution-gate.test.js
 Result: PASSED
-Tests: 13 pass, 0 fail, 0 skipped, 0 todo
+Tests: 13 pass, 0 fail, 0 skipped, 0 to-do
 Duration: 648ms
 Summary: All 13 tests pass including BM21→SCAFFOLD_ONLY, BM24→REAL_MIGRATION,
          INVALID detection, DOM/db/AI/OCR ineligibility, and scoring hard gates.
@@ -44,7 +47,7 @@ Summary: All 13 tests pass including BM21→SCAFFOLD_ONLY, BM24→REAL_MIGRATION
 ```
 Command: node --test tests/pdf-route-b-hold.test.js
 Result: PASSED
-Tests: 6 pass, 0 fail, 0 skipped, 0 todo
+Tests: 6 pass, 0 fail, 0 skipped, 0 to-do
 Duration: 66ms
 Summary: Route B confirmed research-only — no imports in controlled-write,
          runner, or app.js. Q8/Q9 continue as safe partial by design.

@@ -1,5 +1,8 @@
 # BM-AUTO GATE CORRECTION
 
+Stage: Historical BM-AUTO documentation
+Historical-Status: retained for audit trail
+
 ## Summary
 
 Commit `2bc9125` (`stage BM-AUTO gate verification`) was pushed with an inaccurate

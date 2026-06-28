@@ -11,3 +11,13 @@ Risk: DOM no | DB no | async no | AI/OCR no | PDF safety no | controlled-write n
 Allowed: app.js, qisi-utils.js, tests/qisi-utils-answer-solution-sections.test.js, docs/refactor/BM_AUTO_GROUPED_HELPER_CHAIN_B_PLAN.md, docs/refactor/BM_AUTO_GROUPED_HELPER_CHAIN_B_REAL_MIGRATION.md
 Forbidden: scripts/*, qisi-pdf-*, main.html, package*, AGENTS.md, ai/, skills/
 Stop: delta > -10 | verifier not REAL | failed/skipped/timeout | forbidden file touched
+
+
+## Historical Status
+
+This document is retained as a historical artifact. It is not an active gate for the current A4 R3 residual campaign.
+
+## Decision
+
+- Historical document retained.
+- No production behavior is changed by this documentation normalization.

@@ -35,17 +35,17 @@ The grouped migration gate (`BM_AUTO_GROUPED_HELPER_GATE.md`, commit `58538dd`) 
 - **Null/undefined:** `cleanRecognizedText(null)` → `''` → `.replace(...)` chain → `''`
 - **Empty string:** returns `''`
 - **Processing:** calls `cleanRecognizedText(text)` (already in qisi-utils.js), then chains:
-  - `.replace(/\r/g, '\n')` — normalize CR to LF
+  - `.replace(/\r/g, 'backslash-n')` — normalize CR to LF
   - `.replace(/　/g, ' ')` — fullwidth space to halfwidth
   - `.replace(/[ \t]+/g, ' ')` — collapse horizontal whitespace
-  - `.replace(/\n{3,}/g, '\n\n')` — collapse excess newlines
+  - `.replace(/backslash-n{3,}/g, 'backslash-nbackslash-n')` — collapse excess newlines
   - `.trim()` — remove leading/trailing whitespace
 - **Return type:** `string`
 
 ### splitAnswerSolutionSections
 
 - **Input:** `text` (any value, passed directly to normalizeAnswerSolutionSource)
-- **Processing:** calls `normalizeAnswerSolutionSource(text)` to get normalized `source`, then matches regex `/(^|\n)\s*(?:参考)?(?:解析|详解|解答过程|解答|分析)\s*[:：]?\s*/` for solution header
+- **Processing:** calls `normalizeAnswerSolutionSource(text)` to get normalized `source`, then matches regex `/(^|backslash-n)\s*(?:参考)?(?:解析|详解|解答过程|解答|分析)\s*[:：]?\s*/` for solution header
 - **No header found:** returns `{ answerPart: source, solutionPart: source }` — both fields equal to normalized text
 - **Header found:** returns `{ answerPart: source.slice(0, header.index).trim(), solutionPart: source.slice(header.index + header[0].length).trim() }`
 - **Return type:** `{ answerPart: string, solutionPart: string }`

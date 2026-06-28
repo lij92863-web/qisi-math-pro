@@ -3,7 +3,7 @@
 - **Stage:** BM-AUTO-GROUPED-HELPER-MIGRATION-CHAIN-B-SYNC
 - **Migration commit:** `dae9bec`
 - **Sync commit:** `43b3a17`
-- **End commit corrected:** yes (`pending` → `dae9bec`)
+- **End commit corrected:** yes (`not-completed` → `dae9bec`)
 - **Origin/main contains `dae9bec`:** yes
 - **Origin/main contains `43b3a17`:** yes
 - **Working tree before sync:** clean
@@ -13,7 +13,7 @@
 
 | File | Change |
 |------|--------|
-| docs/refactor/BM_AUTO_GROUPED_HELPER_CHAIN_B_REAL_MIGRATION.md | `End: pending` → `End: dae9bec` |
+| docs/refactor/BM_AUTO_GROUPED_HELPER_CHAIN_B_REAL_MIGRATION.md | `End: not-completed` → `End: dae9bec` |
 | docs/refactor/BM_AUTO_GROUPED_HELPER_CHAIN_B_SYNC.md | new file |
 
 ## Code files changed in sync
