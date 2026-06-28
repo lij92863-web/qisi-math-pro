@@ -2816,7 +2816,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     }
 
                     return {
-                        stem: cleanDisplayTextForBatchSave(stem || source),
+                        stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(stem || source),
                         options: cleanDisplayOptionsForBatchSave(options)
                     };
                 };
