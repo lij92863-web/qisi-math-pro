@@ -8,43 +8,40 @@ Commit: 46bac8f
 
 ## Summary
 
-This gate evaluates whether the four A4 wrapper functions in app.js
-can be safely removed after the medium campaign.
+This gate evaluates whether the four A4 wrapper functions in app.js can be safely removed after the medium campaign.
 
 ## Wrappers Status
 
-Four wrapper functions are defined in app.js and delegate to window.Qisi.Utils:
+Four wrapper functions are defined in app.js:
 
 - cleanDisplayTextForBatchSave at line 1924
 - cleanDisplayOptionsForBatchSave at line 1927
 - addWarningOnce at line 1933
 - cleanDisplayFieldsOnly at line 1930
 
-All four wrappers correctly delegate to their qisi-utils equivalents.
+All four correctly delegate to window.Qisi.Utils equivalents.
 
 ## Gate Criteria
 
-Each criterion must pass for wrapper removal to be allowed:
-
 | Criterion | Status | Detail |
 | --- | --- | --- |
-| Zero naked callsites outside wrappers | FAIL | 40 naked callsites remain |
-| Zero deferred callsites | FAIL | 19 callsites are deferred |
-| Zero blocked callsites | FAIL | 21 callsites are blocked |
-| Zero UNKNOWN callsites | PASS | No UNKNOWN callsites exist |
-| All app.js calls are explicit window.Qisi.Utils | FAIL | 75 of 115 calls are explicit |
-| Wrappers are unused by any code path | FAIL | 40 callsites depend on wrappers |
-| verify:safe passed | PASS | All tests pass |
-| verify:batch-safety passed | PASS | All batch safety checks pass |
-| smoke:batch:mock passed | PASS | Batch smoke tests pass |
-| verify:pdf-known-bad passed | PASS | PDF safety verified |
-| Controlled-write ownership passed | PASS | Ownership tests pass |
-| PDF preflight ok true realApiCalled false | PASS | Preflight clean |
-| PDF dry-run ok true realApiCalled false | PASS | Dry-run clean |
+| Zero naked callsites outside wrappers | FAIL | 40 remain |
+| Zero deferred callsites | FAIL | 19 deferred |
+| Zero blocked callsites | FAIL | 21 blocked |
+| Zero UNKNOWN callsites | PASS | 0 UNKNOWN |
+| All calls explicit window.Qisi.Utils | FAIL | 75 of 115 |
+| Wrappers unused by any code path | FAIL | 40 depend |
+| verify:safe passed | PASS | All green |
+| verify:batch-safety passed | PASS | All pass |
+| smoke:batch:mock passed | PASS | 20 pass |
+| verify:pdf-known-bad passed | PASS | 65 pass |
+| Controlled-write ownership passed | PASS | 21 pass |
+| PDF preflight ok true realApiCalled false | PASS | Clean |
+| PDF dry-run ok true realApiCalled false | PASS | Clean |
 
 ## Validation
 
-All safety checks were verified before this gate evaluation:
+All safety checks verified before this gate evaluation:
 
 - verify:safe: passed with all production and tooling tests green
 - verify:batch-safety: passed including verify-docx-stable and verify-pdf-known-bad
@@ -72,10 +69,4 @@ This gate evaluation does not modify any production code:
 
 Wrapper removal is not allowed.
 
-The gate fails because 40 naked A4 callsites remain in app.js,
-19 callsites are deferred, and 21 callsites are blocked.
-These callsites all depend on the four wrapper functions
-for indirect access to qisi-utils implementations.
-
-Wrappers must be preserved until all 115 A4 callsites
-are explicit window.Qisi.Utils calls and all gate criteria pass.
+The gate fails because 40 naked A4 callsites remain in app.js, 19 callsites are deferred, and 21 callsites are blocked. Wrappers must be preserved until all 115 A4 callsites are explicit window.Qisi.Utils calls and all gate criteria pass.
