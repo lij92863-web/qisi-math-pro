@@ -44,7 +44,7 @@ function analyzeSource(name, source) {
     const headingCount = (source.match(/^#{1,4}\s+/gm) || []).length;
     const maxLineLength = lines.reduce((max, line) => Math.max(max, line.length), 0);
     const currentCampaignDoc = isCurrentCampaignDoc(name);
-    const hasArchiveIntent = /Archived-Doc-Audit-Status:|Archive-Reason:|Historical-Status:/i.test(source);
+    const hasArchiveIntent = /Archived-Doc-Audit-Status:|Archive-Reason:/i.test(source);
     const archivedDoc = !currentCampaignDoc && hasArchiveIntent;
     return {
         lineCount: lines.length,

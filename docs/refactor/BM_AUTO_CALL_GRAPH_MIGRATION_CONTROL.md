@@ -1,5 +1,8 @@
 # BM-AUTO Call Graph Migration Control System
 
+Stage: Historical BM-AUTO documentation
+Historical-Status: retained for audit trail
+
 ## Purpose
 
 This document defines the automatic migration control system (BM-AUTO) that governs all future real migrations from `app.js`. Its role is to **prevent scaffold-only changes from being misclassified as real migrations**, and to ensure every migration step produces measurable, verifiable progress toward app.js responsibility contraction.

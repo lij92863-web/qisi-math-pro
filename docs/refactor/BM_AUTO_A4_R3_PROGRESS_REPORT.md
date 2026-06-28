@@ -43,3 +43,13 @@ CALLSITE_PARTIAL (explicitCount: 10).
 ## Next Shard
 
 R3-S006 (stopped due to 5 consecutive shards with zero replacements).
+
+
+## Historical Status
+
+This document is retained as a historical artifact. It is not an active gate for the current A4 R3 residual campaign.
+
+## Decision
+
+- Historical document retained.
+- No production behavior is changed by this documentation normalization.

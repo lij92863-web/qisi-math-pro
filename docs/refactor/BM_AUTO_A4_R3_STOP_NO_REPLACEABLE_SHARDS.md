@@ -54,3 +54,13 @@ Limited. The heuristic ownership audit tool correctly identifies risk categories
 4. Proceed to Phase 15 (documentation audit).
 5. Complete Phase 16 (full verification) and Phase 17 (final summary).
 6. Future work: Human reviewer creates per-callsite fixtures for the 105 remaining R3 callsites, then re-runs the ownership audit to unlock replacement.
+
+
+## Historical Status
+
+This document is retained as a historical artifact. It is not an active gate for the current A4 R3 residual campaign.
+
+## Decision
+
+- Historical document retained.
+- No production behavior is changed by this documentation normalization.

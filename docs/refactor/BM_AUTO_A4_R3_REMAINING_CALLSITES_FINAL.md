@@ -64,3 +64,13 @@ All 105 callsites require manual per-callsite fixture creation and ownership ana
 3. Run full verification (Phase 16).
 4. Create final campaign summary (Phase 17).
 5. Future: Human reviewer must create per-callsite fixtures and re-run ownership audit.
+
+
+## Historical Status
+
+This document is retained as a historical artifact. It is not an active gate for the current A4 R3 residual campaign.
+
+## Decision
+
+- Historical document retained.
+- No production behavior is changed by this documentation normalization.

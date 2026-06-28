@@ -94,7 +94,7 @@ No BLOCK-classified callsites exist in the current risk matrix.
 
 ## Deferred Callsites
 
-All 109 HIGH-risk callsites are effectively deferred to R3, pending:
+All 109 HIGH-risk callsites are effectively deferred to R3, not-completed:
 - Call-site-specific fixtures for BATCH_SAVE_PATH, DRAFT_WRITE_PATH, PDF_PATH
 - PDF ownership analysis
 - Controlled-write adjacency analysis

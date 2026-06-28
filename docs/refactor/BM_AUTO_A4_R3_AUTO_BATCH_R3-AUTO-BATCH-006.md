@@ -16,9 +16,9 @@ Deferred: 0. Blocked: 0.
 
 | ID | Helper | Line | Old | New |
 | --- | --- | ---: | --- | --- |
-| R3-02967 | cleanDisplayTextForBatchSave | 2967 | stem: cleanDisplayTextForBatchSave(stemLines.join('\n')), | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(stemLines.join('\n')), |
-| R3-03030 | cleanDisplayTextForBatchSave | 3030 | stem: cleanDisplayTextForBatchSave(lines.slice(0, i).join('\n')), | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(lines.slice(0, i).join('\n')), |
-| R3-03054 | cleanDisplayTextForBatchSave | 3054 | stem: cleanDisplayTextForBatchSave(lines.slice(0, i).join('\n')), | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(lines.slice(0, i).join('\n')), |
+| R3-02967 | cleanDisplayTextForBatchSave | 2967 | stem: cleanDisplayTextForBatchSave(stemLines.join('backslash-n')), | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(stemLines.join('backslash-n')), |
+| R3-03030 | cleanDisplayTextForBatchSave | 3030 | stem: cleanDisplayTextForBatchSave(lines.slice(0, i).join('backslash-n')), | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(lines.slice(0, i).join('backslash-n')), |
+| R3-03054 | cleanDisplayTextForBatchSave | 3054 | stem: cleanDisplayTextForBatchSave(lines.slice(0, i).join('backslash-n')), | stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(lines.slice(0, i).join('backslash-n')), |
 
 ## Decision
 

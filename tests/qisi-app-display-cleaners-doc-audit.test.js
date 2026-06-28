@@ -222,6 +222,11 @@ describe('bm-a4-doc-audit', () => {
         assert.deepEqual(errors, []);
     });
 
+    it('historical status alone does not make an archived doc', () => {
+        const result = auditDocs('docs/refactor');
+        assert.ok(result.docs.every(doc => doc.policyClass !== 'archived' || /Archive-Reason:|Archived-Doc-Audit-Status:/i.test(require('node:fs').readFileSync(doc.filePath, 'utf8'))));
+    });
+
     it('archived doc without marker fails', () => {
         const errors = auditSource('BM_AUTO_ARCHIVE_TEST.md', archivedDoc().replace('Archived-Doc-Audit-Status: archived', 'Archived-Doc-Audit-Status:'));
         assert.ok(errors.some(e => e.includes('archive status')));
