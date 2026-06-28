@@ -2810,7 +2810,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                     if (validCount < 2) {
                         return {
-                            stem: cleanDisplayTextForBatchSave(source),
+                            stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(source),
                             options: ['', '', '', '']
                         };
                     }
@@ -2880,7 +2880,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                                     const optionIndex = hit.label.charCodeAt(0) - 65;
                                     if (optionIndex >= 0 && optionIndex < 4) {
-                                        options[optionIndex] = cleanDisplayTextForBatchSave(value);
+                                        options[optionIndex] = window.Qisi.Utils.cleanDisplayTextForBatchSave(value);
                                     }
                                 });
 
@@ -2890,7 +2890,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                                 }).length;
 
                                 candidates.push({
-                                    stem: cleanDisplayTextForBatchSave(source.slice(0, ordered[0].start).trim()),
+                                    stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(source.slice(0, ordered[0].start).trim()),
                                     options: cleanDisplayOptionsForBatchSave(options),
                                     optionCount: validCount,
                                     score: validCount * 100 + Math.min(50, source.length / 20)
