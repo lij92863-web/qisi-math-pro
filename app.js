@@ -2906,16 +2906,16 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                         if (match) {
                             const options = [
-                                cleanDisplayTextForBatchSave(match[1]),
-                                cleanDisplayTextForBatchSave(match[2]),
-                                cleanDisplayTextForBatchSave(match[3]),
-                                cleanDisplayTextForBatchSave(match[4])
+                                window.Qisi.Utils.cleanDisplayTextForBatchSave(match[1]),
+                                window.Qisi.Utils.cleanDisplayTextForBatchSave(match[2]),
+                                window.Qisi.Utils.cleanDisplayTextForBatchSave(match[3]),
+                                window.Qisi.Utils.cleanDisplayTextForBatchSave(match[4])
                             ];
 
                             const validCount = options.filter(opt => window.Qisi.Utils.cleanRecognizedText(opt)).length;
 
                             candidates.push({
-                                stem: cleanDisplayTextForBatchSave(source.slice(0, match.index).trim()),
+                                stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(source.slice(0, match.index).trim()),
                                 options: cleanDisplayOptionsForBatchSave(options),
                                 optionCount: validCount,
                                 score: validCount * 90
@@ -2957,14 +2957,14 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                                 ordered.forEach(hit => {
                                     const idx = hit.label.charCodeAt(0) - 65;
-                                    options[idx] = cleanDisplayTextForBatchSave(hit.value);
+                                    options[idx] = window.Qisi.Utils.cleanDisplayTextForBatchSave(hit.value);
                                 });
 
                                 const stemLines = lines.slice(0, ordered[0].lineIndex);
                                 const validCount = options.filter(opt => window.Qisi.Utils.cleanRecognizedText(opt)).length;
 
                                 candidates.push({
-                                    stem: cleanDisplayTextForBatchSave(stemLines.join('\n')),
+                                    stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(stemLines.join('\n')),
                                     options: cleanDisplayOptionsForBatchSave(options),
                                     optionCount: validCount,
                                     score: validCount * 110
@@ -3027,7 +3027,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                                 if (validCount >= 2) {
                                     candidates.push({
-                                        stem: cleanDisplayTextForBatchSave(lines.slice(0, i).join('\n')),
+                                        stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(lines.slice(0, i).join('\n')),
                                         options: cleanDisplayOptionsForBatchSave(options),
                                         optionCount: validCount,
                                         score: validCount * 140 + 20,
@@ -3051,7 +3051,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                             if (validCount >= 2) {
                                 candidates.push({
-                                    stem: cleanDisplayTextForBatchSave(lines.slice(0, i).join('\n')),
+                                    stem: window.Qisi.Utils.cleanDisplayTextForBatchSave(lines.slice(0, i).join('\n')),
                                     options: cleanDisplayOptionsForBatchSave(options),
                                     optionCount: validCount,
                                     score: validCount * 135 + 15,
