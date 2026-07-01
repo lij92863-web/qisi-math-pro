@@ -428,10 +428,262 @@
             };
         };
 
+        const repairChoiceOptions = (
+            stem,
+            options,
+            type,
+            deps = {}
+        ) => {
+            const {
+                sanitizeChoiceOptions,
+                normalizeMathTextForLatexSafe,
+                stripQuestionSectionNoise,
+                splitQuestionForStorage
+            } = deps;
+
+            const sanitize =
+                typeof sanitizeChoiceOptions ===
+                    'function'
+                    ? sanitizeChoiceOptions
+                    : value =>
+                        Array.isArray(value)
+                            ? value
+                            : [];
+
+            const normalizeMath =
+                typeof normalizeMathTextForLatexSafe ===
+                    'function'
+                    ? normalizeMathTextForLatexSafe
+                    : value =>
+                        String(value || '');
+
+            const stripNoise =
+                typeof stripQuestionSectionNoise ===
+                    'function'
+                    ? stripQuestionSectionNoise
+                    : value =>
+                        String(value || '');
+
+            const splitForStorage =
+                typeof splitQuestionForStorage ===
+                    'function'
+                    ? splitQuestionForStorage
+                    : null;
+
+            const cleanOptions =
+                sanitize(options);
+
+            const hasOptions =
+                cleanOptions
+                    .filter(Boolean)
+                    .length >= 2;
+
+            if (hasOptions) {
+                return {
+                    stem:
+                        normalizeMath(
+                            stripNoise(stem)
+                        ),
+
+                    options:
+                        cleanOptions
+                };
+            }
+
+            if (splitForStorage) {
+                const split =
+                    splitForStorage(
+                        stem,
+                        type || '单选题',
+                        cleanOptions
+                    );
+
+                const splitOptions =
+                    sanitize(
+                        split?.options
+                    );
+
+                if (
+                    splitOptions
+                        .filter(Boolean)
+                        .length >= 2
+                ) {
+                    return {
+                        stem:
+                            normalizeMath(
+                                stripNoise(
+                                    split?.stem
+                                )
+                            ),
+
+                        options:
+                            splitOptions
+                    };
+                }
+            }
+
+            return {
+                stem:
+                    normalizeMath(
+                        stripNoise(stem)
+                    ),
+
+                options:
+                    cleanOptions
+            };
+        };
+
+        const tryRepairedCandidate = ({
+            candidate = '',
+            lastParseError = null,
+            escapeLatexBackslashesInJsonCandidate,
+            extractQuestionArray
+        } = {}) => {
+            const escapeLatex =
+                typeof escapeLatexBackslashesInJsonCandidate ===
+                    'function'
+                    ? escapeLatexBackslashesInJsonCandidate
+                    : () => ({
+                        text:
+                            String(candidate || ''),
+
+                        changed:
+                            false,
+
+                        repairCount:
+                            0,
+
+                        commands:
+                            []
+                    });
+
+            const extractQuestions =
+                typeof extractQuestionArray ===
+                    'function'
+                    ? extractQuestionArray
+                    : () => [];
+
+            const repairedCandidate =
+                escapeLatex(
+                    candidate
+                );
+
+            if (!repairedCandidate.changed) {
+                return {
+                    result:
+                        false,
+
+                    parsedWithoutQuestions:
+                        null,
+
+                    repairDiagnostics:
+                        null
+                };
+            }
+
+            let repairDiagnostics = {
+                candidateLength:
+                    String(candidate || '')
+                        .length,
+
+                repairCount:
+                    repairedCandidate
+                        .repairCount,
+
+                commands:
+                    repairedCandidate
+                        .commands,
+
+                originalParseMessage:
+                    lastParseError?.message ||
+                    ''
+            };
+
+            try {
+                const rawParsed =
+                    JSON.parse(
+                        repairedCandidate.text
+                    );
+
+                const parsed =
+                    Array.isArray(rawParsed)
+                        ? {
+                            questions:
+                                rawParsed
+                        }
+                        : rawParsed;
+
+                const questions =
+                    extractQuestions(
+                        parsed
+                    );
+
+                if (questions.length) {
+                    return {
+                        result: {
+                            ok:
+                                true,
+
+                            parsed,
+
+                            questions,
+
+                            method:
+                                'json-latex-backslash-repair',
+
+                            reason:
+                                '',
+
+                            message:
+                                '',
+
+                            diagnostics:
+                                repairDiagnostics
+                        },
+
+                        parsedWithoutQuestions:
+                            null,
+
+                        repairDiagnostics
+                    };
+                }
+
+                return {
+                    result:
+                        false,
+
+                    parsedWithoutQuestions:
+                        parsed,
+
+                    repairDiagnostics
+                };
+            } catch (repairError) {
+                repairDiagnostics = {
+                    ...repairDiagnostics,
+
+                    repairParseMessage:
+                        repairError?.message ||
+                        ''
+                };
+            }
+
+            return {
+                result:
+                    false,
+
+                parsedWithoutQuestions:
+                    null,
+
+                repairDiagnostics
+            };
+        };
+
         return {
             normalizeQuestionNumber,
             buildSupportRepairPlan,
-            applySupportRepairsFillOnly
+            applySupportRepairsFillOnly,
+            repairChoiceOptions,
+            tryRepairedCandidate
         };
     }
 );

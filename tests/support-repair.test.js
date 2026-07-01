@@ -6,7 +6,9 @@ const assert =
 
 const {
     buildSupportRepairPlan,
-    applySupportRepairsFillOnly
+    applySupportRepairsFillOnly,
+    repairChoiceOptions,
+    tryRepairedCandidate
 } =
     require(
         '../qisi-support-repair.js'
@@ -283,6 +285,281 @@ test(
                 questionNumber:
                     '99'
             }]
+        );
+    }
+);
+
+test(
+    'repairChoiceOptions keeps existing usable options and cleans stem',
+    () => {
+        const result =
+            repairChoiceOptions(
+                '  单选题：已知 $x$ ',
+                [' A. 1 ', 'B. 2', '', ''],
+                '单选题',
+                {
+                    sanitizeChoiceOptions:
+                        options =>
+                            options.map(
+                                option =>
+                                    String(option || '')
+                                        .trim()
+                            ),
+
+                    normalizeMathTextForLatexSafe:
+                        value =>
+                            `math:${value}`,
+
+                    stripQuestionSectionNoise:
+                        value =>
+                            String(value || '')
+                                .replace(
+                                    '单选题：',
+                                    ''
+                                )
+                                .trim(),
+
+                    splitQuestionForStorage:
+                        () => {
+                            throw new Error(
+                                'should not split when options are present'
+                            );
+                        }
+                }
+            );
+
+        assert.deepEqual(
+            result,
+            {
+                stem:
+                    'math:已知 $x$',
+
+                options:
+                    ['A. 1', 'B. 2', '', '']
+            }
+        );
+    }
+);
+
+test(
+    'repairChoiceOptions splits stem when options are missing',
+    () => {
+        const result =
+            repairChoiceOptions(
+                '题干 A. 甲 B. 乙',
+                ['', '', '', ''],
+                '',
+                {
+                    sanitizeChoiceOptions:
+                        options =>
+                            options.map(
+                                option =>
+                                    String(option || '')
+                                        .trim()
+                            ),
+
+                    normalizeMathTextForLatexSafe:
+                        value =>
+                            String(value || '')
+                                .trim(),
+
+                    stripQuestionSectionNoise:
+                        value =>
+                            String(value || '')
+                                .replace(
+                                    '噪声',
+                                    ''
+                                ),
+
+                    splitQuestionForStorage:
+                        () => ({
+                            stem:
+                                '噪声题干',
+
+                            options:
+                                ['甲', '乙', '', '']
+                        })
+                }
+            );
+
+        assert.deepEqual(
+            result,
+            {
+                stem:
+                    '题干',
+
+                options:
+                    ['甲', '乙', '', '']
+            }
+        );
+    }
+);
+
+test(
+    'repairChoiceOptions falls back safely for malformed inputs',
+    () => {
+        const result =
+            repairChoiceOptions(
+                null,
+                null,
+                null
+            );
+
+        assert.deepEqual(
+            result,
+            {
+                stem:
+                    '',
+
+                options:
+                    []
+            }
+        );
+    }
+);
+
+test(
+    'tryRepairedCandidate repairs LaTeX JSON and returns parsed questions',
+    () => {
+        const result =
+            tryRepairedCandidate({
+                candidate:
+                    '{"questions":[{"stem":"\\\\frac{x}{2}"}]}',
+
+                lastParseError:
+                    new Error('bad escape'),
+
+                escapeLatexBackslashesInJsonCandidate:
+                    () => ({
+                        text:
+                            '{"questions":[{"stem":"\\\\frac{x}{2}"}]}',
+
+                        changed:
+                            true,
+
+                        repairCount:
+                            1,
+
+                        commands:
+                            ['frac']
+                    }),
+
+                extractQuestionArray:
+                    parsed =>
+                        parsed.questions || []
+            });
+
+        assert.equal(
+            result.result.ok,
+            true
+        );
+
+        assert.equal(
+            result.result.method,
+            'json-latex-backslash-repair'
+        );
+
+        assert.deepEqual(
+            result.result.questions,
+            [{
+                stem:
+                    '\\frac{x}{2}'
+            }]
+        );
+
+        assert.equal(
+            result.repairDiagnostics
+                .originalParseMessage,
+            'bad escape'
+        );
+    }
+);
+
+test(
+    'tryRepairedCandidate reports parsed JSON without questions',
+    () => {
+        const result =
+            tryRepairedCandidate({
+                candidate:
+                    '{"items":[]}',
+
+                escapeLatexBackslashesInJsonCandidate:
+                    () => ({
+                        text:
+                            '{"items":[]}',
+
+                        changed:
+                            true,
+
+                        repairCount:
+                            1,
+
+                        commands:
+                            ['sqrt']
+                    }),
+
+                extractQuestionArray:
+                    () => []
+            });
+
+        assert.equal(
+            result.result,
+            false
+        );
+
+        assert.deepEqual(
+            result.parsedWithoutQuestions,
+            {
+                items:
+                    []
+            }
+        );
+    }
+);
+
+test(
+    'tryRepairedCandidate is inert when repair does not change text',
+    () => {
+        const result =
+            tryRepairedCandidate({
+                candidate:
+                    '{"questions":[]}',
+
+                escapeLatexBackslashesInJsonCandidate:
+                    () => ({
+                        text:
+                            '{"questions":[]}',
+
+                        changed:
+                            false,
+
+                        repairCount:
+                            0,
+
+                        commands:
+                            []
+                    }),
+
+                extractQuestionArray:
+                    () => {
+                        throw new Error(
+                            'should not parse unchanged candidate'
+                        );
+                    }
+            });
+
+        assert.deepEqual(
+            result,
+            {
+                result:
+                    false,
+
+                parsedWithoutQuestions:
+                    null,
+
+                repairDiagnostics:
+                    null
+            }
         );
     }
 );

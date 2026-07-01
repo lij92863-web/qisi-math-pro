@@ -2172,29 +2172,6 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         /(?:^|[\n\r\s　])B\s*[\.\．、:：\)）]/.test(source);
                 };
 
-                const repairChoiceOptions = (stem, options, type) => {
-                    const cleanOptions = sanitizeChoiceOptions(options);
-                    const hasOptions = cleanOptions.filter(Boolean).length >= 2;
-                    if (hasOptions) {
-                        return {
-                            stem: normalizeMathTextForLatexSafe(stripQuestionSectionNoise(stem)),
-                            options: cleanOptions
-                        };
-                    }
-                    const split = splitQuestionForStorage(stem, type || '单选题', cleanOptions);
-                    const splitOptions = sanitizeChoiceOptions(split.options);
-                    if (splitOptions.filter(Boolean).length >= 2) {
-                        return {
-                            stem: normalizeMathTextForLatexSafe(stripQuestionSectionNoise(split.stem)),
-                            options: splitOptions
-                        };
-                    }
-                    return {
-                        stem: normalizeMathTextForLatexSafe(stripQuestionSectionNoise(stem)),
-                        options: cleanOptions
-                    };
-                };
-
                 const stripQuestionSectionNoise = (text) => window.Qisi.Utils.cleanRecognizedText(text)
                     .replace(/\[\[TYPE:[^\]]+\]\]/g, '\n')
                     .replace(/(?:^|\n|\s)(?:[一二三四五六七八九十]+[、.．]\s*)?(?:单项选择题|单选题|多项选择题|多选题|填空题|解答题|证明题)\s*[：:]?[^0-9\n]{0,90}(?=\n|$)/g, '\n')
@@ -2204,6 +2181,13 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     .replace(/有选错[^。\n]{0,80}(?:分|分。|。)?/g, '')
                     .replace(/\n{3,}/g, '\n\n')
                     .trim();
+
+                const choiceRepairDeps = {
+                    sanitizeChoiceOptions,
+                    normalizeMathTextForLatexSafe,
+                    stripQuestionSectionNoise,
+                    splitQuestionForStorage
+                };
 
                 const normalizeQuestionType = (rawType, stem = '', options = [], answer = '', fallback = '') => {
                     const raw = window.Qisi.Utils.cleanRecognizedText(rawType);
@@ -4719,7 +4703,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         const split = window.Qisi.Utils.stripAnswerSolution(stripQuestionSectionNoise(seg.text));
                         const answer = includeInlineAnswer ? window.Qisi.Utils.cleanRecognizedText(split.answer) : '';
                         const prepared = splitQuestionForStorage(split.stem, batchDefaultMeta.defaultType, ['', '', '', '']);
-                        const repaired = repairChoiceOptions(prepared.stem || split.stem, prepared.options, prepared.type);
+                        const repaired = window.Qisi.SupportRepair.repairChoiceOptions(prepared.stem || split.stem, prepared.options, prepared.type, choiceRepairDeps);
                         const options = repaired.options;
                         const stem = repaired.stem;
                         return {
@@ -6151,80 +6135,33 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                                 candidate
                             );
 
-                        const tryRepairedCandidate = () => {
-                            const repairedCandidate =
-                                escapeLatexBackslashesInJsonCandidate(
-                                    candidate
-                                );
+                        const runSupportRepairCandidate = () => {
+                            const repairAttempt =
+                                window.Qisi.SupportRepair.tryRepairedCandidate({
+                                    candidate,
+                                    lastParseError,
+                                    escapeLatexBackslashesInJsonCandidate,
+                                    extractQuestionArray
+                                });
 
-                            if (!repairedCandidate.changed) {
-                                return false;
+                            if (repairAttempt.repairDiagnostics) {
+                                repairDiagnostics =
+                                    repairAttempt
+                                        .repairDiagnostics;
                             }
 
-                            repairDiagnostics = {
-                                candidateLength:
-                                    candidate.length,
-                                repairCount:
-                                    repairedCandidate
-                                        .repairCount,
-                                commands:
-                                    repairedCandidate
-                                        .commands,
-                                originalParseMessage:
-                                    lastParseError?.message ||
-                                    ''
-                            };
-
-                            try {
-                                const rawParsed =
-                                    JSON.parse(
-                                        repairedCandidate.text
-                                    );
-
-                                const parsed =
-                                    Array.isArray(rawParsed)
-                                        ? {
-                                            questions:
-                                                rawParsed
-                                        }
-                                        : rawParsed;
-
-                                const questions =
-                                    extractQuestionArray(
-                                        parsed
-                                    );
-
-                                if (questions.length) {
-                                    return {
-                                        ok: true,
-                                        parsed,
-                                        questions,
-                                        method:
-                                            'json-latex-backslash-repair',
-                                        reason: '',
-                                        message: '',
-                                        diagnostics:
-                                            repairDiagnostics
-                                    };
-                                }
-
+                            if (repairAttempt.parsedWithoutQuestions) {
                                 parsedWithoutQuestions =
-                                    parsed;
-                            } catch (repairError) {
-                                repairDiagnostics = {
-                                    ...repairDiagnostics,
-                                    repairParseMessage:
-                                        repairError?.message ||
-                                        ''
-                                };
+                                    repairAttempt
+                                        .parsedWithoutQuestions;
                             }
 
-                            return false;
+                            return repairAttempt.result;
                         };
 
                         if (needsLatexRepair) {
                             const repairedResult =
-                                tryRepairedCandidate();
+                                runSupportRepairCandidate();
 
                             if (repairedResult) {
                                 return repairedResult;
@@ -6274,7 +6211,7 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                         }
 
                         const repairedResult =
-                            tryRepairedCandidate();
+                            runSupportRepairCandidate();
 
                         if (repairedResult) {
                             return repairedResult;
@@ -6490,7 +6427,7 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                             '';
 
                         const answer = normalizeAnswerForLatex(rawAnswer);
-                        const repaired = repairChoiceOptions(rawStem, rawOptions, item.type || item.题型 || fallbackType);
+                        const repaired = window.Qisi.SupportRepair.repairChoiceOptions(rawStem, rawOptions, item.type || item.题型 || fallbackType, choiceRepairDeps);
                         const type = normalizeQuestionType(
                             item.type || item.题型 || fallbackType,
                             repaired.stem,
@@ -13110,7 +13047,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                         changed = true;
                     }
                     if (changed) {
-                        const normalized = repairChoiceOptions(draft.stem, draft.options, draft.type);
+                        const normalized = window.Qisi.SupportRepair.repairChoiceOptions(draft.stem, draft.options, draft.type, choiceRepairDeps);
                         draft.stem = normalized.stem;
                         draft.options = normalized.options;
                         draft.type = normalizeQuestionType(repaired.type || draft.type, draft.stem, draft.options, draft.answer, draft.type);
@@ -14539,7 +14476,7 @@ ${source}`;
                         }
                         const systemKnowledge = meta.systemKnowledge || '';
                         const personalKnowledge = meta.personalKnowledge || '';
-                        const repaired = repairChoiceOptions(item.stem || '', item.options, item.type || meta.defaultType);
+                        const repaired = window.Qisi.SupportRepair.repairChoiceOptions(item.stem || '', item.options, item.type || meta.defaultType, choiceRepairDeps);
                         const cleanStem = repaired.stem;
                         const cleanOptions = repaired.options;
                         let cleanSolution = cleanDisplayTextForBatchSave(solution?.solution || '');
