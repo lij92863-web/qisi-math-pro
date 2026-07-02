@@ -332,6 +332,94 @@
             return out.replace(/\n/g, '');
         };
 
+        const normalizeBareLatexExpressionForDisplay = (expression = '') => String(expression || '')
+            .replace(/鈭歿2\}/g, '\\sqrt{2}')
+            .replace(/鈭\?/g, '\\sqrt{2}')
+            .replace(/√\s*2/g, '\\sqrt{2}')
+            .replace(/蟺/g, '\\pi')
+            .replace(/π/g, '\\pi')
+            .trim();
+
+        const BARE_LATEX_DISPLAY_SIGNAL_RE =
+            /\\(?:frac|dfrac|sqrt|angle|sin|cos|tan|log|ln|pi|theta|alpha|beta|gamma|Delta|overline|vec|overrightarrow)\b|鈭\?|鈭歿2\}|√\s*2|蟺|π/;
+
+        const normalizeBareLatexForDisplaySpan = (span = '') => {
+            const source = String(span || '');
+            if (!BARE_LATEX_DISPLAY_SIGNAL_RE.test(source)) return source;
+
+            return source.replace(
+                /[A-Za-z0-9\\{}()[\]^_+\-*/=.,:;|<>!~ \t鈭歿?√蟺π]+/g,
+                (run) => {
+                    if (!BARE_LATEX_DISPLAY_SIGNAL_RE.test(run)) return run;
+
+                    const leading = run.match(/^\s*/)?.[0] || '';
+                    const trailing = run.match(/\s*$/)?.[0] || '';
+                    let body = run.slice(leading.length, run.length - trailing.length);
+                    if (!body) return run;
+
+                    if (!BARE_LATEX_DISPLAY_SIGNAL_RE.test(body)) return run;
+
+                    const normalized = normalizeBareLatexExpressionForDisplay(body);
+                    if (!normalized || !BARE_LATEX_DISPLAY_SIGNAL_RE.test(normalized)) return run;
+                    if (/^\$[\s\S]*\$$/.test(normalized) || /^\\\([\s\S]*\\\)$/.test(normalized) || /^\\\[[\s\S]*\\\]$/.test(normalized)) {
+                        return run;
+                    }
+
+                    return `${leading}$${normalized}$${trailing}`;
+                }
+            );
+        };
+
+        const normalizeBareLatexForDisplayTextBody = (text) => {
+            const source = String(text ?? '');
+            if (!source || !BARE_LATEX_DISPLAY_SIGNAL_RE.test(source)) return source;
+
+            const {
+                protectedText,
+                chunks: latexBlocks,
+                issues
+            } = protectLatexMathSegments(source);
+
+            if (issues.length) {
+                console.warn('[DISPLAY_LATEX_NORMALIZE][delimiter-issues]', { source, issues });
+            }
+
+            const normalized = normalizeBareLatexForDisplaySpan(protectedText);
+            return restoreLatexMathSegments(normalized, latexBlocks);
+        };
+
+        const normalizeBareLatexForDisplayOptionLine = (line) => {
+            const optionMatch = String(line).match(/^(\s*)([A-FＡ-Ｆ])([.．、:：])(\s*)(.*)$/);
+            if (!optionMatch) return null;
+
+            const [, leading, rawLabel, delimiter, spacing, content] = optionMatch;
+            const label = rawLabel.replace(/[Ａ-Ｆ]/g, ch =>
+                String.fromCharCode(ch.charCodeAt(0) - 65248)
+            );
+            const normalizedContent = normalizeBareLatexForDisplayTextBody(content);
+            return normalizedContent
+                ? `${leading}${label}${delimiter}${spacing || ' '}${normalizedContent}`
+                : `${leading}${label}${delimiter}`;
+        };
+
+        const normalizeBareLatexForDisplayText = (text) => {
+            const source = String(text ?? '');
+            if (!source) return source;
+
+            return source.split('\n').map(line => {
+                const optionLine = normalizeBareLatexForDisplayOptionLine(line);
+                return optionLine === null
+                    ? normalizeBareLatexForDisplayTextBody(line)
+                    : optionLine;
+            }).join('\n');
+        };
+
+        const normalizeBareLatexForDisplayOptions = (options) => (
+            Array.isArray(options)
+                ? options.map(option => normalizeBareLatexForDisplayText(option))
+                : options
+        );
+
         const splitOptionsFromStem = (text) => {
             if (!text) return null;
 
@@ -764,6 +852,12 @@
             extractRelevanceTokens,
             findNode,
             finalChoiceAnswerText,
+            normalizeBareLatexExpressionForDisplay,
+            normalizeBareLatexForDisplayOptionLine,
+            normalizeBareLatexForDisplayOptions,
+            normalizeBareLatexForDisplaySpan,
+            normalizeBareLatexForDisplayText,
+            normalizeBareLatexForDisplayTextBody,
             hasBatchImagePlaceholder,
             hasBatchMediaToken,
             hasUnconvertedImagePlaceholder,
