@@ -1,123 +1,71 @@
-# BM-AUTO Round 2 REAL_MIGRATION
+# BM-AUTO Round 2 Real Migration
 
-## Stage: BM-AUTO-ROUND-2
-## Branch: main
-## Start commit: 6150a63
-## End commit: (not-completed)
-## Target helper group: mathSignalCount
-## Target module: qisi-utils.js
-## Changed files: app.js, qisi-utils.js, tests/qisi-utils-math-signal-count.test.js, docs/refactor/BM_AUTO_ROUND_2_PLAN.md
+## Stage
+BMR2/BMG2
 
----
+## Start Commit
+72520cc46f674dd29083fa7219872683f442addf
 
-## Purpose
+## Candidate Selection
+- inventory file: `.bm_auto_inventory_round_2.json`
+- score file: `.bm_auto_score_round_2.json`
+- selected candidate: `extractDocxQuestionBlockByNumber, extractDocxTableTextFallback, parseDocxRelationshipMap, mimeFromDocxMediaPath, debugDocxXmlStructure, extractPlainTextFromDocxOptionXmlFragment, splitDocxParagraphsForOptionMap, findUploadedVisualCompanionForDocx, docxVisualTextIsBetterForV2, mergeDocxVisualOptionsForV2`
+- score: 78
+- target module: `qisi-docx-pipeline.js`
+- old function names: `extractDocxQuestionBlockByNumber, extractDocxTableTextFallback, parseDocxRelationshipMap, mimeFromDocxMediaPath, debugDocxXmlStructure, extractPlainTextFromDocxOptionXmlFragment, splitDocxParagraphsForOptionMap, findUploadedVisualCompanionForDocx, docxVisualTextIsBetterForV2, mergeDocxVisualOptionsForV2`
+- original app.js line range: 3243-15982, non-contiguous helper group
+- estimatedRemovedAppLines: 303
+- reason selected: highest scored eligible group; all selected helpers were low-risk, synchronous, no DOM, no DB, no AI/OCR, no controlled-write, and target existing module existed
+- skipped higher-risk candidates: none with higher group score; lower-ranked groups included PDF extraction, support parser, review draft state, batch engine, UI events, utils, file dispatcher, and OCR repair candidates
 
-将 `mathSignalCount` 从 app.js 迁移到 qisi-utils.js。该函数是纯数学符号计数工具，仅依赖 `cleanRecognizedText`（Round 1 已迁移到 qisi-utils.js）。
+## Fixed-Line / Ownership Test Preflight
+- tests scanned: `findstr /s /n /i "line lineNumber startLine endLine contextWindow windowStart windowEnd fixed line-number" tests\*.js`
+- relevant fixed-line fixtures found: no DOCX-pipeline-specific fixed-line fixture found; existing app.js line/context tests were unrelated or module-aware ownership tests
+- action taken: no ownership/audit test update required
+- any ownership/audit test updated: no
 
----
-
-## Boundary
-
-### Allowed files
-- app.js ✓
-- qisi-utils.js ✓
-- tests/qisi-utils-math-signal-count.test.js ✓
-- docs/refactor/BM_AUTO_ROUND_2_PLAN.md ✓
-
-### Forbidden files (NOT touched)
-- All forbidden files NOT touched ✓
-
----
-
-## Inventory
-
-### 候选 1: mathSignalCount
-- Lines: 2298-2325, 28 lines
-- Dependencies: cleanRecognizedText only
-- **Selected**: Self-contained, pure helper
-
-### 候选 2: extractRelevanceTokens
-- Lines: 3978-3999, 22 lines
-- **Rejected**: Smaller than mathSignalCount
-
-### 候选 3: finalChoiceAnswerText
-- Lines: 13594-13612, 19 lines
-- **Rejected**: Smaller than mathSignalCount
-
----
+## Risk Check
+- DOM access: no
+- DB access: no
+- AI/OCR access: no
+- controlled-write access: no
+- async: no
+- Route B: no
+- target existing module: yes, `qisi-docx-pipeline.js`
 
 ## Migration
-
-### Old app.js function
-- Name: mathSignalCount
-- Location: app.js lines 2298-2325
-- Behavior: Counts LaTeX/math symbol occurrences in text
-
-### New module exports
-- qisi-utils.js: added mathSignalCount to api object
-
-### Line counts
-- app.js before: 23154 lines
-- app.js after: 23125 lines
-- app.js delta: -29 lines
-
----
-
-## Behavior equivalence
-
-### Tests added
-- File: tests/qisi-utils-math-signal-count.test.js
-- Count: 16 tests
-
-### Cases covered
-- Normal input, empty input, null, undefined
-- No math, dollar signs, subscripts/superscripts
-- Chinese math symbols, multiple commands
-- Boundary, real case, no mutation, output shape
-- Malformed input, whitespace-only, repeated commands
-
----
-
-## Execution verification
-
-```
-node scripts/base-migration-verify-execution.js --before .bm_app_before.js --after app.js --module qisi-utils.js --old-names mathSignalCount
-```
-
-- classification: REAL_MIGRATION
-- delta: -29
+- moved functions: `extractDocxQuestionBlockByNumber`, `extractDocxTableTextFallback`, `parseDocxRelationshipMap`, `mimeFromDocxMediaPath`, `debugDocxXmlStructure`, `extractPlainTextFromDocxOptionXmlFragment`, `splitDocxParagraphsForOptionMap`, `findUploadedVisualCompanionForDocx`, `docxVisualTextIsBetterForV2`, `mergeDocxVisualOptionsForV2`
+- source: `app.js`
+- target: `qisi-docx-pipeline.js`
+- app.js calls new module: yes, explicit `window.Qisi.DocxPipeline.*` callsites
 - old definitions removed: yes
-- module exports moved functions: yes
 
----
+## Execution Verification
+- before app.js lines: 22722
+- after app.js lines: 22384
+- delta: -338
+- verifier classification: REAL_MIGRATION
+- oldDefinitionsStillPresent: false
+- appCallsNewModule: true
+- moduleExportsMovedFunctions: true
 
 ## Tests
-
-### Group 1 (post-migration immediate)
-- `node --check app.js`: passed
-- `node --check qisi-utils.js`: passed
-- `node --test tests/qisi-utils-math-signal-count.test.js`: passed (16/16)
-- `node scripts/base-migration-verify-execution.js ...`: REAL_MIGRATION
-
-### Group 2 (pre-commit full)
-- `node --test tests/base-migration-execution-gate.test.js`: passed (13/13)
-- `node --test tests/pdf-route-b-hold.test.js`: passed (6/6)
-- `npm.cmd run verify:safe`: passed (20/20)
-- `npm.cmd run verify:batch-safety`: passed (20/20)
-- `npm.cmd run smoke:batch:mock`: passed (20/20)
-- `npm.cmd run verify:pdf-known-bad`: passed (65/65)
-- `node --test tests/pdf-support-controlled-write-answer-ownership.test.js`: passed (21/21)
-- `node scripts/pdf-master-browser-runner.js preflight`: passed
-- `node scripts/pdf-master-browser-runner.js dry-run`: passed
-- `npm.cmd run verify:diff-scope`: passed
-
----
+| Command | Result | Notes |
+| --- | --- | --- |
+| `node --test tests/docx-pipeline.test.js` | passed | 10 tests |
+| `node --test tests/base-migration-execution-gate.test.js` | passed | 15 tests |
+| `node --test tests/pdf-route-b-hold.test.js` | passed | 6 tests |
+| `npm.cmd run smoke:batch:mock` | passed | 20 tests |
+| `npm.cmd run verify:safe` | passed | check + 817 node tests + smoke + no-real-ai |
+| `npm.cmd run verify:batch-safety` | passed | docx stable + pdf known-bad + no-real-ai + smoke |
+| `npm.cmd run verify:pdf-known-bad` | passed | 65 tests |
+| `node --test tests/pdf-support-controlled-write-answer-ownership.test.js` | passed | 21 tests |
+| `node scripts/pdf-master-browser-runner.js preflight` | passed | `realApiCalled=false` |
+| `node scripts/pdf-master-browser-runner.js dry-run` | passed | `realApiCalled=false` |
+| `npm.cmd run verify:docx-stable` | passed | DOCX-related extra gate |
+| `npm.cmd run verify:diff-scope` | passed | allowed diff: `app.js,qisi-docx-pipeline.js,tests/docx-pipeline.test.js,docs/refactor/**` |
 
 ## Safety
-
-- app.js touched: yes
-- target qisi module touched: yes
-- tests touched: yes
 - controlled-write touched: no
 - parser touched: no
 - aligner touched: no
@@ -127,18 +75,16 @@ node scripts/base-migration-verify-execution.js --before .bm_app_before.js --aft
 - AI/OCR called: no
 - package changed: no
 - main.html changed: no
+- app.css changed: no
 
----
-
-## Git
-
-- commit hash: (not-completed)
-- push status: (not-completed)
-
----
+## Git Diff
+- changed files: `app.js`, `qisi-docx-pipeline.js`, `tests/docx-pipeline.test.js`, `docs/refactor/BM_AUTO_ROUND_2_REAL_MIGRATION.md`
+- app.js delta: -338 lines
+- target module delta: +662 lines
+- test delta: +159 lines
 
 ## Decision
+CONTINUE
 
-- classification: REAL_MIGRATION
-- accepted: yes
-- allowed to continue next round: yes
+## Next Stage
+Stop. Do not enter Round 3 automatically.

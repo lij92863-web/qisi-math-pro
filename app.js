@@ -3240,52 +3240,6 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     return false;
                 };
 
-                const extractDocxQuestionBlockByNumber = (fullText = '', questionNo = '') => {
-                    const source = normalizeDocxOptionEvidenceText(fullText);
-                    const qno = normalizeQuestionKey(questionNo);
-
-                    if (!source || !qno) return '';
-
-                    const startPatterns = [
-                        new RegExp(`(?:^|\\n)\\s*(?:第\\s*)?${qno}\\s*(?:题)?\\s*[\\.．、:：\\)）]?\\s*`, 'g'),
-                        new RegExp(`(?:^|\\n)\\s*[（(]\\s*${qno}\\s*[）)]\\s*`, 'g')
-                    ];
-
-                    let startMatch = null;
-                    let startRe = null;
-
-                    for (const re of startPatterns) {
-                        const m = re.exec(source);
-                        if (m) {
-                            startMatch = m;
-                            startRe = re;
-                            break;
-                        }
-                    }
-
-                    if (!startMatch || !startRe) return '';
-
-                    const cur = Number(qno);
-                    const start = startMatch.index + (startMatch[0].startsWith('\n') ? 1 : 0);
-                    const afterStart = startRe.lastIndex;
-
-                    const nextQuestionRe = /(?:^|\n)\s*(?:第\s*)?[（(]?\s*(\d{1,3})\s*[）)]?\s*(?:题)?\s*[\.．、:：\)）]?\s*/g;
-                    nextQuestionRe.lastIndex = afterStart;
-
-                    let end = source.length;
-                    let m;
-
-                    while ((m = nextQuestionRe.exec(source)) !== null) {
-                        const n = Number(m[1]);
-                        if (Number.isFinite(n) && Number.isFinite(cur) && n > cur) {
-                            end = m.index;
-                            break;
-                        }
-                    }
-
-                    return source.slice(start, end).trim();
-                };
-
                 const attachDocxTextEvidenceToItem = (item, sourceFile, fullText = '') => {
                     if (!item) return item;
 
@@ -3337,7 +3291,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         draft.sourceTrace?.sourceText ||
                         '';
 
-                    const currentBlock = extractDocxQuestionBlockByNumber(fullText, qno);
+                    const currentBlock = window.Qisi.DocxPipeline.extractDocxQuestionBlockByNumber(fullText, qno);
 
                     const sources = [
                         draft.rawBlock,
@@ -3871,31 +3825,6 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         .trim();
                 };
 
-                const extractPlainTextFromDocxXmlFragment = (xmlFragment = '') => {
-                    const source = String(xmlFragment || '');
-                    const parts = [];
-
-                    // 优先抽取普通文本节点。
-                    source.replace(/<(?:w:t|m:t|w:instrText|w:delText)[^>]*>([\s\S]*?)<\/(?:w:t|m:t|w:instrText|w:delText)>/g, (_, textNode) => {
-                        const text = stripXmlTagsForDocxText(textNode);
-                        if (text) parts.push(text);
-                        return '';
-                    });
-
-                    // 抽取简单数学字符。
-                    source.replace(/<m:chr[^>]*m:val="([^"]+)"[^>]*\/>/g, (_, mathChar) => {
-                        if (mathChar) parts.push(mathChar);
-                        return '';
-                    });
-
-                    if (!parts.length) {
-                        const fallback = stripXmlTagsForDocxText(source);
-                        if (fallback) parts.push(fallback);
-                    }
-
-                    return window.Qisi.Utils.cleanRecognizedText(parts.join(' '));
-                };
-
                 const normalizeDocxOptionCellText = (text = '') => {
                     return window.Qisi.Utils.cleanRecognizedText(String(text || '')
                         .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
@@ -3905,104 +3834,9 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     );
                 };
 
-                const extractDocxTableTextFallback = (documentXml = '') => {
-                    const source = String(documentXml || '');
-                    const tableBlocks = [];
-
-                    source.replace(/<w:tbl[\s\S]*?<\/w:tbl>/g, (tableXml) => {
-                        const rowTexts = [];
-
-                        tableXml.replace(/<w:tr[\s\S]*?<\/w:tr>/g, (rowXml) => {
-                            const cells = [];
-
-                            rowXml.replace(/<w:tc[\s\S]*?<\/w:tc>/g, (cellXml) => {
-                                const cellText = extractPlainTextFromDocxXmlFragment(cellXml);
-                                if (cellText) cells.push(cellText);
-                                return '';
-                            });
-
-                            if (!cells.length) return '';
-
-                            if (cells.length === 4) {
-                                const normalized = cells.map(normalizeDocxOptionCellText);
-                                if (normalized.filter(Boolean).length >= 2) {
-                                    rowTexts.push(`A. ${normalized[0] || ''} B. ${normalized[1] || ''} C. ${normalized[2] || ''} D. ${normalized[3] || ''}`);
-                                } else {
-                                    rowTexts.push(cells.join(' '));
-                                }
-                                return '';
-                            }
-
-                            if (cells.length === 2) {
-                                rowTexts.push(cells.map(normalizeDocxOptionCellText).join('    '));
-                                return '';
-                            }
-
-                            rowTexts.push(cells.join(' '));
-                            return '';
-                        });
-
-                        if (rowTexts.length) {
-                            const block = rowTexts.join('\n').trim();
-                            if (block) tableBlocks.push(block);
-                        }
-
-                        return '';
-                    });
-
-                    const tableText = tableBlocks.join('\n\n').trim();
-
-                    console.groupCollapsed('[BATCH_DEBUG][docx-table-fallback-extract]');
-                    console.log('tableCount =', tableBlocks.length);
-                    console.log('tableTextLength =', tableText.length);
-                    console.log('tableTextHead =', tableText.slice(0, 2000));
-                    console.groupEnd();
-
-                    return tableText;
-                };
-
-                const parseDocxRelationshipMap = (relsXml = '') => {
-                    const map = new Map();
-
-                    String(relsXml || '').replace(/<Relationship\b([^>]+?)\/>/g, (_, attrs) => {
-                        const id = attrs.match(/\bId=["']([^"']+)["']/)?.[1] || '';
-                        const target = attrs.match(/\bTarget=["']([^"']+)["']/)?.[1] || '';
-                        const type = attrs.match(/\bType=["']([^"']+)["']/)?.[1] || '';
-
-                        if (!id || !target) return '';
-
-                        let normalizedTarget = target.replace(/\\/g, '/');
-                        if (!/^word\//.test(normalizedTarget)) {
-                            normalizedTarget = normalizedTarget.startsWith('/')
-                                ? normalizedTarget.replace(/^\/+/, '')
-                                : `word/${normalizedTarget.replace(/^(\.\.\/)+/, '')}`;
-                        }
-
-                        map.set(id, { id, target: normalizedTarget, type });
-                        return '';
-                    });
-
-                    return map;
-                };
-
                 const getExtensionFromPath = (path = '') => {
                     const match = String(path || '').match(/\.([a-zA-Z0-9]+)$/);
                     return match ? match[1].toLowerCase() : '';
-                };
-
-                const mimeFromDocxMediaPath = (path = '') => {
-                    const ext = getExtensionFromPath(path);
-                    return {
-                        png: 'image/png',
-                        jpg: 'image/jpeg',
-                        jpeg: 'image/jpeg',
-                        gif: 'image/gif',
-                        bmp: 'image/bmp',
-                        webp: 'image/webp',
-                        svg: 'image/svg+xml',
-                        emf: 'image/emf',
-                        wmf: 'image/wmf'
-                    }[ext] || 'application/octet-stream';
                 };
 
                 const isBrowserDisplayableImageExt = (ext = '') =>
@@ -4014,7 +3848,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     if (!file) return '';
 
                     const blob = await file.async('blob');
-                    const mime = mimeFromDocxMediaPath(normalized);
+                    const mime = window.Qisi.DocxPipeline.mimeFromDocxMediaPath(normalized);
 
                     return await new Promise((resolve, reject) => {
                         const reader = new FileReader();
@@ -4025,7 +3859,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 };
 
                 const buildDocxMediaMaps = async (zip, relsXml = '', filename = '') => {
-                    const relMap = parseDocxRelationshipMap(relsXml);
+                    const relMap = window.Qisi.DocxPipeline.parseDocxRelationshipMap(relsXml);
                     const ridImageUrlMap = new Map();
                     const ridImageMetaMap = new Map();
 
@@ -4039,7 +3873,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         if (!isImage) continue;
 
                         const ext = getExtensionFromPath(rel.target);
-                        const mime = mimeFromDocxMediaPath(rel.target);
+                        const mime = window.Qisi.DocxPipeline.mimeFromDocxMediaPath(rel.target);
                         const displayable = isBrowserDisplayableImageExt(ext);
                         const id = makeBatchId('dimg');
 
@@ -4089,58 +3923,6 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     console.groupEnd();
 
                     return { relMap, ridImageUrlMap, ridImageMetaMap };
-                };
-
-                const debugDocxXmlStructure = (documentXml = '', filename = '') => {
-                    const source = String(documentXml || '');
-
-                    const count = (regex) => (source.match(regex) || []).length;
-
-                    const sampleAround = (keyword, radius = 500) => {
-                        const idx = source.indexOf(keyword);
-                        if (idx < 0) return '';
-                        return source.slice(Math.max(0, idx - radius), Math.min(source.length, idx + keyword.length + radius));
-                    };
-
-                    const textNodes = [];
-                    source.replace(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g, (_, text) => {
-                        const clean = decodeXmlEntitiesSafe(text).trim();
-                        if (clean) textNodes.push(clean);
-                        return '';
-                    });
-
-                    const textJoined = textNodes.join('\n');
-
-                    console.groupCollapsed('[BATCH_DEBUG][docx-xml-structure]');
-                    console.log('filename =', filename);
-                    console.table([{
-                        length: source.length,
-                        w_t_count: count(/<w:t\b/g),
-                        w_tbl_count: count(/<w:tbl\b/g),
-                        w_tr_count: count(/<w:tr\b/g),
-                        w_tc_count: count(/<w:tc\b/g),
-                        w_drawing_count: count(/<w:drawing\b/g),
-                        w_pict_count: count(/<w:pict\b/g),
-                        v_textbox_count: count(/<v:textbox\b/g),
-                        wps_txbx_count: count(/<wps:txbx\b/g),
-                        w_txbxContent_count: count(/<w:txbxContent\b/g),
-                        mc_alternate_count: count(/<mc:AlternateContent\b/g),
-                        m_oMath_count: count(/<m:oMath\b/g),
-                        has_A_label: /(?:^|[>\s])A[.．、:：)）]/.test(source),
-                        has_B_label: /(?:^|[>\s])B[.．、:：)）]/.test(source),
-                        has_C_label: /(?:^|[>\s])C[.．、:：)）]/.test(source),
-                        has_D_label: /(?:^|[>\s])D[.．、:：)）]/.test(source)
-                    }]);
-
-                    console.log('textNodesHead =', textJoined.slice(0, 2000));
-                    console.log('sampleAround A. =', sampleAround('A.'));
-                    console.log('sampleAround B. =', sampleAround('B.'));
-                    console.log('sampleAround C. =', sampleAround('C.'));
-                    console.log('sampleAround D. =', sampleAround('D.'));
-                    console.log('sampleAround txbxContent =', sampleAround('w:txbxContent'));
-                    console.log('sampleAround drawing =', sampleAround('w:drawing'));
-                    console.log('sampleAround pict =', sampleAround('w:pict'));
-                    console.groupEnd();
                 };
 
                 const extractDocxTextNodesOnly = (documentXml = '') => {
@@ -4453,7 +4235,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         if (!window.JSZip) return '';
                         const zip = await JSZip.loadAsync(await dataUrlToBlob(file.uploadPath));
                         const doc = await zip.file('word/document.xml')?.async('string');
-                        debugDocxXmlStructure(doc || '', file.filename);
+                        window.Qisi.DocxPipeline.debugDocxXmlStructure(doc || '', file.filename);
 
                         const textNodesOnly = extractDocxTextNodesOnly(doc || '');
 
@@ -4494,7 +4276,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             let text = extractDocxTextWithMath(doc || '', imageRefsByRid);
                             text = await resolveFormulaImageTokens(text, docxEmbeddedImageCache.get(file.id) || []);
 
-                            const docxTableText = extractDocxTableTextFallback(doc || '');
+                            const docxTableText = window.Qisi.DocxPipeline.extractDocxTableTextFallback(doc || '');
 
                             if (window.Qisi.Utils.cleanRecognizedText(docxTableText)) {
                                 text = [
@@ -4829,53 +4611,6 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     return [...new Set(ids)];
                 };
 
-                const extractPlainTextFromDocxOptionXmlFragment = (xml = '') => {
-                    const source = String(xml || '');
-                    const parts = [];
-
-                    source.replace(/<(?:w:t|m:t|w:instrText|w:delText)[^>]*>([\s\S]*?)<\/(?:w:t|m:t|w:instrText|w:delText)>/g, (_, textNode) => {
-                        const text = decodeXmlEntitiesSafe(textNode || '');
-                        if (text) parts.push(text);
-                        return '';
-                    });
-
-                    source.replace(/<w:tab\s*\/>/g, () => {
-                        parts.push(' ');
-                        return '';
-                    });
-
-                    source.replace(/<w:br\s*\/>/g, () => {
-                        parts.push('\n');
-                        return '';
-                    });
-
-                    source.replace(/<m:chr[^>]*m:val=["']([^"']+)["'][^>]*\/>/g, (_, ch) => {
-                        if (ch) parts.push(ch);
-                        return '';
-                    });
-
-                    return normalizeDocxTextSpace(parts.join(''));
-                };
-
-                const splitDocxParagraphsForOptionMap = (documentXml = '') => {
-                    const paragraphs = [];
-
-                    String(documentXml || '').replace(/<w:p[\s\S]*?<\/w:p>/g, (pXml) => {
-                        const text = extractPlainTextFromDocxOptionXmlFragment(pXml);
-
-                        if (text || /<w:object\b|<w:drawing\b|<v:imagedata\b/.test(pXml)) {
-                            paragraphs.push({
-                                text,
-                                rawXml: pXml
-                            });
-                        }
-
-                        return '';
-                    });
-
-                    return { paragraphs };
-                };
-
                 const getQuestionNoFromDocxLine = (line = '') => {
                     const m = normalizeDocxTextSpace(line).match(/^\s*(\d{1,3})\s*[.．、:：)）]\s*/);
                     return m ? m[1] : '';
@@ -5027,7 +4762,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     ridImageUrlMap = new Map(),
                     ridImageMetaMap = new Map()
                 ) => {
-                    const { paragraphs } = splitDocxParagraphsForOptionMap(documentXml);
+                    const { paragraphs } = window.Qisi.DocxPipeline.splitDocxParagraphsForOptionMap(documentXml);
                     const blocks = [];
                     let current = null;
 
@@ -10583,25 +10318,6 @@ const normalizeRecognizedFigureDescriptor = (raw = {}) => {
                     return 0;
                 };
 
-                const findUploadedVisualCompanionForDocx = (docxFile, allFiles = []) => {
-                    const docxBase = fileBaseNameForMatch(docxFile?.filename || '');
-                    const candidates = (allFiles || [])
-                        .filter(file => file?.id !== docxFile?.id)
-                        .filter(isVisualQuestionFile);
-
-                    if (!candidates.length) return null;
-
-                    const sameBase = candidates.find(file =>
-                        fileBaseNameForMatch(file.filename || '') === docxBase
-                    );
-
-                    if (sameBase) return sameBase;
-                    if (/^1$/i.test(docxBase) && candidates.length === 1) return candidates[0];
-                    if (candidates.length === 1) return candidates[0];
-
-                    return null;
-                };
-
                 const recognizeDocxRenderedPageQuestionsWithQwen = async (file, page, expectedQuestionCount = 0, repairInfo = '') => {
                     const basePrompt = `你是高中数学试题 OCR 与 LaTeX 转写器。
 请从图片中识别所有选择题。
@@ -15932,60 +15648,6 @@ ${source}`;
                     return output;
                 };
 
-                const docxVisualTextIsBetterForV2 = (xmlText = '', visualText = '') => {
-                    const xml = cleanDocxImporterTextForV2(xmlText || '');
-                    const visual = cleanDocxImporterTextForV2(visualText || '');
-
-                    if (!visual) return false;
-
-                    const xmlPlaceholderCount = countDocxFormulaPlaceholdersForV2(xml);
-                    const visualPlaceholderCount = countDocxFormulaPlaceholdersForV2(visual);
-
-                    const xmlLatexSignals = countLatexSignalsForV2(xml);
-                    const visualLatexSignals = countLatexSignalsForV2(visual);
-
-                    if (xmlPlaceholderCount > 0 && visualPlaceholderCount === 0 && visual.length >= 2) {
-                        return true;
-                    }
-
-                    if (
-                        visualLatexSignals >= xmlLatexSignals + 2 &&
-                        visualPlaceholderCount <= xmlPlaceholderCount
-                    ) {
-                        return true;
-                    }
-
-                    return false;
-                };
-
-                const mergeDocxVisualOptionsForV2 = (xmlOptions = [], visualOptions = []) => {
-                    const xml = Array.isArray(xmlOptions) ? xmlOptions : ['', '', '', ''];
-                    const visual = Array.isArray(visualOptions) ? visualOptions : ['', '', '', ''];
-
-                    return [0, 1, 2, 3].map(idx => {
-                        const xmlOpt = cleanDocxImporterTextForV2(xml[idx] || '');
-                        const visualOpt = cleanDocxImporterTextForV2(visual[idx] || '');
-
-                        if (hasBatchImageTokenForV2(xmlOpt) && !hasDocxFormulaPlaceholderForV2(xmlOpt)) {
-                            return xmlOpt;
-                        }
-
-                        if (
-                            hasDocxFormulaPlaceholderForV2(xmlOpt) &&
-                            visualOpt &&
-                            !hasDocxFormulaPlaceholderForV2(visualOpt)
-                        ) {
-                            return appendMissingImageTokensForV2(visualOpt, xmlOpt);
-                        }
-
-                        if (docxVisualTextIsBetterForV2(xmlOpt, visualOpt)) {
-                            return appendMissingImageTokensForV2(visualOpt, xmlOpt);
-                        }
-
-                        return xmlOpt;
-                    });
-                };
-
                 const docxDraftNeedsVisualEnhanceForV2 = (draft) => {
                     const text = [
                         draft?.stem || '',
@@ -16008,7 +15670,7 @@ ${source}`;
                     const xmlStem = cleanDocxImporterTextForV2(next.stem || '');
                     const visualStem = cleanDocxImporterTextForV2(visualDraft.stem || '');
 
-                    if (docxVisualTextIsBetterForV2(xmlStem, visualStem)) {
+                    if (window.Qisi.DocxPipeline.docxVisualTextIsBetterForV2(xmlStem, visualStem)) {
                         next.stem = appendMissingImageTokensForV2(visualStem, xmlStem);
                         warnings.push('已使用 DOCX 转 PDF 后的 OCR 结果修复题干中的公式图片占位。');
                     }
@@ -16017,7 +15679,7 @@ ${source}`;
                         (Array.isArray(next.options) ? next.options : []).join('\n')
                     );
 
-                    const mergedOptions = mergeDocxVisualOptionsForV2(
+                    const mergedOptions = window.Qisi.DocxPipeline.mergeDocxVisualOptionsForV2(
                         next.options || [],
                         visualDraft.options || []
                     );
@@ -18435,7 +18097,7 @@ ${source}`;
                                     let docxImporterItems = [];
                                     let docxImporterResult = null;
                                     const expectedDocxQuestionCount = 0;
-                                    const companionVisualFile = findUploadedVisualCompanionForDocx(file, processFiles);
+                                    const companionVisualFile = window.Qisi.DocxPipeline.findUploadedVisualCompanionForDocx(file, processFiles);
 
                                     if (companionVisualFile) {
                                         const expected = batchExpectedCount || expectedDocxQuestionCount || 0;
