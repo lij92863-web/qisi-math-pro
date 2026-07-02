@@ -704,7 +704,7 @@
                 };
                 const copyDraftImagePlacementLatex = async (image, position) => {
                     try {
-                        const code = buildDraftImagePlacementCode(image, position);
+                        const code = window.Qisi.ReviewDraftState.buildDraftImagePlacementCode(image, position);
                         const copied = await copyText(code);
 
                         if (!copied) {
@@ -733,17 +733,14 @@
                     activeDraftEditorBuffer.value !== activeDraftEditorOriginal.value
                 );
 
-                const normalizeDraftEditorNewlines = (value) =>
-                    String(value ?? '').replace(/\r\n?/g, '\n');
-
                 const buildDraftEditorSource = (q) => {
                     if (!q) return '';
 
                     if (typeof q.editorSource === 'string' && q.editorSource.length > 0) {
-                        return normalizeDraftEditorNewlines(q.editorSource);
+                        return window.Qisi.ReviewDraftState.normalizeDraftEditorNewlines(q.editorSource);
                     }
 
-                    return normalizeDraftEditorNewlines(
+                    return window.Qisi.ReviewDraftState.normalizeDraftEditorNewlines(
                         mergeStemWithOptions(
                             q.stem || '',
                             q.options || ['', '', '', ''],
@@ -752,29 +749,13 @@
                     );
                 };
 
-                const syncActiveDraftEditorFromQuestion = () => {
-                    const q = activeDraftQuestion.value;
-
-                    if (!q) {
-                        activeDraftEditorBuffer.value = '';
-                        activeDraftEditorOriginal.value = '';
-                        activeDraftEditorQuestionId.value = '';
-                        return;
-                    }
-
-                    const source = buildDraftEditorSource(q);
-                    activeDraftEditorBuffer.value = source;
-                    activeDraftEditorOriginal.value = source;
-                    activeDraftEditorQuestionId.value = q.id || '';
-                };
-
                 const normalizeEditorChoiceLabel = (value) =>
                     String(value || '')
                         .replace(/[Ａ-Ｄａ-ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
                         .toUpperCase();
 
                 const splitChoiceSourceForEditor = (source) => {
-                    const text = normalizeDraftEditorNewlines(source);
+                    const text = window.Qisi.ReviewDraftState.normalizeDraftEditorNewlines(source);
                     if (!text.trim()) return null;
 
                     const labelRegex = /(^|\n)[ \t　]*([A-DＡ-Ｄa-dａ-ｄ])\s*[.．。、:：)）]/g;
@@ -830,7 +811,7 @@
                 };
 
                 const buildDraftEditorProjection = (source, question) => {
-                    const text = normalizeDraftEditorNewlines(source);
+                    const text = window.Qisi.ReviewDraftState.normalizeDraftEditorNewlines(source);
                     const type = String(question?.type || '解答题').trim();
                     const isChoice = type === '单选题' || type === '多选题';
 
@@ -902,11 +883,16 @@
                 watch(
                     () => activeDraftQuestion.value?.id || '',
                     () => {
-                        syncActiveDraftEditorFromQuestion();
+                        window.Qisi.ReviewDraftState.syncActiveDraftEditorFromQuestion({
+                            activeDraftQuestion,
+                            activeDraftEditorBuffer,
+                            activeDraftEditorOriginal,
+                            activeDraftEditorQuestionId,
+                            buildDraftEditorSource
+                        });
                     },
                     { immediate: true }
                 );
-                const draftSummaryQuestionNo = (q, index) => String(q?.questionNumber || q?.question || q?.order || index + 1);
                 const draftHasImageToken = (q) => {
                     const options = Array.isArray(q?.options) ? q.options : [];
                     const text = [
@@ -928,7 +914,7 @@
                     let withImageTokens = 0;
 
                     drafts.forEach((q, index) => {
-                        const questionNo = draftSummaryQuestionNo(q, index);
+                        const questionNo = window.Qisi.ReviewDraftState.draftSummaryQuestionNo(q, index);
                         const optionCount = countValidOptions(q?.options);
                         if (optionCount > 0) withOptions += 1;
                         if (window.Qisi.Utils.cleanRecognizedText(q?.answer)) {
@@ -2536,30 +2522,19 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     };
                 };
 
-                const draftRawOptionSourceCandidates = (q) => {
-                    const candidates = [
-                        q?.rawText,
-                        q?.rawBlock,
-                        q?.sourceTrace?.rawBlock,
-                        q?.stem
-                    ].map(cleanRecognizedText).filter(Boolean);
-                    const pageSources = [q?.sourceText, q?.pageText, q?.sourceTrace?.pageText]
-                        .map(cleanRecognizedText)
-                        .filter(Boolean);
-                    const qKey = normalizeQuestionKey(q?.questionNumber || q?.question || q?.order);
-                    pageSources.forEach(source => {
-                        const block = splitQuestionBlocksByNumber(source).find(item => normalizeQuestionKey(item.question) === qKey);
-                        if (block?.block) candidates.push(block.block);
-                    });
-                    candidates.push(...pageSources);
-                    return [...new Set(candidates)];
-                };
-
-                const draftRawOptionSource = (q) => draftRawOptionSourceCandidates(q).join('\n\n');
+                const draftRawOptionSource = (q) => window.Qisi.ReviewDraftState.draftRawOptionSourceCandidates(q, {
+                    cleanRecognizedText,
+                    normalizeQuestionKey,
+                    splitQuestionBlocksByNumber
+                }).join('\n\n');
 
                 const repairDraftChoiceOptionsBeforeSave = (q) => {
                     if (!q || !choiceQuestionMissingOptions(q)) return false;
-                    const extracted = draftRawOptionSourceCandidates(q)
+                    const extracted = window.Qisi.ReviewDraftState.draftRawOptionSourceCandidates(q, {
+                        cleanRecognizedText,
+                        normalizeQuestionKey,
+                        splitQuestionBlocksByNumber
+                    })
                         .map(forceExtractOptionsFromText)
                         .filter(Boolean)
                         .sort((a, b) => b.options.filter(Boolean).length - a.options.filter(Boolean).length)[0];
@@ -2574,44 +2549,14 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     return true;
                 };
 
-                const repairDraftChoiceOptionsFromCachedFileText = (q) => {
-                    if (!q || !choiceQuestionMissingOptions(q)) return false;
-                    const sourceFileId = q.sourceFileId || q.sourceQuestionFileId || q.sourceTrace?.sourceFileId || '';
-                    const source = draftFileTextCache.get(sourceFileId) || '';
-                    if (!source) return false;
-
-                    const qKey = normalizeQuestionKey(q.questionNumber || q.question || q.order);
-                    const blocks = splitQuestionBlocksByNumber(source);
-                    const block = blocks.find(item => normalizeQuestionKey(item.question) === qKey);
-                    const candidates = [block?.block, source].filter(Boolean);
-                    const extracted = candidates
-                        .map(forceExtractOptionsFromText)
-                        .filter(Boolean)
-                        .sort((a, b) => b.options.filter(Boolean).length - a.options.filter(Boolean).length)[0];
-                    if (!extracted || extracted.options.filter(Boolean).length <= sanitizeChoiceOptions(q.options).filter(Boolean).length) return false;
-
-                    if (extracted.stem) q.stem = extracted.stem;
-                    q.options = extracted.options;
-                    q.rawText = block?.block || q.rawText || '';
-                    q.rawBlock = block?.block || q.rawBlock || q.rawText || '';
-                    q.pageText = source;
-                    q.sourceText = source;
-                    q.sourceTrace = {
-                        ...(q.sourceTrace || {}),
-                        rawBlock: q.rawBlock,
-                        pageText: source
-                    };
-                    q.warnings = [
-                        ...(q.warnings || []).filter(w => !String(w).includes('选择题仅识别到') && !String(w).includes('选择题选项未识别完整')),
-                        '已从原始 DOCX 全文按题号补回选择题选项，请核对。'
-                    ];
-                    return true;
-                };
-
                 const addChoiceOptionWarning = (q) => {
                     if (!q || !choiceQuestionMissingOptions(q)) return false;
                     const count = sanitizeChoiceOptions(q.options || []).filter(Boolean).length;
-                    const hasRawText = draftRawOptionSourceCandidates(q).some(source => Boolean(forceExtractOptionsFromText(source)));
+                    const hasRawText = window.Qisi.ReviewDraftState.draftRawOptionSourceCandidates(q, {
+                        cleanRecognizedText,
+                        normalizeQuestionKey,
+                        splitQuestionBlocksByNumber
+                    }).some(source => Boolean(forceExtractOptionsFromText(source)));
                     const imageIds = q.sourceTrace?.imageIds || q.imageIds || (q.images || []).map(img => img.id).filter(Boolean);
                     const hasImage = Boolean(q.sourcePageImage || (Array.isArray(imageIds) && imageIds.length));
                     const warning = `选择题仅识别到 ${count}/4 个选项。原始文本：${hasRawText ? '有' : '无'}；题目图片：${hasImage ? '有' : '无'}。请检查 AI 原始返回或手动补全。`;
@@ -12918,22 +12863,6 @@ answers=${JSON.stringify(answers)}
                     return false;
                 };
 
-                const finalDraftNeedsOptionVisionRepair = (draft) => {
-                    if (!draft) return false;
-
-                    const optionCount = cleanDisplayOptionsForBatchSave(draft.options).filter(Boolean).length;
-
-                    const hasQuestionImage = Boolean(
-                        draft.sourcePageImage ||
-                        draft.sourceTrace?.sourcePageImage
-                    );
-
-                    // 关键：不要再依赖 type / answer 判断。
-                    // 只要当前题有原图且选项不足，就让视觉模型去看图确认有没有 A/B/C/D。
-                    // 如果原图没有选项，模型返回空数组即可；代码不编造。
-                    return hasQuestionImage && optionCount < 2;
-                };
-
                 const finalDraftNeedsAnswerVisionRepair = (draft) => {
                     if (!draft) return false;
 
@@ -13366,7 +13295,7 @@ ${JSON.stringify(targets, null, 2)}
                         answer: draft.answer,
                         optionCount: cleanDisplayOptionsForBatchSave(draft.options).filter(Boolean).length,
                         finalChoiceAnswer: window.Qisi.Utils.finalChoiceAnswerText(draft.answer),
-                        needsOptionRepair: finalDraftNeedsOptionVisionRepair(draft),
+                        needsOptionRepair: window.Qisi.ReviewDraftState.finalDraftNeedsOptionVisionRepair(draft),
                         needsAnswerRepair: finalDraftNeedsAnswerVisionRepair(draft),
                         needsSolutionRepair: finalDraftNeedsSolutionVisionRepair(draft),
                         hasQuestionImage: Boolean(draft.sourcePageImage || draft.sourceTrace?.sourcePageImage),
@@ -14969,33 +14898,6 @@ ${source}`;
                     return [...new Set(problems)];
                 };
 
-                const convertDocxImporterDraftToRecognitionItem = (draft) => {
-                    const images = normalizeInlineImageList(draft.images || []);
-                    return {
-                        question: draft.questionNumber,
-                        questionNumber: draft.questionNumber,
-                        order: draft.order,
-                        type: draft.type,
-                        stem: draft.stem,
-                        options: draft.options,
-                        answer: draft.answer,
-                        solution: draft.solution,
-                        images,
-                        rawText: draft.sourceTrace?.blockTextHead || '',
-                        rawBlock: draft.sourceTrace?.blockTextHead || '',
-                        pageText: draft.sourceTrace?.blockTextHead || '',
-                        sourceText: draft.sourceTrace?.blockTextHead || '',
-                        sourceFileId: draft.sourceFileId,
-                        sourceFileName: draft.sourceFileName,
-                        sourcePage: draft.sourcePage || 1,
-                        sourceTrace: {
-                            ...(draft.sourceTrace || {}),
-                            imageIds: images.map(img => img.id)
-                        },
-                        warnings: draft.warnings
-                    };
-                };
-
                 const extractLatexFragmentsForCheck = (text = '') => {
                     const source = String(text || '');
                     const fragments = [];
@@ -15715,33 +15617,6 @@ ${source}`;
                     return next;
                 };
 
-                const mergeDocxVisualDraftsByQuestionNumberForV2 = (xmlDrafts = [], visualDrafts = []) => {
-                    if (!xmlDrafts.length || !visualDrafts.length) return xmlDrafts;
-
-                    const visualMap = new Map();
-
-                    for (const visualDraft of visualDrafts) {
-                        const qKey = normalizeDocxMergeQuestionKeyForV2(
-                            visualDraft.questionNumber || visualDraft.question || visualDraft.order || ''
-                        );
-
-                        if (qKey && !visualMap.has(qKey)) {
-                            visualMap.set(qKey, visualDraft);
-                        }
-                    }
-
-                    return xmlDrafts.map(xmlDraft => {
-                        const qKey = normalizeDocxMergeQuestionKeyForV2(
-                            xmlDraft.questionNumber || xmlDraft.question || xmlDraft.order || ''
-                        );
-
-                        const visualDraft = qKey ? visualMap.get(qKey) : null;
-                        if (!visualDraft) return xmlDraft;
-
-                        return mergeDocxVisualDraftIntoXmlDraftForV2(xmlDraft, visualDraft);
-                    });
-                };
-
                 const INLINE_IMAGE_TOKEN_RE_FOR_V2 = /\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\]/g;
 
                 const imageTokenForDraftImageV2 = (img) => {
@@ -15765,44 +15640,6 @@ ${source}`;
                     const graphicMatch = text.match(/\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}/);
                     return graphicMatch?.[1] ? String(graphicMatch[1]).trim() : '';
                 };
-
-                const buildDraftImagePlacementCode = (image, position = 'center') => {
-                    const imageId = String(image?.id || '').trim();
-
-                    if (!imageId) {
-                        throw new Error('图片缺少 ID，无法生成位置代码。');
-                    }
-
-                    const token = `[[IMAGE:${imageId}]]`;
-
-                    if (position === 'left') {
-                        return (
-                            '\\begin{wrapfigure}{l}' +
-                            '{0.34\\linewidth}' +
-                            '\\centering ' +
-                            token +
-                            '\\end{wrapfigure}'
-                        );
-                    }
-
-                    if (position === 'right') {
-                        return (
-                            '\\begin{wrapfigure}{r}' +
-                            '{0.34\\linewidth}' +
-                            '\\centering ' +
-                            token +
-                            '\\end{wrapfigure}'
-                        );
-                    }
-
-                    return (
-                        '\\begin{center}' +
-                        token +
-                        '\\end{center}'
-                    );
-                };
-
-                const buildDraftImagePlacementLatex = buildDraftImagePlacementCode;
 
                 const normalizeImagePlacementDuplicates = (source = '') => {
                     let output = String(source || '');
@@ -15963,23 +15800,6 @@ ${source}`;
                     );
                 };
 
-                const shouldInlineDraftImageInStemForV2 = (img) => {
-                    if (!img || !img.id || !img.url) return false;
-                    if (img.status === 'deleted') return false;
-                    if (isSourcePageImageForStemTokenV2(img)) return false;
-
-                    const source = String(img.source || '');
-                    const desc = String(img.description || '');
-
-                    return (
-                        source === 'auto-figure-crop' ||
-                        source === 'pdf-layout-figure-crop' ||
-                        source === 'manual-crop' ||
-                        source === 'uploaded-question-image' ||
-                        /自动裁剪题图|PDF 坐标裁剪题图|人工裁剪题图|题中图形|题图/.test(desc)
-                    );
-                };
-
                 const appendImageTokensToStemForV2 = (stem = '', images = []) => {
                     let output = String(stem || '').trim();
 
@@ -15989,7 +15809,7 @@ ${source}`;
                     );
 
                     const tokens = (images || [])
-                        .filter(shouldInlineDraftImageInStemForV2)
+                        .filter(window.Qisi.ReviewDraftState.shouldInlineDraftImageInStemForV2)
                         .map(imageTokenForDraftImageV2)
                         .filter(Boolean);
 
@@ -16048,42 +15868,6 @@ ${source}`;
                     return output
                         .replace(/\n{3,}/g, '\n\n')
                         .trim();
-                };
-
-                const attachDraftImageTokensIntoStemsForV2 = (drafts = [], draftImages = []) => {
-                    if (!Array.isArray(drafts) || !drafts.length) return drafts;
-
-                    const imagesByQuestionId = new Map();
-
-                    for (const img of draftImages || []) {
-                        if (!shouldInlineDraftImageInStemForV2(img)) continue;
-
-                        const qid = String(img.questionId || '').trim();
-                        if (!qid) continue;
-
-                        if (!imagesByQuestionId.has(qid)) {
-                            imagesByQuestionId.set(qid, []);
-                        }
-
-                        imagesByQuestionId.get(qid).push(img);
-                    }
-
-                    return drafts.map(draft => {
-                        const qid = String(draft.id || '').trim();
-                        const imgs = imagesByQuestionId.get(qid) || [];
-                        if (!imgs.length) return draft;
-
-                        return {
-                            ...draft,
-                            stem: appendImageTokensToStemForV2(draft.stem || '', imgs),
-                            hasImage: true,
-                            imageReviewStatus:
-                                draft.imageReviewStatus && draft.imageReviewStatus !== 'none'
-                                    ? draft.imageReviewStatus
-                                    : 'need_confirm',
-                            updatedAt: Date.now()
-                        };
-                    });
                 };
 
                 const normalizeDocxImporterDraftForV2 = (draft, file, batch, order) => {
@@ -16343,9 +16127,13 @@ ${source}`;
                                 const visualDrafts = await buildDocxVisualOcrDraftsForV2(file, batch, engineHelpers);
 
                                 if (visualDrafts.length) {
-                                    normalizedDrafts = mergeDocxVisualDraftsByQuestionNumberForV2(
+                                    normalizedDrafts = window.Qisi.ReviewDraftState.mergeDocxVisualDraftsByQuestionNumberForV2(
                                         normalizedDrafts,
-                                        visualDrafts
+                                        visualDrafts,
+                                        {
+                                            normalizeDocxMergeQuestionKeyForV2,
+                                            mergeDocxVisualDraftIntoXmlDraftForV2
+                                        }
                                     );
 
                                     warnings.push(`${file.filename || 'DOCX 文件'}：已使用视觉 OCR 尝试修复公式图片占位。`);
@@ -16485,7 +16273,7 @@ ${source}`;
                         });
                         drafts = batchGateResult.drafts;
                         const finalDraftImages = batchFinalGateRebindDraftImages(draftImages, batchGateResult);
-                        drafts = attachDraftImageTokensIntoStemsForV2(drafts, finalDraftImages);
+                        drafts = window.Qisi.ReviewDraftState.attachDraftImageTokensIntoStemsForV2(drafts, finalDraftImages);
                         const unmatched = result.unmatched || [];
                         const problemCount = drafts.filter(q => draftQuestionProblems(q).length > 0).length;
 
@@ -18193,7 +17981,7 @@ ${source}`;
                                         });
 
                                         docxImporterItems = (docxImporterResult.drafts || [])
-                                            .map(convertDocxImporterDraftToRecognitionItem)
+                                            .map(window.Qisi.ReviewDraftState.convertDocxImporterDraftToRecognitionItem)
                                             .filter(item => {
                                                 const stem = window.Qisi.Utils.cleanRecognizedText(item?.stem || '');
                                                 const optionCount = Array.isArray(item?.options)
@@ -18976,7 +18764,7 @@ ${source}`;
                         drafts = batchGateResult.drafts;
 
                         const finalDraftImages = batchFinalGateRebindDraftImages(draftImages, batchGateResult);
-                        drafts = attachDraftImageTokensIntoStemsForV2(drafts, finalDraftImages);
+                        drafts = window.Qisi.ReviewDraftState.attachDraftImageTokensIntoStemsForV2(drafts, finalDraftImages);
 
                         console.groupCollapsed('[BATCH_IMAGE][figure-binding]');
                         console.table(drafts.map(draft => ({
@@ -19149,7 +18937,13 @@ ${source}`;
                     await loadBatchImportData();
                     activeDraftQuestionId.value = batchDraftQuestions.value[0]?.id || '';
                     await nextTick();
-                    syncActiveDraftEditorFromQuestion();
+                    window.Qisi.ReviewDraftState.syncActiveDraftEditorFromQuestion({
+                        activeDraftQuestion,
+                        activeDraftEditorBuffer,
+                        activeDraftEditorOriginal,
+                        activeDraftEditorQuestionId,
+                        buildDraftEditorSource
+                    });
                 };
 
                 const selectDraftQuestion = async (id) => {
@@ -19163,7 +18957,13 @@ ${source}`;
                     activeDraftQuestionId.value = id;
                     activeDraftTab.value = 'stem';
                     await nextTick();
-                    syncActiveDraftEditorFromQuestion();
+                    window.Qisi.ReviewDraftState.syncActiveDraftEditorFromQuestion({
+                        activeDraftQuestion,
+                        activeDraftEditorBuffer,
+                        activeDraftEditorOriginal,
+                        activeDraftEditorQuestionId,
+                        buildDraftEditorSource
+                    });
                 };
 
                 const cleanSingleDraftForSave = (q) => {
@@ -19212,7 +19012,7 @@ ${source}`;
                         activeDraftEditorBuffer.value,
                         activeDraftPreviewImages.value || []
                     );
-                    const source = normalizeDraftEditorNewlines(
+                    const source = window.Qisi.ReviewDraftState.normalizeDraftEditorNewlines(
                         normalizeImagePlacementDuplicates(migratedSource)
                     );
                     activeDraftEditorBuffer.value = source;
@@ -22279,7 +22079,14 @@ Promise.all([imageReady, fontReady]).then(() => {
                     importBankInput, openImportBankPicker, handleImportBankFileChange, pendingImportPreview, cancelImportPreview, confirmImportBankPreview, exportQuestionBankPackage,
                     undoLatestExternalMerge, deleteExternalBatch, recalculateExternalBatchStatus,
                     batchImportMode, batchImportBatches, recentBatchImportBatches, batchImportFiles, batchDraftQuestions, filteredDraftQuestions, batchDraftImages, batchImportFilter, activeBatchId, activeBatch, activeDraftQuestionId, activeDraftQuestion, batchRecognitionSummary, activeDraftEditorBuffer, activeDraftEditorOriginal, activeDraftEditorDirty, activeDraftEditorPreview, activeDraftEditorTextarea, activeDraftImages, activeDraftRealQuestionImages, activeDraftSourcePageImages, activeDraftPreviewImages, unassignedDraftImages, activeDraftTab, batchUploadInput, isDraggingBatchFiles, batchToast, unassignedImageModal, imagePositionMenuId, cropModalOpen, cropImageRef, cropState, cropSelectionStyle, pendingPurposeFile, pendingPurposeRoles, batchCreateFiles, batchCreateTypeHint, batchCreateWarning, batchExpectedQuestionCount, batchDefaultMeta, unmatchedAnswers, submitSummary,
-                    openBatchCreate, openBatchList, clearBatchDraftWorkspace, openBatchFilePicker, handleBatchFileChange, handleBatchDrop, handleBatchHomeDrop, togglePurposeRole, confirmBatchFilePurpose, cancelBatchFilePurpose, editBatchFilePurpose, removeBatchCreateFile, createDraftImportBatch, processDraftImportBatch, runBatchRecognition, rerunActiveBatchRecognition, dedupeActiveBatchDraftsNow, openBatchReview, selectDraftQuestion, updateDraftQuestionField, saveActiveDraftQuestion, markDraftReviewed, submitDraftQuestion, openBatchSubmitSummary, confirmBatchSubmit, deleteBatchImport, validatePageRange, batchStatusText, draftQuestionStatusText, roleLabel, rolesLabel, fileTypeText, formatFileSize, draftQuestionProblems, duplicateLabel, confirmDraftImages, deleteDraftImage, toggleImagePositionMenu, copyDraftImagePlacementLatex, openSourcePageCrop, closeCropModal, resetCropState, startManualCrop, moveManualCrop, endManualCrop, saveManualCropToDraft, bindUnassignedImage, deleteUnassignedImage, showUnmatchedAnswerList, showActiveRawText, showCropNotice, cleanupActiveBatchDisplayPollution, markActiveDraftUserEdited, insertDraftEditorText, discardActiveDraftEditorChanges, syncActiveDraftEditorFromQuestion,
+                    openBatchCreate, openBatchList, clearBatchDraftWorkspace, openBatchFilePicker, handleBatchFileChange, handleBatchDrop, handleBatchHomeDrop, togglePurposeRole, confirmBatchFilePurpose, cancelBatchFilePurpose, editBatchFilePurpose, removeBatchCreateFile, createDraftImportBatch, processDraftImportBatch, runBatchRecognition, rerunActiveBatchRecognition, dedupeActiveBatchDraftsNow, openBatchReview, selectDraftQuestion, updateDraftQuestionField, saveActiveDraftQuestion, markDraftReviewed, submitDraftQuestion, openBatchSubmitSummary, confirmBatchSubmit, deleteBatchImport, validatePageRange, batchStatusText, draftQuestionStatusText, roleLabel, rolesLabel, fileTypeText, formatFileSize, draftQuestionProblems, duplicateLabel, confirmDraftImages, deleteDraftImage, toggleImagePositionMenu, copyDraftImagePlacementLatex, openSourcePageCrop, closeCropModal, resetCropState, startManualCrop, moveManualCrop, endManualCrop, saveManualCropToDraft, bindUnassignedImage, deleteUnassignedImage, showUnmatchedAnswerList, showActiveRawText, showCropNotice, cleanupActiveBatchDisplayPollution, markActiveDraftUserEdited, insertDraftEditorText, discardActiveDraftEditorChanges,
+                    syncActiveDraftEditorFromQuestion: () => window.Qisi.ReviewDraftState.syncActiveDraftEditorFromQuestion({
+                        activeDraftQuestion,
+                        activeDraftEditorBuffer,
+                        activeDraftEditorOriginal,
+                        activeDraftEditorQuestionId,
+                        buildDraftEditorSource
+                    }),
                     librarySearchInput, libraryFilters, resetLibraryFilters,
                     getExternalStatus, externalStatusLabel, externalStatusClass, actionLabel,
                     cartQuestions: cartQuestionsOrdered,

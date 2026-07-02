@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
 const { traceCallsite, traceAll } = require('../scripts/bm-a4-r3-ownership-trace');
+const EXPECTED_REMAINING_CALLSITES = 39;
 
 function traceSnippet(source, line, helper = 'cleanDisplayTextForBatchSave') {
     return traceCallsite({ callsiteId: 'R3-TEST', helper, line, text: '' }, source.split(/\r?\n/));
@@ -56,7 +57,7 @@ describe('bm-a4-r3-ownership-trace', () => {
     it('outputs all remaining callsites', () => {
         const result = traceAll();
         assert.equal(result.ok, true);
-        assert.equal(result.totalCallsites, 40);
-        assert.equal(result.results.length, 40);
+        assert.equal(result.totalCallsites, EXPECTED_REMAINING_CALLSITES);
+        assert.equal(result.results.length, EXPECTED_REMAINING_CALLSITES);
     });
 });

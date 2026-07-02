@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const { auditCallsite, auditShard, auditAll, RISK_PATTERNS } = require('../scripts/bm-a4-r3-ownership-audit');
 
 const appLines = fs.readFileSync('app.js', 'utf8').split('\n');
+const EXPECTED_REMAINING_CALLSITES = 39;
 
 function findLineContaining(fragment, startLine = 1) {
     const index = appLines.findIndex((line, idx) =>
@@ -132,7 +133,7 @@ describe('bm-a4-r3-ownership-audit', () => {
     it('auditAll returns results for all callsites', () => {
         const result = auditAll();
         assert.equal(result.ok, true);
-        assert.ok(result.totalCallsites >= 40);
-        assert.ok(result.results.length >= 40);
+        assert.equal(result.totalCallsites, EXPECTED_REMAINING_CALLSITES);
+        assert.equal(result.results.length, EXPECTED_REMAINING_CALLSITES);
     });
 });

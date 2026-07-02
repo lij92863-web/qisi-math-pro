@@ -7,6 +7,7 @@ const {
     assertValidFrozenItem,
     buildFreezeRegister
 } = require('../scripts/bm-a4-r3-freeze-register');
+const EXPECTED_REMAINING_CALLSITES = 39;
 
 const unsafeProof = {
     callsiteId: 'R3-TEST',
@@ -57,7 +58,7 @@ describe('bm-a4-r3-freeze-register', () => {
     it('outputs all frozen residual callsites', () => {
         const register = buildFreezeRegister();
         assert.equal(register.ok, true);
-        assert.equal(register.totalResidual, 40);
-        assert.equal(register.frozenCount, 40);
+        assert.equal(register.totalResidual, EXPECTED_REMAINING_CALLSITES);
+        assert.equal(register.frozenCount, EXPECTED_REMAINING_CALLSITES);
     });
 });
