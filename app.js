@@ -160,24 +160,6 @@
                     stemFingerprintMap.value = stemMap;
                 };
 
-                const questionMatchesLibraryFilters = (q) => {
-                    if (!q) return false;
-                    const keyword = librarySearchKeyword.value.trim().toLowerCase();
-                    if (keyword) {
-                        const haystack = [q.stem, q.answer, q.solution].map(x => String(x || '').toLowerCase()).join('\n');
-                        if (!haystack.includes(keyword)) return false;
-                    }
-                    if (libraryFilters.type && q.type !== libraryFilters.type) return false;
-                    if (libraryFilters.diff && (q.diff || q.meta?.diff || '') !== libraryFilters.diff) return false;
-                    if (libraryFilters.grade && (q.grade || q.meta?.grade || '') !== libraryFilters.grade) return false;
-                    if (libraryFilters.answerState === 'hasAnswer' && !hasText(q.solution)) return false;
-                    if (libraryFilters.answerState === 'noAnswer' && hasText(q.solution)) return false;
-                    const hasImages = Array.isArray(q.images) && q.images.length > 0;
-                    if (libraryFilters.imageState === 'hasImage' && !hasImages) return false;
-                    if (libraryFilters.imageState === 'noImage' && hasImages) return false;
-                    return true;
-                };
-
                 const resetLibraryFilters = () => {
                     librarySearchInput.value = '';
                     librarySearchKeyword.value = '';
@@ -242,7 +224,11 @@
                             });
                         }
                     }
-                    return result.filter(questionMatchesLibraryFilters);
+                    return result.filter(q => window.Qisi.Utils.questionMatchesLibraryFilters(q, {
+                        keyword: librarySearchKeyword.value,
+                        filters: libraryFilters,
+                        hasText
+                    }));
                 });
 
                 const flattenKnowledgeTree = (tree, prefix = []) => {
@@ -19807,7 +19793,11 @@ ${source}`;
                     if (externalOnlyUnprocessed.value) {
                         result = result.filter(q => !q.processStatus || q.processStatus === 'unprocessed');
                     }
-                    result = result.filter(questionMatchesLibraryFilters);
+                    result = result.filter(q => window.Qisi.Utils.questionMatchesLibraryFilters(q, {
+                        keyword: librarySearchKeyword.value,
+                        filters: libraryFilters,
+                        hasText
+                    }));
                     return [...result].sort((a, b) => {
                         if (a.batchId === b.batchId) return (a.importOrder || 0) - (b.importOrder || 0);
                         return (b.importedAt || 0) - (a.importedAt || 0);

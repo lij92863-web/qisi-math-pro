@@ -667,6 +667,34 @@
             item.solution
         ].some(hasUnconvertedImagePlaceholder);
 
+        const questionMatchesLibraryFilters = (q, options = {}) => {
+            if (!q) return false;
+
+            const keyword = String(options.keyword || '').trim().toLowerCase();
+            const filters = options.filters || {};
+            const hasTextFn = typeof options.hasText === 'function'
+                ? options.hasText
+                : (value) => String(value || '').trim().length > 0;
+
+            if (keyword) {
+                const haystack = [q.stem, q.answer, q.solution]
+                    .map(value => String(value || '').toLowerCase())
+                    .join('\n');
+                if (!haystack.includes(keyword)) return false;
+            }
+            if (filters.type && q.type !== filters.type) return false;
+            if (filters.diff && (q.diff || q.meta?.diff || '') !== filters.diff) return false;
+            if (filters.grade && (q.grade || q.meta?.grade || '') !== filters.grade) return false;
+            if (filters.answerState === 'hasAnswer' && !hasTextFn(q.solution)) return false;
+            if (filters.answerState === 'noAnswer' && hasTextFn(q.solution)) return false;
+
+            const hasImages = Array.isArray(q.images) && q.images.length > 0;
+            if (filters.imageState === 'hasImage' && !hasImages) return false;
+            if (filters.imageState === 'noImage' && hasImages) return false;
+
+            return true;
+        };
+
         const stripBatchImagePlaceholders = (text) => {
             const raw = String(text || '');
             const { protectedText, tokens } = protectBatchMediaTokens(raw);
@@ -746,6 +774,7 @@
             normalizeAnswerSolutionSource,
             normalizeFigureBbox,
             preserveRawEvidence,
+            questionMatchesLibraryFilters,
             protectBatchMediaTokens,
             protectLatexMathSegments,
             restoreBatchMediaTokens,
