@@ -167,34 +167,8 @@
                     currentPage.value = 1;
                 };
                 
-                const buildKnowledgeCounts = (tree, type) => {
-                    const counts = {};
-                    const addCount = (name) => { counts[name] = (counts[name] || 0) + 1; };
-                    
-                    const parentMap = {};
-                    (tree || []).forEach(l1 => {
-                        if(l1.children) l1.children.forEach(l2 => {
-                            parentMap[l2.name] = [l1.name];
-                            if(l2.children) l2.children.forEach(l3 => {
-                                parentMap[l3.name] = [l2.name, l1.name];
-                            });
-                        });
-                    });
-
-                    questions.value.forEach(q => {
-                        const kn = getQuestionKnowledge(q, type);
-                        if(q && kn) {
-                            addCount(kn);
-                            if (parentMap[kn]) {
-                                parentMap[kn].forEach(p => addCount(p));
-                            }
-                        }
-                    });
-                    return counts;
-                };
-
-                const knowledgeCounts = computed(() => buildKnowledgeCounts(knowledgeTree, 'system'));
-                const personalKnowledgeCounts = computed(() => buildKnowledgeCounts(personalKnowledgeTree.value, 'personal'));
+                const knowledgeCounts = computed(() => window.Qisi.UiEvents.buildKnowledgeCounts(knowledgeTree, 'system', questions.value, getQuestionKnowledge));
+                const personalKnowledgeCounts = computed(() => window.Qisi.UiEvents.buildKnowledgeCounts(personalKnowledgeTree.value, 'personal', questions.value, getQuestionKnowledge));
                 const activeKnowledgeTree = computed(() => libraryKnowledgeMode.value === 'personal' ? personalKnowledgeTree.value : (libraryKnowledgeMode.value === 'external' ? [] : knowledgeTree));
                 const activeKnowledgeCounts = computed(() => libraryKnowledgeMode.value === 'personal' ? personalKnowledgeCounts.value : (libraryKnowledgeMode.value === 'external' ? {} : knowledgeCounts.value));
 

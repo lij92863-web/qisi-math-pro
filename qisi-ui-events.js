@@ -41,8 +41,38 @@
             : '';
     };
 
+    const buildKnowledgeCounts = (tree, type, questions = [], getQuestionKnowledge) => {
+        const counts = {};
+        const addCount = (name) => { counts[name] = (counts[name] || 0) + 1; };
+
+        const parentMap = {};
+        (tree || []).forEach(l1 => {
+            if (l1.children) l1.children.forEach(l2 => {
+                parentMap[l2.name] = [l1.name];
+                if (l2.children) l2.children.forEach(l3 => {
+                    parentMap[l3.name] = [l2.name, l1.name];
+                });
+            });
+        });
+
+        if (typeof getQuestionKnowledge !== 'function') return counts;
+
+        (questions || []).forEach(q => {
+            const kn = getQuestionKnowledge(q, type);
+            if (q && kn) {
+                addCount(kn);
+                if (parentMap[kn]) {
+                    parentMap[kn].forEach(p => addCount(p));
+                }
+            }
+        });
+
+        return counts;
+    };
+
     return {
         bindClick,
-        buildQuestionNumberGapWarning
+        buildQuestionNumberGapWarning,
+        buildKnowledgeCounts
     };
 });
