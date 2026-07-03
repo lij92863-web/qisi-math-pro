@@ -3714,21 +3714,6 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         .trim();
                 };
 
-                const decodeXmlEntitiesSafe = (value = '') => String(value || '')
-                    .replace(/&lt;/g, '<')
-                    .replace(/&gt;/g, '>')
-                    .replace(/&amp;/g, '&')
-                    .replace(/&quot;/g, '"')
-                    .replace(/&apos;/g, "'");
-
-                const stripXmlTagsForDocxText = (value = '') => {
-                    return decodeXmlEntitiesSafe(String(value || ''))
-                        .replace(/<w:tab\s*\/>/g, ' ')
-                        .replace(/<w:br\s*\/>/g, '\n')
-                        .replace(/<[^>]+>/g, '')
-                        .replace(/\s+/g, ' ')
-                        .trim();
-                };
 
                 const normalizeDocxOptionCellText = (text = '') => {
                     return window.Qisi.Utils.cleanRecognizedText(String(text || '')
@@ -3833,7 +3818,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 const extractDocxTextNodesOnly = (documentXml = '') => {
                     const nodes = [];
                     String(documentXml || '').replace(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g, (_, text) => {
-                        const clean = decodeXmlEntitiesSafe(text).trim();
+                        const clean = window.Qisi.DocxPipeline.decodeXmlEntitiesSafe(text).trim();
                         if (clean) nodes.push(clean);
                         return '';
                     });
@@ -4587,7 +4572,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         const textParts = [];
 
                         segment.replace(/<(?:w:t|m:t|w:instrText|w:delText)[^>]*>([\s\S]*?)<\/(?:w:t|m:t|w:instrText|w:delText)>/g, (_, textNode) => {
-                            const text = decodeXmlEntitiesSafe(textNode || '')
+                            const text = window.Qisi.DocxPipeline.decodeXmlEntitiesSafe(textNode || '')
                                 .replace(/\s+/g, ' ')
                                 .trim();
 

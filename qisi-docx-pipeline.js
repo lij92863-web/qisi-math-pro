@@ -649,6 +649,8 @@
             parseDocxRelationshipMap,
             mimeFromDocxMediaPath,
             debugDocxXmlStructure,
+            decodeXmlEntitiesSafe,
+            stripXmlTagsForDocxText,
             extractPlainTextFromDocxOptionXmlFragment,
             splitDocxParagraphsForOptionMap,
             findUploadedVisualCompanionForDocx,

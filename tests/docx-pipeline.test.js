@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 
 const {
     normalizeDocxPipelineResult,
+    decodeXmlEntitiesSafe,
+    stripXmlTagsForDocxText,
     extractDocxQuestionBlockByNumber,
     extractDocxTableTextFallback,
     parseDocxRelationshipMap,
@@ -153,4 +155,40 @@ test('BMR2: debug DOCX XML structure is side-effect limited and tolerant', () =>
         debugDocxXmlStructure('<w:p><w:r><w:t>A. option</w:t></w:r></w:p>', 'sample.docx');
         debugDocxXmlStructure(null, null);
     });
+});
+
+/* BMR9: decodeXmlEntitiesSafe */
+test('BMR9: decodeXmlEntitiesSafe decodes XML entities', () => {
+    assert.equal(decodeXmlEntitiesSafe('&lt;tag&gt;'), '<tag>');
+    assert.equal(decodeXmlEntitiesSafe('&amp;'), '&');
+    assert.equal(decodeXmlEntitiesSafe('&quot;hello&quot;'), '"hello"');
+    assert.equal(decodeXmlEntitiesSafe('&apos;world&apos;'), "'world'");
+});
+
+test('BMR9: decodeXmlEntitiesSafe handles empty and null', () => {
+    assert.equal(decodeXmlEntitiesSafe(''), '');
+    assert.equal(decodeXmlEntitiesSafe(null), '');
+    assert.equal(decodeXmlEntitiesSafe(undefined), '');
+});
+
+test('BMR9: decodeXmlEntitiesSafe preserves non-entity text', () => {
+    assert.equal(decodeXmlEntitiesSafe('hello world'), 'hello world');
+    assert.equal(decodeXmlEntitiesSafe('数学公式 < 10'), '数学公式 < 10');
+});
+
+/* BMR9: stripXmlTagsForDocxText */
+test('BMR9: stripXmlTagsForDocxText strips DOCX XML tags', () => {
+    const result = stripXmlTagsForDocxText('<w:t>A. option</w:t>');
+    assert.equal(result, 'A. option');
+});
+
+test('BMR9: stripXmlTagsForDocxText handles tab and br tags', () => {
+    const result = stripXmlTagsForDocxText('text<w:tab />more<w:br />end');
+    assert.ok(result.includes('text'));
+    assert.ok(result.includes('more'));
+});
+
+test('BMR9: stripXmlTagsForDocxText handles empty input', () => {
+    assert.equal(stripXmlTagsForDocxText(''), '');
+    assert.equal(stripXmlTagsForDocxText(null), '');
 });
