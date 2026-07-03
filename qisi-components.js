@@ -340,10 +340,144 @@
                 });
             }
 
+            // Detect bare LaTeX math commands embedded in plain text
+            // and render them inline with KaTeX.
+            const BARE_LATEX_MATH_COMMANDS = new Set([
+                'overline', 'overrightarrow', 'vec', 'sqrt', 'frac',
+                'therefore', 'because', 'cdot', 'times', 'div', 'pm', 'mp',
+                'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
+                'angle', 'triangle', 'Delta', 'omega', 'Omega',
+                'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'theta',
+                'pi', 'sigma', 'lambda', 'mu', 'rho', 'phi', 'psi',
+                'le', 'ge', 'neq', 'equiv', 'approx', 'sim', 'propto',
+                'in', 'notin', 'subset', 'supset', 'subseteq', 'supseteq',
+                'cup', 'cap', 'forall', 'exists', 'neg', 'vee', 'wedge',
+                'infty', 'partial', 'nabla', 'sum', 'prod', 'int', 'oint',
+                'left', 'right', 'langle', 'rangle',
+                'mathbb', 'mathbf', 'mathrm', 'mathcal',
+                'bar', 'hat', 'tilde', 'dot', 'ddot',
+                'ldots', 'cdots', 'vdots', 'ddots',
+                'circ', 'bullet', 'Box', 'square', 'diamond',
+                'oplus', 'ominus', 'otimes', 'oslash', 'odot',
+                'star', 'ast', 'bigcirc', 'bigstar', 'bigodot',
+                'setminus', 'cap', 'cup', 'land', 'lor',
+                'parallel', 'perp', 'mid', 'nmid',
+                'to', 'mapsto', 'implies', 'iff', 'Rightarrow',
+                'longrightarrow', 'longmapsto', 'xrightarrow',
+                'underset', 'overset', 'stackrel',
+                'displaystyle', 'textstyle', 'limits', 'nolimits',
+                'prime', 'empty', 'emptyset', 'varnothing',
+                'nabla', 'surd', 'top', 'bot',
+                'smile', 'frown', 'wr', 'bowtie',
+                'models', 'vdash', 'dashv', 'Vdash',
+                'cong', 'asymp', 'doteq', 'risingdotseq',
+                'fallingdotseq', 'bumpeq', 'Bumpeq',
+                'gg', 'll', 'prec', 'succ', 'preceq', 'succeq',
+                'sqsubset', 'sqsupset', 'sqsubseteq', 'sqsupseteq',
+                'in', 'ni', 'Join', 'bowtie', 'ltimes', 'rtimes',
+                'smile', 'frown', 'wr'
+            ]);
+
+            const hasBareLatexCommands = (text = '') => {
+                // Fast check: does the text contain \ followed by a letter?
+                if (!/\\[A-Za-z]/.test(text)) return false;
+                // Check against known math commands.
+                const re = /\\([A-Za-z]+)/g;
+                let m;
+                while ((m = re.exec(text)) !== null) {
+                    if (BARE_LATEX_MATH_COMMANDS.has(m[1])) return true;
+                }
+                return false;
+            };
+
+            const splitBareLatexMathIslands = (text = '') => {
+                const parts = [];
+                let i = 0;
+                let plainStart = 0;
+
+                while (i < text.length) {
+                    if (text[i] === '\\' && i + 1 < text.length &&
+                        /[A-Za-z]/.test(text[i + 1])) {
+                        // Read command name.
+                        let j = i + 1;
+                        while (j < text.length && /[A-Za-z]/.test(text[j])) j += 1;
+                        const cmdName = text.slice(i + 1, j);
+
+                        if (BARE_LATEX_MATH_COMMANDS.has(cmdName)) {
+                            // Push preceding plain text.
+                            if (plainStart < i) {
+                                parts.push({ type: 'text', text: text.slice(plainStart, i) });
+                            }
+
+                            // Read brace groups after the command.
+                            let end = j;
+                            while (end < text.length && text[end] === '{') {
+                                let depth = 0;
+                                let k = end;
+                                while (k < text.length) {
+                                    if (text[k] === '{') depth += 1;
+                                    else if (text[k] === '}') {
+                                        depth -= 1;
+                                        if (depth === 0) { k += 1; break; }
+                                    }
+                                    k += 1;
+                                }
+                                end = k;
+                            }
+
+                            parts.push({ type: 'math', text: text.slice(i, end) });
+                            i = end;
+                            plainStart = end;
+                            continue;
+                        }
+                    }
+                    i += 1;
+                }
+
+                if (plainStart < text.length) {
+                    parts.push({ type: 'text', text: text.slice(plainStart) });
+                }
+
+                return parts.length ? parts : [{ type: 'text', text }];
+            };
+
+            const renderTextWithBareLatex = (text) => {
+                if (!hasBareLatexCommands(text)) {
+                    return renderPlainText(text);
+                }
+
+                const parts = splitBareLatexMathIslands(text);
+
+                return parts.map(part => {
+                    if (part.type !== 'math') {
+                        return renderPlainText(part.text);
+                    }
+
+                    const normalized = normalizeMathExpressionForPreview(part.text);
+
+                    try {
+                        if (!window.katex) throw new Error('KaTeX 尚未加载');
+                        return window.katex.renderToString(normalized, {
+                            displayMode: false,
+                            throwOnError: true,
+                            strict: 'ignore',
+                            trust: false
+                        });
+                    } catch (error) {
+                        return (
+                            `<span class="latex-render-error" title="${escapeHtmlLocal(error?.message || '公式语法错误')}">` +
+                            `[公式语法错误：原文已保留] ` +
+                            `${escapeHtmlLocal(normalized)}` +
+                            `</span>`
+                        );
+                    }
+                }).join('');
+            };
+
             return parsed.segments
                 .map(segment => segment.type === 'math'
                     ? renderMathSegmentForPreview(segment)
-                    : renderPlainText(segment.raw))
+                    : renderTextWithBareLatex(segment.raw))
                 .join('');
         };
 
