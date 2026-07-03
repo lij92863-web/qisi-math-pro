@@ -7514,53 +7514,8 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     return rendered;
                 };
 
-                const attachPdfPageTrace = (items, file, pageNo, imageUrl, rawText = '') => {
-                    return (items || []).map(item => ({
-                        ...item,
-                        sourceFileId: item.sourceFileId || file.id,
-                        sourceFileName: item.sourceFileName || file.filename,
-                        sourcePage: item.sourcePage || pageNo,
-                        pageIndex: item.pageIndex ?? pageNo,
-                        sourcePageImage: item.sourcePageImage || imageUrl,
-                        rawText: item.rawText || item.rawBlock || item.stem || '',
-                        sourceTrace: {
-                            ...(item.sourceTrace || {}),
-                            sourceFileId: file.id,
-                            sourceFileName: file.filename,
-                            sourcePage: pageNo,
-                            pageIndex: pageNo,
-                            sourcePageImage: imageUrl,
-                            rawBlock: item.rawText || item.rawBlock || item.stem || '',
-                            pageText: rawText || ''
-                        }
-                    }));
-                };
-
-                const attachSinglePdfPageTrace = (item, file, pageNo, imageUrl, pageText = '') => {
-                    const next = { ...(item || {}) };
-
-                    next.sourceFileId = next.sourceFileId || file.id;
-                    next.sourceFileName = next.sourceFileName || file.filename;
-                    next.sourcePage = next.sourcePage || pageNo;
-                    next.pageIndex = next.pageIndex || pageNo;
-                    next.sourcePageImage = next.sourcePageImage || imageUrl;
-                    next.pageText = next.pageText || pageText || '';
-                    next.sourceText = next.sourceText || pageText || '';
-
-                    next.sourceTrace = {
-                        ...(next.sourceTrace || {}),
-                        sourceFileId: next.sourceTrace?.sourceFileId || file.id,
-                        sourceFileName: next.sourceTrace?.sourceFileName || file.filename,
-                        sourcePage: next.sourceTrace?.sourcePage || pageNo,
-                        pageIndex: next.sourceTrace?.pageIndex || pageNo,
-                        sourcePageImage: next.sourceTrace?.sourcePageImage || imageUrl,
-                        rawBlock: next.sourceTrace?.rawBlock || next.rawBlock || '',
-                        pageText: next.sourceTrace?.pageText || pageText || '',
-                        sourceText: next.sourceTrace?.sourceText || pageText || ''
-                    };
-
-                    return next;
-                };
+                const attachPdfPageTrace = window.Qisi.PdfSafePartialPipeline.attachPdfPageTrace;
+                const attachSinglePdfPageTrace = window.Qisi.PdfSafePartialPipeline.attachSinglePdfPageTrace;
 
                 const compactDebugText = (
                     value = '',
