@@ -204,6 +204,14 @@
                 // tokenizer encounters nested/ambiguous $ boundaries.
                 .replace(/^\$\$?\s*/, '')
                 .replace(/\s*\$\$?$/, '')
+                // Fix OCR malformed \text{中文$} wrapper where a spurious $
+                // inside \text{} confuses the tokenizer.  Only matches when
+                // the content before $ is purely CJK.
+                .replace(/\\text\{([一-龥]+)\$\}/g, '$1')
+                // Strip leading } and trailing { orphaned by partial wrapper
+                // removal — these are never valid at expression boundaries.
+                .replace(/^\}\s*/, '')
+                .replace(/\s*\{$/, '')
                 .replace(/\s*\n\s*/g, ' ')
                 .replace(/(?<!\\)\bSangle\b/g, '\\angle')
                 .replace(/(?<!\\)\bangle\b/g, '\\angle')
