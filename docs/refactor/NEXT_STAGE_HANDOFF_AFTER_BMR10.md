@@ -1,12 +1,13 @@
 # Next Stage Handoff After BMR10
 
 ## Current Safe State
-- latest commit: 3034083 (POST-BMR10, no eligible candidate)
+- latest commit: 0dff497cb53f291732e63b005055b3df42c5e1c1 (POST-BMR10 final summary)
+- BMR10 no-eligible commit: 3034083
 - branch: main
 - working tree: clean (except pre-existing ai/CODEX_TASK.local.md task doc edit)
 - local/remote equal: yes
-- local HEAD: 3034083
-- origin/main: 3034083
+- local HEAD: 0dff497cb53f291732e63b005055b3df42c5e1c1
+- origin/main: 0dff497cb53f291732e63b005055b3df42c5e1c1
 
 ## Completed Work
 - BMR8/BMG8: accepted — attachPdfPageTrace, attachSinglePdfPageTrace → qisi-pdf-safe-partial-pipeline.js (delta -45)

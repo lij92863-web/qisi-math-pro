@@ -80,6 +80,12 @@ app.js should move toward orchestration only.
 Business helpers should migrate into qisi-* modules only when REAL_MIGRATION
 criteria are met.
 
+## Final HEAD After BMR10
+0dff497cb53f291732e63b005055b3df42c5e1c1 (POST-BMR10 final summary)
+
+## Status
+BM-AUTO automatic long run frozen after BMR10. No automatic BMR11.
+
 ## Still Forbidden
 - controlled-write migration without explicit user task
 - parser / aligner migration without explicit user task

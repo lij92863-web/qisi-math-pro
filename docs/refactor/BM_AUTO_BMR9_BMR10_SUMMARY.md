@@ -3,8 +3,11 @@
 ## Start Commit
 7e7980e50aa058625d905d6a1ad558da02034bc0 (POST-BMR8)
 
-## End Commit
+## BMR10 No-Eligible Commit
 3034083 (POST-BMR10, no eligible candidate)
+
+## Final Summary Commit / Current HEAD
+0dff497cb53f291732e63b005055b3df42c5e1c1 (POST-BMR10 final summary)
 
 ## Rounds Attempted
 | Round | Candidate | Target Module | Delta | Classification | Tests | Commit | Decision |
