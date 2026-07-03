@@ -5475,13 +5475,13 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                             end
                         );
 
-                    return LATEX_JSON_BACKSLASH_REPAIR_COMMANDS
-                        .has(command)
-                        ? {
-                            command,
-                            end
-                        }
-                        : null;
+                    return {
+                        command,
+                        end,
+                        known:
+                            LATEX_JSON_BACKSLASH_REPAIR_COMMANDS
+                                .has(command)
+                    };
                 };
 
                 const hasUnescapedLatexCommandInJsonString = (
@@ -5525,13 +5525,28 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                             continue;
                         }
 
-                        if (
+                        const cmd =
                             readLatexJsonCommandAt(
                                 source,
                                 index
-                            )
-                        ) {
-                            return true;
+                            );
+
+                        if (cmd) {
+                            // Known LaTeX command → needs repair.
+                            if (cmd.known) return true;
+
+                            // Multi-letter unknown command (e.g. \therefore)
+                            // cannot be a valid JSON escape → needs repair.
+                            if (cmd.command.length > 1) return true;
+
+                            // Single letter NOT in {b,f,n,r,t}
+                            // → not a valid JSON escape → needs repair.
+                            if (!/[bfnrt]/.test(cmd.command)) return true;
+
+                            // Single-letter valid JSON escape (e.g. \n, \t)
+                            // → advance past it and continue.
+                            index = cmd.end - 1;
+                            continue;
                         }
 
                         if (next === 'u') {
@@ -5558,6 +5573,10 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                         ) {
                             index += 1;
                         }
+
+                        // Not a known LaTeX command and not a valid
+                        // JSON escape — this backslash needs repair.
+                        return true;
                     }
 
                     return false;
@@ -5611,6 +5630,23 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                             continue;
                         }
 
+                        // \uXXXX is a valid multi-char JSON escape —
+                        // check before readLatexJsonCommandAt.
+                        if (next === 'u') {
+                            const hex =
+                                source.slice(
+                                    index + 2,
+                                    index + 6
+                                );
+
+                            if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+                                result +=
+                                    char + next + hex;
+                                index += 5;
+                                continue;
+                            }
+                        }
+
                         const latexCommand =
                             readLatexJsonCommandAt(
                                 source,
@@ -5618,13 +5654,37 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                             );
 
                         if (latexCommand) {
+                            // Single-letter valid JSON escapes
+                            // (b, f, n, r, t) — let through as-is.
+                            if (
+                                !latexCommand.known &&
+                                latexCommand.command.length === 1 &&
+                                /[bfnrt]/.test(
+                                    latexCommand.command
+                                )
+                            ) {
+                                result +=
+                                    '\\' +
+                                    latexCommand.command;
+                                index =
+                                    latexCommand.end - 1;
+                                continue;
+                            }
+
+                            // Known LaTeX command, multi-letter unknown,
+                            // or single letter not in valid escapes
+                            // → double the backslash.
                             result +=
                                 '\\\\' +
                                 latexCommand.command;
                             repairCount += 1;
-                            commands.add(
-                                latexCommand.command
-                            );
+
+                            if (latexCommand.known) {
+                                commands.add(
+                                    latexCommand.command
+                                );
+                            }
+
                             index =
                                 latexCommand.end - 1;
                             continue;
@@ -5662,7 +5722,11 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                             }
                         }
 
-                        result += char;
+                        // Not a recognised LaTeX command and not a valid
+                        // JSON escape — double the backslash so the
+                        // JSON becomes valid.
+                        result += '\\\\';
+                        repairCount += 1;
                     }
 
                     return {

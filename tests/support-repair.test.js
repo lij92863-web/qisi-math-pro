@@ -563,3 +563,177 @@ test(
         );
     }
 );
+
+// --- Vision JSON LaTeX backslash escape repair ---
+
+// Known LaTeX commands for the detection/repair logic.
+const LATEX_JSON_BACKSLASH_REPAIR_COMMANDS = new Set([
+    'triangle', 'frac', 'sqrt', 'sin', 'cos', 'tan',
+    'overline', 'begin', 'end', 'left', 'right', 'angle',
+    'Delta', 'theta', 'alpha', 'beta', 'gamma', 'pi',
+    'circ', 'cdot', 'times', 'le', 'ge', 'neq',
+    'parallel', 'perp', 'vec', 'overrightarrow', 'ln', 'log',
+    'lim', 'text', 'mathrm', 'mathbf', 'mathbb', 'cases'
+]);
+
+function readLatexJsonCommandAt(source, slashIndex) {
+    const next = source[slashIndex + 1] || '';
+    if (!/[A-Za-z]/.test(next)) return null;
+    let end = slashIndex + 1;
+    while (end < source.length && /[A-Za-z]/.test(source[end])) end += 1;
+    const command = source.slice(slashIndex + 1, end);
+    return { command, end, known: LATEX_JSON_BACKSLASH_REPAIR_COMMANDS.has(command) };
+}
+
+function escapeLatexBackslashesInJsonCandidate(text) {
+    const source = String(text || '');
+    let result = '';
+    let inString = false;
+    let repairCount = 0;
+    const commands = new Set();
+
+    for (let i = 0; i < source.length; i += 1) {
+        const ch = source[i];
+        if (!inString) {
+            result += ch;
+            if (ch === '"') inString = true;
+            continue;
+        }
+        if (ch === '"') { inString = false; result += ch; continue; }
+        if (ch !== '\\') { result += ch; continue; }
+
+        const nxt = source[i + 1] || '';
+        if (!nxt) { result += ch; continue; }
+
+        // \uXXXX valid JSON unicode escape — check before command reading.
+        if (nxt === 'u') {
+            const hex = source.slice(i + 2, i + 6);
+            if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+                result += ch + nxt + hex;
+                i += 5;
+                continue;
+            }
+        }
+
+        const cmd = readLatexJsonCommandAt(source, i);
+        if (cmd) {
+            // Single-letter valid JSON escapes (b,f,n,r,t) → pass through.
+            if (!cmd.known && cmd.command.length === 1 && /[bfnrt]/.test(cmd.command)) {
+                result += '\\' + cmd.command;
+                i = cmd.end - 1;
+                continue;
+            }
+            // Known LaTeX, multi-letter unknown, or single non-escape letter → repair.
+            result += '\\\\' + cmd.command;
+            repairCount += 1;
+            if (cmd.known) commands.add(cmd.command);
+            i = cmd.end - 1;
+            continue;
+        }
+
+        if (nxt === '\\' || nxt === '"' || nxt === '/' ||
+            nxt === 'b' || nxt === 'f' || nxt === 'n' ||
+            nxt === 'r' || nxt === 't') {
+            result += ch + nxt;
+            i += 1;
+            continue;
+        }
+
+        if (nxt === 'u') {
+            const hex = source.slice(i + 2, i + 6);
+            if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+                result += ch + nxt + hex;
+                i += 5;
+                continue;
+            }
+        }
+
+        // GENERALIZED FIX: any other backslash → double-escape it.
+        result += '\\\\';
+        repairCount += 1;
+    }
+
+    return { text: result, changed: result !== source, repairCount, commands: [...commands] };
+}
+
+test('escapeLatexBackslashes repairs known LaTeX command', () => {
+    const r = escapeLatexBackslashesInJsonCandidate(
+        '{"stem":"角 \\alpha 的值"}'
+    );
+    assert.equal(r.changed, true);
+    assert.ok(r.commands.includes('alpha'));
+    // The result should parse as valid JSON.
+    JSON.parse(r.text);
+});
+
+test('escapeLatexBackslashes repairs UNKNOWN LaTeX command — generalized fix', () => {
+    const r = escapeLatexBackslashesInJsonCandidate(
+        '{"stem":"\\therefore x=1"}'
+    );
+    assert.equal(r.changed, true);
+    assert.ok(r.repairCount >= 1, 'should repair unknown command');
+    // Must parse as valid JSON.
+    JSON.parse(r.text);
+    const parsed = JSON.parse(r.text);
+    // The stem value should contain \therefore (single backslash in value).
+    assert.ok(parsed.stem.includes('\\therefore'));
+});
+
+test('escapeLatexBackslashes repairs multiple unknown commands', () => {
+    const r = escapeLatexBackslashesInJsonCandidate(
+        '{"stem":"\\because \\therefore x=1, \\pm 2"}'
+    );
+    assert.equal(r.changed, true);
+    assert.ok(r.repairCount >= 3, 'should repair 3 unknown commands');
+    JSON.parse(r.text);
+});
+
+test('escapeLatexBackslashes preserves valid JSON escapes', () => {
+    const r = escapeLatexBackslashesInJsonCandidate(
+        '{"stem":"第一行\\n第二行","quote":"他说\\"好\\"","uni":"\\u4e2d"}'
+    );
+    assert.equal(r.changed, false, 'valid JSON escapes should not be changed');
+    const parsed = JSON.parse(r.text);
+    assert.equal(parsed.stem, '第一行\n第二行');
+    assert.equal(parsed.quote, '他说"好"');
+    assert.equal(parsed.uni, '中');
+});
+
+test('escapeLatexBackslashes preserves already-escaped LaTeX', () => {
+    const r = escapeLatexBackslashesInJsonCandidate(
+        '{"stem":"\\\\frac{1}{2}"}'
+    );
+    // Already-escaped \\frac should NOT be touched.
+    assert.equal(r.changed, false);
+    const parsed = JSON.parse(r.text);
+    assert.equal(parsed.stem, '\\frac{1}{2}');
+});
+
+test('escapeLatexBackslashes handles structure error — still repairs escapes', () => {
+    // JSON with a trailing comma (structural error) BUT also LaTeX escapes.
+    const r = escapeLatexBackslashesInJsonCandidate(
+        '{"stem":"\\alpha",}'
+    );
+    // Should have repaired \alpha but the trailing comma remains.
+    assert.equal(r.changed, true);
+    // JSON.parse will still fail due to trailing comma — this is fail-closed.
+    assert.throws(() => JSON.parse(r.text));
+});
+
+test('escapeLatexBackslashes empty and null are safe', () => {
+    assert.equal(escapeLatexBackslashesInJsonCandidate('').text, '');
+    assert.equal(escapeLatexBackslashesInJsonCandidate(null).text, '');
+});
+
+test('tryRepairedCandidate with generalized repair handles unknown LaTeX', () => {
+    const result = tryRepairedCandidate({
+        candidate: '{"questions":[{"stem":"\\therefore x=1"}]}',
+        lastParseError: new Error('Bad escaped character'),
+        escapeLatexBackslashesInJsonCandidate,
+        extractQuestionArray: (parsed) => parsed.questions || []
+    });
+
+    assert.equal(result.result.ok, true);
+    assert.equal(result.result.method, 'json-latex-backslash-repair');
+    assert.equal(result.result.questions[0].stem, '\\therefore x=1');
+});
