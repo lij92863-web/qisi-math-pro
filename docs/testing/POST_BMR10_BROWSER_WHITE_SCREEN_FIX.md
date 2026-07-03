@@ -77,3 +77,73 @@ e94191a06ad31e98db27bff4692a30a1526e756b
 
 ## Decision
 BROWSER_SMOKE_ACCEPTED
+
+---
+
+## UiEvents Script Fix After DOCX Smoke
+
+### Symptom
+- file: main.html (line 1531, the script block before app.js)
+- URL: http://localhost:3000/main.html
+- error: `Cannot read properties of undefined (reading 'buildQuestionNumberGapWarning')`
+- context: DOCX 转 PDF 成功，但页面视觉识别失败，因 `window.Qisi.UiEvents` 为 undefined
+
+### Root Cause
+- type: missing script tag in main.html
+- file: main.html — no `<script>` tag for `qisi-ui-events.js`
+- explanation:
+
+  BMR5 migrated `buildQuestionNumberGapWarning` and `buildKnowledgeCounts` into `qisi-ui-events.js`.
+  The file exists on disk and correctly exports via `window.Qisi.UiEvents`.
+
+  However, `qisi-ui-events.js` was never added to main.html's script tags. When app.js calls
+  `window.Qisi.UiEvents.buildQuestionNumberGapWarning` at line 11236, the module had not been
+  loaded, producing the `Cannot read properties of undefined` error.
+
+### Changed Files
+- `main.html` — added one missing `<script>` tag before `app.js`
+
+### Exact Script Added
+```html
+<!-- BEFORE (lines 1530-1531) -->
+<script src="./qisi-docx-pipeline.js?v=bmr9-docx-helpers-01"></script>
+<script src="./app.js?v=latex-display-options-guard-01"></script>
+
+<!-- AFTER -->
+<script src="./qisi-docx-pipeline.js?v=bmr9-docx-helpers-01"></script>
+<script src="./qisi-ui-events.js?v=bmr5-question-gap-warning-01"></script>
+<script src="./app.js?v=latex-display-options-guard-01"></script>
+```
+
+### Browser Verification
+- page visible: yes
+- docx upload: previous error (`buildQuestionNumberGapWarning` undefined) disappeared
+- console red app errors: 0
+
+### Gates
+- ui-events.test.js: 7/7 pass
+- base-migration-execution-gate: 13/15 pass (2 pre-existing failures unrelated to this fix)
+- pdf-route-b-hold: 6/6 pass
+- smoke:batch:mock: 20/20 pass
+- verify:safe: pass (pre-existing migration gate failures only)
+- verify:batch-safety: pass
+- verify:pdf-known-bad: 65/65 pass
+- controlled-write ownership: 21/21 pass
+- preflight: ok, realApiCalled=false
+- dry-run: ok, realApiCalled=false
+- verify:docx-stable: 20/20 pass
+- diff-scope: pass (main.html, app.js, docs/testing/**)
+- no-real-ai: pass
+
+### Safety
+- controlled-write: not touched
+- parser: not touched
+- aligner: not touched
+- runner: not touched
+- Route B: not integrated
+- real-run: not called
+- AI/OCR: not called
+- A4: not touched
+
+### Decision
+BROWSER_SMOKE_ACCEPTED
