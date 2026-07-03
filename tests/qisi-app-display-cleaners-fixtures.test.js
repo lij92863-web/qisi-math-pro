@@ -753,6 +753,187 @@ describe('sanitizeLatexWrapperArtifacts', () => {
         assert.equal(q.answer, '');
         assert.equal(q.solution, '');
     });
+
+    // ===========================
+    // SECOND PASS: equation normalization + orphaned brace stripping
+    // ===========================
+
+    // --- Equation → display math ---
+    it('[LATEX_PASS2:equation-to-display] converts \\begin{equation}...\\end{equation} to \\[...\\]', () => {
+        const input = '\\begin{equation}\n\\frac{2\\cos(\\pi+\\alpha)-3\\sin(-\\alpha)}{4\\cos(-\\alpha)+\\sin(2\\pi+\\alpha)}\n=-\\frac{19}{13}\n\\end{equation}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.ok(result.startsWith('\\['), 'should start with \\[');
+        assert.ok(result.endsWith('\\]'), 'should end with \\]');
+        assert.ok(result.includes('\\frac'), 'frac preserved');
+        assert.ok(!result.includes('\\begin{equation}'), 'equation begin removed');
+        assert.ok(!result.includes('\\end{equation}'), 'equation end removed');
+    });
+
+    it('[LATEX_PASS2:equation-star] converts \\begin{equation*} to \\[', () => {
+        const input = '\\begin{equation*}\na=b\n\\end{equation*}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.ok(result.startsWith('\\['), 'should start with \\[');
+        assert.ok(result.endsWith('\\]'), 'should end with \\]');
+        assert.ok(!result.includes('equation'), 'equation removed');
+    });
+
+    // --- Equation + aligned ---
+    it('[LATEX_PASS2:equation-with-aligned] converts equation wrapping aligned', () => {
+        const input = '\\begin{equation}\n\\begin{aligned}\na^2+b^2=c^2\n\\end{aligned}\n\\end{equation}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.ok(result.startsWith('\\['), 'should start with \\[');
+        assert.ok(result.endsWith('\\]'), 'should end with \\]');
+        assert.ok(result.includes('\\begin{aligned}'), 'aligned preserved');
+        assert.ok(result.includes('\\end{aligned}'), 'aligned end preserved');
+        assert.ok(!result.includes('equation'), 'equation removed');
+    });
+
+    // --- Orphaned braces: leading } ---
+    it('[LATEX_PASS2:brace-leading-close] strips leading orphaned }', () => {
+        const input = '} -\\frac{19}{13}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, '-\\frac{19}{13}');
+    });
+
+    // --- Orphaned braces: trailing } ---
+    it('[LATEX_PASS2:brace-trailing-close-number] strips trailing orphaned } from number', () => {
+        const input = '6}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, '6');
+    });
+
+    // --- Orphaned braces: leading } before letter ---
+    it('[LATEX_PASS2:brace-leading-close-letter] strips leading } before letter', () => {
+        const input = '}B';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, 'B');
+    });
+
+    // --- Orphaned braces: trailing } after letter ---
+    it('[LATEX_PASS2:brace-trailing-close-letter] strips trailing } after letter', () => {
+        const input = 'D}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, 'D');
+    });
+
+    // --- Orphaned braces: leading } before formula ---
+    it('[LATEX_PASS2:brace-leading-close-formula] strips leading } before formula', () => {
+        const input = '} \\frac{\\sqrt{2}+1}{2}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, '\\frac{\\sqrt{2}+1}{2}');
+    });
+
+    // --- Preserve: balanced frac braces ---
+    it('[LATEX_PASS2:preserve-frac-braces] preserves balanced braces in frac', () => {
+        const input = '\\frac{\\sqrt{2}+1}{2}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, '\\frac{\\sqrt{2}+1}{2}');
+    });
+
+    // --- Preserve: set notation ---
+    it('[LATEX_PASS2:preserve-set-notation] preserves set notation braces', () => {
+        const input = 'A={-1,0,1}, B={0,1}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, 'A={-1,0,1}, B={0,1}');
+    });
+
+    // --- Preserve: cases environment braces ---
+    it('[LATEX_PASS2:preserve-cases] preserves cases environment', () => {
+        const input = '\\[\n\\begin{cases}\nx+y=1\\\\\nx-y=2\n\\end{cases}\n\\]';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.ok(result.includes('\\begin{cases}'), 'cases preserved');
+        assert.ok(result.includes('\\end{cases}'), 'cases end preserved');
+    });
+
+    // --- Preserve: aligned braces ---
+    it('[LATEX_PASS2:preserve-aligned-alone] preserves standalone aligned', () => {
+        const input = '\\begin{aligned}\na^2+b^2=c^2\n\\end{aligned}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.ok(result.includes('\\begin{aligned}'), 'aligned preserved');
+        assert.ok(result.includes('\\end{aligned}'), 'aligned end preserved');
+    });
+
+    // --- Preserve: matrix ---
+    it('[LATEX_PASS2:preserve-matrix] preserves matrix environment', () => {
+        const input = '\\begin{matrix} a & b \\\\ c & d \\end{matrix}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.ok(result.includes('\\begin{matrix}'), 'matrix preserved');
+        assert.ok(result.includes('\\end{matrix}'), 'matrix end preserved');
+    });
+
+    // --- Leading orphaned { ---
+    it('[LATEX_PASS2:brace-leading-open] strips leading orphaned {', () => {
+        const input = '{ -\\frac{19}{13}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, '-\\frac{19}{13}');
+    });
+
+    // --- Trailing orphaned { ---
+    it('[LATEX_PASS2:brace-trailing-open] strips trailing orphaned {', () => {
+        const input = '6{';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, '6');
+    });
+
+    // --- Multiple orphaned braces ---
+    it('[LATEX_PASS2:brace-multiple-orphaned] strips multiple orphaned boundary braces', () => {
+        const input = '}} \\frac{1}{2} }}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        // \frac{1}{2} has 2 { and 2 } — balanced internally
+        // The leading }} and trailing }} are orphans
+        assert.equal(result, '\\frac{1}{2}');
+    });
+
+    // --- Idempotent after brace strip ---
+    it('[LATEX_PASS2:brace-idempotent] brace stripping is idempotent', () => {
+        const input = '} -\\frac{19}{13}';
+        const once = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        const twice = qisiUtils.sanitizeLatexWrapperArtifacts(once);
+        assert.equal(twice, once);
+    });
+
+    // --- Combined: equation + braces ---
+    it('[LATEX_PASS2:combined-equation-braces] handles equation with trailing orphan brace', () => {
+        const input = '\\begin{equation}\n\\frac{1}{2}\n\\end{equation}}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.ok(result.startsWith('\\['), 'should start with \\[');
+        assert.ok(result.endsWith('\\]'), 'should end with \\]');
+    });
+
+    // --- Integration: answer with orphaned brace through batch save ---
+    it('[LATEX_PASS2:integration:answer-orphaned-brace] PDF answer orphaned brace cleaned through batch save', () => {
+        const result = helpers.cleanDisplayTextForBatchSave('} -\\frac{19}{13}');
+        assert.equal(result, '-\\frac{19}{13}');
+    });
+
+    // --- Integration: solution with equation through fields ---
+    it('[LATEX_PASS2:integration:solution-equation] PDF solution with equation cleaned through fields path', () => {
+        const q = {
+            stem: '题目',
+            options: [],
+            answer: 'D}',
+            solution: '\\begin{equation}\n\\frac{2\\cos(\\pi+\\alpha)-3\\sin(-\\alpha)}{4\\cos(-\\alpha)+\\sin(2\\pi+\\alpha)}\n=-\\frac{19}{13}\n\\end{equation}'
+        };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.equal(q.answer, 'D');
+        assert.ok(q.solution.startsWith('\\['), 'solution should start with \\[');
+        assert.ok(!q.solution.includes('\\begin{equation}'), 'equation removed');
+    });
+
+    // --- Integration: formula syntax error text not swallowed ---
+    it('[LATEX_PASS2:integration:bad-formula-not-swallowed] bad formula fragment is not swallowed', () => {
+        const input = '\\frac{1}{2';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.ok(result.length > 0, 'should not return empty for incomplete formula');
+        assert.ok(result.includes('\\frac'), 'frac preserved even with bad brace');
+    });
+
+    // --- Empty remains empty ---
+    it('[LATEX_PASS2:empty-stays-empty] all-wrapper text with braces stays empty', () => {
+        const input = '}\n{';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, '');
+    });
 });
 
 describe('R3 auto-generated fixtures', () => {

@@ -807,7 +807,12 @@
             // 1. Remove markdown code fences — lines that are ONLY ``` or ```lang
             s = s.replace(/^```[a-z]*\s*$/gm, '');
 
-            // 2. Remove standalone \begin{env} / \end{env} lines for wrapper environments
+            // 2. Convert \begin{equation}...\end{equation} to \[...\]
+            //    This allows the LaTeX tokenizer to recognize them as display math.
+            s = s.replace(/\\begin\{equation\*?\}/g, '\\[');
+            s = s.replace(/\\end\{equation\*?\}/g, '\\]');
+
+            // 3. Remove standalone \begin{env} / \end{env} lines for wrapper environments
             LATEX_WRAPPER_ENV_NAMES.forEach((env) => {
                 const beginLineRe = new RegExp(`^\\\\begin\\{${env}\\}\\s*$`, 'gm');
                 const endLineRe = new RegExp(`^\\\\end\\{${env}\\}\\s*$`, 'gm');
@@ -815,18 +820,64 @@
                 s = s.replace(endLineRe, '');
             });
 
-            // 3. Remove any remaining \begin{env} / \end{env} fragments (inline or trailing)
+            // 4. Remove any remaining \begin{env} / \end{env} fragments (inline or trailing)
             LATEX_WRAPPER_ENV_NAMES.forEach((env) => {
                 s = s.replace(new RegExp(`\\\\begin\\{${env}\\}`, 'g'), '');
                 s = s.replace(new RegExp(`\\\\end\\{${env}\\}`, 'g'), '');
             });
 
-            // 4. Remove \item (and \item[...]) at line start, keep the content after it
+            // 5. Remove \item (and \item[...]) at line start, keep the content after it
             s = s.replace(/^\\item(?:\[[^\]]*\])?\s*/gm, '');
 
-            // 5. Collapse blank lines and trim
+            // 6. Strip orphaned boundary braces — unmatched { or } at the very
+            //    beginning or end that are not part of a balanced LaTeX group.
+            {
+                const countUnescaped = (char) => {
+                    let count = 0;
+                    for (let i = 0; i < s.length; i += 1) {
+                        if (s[i] === char && (i === 0 || s[i - 1] !== '\\')) {
+                            count += 1;
+                        }
+                    }
+                    return count;
+                };
+
+                let openCount = countUnescaped('{');
+                let closeCount = countUnescaped('}');
+
+                // Leading orphaned } (more } than { overall)
+                while (openCount < closeCount && /^\}\s*/.test(s)) {
+                    s = s.replace(/^\}\s*/, '');
+                    closeCount -= 1;
+                }
+
+                // Trailing orphaned } (more } than { overall)
+                while (openCount < closeCount && /\s*\}$/.test(s)) {
+                    s = s.replace(/\s*\}$/, '');
+                    closeCount -= 1;
+                }
+
+                // Leading orphaned { (more { than } overall)
+                while (openCount > closeCount && /^\{\s*/.test(s)) {
+                    s = s.replace(/^\{\s*/, '');
+                    openCount -= 1;
+                }
+
+                // Trailing orphaned { (more { than } overall)
+                while (openCount > closeCount && /\s*\{$/.test(s)) {
+                    s = s.replace(/\s*\{$/, '');
+                    openCount -= 1;
+                }
+            }
+
+            // 7. Collapse blank lines and trim
             s = s.replace(/\n{3,}/g, '\n\n');
             s = s.trim();
+
+            // 8. If only braces and whitespace remain, return empty
+            if (/^[\s\{\}]*$/.test(s)) {
+                return '';
+            }
 
             return s;
         };
