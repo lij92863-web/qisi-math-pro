@@ -200,6 +200,10 @@
             };
 
             const normalizeMathExpressionForPreview = (expression = '') => String(expression || '')
+                // Strip outer dollar delimiters that leak through when the
+                // tokenizer encounters nested/ambiguous $ boundaries.
+                .replace(/^\$\$?\s*/, '')
+                .replace(/\s*\$\$?$/, '')
                 .replace(/\s*\n\s*/g, ' ')
                 .replace(/(?<!\\)\bSangle\b/g, '\\angle')
                 .replace(/(?<!\\)\bangle\b/g, '\\angle')
@@ -231,6 +235,61 @@
                     /\\includegraphics(?:\[[^\]]*\])?\{[^}]+\}/.test(raw)
                 ) {
                     return renderPlainText(segment.expression || '');
+                }
+
+                // If the expression has Chinese characters AND $ delimiters,
+                // it's mixed text with inline math that the tokenizer couldn't
+                // split.  Re-segment on $...$ boundaries and render each part.
+                if (/[一-龥]/.test(expression) && /\$/.test(expression)) {
+                    const segments = [];
+                    // Match $$...$$ first (display), then $...$ (inline).
+                    const re = /\$\$([\s\S]*?)\$\$|\$([\s\S]*?)\$/g;
+                    let lastIdx = 0;
+                    let m;
+
+                    while ((m = re.exec(expression)) !== null) {
+                        if (m.index > lastIdx) {
+                            segments.push(renderPlainText(
+                                expression.slice(lastIdx, m.index)
+                            ));
+                        }
+
+                        const isDisplay = m[0].startsWith('$$');
+                        const inner = normalizeMathExpressionForPreview(
+                            isDisplay ? m[1] : m[2]
+                        );
+
+                        try {
+                            if (!window.katex) throw new Error('KaTeX 尚未加载');
+                            segments.push(window.katex.renderToString(inner, {
+                                displayMode: isDisplay,
+                                throwOnError: true,
+                                strict: 'ignore',
+                                trust: false
+                            }));
+                        } catch (error) {
+                            segments.push(
+                                `<span class="latex-render-error" title="${escapeHtmlLocal(error?.message || '公式语法错误')}">` +
+                                `[公式语法错误：原文已保留] ` +
+                                `${escapeHtmlLocal(inner)}` +
+                                `</span>`
+                            );
+                        }
+
+                        lastIdx = m.index + m[0].length;
+                    }
+
+                    if (lastIdx < expression.length) {
+                        segments.push(renderPlainText(expression.slice(lastIdx)));
+                    }
+
+                    return segments.join('');
+                }
+
+                // If the expression is purely Chinese text, render as plain
+                // text — don't pass it to KaTeX.
+                if (/[一-龥]/.test(expression)) {
+                    return renderPlainText(expression);
                 }
 
                 try {
