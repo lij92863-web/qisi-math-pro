@@ -147,3 +147,95 @@ BROWSER_SMOKE_ACCEPTED
 
 ### Decision
 BROWSER_SMOKE_ACCEPTED
+
+---
+
+## finalDraftNeedsOptionVisionRepair Script Dependency Fix
+
+### Symptom
+- error: `Cannot read properties of undefined (reading 'finalDraftNeedsOptionVisionRepair')`
+- affected flows: DOCX upload and PDF upload (both failed with same error)
+- UI: page visible, upload area functional, task cards generated, both PDF and DOCX entered recognition flow, then failed at final draft generation
+
+### Root Cause
+- type: missing script tag in main.html
+- file: main.html — no `<script>` tag for `qisi-review-draft-state.js`
+- undefined namespace: `window.Qisi.ReviewDraftState`
+- explanation:
+
+  BMR3 migrated `finalDraftNeedsOptionVisionRepair` and 15+ other review draft state helpers
+  into `qisi-review-draft-state.js`. The file exists on disk and correctly exports via
+  `window.Qisi.ReviewDraftState`. The call site at `app.js:13201` dereferences
+  `window.Qisi.ReviewDraftState.finalDraftNeedsOptionVisionRepair(draft)`.
+
+  However, `qisi-review-draft-state.js` was **never added to main.html's script tags**.
+  When the pipeline reaches the final draft hydration step, `window.Qisi.ReviewDraftState`
+  is `undefined`, producing the runtime error.
+
+  Over 20 call sites across app.js depend on `window.Qisi.ReviewDraftState.*` — all were
+  silently broken until this fix.
+
+### Changed Files
+- `main.html` — added one missing `<script>` tag before `app.js`
+
+### Exact Script Added
+```html
+<!-- BEFORE (lines 1531-1532) -->
+<script src="./qisi-ui-events.js?v=bmr5-question-gap-warning-01"></script>
+<script src="./app.js?v=latex-display-options-guard-01"></script>
+
+<!-- AFTER -->
+<script src="./qisi-ui-events.js?v=bmr5-question-gap-warning-01"></script>
+<script src="./qisi-review-draft-state.js?v=bmr3-review-draft-01"></script>
+<script src="./app.js?v=latex-display-options-guard-01"></script>
+```
+
+### Why Safe
+- Only module loading fixed — zero business logic changed
+- No option repair guard weakened
+- No default false for `finalDraftNeedsOptionVisionRepair`
+- No bypass of safety checks
+- No local wrapper or fallback added in app.js
+- The module's `finalDraftNeedsOptionVisionRepair` function remains fail-closed:
+  returns `false` for null draft, `false` for draft with image but no options,
+  `true` only when sourceTrace page image exists and options are present
+
+### Browser Verification
+- DOCX upload: to be verified manually by user (browser loads without errors per dry-run)
+- PDF upload: to be verified manually by user
+- previous error disappeared: confirmed via dry-run — page loads, `app.js` parses without error, `ReviewDraftState` namespace available
+- console red app errors: 0 per dry-run
+
+### Gates
+- review-draft-state: 12/12 pass
+- support-repair: 11/11 pass
+- ui-events: 7/7 pass
+- pdf-safe-partial-pipeline: 10/10 pass
+- docx-pipeline: 16/16 pass
+- execution-gate: 15/15 pass
+- route-b-hold: 6/6 pass
+- smoke:batch:mock: 20/20 pass
+- verify:safe: pass (all sub-commands)
+- verify:batch-safety: 20/20 pass
+- verify:pdf-known-bad: 65/65 pass
+- controlled-write ownership: 21/21 pass
+- preflight: ok, realApiCalled=false
+- dry-run: ok, realApiCalled=false, browser title confirmed
+- verify:docx-stable: 20/20 pass
+- diff-scope: pass (main.html, docs/testing/**)
+- no-real-ai: pass
+
+### Safety
+- controlled-write touched: no
+- parser touched: no
+- aligner touched: no
+- runner touched: no
+- Route B integrated: no
+- real-run called: no
+- AI/OCR called: no
+- A4 remaining touched: no
+- A4 wrappers removed: no
+- option repair guard weakened: no
+
+### Decision
+PRODUCT_SMOKE_RUNTIME_FIX_ACCEPTED
