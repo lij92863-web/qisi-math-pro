@@ -879,7 +879,45 @@
                 return '';
             }
 
+            // 9. Guard against raw JSON payload leakage.
+            //    AI structured output (e.g. qwen-plus) can leak its JSON wrapper
+            //    into stem / answer / solution when extraction fails.  This is
+            //    NOT a general JSON detector — it only fires when ≥3 known AI
+            //    JSON field patterns appear together with JSON structural chars.
+            if (isRawJsonPayloadText(s)) {
+                return '【结构化输出解析失败，需人工复核】';
+            }
+
             return s;
+        };
+
+        // Detects text that looks like leaked AI structured-output JSON.
+        // Conservative: requires ≥3 known field patterns AND JSON structural
+        // characters.  Normal math / Chinese text will never match.
+        const AI_JSON_FIELD_PATTERNS = [
+            /"questions"\s*:\s*\[/,
+            /"questionNumber"\s*:/,
+            /"options"\s*:\s*\{/,
+            /"stem"\s*:\s*"/,
+            /"answer"\s*:\s*"/,
+            /"analysis"\s*:\s*"/,
+            /"correctAnswer"\s*:/,
+            /"type"\s*:\s*"/
+        ];
+
+        const isRawJsonPayloadText = (text) => {
+            if (!text) return false;
+
+            const s = String(text);
+
+            // Must have JSON structural characters to even consider it.
+            const hasJsonStructure = /[\{\}]/.test(s) && /["\[\]:,]/.test(s);
+            if (!hasJsonStructure) return false;
+
+            const matchCount = AI_JSON_FIELD_PATTERNS.filter((re) => re.test(s)).length;
+            // Require ≥3 distinct AI JSON field patterns — normal text will
+            // never match even one of these.
+            return matchCount >= 3;
         };
 
         const cleanDisplayTextForBatchSave = (text) => {
@@ -948,6 +986,7 @@
             hasUnconvertedImagePlaceholder,
             hasUnconvertedOptionPlaceholder,
             isFatalQwenServiceError,
+            isRawJsonPayloadText,
             itemHasUnconvertedImagePlaceholder,
             mathSignalCount,
             normalizeAnswerSolutionSource,

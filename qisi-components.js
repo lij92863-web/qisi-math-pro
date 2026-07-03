@@ -250,7 +250,8 @@
 
                     return (
                         `<span class="latex-render-error" title="${escapeHtmlLocal(error?.message || '公式语法错误')}">` +
-                        `[公式语法错误]` +
+                        `[公式语法错误：原文已保留] ` +
+                        `${escapeHtmlLocal(expression)}` +
                         `</span>`
                     );
                 }

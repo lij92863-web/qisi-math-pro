@@ -934,6 +934,90 @@ describe('sanitizeLatexWrapperArtifacts', () => {
         const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
         assert.equal(result, '');
     });
+
+    // ===========================
+    // THIRD PASS: raw JSON leakage guard + formula fallback
+    // ===========================
+
+    // --- isRawJsonPayloadText: detects AI JSON payload ---
+    it('[LATEX_PASS3:json-detection:ai-structured-output] detects AI structured output JSON', () => {
+        const input = '{"questions":[{"questionNumber":"1","stem":"已知...","options":{"A":"...","B":"..."},"answer":"D","analysis":"..."}]}';
+        assert.equal(qisiUtils.isRawJsonPayloadText(input), true);
+    });
+
+    // --- isRawJsonPayloadText: normal math is NOT flagged ---
+    it('[LATEX_PASS3:json-detection:normal-math] normal math is not flagged as JSON', () => {
+        const input = '\\frac{\\sqrt{2}+1}{2}';
+        assert.equal(qisiUtils.isRawJsonPayloadText(input), false);
+    });
+
+    // --- isRawJsonPayloadText: normal Chinese text is NOT flagged ---
+    it('[LATEX_PASS3:json-detection:chinese-text] Chinese text is not flagged as JSON', () => {
+        const input = '由正弦定理得 AB=2R\\sin60^\\circ。';
+        assert.equal(qisiUtils.isRawJsonPayloadText(input), false);
+    });
+
+    // --- isRawJsonPayloadText: answer letter is NOT flagged ---
+    it('[LATEX_PASS3:json-detection:answer-letter] single answer letter is not flagged', () => {
+        const input = 'D';
+        assert.equal(qisiUtils.isRawJsonPayloadText(input), false);
+    });
+
+    // --- isRawJsonPayloadText: JSON with only 2 patterns is NOT flagged ---
+    it('[LATEX_PASS3:json-detection:two-patterns] JSON with only 2 AI patterns not flagged', () => {
+        const input = '{"questionNumber":"1","stem":"已知..."}';
+        assert.equal(qisiUtils.isRawJsonPayloadText(input), false);
+    });
+
+    // --- isRawJsonPayloadText: empty/null is NOT flagged ---
+    it('[LATEX_PASS3:json-detection:empty] empty string is not flagged', () => {
+        assert.equal(qisiUtils.isRawJsonPayloadText(''), false);
+        assert.equal(qisiUtils.isRawJsonPayloadText(null), false);
+    });
+
+    // --- JSON payload in stem: replaced with warning placeholder ---
+    it('[LATEX_PASS3:integration:json-stem-blocked] raw JSON in stem is replaced with warning', () => {
+        const input = '{"questions":[{"questionNumber":"1","stem":"已知...","options":{"A":"x","B":"y"},"answer":"D","analysis":"解..."}]}';
+        const result = helpers.cleanDisplayTextForBatchSave(input);
+        assert.equal(result, '【结构化输出解析失败，需人工复核】');
+    });
+
+    // --- JSON payload through cleanDisplayFieldsOnly: stem blocked ---
+    it('[LATEX_PASS3:integration:json-fields-blocked] raw JSON stem blocked through fields path', () => {
+        const q = {
+            stem: '{"questions":[{"questionNumber":"1","stem":"已知...","options":{"A":"x"},"answer":"D","analysis":"解"}]}',
+            options: [],
+            answer: '',
+            solution: ''
+        };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.equal(q.stem, '【结构化输出解析失败，需人工复核】');
+    });
+
+    // --- Normal stem with math is NOT blocked ---
+    it('[LATEX_PASS3:integration:normal-stem-passes] normal stem with math is not blocked', () => {
+        const result = helpers.cleanDisplayTextForBatchSave(
+            '已知集合 A=\\{-1,0,1\\}，B=\\{0,1\\}，则 A\\cap B 等于'
+        );
+        assert.ok(result.includes('已知集合'), 'stem content preserved');
+        assert.ok(!result.includes('结构化输出'), 'not flagged as JSON');
+    });
+
+    // --- Answer with single letter is NOT blocked ---
+    it('[LATEX_PASS3:integration:answer-passes] single answer letter is not blocked', () => {
+        const q = { stem: '题目', options: ['A', 'B', 'C', 'D'], answer: 'D', solution: '解析' };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.equal(q.answer, 'D');
+    });
+
+    // --- JSON guard does not affect answer ownership ---
+    it('[LATEX_PASS3:safety:json-guard-fail-closed] JSON guard is fail-closed — returns warning not original', () => {
+        const input = '{"questions":[{"questionNumber":"1","stem":"已知...","options":{"A":"x"},"answer":"D","analysis":"解"}]}';
+        const result = helpers.cleanDisplayTextForBatchSave(input);
+        assert.ok(!result.includes('questions'), 'raw JSON removed');
+        assert.ok(!result.includes('questionNumber'), 'field names removed');
+        assert.ok(result.includes('需人工复核'), 'manual review requested');
+    });
 });
 
 describe('R3 auto-generated fixtures', () => {
