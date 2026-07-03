@@ -566,6 +566,195 @@ describe('qisi-utils implementation parity', () => {
         }
     });
 
+describe('sanitizeLatexWrapperArtifacts', () => {
+    it('[LATEX_WRAPPER:empty] empty string returns empty', () => {
+        assert.equal(qisiUtils.sanitizeLatexWrapperArtifacts(''), '');
+    });
+
+    it('[LATEX_WRAPPER:null] null returns empty', () => {
+        assert.equal(qisiUtils.sanitizeLatexWrapperArtifacts(null), '');
+    });
+
+    it('[LATEX_WRAPPER:plain-text] plain text is preserved', () => {
+        assert.equal(
+            qisiUtils.sanitizeLatexWrapperArtifacts('由正弦定理得 AB=2R'),
+            '由正弦定理得 AB=2R'
+        );
+    });
+
+    // --- Sample 1: trailing description ---
+    it('[LATEX_WRAPPER:sample-1:trailing-description] strips trailing end description', () => {
+        const input = '因为 A={x|x=sin nπ/2,n∈Z}，所以 A={-1,0,1}，B={0,1}，故选：B\n\\end{description}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, '因为 A={x|x=sin nπ/2,n∈Z}，所以 A={-1,0,1}，B={0,1}，故选：B');
+    });
+
+    // --- Sample 2: markdown fence + enumerate ---
+    it('[LATEX_WRAPPER:sample-2:fence-enumerate] strips markdown fence and enumerate wrappers', () => {
+        const input = '```latex\n\\begin{enumerate}\n\\item 由条件可得 AB=AC。\n\\item 所以答案为 D。\n\\end{enumerate}\n```';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, '由条件可得 AB=AC。\n所以答案为 D。');
+    });
+
+    // --- Sample 3: itemize mixed in solution ---
+    it('[LATEX_WRAPPER:sample-3:itemize] strips itemize wrappers, preserves math', () => {
+        const input = '\\begin{itemize}\n\\item 由正弦定理得 AB=2R\\sin60^\\circ。\n\\item 所以体积为 2\\sqrt{6}。\n\\end{itemize}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, '由正弦定理得 AB=2R\\sin60^\\circ。\n所以体积为 2\\sqrt{6}。');
+    });
+
+    // --- Sample 4: preserve math environment ---
+    it('[LATEX_WRAPPER:sample-4:preserve-math-env] preserves aligned/cases/matrix math environments', () => {
+        const input = '\\[\n\\begin{aligned}\na^2+b^2=c^2\n\\end{aligned}\n\\]';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, '\\[\n\\begin{aligned}\na^2+b^2=c^2\n\\end{aligned}\n\\]');
+    });
+
+    // --- Sample 5: preserve normal formula ---
+    it('[LATEX_WRAPPER:sample-5:preserve-formula] does not destroy normal math LaTeX', () => {
+        const input = '所以 \\frac{\\sin A+\\sin B}{\\sin A\\sin B} \\ge 32\\sin C。';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, '所以 \\frac{\\sin A+\\sin B}{\\sin A\\sin B} \\ge 32\\sin C。');
+    });
+
+    // --- Sample 6: answer field with trailing wrapper ---
+    it('[LATEX_WRAPPER:sample-6:answer-trailing] strips trailing wrapper from answer', () => {
+        const input = 'D\n\\end{description}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, 'D');
+    });
+
+    // --- Sample 7: repeated wrappers ---
+    it('[LATEX_WRAPPER:sample-7:repeated-wrappers] strips repeated wrappers', () => {
+        const input = '\\end{itemize}\n\\begin{description}\n\\item 故选：C\n\\end{description}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, '故选：C');
+    });
+
+    // --- Preserve math commands ---
+    it('[LATEX_WRAPPER:preserve-frac] preserves \\frac', () => {
+        assert.equal(
+            qisiUtils.sanitizeLatexWrapperArtifacts('\\frac{1}{2}'),
+            '\\frac{1}{2}'
+        );
+    });
+
+    it('[LATEX_WRAPPER:preserve-sqrt] preserves \\sqrt', () => {
+        assert.equal(
+            qisiUtils.sanitizeLatexWrapperArtifacts('\\sqrt{2}'),
+            '\\sqrt{2}'
+        );
+    });
+
+    it('[LATEX_WRAPPER:preserve-angle] preserves \\angle', () => {
+        assert.equal(
+            qisiUtils.sanitizeLatexWrapperArtifacts('\\angle ABC'),
+            '\\angle ABC'
+        );
+    });
+
+    it('[LATEX_WRAPPER:preserve-triangle] preserves \\triangle', () => {
+        assert.equal(
+            qisiUtils.sanitizeLatexWrapperArtifacts('\\triangle ABC'),
+            '\\triangle ABC'
+        );
+    });
+
+    it('[LATEX_WRAPPER:preserve-math-begin-end] preserves \\begin{cases} ... \\end{cases}', () => {
+        const input = '\\begin{cases} x+y=1 \\\\ x-y=0 \\end{cases}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, '\\begin{cases} x+y=1 \\\\ x-y=0 \\end{cases}');
+    });
+
+    it('[LATEX_WRAPPER:preserve-matrix] preserves \\begin{matrix} ... \\end{matrix}', () => {
+        const input = '\\begin{matrix} a & b \\\\ c & d \\end{matrix}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, '\\begin{matrix} a & b \\\\ c & d \\end{matrix}');
+    });
+
+    // --- \item with brackets ---
+    it('[LATEX_WRAPPER:item-with-brackets] strips \\item[...] at line start', () => {
+        const input = '\\item[步骤一] 由题意得 x>0。\n\\item[步骤二] 所以解为 x=1。';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, '由题意得 x>0。\n所以解为 x=1。');
+    });
+
+    // --- does not strip plain "item" in text ---
+    it('[LATEX_WRAPPER:plain-item-word] does not strip the word "item" in normal text', () => {
+        const input = 'The item difficulty is moderate.';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, 'The item difficulty is moderate.');
+    });
+
+    // --- does not change answer letter ---
+    it('[LATEX_WRAPPER:answer-letter-preserved] answer letter is not modified', () => {
+        const input = '\\end{description}\nD';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.ok(result.includes('D'), 'answer letter D should be preserved');
+        assert.ok(!result.includes('\\end{description}'), 'wrapper should be removed');
+    });
+
+    // --- idempotent ---
+    it('[LATEX_WRAPPER:idempotent] repeated cleaning is idempotent', () => {
+        const input = '\\begin{enumerate}\n\\item 答案：D\n\\end{enumerate}';
+        const once = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        const twice = qisiUtils.sanitizeLatexWrapperArtifacts(once);
+        assert.equal(twice, once);
+    });
+
+    // --- empty after cleanup ---
+    it('[LATEX_WRAPPER:all-wrapper] text that is only wrappers returns empty', () => {
+        const input = '\\begin{description}\n\\end{description}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, '');
+    });
+
+    // --- inline wrapper removal ---
+    it('[LATEX_WRAPPER:inline-wrapper] strips inline wrapper tags', () => {
+        const input = '故选：B\\end{description}';
+        const result = qisiUtils.sanitizeLatexWrapperArtifacts(input);
+        assert.equal(result, '故选：B');
+    });
+
+    // --- integration: PDF answer field through cleanDisplayTextForBatchSave ---
+    it('[LATEX_WRAPPER:integration:pdf-answer] PDF answer with wrapper cleaned through batch save path', () => {
+        const result = helpers.cleanDisplayTextForBatchSave('D\n\\end{description}');
+        assert.equal(result, 'D');
+    });
+
+    // --- integration: PDF solution field through cleanDisplayFieldsOnly ---
+    it('[LATEX_WRAPPER:integration:pdf-solution] PDF solution with wrappers cleaned through fields path', () => {
+        const q = {
+            stem: '题目',
+            options: [],
+            answer: 'B\n\\end{description}',
+            solution: '\\begin{itemize}\n\\item 由正弦定理得解。\n\\end{itemize}'
+        };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.equal(q.answer, 'B');
+        assert.equal(q.solution, '由正弦定理得解。');
+    });
+
+    // --- integration: math formula preserved through cleanDisplayTextForBatchSave ---
+    it('[LATEX_WRAPPER:integration:math-preserved] math LaTeX preserved through full batch save pipeline', () => {
+        const result = helpers.cleanDisplayTextForBatchSave(
+            '\\begin{enumerate}\n\\item 所以 \\frac{1}{2}+\\sqrt{3}=\\frac{1+2\\sqrt{3}}{2}\n\\end{enumerate}'
+        );
+        assert.ok(result.includes('\\frac{1}{2}'), 'frac preserved');
+        assert.ok(result.includes('\\sqrt{3}'), 'sqrt preserved');
+        assert.ok(!result.includes('\\begin{enumerate}'), 'wrapper removed');
+        assert.ok(!result.includes('\\item'), 'item removed');
+    });
+
+    // --- integration: does not turn empty into accepted ---
+    it('[LATEX_WRAPPER:integration:empty-not-accepted] empty after cleanup stays empty', () => {
+        const q = { stem: '', options: [], answer: '\\begin{description}\n\\end{description}', solution: '' };
+        helpers.cleanDisplayFieldsOnly(q);
+        assert.equal(q.answer, '');
+        assert.equal(q.solution, '');
+    });
+});
+
 describe('R3 auto-generated fixtures', () => {
     it('[A4:R3:AUTO:R3-01937:cleanDisplayTextForBatchSave:context] cleanDisplayTextForBatchSave at line 1937 preserves behavior', () => {
         const result = helpers.cleanDisplayTextForBatchSave('test [[IMAGE:x]] content');

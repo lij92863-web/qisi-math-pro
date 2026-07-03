@@ -797,10 +797,44 @@
             return restoreBatchMediaTokens(cleaned, tokens).trim();
         };
 
+        const LATEX_WRAPPER_ENV_NAMES = ['description', 'enumerate', 'itemize'];
+
+        const sanitizeLatexWrapperArtifacts = (text) => {
+            if (!text) return '';
+
+            let s = String(text);
+
+            // 1. Remove markdown code fences — lines that are ONLY ``` or ```lang
+            s = s.replace(/^```[a-z]*\s*$/gm, '');
+
+            // 2. Remove standalone \begin{env} / \end{env} lines for wrapper environments
+            LATEX_WRAPPER_ENV_NAMES.forEach((env) => {
+                const beginLineRe = new RegExp(`^\\\\begin\\{${env}\\}\\s*$`, 'gm');
+                const endLineRe = new RegExp(`^\\\\end\\{${env}\\}\\s*$`, 'gm');
+                s = s.replace(beginLineRe, '');
+                s = s.replace(endLineRe, '');
+            });
+
+            // 3. Remove any remaining \begin{env} / \end{env} fragments (inline or trailing)
+            LATEX_WRAPPER_ENV_NAMES.forEach((env) => {
+                s = s.replace(new RegExp(`\\\\begin\\{${env}\\}`, 'g'), '');
+                s = s.replace(new RegExp(`\\\\end\\{${env}\\}`, 'g'), '');
+            });
+
+            // 4. Remove \item (and \item[...]) at line start, keep the content after it
+            s = s.replace(/^\\item(?:\[[^\]]*\])?\s*/gm, '');
+
+            // 5. Collapse blank lines and trim
+            s = s.replace(/\n{3,}/g, '\n\n');
+            s = s.trim();
+
+            return s;
+        };
+
         const cleanDisplayTextForBatchSave = (text) => {
             const raw = cleanRecognizedText(text);
             if (!raw) return '';
-            return stripBatchImagePlaceholders(raw);
+            return sanitizeLatexWrapperArtifacts(stripBatchImagePlaceholders(raw));
         };
 
         const cleanDisplayOptionsForBatchSave = (options) => {
@@ -873,6 +907,7 @@
             protectLatexMathSegments,
             restoreBatchMediaTokens,
             restoreLatexMathSegments,
+            sanitizeLatexWrapperArtifacts,
             splitAnswerSolutionSections,
             stripBatchImagePlaceholders,
             splitQuestionForStorage,
