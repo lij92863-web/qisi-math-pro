@@ -14,6 +14,9 @@ Track the continued reduction of app.js responsibilities toward orchestration on
 | BMR5 | 8ee1b47 | qisi-ui-events.js | buildQuestionNumberGapWarning | -27 |
 | BMR6 | 3b2ed34 | qisi-ui-events.js | buildKnowledgeCounts | -26 |
 | BMR7 | 359c0a2 | qisi-utils.js | 6 bare LaTeX display helpers | -88 |
+| BMR8 | 7e7980e | qisi-pdf-safe-partial-pipeline.js | attachPdfPageTrace, attachSinglePdfPageTrace | -45 |
+| BMR9 | c154d30 | qisi-docx-pipeline.js | decodeXmlEntitiesSafe, stripXmlTagsForDocxText | -15 |
+| BMR10 | 3034083 | (none) | no eligible candidate | 0 |
 
 ## Functions Moved Details
 BM24:
@@ -61,6 +64,17 @@ BMR7:
 - normalizeBareLatexForDisplayText
 - normalizeBareLatexForDisplayOptions
 
+BMR8:
+- attachPdfPageTrace
+- attachSinglePdfPageTrace
+
+BMR9:
+- decodeXmlEntitiesSafe
+- stripXmlTagsForDocxText
+
+BMR10:
+- (none — no eligible candidate; see BM_AUTO_ROUND_10_NO_ELIGIBLE_CANDIDATE.md)
+
 ## Current Rule
 app.js should move toward orchestration only.
 Business helpers should migrate into qisi-* modules only when REAL_MIGRATION
@@ -72,4 +86,4 @@ criteria are met.
 - Route B production integration
 - AI/OCR real calls
 - A4 remaining callsite migration without manual review
-- BMR8/BMR9/BMR10 continuation without explicit user confirmation after POST-BMR7 halt
+- BMR11 continuation without explicit user confirmation after POST-BMR10 halt
