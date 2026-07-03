@@ -16,8 +16,19 @@ BMR6/BMG6
 - original app.js line range: 170-194
 - estimatedRemovedAppLines: 25
 - reason selected: pure knowledge-count view-model helper with existing qisi-ui-events.js target, no DOM/DB/AI/OCR/controlled-write/async/Route B access.
-- skipped candidates: ommlChildren; extractQuestionArray; splitMergedRecognizedItems; alignSupportItemsSafely; replaceQisiImageTokensForLatex; extractImageTokenIds; openBatchFilePicker; openBatchCreate
-- skipped reasons: higher-ranked PDF answer-only/support parser candidates were forbidden; open/file-picker candidates touched UI entry/DOM flow; qisi-utils candidates were deferred to avoid broader utility grouping in this round.
+- skipped candidates:
+  - ommlChildren
+  - extractQuestionArray
+  - splitMergedRecognizedItems
+  - alignSupportItemsSafely
+  - replaceQisiImageTokensForLatex
+  - extractImageTokenIds
+  - openBatchFilePicker
+  - openBatchCreate
+- skipped reasons:
+  - PDF answer-only/support parser candidates were forbidden.
+  - open/file-picker candidates touched UI entry/DOM flow.
+  - qisi-utils candidates were deferred to avoid broader utility grouping in this round.
 
 ## A4 Exclusion Check
 - related to A4 remaining callsites: no

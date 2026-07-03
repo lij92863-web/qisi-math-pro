@@ -12,12 +12,29 @@ BMR7/BMG7
 - selected candidate: normalizeBareLatexForDisplaySpan helper group
 - score: 79
 - target module: qisi-utils.js
-- old function names: normalizeBareLatexExpressionForDisplay, normalizeBareLatexForDisplaySpan, normalizeBareLatexForDisplayTextBody, normalizeBareLatexForDisplayOptionLine, normalizeBareLatexForDisplayText, normalizeBareLatexForDisplayOptions
+- old function names:
+  - normalizeBareLatexExpressionForDisplay
+  - normalizeBareLatexForDisplaySpan
+  - normalizeBareLatexForDisplayTextBody
+  - normalizeBareLatexForDisplayOptionLine
+  - normalizeBareLatexForDisplayText
+  - normalizeBareLatexForDisplayOptions
 - original app.js line range: 21267-21356
 - estimatedRemovedAppLines: 88
 - reason selected: pure display normalization helper group; dependencies already exist in qisi-utils.js; app.js can call exported utility functions explicitly.
-- skipped candidates: ommlChildren; extractQuestionArray; splitMergedRecognizedItems; alignSupportItemsSafely; replaceQisiImageTokensForLatex; extractImageTokenIds
-- skipped reasons: OMML candidate uses DOMParser; PDF answer-only candidates are forbidden; support parser candidate is forbidden; splitMergedRecognizedItems sits in recognition/orchestration context; replaceQisiImageTokensForLatex had no app callsite to satisfy appCallsNewModule.
+- skipped candidates:
+  - ommlChildren
+  - extractQuestionArray
+  - splitMergedRecognizedItems
+  - alignSupportItemsSafely
+  - replaceQisiImageTokensForLatex
+  - extractImageTokenIds
+- skipped reasons:
+  - OMML candidate uses DOMParser.
+  - PDF answer-only candidates are forbidden.
+  - support parser candidate is forbidden.
+  - splitMergedRecognizedItems sits in recognition/orchestration context.
+  - replaceQisiImageTokensForLatex had no app callsite to satisfy appCallsNewModule.
 
 ## A4 Exclusion Check
 - related to A4 remaining callsites: no
@@ -40,7 +57,13 @@ BMR7/BMG7
 - target existing module: yes
 
 ## Migration
-- moved functions: normalizeBareLatexExpressionForDisplay; normalizeBareLatexForDisplaySpan; normalizeBareLatexForDisplayTextBody; normalizeBareLatexForDisplayOptionLine; normalizeBareLatexForDisplayText; normalizeBareLatexForDisplayOptions
+- moved functions:
+  - normalizeBareLatexExpressionForDisplay
+  - normalizeBareLatexForDisplaySpan
+  - normalizeBareLatexForDisplayTextBody
+  - normalizeBareLatexForDisplayOptionLine
+  - normalizeBareLatexForDisplayText
+  - normalizeBareLatexForDisplayOptions
 - source: app.js
 - target: qisi-utils.js
 - app.js calls new module: yes, via window.Qisi.Utils.normalizeBareLatexForDisplayText and window.Qisi.Utils.normalizeBareLatexForDisplayOptions
