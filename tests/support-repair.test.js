@@ -8,7 +8,9 @@ const {
     buildSupportRepairPlan,
     applySupportRepairsFillOnly,
     repairChoiceOptions,
-    tryRepairedCandidate
+    tryRepairedCandidate,
+    hasUnescapedLatexCommandInJsonString,
+    escapeLatexBackslashesInJsonCandidate
 } =
     require(
         '../qisi-support-repair.js'
@@ -564,98 +566,13 @@ test(
     }
 );
 
-// --- Vision JSON LaTeX backslash escape repair ---
+// --- Vision JSON LaTeX backslash escape repair (production exports) ---
 
-// Known LaTeX commands for the detection/repair logic.
-const LATEX_JSON_BACKSLASH_REPAIR_COMMANDS = new Set([
-    'triangle', 'frac', 'sqrt', 'sin', 'cos', 'tan',
-    'overline', 'begin', 'end', 'left', 'right', 'angle',
-    'Delta', 'theta', 'alpha', 'beta', 'gamma', 'pi',
-    'circ', 'cdot', 'times', 'le', 'ge', 'neq',
-    'parallel', 'perp', 'vec', 'overrightarrow', 'ln', 'log',
-    'lim', 'text', 'mathrm', 'mathbf', 'mathbb', 'cases'
-]);
-
-function readLatexJsonCommandAt(source, slashIndex) {
-    const next = source[slashIndex + 1] || '';
-    if (!/[A-Za-z]/.test(next)) return null;
-    let end = slashIndex + 1;
-    while (end < source.length && /[A-Za-z]/.test(source[end])) end += 1;
-    const command = source.slice(slashIndex + 1, end);
-    return { command, end, known: LATEX_JSON_BACKSLASH_REPAIR_COMMANDS.has(command) };
-}
-
-function escapeLatexBackslashesInJsonCandidate(text) {
-    const source = String(text || '');
-    let result = '';
-    let inString = false;
-    let repairCount = 0;
-    const commands = new Set();
-
-    for (let i = 0; i < source.length; i += 1) {
-        const ch = source[i];
-        if (!inString) {
-            result += ch;
-            if (ch === '"') inString = true;
-            continue;
-        }
-        if (ch === '"') { inString = false; result += ch; continue; }
-        if (ch !== '\\') { result += ch; continue; }
-
-        const nxt = source[i + 1] || '';
-        if (!nxt) { result += ch; continue; }
-
-        // \uXXXX valid JSON unicode escape — check before command reading.
-        if (nxt === 'u') {
-            const hex = source.slice(i + 2, i + 6);
-            if (/^[0-9a-fA-F]{4}$/.test(hex)) {
-                result += ch + nxt + hex;
-                i += 5;
-                continue;
-            }
-        }
-
-        const cmd = readLatexJsonCommandAt(source, i);
-        if (cmd) {
-            // Single-letter valid JSON escapes (b,f,n,r,t) → pass through.
-            if (!cmd.known && cmd.command.length === 1 && /[bfnrt]/.test(cmd.command)) {
-                result += '\\' + cmd.command;
-                i = cmd.end - 1;
-                continue;
-            }
-            // Known LaTeX, multi-letter unknown, or single non-escape letter → repair.
-            result += '\\\\' + cmd.command;
-            repairCount += 1;
-            if (cmd.known) commands.add(cmd.command);
-            i = cmd.end - 1;
-            continue;
-        }
-
-        if (nxt === '\\' || nxt === '"' || nxt === '/' ||
-            nxt === 'b' || nxt === 'f' || nxt === 'n' ||
-            nxt === 'r' || nxt === 't') {
-            result += ch + nxt;
-            i += 1;
-            continue;
-        }
-
-        if (nxt === 'u') {
-            const hex = source.slice(i + 2, i + 6);
-            if (/^[0-9a-fA-F]{4}$/.test(hex)) {
-                result += ch + nxt + hex;
-                i += 5;
-                continue;
-            }
-        }
-
-        // GENERALIZED FIX: any other backslash → double-escape it.
-        result += '\\\\';
-        repairCount += 1;
-    }
-
-    return { text: result, changed: result !== source, repairCount, commands: [...commands] };
-}
-
+test('hasUnescapedLatexCommand detects unsafe JSON LaTeX without changing input', () => {
+    const source = '{"stem":"\\therefore x=1"}';
+    assert.equal(hasUnescapedLatexCommandInJsonString(source), true);
+    assert.equal(source, '{"stem":"\\therefore x=1"}');
+});
 test('escapeLatexBackslashes repairs known LaTeX command', () => {
     const r = escapeLatexBackslashesInJsonCandidate(
         '{"stem":"角 \\alpha 的值"}'

@@ -21,6 +21,253 @@
     function () {
         'use strict';
 
+        const LATEX_JSON_BACKSLASH_REPAIR_COMMANDS =
+            new Set([
+                'triangle', 'frac', 'sqrt', 'sin', 'cos', 'tan',
+                'overline', 'begin', 'end', 'left', 'right', 'angle',
+                'Delta', 'theta', 'alpha', 'beta', 'gamma', 'pi',
+                'circ', 'cdot', 'times', 'le', 'ge', 'neq',
+                'parallel', 'perp', 'vec', 'overrightarrow', 'ln',
+                'log', 'lim', 'text', 'mathrm', 'mathbf', 'mathbb',
+                'cases'
+            ]);
+
+        const readLatexJsonCommandAt = (
+            source = '',
+            slashIndex = 0
+        ) => {
+            const next =
+                source[slashIndex + 1] || '';
+
+            if (!/[A-Za-z]/.test(next)) {
+                return null;
+            }
+
+            let end =
+                slashIndex + 1;
+
+            while (
+                end < source.length &&
+                /[A-Za-z]/.test(source[end])
+            ) {
+                end += 1;
+            }
+
+            const command =
+                source.slice(slashIndex + 1, end);
+
+            return {
+                command,
+                end,
+                known:
+                    LATEX_JSON_BACKSLASH_REPAIR_COMMANDS
+                        .has(command)
+            };
+        };
+
+        const hasUnescapedLatexCommandInJsonString = (
+            text = ''
+        ) => {
+            const source =
+                String(text || '');
+            let inString = false;
+
+            for (
+                let index = 0;
+                index < source.length;
+                index += 1
+            ) {
+                const char =
+                    source[index];
+
+                if (!inString) {
+                    if (char === '"') {
+                        inString = true;
+                    }
+                    continue;
+                }
+
+                if (char === '"') {
+                    inString = false;
+                    continue;
+                }
+
+                if (char !== '\\') {
+                    continue;
+                }
+
+                const next =
+                    source[index + 1] || '';
+
+                if (next === '\\') {
+                    index += 1;
+                    continue;
+                }
+
+                const command =
+                    readLatexJsonCommandAt(
+                        source,
+                        index
+                    );
+
+                if (command) {
+                    if (command.known) {
+                        return true;
+                    }
+                    if (command.command.length > 1) {
+                        return true;
+                    }
+                    if (!/[bfnrt]/.test(command.command)) {
+                        return true;
+                    }
+                    index =
+                        command.end - 1;
+                    continue;
+                }
+
+                if (next === 'u') {
+                    const hex =
+                        source.slice(
+                            index + 2,
+                            index + 6
+                        );
+                    if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+                        index += 5;
+                        continue;
+                    }
+                }
+
+                if (
+                    next === '"' ||
+                    next === '/' ||
+                    /[bfnrt]/.test(next)
+                ) {
+                    index += 1;
+                    continue;
+                }
+
+                return true;
+            }
+
+            return false;
+        };
+
+        const escapeLatexBackslashesInJsonCandidate = (
+            text = ''
+        ) => {
+            const source =
+                String(text || '');
+            let result = '';
+            let inString = false;
+            let repairCount = 0;
+            const commands =
+                new Set();
+
+            for (
+                let index = 0;
+                index < source.length;
+                index += 1
+            ) {
+                const char =
+                    source[index];
+
+                if (!inString) {
+                    result += char;
+                    if (char === '"') {
+                        inString = true;
+                    }
+                    continue;
+                }
+
+                if (char === '"') {
+                    inString = false;
+                    result += char;
+                    continue;
+                }
+
+                if (char !== '\\') {
+                    result += char;
+                    continue;
+                }
+
+                const next =
+                    source[index + 1] || '';
+
+                if (!next) {
+                    result += char;
+                    continue;
+                }
+
+                if (next === 'u') {
+                    const hex =
+                        source.slice(
+                            index + 2,
+                            index + 6
+                        );
+                    if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+                        result +=
+                            char + next + hex;
+                        index += 5;
+                        continue;
+                    }
+                }
+
+                const command =
+                    readLatexJsonCommandAt(
+                        source,
+                        index
+                    );
+
+                if (command) {
+                    if (
+                        !command.known &&
+                        command.command.length === 1 &&
+                        /[bfnrt]/.test(command.command)
+                    ) {
+                        result +=
+                            '\\' + command.command;
+                        index =
+                            command.end - 1;
+                        continue;
+                    }
+
+                    result +=
+                        '\\\\' + command.command;
+                    repairCount += 1;
+                    if (command.known) {
+                        commands.add(command.command);
+                    }
+                    index =
+                        command.end - 1;
+                    continue;
+                }
+
+                if (
+                    next === '\\' ||
+                    next === '"' ||
+                    next === '/' ||
+                    /[bfnrt]/.test(next)
+                ) {
+                    result +=
+                        char + next;
+                    index += 1;
+                    continue;
+                }
+
+                result += '\\\\';
+                repairCount += 1;
+            }
+
+            return {
+                text: result,
+                changed:
+                    result !== source,
+                repairCount,
+                commands:
+                    [...commands]
+            };
+        };
+
         const normalizeQuestionNumber = (
             value
         ) => {
@@ -679,6 +926,9 @@
         };
 
         return {
+            readLatexJsonCommandAt,
+            hasUnescapedLatexCommandInJsonString,
+            escapeLatexBackslashesInJsonCandidate,
             normalizeQuestionNumber,
             buildSupportRepairPlan,
             applySupportRepairsFillOnly,
