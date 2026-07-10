@@ -4,44 +4,39 @@
 - Baseline tag: `pre-engineering-closure-r2-da699b5`
 - Current branch: `stage/post-rc-engineering-closure-r2`
 - Current phase: Phase 2
-- Current work package: WP2A test authenticity accepted; WP2B next
+- Current work package: WP2B runtime dependency gate accepted; WP2C next
 - Status updated: 2026-07-10 Asia/Shanghai
 
 ## Completed items
 
-- Phase 0.5 commit `11c9e39`; Phase 1 commit `20f3cf9`.
-- Audited all baseline tests for duplicate helpers, source-only checks, mock safety, and skipped markers.
-- Removed the confirmed copied JSON/LaTeX repair implementation from tests.
-- Established `qisi-support-repair.js` as the production owner; app.js now delegates.
-- Added a production-owner duplication guard and audit report.
+- Phase 0.5 `11c9e39`; Phase 1 `20f3cf9`; WP2A `3b93225`.
+- Added production runtime dependency verifier derived from main.html, module declarations, app usage, and filesystem.
+- Added eight production-linked runtime mutation tests.
 
 ## Pending items
 
-- WP2B–WP2P.
-- Phase 3–8.
+- WP2C–WP2P and Phase 3–8.
 
 ## Blocked items
 
-- None.
-- Real OCR/API benchmark disabled.
-- EOL migration deferred.
+- None. Real OCR/API remains disabled; EOL migration deferred.
 
 ## Commits
 
-- `11c9e39` — repository reality baseline.
-- `20f3cf9` — architect design.
+- `11c9e39` reality baseline.
+- `20f3cf9` architect design.
+- `3b93225` production-linked tests.
 
 ## Gate results
 
-- Phase 0.5 and Phase 1 gates: passed.
-- WP2A targeted: support repair 20/20; duplication guard 4/4.
-- WP2A mandatory matrix: passed with no failures/skips/timeouts.
-- Browser preflight/dry-run: passed, `realApiCalled=false`; dry-run required restoring the lockfile-defined node_modules and starting the ignored local service.
-- DOCX stable, known-bad, controlled-write, Route B, and no-real-AI: passed.
+- WP2A mandatory matrix passed; dry-run `realApiCalled=false`.
+- WP2B targeted runtime mutations: 8/8 passed.
+- WP2B mandatory matrix: passed; preflight/dry-run realApiCalled=false.
 
 ## Browser E2E results
 
-- Existing runner available; product E2E pending WP2C.
+- Existing local service is running from ignored dependencies/artifacts.
+- Product E2E pending WP2C.
 
 ## Benchmark results
 
@@ -49,9 +44,8 @@
 
 ## Known limitations
 
-- Batch smoke uses a harness to assemble drafts, while executing real safety owners. It is not browser acceptance.
-- Route B validation tests remain research artifacts and do not count as production behavior.
+- Static verifier does not fetch CDN scripts; browser startup owns runtime initialization errors.
 
 ## Next exact action
 
-Commit/push WP2A, then implement the runtime dependency gate in WP2B.
+Commit/push WP2B, then build browser product E2E in WP2C.
