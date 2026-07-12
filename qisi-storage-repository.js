@@ -169,7 +169,13 @@
         };
     };
 
-    const createRepository = (database, { clock = () => Date.now() } = {}) => {
+    const createRepository = (
+        database,
+        {
+            clock = () => Date.now(),
+            admission = {}
+        } = {}
+    ) => {
         if (!database || typeof database.table !== 'function') {
             throw new StorageRepositoryError(
                 'database-unavailable',
@@ -396,6 +402,272 @@
             }
         );
 
+        const confirmDraftToQuestion = async (
+            draftId,
+            admissionDecision,
+            {
+                expectedDraftVersion,
+                idempotencyKey = '',
+                actorId = '',
+                requestId = '',
+                questionId = '',
+                context: providedContext = {},
+                imageRecords = []
+            } = {}
+        ) => {
+            const id = requireId(draftId, 'draftId');
+            if (!idempotencyKey) {
+                throw new StorageRepositoryError(
+                    'idempotency-required',
+                    'Formal confirmation requires an idempotency key.',
+                    { draftId: id }
+                );
+            }
+            if (!actorId || !requestId) {
+                throw new StorageRepositoryError(
+                    'admission-invalid',
+                    'Formal confirmation requires actor and request IDs.',
+                    { draftId: id }
+                );
+            }
+            if (!Number.isInteger(expectedDraftVersion)) {
+                throw new StorageRepositoryError(
+                    'draft-version-conflict',
+                    'Expected draft version must be an integer.',
+                    { draftId: id, expectedDraftVersion }
+                );
+            }
+            const {
+                evaluateDraftAdmission,
+                validateAdmissionDecision,
+                buildQuestionV2,
+                validateQuestionV2
+            } = admission;
+            if (
+                typeof evaluateDraftAdmission !== 'function' ||
+                typeof validateAdmissionDecision !== 'function' ||
+                typeof buildQuestionV2 !== 'function' ||
+                typeof validateQuestionV2 !== 'function'
+            ) {
+                throw new StorageRepositoryError(
+                    'admission-unavailable',
+                    'Formal admission dependencies are unavailable.',
+                    { draftId: id }
+                );
+            }
+
+            return transaction(
+                [
+                    'draftQuestions',
+                    'questions',
+                    'images',
+                    'draftImportBatches'
+                ],
+                async () => {
+                    const draftTable = table('draftQuestions');
+                    const questionTable = table('questions');
+                    const imageTable = table('images');
+                    const batchTable = table('draftImportBatches');
+                    const fresh = clone(await draftTable.get(id));
+                    if (!fresh) {
+                        throw new StorageRepositoryError(
+                            'draft-missing',
+                            `Draft ${id} was not found.`,
+                            { draftId: id }
+                        );
+                    }
+
+                    if (fresh.status === 'submitted') {
+                        if (
+                            fresh.admissionAudit?.idempotencyKey ===
+                            idempotencyKey
+                        ) {
+                            const committed = clone(
+                                await questionTable.get(
+                                    fresh.submittedQuestionId
+                                )
+                            );
+                            if (!committed) {
+                                throw new StorageRepositoryError(
+                                    'corrupt-data',
+                                    'Submitted draft references a missing question.',
+                                    { draftId: id }
+                                );
+                            }
+                            return {
+                                question: committed,
+                                draftId: id,
+                                admissionDecisionId:
+                                    fresh.admissionDecisionId || '',
+                                idempotent: true,
+                                committedAt:
+                                    fresh.admissionAudit?.committedAt || '',
+                                requestId:
+                                    fresh.admissionAudit?.requestId || requestId
+                            };
+                        }
+                        throw new StorageRepositoryError(
+                            'draft-already-confirmed',
+                            `Draft ${id} was already confirmed.`,
+                            { draftId: id }
+                        );
+                    }
+
+                    const actualVersion = fresh.version;
+                    if (actualVersion !== expectedDraftVersion) {
+                        throw new StorageRepositoryError(
+                            'draft-version-conflict',
+                            `Draft ${id} changed in another writer.`,
+                            {
+                                draftId: id,
+                                expectedDraftVersion,
+                                actualDraftVersion: actualVersion
+                            }
+                        );
+                    }
+
+                    const clockValue = clock();
+                    const committedAt = new Date(clockValue).toISOString();
+                    const context = {
+                        ...clone(providedContext || {}),
+                        mode:
+                            providedContext?.mode ||
+                            fresh.source?.mode || '',
+                        actorId,
+                        requestId,
+                        idempotencyKey,
+                        evaluatedAt:
+                            providedContext?.evaluatedAt || committedAt,
+                        source: {
+                            ...clone(fresh.source || {}),
+                            ...clone(providedContext?.source || {})
+                        }
+                    };
+
+                    let evaluated;
+                    let decisionValidation;
+                    try {
+                        evaluated = evaluateDraftAdmission(fresh, context);
+                        decisionValidation = validateAdmissionDecision(
+                            admissionDecision,
+                            fresh,
+                            context
+                        );
+                    } catch (cause) {
+                        throw new StorageRepositoryError(
+                            'admission-invalid',
+                            cause?.message || 'Formal admission evaluation failed.',
+                            { draftId: id, causeCode: cause?.code || '' }
+                        );
+                    }
+                    if (
+                        evaluated?.accepted !== true ||
+                        decisionValidation?.valid !== true
+                    ) {
+                        throw new StorageRepositoryError(
+                            'admission-invalid',
+                            'Formal admission decision was rejected.',
+                            {
+                                draftId: id,
+                                policyErrors: clone(evaluated?.errors || []),
+                                decisionErrors: clone(
+                                    decisionValidation?.errors || []
+                                )
+                            }
+                        );
+                    }
+
+                    const formalId = requireId(
+                        questionId,
+                        'questionId'
+                    );
+                    if (await questionTable.get(formalId)) {
+                        throw new StorageRepositoryError(
+                            'duplicate-id',
+                            `Question ${formalId} already exists.`,
+                            { id: formalId }
+                        );
+                    }
+
+                    let question;
+                    try {
+                        question = buildQuestionV2(
+                            fresh,
+                            evaluated,
+                            {
+                                id: formalId,
+                                context,
+                                createdAt: committedAt,
+                                updatedAt: committedAt,
+                                confirmedAt: committedAt
+                            }
+                        );
+                    } catch (cause) {
+                        throw new StorageRepositoryError(
+                            'admission-invalid',
+                            cause?.message || 'Question v2 construction failed.',
+                            { draftId: id, causeCode: cause?.code || '' }
+                        );
+                    }
+                    const schemaValidation = validateQuestionV2(question);
+                    if (schemaValidation?.valid !== true) {
+                        throw new StorageRepositoryError(
+                            'question-schema-invalid',
+                            'Formal question v2 failed schema validation.',
+                            {
+                                draftId: id,
+                                errors: clone(schemaValidation?.errors || [])
+                            }
+                        );
+                    }
+
+                    for (const image of imageRecords || []) {
+                        requireId(image?.id, 'image.id');
+                        await imageTable.put(clone(image));
+                    }
+                    await questionTable.put(clone(question));
+                    await draftTable.update(id, {
+                        status: 'submitted',
+                        submittedQuestionId: formalId,
+                        admissionDecisionId: evaluated.decisionId,
+                        version: actualVersion + 1,
+                        updatedAt: clockValue,
+                        admissionAudit: {
+                            idempotencyKey,
+                            actorId,
+                            requestId,
+                            decisionId: evaluated.decisionId,
+                            committedAt
+                        }
+                    });
+
+                    if (fresh.batchId) {
+                        const drafts = await draftTable
+                            .where('batchId')
+                            .equals(fresh.batchId)
+                            .toArray();
+                        const submittedCount = drafts.filter(
+                            item => item.status === 'submitted'
+                        ).length;
+                        await batchTable.update(fresh.batchId, {
+                            submittedCount,
+                            updatedAt: clockValue,
+                            lastAdmissionDecisionId: evaluated.decisionId
+                        });
+                    }
+
+                    return {
+                        question: clone(question),
+                        draftId: id,
+                        admissionDecisionId: evaluated.decisionId,
+                        idempotent: false,
+                        committedAt,
+                        requestId
+                    };
+                }
+            );
+        };
+
         const createBackup = async () => {
             const tables = {};
             for (const name of BACKUP_TABLES) {
@@ -426,7 +698,8 @@
             loadImageRecords,
             loadLibrary, saveQuestion, updateQuestion, softDeleteQuestion,
             restoreQuestion, listRecentTasks, saveDraft, loadDraft,
-            loadDraftBatch, deleteDraftBatch, createBackup, restoreBackup
+            loadDraftBatch, deleteDraftBatch, confirmDraftToQuestion,
+            createBackup, restoreBackup
         });
         return repository;
     };

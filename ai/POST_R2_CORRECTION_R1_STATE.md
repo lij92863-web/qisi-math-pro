@@ -4,7 +4,7 @@
 - Baseline tag: `pre-post-r2-correction-r1-6ab88d0`
 - Current branch: `stage/post-r2-correction-r1`
 - Current phase: Program A / Phase 2
-- Current work package: A2-2 question schema v2 accepted; preparing atomic commit
+- Current work package: A2-3 formal question transaction accepted; preparing atomic commit
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Completed
@@ -32,10 +32,12 @@
   and question-v2 construction.
 - Extended the canonical recognition/contracts owner with immutable question v2
   runtime validation and a non-persistable legacy read-only compatibility view.
+- Added repository-owned `confirmDraftToQuestion` with fresh policy re-evaluation,
+  v2 validation, atomic question/image/draft/batch writes, optimistic versioning,
+  idempotency, and stable failure codes.
 
 ## Pending
 
-- A2-3 repository formal confirmation transaction.
 - A2-4 through A2-10 production wiring, fail-closed controllers, truthful import
   boundary, review validation, true E2E, architecture manifest, and operational
   hardening.
@@ -46,6 +48,7 @@
 - Phase 0 baseline state `d326e0b`.
 - Phase 1 architecture and truth audit `92d913b`.
 - A2-1 Formal Admission Policy `b7feeef`.
+- A2-2 question schema v2 `4544270`.
 
 ## Gates
 
@@ -69,6 +72,11 @@
 - A2-2 full mandatory matrix: passed.
 - A2-2 browser preflight/dry-run: passed with `realApiCalled=false`,
   `underlyingApiCallCount=0`, and browser chain healthy.
+- A2-3 failure-first evidence: repository transaction API missing.
+- A2-3 transaction/concurrency plus storage regression tests: passed 19/19.
+- A2-3 full mandatory matrix: passed.
+- A2-3 browser preflight/dry-run: passed with `realApiCalled=false`,
+  `underlyingApiCallCount=0`, and browser chain healthy.
 
 ## Blockers
 
@@ -77,5 +85,5 @@
 
 ## Next exact action
 
-Run exact A2-2 diff-scope verification, commit/push, then begin A2-3 with failing
-formal transaction and concurrency tests.
+Run exact A2-3 diff-scope verification, commit/push, then begin A2-4 production
+batch-submit wiring with a failing production-linked test.
