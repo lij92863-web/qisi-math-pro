@@ -21700,7 +21700,13 @@ Promise.all([imageReady, fontReady]).then(() => {
                     console.warn("虚拟列表加载被安全跳过", error);
                 }
 
-                app.mount('#app');
+                const appProxy =
+                    app.mount('#app');
+
+                Qisi.Runtime.setRuntimeDependency(
+                    'AppProxy',
+                    appProxy
+                );
 
                 console.log('[QISI_RUNTIME][booted]', {
                     build: 'foundation-01'
