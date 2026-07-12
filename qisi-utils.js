@@ -1,39 +1,29 @@
-﻿        const safeStorage = {
-            get(key, fallback = null) {
-                try {
-                    const value = localStorage.getItem(key);
-                    return value === null ? fallback : value;
-                } catch (error) {
-                    console.warn(`读取本地缓存失败：${key}`, error);
-                    return fallback;
-                }
-            },
-            set(key, value) {
-                try {
-                    localStorage.setItem(key, value);
-                    return true;
-                } catch (error) {
-                    console.warn(`写入本地缓存失败：${key}`, error);
-                    return false;
-                }
-            },
-            remove(key) {
-                try {
-                    localStorage.removeItem(key);
-                } catch (error) {
-                    console.warn(`删除本地缓存失败：${key}`, error);
-                }
-            },
-            json(key, fallback) {
-                try {
-                    const raw = this.get(key, null);
-                    return raw === null ? fallback : JSON.parse(raw);
-                } catch (error) {
-                    console.warn(`解析本地缓存失败：${key}`, error);
-                    return fallback;
+﻿        const storageRepositoryApi =
+            typeof Qisi !== 'undefined' && Qisi.StorageRepository
+                ? Qisi.StorageRepository
+                : typeof require === 'function'
+                    ? require('./qisi-storage-repository.js')
+                    : null;
+        const preferenceStorage =
+            typeof localStorage !== 'undefined'
+                ? localStorage
+                : {
+                    getItem: () => null,
+                    setItem: () => {},
+                    removeItem: () => {}
+                };
+        const safeStorage = storageRepositoryApi.createPreferenceFacade(
+            preferenceStorage,
+            {
+                strict: false,
+                onError(error) {
+                    console.warn('本地缓存操作失败', {
+                        code: error.code,
+                        operation: error.details?.operation
+                    });
                 }
             }
-        };
+        );
 
         const copyText = async (text) => {
             try {

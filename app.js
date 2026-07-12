@@ -2,6 +2,8 @@
             components: { Icon, LatexPreview, KnowledgeTree, QuestionCard },
             setup() {
                 console.log('当前运行版本：batch-refactor-01-DOCX批量录题模块拆分');
+                const storageRepository =
+                    Qisi.StorageRepository.createRepository(db);
                 const view = ref('entry'); 
                 const questions = ref([]);
                 const cart = ref([]);
@@ -19376,12 +19378,7 @@ ${source}`;
 
                 const deleteBatchImport = async (batchId) => {
                     if (!confirm('确定删除这个批量录题任务吗？已入库的正式题目不会受影响。')) return;
-                    await db.transaction('rw', db.draftImportBatches, db.draftImportFiles, db.draftQuestions, db.draftImages, async () => {
-                        await db.draftImportBatches.delete(batchId);
-                        await db.draftImportFiles.where('batchId').equals(batchId).delete();
-                        await db.draftQuestions.where('batchId').equals(batchId).delete();
-                        await db.draftImages.where('batchId').equals(batchId).delete();
-                    });
+                    await storageRepository.deleteDraftBatch(batchId);
                     await openBatchList();
                 };
 
@@ -19574,11 +19571,14 @@ ${source}`;
                 }, { deep: true });
 
                 watch(cart, (val) => {
-                    safeStorage.set('qisi_exam_cart', JSON.stringify(toRaw(val)));
+                    safeStorage.setJson('qisi_exam_cart', toRaw(val));
                 }, { deep: true });
 
                 watch(examQuestionMeta, (val) => {
-                    safeStorage.set('qisi_exam_question_meta', JSON.stringify(toRaw(val)));
+                    safeStorage.setJson(
+                        'qisi_exam_question_meta',
+                        toRaw(val)
+                    );
                 }, { deep: true });
 
                 watch(view, (val) => {
@@ -19649,7 +19649,9 @@ ${source}`;
                         q.personalKnowledge = q.personalKnowledge || q.meta?.personalKnowledge || (q.knowledgeType === 'personal' ? q.knowledge || q.meta?.knowledge || '' : '');
                         if (q.images.length > 0) {
                             const ids = q.images.map(i => String(i?.id || '')).filter(Boolean);
-                            const blobs = ids.length ? await db.images.where('id').anyOf(ids).toArray() : [];
+                            const blobs = ids.length
+                                ? await storageRepository.loadImageRecords(ids)
+                                : [];
                             for (const img of q.images) {
                                 const b = blobs.find(x => x.id === img.id);
                                 if (b?.blob) {
@@ -19675,22 +19677,40 @@ ${source}`;
                     try {
                         objectUrls.forEach(url => URL.revokeObjectURL(url));
                         objectUrls.clear();
-                        const allQs = await db.questions.orderBy('createdAt').reverse().toArray();
+                        const allQs = await storageRepository.loadLibrary();
                         await attachQuestionImageUrls(allQs);
                         questions.value = allQs.filter(q => q && typeof q === 'object');
                         buildQuestionFingerprintMaps(questions.value);
-                        const allExternal = await db.externalQuestions.orderBy('importedAt').reverse().toArray();
+                        const allExternal = await storageRepository.listTable(
+                            'externalQuestions',
+                            { orderBy: 'importedAt', reverse: true }
+                        );
                         await attachQuestionImageUrls(allExternal);
                         externalQuestions.value = allExternal.filter(q => q && typeof q === 'object');
-                        importBatches.value = await db.importBatches.orderBy('importedAt').reverse().toArray();
-                        batchImportBatches.value = await db.draftImportBatches.orderBy('createdAt').reverse().toArray();
+                        importBatches.value = await storageRepository.listTable(
+                            'importBatches',
+                            { orderBy: 'importedAt', reverse: true }
+                        );
+                        batchImportBatches.value =
+                            await storageRepository.listRecentTasks();
                         if (activeBatchId.value) {
-                            batchImportFiles.value = await db.draftImportFiles.where('batchId').equals(activeBatchId.value).toArray();
-                            batchDraftQuestions.value = await db.draftQuestions.where('batchId').equals(activeBatchId.value).sortBy('order');
-                            batchDraftImages.value = await db.draftImages.where('batchId').equals(activeBatchId.value).toArray();
+                            const activeDraft =
+                                await storageRepository.loadDraftBatch(
+                                    activeBatchId.value
+                                );
+                            batchImportFiles.value = activeDraft.files;
+                            batchDraftQuestions.value = activeDraft.questions;
+                            batchDraftImages.value = activeDraft.images;
                         }
-                        customTemplates.value = await db.customTemplates.orderBy('createdAt').reverse().toArray();
-                        const savedPersonal = await db.personalKnowledge.get('tree');
+                        customTemplates.value =
+                            await storageRepository.listTable(
+                                'customTemplates',
+                                { orderBy: 'createdAt', reverse: true }
+                            );
+                        const savedPersonal = await storageRepository.get(
+                            'personalKnowledge',
+                            'tree'
+                        );
                         personalKnowledgeTree.value = Array.isArray(savedPersonal?.nodes) ? savedPersonal.nodes : [];
                     } catch (error) {
                         console.error('题库数据加载失败', error);
@@ -19969,7 +19989,9 @@ ${source}`;
                             safeStorage.set('qisi_teacher_name', teacherName);
                         }
 
-                        const allQuestions = await db.questions.orderBy('createdAt').toArray();
+                        const allQuestions = (
+                            await storageRepository.loadLibrary()
+                        ).reverse();
                         const zip = new JSZip();
                         const nowIso = new Date().toISOString();
                         const manifest = {
@@ -20520,12 +20542,15 @@ ${source}`;
                 });
 
                 watch(examConfig, (val) => {
-                    safeStorage.set('qisi_exam_config', JSON.stringify(toRaw(val)));
+                    safeStorage.setJson('qisi_exam_config', toRaw(val));
                     examTitle.value = val.title || examTitle.value;
                 }, { deep: true });
 
                 watch(examGroupConfig, (val) => {
-                    safeStorage.set('qisi_exam_group_config', JSON.stringify(toRaw(val)));
+                    safeStorage.setJson(
+                        'qisi_exam_group_config',
+                        toRaw(val)
+                    );
                 }, { deep: true });
 
                 watch(selectedExamTemplate, (key) => {
@@ -20543,7 +20568,7 @@ ${source}`;
                 watch(entryForm, (val) => {
                     if (val.stem || (Array.isArray(val.images) && val.images.length > 0)) {
                         const saveObj = {...val, images: (Array.isArray(val.images) ? val.images : []).map(i => ({id: i.id, align: i.align}))};
-                        safeStorage.set('qisi_draft_v2', JSON.stringify(saveObj));
+                        safeStorage.setJson('qisi_draft_v2', saveObj);
                     }
                 }, { deep: true });
 
@@ -20910,16 +20935,26 @@ ${source}`;
                 };
                 const resetExamOrder = () => { cart.value = [...cart.value].sort((a, b) => String(a).localeCompare(String(b))); };
                 const clearCart = () => { if (confirm("确定清空试卷篮吗？")) cart.value = []; };
-                const deleteQuestion = async (id) => { await db.questions.delete(id); await loadData(); cart.value = cart.value.filter(i => i !== id); };
+                const deleteQuestion = async (id) => {
+                    await storageRepository.softDeleteQuestion(id);
+                    await loadData();
+                    cart.value = cart.value.filter(i => i !== id);
+                };
                 
                 const saveEditedQuestion = async (id, stem, imgs, g, t, d, ans, sol, tagsStr, opts, knowledge, systemKnowledgeArg = '', personalKnowledgeArg = '') => {
                     const q = questions.value.find(q => q.id === id);
                     if(q) {
+                        const expectedUpdatedAt = q.updatedAt;
                         const now = Date.now();
+                        const imageRecords = [];
                         for (const img of imgs || []) {
                             if (img?.url && img.url.startsWith('data:')) {
                                 const blob = await (await fetch(img.url)).blob();
-                                await db.images.put({ id: img.id, blob, createdAt: now });
+                                imageRecords.push({
+                                    id: img.id,
+                                    blob,
+                                    createdAt: now
+                                });
                             }
                         }
                         q.stem = stem;
@@ -20940,7 +20975,11 @@ ${source}`;
                         q.meta.grade = g; q.meta.diff = d; q.meta.knowledge = primaryKnowledge; q.meta.knowledgeType = primaryKnowledgeType; q.meta.tags = String(tagsStr || '').split(',').filter(x => x.trim());
                         q.userEdited = true;
                         q.updatedAt = now;
-                        await db.questions.put(toRaw(q));
+                        await storageRepository.saveQuestion(toRaw(q), {
+                            allowUpdate: true,
+                            expectedUpdatedAt,
+                            imageRecords
+                        });
                     }
                     await loadData();
                 };
@@ -21461,7 +21500,10 @@ Promise.all([imageReady, fontReady]).then(() => {
                             [currentPresetKey.value]: { name: editTplName.value, code: ensureImagePackagesForLatex(latexTemplate.value), updatedAt: Date.now() }
                         };
                         latexTemplate.value = templateOverrides.value[currentPresetKey.value].code;
-                        safeStorage.set('qisi_template_overrides', JSON.stringify(toRaw(templateOverrides.value)));
+                        safeStorage.setJson(
+                            'qisi_template_overrides',
+                            toRaw(templateOverrides.value)
+                        );
                         alert('系统模板已更新');
                         return;
                     }

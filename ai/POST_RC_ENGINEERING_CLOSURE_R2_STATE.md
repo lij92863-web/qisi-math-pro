@@ -4,22 +4,24 @@
 - Baseline tag: `pre-engineering-closure-r2-da699b5`
 - Current branch: `stage/post-rc-engineering-closure-r2`
 - Current phase: Phase 2
-- Current work package: WP2D recognition contracts accepted; preparing atomic commit
+- Current work package: WP2E storage repository accepted; preparing atomic commit
 - Status updated: 2026-07-12 Asia/Shanghai
 
 ## Completed items
 
-- Phase 0.5 `11c9e39`; Phase 1 `20f3cf9`; WP2A `3b93225`; WP2B `5ebf2ff`; WP2C `90946e3`.
+- Phase 0.5 `11c9e39`; Phase 1 `20f3cf9`; WP2A `3b93225`; WP2B `5ebf2ff`; WP2C `90946e3`; WP2D `02fbd5b`.
 - Added isolated Playwright harness with unique ports, isolated browser contexts, and blocked AI/OCR routes.
 - Added browser startup, mock DOCX/PDF upload + review/confirm/insert, reload persistence, export/download, recent-task deletion, and formal-data preservation tests.
 - Verified deletion of recent-task data preserves the independently stored formal question.
 - Added the canonical `qisi.question.v1` recognition/question contract owner with immutable factories, validators, provenance/raw-evidence preservation, stable errors, and the sole legacy compatibility mapping.
 - Confirmed-question validation requires both controlled-write acceptance and explicit manual confirmation evidence.
+- Added the storage repository owner for library reads, atomic question/image writes, optimistic conflicts, idempotent confirmation, soft delete/restore, recent tasks, drafts, JSON preferences, transactions, and versioned backup/restore.
+- Migrated active library load, image reference reads, edited-question saves, recent-task deletion, export reads, and preference serialization to the repository boundary.
 
 ## Pending items
 
-- WP2D atomic commit and push.
-- WP2E–WP2P and Phase 3–8.
+- WP2E atomic commit and push.
+- WP2F–WP2P and Phase 3–8.
 
 ## Blocked items
 
@@ -32,6 +34,8 @@
 - WP2C runtime dependency gate: 8/8 passed.
 - WP2D contract/compatibility targeted tests: 10/10 passed.
 - WP2D final mandatory matrix passed after the last production change.
+- WP2E storage/migration/failure targeted tests: 10/10 passed.
+- WP2E browser E2E: 4/4 passed; final mandatory matrix passed with `npm test` 964/964 and 0 skipped.
 - Preflight and dry-run passed with `realApiCalled=false` and `underlyingApiCallCount=0`.
 
 ## Browser E2E results
@@ -47,7 +51,8 @@
 
 - Mock upload validates the real UI/file-role path; recognition results are deterministic seeded candidates because real AI/OCR is forbidden.
 - Full import orchestration receives production contract coverage in WP2I.
+- `qisi-db.js` retains the proven Dexie physical version bootstrap; residual legacy app transaction call sites migrate through the repository during ordered WP2N slimming rather than rewriting the historical schema chain in WP2E.
 
 ## Next exact action
 
-Audit the WP2D diff, commit `stage closure r2 add recognition contracts`, push, then begin WP2E storage repository.
+Audit the WP2E diff, commit `stage closure r2 extract storage repository`, push, then begin WP2F library service.
