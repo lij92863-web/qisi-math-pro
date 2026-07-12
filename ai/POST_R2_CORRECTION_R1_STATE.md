@@ -4,7 +4,8 @@
 - Baseline tag: `pre-post-r2-correction-r1-6ab88d0`
 - Current branch: `stage/post-r2-correction-r1`
 - Current phase: Program A / Phase 2
-- Current work package: A2-3 formal question transaction accepted; preparing atomic commit
+- Current work package: A2-4 batch formal submit production wiring accepted;
+  preparing atomic commit
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Completed
@@ -35,10 +36,18 @@
 - Added repository-owned `confirmDraftToQuestion` with fresh policy re-evaluation,
   v2 validation, atomic question/image/draft/batch writes, optimistic versioning,
   idempotency, and stable failure codes.
+- Wired the real batch submit path through a production
+  `BatchFormalSubmit` owner, Formal Admission Policy, and the repository
+  transaction; removed the submit path's direct formal-table transaction.
+- Added field-level manual revision tracking for actual editor changes while
+  preserving deterministic and controlled-write evidence on untouched fields.
+- Upgraded the seeded review fixture to carry draft versions, source mode, and
+  complete field provenance without converting click-only confirmation into a
+  manual edit.
 
 ## Pending
 
-- A2-4 through A2-10 production wiring, fail-closed controllers, truthful import
+- A2-5 through A2-10 fail-closed controllers, truthful import
   boundary, review validation, true E2E, architecture manifest, and operational
   hardening.
 - Phase 3 through Phase 8 attacks, audits, benchmark, CTO review, and sealing.
@@ -49,6 +58,7 @@
 - Phase 1 architecture and truth audit `92d913b`.
 - A2-1 Formal Admission Policy `b7feeef`.
 - A2-2 question schema v2 `4544270`.
+- A2-3 formal question transaction `6da4247`.
 
 ## Gates
 
@@ -77,6 +87,16 @@
 - A2-3 full mandatory matrix: passed.
 - A2-3 browser preflight/dry-run: passed with `realApiCalled=false`,
   `underlyingApiCallCount=0`, and browser chain healthy.
+- A2-4 failure-first evidence: production submit still directly called
+  `db.questions.put` and produced a legacy formal record without schema v2.
+- A2-4 production-linked AppProxy, formal-owner, repository, and seeded UI
+  lifecycle tests: passed.
+- A2-4 `verify:safe`: passed with 1047/1047 tests, 0 skipped; batch mock smoke
+  passed 20/20.
+- A2-4 full mandatory matrix: passed, including app shell 21,780-line gate,
+  DOCX stable chain, PDF known-bad and ownership gates.
+- A2-4 browser preflight/dry-run: passed with `realApiCalled=false`,
+  `underlyingApiCallCount=0`, and browser chain healthy.
 
 ## Blockers
 
@@ -85,5 +105,5 @@
 
 ## Next exact action
 
-Run exact A2-3 diff-scope verification, commit/push, then begin A2-4 production
-batch-submit wiring with a failing production-linked test.
+Run exact A2-4 diff-scope verification, commit/push, then begin A2-5
+controller fail-closed work with failure-first tests.

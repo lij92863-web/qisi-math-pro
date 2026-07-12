@@ -2,8 +2,17 @@
             components: { Icon, LatexPreview, KnowledgeTree, QuestionCard },
             setup() {
                 console.log('当前运行版本：batch-refactor-01-DOCX批量录题模块拆分');
-                const storageRepository =
-                    Qisi.StorageRepository.createRepository(db);
+                const storageRepository = Qisi.StorageRepository.createRepository(db, {
+                    admission: {
+                        evaluateDraftAdmission: Qisi.FormalAdmissionPolicy.evaluateDraftAdmission,
+                        validateAdmissionDecision: Qisi.FormalAdmissionPolicy.validateAdmissionDecision,
+                        buildQuestionV2: Qisi.FormalAdmissionPolicy.buildQuestionV2,
+                        validateQuestionV2: Qisi.RecognitionContracts.validateQuestionV2
+                    }
+                });
+                const batchFormalSubmit = Qisi.BatchFormalSubmit.createBatchFormalSubmit({
+                    policy: Qisi.FormalAdmissionPolicy, repository: storageRepository
+                });
                 const libraryService = Qisi.LibraryService.createLibraryService({
                     repository: storageRepository,
                     matchesFilters:
@@ -18608,10 +18617,19 @@ ${source}`;
                     return q;
                 };
 
-                const markActiveDraftUserEdited = () => {
+                const markDraftFieldManual = (q, field) => {
+                    if (!q) return;
+                    q.fieldProvenance = batchFormalSubmit
+                        .buildManualFieldProvenance(q, field);
+                };
+                const bumpDraftVersion = q =>
+                    q.version = batchFormalSubmit.nextDraftVersion(q?.version);
+                const markActiveDraftUserEdited = (field = '') => {
                     const q = activeDraftQuestion.value;
                     if (!q || q.status === 'submitted') return;
                     q.userEdited = true;
+                    q.manualEdited = true;
+                    markDraftFieldManual(q, field);
                     q.updatedAt = Date.now();
                 };
 
@@ -18623,8 +18641,10 @@ ${source}`;
                         q,
                         reviewController.editField(q, field, value)
                     );
+                    markDraftFieldManual(q, field);
 
                     cleanSingleDraftForSave(q);
+                    bumpDraftVersion(q);
 
                     await db.draftQuestions.put(toRaw(q));
                     showBatchToast('已保存草稿。');
@@ -18638,6 +18658,11 @@ ${source}`;
 
                 const commitDraftEditorBufferToQuestion = (q) => {
                     if (!q) return null;
+
+                    const previousStem = q.stem;
+                    const previousOptions = Array.isArray(q.options)
+                        ? [...q.options]
+                        : q.options;
 
                     const migratedSource = migrateLegacyIncludegraphicsToQisiTokens(
                         activeDraftEditorBuffer.value,
@@ -18670,6 +18695,11 @@ ${source}`;
                     }
 
                     q.userEdited = true;
+                    q.manualEdited = true;
+                    if (q.stem !== previousStem) markDraftFieldManual(q, 'stem');
+                    if (JSON.stringify(q.options) !== JSON.stringify(previousOptions)) {
+                        markDraftFieldManual(q, 'options');
+                    }
                     q.updatedAt = Date.now();
 
                     return projection;
@@ -18683,6 +18713,7 @@ ${source}`;
                     q.userEdited = true;
                     cleanSingleDraftForSave(q);
                     normalizeDraftQuestionBeforeSave(q);
+                    bumpDraftVersion(q);
 
                     await db.draftQuestions.put(toRaw(q));
                     await refreshBatchStats(q.batchId);
@@ -19106,6 +19137,7 @@ ${source}`;
                         return;
                     }
                     Object.assign(q, confirmation.draft);
+                    bumpDraftVersion(q);
                     await db.draftQuestions.put(toRaw(q));
                     await refreshBatchStats(q.batchId);
                     activeDraftEditorOriginal.value = activeDraftEditorBuffer.value;
@@ -19166,73 +19198,41 @@ ${source}`;
                         return false;
                     }
 
-                    const now = Date.now();
-                    const systemKnowledge = q.systemKnowledge || '';
-                    const personalKnowledge = q.personalKnowledge || '';
-                    const primaryKnowledge = personalKnowledge || systemKnowledge || '';
-                    const primaryKnowledgeType = personalKnowledge ? 'personal' : 'system';
-
                     const relatedDraftImages = await db.draftImages
                         .where('batchId')
                         .equals(q.batchId)
                         .toArray();
-
                     const boundDraftImages = relatedDraftImages
                         .filter(img => img.questionId === q.id && img.status !== 'deleted');
 
                     const allImagesForSubmit = mergeImageListsById(q.images || [], boundDraftImages || []);
-
-                    const imageRefs = allImagesForSubmit.map(img => ({ id: img.id, align: img.align || 'center' }));
                     const imagePayloads = [];
                     for (const img of allImagesForSubmit) {
                         if (img?.url?.startsWith('data:')) {
-                            imagePayloads.push({ id: img.id, blob: await dataUrlToBlob(img.url) });
+                            imagePayloads.push({
+                                id: img.id,
+                                blob: await dataUrlToBlob(img.url),
+                                createdAt: Date.now()
+                            });
                         }
                     }
-                    const questionRecord = {
-                        id: `q_${now}_${Math.random().toString(36).slice(2, 7)}`,
-                        grade: q.grade,
-                        diff: q.diff,
-                        type: q.type,
-                        knowledge: primaryKnowledge,
-                        knowledgeType: primaryKnowledgeType,
-                        systemKnowledge,
-                        personalKnowledge,
-                        stem: q.stem,
-                        options: Array.isArray(q.options) ? q.options : ['', '', '', ''],
-                        answer: q.answer,
-                        solution: q.solution,
-                        images: imageRefs,
-                        meta: {
-                            grade: q.grade,
-                            diff: q.diff,
-                            year: q.year || '',
-                            source: q.source || '',
-                            province: q.province || '',
-                            tags: q.tags || [],
-                            knowledge: primaryKnowledge,
-                            knowledgeType: primaryKnowledgeType,
-                            systemKnowledge,
-                            personalKnowledge,
-                            importBatchId: q.batchId
-                        },
-                        createdAt: now,
-                        updatedAt: now
-                    };
-                    await db.transaction('rw', db.questions, db.images, db.draftQuestions, db.draftImportBatches, async () => {
-                        const fresh = await db.draftQuestions.get(q.id);
-                        if (!fresh || fresh.status === 'submitted') throw new Error('该题已入库。');
-                        for (const img of imagePayloads) {
-                            await db.images.put({ id: img.id, blob: img.blob, createdAt: now });
-                        }
-                        await db.questions.put(questionRecord);
-                        await db.draftQuestions.update(q.id, { status: 'submitted', duplicateStatus: 'none', updatedAt: now, submittedQuestionId: questionRecord.id });
-                        const allDrafts = await db.draftQuestions.where('batchId').equals(q.batchId).toArray();
-                        await db.draftImportBatches.update(q.batchId, {
-                            submittedCount: allDrafts.filter(item => item.status === 'submitted' || item.id === q.id).length,
-                            updatedAt: now
+                    let formalResult;
+                    try {
+                        formalResult = await batchFormalSubmit.submit({
+                            draft: q, imageRecords: imagePayloads
                         });
-                    });
+                    } catch (error) {
+                        if (!silent) {
+                            alert(error?.details?.policyErrors?.[0]?.message ||
+                                error?.message || '正式入库失败。');
+                        }
+                        return false;
+                    }
+                    if (!formalResult.accepted) {
+                        if (!silent) alert(formalResult.decision.errors?.[0]?.message ||
+                            '正式入库准入校验失败。');
+                        return false;
+                    }
                     await loadData();
                     await refreshBatchStats(q.batchId);
                     await loadBatchImportData();

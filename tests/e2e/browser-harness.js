@@ -278,6 +278,7 @@ const seedReviewBatch = (page, {
                 {
                     id: `${value.batchId}_q1`,
                     batchId: value.batchId,
+                    version: 1,
                     order: 1,
                     questionNumber: '1',
                     status: 'pending',
@@ -292,7 +293,40 @@ const seedReviewBatch = (page, {
                     solution: 'Original solution',
                     images: [],
                     warnings: [],
-                    source: 'mock-question.docx',
+                    source: {
+                        mode: 'docx-deterministic',
+                        sourceId: `${value.batchId}_docx`,
+                        batchId: value.batchId,
+                        filename: 'mock-question.docx'
+                    },
+                    fieldProvenance: {
+                        questionNumber: {
+                            status: 'deterministic-source',
+                            sourceId: `${value.batchId}_docx`,
+                            evidenceRef: 'docx:questionNumber'
+                        },
+                        stem: {
+                            status: 'deterministic-source',
+                            sourceId: `${value.batchId}_docx`,
+                            evidenceRef: 'docx:stem'
+                        },
+                        options: {
+                            status: 'deterministic-source',
+                            sourceId: `${value.batchId}_docx`,
+                            evidenceRef: 'docx:options'
+                        },
+                        answer: {
+                            status: 'deterministic-source',
+                            sourceId: `${value.batchId}_docx`,
+                            evidenceRef: 'docx:answer'
+                        },
+                        solution: {
+                            status: 'deterministic-source',
+                            sourceId: `${value.batchId}_docx`,
+                            evidenceRef: 'docx:solution'
+                        },
+                        images: { status: 'missing' }
+                    },
                     sourceTrace: {
                         sourceFile: 'mock-question.docx',
                         sourceType: 'docx'
@@ -304,6 +338,7 @@ const seedReviewBatch = (page, {
                 {
                     id: `${value.batchId}_q2`,
                     batchId: value.batchId,
+                    version: 1,
                     order: 2,
                     questionNumber: '2',
                     status: 'pending',
@@ -324,7 +359,35 @@ const seedReviewBatch = (page, {
                     ],
                     supportLevel: 'prefix',
                     manualReviewRequired: true,
-                    source: 'mock-support.pdf',
+                    source: {
+                        mode: 'pdf-ai',
+                        sourceId: `${value.batchId}_pdf`,
+                        batchId: value.batchId,
+                        filename: 'mock-support.pdf'
+                    },
+                    fieldProvenance: {
+                        questionNumber: {
+                            status: 'controlled-write',
+                            sourceId: `${value.batchId}_pdf`,
+                            controlledWriteAccepted: true,
+                            controlledWriteDecisionId: 'mock-cw-question-number'
+                        },
+                        stem: {
+                            status: 'controlled-write',
+                            sourceId: `${value.batchId}_pdf`,
+                            controlledWriteAccepted: true,
+                            controlledWriteDecisionId: 'mock-cw-stem'
+                        },
+                        options: { status: 'missing' },
+                        answer: { status: 'missing' },
+                        solution: {
+                            status: 'controlled-write',
+                            sourceId: `${value.batchId}_pdf`,
+                            controlledWriteAccepted: true,
+                            controlledWriteDecisionId: 'mock-cw-solution'
+                        },
+                        images: { status: 'missing' }
+                    },
                     sourceTrace: {
                         sourceFile: 'mock-support.pdf',
                         sourceType: 'pdf',

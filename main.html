@@ -614,7 +614,7 @@
                                     <div class="batch-editor-card">
                                         <h2>题目属性</h2>
                                         <div class="batch-form-grid">
-                                            <label>题型<select v-model="activeDraftQuestion.type" @change="markActiveDraftUserEdited"><option>单选题</option><option>多选题</option><option>填空题</option><option>解答题</option><option>证明题</option></select></label>
+                                            <label>题型<select v-model="activeDraftQuestion.type" @change="markActiveDraftUserEdited('type')"><option>单选题</option><option>多选题</option><option>填空题</option><option>解答题</option><option>证明题</option></select></label>
                                             <label>年级<select v-model="activeDraftQuestion.grade"><option>高一</option><option>高二</option><option>高三</option><option>初一</option><option>初二</option><option>初三</option></select></label>
                                             <label>难度<select v-model="activeDraftQuestion.diff"><option>容易</option><option>中等</option><option>较难</option><option>压轴</option></select></label>
                                             <label>年份<input v-model="activeDraftQuestion.year" /></label>
@@ -660,8 +660,8 @@
                                                 </textarea>
                                             </label>
                                         </div>
-                                        <label v-else-if="activeDraftTab === 'answer'">答案<textarea v-model="activeDraftQuestion.answer" @input="markActiveDraftUserEdited"></textarea></label>
-                                        <label v-else>解析<textarea v-model="activeDraftQuestion.solution" @input="markActiveDraftUserEdited"></textarea></label>
+                                        <label v-else-if="activeDraftTab === 'answer'">答案<textarea v-model="activeDraftQuestion.answer" @input="markActiveDraftUserEdited('answer')"></textarea></label>
+                                        <label v-else>解析<textarea v-model="activeDraftQuestion.solution" @input="markActiveDraftUserEdited('solution')"></textarea></label>
                                     </div>
 
                                     <div class="batch-editor-actions">
@@ -1516,7 +1516,9 @@
     <script src="./qisi-config.js?v=foundation-01"></script>
     <script src="./qisi-runtime.js?v=foundation-01"></script>
     <script src="./qisi-recognition-contracts.js?v=closure-r2-contracts-01"></script>
+    <script src="./qisi-formal-admission-policy.js?v=post-r2-correction-r1-admission-01"></script>
     <script src="./qisi-storage-repository.js?v=closure-r2-storage-01"></script>
+    <script src="./qisi-batch-formal-submit.js?v=post-r2-correction-r1-submit-01"></script>
     <script src="./qisi-utils.js?v=foundation-01"></script>
     <script src="./qisi-library-service.js?v=closure-r2-library-01"></script>
     <script src="./qisi-review-controller.js?v=closure-r2-review-01"></script>
