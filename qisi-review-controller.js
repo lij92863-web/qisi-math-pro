@@ -19,7 +19,7 @@
     };
 
     const createReviewController = ({
-        validateDraft = () => ({ valid: true, errors: [], warnings: [] }),
+        validateDraft,
         clock = () => Date.now()
     } = {}) => {
         const open = draft => ({
@@ -75,9 +75,48 @@
         };
 
         const requestValidation = draft => {
-            const result = validateDraft(clone(draft));
+            if (typeof validateDraft !== 'function') {
+                return {
+                    valid: false,
+                    errors: [{
+                        code: 'validator-required',
+                        message: 'A review validator is required.'
+                    }],
+                    warnings: []
+                };
+            }
+            let result;
+            try {
+                result = validateDraft(clone(draft));
+            } catch (_error) {
+                return {
+                    valid: false,
+                    errors: [{
+                        code: 'validator-failed',
+                        message: 'Review validator failed.'
+                    }],
+                    warnings: []
+                };
+            }
+            if (
+                !result ||
+                typeof result !== 'object' ||
+                Array.isArray(result) ||
+                typeof result.valid !== 'boolean' ||
+                (result.errors !== undefined && !Array.isArray(result.errors)) ||
+                (result.warnings !== undefined && !Array.isArray(result.warnings))
+            ) {
+                return {
+                    valid: false,
+                    errors: [{
+                        code: 'validator-malformed',
+                        message: 'Review validator returned a malformed result.'
+                    }],
+                    warnings: []
+                };
+            }
             return {
-                valid: Boolean(result?.valid),
+                valid: result.valid,
                 errors: clone(result?.errors || []),
                 warnings: clone(result?.warnings || [])
             };

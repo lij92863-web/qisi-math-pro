@@ -28,7 +28,7 @@
 
     const createImportOrchestrator = ({
         handlers = {},
-        validate = result => ({ valid: true, value: result }),
+        validate,
         handoff = async result => result
     } = {}) => {
         const running = new Set();
@@ -77,7 +77,45 @@
                 const aggregated = Array.isArray(candidates)
                     ? candidates.flat().filter(Boolean)
                     : candidates;
-                const validation = await validate(aggregated, { source, path });
+                if (typeof validate !== 'function') {
+                    throw new ImportError(
+                        'validator-required',
+                        'An import validator is required.',
+                        'validation'
+                    );
+                }
+                let validation;
+                try {
+                    validation = await validate(aggregated, { source, path });
+                } catch (error) {
+                    if (error instanceof ImportError) throw error;
+                    throw new ImportError(
+                        'validator-failed',
+                        'Import validator failed.',
+                        'validation',
+                        error
+                    );
+                }
+                if (
+                    !validation ||
+                    typeof validation !== 'object' ||
+                    Array.isArray(validation) ||
+                    typeof validation.valid !== 'boolean' ||
+                    (
+                        validation.errors !== undefined &&
+                        !Array.isArray(validation.errors)
+                    ) ||
+                    (
+                        validation.warnings !== undefined &&
+                        !Array.isArray(validation.warnings)
+                    )
+                ) {
+                    throw new ImportError(
+                        'validator-malformed',
+                        'Import validator returned a malformed result.',
+                        'validation'
+                    );
+                }
                 if (!validation?.valid) {
                     throw new ImportError(
                         'validation-failed',

@@ -4,7 +4,7 @@
 - Baseline tag: `pre-post-r2-correction-r1-6ab88d0`
 - Current branch: `stage/post-r2-correction-r1`
 - Current phase: Program A / Phase 2
-- Current work package: A2-4 batch formal submit production wiring accepted;
+- Current work package: A2-5 controller fail-closed behavior accepted;
   preparing atomic commit
 - Status updated: 2026-07-13 Asia/Shanghai
 
@@ -44,10 +44,13 @@
 - Upgraded the seeded review fixture to carry draft versions, source mode, and
   complete field provenance without converting click-only confirmation into a
   manual edit.
+- Removed permissive default validators from ImportOrchestrator and
+  ReviewController; missing, malformed, throwing, and explicitly invalid
+  validators now fail closed before handoff or confirmation.
 
 ## Pending
 
-- A2-5 through A2-10 fail-closed controllers, truthful import
+- A2-6 through A2-10 truthful import
   boundary, review validation, true E2E, architecture manifest, and operational
   hardening.
 - Phase 3 through Phase 8 attacks, audits, benchmark, CTO review, and sealing.
@@ -59,6 +62,7 @@
 - A2-1 Formal Admission Policy `b7feeef`.
 - A2-2 question schema v2 `4544270`.
 - A2-3 formal question transaction `6da4247`.
+- A2-4 batch formal submit production wiring `45d7101`.
 
 ## Gates
 
@@ -97,6 +101,14 @@
   DOCX stable chain, PDF known-bad and ownership gates.
 - A2-4 browser preflight/dry-run: passed with `realApiCalled=false`,
   `underlyingApiCallCount=0`, and browser chain healthy.
+- A2-5 failure-first evidence: both controllers accepted a missing validator;
+  malformed results were not distinguished and validator exceptions escaped.
+- A2-5 targeted fail-closed and controller regressions: passed 24/24.
+- A2-5 `verify:safe`: passed with 1055/1055 tests, 0 skipped; batch mock smoke
+  passed 20/20.
+- A2-5 full mandatory matrix: passed.
+- A2-5 browser preflight/dry-run: passed with `realApiCalled=false`,
+  `underlyingApiCallCount=0`, and browser chain healthy.
 
 ## Blockers
 
@@ -105,5 +117,5 @@
 
 ## Next exact action
 
-Run exact A2-4 diff-scope verification, commit/push, then begin A2-5
-controller fail-closed work with failure-first tests.
+Run exact A2-5 diff-scope verification, commit/push, then begin A2-6 truthful
+import coordinator production-boundary work.
