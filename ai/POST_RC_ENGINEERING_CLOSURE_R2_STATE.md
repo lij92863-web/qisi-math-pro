@@ -3,13 +3,13 @@
 - Start HEAD: `da699b53abbe8a6715bb8a8ffae5a954f6b514af`
 - Baseline tag: `pre-engineering-closure-r2-da699b5`
 - Current branch: `stage/post-rc-engineering-closure-r2`
-- Current phase: Phase 4
-- Current work package: Code-quality audit and boundary guards accepted; preparing atomic commit
+- Current phase: Phase 5
+- Current work package: Architecture-consistency audit and guards accepted; preparing atomic commit
 - Status updated: 2026-07-12 Asia/Shanghai
 
 ## Completed items
 
-- Phase 0.5 `11c9e39`; Phase 1 `20f3cf9`; WP2A `3b93225`; WP2B `5ebf2ff`; WP2C `90946e3`; WP2D `02fbd5b`; WP2E `4a52e4b`; WP2F `8384cbc`; WP2G `b10040a`; WP2H `56ce991`; WP2I `d772280`; WP2J `13f79e1`; WP2K `b05a0bd`; WP2L `64ae5e5`; WP2M `64c33d5`; WP2N `30e0500`; WP2O `065fa08`; WP2P `0c828cf`; Phase 3 `6258d34`.
+- Phase 0.5 `11c9e39`; Phase 1 `20f3cf9`; WP2A `3b93225`; WP2B `5ebf2ff`; WP2C `90946e3`; WP2D `02fbd5b`; WP2E `4a52e4b`; WP2F `8384cbc`; WP2G `b10040a`; WP2H `56ce991`; WP2I `d772280`; WP2J `13f79e1`; WP2K `b05a0bd`; WP2L `64ae5e5`; WP2M `64c33d5`; WP2N `30e0500`; WP2O `065fa08`; WP2P `0c828cf`; Phase 3 `6258d34`; Phase 4 `37d6f2b`.
 - Added isolated Playwright harness with unique ports, isolated browser contexts, and blocked AI/OCR routes.
 - Added browser startup, mock DOCX/PDF upload + review/confirm/insert, reload persistence, export/download, recent-task deletion, and formal-data preservation tests.
 - Verified deletion of recent-task data preserves the independently stored formal question.
@@ -78,6 +78,10 @@
 - Phase 4 code-quality boundary tests passed 4/4; combined targeted guards
   passed 18/18 and browser startup passed 1/1.
 - Phase 4 final mandatory matrix passed with no real AI/OCR call.
+- Phase 5 verified dependency direction, critical single owners, app residual
+  debt, deterministic runtime order, and safety invariants.
+- Phase 5 targeted architecture matrix passed 52/52; browser startup passed
+  1/1; final mandatory matrix passed with no real AI/OCR call.
 - Preflight and dry-run passed with `realApiCalled=false` and `underlyingApiCallCount=0`.
 
 ## Browser E2E results
@@ -99,4 +103,4 @@
 
 ## Next exact action
 
-Commit and push Phase 4, then begin the Phase 5 architecture-consistency audit.
+Commit and push Phase 5, then begin the Phase 6 benchmark audit.
