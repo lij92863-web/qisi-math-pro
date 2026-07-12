@@ -23,6 +23,12 @@
                             };
                         }
                     });
+                const exportService = Qisi.ExportService.createExportService({
+                    coreFingerprint: questionCoreFingerprint,
+                    stemFingerprint: questionStemFingerprint,
+                    resolveImages: ids =>
+                        storageRepository.loadImageRecords(ids)
+                });
                 const view = ref('entry'); 
                 const questions = ref([]);
                 const cart = ref([]);
@@ -19993,40 +19999,26 @@ ${source}`;
                         const allQuestions = (
                             await storageRepository.loadLibrary()
                         ).reverse();
+                        const plan = await exportService.build(
+                            allQuestions.map(toRaw),
+                            { teacherName }
+                        );
                         const zip = new JSZip();
-                        const nowIso = new Date().toISOString();
-                        const manifest = {
-                            schemaVersion: '1.0',
-                            packageType: 'qisi-question-bank',
-                            exportedAt: nowIso,
-                            createdBy: { name: teacherName },
-                            questionCount: allQuestions.length
-                        };
+                        zip.file(
+                            'manifest.json',
+                            JSON.stringify(plan.manifest, null, 2)
+                        );
+                        zip.file(
+                            'questions.json',
+                            JSON.stringify(plan.questions, null, 2)
+                        );
 
-                        const imageIds = new Set();
-                        const cleanQuestions = allQuestions.map(q => {
-                            const copy = JSON.parse(JSON.stringify(toRaw(q)));
-                            copy.images = Array.isArray(copy.images) ? copy.images.map(img => {
-                                if (img?.id) imageIds.add(img.id);
-                                return { id: img.id, align: img.align || 'center', file: `images/${img.id}.png` };
-                            }) : [];
-                            copy.images.forEach(img => delete img.url);
-                            copy.exportFingerprint = questionCoreFingerprint(copy);
-                            copy.exportStemFingerprint = questionStemFingerprint(copy);
-                            return copy;
-                        });
-
-                        zip.file('manifest.json', JSON.stringify(manifest, null, 2));
-                        zip.file('questions.json', JSON.stringify(cleanQuestions, null, 2));
-
-                        const imageRows = imageIds.size ? await db.images.where('id').anyOf([...imageIds]).toArray() : [];
-                        for (const row of imageRows) {
+                        for (const row of plan.images) {
                             if (row?.blob) zip.file(`images/${row.id}.png`, row.blob);
                         }
 
                         const blob = await zip.generateAsync({ type: 'blob' });
-                        const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-                        downloadBlob(blob, `高中数学题库数据_${makeSafeFileName(teacherName)}_${date}.zip`);
+                        downloadBlob(blob, plan.filename);
                     } catch (error) {
                         console.error('导出题库数据失败', error);
                         alert(`导出题库数据失败：${error?.message || error}`);
