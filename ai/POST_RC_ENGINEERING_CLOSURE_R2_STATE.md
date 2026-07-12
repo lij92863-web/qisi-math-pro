@@ -4,12 +4,12 @@
 - Baseline tag: `pre-engineering-closure-r2-da699b5`
 - Current branch: `stage/post-rc-engineering-closure-r2`
 - Current phase: Phase 2
-- Current work package: WP2N app.js slimming audit accepted; preparing atomic commit
+- Current work package: WP2O performance optimization accepted; preparing atomic commit
 - Status updated: 2026-07-12 Asia/Shanghai
 
 ## Completed items
 
-- Phase 0.5 `11c9e39`; Phase 1 `20f3cf9`; WP2A `3b93225`; WP2B `5ebf2ff`; WP2C `90946e3`; WP2D `02fbd5b`; WP2E `4a52e4b`; WP2F `8384cbc`; WP2G `b10040a`; WP2H `56ce991`; WP2I `d772280`; WP2J `13f79e1`; WP2K `b05a0bd`; WP2L `64ae5e5`; WP2M `64c33d5`.
+- Phase 0.5 `11c9e39`; Phase 1 `20f3cf9`; WP2A `3b93225`; WP2B `5ebf2ff`; WP2C `90946e3`; WP2D `02fbd5b`; WP2E `4a52e4b`; WP2F `8384cbc`; WP2G `b10040a`; WP2H `56ce991`; WP2I `d772280`; WP2J `13f79e1`; WP2K `b05a0bd`; WP2L `64ae5e5`; WP2M `64c33d5`; WP2N `30e0500`.
 - Added isolated Playwright harness with unique ports, isolated browser contexts, and blocked AI/OCR routes.
 - Added browser startup, mock DOCX/PDF upload + review/confirm/insert, reload persistence, export/download, recent-task deletion, and formal-data preservation tests.
 - Verified deletion of recent-task data preserves the independently stored formal question.
@@ -33,11 +33,12 @@
 - Shadow output is explicitly ineligible for review, controlled-write, auto-selection, supplementation, or field merging; conflicts require manual review.
 - Recorded the WP2M no-change decision because only synthetic scoring evidence exists; frozen recognition/safety owners remain unchanged.
 - Audited the ordered app owner migrations, removed the obsolete filename helper, and added app-shell boundary guards without forced line-count refactoring.
+- Added privacy-safe performance monitoring and optimized library metadata aggregation from five passes to one with a measured 28.55% median improvement.
 
 ## Pending items
 
-- WP2N atomic commit and push.
-- WP2O–WP2P and Phase 3–8.
+- WP2O atomic commit and push.
+- WP2P and Phase 3–8.
 
 ## Blocked items
 
@@ -62,6 +63,8 @@
 - WP2K adapter/registry tests: 4/4 passed; runtime/no-real-AI and final mandatory matrix passed using mock transports only.
 - WP2L shadow isolation tests: 2/2 passed; runtime/no-real-AI and final mandatory matrix passed.
 - WP2N app-shell guard: 2/2; runtime 8/8, browser 4/4, and final mandatory matrix passed.
+- WP2O metadata benchmark: 449.721 ms to 321.314 ms per 1,000 runs (-28.55%); performance monitor/library tests 9/9.
+- WP2O runtime 8/8, browser 4/4, and final mandatory matrix passed with no observed functional regression.
 - Preflight and dry-run passed with `realApiCalled=false` and `underlyingApiCallCount=0`.
 
 ## Browser E2E results
@@ -83,4 +86,4 @@
 
 ## Next exact action
 
-Commit `stage closure r2 audit app shell slimming`, push, then begin WP2O performance baseline and optimization.
+Commit `stage closure r2 optimize library metadata performance`, push, then begin WP2P cleanup/indexing.

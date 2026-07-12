@@ -80,24 +80,30 @@
     };
 
     const metadataQuery = items => {
-        const counts = field => Object.fromEntries(
-            [...(items || []).reduce((map, item) => {
-                const key = String(item?.[field] || item?.meta?.[field] || '');
-                if (key) map.set(key, (map.get(key) || 0) + 1);
-                return map;
-            }, new Map()).entries()]
-        );
+        const rows = items || [];
+        const types = new Map();
+        const grades = new Map();
+        const difficulties = new Map();
+        let withAnswer = 0;
+        let withImages = 0;
+        const increment = (map, value) => {
+            const key = String(value || '');
+            if (key) map.set(key, (map.get(key) || 0) + 1);
+        };
+        for (const item of rows) {
+            increment(types, item?.type || item?.meta?.type);
+            increment(grades, item?.grade || item?.meta?.grade);
+            increment(difficulties, item?.diff || item?.meta?.diff);
+            if (String(item?.answer || '').trim()) withAnswer += 1;
+            if (Array.isArray(item?.images) && item.images.length) withImages += 1;
+        }
         return {
-            total: (items || []).length,
-            types: counts('type'),
-            grades: counts('grade'),
-            difficulties: counts('diff'),
-            withAnswer: (items || []).filter(item =>
-                String(item?.answer || '').trim()
-            ).length,
-            withImages: (items || []).filter(item =>
-                Array.isArray(item?.images) && item.images.length
-            ).length
+            total: rows.length,
+            types: Object.fromEntries(types),
+            grades: Object.fromEntries(grades),
+            difficulties: Object.fromEntries(difficulties),
+            withAnswer,
+            withImages
         };
     };
 
