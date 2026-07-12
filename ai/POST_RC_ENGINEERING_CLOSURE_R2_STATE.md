@@ -3,13 +3,13 @@
 - Start HEAD: `da699b53abbe8a6715bb8a8ffae5a954f6b514af`
 - Baseline tag: `pre-engineering-closure-r2-da699b5`
 - Current branch: `stage/post-rc-engineering-closure-r2`
-- Current phase: Phase 2
-- Current work package: WP2P repository cleanup/indexing accepted; preparing atomic commit
+- Current phase: Phase 3
+- Current work package: Phase 3 counterfactual attack suite accepted; preparing atomic commit
 - Status updated: 2026-07-12 Asia/Shanghai
 
 ## Completed items
 
-- Phase 0.5 `11c9e39`; Phase 1 `20f3cf9`; WP2A `3b93225`; WP2B `5ebf2ff`; WP2C `90946e3`; WP2D `02fbd5b`; WP2E `4a52e4b`; WP2F `8384cbc`; WP2G `b10040a`; WP2H `56ce991`; WP2I `d772280`; WP2J `13f79e1`; WP2K `b05a0bd`; WP2L `64ae5e5`; WP2M `64c33d5`; WP2N `30e0500`; WP2O `065fa08`.
+- Phase 0.5 `11c9e39`; Phase 1 `20f3cf9`; WP2A `3b93225`; WP2B `5ebf2ff`; WP2C `90946e3`; WP2D `02fbd5b`; WP2E `4a52e4b`; WP2F `8384cbc`; WP2G `b10040a`; WP2H `56ce991`; WP2I `d772280`; WP2J `13f79e1`; WP2K `b05a0bd`; WP2L `64ae5e5`; WP2M `64c33d5`; WP2N `30e0500`; WP2O `065fa08`; WP2P `0c828cf`.
 - Added isolated Playwright harness with unique ports, isolated browser contexts, and blocked AI/OCR routes.
 - Added browser startup, mock DOCX/PDF upload + review/confirm/insert, reload persistence, export/download, recent-task deletion, and formal-data preservation tests.
 - Verified deletion of recent-task data preserves the independently stored formal question.
@@ -68,6 +68,10 @@
 - WP2O runtime 8/8, browser 4/4, and final mandatory matrix passed with no observed functional regression.
 - WP2P audit found 529 tracked files, no untracked files, and no tracked temporary extensions; no uncertain tracked file was deleted.
 - WP2P final mandatory matrix and no-real-AI gate passed.
+- Phase 3 counterfactual suite passed 7/7 across runtime, JSON/LaTeX,
+  ownership, synthetic OCR isolation, storage, security, and performance.
+- Phase 3 final mandatory matrix passed; browser preflight/dry-run reported
+  `realApiCalled=false` and `underlyingApiCallCount=0`.
 - Preflight and dry-run passed with `realApiCalled=false` and `underlyingApiCallCount=0`.
 
 ## Browser E2E results
@@ -89,4 +93,4 @@
 
 ## Next exact action
 
-Commit `stage closure r2 clean repository and index docs`, push, then begin Phase 3 counterfactual attacks.
+Commit and push Phase 3, then begin the Phase 4 code-quality audit.
