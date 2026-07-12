@@ -93,3 +93,28 @@ test('unsupported schema remains explicit and fails closed', () => {
     assert.equal(result.errors[0].code, 'unsupported-schema');
     assert.equal(result.errors[0].path, 'schemaVersion');
 });
+
+test('legacy formal question gets a read-only view without fabricated admission', () => {
+    const legacy = {
+        id: 'legacy-question',
+        questionNumber: '7',
+        type: '解答题',
+        stem: 'legacy stem',
+        options: [],
+        answer: '',
+        solution: 'legacy solution',
+        images: [],
+        createdAt: 100,
+        updatedAt: 200
+    };
+    const before = structuredClone(legacy);
+    const view = Contracts.legacyQuestionToReadableV2(legacy);
+    assert.deepEqual(legacy, before);
+    assert.equal(view.schemaVersion, 'qisi.question.legacy-read.v1');
+    assert.equal(view.compatibility.readOnly, true);
+    assert.equal(view.stem, legacy.stem);
+    assert.equal(view.admission, null);
+    assert.equal(view.provenance, null);
+    assert.equal(Object.isFrozen(view), true);
+    assert.equal(Contracts.validateQuestionV2(view).valid, false);
+});
