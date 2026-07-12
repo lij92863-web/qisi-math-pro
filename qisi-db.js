@@ -183,11 +183,6 @@
             unprocessed: '未处理'
         }[status] || '');
 
-        const makeSafeFileName = (name) => String(name || '题库数据')
-            .replace(/[\\/:*?"<>|]/g, '_')
-            .replace(/\s+/g, '_')
-            .slice(0, 60);
-
         const downloadBlob = (blob, filename) => {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
