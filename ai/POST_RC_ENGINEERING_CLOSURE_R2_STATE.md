@@ -4,12 +4,12 @@
 - Baseline tag: `pre-engineering-closure-r2-da699b5`
 - Current branch: `stage/post-rc-engineering-closure-r2`
 - Current phase: Phase 2
-- Current work package: WP2L OCR shadow mode accepted; preparing atomic commit
+- Current work package: WP2M recognition-quality evidence review; no production change
 - Status updated: 2026-07-12 Asia/Shanghai
 
 ## Completed items
 
-- Phase 0.5 `11c9e39`; Phase 1 `20f3cf9`; WP2A `3b93225`; WP2B `5ebf2ff`; WP2C `90946e3`; WP2D `02fbd5b`; WP2E `4a52e4b`; WP2F `8384cbc`; WP2G `b10040a`; WP2H `56ce991`; WP2I `d772280`; WP2J `13f79e1`; WP2K `b05a0bd`.
+- Phase 0.5 `11c9e39`; Phase 1 `20f3cf9`; WP2A `3b93225`; WP2B `5ebf2ff`; WP2C `90946e3`; WP2D `02fbd5b`; WP2E `4a52e4b`; WP2F `8384cbc`; WP2G `b10040a`; WP2H `56ce991`; WP2I `d772280`; WP2J `13f79e1`; WP2K `b05a0bd`; WP2L `64ae5e5`.
 - Added isolated Playwright harness with unique ports, isolated browser contexts, and blocked AI/OCR routes.
 - Added browser startup, mock DOCX/PDF upload + review/confirm/insert, reload persistence, export/download, recent-task deletion, and formal-data preservation tests.
 - Verified deletion of recent-task data preserves the independently stored formal question.
@@ -31,11 +31,12 @@
 - Enforced registry default/health/capabilities/timeout/cancellation and local MIME/size/no-path/loopback boundaries; no adapter owns alignment or writing.
 - Added isolated OCR shadow comparison retaining separate candidates while emitting raw-content-free structured metrics.
 - Shadow output is explicitly ineligible for review, controlled-write, auto-selection, supplementation, or field merging; conflicts require manual review.
+- Recorded the WP2M no-change decision because only synthetic scoring evidence exists; frozen recognition/safety owners remain unchanged.
 
 ## Pending items
 
-- WP2L atomic commit and push.
-- WP2M–WP2P and Phase 3–8.
+- WP2M evidence/no-change commit and push.
+- WP2N–WP2P and Phase 3–8.
 
 ## Blocked items
 
@@ -68,7 +69,8 @@
 
 ## Benchmark results
 
-- Specification complete; execution pending.
+- Deterministic scoring harness and ten-category synthetic corpus pass.
+- No authorized real OCR corpus/run exists; synthetic results are not claimed as real quality improvement, so WP2M production changes are deferred.
 
 ## Known limitations
 
@@ -78,4 +80,4 @@
 
 ## Next exact action
 
-Audit the WP2L diff, commit `stage closure r2 add OCR shadow mode`, push, then begin WP2M recognition quality review.
+Run WP2M safety evidence, commit the no-change decision, push, then begin WP2N ordered app.js slimming.
