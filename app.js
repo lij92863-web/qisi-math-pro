@@ -29,6 +29,19 @@
                     resolveImages: ids =>
                         storageRepository.loadImageRecords(ids)
                 });
+                const importOrchestrator =
+                    Qisi.ImportOrchestrator.createImportOrchestrator({
+                        handlers: {
+                            batch: source =>
+                                processDraftImportBatch(source.batchId)
+                        },
+                        validate: result => ({
+                            valid: true,
+                            value: result,
+                            errors: []
+                        }),
+                        handoff: result => result
+                    });
                 const view = ref('entry'); 
                 const questions = ref([]);
                 const cart = ref([]);
@@ -18518,36 +18531,32 @@ ${source}`;
                     }
                 };
 
-                const runningBatchIds = new Set();
-
                 const runBatchRecognition = async (batchId) => {
                     if (!batchId) {
                         throw new Error('缺少批量录题任务 ID');
                     }
 
-                    if (runningBatchIds.has(batchId)) {
+                    if (importOrchestrator.isRunning(batchId)) {
                         console.warn('[BATCH_DEBUG][duplicate-run-blocked]', { batchId });
                         return;
                     }
+                    console.log('[BATCH_DEBUG][single-engine-start]', {
+                        batchId,
+                        engine: 'processDraftImportBatch'
+                    });
+                    logBatchPdfDiag('run-start', {
+                        batchId,
+                        engine: 'legacy',
+                        actualFunction: 'processDraftImportBatch',
+                        v2EnabledForThisRun: false
+                    });
 
-                    runningBatchIds.add(batchId);
-
-                    try {
-                        console.log('[BATCH_DEBUG][single-engine-start]', {
-                            batchId,
-                            engine: 'processDraftImportBatch'
-                        });
-                        logBatchPdfDiag('run-start', {
-                            batchId,
-                            engine: 'legacy',
-                            actualFunction: 'processDraftImportBatch',
-                            v2EnabledForThisRun: false
-                        });
-
-                        return await processDraftImportBatch(batchId);
-                    } finally {
-                        runningBatchIds.delete(batchId);
-                    }
+                    const result = await importOrchestrator.run({
+                        id: batchId,
+                        batchId,
+                        type: 'batch'
+                    });
+                    return result.review;
                 };
 
                 const openBatchReview = async (batchId) => {
