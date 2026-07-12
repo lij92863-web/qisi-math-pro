@@ -3,8 +3,8 @@
 - Start commit: `6ab88d0551be5af24d134f17906ba0c42631b2ea`
 - Baseline tag: `pre-post-r2-correction-r1-6ab88d0`
 - Current branch: `stage/post-r2-correction-r1`
-- Current phase: Program A / Phase 1
-- Current work package: Phase 1 truth audit and architecture design accepted; preparing atomic commit
+- Current phase: Program A / Phase 2
+- Current work package: A2-1 Formal Admission Policy accepted; preparing atomic commit
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Completed
@@ -27,20 +27,23 @@
   sites, seeded E2E coverage, architecture guards, and stale release ledger.
 - Designed source-aware Formal Admission, question schema v2, the repository
   confirmation transaction, and true deterministic import E2E.
+- Implemented the pure source-aware Formal Admission Policy with immutable
+  decisions, per-field provenance, fail-closed mode rules, decision validation,
+  and question-v2 construction.
 
 ## Pending
 
-- Phase 1 independent post-release truth audit.
-- Formal Admission Policy design.
-- Question schema v2 design.
-- Formal question transaction design.
-- True deterministic import E2E design.
-- Phase 2 through Phase 8 implementation, attacks, audits, benchmark, CTO
-  review, and Git sealing.
+- A2-2 question schema v2 runtime contract.
+- A2-3 repository formal confirmation transaction.
+- A2-4 through A2-10 production wiring, fail-closed controllers, truthful import
+  boundary, review validation, true E2E, architecture manifest, and operational
+  hardening.
+- Phase 3 through Phase 8 attacks, audits, benchmark, CTO review, and sealing.
 
 ## Commits
 
 - Phase 0 baseline state `d326e0b`.
+- Phase 1 architecture and truth audit `92d913b`.
 
 ## Gates
 
@@ -54,6 +57,11 @@
 - Phase 1 `verify:safe`: passed with 1013/1013 tests, 0 skipped; batch mock
   smoke passed 20/20.
 - Phase 1 docs/ai exact diff-scope verification: passed.
+- A2-1 failure-first evidence: module-not-found before implementation.
+- A2-1 targeted syntax and policy tests: passed 12/12, 0 skipped.
+- A2-1 full mandatory matrix: passed.
+- A2-1 browser preflight/dry-run: passed with `realApiCalled=false`,
+  `underlyingApiCallCount=0`, and browser chain healthy.
 
 ## Blockers
 
@@ -62,5 +70,5 @@
 
 ## Next exact action
 
-Commit/push Phase 1, then start A2-1 with a failing Formal Admission Policy
-test.
+Run exact A2-1 diff-scope verification, commit/push, then begin A2-2 with failing
+question schema v2 contract tests.
