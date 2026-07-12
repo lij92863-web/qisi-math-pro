@@ -4,12 +4,12 @@
 - Baseline tag: `pre-engineering-closure-r2-da699b5`
 - Current branch: `stage/post-rc-engineering-closure-r2`
 - Current phase: Phase 2
-- Current work package: WP2F library service accepted; preparing atomic commit
+- Current work package: WP2G review controller accepted; preparing atomic commit
 - Status updated: 2026-07-12 Asia/Shanghai
 
 ## Completed items
 
-- Phase 0.5 `11c9e39`; Phase 1 `20f3cf9`; WP2A `3b93225`; WP2B `5ebf2ff`; WP2C `90946e3`; WP2D `02fbd5b`; WP2E `4a52e4b`.
+- Phase 0.5 `11c9e39`; Phase 1 `20f3cf9`; WP2A `3b93225`; WP2B `5ebf2ff`; WP2C `90946e3`; WP2D `02fbd5b`; WP2E `4a52e4b`; WP2F `8384cbc`.
 - Added isolated Playwright harness with unique ports, isolated browser contexts, and blocked AI/OCR routes.
 - Added browser startup, mock DOCX/PDF upload + review/confirm/insert, reload persistence, export/download, recent-task deletion, and formal-data preservation tests.
 - Verified deletion of recent-task data preserves the independently stored formal question.
@@ -19,11 +19,13 @@
 - Migrated active library load, image reference reads, edited-question saves, recent-task deletion, export reads, and preference serialization to the repository boundary.
 - Added the pure library service for search/filter, knowledge descendants, stable sort, pagination, batch selection, duplicate detection, metadata aggregation, and repository-delegated soft delete/restore.
 - Migrated the Vue library computed query and pagination to the service without DOM, OCR, parser, or storage-backend dependencies.
+- Added the review controller for immutable field edits, dirty/manual state, warning lifecycle, provenance display, validation requests, cancel, and manual confirmation.
+- Migrated review field updates and confirmation decisions while leaving persistence outside the controller and preserving the existing validation/controlled-write chain.
 
 ## Pending items
 
-- WP2F atomic commit and push.
-- WP2G–WP2P and Phase 3–8.
+- WP2G atomic commit and push.
+- WP2H–WP2P and Phase 3–8.
 
 ## Blocked items
 
@@ -40,6 +42,8 @@
 - WP2E browser E2E: 4/4 passed; final mandatory matrix passed with `npm test` 964/964 and 0 skipped.
 - WP2F targeted tests: 7/7 passed, including 100/1000/5000 metadata records.
 - WP2F browser E2E: 4/4 passed; final mandatory matrix passed with `npm test` 971/971 and 0 skipped.
+- WP2G targeted tests: 5/5 passed; reactive Proxy regression covered.
+- WP2G browser product acceptance and final mandatory matrix passed; no controller repository write exists.
 - Preflight and dry-run passed with `realApiCalled=false` and `underlyingApiCallCount=0`.
 
 ## Browser E2E results
@@ -59,4 +63,4 @@
 
 ## Next exact action
 
-Audit the WP2F diff, commit `stage closure r2 extract library service`, push, then begin WP2G review controller.
+Audit the WP2G diff, commit `stage closure r2 extract review controller`, push, then begin WP2H export service.

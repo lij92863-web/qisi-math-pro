@@ -1,0 +1,125 @@
+(function (root, factory) {
+    const api = factory();
+    root.Qisi = root.Qisi || {};
+    root.Qisi.ReviewController = api;
+    if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+    'use strict';
+
+    const clone = value => {
+        if (value == null) return value;
+        if (typeof structuredClone === 'function') {
+            try {
+                return structuredClone(value);
+            } catch (_error) {
+                // Vue reactive proxies are intentionally cloned as plain data.
+            }
+        }
+        return JSON.parse(JSON.stringify(value));
+    };
+
+    const createReviewController = ({
+        validateDraft = () => ({ valid: true, errors: [], warnings: [] }),
+        clock = () => Date.now()
+    } = {}) => {
+        const open = draft => ({
+            draft: clone(draft),
+            baseline: clone(draft),
+            dirty: false,
+            cancelled: false
+        });
+
+        const editField = (draft, field, value) => {
+            if (!draft || draft.status === 'submitted') return clone(draft);
+            const next = clone(draft);
+            next[field] = clone(value);
+            next.userEdited = true;
+            next.manualEdited = true;
+            next.updatedAt = clock();
+            return next;
+        };
+
+        const addWarning = (draft, warning) => {
+            const next = clone(draft);
+            next.warnings = [...new Set([
+                ...(next?.warnings || []),
+                String(warning || '').trim()
+            ].filter(Boolean))];
+            return next;
+        };
+
+        const removeWarning = (draft, predicate) => {
+            const next = clone(draft);
+            next.warnings = (next?.warnings || []).filter(warning =>
+                typeof predicate === 'function'
+                    ? !predicate(warning)
+                    : warning !== predicate
+            );
+            return next;
+        };
+
+        const provenanceDisplay = draft => {
+            const provenance = draft?.provenance || draft?.sourceTrace || {};
+            return Object.entries(provenance).map(([field, evidence]) => ({
+                field,
+                sourceFile: evidence?.file || evidence?.sourceFileName || '',
+                page: evidence?.page || evidence?.sourcePage || null,
+                block: evidence?.block || evidence?.rawBlock || '',
+                engine: evidence?.engine || provenance.engine || '',
+                repair: Boolean(evidence?.repair || evidence?.repaired),
+                manualEdit: Boolean(
+                    evidence?.manualEdit || draft?.manualEdited || draft?.userEdited
+                ),
+                decision: evidence?.decision || evidence?.reason || ''
+            }));
+        };
+
+        const requestValidation = draft => {
+            const result = validateDraft(clone(draft));
+            return {
+                valid: Boolean(result?.valid),
+                errors: clone(result?.errors || []),
+                warnings: clone(result?.warnings || [])
+            };
+        };
+
+        const confirm = draft => {
+            const validation = requestValidation(draft);
+            if (!validation.valid) {
+                return { accepted: false, draft: clone(draft), validation };
+            }
+            const next = clone(draft);
+            next.status = 'reviewed';
+            next.userEdited = true;
+            next.manualEdited = true;
+            next.manualConfirmed = true;
+            next.confirmedAt = new Date(clock()).toISOString();
+            next.updatedAt = clock();
+            return { accepted: true, draft: next, validation };
+        };
+
+        const cancel = session => ({
+            ...session,
+            draft: clone(session?.baseline),
+            dirty: false,
+            cancelled: true
+        });
+
+        const isDirty = (draft, baseline) =>
+            JSON.stringify(draft) !== JSON.stringify(baseline);
+
+        return Object.freeze({
+            open,
+            editField,
+            addWarning,
+            removeWarning,
+            provenanceDisplay,
+            requestValidation,
+            confirm,
+            cancel,
+            isDirty
+        });
+    };
+
+    return Object.freeze({ createReviewController });
+});

@@ -12,6 +12,17 @@
                     findKnowledgeNode: Qisi.Utils.findNode,
                     fingerprint: questionCoreFingerprint
                 });
+                const reviewController =
+                    Qisi.ReviewController.createReviewController({
+                        validateDraft(draft) {
+                            const message = validateDraftForReview(draft);
+                            return {
+                                valid: !message,
+                                errors: message ? [{ message }] : [],
+                                warnings: draft?.warnings || []
+                            };
+                        }
+                    });
                 const view = ref('entry'); 
                 const questions = ref([]);
                 const cart = ref([]);
@@ -18593,9 +18604,10 @@ ${source}`;
                     const q = activeDraftQuestion.value;
                     if (!q || q.status === 'submitted') return;
 
-                    q[field] = value;
-                    q.userEdited = true;
-                    q.updatedAt = Date.now();
+                    Object.assign(
+                        q,
+                        reviewController.editField(q, field, value)
+                    );
 
                     cleanSingleDraftForSave(q);
 
@@ -19073,14 +19085,12 @@ ${source}`;
                     }
 
                     normalizeDraftQuestionBeforeSave(q);
-                    const error = validateDraftForReview(q);
-                    if (error) {
-                        alert(error);
+                    const confirmation = reviewController.confirm(q);
+                    if (!confirmation.accepted) {
+                        alert(confirmation.validation.errors[0]?.message || '题目校验失败。');
                         return;
                     }
-                    q.status = 'reviewed';
-                    q.userEdited = true;
-                    q.updatedAt = Date.now();
+                    Object.assign(q, confirmation.draft);
                     await db.draftQuestions.put(toRaw(q));
                     await refreshBatchStats(q.batchId);
                     activeDraftEditorOriginal.value = activeDraftEditorBuffer.value;
