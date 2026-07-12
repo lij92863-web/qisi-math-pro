@@ -4,7 +4,7 @@
 - Baseline tag: `pre-post-r2-correction-r1-6ab88d0`
 - Current branch: `stage/post-r2-correction-r1`
 - Current phase: Program A / Phase 2
-- Current work package: A2-6 truthful import coordinator boundary accepted;
+- Current work package: A2-7 production review validator wiring accepted;
   preparing atomic commit
 - Status updated: 2026-07-13 Asia/Shanghai
 
@@ -53,10 +53,15 @@
   persisted terminal state.
 - Recorded that candidate production validation and the six proposed import
   extraction steps remain deferred debt rather than completed architecture.
+- Added a directly testable production review validator that composes existing
+  content checks with draft identity/version/source checks, field-level manual
+  revision state, complete provenance, and a Formal Admission Policy precheck.
+- Wired ReviewController and the pre-submit review check to that real validator;
+  global edit/confirm booleans cannot wash a rejected field into manual.
 
 ## Pending
 
-- A2-7 through A2-10 review validation, true E2E, architecture manifest, and
+- A2-8 through A2-10 true E2E, architecture manifest, and
   operational hardening.
   boundary, review validation, true E2E, architecture manifest, and operational
   hardening.
@@ -71,6 +76,7 @@
 - A2-3 formal question transaction `6da4247`.
 - A2-4 batch formal submit production wiring `45d7101`.
 - A2-5 controller fail-closed behavior `dab55b6`.
+- A2-6 truthful import coordinator boundary `f33cf7a`.
 
 ## Gates
 
@@ -126,6 +132,15 @@
 - A2-6 full mandatory matrix: passed.
 - A2-6 browser preflight/dry-run: passed with `realApiCalled=false`,
   `underlyingApiCallCount=0`, and browser chain healthy.
+- A2-7 failure-first evidence: the production review validator owner was
+  missing and the app used only content/display checks.
+- A2-7 production validator, counterfactual provenance, controller, quality,
+  and seeded UI tests: passed 17/17.
+- A2-7 `verify:safe`: passed with 1065/1065 tests, 0 skipped; batch mock smoke
+  passed 20/20.
+- A2-7 full mandatory matrix: passed.
+- A2-7 browser preflight/dry-run: passed with `realApiCalled=false`,
+  `underlyingApiCallCount=0`, and browser chain healthy.
 
 ## Blockers
 
@@ -134,5 +149,5 @@
 
 ## Next exact action
 
-Run exact A2-6 diff-scope verification, commit/push, then begin A2-7 production
-review validator wiring.
+Run exact A2-7 diff-scope verification, commit/push, then begin A2-8 seeded/true
+E2E classification and deterministic true-chain coverage.

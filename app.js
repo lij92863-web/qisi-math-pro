@@ -21,17 +21,13 @@
                     findKnowledgeNode: Qisi.Utils.findNode,
                     fingerprint: questionCoreFingerprint
                 });
-                const reviewController =
-                    Qisi.ReviewController.createReviewController({
-                        validateDraft(draft) {
-                            const message = validateDraftForReview(draft);
-                            return {
-                                valid: !message,
-                                errors: message ? [{ message }] : [],
-                                warnings: draft?.warnings || []
-                            };
-                        }
+                const productionReviewValidator =
+                    Qisi.ProductionReviewValidator.createProductionReviewValidator({
+                        policy: Qisi.FormalAdmissionPolicy
                     });
+                const reviewController = Qisi.ReviewController.createReviewController({
+                    validateDraft: draft => validateDraftForReview(draft)
+                });
                 const exportService = Qisi.ExportService.createExportService({
                     coreFingerprint: questionCoreFingerprint,
                     stemFingerprint: questionStemFingerprint,
@@ -19005,7 +19001,7 @@ ${source}`;
                     await loadBatchImportData();
                 };
 
-                const validateDraftForReview = (q) => {
+                const validateDraftContentForReview = (q) => {
                     if (!String(q?.stem || '').trim()) return '题干为空，请先补充题干。';
                     if (!String(q?.type || '').trim()) return '题型为空，请先选择题型。';
                     if ([q.stem, ...(Array.isArray(q.options) ? q.options : []), q.answer, q.solution].some(window.Qisi.Utils.hasUnconvertedImagePlaceholder)) {
@@ -19019,6 +19015,16 @@ ${source}`;
                     // 安全审核版：图片未确认只 warning，不阻塞入库。
                     // if (q.imageReviewStatus === 'need_confirm' || q.imageReviewStatus === 'low_confidence') return '该题图片尚未确认，请先确认图片是否正确。';
                     return '';
+                };
+
+                const validateDraftForReview = q => {
+                    const contentMessage = validateDraftContentForReview(q);
+                    return productionReviewValidator.validate(q, {
+                        baseErrors: contentMessage
+                            ? [{ code: 'review-content-invalid', message: contentMessage }]
+                            : [],
+                        baseWarnings: q?.warnings || []
+                    });
                 };
 
                 const normalizeDraftQuestionBeforeSave = (q) => {
@@ -19166,9 +19172,11 @@ ${source}`;
                         if (!silent) alert('请先标记已确认，再提交入库。');
                         return false;
                     }
-                    const reviewError = validateDraftForReview(q);
-                    if (reviewError) {
-                        if (!silent) alert(reviewError);
+                    const reviewValidation = validateDraftForReview(q);
+                    if (!reviewValidation.valid) {
+                        if (!silent) alert(
+                            reviewValidation.errors[0]?.message || '题目校验失败。'
+                        );
                         return false;
                     }
                     // 安全审核版：图片未确认只 warning，不阻塞入库。
