@@ -38,18 +38,10 @@
                     resolveImages: ids =>
                         storageRepository.loadImageRecords(ids)
                 });
-                const importOrchestrator =
-                    Qisi.ImportOrchestrator.createImportOrchestrator({
-                        handlers: {
-                            batch: source =>
-                                processDraftImportBatch(source.batchId)
-                        },
-                        validate: result => ({
-                            valid: true,
-                            value: result,
-                            errors: []
-                        }),
-                        handoff: result => result
+                const legacyBatchRunCoordinator =
+                    Qisi.LegacyBatchRunCoordinator.createLegacyBatchRunCoordinator({
+                        runLegacyBatch: batchId => processDraftImportBatch(batchId),
+                        loadBatchState: batchId => db.draftImportBatches.get(batchId)
                     });
                 const view = ref('entry'); 
                 const questions = ref([]);
@@ -18545,7 +18537,7 @@ ${source}`;
                         throw new Error('缺少批量录题任务 ID');
                     }
 
-                    if (importOrchestrator.isRunning(batchId)) {
+                    if (legacyBatchRunCoordinator.isRunning(batchId)) {
                         console.warn('[BATCH_DEBUG][duplicate-run-blocked]', { batchId });
                         return;
                     }
@@ -18560,12 +18552,7 @@ ${source}`;
                         v2EnabledForThisRun: false
                     });
 
-                    const result = await importOrchestrator.run({
-                        id: batchId,
-                        batchId,
-                        type: 'batch'
-                    });
-                    return result.review;
+                    return legacyBatchRunCoordinator.run(batchId);
                 };
 
                 const openBatchReview = async (batchId) => {

@@ -13,7 +13,7 @@ test('app delegates migrated owners to production modules', () => {
         'LibraryService.createLibraryService',
         'ReviewController.createReviewController',
         'ExportService.createExportService',
-        'ImportOrchestrator.createImportOrchestrator'
+        'LegacyBatchRunCoordinator.createLegacyBatchRunCoordinator'
     ]) {
         assert.match(app, new RegExp(call.replace('.', '\\.')));
     }
@@ -27,7 +27,7 @@ test('migrated module scripts load before app and app remains below baseline', (
         'qisi-library-service.js',
         'qisi-review-controller.js',
         'qisi-export-service.js',
-        'qisi-import-orchestrator.js'
+        'qisi-legacy-batch-run-coordinator.js'
     ];
     const appIndex = main.indexOf('./app.js');
     for (const script of scripts) {

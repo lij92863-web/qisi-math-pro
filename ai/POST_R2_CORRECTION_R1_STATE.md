@@ -4,7 +4,7 @@
 - Baseline tag: `pre-post-r2-correction-r1-6ab88d0`
 - Current branch: `stage/post-r2-correction-r1`
 - Current phase: Program A / Phase 2
-- Current work package: A2-5 controller fail-closed behavior accepted;
+- Current work package: A2-6 truthful import coordinator boundary accepted;
   preparing atomic commit
 - Status updated: 2026-07-13 Asia/Shanghai
 
@@ -47,10 +47,17 @@
 - Removed permissive default validators from ImportOrchestrator and
   ReviewController; missing, malformed, throwing, and explicitly invalid
   validators now fail closed before handoff or confirmation.
+- Replaced the misleading production ImportOrchestrator/no-op-validator wiring
+  with `LegacyBatchRunCoordinator`, which truthfully identifies the active
+  workflow as a legacy business-and-persistence boundary and verifies its
+  persisted terminal state.
+- Recorded that candidate production validation and the six proposed import
+  extraction steps remain deferred debt rather than completed architecture.
 
 ## Pending
 
-- A2-6 through A2-10 truthful import
+- A2-7 through A2-10 review validation, true E2E, architecture manifest, and
+  operational hardening.
   boundary, review validation, true E2E, architecture manifest, and operational
   hardening.
 - Phase 3 through Phase 8 attacks, audits, benchmark, CTO review, and sealing.
@@ -63,6 +70,7 @@
 - A2-2 question schema v2 `4544270`.
 - A2-3 formal question transaction `6da4247`.
 - A2-4 batch formal submit production wiring `45d7101`.
+- A2-5 controller fail-closed behavior `dab55b6`.
 
 ## Gates
 
@@ -109,6 +117,15 @@
 - A2-5 full mandatory matrix: passed.
 - A2-5 browser preflight/dry-run: passed with `realApiCalled=false`,
   `underlyingApiCallCount=0`, and browser chain healthy.
+- A2-6 failure-first evidence: the required legacy coordinator owner was
+  missing and production still used an unconditional `valid:true` callback.
+- A2-6 coordinator, production-boundary, shell, quality, and seeded UI tests:
+  passed 11/11.
+- A2-6 `verify:safe`: passed with 1059/1059 tests, 0 skipped; batch mock smoke
+  passed 20/20.
+- A2-6 full mandatory matrix: passed.
+- A2-6 browser preflight/dry-run: passed with `realApiCalled=false`,
+  `underlyingApiCallCount=0`, and browser chain healthy.
 
 ## Blockers
 
@@ -117,5 +134,5 @@
 
 ## Next exact action
 
-Run exact A2-5 diff-scope verification, commit/push, then begin A2-6 truthful
-import coordinator production-boundary work.
+Run exact A2-6 diff-scope verification, commit/push, then begin A2-7 production
+review validator wiring.
