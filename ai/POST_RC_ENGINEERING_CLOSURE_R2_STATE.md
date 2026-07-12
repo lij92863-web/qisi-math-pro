@@ -4,20 +4,22 @@
 - Baseline tag: `pre-engineering-closure-r2-da699b5`
 - Current branch: `stage/post-rc-engineering-closure-r2`
 - Current phase: Phase 2
-- Current work package: WP2C browser product E2E accepted; preparing atomic commit
+- Current work package: WP2D recognition contracts accepted; preparing atomic commit
 - Status updated: 2026-07-12 Asia/Shanghai
 
 ## Completed items
 
-- Phase 0.5 `11c9e39`; Phase 1 `20f3cf9`; WP2A `3b93225`; WP2B `5ebf2ff`.
+- Phase 0.5 `11c9e39`; Phase 1 `20f3cf9`; WP2A `3b93225`; WP2B `5ebf2ff`; WP2C `90946e3`.
 - Added isolated Playwright harness with unique ports, isolated browser contexts, and blocked AI/OCR routes.
 - Added browser startup, mock DOCX/PDF upload + review/confirm/insert, reload persistence, export/download, recent-task deletion, and formal-data preservation tests.
 - Verified deletion of recent-task data preserves the independently stored formal question.
+- Added the canonical `qisi.question.v1` recognition/question contract owner with immutable factories, validators, provenance/raw-evidence preservation, stable errors, and the sole legacy compatibility mapping.
+- Confirmed-question validation requires both controlled-write acceptance and explicit manual confirmation evidence.
 
 ## Pending items
 
-- WP2C atomic commit and push.
-- WP2D–WP2P and Phase 3–8.
+- WP2D atomic commit and push.
+- WP2E–WP2P and Phase 3–8.
 
 ## Blocked items
 
@@ -28,6 +30,8 @@
 - WP2A, WP2B, and WP2C mandatory matrices passed.
 - WP2C `verify:safe`: 944/944 passed, 0 skipped.
 - WP2C runtime dependency gate: 8/8 passed.
+- WP2D contract/compatibility targeted tests: 10/10 passed.
+- WP2D final mandatory matrix passed after the last production change.
 - Preflight and dry-run passed with `realApiCalled=false` and `underlyingApiCallCount=0`.
 
 ## Browser E2E results
@@ -46,4 +50,4 @@
 
 ## Next exact action
 
-Audit the WP2C diff, commit `stage closure r2 add browser product e2e`, push, then begin WP2D contracts.
+Audit the WP2D diff, commit `stage closure r2 add recognition contracts`, push, then begin WP2E storage repository.
