@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qisi.local/schemas/ocr-ground-truth-r2.json",
+  "title": "Qisi OCR Ground Truth R2",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "documentId", "sourceHash", "page", "sourceOrder",
+      "questionNumber", "stem", "options", "answer", "solution",
+      "formulas", "images", "expectedSafePartial", "notes"
+    ],
+    "properties": {
+      "documentId": { "type": "string", "minLength": 1 },
+      "sourceHash": { "type": "string", "minLength": 1 },
+      "page": { "type": "integer", "minimum": 1 },
+      "sourceOrder": { "type": "integer", "minimum": 1 },
+      "questionNumber": { "type": "string", "minLength": 1 },
+      "stem": { "type": "string" },
+      "options": { "type": "array", "items": { "type": "string" } },
+      "answer": { "type": "string" },
+      "solution": { "type": "string" },
+      "formulas": { "type": "array", "items": { "type": "string" } },
+      "images": { "type": "array", "items": { "type": "object" } },
+      "expectedSafePartial": { "type": "boolean" },
+      "notes": { "type": "string" }
+    }
+  }
+}

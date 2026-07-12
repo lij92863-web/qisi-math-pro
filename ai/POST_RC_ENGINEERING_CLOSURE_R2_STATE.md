@@ -4,12 +4,12 @@
 - Baseline tag: `pre-engineering-closure-r2-da699b5`
 - Current branch: `stage/post-rc-engineering-closure-r2`
 - Current phase: Phase 2
-- Current work package: WP2I import orchestrator accepted; preparing atomic commit
+- Current work package: WP2J OCR benchmark harness accepted; preparing atomic commit
 - Status updated: 2026-07-12 Asia/Shanghai
 
 ## Completed items
 
-- Phase 0.5 `11c9e39`; Phase 1 `20f3cf9`; WP2A `3b93225`; WP2B `5ebf2ff`; WP2C `90946e3`; WP2D `02fbd5b`; WP2E `4a52e4b`; WP2F `8384cbc`; WP2G `b10040a`; WP2H `56ce991`.
+- Phase 0.5 `11c9e39`; Phase 1 `20f3cf9`; WP2A `3b93225`; WP2B `5ebf2ff`; WP2C `90946e3`; WP2D `02fbd5b`; WP2E `4a52e4b`; WP2F `8384cbc`; WP2G `b10040a`; WP2H `56ce991`; WP2I `d772280`.
 - Added isolated Playwright harness with unique ports, isolated browser contexts, and blocked AI/OCR routes.
 - Added browser startup, mock DOCX/PDF upload + review/confirm/insert, reload persistence, export/download, recent-task deletion, and formal-data preservation tests.
 - Verified deletion of recent-task data preserves the independently stored formal question.
@@ -25,11 +25,13 @@
 - Migrated ZIP export plan construction to the service while retaining JSZip/download browser effects in the UI adapter.
 - Added the import orchestrator for DOCX/PDF/batch routing, progress, cancellation, candidate aggregation, validator enforcement, review handoff, duplicate-run locking, and error mapping.
 - Migrated the live batch recognition wrapper to the orchestrator while retaining the proven legacy batch handler as an injected dependency.
+- Added the versioned OCR ground-truth schema, ten-category synthetic corpus, validator, and deterministic scoring for CER, LaTeX F1, formula exactness, structure, options, ownership safety, and manual correction cost.
+- Explicitly ignored private OCR benchmark materials; synthetic fixtures are labeled non-real evidence.
 
 ## Pending items
 
-- WP2I atomic commit and push.
-- WP2J–WP2P and Phase 3–8.
+- WP2J atomic commit and push.
+- WP2K–WP2P and Phase 3–8.
 
 ## Blocked items
 
@@ -50,6 +52,7 @@
 - WP2G browser product acceptance and final mandatory matrix passed; no controller repository write exists.
 - WP2H targeted tests: 4/4 passed; browser E2E 4/4 and final mandatory matrix passed.
 - WP2I targeted tests: 4/4 passed; browser acceptance and final mandatory matrix passed.
+- WP2J scoring tests: 4/4 passed; ten synthetic categories validate and final mandatory matrix passed with no OCR/API call.
 - Preflight and dry-run passed with `realApiCalled=false` and `underlyingApiCallCount=0`.
 
 ## Browser E2E results
@@ -69,4 +72,4 @@
 
 ## Next exact action
 
-Audit the WP2I diff, commit `stage closure r2 extract import orchestrator`, push, then begin WP2J OCR benchmark infrastructure.
+Audit the WP2J diff, commit `stage closure r2 add OCR benchmark harness`, push, then begin WP2K OCR engine adapters.

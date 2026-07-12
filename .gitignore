@@ -43,6 +43,7 @@ local-test-materials/
 local-test-materials/real/
 local-test-materials/private/
 local-test-materials/large/
+local-test-materials/ocr-benchmark/
 
 # local real-run artifacts
 local-run-artifacts/
