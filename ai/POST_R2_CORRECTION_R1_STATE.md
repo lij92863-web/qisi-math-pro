@@ -3,8 +3,8 @@
 - Start commit: `6ab88d0551be5af24d134f17906ba0c42631b2ea`
 - Baseline tag: `pre-post-r2-correction-r1-6ab88d0`
 - Current branch: `stage/post-r2-correction-r1`
-- Current phase: Program A / Phase 0
-- Current work package: Phase 0 reality baseline accepted; preparing atomic commit
+- Current phase: Program A / Phase 1
+- Current work package: Phase 1 truth audit and architecture design accepted; preparing atomic commit
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Completed
@@ -23,6 +23,10 @@
 - Created and pushed annotated baseline tag
   `pre-post-r2-correction-r1-6ab88d0`.
 - Created and pushed `stage/post-r2-correction-r1` from the verified baseline.
+- Independently audited the R2 production wiring, formal writes, contract call
+  sites, seeded E2E coverage, architecture guards, and stale release ledger.
+- Designed source-aware Formal Admission, question schema v2, the repository
+  confirmation transaction, and true deterministic import E2E.
 
 ## Pending
 
@@ -36,7 +40,7 @@
 
 ## Commits
 
-- Phase 0 baseline state commit: pending current atomic commit.
+- Phase 0 baseline state `d326e0b`.
 
 ## Gates
 
@@ -46,6 +50,10 @@
 - Batch mock smoke: passed 20/20.
 - `verify:no-real-ai`: passed as part of the safe gate.
 - Phase 0 exact diff-scope verification: passed for this state file only.
+- Phase 1 explicit `verify:no-real-ai`: passed.
+- Phase 1 `verify:safe`: passed with 1013/1013 tests, 0 skipped; batch mock
+  smoke passed 20/20.
+- Phase 1 docs/ai exact diff-scope verification: passed.
 
 ## Blockers
 
@@ -54,5 +62,5 @@
 
 ## Next exact action
 
-Commit/push this state file, then begin the read-only evidence collection for
-Program A Phase 1.
+Commit/push Phase 1, then start A2-1 with a failing Formal Admission Policy
+test.
