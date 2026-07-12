@@ -1,9 +1,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-
 const { findNode } = require('../qisi-utils.js');
+const { createLibraryService } = require('../qisi-library-service.js');
 
 describe('findNode', () => {
     const tree = [
@@ -84,11 +82,22 @@ describe('findNode', () => {
         assert.equal(findNode(tree, '不存在'), null);
     });
 
-    it('app.js explicitly calls Qisi Utils helper', () => {
-        const rootDir = path.join(__dirname, '..');
-        const app = fs.readFileSync(path.join(rootDir, 'app.js'), 'utf8');
-        assert.match(app, /window\.Qisi\.Utils\.findNode\(sourceTree, activeKnowledge\.value\)/);
-        assert.doesNotMatch(app, /const\s+findNode\s*=/);
+    it('library service executes the production findNode dependency', () => {
+        const service = createLibraryService({
+            matchesFilters: () => true,
+            findKnowledgeNode: findNode,
+            getKnowledge: item => item.knowledge
+        });
+        const result = service.filterAndSort([
+            { id: 'q1', knowledge: '数列', createdAt: 1 },
+            { id: 'q2', knowledge: '等差数列', createdAt: 2 },
+            { id: 'q3', knowledge: '几何', createdAt: 3 }
+        ], {
+            knowledge: '数列',
+            knowledgeTree: tree
+        });
+
+        assert.deepEqual(result.map(item => item.id), ['q2', 'q1']);
     });
 });
 

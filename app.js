@@ -4,6 +4,14 @@
                 console.log('当前运行版本：batch-refactor-01-DOCX批量录题模块拆分');
                 const storageRepository =
                     Qisi.StorageRepository.createRepository(db);
+                const libraryService = Qisi.LibraryService.createLibraryService({
+                    repository: storageRepository,
+                    matchesFilters:
+                        Qisi.Utils.questionMatchesLibraryFilters,
+                    getKnowledge: getQuestionKnowledge,
+                    findKnowledgeNode: Qisi.Utils.findNode,
+                    fingerprint: questionCoreFingerprint
+                });
                 const view = ref('entry'); 
                 const questions = ref([]);
                 const cart = ref([]);
@@ -175,36 +183,19 @@
                 const activeKnowledgeCounts = computed(() => libraryKnowledgeMode.value === 'personal' ? personalKnowledgeCounts.value : (libraryKnowledgeMode.value === 'external' ? {} : knowledgeCounts.value));
 
                 const filteredQuestions = computed(() => {
-                    let result = questions.value;
-                    if(activeKnowledge.value) {
-                        const getAllChildrenNames = (node) => {
-                            let names = [node.name];
-                            if (node.children) node.children.forEach(c => names = names.concat(getAllChildrenNames(c)));
-                            return names;
-                        };
-                        
-                        let targetNode = null;
-                        const sourceTree = activeKnowledgeType.value === 'personal' ? personalKnowledgeTree.value : knowledgeTree;
-                        targetNode = window.Qisi.Utils.findNode(sourceTree, activeKnowledge.value);
-                        
-                        if (targetNode) {
-                            const allowedNames = getAllChildrenNames(targetNode);
-                            result = result.filter(q => {
-                                const kn = getQuestionKnowledge(q, activeKnowledgeType.value);
-                                return q && allowedNames.includes(kn);
-                            });
-                        } else {
-                            result = result.filter(q => {
-                                const kn = getQuestionKnowledge(q, activeKnowledgeType.value);
-                                return q && kn === activeKnowledge.value;
-                            });
-                        }
-                    }
-                    return result.filter(q => window.Qisi.Utils.questionMatchesLibraryFilters(q, {
+                    const sourceTree =
+                        activeKnowledgeType.value === 'personal'
+                            ? personalKnowledgeTree.value
+                            : knowledgeTree;
+                    return libraryService.filterAndSort(questions.value, {
                         keyword: librarySearchKeyword.value,
                         filters: libraryFilters,
-                        hasText
-                    }));
+                        knowledge: activeKnowledge.value,
+                        knowledgeType: activeKnowledgeType.value,
+                        knowledgeTree: sourceTree,
+                        sortBy: 'createdAt',
+                        direction: 'desc'
+                    });
                 });
 
                 const flattenKnowledgeTree = (tree, prefix = []) => {
@@ -21640,8 +21631,20 @@ Promise.all([imageReady, fontReady]).then(() => {
 
                 return {
                     view, questions, filteredQuestions, cart, currentPage, 
-                    totalPages: computed(() => Math.ceil(filteredQuestions.value.length/pageSize)||1),
-                    paginatedQuestions: computed(() => filteredQuestions.value.slice((currentPage.value-1)*pageSize, currentPage.value*pageSize)),
+                    totalPages: computed(() =>
+                        libraryService.paginate(
+                            filteredQuestions.value,
+                            currentPage.value,
+                            pageSize
+                        ).totalPages
+                    ),
+                    paginatedQuestions: computed(() =>
+                        libraryService.paginate(
+                            filteredQuestions.value,
+                            currentPage.value,
+                            pageSize
+                        ).items
+                    ),
                     externalQuestions, importBatches, externalTeacherGroups, failedImportBatches, activeExternalBatchId, filteredExternalQuestions, paginatedExternalQuestions, externalTotalPages,
                     externalPickMode, selectedExternalIds, toggleExternalPick, clearExternalSelection, selectAllExternalOnPage, openExternalConfirmPage, externalOnlyUnprocessed,
                     confirmItems, filteredConfirmItems, confirmStatusFilter, confirmStatusOptions, confirmStatusCount, batchPersonalKnowledge, batchSystemKnowledge, flatSystemKnowledge, flatPersonalKnowledge, flatKnowledge, applyBatchKnowledge, confirmAddExternalToPersonal,
