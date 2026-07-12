@@ -380,6 +380,23 @@
             ),
             images: await findBy('draftImages', 'batchId', batchId)
         });
+        const persistReviewDraftBatch = async ({ batch, files = [], drafts = [] }) => {
+            requireId(batch?.id, 'batch.id');
+            return run('persist-review-draft-batch', () => database.transaction(
+                'rw',
+                table('draftQuestions'),
+                table('draftImportFiles'),
+                table('draftImportBatches'),
+                async () => {
+                    await table('draftQuestions').where('batchId')
+                        .equals(batch.id).delete();
+                    if (drafts.length) await table('draftQuestions').bulkPut(clone(drafts));
+                    if (files.length) await table('draftImportFiles').bulkPut(clone(files));
+                    await table('draftImportBatches').put(clone(batch));
+                    return { batch: clone(batch), draftCount: drafts.length };
+                }
+            ));
+        };
         const deleteDraftBatch = batchId => transaction(
             [
                 'draftImportBatches',
@@ -698,7 +715,8 @@
             loadImageRecords,
             loadLibrary, saveQuestion, updateQuestion, softDeleteQuestion,
             restoreQuestion, listRecentTasks, saveDraft, loadDraft,
-            loadDraftBatch, deleteDraftBatch, confirmDraftToQuestion,
+            loadDraftBatch, persistReviewDraftBatch, deleteDraftBatch,
+            confirmDraftToQuestion,
             createBackup, restoreBackup
         });
         return repository;

@@ -4,7 +4,7 @@
 - Baseline tag: `pre-post-r2-correction-r1-6ab88d0`
 - Current branch: `stage/post-r2-correction-r1`
 - Current phase: Program A / Phase 2
-- Current work package: A2-7 production review validator wiring accepted;
+- Current work package: A2-8 true deterministic import E2E accepted;
   preparing atomic commit
 - Status updated: 2026-07-13 Asia/Shanghai
 
@@ -58,10 +58,19 @@
   revision state, complete provenance, and a Formal Admission Policy precheck.
 - Wired ReviewController and the pre-submit review check to that real validator;
   global edit/confirm booleans cannot wash a rejected field into manual.
+- Reclassified the three R2 browser tests as seeded review, persistence, and
+  export/delete lifecycles instead of complete import proof.
+- Added a repository-backed injected candidate path used only by an explicitly
+  marked mock transport, plus true UI-entry DOCX, PDF safe-partial, and
+  admission E2E coverage.
+- Proved gap prefix behavior, raw JSON rejection, answer/solution ownership
+  rewind rejection, click-only rejection, field-level teacher rewrite,
+  transactional review persistence, formal v2 admission, reload persistence,
+  sanitized export, and localhost-only browser execution.
 
 ## Pending
 
-- A2-8 through A2-10 true E2E, architecture manifest, and
+- A2-9 through A2-10 architecture manifest and
   operational hardening.
   boundary, review validation, true E2E, architecture manifest, and operational
   hardening.
@@ -77,6 +86,7 @@
 - A2-4 batch formal submit production wiring `45d7101`.
 - A2-5 controller fail-closed behavior `dab55b6`.
 - A2-6 truthful import coordinator boundary `f33cf7a`.
+- A2-7 production review validator wiring `173fa19`.
 
 ## Gates
 
@@ -141,6 +151,15 @@
 - A2-7 full mandatory matrix: passed.
 - A2-7 browser preflight/dry-run: passed with `realApiCalled=false`,
   `underlyingApiCallCount=0`, and browser chain healthy.
+- A2-8 failure-first evidence: existing E2E seeded draft tables directly and no
+  true UI-entry candidate transport path existed.
+- A2-8 seeded and true-import browser suite: passed 10/10 checks across 7 browser
+  scenarios; true-import designated tests passed 4/4.
+- A2-8 `verify:safe`: passed with 1069/1069 tests, 0 skipped; batch mock smoke
+  passed 20/20.
+- A2-8 full mandatory matrix: passed.
+- A2-8 browser preflight/dry-run: passed with `realApiCalled=false`,
+  `underlyingApiCallCount=0`, and browser chain healthy.
 
 ## Blockers
 
@@ -149,5 +168,5 @@
 
 ## Next exact action
 
-Run exact A2-7 diff-scope verification, commit/push, then begin A2-8 seeded/true
-E2E classification and deterministic true-chain coverage.
+Run exact A2-8 diff-scope verification, commit/push, then begin A2-9 complete
+architecture ownership manifest and automated guards.

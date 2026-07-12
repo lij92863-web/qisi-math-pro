@@ -11,7 +11,7 @@ const {
     assertNoRuntimeErrors
 } = require('./browser-harness.js');
 
-test('mock DOCX/PDF upload reaches review, edit, confirm, and formal insertion', {
+test('seeded-review-ui-lifecycle: seeded drafts reach edit, confirm, and formal insertion', {
     timeout: 90000
 }, async () => {
     const harness = await startBrowserApp(32102);

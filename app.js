@@ -36,7 +36,10 @@
                 });
                 const legacyBatchRunCoordinator =
                     Qisi.LegacyBatchRunCoordinator.createLegacyBatchRunCoordinator({
-                        runLegacyBatch: batchId => processDraftImportBatch(batchId),
+                        runLegacyBatch: batchId => Qisi.Runtime.getRuntimeDependency('InjectedImportTransport')
+                            ? Qisi.InjectedImportPath.createInjectedImportPath({ repository: storageRepository })
+                                .run(batchId, Qisi.Runtime.getRuntimeDependency('InjectedImportTransport'))
+                            : processDraftImportBatch(batchId),
                         loadBatchState: batchId => db.draftImportBatches.get(batchId)
                     });
                 const view = ref('entry'); 

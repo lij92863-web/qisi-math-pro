@@ -10,7 +10,7 @@ const {
     assertNoRuntimeErrors
 } = require('./browser-harness.js');
 
-test('export downloads a package and deleting a recent task preserves formal questions', {
+test('seeded-export-delete: export and task deletion preserve formal questions', {
     timeout: 90000
 }, async () => {
     const harness = await startBrowserApp(32104);

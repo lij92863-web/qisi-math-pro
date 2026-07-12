@@ -29,28 +29,7 @@ const cachedExternalAsset = async url => {
     if (fs.existsSync(bodyPath)) {
         return fs.readFileSync(bodyPath);
     }
-
-    let lastError;
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-        try {
-            const response = await fetch(url, {
-                signal: AbortSignal.timeout(12000)
-            });
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status} for ${url}`);
-            }
-            const body = Buffer.from(await response.arrayBuffer());
-            fs.writeFileSync(bodyPath, body);
-            return body;
-        } catch (error) {
-            lastError = error;
-            await new Promise(resolve =>
-                setTimeout(resolve, 200 * (attempt + 1))
-            );
-        }
-    }
-
-    throw lastError;
+    throw new Error(`uncached external browser asset blocked: ${url}`);
 };
 
 const requestOk = url => new Promise(resolve => {
@@ -137,7 +116,8 @@ const startBrowserApp = async (port) => {
                 }
             });
         } catch {
-            await route.continue();
+            forbiddenRequests.push(url);
+            await route.abort('blockedbyclient');
         }
     });
 
@@ -435,6 +415,31 @@ const waitForDbSnapshot = async (
     throw new Error('timed out waiting for IndexedDB state');
 };
 
+const installImportTransport = (page, envelope) => page.evaluate(value => {
+    window.Qisi.Runtime.setRuntimeDependency('InjectedImportTransport', {
+        kind: 'qisi.mock-import-transport.v1',
+        produceCandidates: async () => structuredClone(value)
+    });
+}, envelope);
+
+const createImportThroughUi = async (page, file) => {
+    await page.getByRole('button', { name: '批量录题' }).click();
+    await page.locator('.batch-home-upload').click();
+    await page.locator('input[type="file"][accept*=".docx"]')
+        .setInputFiles(file);
+    const modal = page.locator('.batch-purpose-modal')
+        .filter({ has: page.locator('.batch-purpose-options') });
+    await modal.waitFor({ state: 'visible' });
+    await modal.locator('.batch-purpose-options input').nth(3).check();
+    await modal.getByRole('button', { name: '确认添加' }).click();
+    await page.getByRole('button', { name: '创建识别任务' }).click();
+    const snapshot = await waitForDbSnapshot(page, value =>
+        value.batches.some(batch => ['review', 'failed'].includes(batch.status))
+    );
+    const batch = snapshot.batches.sort((a, b) => b.createdAt - a.createdAt)[0];
+    return { batchId: batch.id, snapshot };
+};
+
 const clearE2eData = page =>
     withDb(
         page,
@@ -477,6 +482,8 @@ module.exports = {
     startBrowserApp,
     callProxy,
     seedReviewBatch,
+    installImportTransport,
+    createImportThroughUi,
     getDbSnapshot,
     waitForDbSnapshot,
     clearE2eData,

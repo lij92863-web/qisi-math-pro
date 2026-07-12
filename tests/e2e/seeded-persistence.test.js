@@ -10,7 +10,7 @@ const {
     assertNoRuntimeErrors
 } = require('./browser-harness.js');
 
-test('review and formal question state survives a browser reload', {
+test('seeded-persistence: seeded review state survives a browser reload', {
     timeout: 90000
 }, async () => {
     const harness = await startBrowserApp(32103);
