@@ -15988,15 +15988,21 @@ ${source}`;
                         console.log('[BATCH_DEBUG][stage]', 'start processDraftImportBatch legacy fallback', { batchId });
                         const batch = await db.draftImportBatches.get(batchId);
                         if (!batch) return;
-                        const batchExpectedCount =
-                            Math.max(0, Number(batch.expectedQuestionCount || 0)) || 0;
+                        const files = await db.draftImportFiles.where('batchId').equals(batchId).toArray();
+                        const batchContext = window.Qisi.BatchContextService.createBatchContext({
+                            batchId,
+                            batch,
+                            files,
+                            getRoles: getBatchFileRoles
+                        });
+                        const batchExpectedCount = batchContext.userSettings.expectedQuestionCount;
 
                         console.log('[BATCH_DEBUG][batch-expected-count]', {
                             batchId,
                             expectedQuestionCount: batchExpectedCount
                         });
 
-                        const recognitionMode = batch.recognitionMode || 'standard';
+                        const recognitionMode = batchContext.engineConfig.recognitionMode;
                         activeRecognitionMode = recognitionMode;
                         activeBatchCostStats = {
                             visionCalls: 0,
@@ -16008,7 +16014,6 @@ ${source}`;
                         await db.draftImportBatches.update(batchId, { status: 'processing', progress: 3, updatedAt: now, errorMessage: '' });
                         await loadBatchImportData();
 
-                        const files = await db.draftImportFiles.where('batchId').equals(batchId).toArray();
                         const supplementalImageFiles = files.filter(batchIsSupplementalImage);
 
                         let processFiles = files.filter(file => !batchIsSupplementalImage(file));
@@ -16056,13 +16061,7 @@ ${source}`;
                             recognitionMode,
                             fileCount: files.length,
                             processFileCount: processFiles.length,
-                            files: files.map(file => ({
-                                id: file.id || '',
-                                filename: file.filename || '',
-                                fileType: file.fileType || '',
-                                roles: getBatchFileRoles(file),
-                                pageRange: file.pageRange || ''
-                            })),
+                            files: batchContext.sourceManifest,
                             questionPdfCount: files.filter(file =>
                                 file.fileType === 'pdf' &&
                                 batchHasQuestionRole(file)

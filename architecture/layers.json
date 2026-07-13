@@ -214,6 +214,14 @@
       "status": "scaffold"
     },
     {
+      "id": "batch-context-service", "file": "qisi-batch-context-service.js",
+      "layer": 2, "domainOwner": "batchContextServiceOwner",
+      "publicApi": ["createBatchContext"],
+      "allowedDependencies": [],
+      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository"],
+      "status": "production-wired"
+    },
+    {
       "id": "app-shell", "file": "app.js", "layer": 4,
       "domainOwner": "appShellOwner", "publicApi": ["App.setup"],
       "allowedDependencies": [
@@ -223,7 +231,7 @@
         "batch-formal-submit", "ocr-registry", "ocr-qwen-adapter",
         "ocr-local-adapter", "ocr-shadow-mode", "performance-monitor",
         "controlled-write", "support-aligner", "support-parser", "archive-security",
-        "secure-logger"
+        "secure-logger", "batch-context-service"
       ],
       "forbiddenDependencies": ["route-b-research"],
       "status": "production-wired"

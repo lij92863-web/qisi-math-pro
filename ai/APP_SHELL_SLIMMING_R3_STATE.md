@@ -82,10 +82,37 @@
 - C2-1 failure-first began with module-not-found. Final implementation/design/
   architecture targets passed 17/17 and all 11 mandatory gates passed with
   preflight/dry-run making zero real calls.
+- Wave C2-2 implemented and production-wired `qisi-batch-context-service.js` as
+  the single owner for immutable batch metadata, file metadata, source manifest,
+  user-settings snapshot, and engine-config snapshot.
+- `processDraftImportBatch` now reads source records once, delegates context
+  construction to `Qisi.BatchContextService.createBatchContext`, and consumes the
+  returned expected-count, recognition-mode, and source-manifest snapshots. The
+  three legacy inline derivations were removed and are guarded against return.
+- The service accepts an injected deterministic role reader, has no DOM, Vue,
+  fetch, external API, database mutation, or formal-write access, and excludes
+  raw text/content, credentials, tokens, and base64-like fields from snapshots.
+- Missing batch/file, stale source, duplicate file, and unsupported type fail
+  closed with stable error codes. Inputs and recursively frozen outputs remain
+  independent, and production script order/runtime namespace ownership are
+  machine-checked.
+- C2-2 failure-first began with module-not-found. Bounded repairs addressed a
+  no-write guard false positive on `Set.add`, an `app.js` growth boundary by
+  injecting the role reader, and a runtime namespace convention exposed by the
+  first full gate. The original runtime failures plus counterfactual attacks then
+  passed 26/26.
+- Final C2-2/design/architecture targets passed 24/24; true DOCX/PDF import
+  characterization passed 4/4; the final full suite passed 1,270/1,270; and all
+  11 mandatory gates passed. Browser preflight/dry-run recorded
+  `realApiCalled=false` and `underlyingApiCallCount=0`.
+- `app.js` is now 21,777 lines with the same 318 inventoried function names. The
+  Phase 1 responsibility report remains the immutable 21,778-line baseline map;
+  its gate now freezes all 318 baseline rows while proving every current function
+  name is still represented exactly once and the shell has not grown.
 
 ## Pending
 
-- Phase 2 Waves C2-2–C2-14, then attacks, audits, benchmark, CTO review, and seal.
+- Phase 2 Waves C2-3–C2-14, then attacks, audits, benchmark, CTO review, and seal.
 
 ## Blockers / limitations
 
@@ -98,6 +125,6 @@
 
 ## Next exact action
 
-Commit and push C2-1, then begin Wave C2-2 Batch Context with failure-first tests
-for missing batch/file, stale source, duplicate file, unsupported type, immutable
-settings/engine snapshots, and read-only repository abstraction.
+Commit and push C2-2, then begin Wave C2-3 Source Role Classifier with
+failure-first tests for deterministic declared-role evidence, ambiguity,
+duplicates, missing roles, and prohibition of semantic content guessing.
