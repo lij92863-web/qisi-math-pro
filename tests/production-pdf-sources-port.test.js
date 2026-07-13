@@ -33,7 +33,8 @@ test('processPdfSources invokes the existing engine once with coordinator contro
                 await payload.helpers.onPdfPageProgress({ sourceId: 'question' });
                 return engineResult;
             }
-        }
+        },
+        buildProjectionContext: value => ({ marker: value.engineResult.drafts[0].id })
     });
 
     assert.equal(calls.length, 1);
@@ -41,33 +42,44 @@ test('processPdfSources invokes the existing engine once with coordinator contro
     assert.equal(calls[0].files, request.sources);
     assert.notEqual(calls[0].helpers, request.helpers);
     assert.equal(calls[0].helpers.marker, true);
+    assert.equal(calls[0].helpers.deferPdfCandidateProjection, true);
     assert.equal(calls[0].helpers.pdfSignal, controller.signal);
     assert.equal(calls[0].helpers.onPdfPageProgress, onPageProgress);
     assert.deepEqual(pageEvents, [{ sourceId: 'question' }]);
-    assert.equal(result, engineResult);
+    assert.notEqual(result, engineResult);
+    assert.deepEqual(result.projectionContext, { marker: 'd1' });
     assert.deepEqual(request.helpers, { marker: true });
 });
 
 test('invalid context and missing engine fail closed', async () => {
     const engine = { processBatchV2: async () => ({ drafts: [] }) };
     await assert.rejects(
-        Port.processPdfSources({ ...input(), sources: [] }, { engine }),
+        Port.processPdfSources({ ...input(), sources: [] }, {
+            engine, buildProjectionContext: () => ({})
+        }),
         error => error.code === 'PDF_SOURCES_INVALID'
     );
     await assert.rejects(
-        Port.processPdfSources({ ...input(), sources: [{ id: 'x', fileType: 'docx' }] }, { engine }),
+        Port.processPdfSources({ ...input(), sources: [{ id: 'x', fileType: 'docx' }] }, {
+            engine, buildProjectionContext: () => ({})
+        }),
         error => error.code === 'PDF_SOURCES_INVALID'
     );
     await assert.rejects(
         Port.processPdfSources(input(), {}),
         error => error.code === 'PDF_SOURCES_PORT_REQUIRED'
     );
+    await assert.rejects(
+        Port.processPdfSources(input(), { engine }),
+        error => error.code === 'PDF_SOURCES_PROJECTION_PORT_REQUIRED'
+    );
 });
 
 test('engine output is returned untouched for the coordinator-owned result gate', async () => {
     const malformed = { engineContract: 'malformed' };
     const result = await Port.processPdfSources(input(), {
-        engine: { processBatchV2: async () => malformed }
+        engine: { processBatchV2: async () => malformed },
+        buildProjectionContext: () => assert.fail('malformed output is coordinator-owned')
     });
     assert.equal(result, malformed);
 });
@@ -76,7 +88,8 @@ test('engine errors retain identity for coordinator sanitization', async () => {
     const stable = Object.assign(new Error('private PDF content'), { code: 'ENGINE_DOWN' });
     await assert.rejects(
         Port.processPdfSources(input(), {
-            engine: { processBatchV2: async () => { throw stable; } }
+            engine: { processBatchV2: async () => { throw stable; } },
+            buildProjectionContext: () => ({})
         }),
         error => error === stable
     );
@@ -88,7 +101,8 @@ test('cancellation stops before the engine and discards a late result', async ()
     let called = false;
     await assert.rejects(
         Port.processPdfSources({ ...input(), signal: before.signal }, {
-            engine: { processBatchV2: async () => { called = true; return { drafts: [] }; } }
+            engine: { processBatchV2: async () => { called = true; return { drafts: [] }; } },
+            buildProjectionContext: () => ({})
         }),
         error => error.name === 'AbortError' && error.code === 'PDF_SOURCES_ABORTED'
     );
@@ -102,7 +116,8 @@ test('cancellation stops before the engine and discards a late result', async ()
                     after.abort();
                     return { drafts: [{ id: 'late' }] };
                 }
-            }
+            },
+            buildProjectionContext: () => ({})
         }),
         error => error.name === 'AbortError' && error.code === 'PDF_SOURCES_ABORTED'
     );
@@ -121,4 +136,6 @@ test('PDF-only production coordinator adapter uses the shared source port', () =
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
     assert.match(app, /ProductionPdfSourcesPort\.processPdfSources\s*\(/);
     assert.match(app, /Qisi\.PdfImportCoordinator\.runPdfImport\s*\(/);
+    assert.match(app, /createPdfEngineProjectionContext\s*\(/);
+    assert.match(app, /PdfCandidateProjection\s*\.projectPdfCandidates\s*\(/);
 });

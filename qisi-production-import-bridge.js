@@ -7,6 +7,7 @@
         'classifySourceRoles',
         'runDocxImport',
         'runPdfImport',
+        'projectPdfCandidates',
         'normalizeCandidates',
         'projectImportOutput',
         'validateCandidates',
@@ -334,6 +335,33 @@
                         sources: data.sources,
                         supplementalSources: data.supplementalSources
                     }, signal);
+                    sourceDrafts('pdf', data.sourceResult);
+                    const projectionContext = data.sourceResult?.projectionContext;
+                    if (!isRecord(projectionContext)) {
+                        throw createError('PRODUCTION_IMPORT_RESULT_MALFORMED', {
+                            causeCode: 'pdf-projection-input-missing'
+                        });
+                    }
+                    const projectedDrafts = sameLengthDrafts(
+                        await ports.projectPdfCandidates(projectionContext, {
+                            batchId,
+                            batch: data.loaded.batch,
+                            batchContext: data.loaded.batchContext,
+                            sources: data.sources,
+                            signal
+                        }),
+                        data.sourceResult.drafts,
+                        'pdf-projection-result-malformed'
+                    );
+                    data.sourceResult = {
+                        ...data.sourceResult,
+                        drafts: projectedDrafts,
+                        safePartialCandidates: data.sourceResult.safePartialCandidates
+                            .map((candidate, index) => ({
+                                ...candidate,
+                                draft: projectedDrafts[index]
+                            }))
+                    };
                     const drafts = sourceDrafts('pdf', data.sourceResult);
                     diagnostics.record({
                         stage: 'candidates-produced',

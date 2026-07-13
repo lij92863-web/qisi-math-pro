@@ -58,6 +58,39 @@ result; it must not recreate the decision.
 | 18000–18018 | Atomic review-draft persistence | final drafts/images/batch counts | persisted review batch | active UI batch state | repository transaction and reload | none | persistence only | D |
 | 18044–18068 | Normal production entry/coordinator | batch id | legacy run promise | coordinator running state | UI diagnostics | none | routing only | B/C |
 
+## Post-characterization classification correction (authoritative)
+
+The preliminary table above intentionally preceded characterization. It marked
+several upstream evidence/evaluation blocks as category A too broadly. The
+production-linked characterization proved that parser, aligner, and
+controlled-write evaluation are inputs to projection, not projection itself.
+The following classification supersedes the preliminary `Class` column; no
+upstream safety algorithm moved.
+
+| Baseline range | Authoritative class | Extraction disposition |
+| --- | --- | --- |
+| 15514-15589 | E | Batch/source orchestration stayed in `app.js`. |
+| 15723-15800 | E | Support artifact preparation stayed upstream. |
+| 15801-15860 | E | Existing aligner adapter stayed upstream. |
+| 15861-15882 | E | Evidence preparation stayed upstream. |
+| 16131-16138 | E | Per-run safety evaluation state stayed upstream; only canonical warning-builder state was deleted. |
+| 16720-16808 | E | Parser/aligner invocation stayed upstream. |
+| 16809-16863 | E | The real controlled-write owner remains the evaluator; its result is now retained and passed as data. |
+| 16864-16909 | A/C | Category A warning/candidate projection moved; category C diagnostics remain. |
+| 16910-16934 | E | Accepted support inputs still feed the existing legacy merge before canonical projection. |
+| 16935-17430 | B/C/D/E | Page processing, fallback, state, UI, and merge behavior stayed in place. |
+| 17431-17507 | A/C | Category A fail-closed/fused/field-warning projection was deleted; category C fail-closed diagnostics remain. |
+| 17508-17913 | B/C/E | Repair, display normalization, image binding, and diagnostics stayed in place. |
+| 17914-17943 | A call site | The legacy path now delegates the final PDF drafts and real decision/alignment data to the shared owner. |
+| 18000-18018 | D | Atomic review persistence stayed in its existing owner. |
+| 18044-18068 | B/C | Normal UI routing stayed in place. |
+
+The caller also exposes strict engine field evidence near baseline line 10359;
+that is evidence wiring, not a second projection owner. The PDF-only V2 adapter
+builds a projection context through the shared owner and defers the engine's
+legacy support attachment in that route. Neither caller constructs provenance,
+support level, manual-review state, or a controlled-write fallback.
+
 ## Exact category A move
 
 The new owner receives data, not authority:
@@ -121,3 +154,31 @@ known-bad cases for the new owner.
    category A extraction.
 6. DOCX code and behavior are unchanged.
 
+## Production call graph after extraction
+
+```text
+processDraftImportBatch (normal UI)
+  -> existing parser / aligner / controlled-write owners
+  -> PdfCandidateProjection.projectPdfCandidates
+  -> existing review persistence owner
+
+ProductionPdfSourcesPort (PDF-only V2)
+  -> existing QisiBatchEngineV2
+  -> PdfCandidateProjection.createPdfEngineProjectionContext
+
+ProductionImportBridge (shadow/scaffold workflow)
+  -> ProductionPdfSourcesPort / PdfImportCoordinator
+  -> injected PdfCandidateProjection.projectPdfCandidates
+  -> validation / in-memory shadow persistence in equivalence tests
+```
+
+Current production search anchors are:
+
+- `app.js`: strict evidence exposure, one V2 projection-context call, one V2
+  projection call, and one legacy final projection call;
+- `qisi-production-import-bridge.js`: one required injected
+  `projectPdfCandidates` call;
+- `qisi-pdf-candidate-projection.js`: the only provenance, support-level,
+  manual-review, and canonical comparator implementation;
+- no `pdfSupportFieldWarningsByQuestion`, `pdfSupportFusedQuestionNumbers`, or
+  `pdfSupportFusedWarnings` inline projection state remains in `app.js`.

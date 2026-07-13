@@ -10367,6 +10367,19 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                                     ...(q.sourceTrace || {}),
                                     source: 'strict-visual-page-qwen',
                                     model,
+                                    strictProtocol: {
+                                        accepted: true,
+                                        decisionId:
+                                            `strict-pdf:${file.id}:${pageNo}:${model}`,
+                                        fields: [
+                                            'questionNumber',
+                                            'stem',
+                                            'options'
+                                        ],
+                                        method:
+                                            payload.method ||
+                                            'strict-json-contract'
+                                    },
                                     sourceFileId: file.id,
                                     sourceFileName: file.filename || '',
                                     sourcePage: pageNo,
@@ -15404,7 +15417,22 @@ ${source}`;
                                         processSources: ({ sources, signal, onPageProgress }) =>
                                             window.Qisi.ProductionPdfSourcesPort.processPdfSources({
                                                 batch, sources, helpers, signal, onPageProgress
-                                            }, { engine: window.QisiBatchEngineV2 }),
+                                            }, {
+                                                engine: window.QisiBatchEngineV2,
+                                                buildProjectionContext: context =>
+                                                    window.Qisi.PdfCandidateProjection
+                                                        .createPdfEngineProjectionContext({
+                                                            ...context,
+                                                            controlledWriteOwner:
+                                                                window.Qisi.PdfSupportControlledWrite,
+                                                            blockParser:
+                                                                window.Qisi.PdfSupportBlockParser,
+                                                            aligner:
+                                                                window.Qisi.PdfSupportAligner,
+                                                            decisionId:
+                                                                `pdf-cw:${batchId}:v2`
+                                                        })
+                                            }),
                                         createSafePartial: (draft, evidence) => ({
                                             ...window.Qisi.PdfSafePartialPipeline.normalizePdfPipelineResult({ answerQuestionNumbers: [], warnings: evidence.warnings }),
                                             draft
@@ -15419,7 +15447,14 @@ ${source}`;
                             evidences: engineResult.evidences || [],
                             drafts: [
                                 ...(docxResult.drafts || []),
-                                ...(engineResult.drafts || [])
+                                ...(
+                                    pdfOnlyEngineFiles
+                                        ? window.Qisi.PdfCandidateProjection
+                                            .projectPdfCandidates(
+                                                engineResult.projectionContext
+                                            )
+                                        : engineResult.drafts || []
+                                )
                             ],
                             draftImages: [
                                 ...(docxResult.draftImages || []),
@@ -16130,9 +16165,8 @@ ${source}`;
                         let pdfAnyPageImage = '';
                         let pdfSupportFailClosed = false;
                         const pdfSupportFailClosedReports = [];
-                        const pdfSupportFusedQuestionNumbers = new Set();
-                        const pdfSupportFusedWarnings = new Set();
-                        const pdfSupportFieldWarningsByQuestion = new Map();
+                        const pdfSupportControlledWriteResults = [];
+                        const pdfSupportAlignmentResults = [];
 
                         const pageImageKey = (fileId, pageNo) => `${fileId || ''}::${Number(pageNo || 0) || 0}`;
                         const rememberPageImages = (pageImages = [], fallbackFile = null) => {
@@ -16833,43 +16867,71 @@ ${source}`;
                                                             legacyPdfSupportGate.fusedQuestionNumbers || [],
                                                         parserFusedQuestionNumbers:
                                                             parserPdfSupportGate?.fusedQuestionNumbers || []
-                                                    }) || {
-                                                    effectiveAnswerItems:
-                                                        legacyPdfSupportGate.answers || [],
-                                                    effectiveSolutionItems:
-                                                        legacyPdfSupportGate.solutions || [],
-                                                    fusedQuestionNumbers:
-                                                        legacyPdfSupportGate.fusedQuestionNumbers || [],
-                                                    warnings: [],
-                                                    fieldDecisions: []
-                                                };
+                                                    });
+                                            if (!fieldControlledWrite) {
+                                                const error = new Error(
+                                                    'controlled-write-missing'
+                                                );
+                                                error.code =
+                                                    'controlled-write-missing';
+                                                throw error;
+                                            }
+                                            const controlledWriteResult = {
+                                                ...fieldControlledWrite,
+                                                decisionId:
+                                                    `pdf-cw:${batchId}:${file.id}`
+                                            };
+                                            pdfSupportControlledWriteResults.push(
+                                                controlledWriteResult
+                                            );
                                             const pdfSupportGate = {
                                                 answers:
-                                                    fieldControlledWrite.effectiveAnswerItems || [],
+                                                    controlledWriteResult.effectiveAnswerItems || [],
                                                 solutions:
-                                                    fieldControlledWrite.effectiveSolutionItems || [],
+                                                    controlledWriteResult.effectiveSolutionItems || [],
                                                 failClosed:
                                                     legacyPdfSupportGate.failClosed &&
                                                     (!parserPdfSupportGate || parserPdfSupportGate.failClosed),
                                                 fusedQuestionNumbers:
-                                                    fieldControlledWrite.fusedQuestionNumbers || [],
+                                                    controlledWriteResult.fusedQuestionNumbers || [],
                                                 fusedWarnings:
                                                     [
                                                         ...new Set([
                                                             ...(legacyPdfSupportGate.fusedWarnings || []),
                                                             ...(parserPdfSupportGate?.fusedWarnings || [])
                                                         ])
-                                                    ]
+                                                    ],
+                                                report:
+                                                    parserPdfSupportGate?.report ||
+                                                    legacyPdfSupportGate.report
                                             };
-                                            (fieldControlledWrite.warnings || []).forEach(warning => {
-                                                const key =
-                                                    normalizeQuestionKey(warning.questionNumber || '');
-                                                if (!key) return;
-
-                                                const list =
-                                                    pdfSupportFieldWarningsByQuestion.get(key) || [];
-                                                list.push(warning.code || 'parser-objective-answer-rejected');
-                                                pdfSupportFieldWarningsByQuestion.set(key, list);
+                                            const acceptedAlignments = [
+                                                legacyPdfSupportGate,
+                                                parserPdfSupportGate
+                                            ].filter(result =>
+                                                result && !result.failClosed
+                                            );
+                                            pdfSupportAlignmentResults.push({
+                                                mode: pdfSupportGate.failClosed
+                                                    ? 'fail-closed'
+                                                    : acceptedAlignments.some(
+                                                        result => result.mode === 'prefix'
+                                                    )
+                                                        ? 'prefix'
+                                                        : 'full',
+                                                safeQuestionNumbers: [
+                                                    ...new Set(
+                                                        acceptedAlignments.flatMap(result =>
+                                                            result.safeQuestionNumbers || []
+                                                        )
+                                                    )
+                                                ],
+                                                fusedQuestionNumbers:
+                                                    pdfSupportGate.fusedQuestionNumbers,
+                                                warnings: [
+                                                    ...pdfSupportGate.fusedWarnings,
+                                                    ...(controlledWriteResult.warnings || [])
+                                                ]
                                             });
 
                                             console.info(
@@ -16881,11 +16943,11 @@ ${source}`;
                                                     effectiveSolutionQuestionNumbers:
                                                         pdfSupportQuestionNumbers(pdfSupportGate.solutions),
                                                     rejectedObjectiveAnswerCount:
-                                                        (fieldControlledWrite.warnings || [])
+                                                        (controlledWriteResult.warnings || [])
                                                             .filter(warning => warning.code === 'parser-objective-answer-rejected')
                                                             .length,
                                                     fieldDecisionSummary:
-                                                        (fieldControlledWrite.fieldDecisions || [])
+                                                        (controlledWriteResult.fieldDecisions || [])
                                                             .map(decision => ({
                                                                 field: decision.field,
                                                                 source: decision.source,
@@ -16903,31 +16965,6 @@ ${source}`;
                                                         pdfSupportGate.report
                                                 });
                                             } else {
-                                                (
-                                                    pdfSupportGate
-                                                        .fusedQuestionNumbers ||
-                                                    []
-                                                ).forEach(questionNumber => {
-                                                    const key =
-                                                        normalizeQuestionKey(
-                                                            questionNumber
-                                                        );
-
-                                                    if (key) {
-                                                        pdfSupportFusedQuestionNumbers
-                                                            .add(key);
-                                                    }
-                                                });
-                                                (
-                                                    pdfSupportGate
-                                                        .fusedWarnings ||
-                                                    []
-                                                ).forEach(warning => {
-                                                    if (warning) {
-                                                        pdfSupportFusedWarnings
-                                                            .add(warning);
-                                                    }
-                                                });
                                                 answerItems.push(
                                                     ...pdfSupportGate.answers
                                                 );
@@ -17429,27 +17466,6 @@ ${source}`;
                         drafts = batchGateResult.drafts;
 
                         if (pdfSupportFailClosed) {
-                            for (const draft of drafts) {
-                                addWarningOnce(
-                                    draft,
-                                    'pdf-support-sequence-unreliable'
-                                );
-
-                                if (!window.Qisi.Utils.cleanRecognizedText(draft.answer)) {
-                                    addWarningOnce(
-                                        draft,
-                                        'missing_answer'
-                                    );
-                                }
-
-                                if (!window.Qisi.Utils.cleanRecognizedText(draft.solution)) {
-                                    addWarningOnce(
-                                        draft,
-                                        'missing_solution'
-                                    );
-                                }
-                            }
-
                             console.warn(
                                 '[BATCH_PDF_SEQUENCE][fail-closed]',
                                 {
@@ -17458,52 +17474,6 @@ ${source}`;
                                         pdfSupportFailClosedReports
                                 }
                             );
-                        }
-
-                        if (pdfSupportFusedQuestionNumbers.size) {
-                            for (const draft of drafts) {
-                                const questionNumber =
-                                    normalizeQuestionKey(
-                                        draft?.questionNumber ||
-                                        draft?.question ||
-                                        draft?.order ||
-                                        draft?.index ||
-                                        ''
-                                    );
-
-                                if (
-                                    !questionNumber ||
-                                    !pdfSupportFusedQuestionNumbers
-                                        .has(questionNumber)
-                                ) {
-                                    continue;
-                                }
-
-                                for (
-                                    const warning of pdfSupportFusedWarnings
-                                ) {
-                                    addWarningOnce(draft, warning);
-                                }
-                            }
-                        }
-
-                        if (pdfSupportFieldWarningsByQuestion.size) {
-                            for (const draft of drafts) {
-                                const questionNumber =
-                                    normalizeQuestionKey(
-                                        draft?.questionNumber ||
-                                        draft?.question ||
-                                        draft?.order ||
-                                        draft?.index ||
-                                        ''
-                                    );
-                                const warnings =
-                                    pdfSupportFieldWarningsByQuestion.get(questionNumber) || [];
-
-                                warnings.forEach(warning =>
-                                    addWarningOnce(draft, warning)
-                                );
-                            }
                         }
 
                         if (!hasAuthoritativeQuestionContract && !pdfSupportFailClosed) {
@@ -17912,6 +17882,36 @@ ${source}`;
 
                         const finalDraftImages = batchGateResult.draftImages;
                         drafts = window.Qisi.ReviewDraftState.attachDraftImageTokensIntoStemsForV2(drafts, finalDraftImages);
+                        if (files.some(file =>
+                            file.fileType === 'pdf' &&
+                            (
+                                batchHasQuestionRole(file) ||
+                                batchIsFullRole(file)
+                            )
+                        )) {
+                            drafts = window.Qisi.PdfCandidateProjection
+                                .projectPdfCandidates({
+                                    drafts,
+                                    sources: files.map((file, index) => ({
+                                        id: file.id,
+                                        fileType: file.fileType,
+                                        sourceOrder: Number.isInteger(file.sourceOrder)
+                                            ? file.sourceOrder
+                                            : index + 1,
+                                        roles: getBatchFileRoles(file)
+                                    })),
+                                    controlledWriteDecisions:
+                                        pdfSupportControlledWriteResults,
+                                    controlledWriteDecisionId:
+                                        `pdf-cw:${batchId}:combined`,
+                                    alignmentResults:
+                                        pdfSupportAlignmentResults,
+                                    routeContext: {
+                                        sourceMode: 'pdf-ai',
+                                        engine: 'strict-visual-page-qwen'
+                                    }
+                                });
+                        }
 
                         console.groupCollapsed('[BATCH_IMAGE][figure-binding]');
                         console.table(drafts.map(draft => ({

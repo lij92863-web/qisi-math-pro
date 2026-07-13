@@ -27,6 +27,9 @@
         if (typeof ports.engine?.processBatchV2 !== 'function') {
             throw createError('PDF_SOURCES_PORT_REQUIRED');
         }
+        if (typeof ports.buildProjectionContext !== 'function') {
+            throw createError('PDF_SOURCES_PROJECTION_PORT_REQUIRED');
+        }
 
         assertActive(input.signal);
         const result = await ports.engine.processBatchV2({
@@ -34,12 +37,24 @@
             files: sources,
             helpers: {
                 ...(input.helpers || {}),
+                deferPdfCandidateProjection: true,
                 pdfSignal: input.signal,
                 onPdfPageProgress: input.onPageProgress
             }
         });
         assertActive(input.signal);
-        return result;
+        if (!result || typeof result !== 'object' || !Array.isArray(result.drafts)) {
+            return result;
+        }
+        const projectionContext = ports.buildProjectionContext({
+            sources,
+            engineResult: result,
+            batch
+        });
+        if (!projectionContext || typeof projectionContext !== 'object') {
+            throw createError('PDF_SOURCES_PROJECTION_CONTEXT_INVALID');
+        }
+        return { ...result, projectionContext };
     }
 
     const api = Object.freeze({ processPdfSources });

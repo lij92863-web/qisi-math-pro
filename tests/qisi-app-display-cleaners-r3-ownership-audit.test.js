@@ -9,7 +9,7 @@ const candidateNormalizerLines = fs.readFileSync(
     'qisi-candidate-normalizer.js',
     'utf8'
 ).split('\n');
-const EXPECTED_REMAINING_CALLSITES = 39;
+const EXPECTED_REMAINING_CALLSITES = 34;
 
 function findLineContaining(fragment, startLine = 1) {
     const index = appLines.findIndex((line, idx) =>
@@ -73,15 +73,16 @@ describe('bm-a4-r3-ownership-audit', () => {
         assert.equal(result.decision.startsWith('BLOCKED'), true);
     });
 
-    it('support attachment context blocked', () => {
-        const site = makeCallsiteAfter(
-            'R3-TEST-03',
-            'addWarningOnce',
-            'pdfSupportFusedWarnings',
-            'addWarningOnce(draft, warning);'
+    it('removed PDF support projection cannot return as an app callsite', () => {
+        const app = appLines.join('\n');
+        const owner = fs.readFileSync(
+            'qisi-pdf-candidate-projection.js',
+            'utf8'
         );
-        const result = auditCallsite(site, appLines);
-        assert.equal(result.decision.startsWith('BLOCKED'), true);
+        assert.doesNotMatch(app, /pdfSupportFusedWarnings/);
+        assert.doesNotMatch(app, /pdfSupportFieldWarningsByQuestion/);
+        assert.match(app, /PdfCandidateProjection\s*\.projectPdfCandidates\s*\(/);
+        assert.match(owner, /function\s+projectPdfCandidate\s*\(/);
     });
 
     it('answer/solution ownership context blocked', () => {

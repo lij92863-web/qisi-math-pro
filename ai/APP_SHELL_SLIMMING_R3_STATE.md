@@ -624,13 +624,41 @@
   commit `7c854d9516f86cf030deed1c22df6229f002a15b`. The legacy projection audit and
   production-linked characterization were independently tested, committed, and
   pushed as `1ed14fcf9a5bef324ad3674392d8e575a18c13bc`.
-- `qisi-pdf-candidate-projection.js` is implemented and browser-loaded as a
-  layer-2 scaffold. Its tests consume the real controlled-write result and
-  enforce source-context mode derivation, per-field provenance, fail-closed
-  missing mode/decision behavior, support/manual-review projection, structured
-  canonical comparison, evidence preservation, and no fake manual provenance.
-  It is not yet called by either production path, so no production-wired claim
-  is made at this stage.
+- The shared `qisi-pdf-candidate-projection.js` owner was implemented,
+  browser-loaded, independently gated, committed, and pushed as
+  `f07b0341b10c0292aaae82e996029bc340756d14`. It consumes the real
+  controlled-write result and fails closed for missing source mode,
+  controlled-write, alignment, ownership, sequence, schema, or strict PDF-AI
+  field evidence.
+- The corrective production wiring is complete in the working package. The
+  normal `processDraftImportBatch` path retains the actual parser/aligner and
+  controlled-write results and delegates final PDF candidate projection to the
+  shared owner. `ProductionPdfSourcesPort` builds the V2 context through that
+  owner, and `ProductionImportBridge` requires and calls the same injected
+  `projectPdfCandidates` port. The bridge remains an overall layer-3 scaffold;
+  this package does not switch the normal UI entry.
+- The old app-local fused/field warning projection and its mutable maps were
+  deleted in the same change that activates the shared owner. Parser, aligner,
+  controlled-write, OCR, persistence, UI, and DOCX logic stayed in their
+  existing owners. All six package-frozen high-risk files remain unmodified.
+- Production-linked projection/Bridge/runtime/architecture targets passed
+  107/107. The true Chromium shadow started from normal `main.html` and passed
+  DOCX deterministic, PDF full, PDF prefix/safe-partial, PDF missing-answer,
+  and PDF ownership-known-bad cases with zero canonical differences, wrong
+  attachments, raw-JSON leakage, placeholders, controlled-write bypass, or
+  real AI/OCR requests.
+- The first `verify:safe` run correctly exposed that deleting five app-local
+  warning callsites made the old display-cleaner residual baseline stale
+  (39 expected versus 34 present). One bounded audit-only correction froze the
+  new count at 34 and added a guard proving the deleted PDF projection cannot
+  return. The complete display-cleaner R3 audit then passed 81/81.
+- On the corrected final code shape, `verify:safe` passed the full suite at
+  1,419/1,419 with no failure, skipped, todo, or timeout. All 11 mandatory
+  gates passed; PDF browser preflight and dry-run recorded
+  `realApiCalled=false` and `underlyingApiCallCount=0`. DOCX stable passed
+  20/20, PDF known-bad passed 65/65, controlled-write ownership passed 21/21,
+  Base Migration passed 15/15, and Route B hold passed 6/6. No real-run was
+  performed.
 - Wave C2-10.5 Phases 5 through 6 and the hard acceptance gates. C2-11 through
   C2-14, attacks, audits, benchmark, CTO review, and seal remain blocked until
   the production bridge and shadow-equivalence package is accepted.
@@ -646,7 +674,7 @@
 
 ## Next exact action
 
-Wire both `processDraftImportBatch` and `ProductionImportBridge` to the shared
-PDF projection owner using the same real controlled-write decision, then remove
-the bounded inline category-A projection. Phase 5 and C2-11 remain blocked until
-the corrective package's browser equivalence and mandatory gates are accepted.
+Commit and push the shared-owner wiring/browser evidence, create the corrective
+release report, and seal the final accepted/blocked decision. If accepted,
+resume Phase 5 browser equivalence; do not enter C2-11 until Phase 5 itself is
+accepted.

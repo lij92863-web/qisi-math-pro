@@ -2,6 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const ControlledWrite = require('../qisi-pdf-support-controlled-write.js');
+const BlockParser = require('../qisi-pdf-support-block-parser.js');
+const Aligner = require('../qisi-pdf-support-aligner.js');
+const FormalAdmissionPolicy = require('../qisi-formal-admission-policy.js');
+const ProductionReviewValidator = require('../qisi-production-review-validator.js');
 
 const Projection = require('../qisi-pdf-candidate-projection.js');
 
@@ -109,6 +113,7 @@ test('projects a fully supported deterministic PDF candidate from real controlle
     assert.equal(result.fieldProvenance.stem.kind, 'deterministic-source');
     assert.equal(result.fieldProvenance.stem.status, 'deterministic-source');
     assert.equal(result.fieldProvenance.answer.kind, 'controlled-write');
+    assert.equal(result.fieldProvenance.answer.controlledWriteAccepted, true);
     assert.equal(result.fieldProvenance.answer.controlledWriteDecisionId, 'cw:pdf-question:1');
     assert.deepEqual(result.controlledWrite.acceptedFields, ['answer', 'solution']);
     assert.deepEqual(result.controlledWrite.rejectedFields, []);
@@ -122,6 +127,208 @@ test('projects a fully supported deterministic PDF candidate from real controlle
     assert.equal(result.diagnostics.requestId, 'engine-request-1');
     assert.equal(result.diagnostics.controlledWriteDecisionId, 'cw:pdf-question:1');
     assert.equal(Object.isFrozen(result), true);
+});
+
+test('projects PDF AI question fields only from explicit strict-engine field decisions', () => {
+    const draft = question();
+    const result = project({
+        parsedQuestion: draft,
+        engineResult: {
+            sourceKind: 'ocrMarkdown',
+            engine: 'qwen-vl',
+            requestId: 'strict-request-1',
+            strictProtocol: {
+                accepted: true,
+                decisionId: 'strict:pdf-question:1',
+                fields: ['questionNumber', 'stem', 'options', 'images'],
+                method: 'strict-json-contract'
+            }
+        },
+        controlledWriteDecision: buildControlledWrite({ draft })
+    });
+
+    assert.equal(result.source.mode, 'pdf-ai');
+    assert.equal(result.supportLevel, 'full');
+    assert.equal(result.manualReviewRequired, false);
+    for (const field of ['questionNumber', 'stem', 'options', 'images']) {
+        assert.equal(result.fieldProvenance[field].kind, 'controlled-write');
+        assert.equal(result.fieldProvenance[field].controlledWriteAccepted, true);
+        assert.equal(
+            result.fieldProvenance[field].controlledWriteDecisionId,
+            'strict:pdf-question:1'
+        );
+    }
+    assert.equal(result.fieldProvenance.answer.controlledWriteDecisionId, 'cw:pdf-question:1');
+    assert.deepEqual(result.controlledWrite.acceptedFields, [
+        'questionNumber', 'stem', 'options', 'answer', 'solution', 'images'
+    ]);
+    assert.deepEqual(result.controlledWrite.rejectedFields, []);
+
+    const review = ProductionReviewValidator
+        .createProductionReviewValidator({
+            policy: FormalAdmissionPolicy,
+            clock: () => 0
+        })
+        .validate({ ...result, version: 1 });
+    assert.equal(review.valid, true);
+    assert.deepEqual(review.errors, []);
+});
+
+test('combines multiple real controlled-write results without changing field decisions', () => {
+    const draft = question({ type: 'solution', options: [], images: [] });
+    const answerDecision = buildControlledWrite({
+        draft, includeAnswer: true, includeSolution: false,
+        decisionId: 'cw:answer'
+    });
+    const solutionDecision = buildControlledWrite({
+        draft, includeAnswer: false, includeSolution: true,
+        decisionId: 'cw:solution'
+    });
+    const combined = Projection.mergeControlledWriteDecisions(
+        [answerDecision, solutionDecision],
+        'cw:combined'
+    );
+
+    assert.equal(combined.decisionId, 'cw:combined');
+    assert.deepEqual(
+        combined.fieldDecisions.map(item => [item.field, item.source]),
+        [['answer', 'parser'], ['solution', 'parser']]
+    );
+    assert.deepEqual(combined.answerQuestionNumbers, ['1']);
+    assert.deepEqual(combined.solutionQuestionNumbers, ['1']);
+});
+
+test('batch projection delegates every input to the same single-candidate owner', () => {
+    const base = {
+        source: { sourceId: 'pdf-question', sourceType: 'pdf', sourceOrder: 1 },
+        engineResult: { sourceKind: 'textLayer', engine: 'pdf-text-layer' },
+        parsedQuestion: question(),
+        alignmentResult: {
+            mode: 'full', safeQuestionNumbers: ['1'],
+            fusedQuestionNumbers: [], warnings: []
+        },
+        controlledWriteDecision: buildControlledWrite({ draft: question() }),
+        evidence: { fields: fieldEvidence(), rawEvidenceRefs: [] },
+        pageContext: { page: 1, sourceOrder: 1 },
+        validation: {
+            schemaValid: true, sequenceValid: true, ownershipValid: true
+        }
+    };
+    const results = Projection.projectPdfCandidates([base, {
+        ...base,
+        parsedQuestion: question({ id: 'draft-pdf-2', questionNumber: '2' }),
+        alignmentResult: {
+            mode: 'prefix', safeQuestionNumbers: [],
+            fusedQuestionNumbers: ['2'], warnings: [{ code: 'sequence-gap' }]
+        }
+    }]);
+
+    assert.equal(results.length, 2);
+    assert.equal(results[0].supportLevel, 'full');
+    assert.equal(results[1].supportLevel, 'rejected');
+});
+
+test('production batch adapter projects PDF drafts while preserving non-PDF drafts', () => {
+    const pdf = question({
+        sourceQuestionFileId: 'pdf-question',
+        sourcePage: 1,
+        images: [],
+        sourceTrace: {
+            source: 'strict-visual-page-qwen',
+            model: 'qwen-vl',
+            sourceFileId: 'pdf-question',
+            sourcePage: 1,
+            strictProtocol: {
+                accepted: true,
+                decisionId: 'strict:pdf-question:1',
+                fields: ['questionNumber', 'stem', 'options'],
+                method: 'strict-json-contract'
+            }
+        }
+    });
+    const docx = {
+        id: 'draft-docx-1', questionNumber: '2', type: 'solution',
+        stem: 'docx stem', options: [], answer: '', solution: '', images: [],
+        sourceFileId: 'docx-question'
+    };
+    const results = Projection.projectPdfCandidates({
+        drafts: [pdf, docx],
+        sources: [
+            {
+                id: 'pdf-question', fileType: 'pdf', sourceOrder: 1,
+                roles: ['question']
+            },
+            {
+                id: 'docx-question', fileType: 'docx', sourceOrder: 2,
+                roles: ['question']
+            }
+        ],
+        controlledWriteDecisions: [buildControlledWrite({ draft: pdf })],
+        controlledWriteDecisionId: 'cw:combined',
+        alignmentResults: [{
+            mode: 'full', safeQuestionNumbers: ['1'],
+            fusedQuestionNumbers: [], warnings: []
+        }],
+        routeContext: {
+            sourceMode: 'pdf-ai', engine: 'strict-visual-page-qwen'
+        }
+    });
+
+    assert.equal(results.length, 2);
+    assert.equal(results[0].source.mode, 'pdf-ai');
+    assert.equal(results[0].fieldProvenance.stem.kind, 'controlled-write');
+    assert.equal(results[0].fieldProvenance.answer.kind, 'controlled-write');
+    assert.equal(results[0].fieldProvenance.images.kind, 'missing');
+    assert.equal(results[0].supportLevel, 'safe-partial');
+    assert.equal(results[0].manualReviewRequired, true);
+    assert.deepEqual(results[1], docx);
+});
+
+test('V2 engine context is built by the owner from real parser, aligner, and controlled-write results', () => {
+    const draft = question({
+        sourceQuestionFileId: 'pdf-question',
+        sourceFileId: 'pdf-question',
+        sourcePage: 1,
+        sourceTrace: {
+            sourceFileId: 'pdf-question', sourcePage: 1,
+            evidenceId: 'question-evidence-1', sourceKind: 'textLayer'
+        }
+    });
+    const sources = [
+        {
+            id: 'pdf-question', fileType: 'pdf', sourceOrder: 1,
+            roles: ['question']
+        },
+        {
+            id: 'pdf-support', fileType: 'pdf', sourceOrder: 2,
+            roles: ['answer', 'solution']
+        }
+    ];
+    const context = Projection.createPdfEngineProjectionContext({
+        sources,
+        engineResult: {
+            drafts: [draft],
+            evidences: [{
+                id: 'support-evidence-1', sourceFileId: 'pdf-support',
+                sourceFileName: 'support.pdf', pageNo: 1,
+                roles: ['answer', 'solution'], selectedSourceKind: 'textLayer',
+                textLayer: '第1题\n答案：A\n解析：because'
+            }]
+        },
+        controlledWriteOwner: ControlledWrite,
+        blockParser: BlockParser,
+        aligner: Aligner,
+        decisionId: 'cw:v2:1'
+    });
+    const [result] = Projection.projectPdfCandidates(context);
+
+    assert.equal(context.controlledWriteDecisions.length, 1);
+    assert.equal(context.controlledWriteDecisions[0].decisionId, 'cw:v2:1');
+    assert.equal(result.source.mode, 'pdf-deterministic');
+    assert.equal(result.answer, 'A');
+    assert.equal(result.solution, 'because');
+    assert.equal(result.fieldProvenance.answer.kind, 'controlled-write');
+    assert.equal(result.validation.sequenceValid, true);
 });
 
 test('derives prefix and safe-partial states from alignment and field decisions, not completeness percentage', () => {
@@ -211,8 +418,10 @@ test('canonical comparator reports structured safety differences and ignores onl
     different.source.mode = 'pdf-ai';
     different.supportLevel = 'safe-partial';
     different.fieldProvenance.answer.kind = 'rejected';
+    different.controlledWrite.evaluated = false;
     different.controlledWrite.acceptedFields = ['solution'];
     different.controlledWrite.rejectedFields = ['answer'];
+    different.controlledWrite.errors = [{ code: 'ownership-invalid' }];
     different.validation.ownershipValid = false;
     different.warnings.push({ code: 'ownership-failure' });
     different.rawEvidenceRefs = [{ evidenceId: 'different-block' }];
@@ -221,8 +430,10 @@ test('canonical comparator reports structured safety differences and ignores onl
     assert.deepEqual(differences.map(item => item.path), [
         'source.mode',
         'fieldProvenance.answer.kind',
+        'controlledWrite.evaluated',
         'controlledWrite.acceptedFields',
         'controlledWrite.rejectedFields',
+        'controlledWrite.errors',
         'supportLevel',
         'validation.ownershipValid',
         'warnings',

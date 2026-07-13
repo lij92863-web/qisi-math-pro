@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
 const { mapCallsite, mapAll } = require('../scripts/bm-a4-r3-field-mutation-map');
-const EXPECTED_REMAINING_CALLSITES = 39;
+const EXPECTED_REMAINING_CALLSITES = 34;
 
 function mapSnippet(source, line, helper = 'cleanDisplayTextForBatchSave') {
     return mapCallsite({ callsiteId: 'R3-TEST', helper, line, text: '' }, source.split(/\r?\n/));

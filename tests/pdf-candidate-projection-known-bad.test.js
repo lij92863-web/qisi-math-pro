@@ -122,6 +122,36 @@ test('raw JSON, wrong ownership, and invalid sequences can never become review-s
     }
 });
 
+test('batch projection cannot synthesize alignment validity from field decisions', () => {
+    const draft = {
+        ...parsedQuestion(),
+        sourceQuestionFileId: 'pdf-1',
+        sourceFileId: 'pdf-1',
+        sourcePage: 1,
+        sourceTrace: {
+            sourceFileId: 'pdf-1',
+            sourcePage: 1,
+            sourceKind: 'textLayer',
+            evidenceId: 'question-block-1'
+        }
+    };
+    const result = Projection.projectPdfCandidates({
+        drafts: [draft],
+        sources: [{
+            id: 'pdf-1', fileType: 'pdf', roles: ['question'], sourceOrder: 1
+        }],
+        controlledWriteDecisions: [realDecision(draft)],
+        alignmentResults: [],
+        routeContext: { engine: 'pdf-text-layer' }
+    })[0];
+
+    assert.equal(result.validation.sequenceValid, false);
+    assert.equal(result.supportLevel, 'rejected');
+    assert.equal(result.controlledWrite.errors.some(error =>
+        error.code === 'sequence-invalid'
+    ), true);
+});
+
 test('confirming a candidate never fabricates manual provenance', () => {
     const result = Projection.projectPdfCandidate(validInput());
     assert.equal(result.fieldProvenance.stem.kind, 'deterministic-source');

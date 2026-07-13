@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
 const { decideResidual, buildResidualProofs } = require('../scripts/bm-a4-r3-residual-proof');
-const EXPECTED_REMAINING_CALLSITES = 39;
+const EXPECTED_REMAINING_CALLSITES = 34;
 
 function decide(overrides) {
     return decideResidual({

@@ -50,6 +50,11 @@
 
     const immutable = value => freeze(clone(value));
     const cleanString = value => String(value ?? '').trim();
+    const finiteNumberOrNull = value => {
+        if (value === null || value === undefined || value === '') return null;
+        const number = Number(value);
+        return Number.isFinite(number) ? number : null;
+    };
     const normalizeQuestionNumber = value => {
         const match = cleanString(value).match(/\d{1,3}/);
         return match ? String(Number(match[0])) : '';
@@ -117,6 +122,34 @@
         ) || null;
     }
 
+    function engineDecisionFor(engineResult, questionNumber, field) {
+        const strict = engineResult?.strictProtocol;
+        if (
+            isRecord(strict) &&
+            strict.accepted === true &&
+            cleanString(strict.decisionId) &&
+            Array.isArray(strict.fields) &&
+            strict.fields.includes(field)
+        ) {
+            return {
+                questionNumber,
+                field,
+                accepted: true,
+                decisionId: cleanString(strict.decisionId),
+                reason: cleanString(strict.method) || 'strict-protocol-accepted'
+            };
+        }
+        if (!Array.isArray(engineResult?.fieldDecisions)) return null;
+        const decision = engineResult.fieldDecisions.find(item =>
+            normalizeQuestionNumber(item?.questionNumber) === questionNumber &&
+            item?.field === field && item?.accepted === true
+        );
+        return decision ? {
+            ...decision,
+            decisionId: cleanString(decision.decisionId || engineResult.decisionId)
+        } : null;
+    }
+
     function supportItemFor(decision, questionNumber, field) {
         const items = field === 'answer'
             ? decision.effectiveAnswerItems
@@ -170,7 +203,10 @@
             fieldEvidence?.page,
             item?.page,
             item?.sourceTrace?.page,
+            item?.sourceTrace?.sourcePage,
+            item?.sourceTrace?.pageIndex,
             item?.evidence?.page,
+            item?.sourcePage,
             pageContext?.page
         ];
         const page = values.find(value => Number.isInteger(Number(value)) && Number(value) > 0);
@@ -207,6 +243,9 @@
             blockIds,
             engine,
             controlledWriteDecisionId: decisionId,
+            ...(kind === 'controlled-write'
+                ? { controlledWriteAccepted: true }
+                : {}),
             manuallyEdited,
             reason,
             reasonCode: reason
@@ -220,6 +259,7 @@
         fieldEvidence,
         item,
         decision,
+        engineDecision,
         sourceId,
         pageContext,
         engine,
@@ -254,13 +294,17 @@
         }
 
         if (mode === 'pdf-ai') {
-            if (accepted) {
+            if (engineDecision) {
                 return {
                     value: rawValue,
                     provenance: provenanceEntry({
                         kind: 'controlled-write', sourceId, page, blockIds,
-                        engine, decisionId, reason: cleanString(decision.reason) ||
-                            'controlled-write-accepted'
+                        engine,
+                        decisionId: cleanString(
+                            engineDecision.decisionId || decisionId
+                        ),
+                        reason: cleanString(engineDecision.reason) ||
+                            'strict-engine-field-accepted'
                     })
                 };
             }
@@ -352,6 +396,9 @@
             const decision = decisionFor(
                 controlledWrite, rawQuestionNumber, field
             );
+            const engineDecision = engineDecisionFor(
+                input.engineResult, rawQuestionNumber, field
+            );
             const item = SUPPORT_FIELDS.has(field)
                 ? supportItemFor(controlledWrite, rawQuestionNumber, field)
                 : null;
@@ -364,6 +411,7 @@
                 fieldEvidence: input.evidence?.fields?.[field],
                 item,
                 decision,
+                engineDecision,
                 sourceId,
                 pageContext: input.pageContext,
                 engine,
@@ -439,16 +487,12 @@
             input.evidence?.engineConflict ? [{ code: 'engine-conflict' }] : [],
             rawJsonCandidate ? [{ code: 'raw-json-candidate' }] : []
         );
-        const acceptedFields = [];
-        const rejectedFields = [];
-        for (const field of FIELDS) {
-            const decision = decisionFor(controlledWrite, rawQuestionNumber, field);
-            if (decision?.source && decision.source !== 'none') {
-                acceptedFields.push(field);
-            } else if (decision?.source === 'none') {
-                rejectedFields.push(field);
-            }
-        }
+        const acceptedFields = FIELDS.filter(field =>
+            provenance[field].kind === 'controlled-write'
+        );
+        const rejectedFields = FIELDS.filter(field =>
+            provenance[field].kind === 'rejected'
+        );
         const incompleteProvenance = Object.values(provenance).some(item =>
             !item.sourceId || item.page === null ||
             (item.kind === 'controlled-write' && !item.controlledWriteDecisionId)
@@ -468,11 +512,9 @@
                 sourceType: cleanString(input.source?.sourceType) || 'pdf',
                 mode: sourceMode,
                 page: evidencePage(null, null, input.pageContext),
-                sourceOrder: Number.isFinite(Number(
+                sourceOrder: finiteNumberOrNull(
                     input.source?.sourceOrder ?? input.pageContext?.sourceOrder
-                ))
-                    ? Number(input.source?.sourceOrder ?? input.pageContext?.sourceOrder)
-                    : null
+                )
             },
             questionNumber: fieldRows.questionNumber.value,
             type: rawJsonCandidate ? '' : cleanString(question.type),
@@ -489,13 +531,22 @@
                 decisionId,
                 acceptedFields,
                 rejectedFields,
-                errors: validityRejected
-                    ? [
-                        !validation.schemaValid ? { code: 'schema-invalid' } : null,
-                        !validation.sequenceValid ? { code: 'sequence-invalid' } : null,
-                        !validation.ownershipValid ? { code: 'ownership-invalid' } : null
-                    ].filter(Boolean)
-                    : [],
+                errors: stableWarnings(
+                    controlledWrite.errors || [],
+                    validityRejected
+                        ? [
+                            !validation.schemaValid
+                                ? { code: 'schema-invalid' }
+                                : null,
+                            !validation.sequenceValid
+                                ? { code: 'sequence-invalid' }
+                                : null,
+                            !validation.ownershipValid
+                                ? { code: 'ownership-invalid' }
+                                : null
+                        ].filter(Boolean)
+                        : []
+                ),
                 warnings: stableWarnings(controlledWrite.warnings || [])
             },
             validation,
@@ -510,6 +561,369 @@
         });
     }
 
+    function mergeControlledWriteDecisions(decisions = [], decisionId = '') {
+        const results = (Array.isArray(decisions) ? decisions : [])
+            .map(assertControlledWrite);
+        if (!results.length) throw createError('controlled-write-missing');
+
+        const fieldDecisionMap = new Map();
+        const acceptDecision = item => item?.source && item.source !== 'none';
+        for (const result of results) {
+            for (const item of result.fieldDecisions) {
+                const questionNumber = normalizeQuestionNumber(item?.questionNumber);
+                const field = cleanString(item?.field);
+                if (!questionNumber || !SUPPORT_FIELDS.has(field)) continue;
+                const key = `${questionNumber}:${field}`;
+                const current = fieldDecisionMap.get(key);
+                if (!current || (!acceptDecision(current) && acceptDecision(item))) {
+                    fieldDecisionMap.set(key, clone({ ...item, questionNumber, field }));
+                }
+            }
+        }
+
+        const acceptedByField = field => {
+            const itemMap = new Map();
+            for (const result of results) {
+                const items = field === 'answer'
+                    ? result.effectiveAnswerItems
+                    : result.effectiveSolutionItems;
+                for (const item of items) {
+                    const questionNumber = normalizeQuestionNumber(
+                        item?.questionNumber ?? item?.question ?? item?.no ?? item?.order
+                    );
+                    if (!questionNumber || itemMap.has(questionNumber)) continue;
+                    const decision = fieldDecisionMap.get(`${questionNumber}:${field}`);
+                    if (acceptDecision(decision)) itemMap.set(questionNumber, clone(item));
+                }
+            }
+            return [...itemMap.values()];
+        };
+        const effectiveAnswerItems = acceptedByField('answer');
+        const effectiveSolutionItems = acceptedByField('solution');
+        const answerQuestionNumbers = effectiveAnswerItems
+            .map(item => normalizeQuestionNumber(
+                item?.questionNumber ?? item?.question ?? item?.no ?? item?.order
+            ))
+            .filter(Boolean);
+        const solutionQuestionNumbers = effectiveSolutionItems
+            .map(item => normalizeQuestionNumber(
+                item?.questionNumber ?? item?.question ?? item?.no ?? item?.order
+            ))
+            .filter(Boolean);
+
+        return immutable({
+            decisionId: cleanString(decisionId) || results
+                .map(result => cleanString(result.decisionId))
+                .filter(Boolean)
+                .join('+'),
+            effectiveAnswerItems,
+            effectiveSolutionItems,
+            fusedQuestionNumbers: [...new Set(results.flatMap(result =>
+                result.fusedQuestionNumbers || []
+            ).map(normalizeQuestionNumber).filter(Boolean))],
+            warnings: stableWarnings(results.flatMap(result => result.warnings || [])),
+            fieldDecisions: [...fieldDecisionMap.values()],
+            answerQuestionNumbers,
+            solutionQuestionNumbers,
+            controlledWriteSummary: {
+                answerQuestionNumbers,
+                solutionQuestionNumbers,
+                decisionCount: fieldDecisionMap.size
+            }
+        });
+    }
+
+    function createPdfEngineProjectionContext({
+        sources = [],
+        engineResult = {},
+        controlledWriteOwner,
+        blockParser,
+        aligner,
+        decisionId = ''
+    } = {}) {
+        if (
+            !Array.isArray(sources) || !sources.length ||
+            !Array.isArray(engineResult?.drafts) || !engineResult.drafts.length ||
+            typeof controlledWriteOwner?.buildPdfSupportParserGate !== 'function' ||
+            typeof controlledWriteOwner?.buildPdfSupportFieldLevelControlledWrite !== 'function' ||
+            typeof blockParser?.parsePdfSupportBlocks !== 'function' ||
+            typeof aligner?.alignPdfSupport !== 'function'
+        ) {
+            throw createError('pdf-projection-context-invalid');
+        }
+        const expectedQuestionNumbers = engineResult.drafts
+            .map(draft => normalizeQuestionNumber(
+                draft?.questionNumber ?? draft?.question ?? draft?.no ?? draft?.order
+            ))
+            .filter(Boolean);
+        const supportSources = sources.filter(source => {
+            const roles = sourceRoles(source);
+            return roles.has('answer') || roles.has('solution') || roles.has('full');
+        });
+        const supportSourceIds = new Set(
+            supportSources.map(source => cleanString(source?.id || source?.sourceId))
+        );
+        const supportEvidences = (Array.isArray(engineResult.evidences)
+            ? engineResult.evidences
+            : []).filter(evidence =>
+            supportSourceIds.has(cleanString(evidence?.sourceFileId))
+        );
+        const rawTextPages = supportEvidences.map(evidence => {
+            const selectedSourceKind = cleanString(evidence?.selectedSourceKind);
+            const text = selectedSourceKind === 'ocrMarkdown'
+                ? cleanString(evidence?.ocrMarkdown)
+                : selectedSourceKind === 'textLayer'
+                    ? cleanString(evidence?.textLayer)
+                    : '';
+            return {
+                pageNo: Number(evidence?.pageNo || 0),
+                sourceOrder: Number(evidence?.pageNo || 0),
+                text
+            };
+        }).filter(page => page.text);
+        const supportFile = supportSources[0] || {
+            id: cleanString(supportEvidences[0]?.sourceFileId),
+            filename: cleanString(supportEvidences[0]?.sourceFileName)
+        };
+        const parserGate = controlledWriteOwner.buildPdfSupportParserGate({
+            parsePdfSupportBlocks: blockParser.parsePdfSupportBlocks,
+            alignPdfSupport: aligner.alignPdfSupport,
+            file: supportFile,
+            expectedQuestionNumbers,
+            rawTextPages
+        });
+        const controlledWrite = controlledWriteOwner
+            .buildPdfSupportFieldLevelControlledWrite({
+                drafts: engineResult.drafts,
+                parserSafeAnswerItems: parserGate?.failClosed
+                    ? [] : parserGate?.answers || [],
+                parserSafeSolutionItems: parserGate?.failClosed
+                    ? [] : parserGate?.solutions || [],
+                parserFusedQuestionNumbers: parserGate?.fusedQuestionNumbers || []
+            });
+        if (!controlledWrite) throw createError('controlled-write-missing');
+        const controlledWriteDecision = {
+            ...controlledWrite,
+            decisionId: cleanString(decisionId) ||
+                `pdf-cw:${cleanString(supportFile?.id)}:engine`
+        };
+        const alignmentResult = parserGate
+            ? {
+                mode: parserGate.mode,
+                safeQuestionNumbers: parserGate.safeQuestionNumbers || [],
+                fusedQuestionNumbers: parserGate.fusedQuestionNumbers || [],
+                warnings: [
+                    ...(parserGate.fusedWarnings || []),
+                    ...(controlledWriteDecision.warnings || [])
+                ]
+            }
+            : {
+                mode: 'fail-closed',
+                safeQuestionNumbers: [],
+                fusedQuestionNumbers: expectedQuestionNumbers,
+                warnings: [{ code: 'support-parser-evidence-missing' }]
+            };
+
+        return immutable({
+            drafts: engineResult.drafts,
+            sources,
+            controlledWriteDecisions: [controlledWriteDecision],
+            controlledWriteDecisionId: controlledWriteDecision.decisionId,
+            alignmentResults: [alignmentResult],
+            routeContext: { engine: 'qisi-batch-engine-v2' }
+        });
+    }
+
+    function sourceRoles(source) {
+        const roles = Array.isArray(source?.roles)
+            ? source.roles
+            : source?.role
+                ? [source.role]
+                : [];
+        return new Set(roles.map(role => cleanString(role).toLowerCase()));
+    }
+
+    function sourceIdForDraft(draft) {
+        return cleanString(
+            draft?.sourceQuestionFileId ||
+            draft?.sourceFileId ||
+            draft?.sourceTrace?.sourceQuestionFileId ||
+            draft?.sourceTrace?.sourceFileId
+        );
+    }
+
+    function mergeProjectedDraft(draft, projected) {
+        const warningCodes = projected.warnings.map(item => item.code);
+        return {
+            ...clone(draft),
+            ...(typeof draft?.source === 'string' && draft.source
+                ? { sourceLabel: draft.source }
+                : {}),
+            ...clone(projected),
+            warnings: [...new Set([
+                ...(Array.isArray(draft?.warnings) ? draft.warnings : []),
+                ...warningCodes
+            ])]
+        };
+    }
+
+    function batchProjectionInputs(input) {
+        const drafts = Array.isArray(input?.drafts) ? input.drafts : [];
+        const sources = Array.isArray(input?.sources) ? input.sources : [];
+        if (!drafts.length || !sources.length) {
+            throw createError('pdf-projection-input-missing');
+        }
+        const sourceMap = new Map(sources.map(source => [
+            cleanString(source?.id || source?.sourceId), source
+        ]));
+        const controlledWriteDecision = mergeControlledWriteDecisions(
+            input.controlledWriteDecisions,
+            cleanString(input.controlledWriteDecisionId)
+        );
+        const alignments = Array.isArray(input.alignmentResults)
+            ? input.alignmentResults
+            : [];
+        const failClosed = !alignments.length ||
+            alignments.some(result => result?.mode === 'fail-closed');
+        const alignmentMode = failClosed
+            ? 'fail-closed'
+            : alignments.some(result => result?.mode === 'prefix')
+                ? 'prefix'
+                : 'full';
+        const safeQuestionNumbers = [...new Set(
+            alignments.flatMap(result => result?.safeQuestionNumbers || [])
+                .map(normalizeQuestionNumber)
+                .filter(Boolean)
+        )];
+        const fusedQuestionNumbers = [...new Set([
+            ...alignments.flatMap(result => result?.fusedQuestionNumbers || []),
+            ...(controlledWriteDecision.fusedQuestionNumbers || [])
+        ].map(normalizeQuestionNumber).filter(Boolean))];
+        const alignmentWarnings = stableWarnings(
+            alignments.flatMap(result => result?.warnings || [])
+        );
+        const projectedIndexes = [];
+        const projectionInputs = [];
+
+        drafts.forEach((draft, index) => {
+            const sourceId = sourceIdForDraft(draft);
+            const source = sourceMap.get(sourceId);
+            if (cleanString(source?.fileType).toLowerCase() !== 'pdf') return;
+            const roles = sourceRoles(source);
+            const questionNumber = normalizeQuestionNumber(
+                draft?.questionNumber ?? draft?.question ?? draft?.no ?? draft?.order
+            );
+            const trace = isRecord(draft?.sourceTrace) ? draft.sourceTrace : {};
+            const page = Number(
+                draft?.sourcePage || trace.sourcePage || trace.pageIndex || 1
+            );
+            const questionEvidenceId = cleanString(
+                trace.evidenceId || trace.strictProtocol?.decisionId
+            );
+            const questionEvidence = {
+                page,
+                blockIds: questionEvidenceId ? [questionEvidenceId] : []
+            };
+            const imageBlockIds = (Array.isArray(draft?.images) ? draft.images : [])
+                .map(image => cleanString(image?.id || image?.imageId || image))
+                .filter(Boolean);
+            const strict = isRecord(trace.strictProtocol)
+                ? trace.strictProtocol
+                : null;
+            const sourceKind = cleanString(
+                trace.sourceKind || draft?.sourceKind || input.routeContext?.sourceKind
+            );
+            const sourceMode = cleanString(input.routeContext?.sourceMode);
+            const ownershipValid = Boolean(
+                sourceId && source && (roles.has('question') || roles.has('full'))
+            );
+            const structuralValid = Boolean(
+                questionNumber && cleanString(draft?.type) && cleanString(draft?.stem) &&
+                draft?.rawJsonCandidate !== true
+            );
+
+            projectedIndexes.push(index);
+            projectionInputs.push({
+                source: {
+                    sourceId,
+                    sourceType: 'pdf',
+                    sourceOrder: Number.isFinite(Number(source?.sourceOrder))
+                        ? Number(source.sourceOrder)
+                        : null,
+                    ...(sourceMode ? { mode: sourceMode } : {})
+                },
+                engineResult: {
+                    ...(sourceKind ? { sourceKind } : {}),
+                    engine: cleanString(
+                        trace.model || trace.source || input.routeContext?.engine
+                    ),
+                    requestId: cleanString(trace.requestId),
+                    ...(strict ? { strictProtocol: strict } : {})
+                },
+                parsedQuestion: draft,
+                alignmentResult: {
+                    mode: alignmentMode,
+                    safeQuestionNumbers,
+                    fusedQuestionNumbers,
+                    warnings: alignmentWarnings
+                },
+                controlledWriteDecision,
+                evidence: {
+                    fields: {
+                        questionNumber: questionEvidence,
+                        stem: questionEvidence,
+                        options: questionEvidence,
+                        answer: {},
+                        solution: {},
+                        images: { page, blockIds: imageBlockIds }
+                    },
+                    rawEvidenceRefs: [
+                        ...(questionEvidenceId
+                            ? [{ evidenceId: questionEvidenceId }]
+                            : []),
+                        ...imageBlockIds.map(imageId => ({ imageId }))
+                    ],
+                    formulaFallback: draft?.formulaFallback === true,
+                    engineConflict: draft?.engineConflict === true
+                },
+                pageContext: {
+                    page,
+                    sourceOrder: Number.isFinite(Number(source?.sourceOrder))
+                        ? Number(source.sourceOrder)
+                        : null
+                },
+                validation: {
+                    schemaValid: structuralValid,
+                    sequenceValid: !failClosed &&
+                        safeQuestionNumbers.includes(questionNumber) &&
+                        !fusedQuestionNumbers.includes(questionNumber),
+                    ownershipValid
+                }
+            });
+        });
+
+        if (!projectionInputs.length) return { drafts, projectionInputs, projectedIndexes };
+        return { drafts, projectionInputs, projectedIndexes };
+    }
+
+    function projectPdfCandidates(input = []) {
+        if (Array.isArray(input)) {
+            if (!input.length) throw createError('pdf-projection-input-missing');
+            return immutable(input.map(projectPdfCandidate));
+        }
+        const batch = batchProjectionInputs(input);
+        if (!batch.projectionInputs.length) return immutable(batch.drafts);
+        const projected = batch.projectionInputs.map(projectPdfCandidate);
+        const byIndex = new Map(
+            batch.projectedIndexes.map((index, offset) => [index, projected[offset]])
+        );
+        return immutable(batch.drafts.map((draft, index) =>
+            byIndex.has(index)
+                ? mergeProjectedDraft(draft, byIndex.get(index))
+                : clone(draft)
+        ));
+    }
+
     function stripVolatile(value) {
         if (Array.isArray(value)) return value.map(stripVolatile);
         if (!isRecord(value)) return value;
@@ -521,10 +935,14 @@
         );
     }
 
-    function stableWarningCodes(candidate) {
-        return [...new Set((candidate?.warnings || []).map(item =>
+    function stableCodes(values) {
+        return [...new Set((values || []).map(item =>
             typeof item === 'string' ? stableCode(item) : stableCode(item?.code)
         ))].sort();
+    }
+
+    function stableWarningCodes(candidate) {
+        return stableCodes(candidate?.warnings);
     }
 
     function stableEvidenceIdentities(candidate) {
@@ -562,6 +980,12 @@
                 'error'
             ]),
             [
+                'controlledWrite.evaluated',
+                legacy?.controlledWrite?.evaluated,
+                bridge?.controlledWrite?.evaluated,
+                'error'
+            ],
+            [
                 'controlledWrite.acceptedFields',
                 legacy?.controlledWrite?.acceptedFields,
                 bridge?.controlledWrite?.acceptedFields,
@@ -572,6 +996,18 @@
                 legacy?.controlledWrite?.rejectedFields,
                 bridge?.controlledWrite?.rejectedFields,
                 'error'
+            ],
+            [
+                'controlledWrite.errors',
+                stableCodes(legacy?.controlledWrite?.errors),
+                stableCodes(bridge?.controlledWrite?.errors),
+                'error'
+            ],
+            [
+                'controlledWrite.warnings',
+                stableCodes(legacy?.controlledWrite?.warnings),
+                stableCodes(bridge?.controlledWrite?.warnings),
+                'warning'
             ],
             ['supportLevel', legacy?.supportLevel, bridge?.supportLevel, 'error'],
             [
@@ -624,7 +1060,10 @@
     const api = Object.freeze({
         FIELDS,
         PdfCandidateProjectionError,
+        mergeControlledWriteDecisions,
+        createPdfEngineProjectionContext,
         projectPdfCandidate,
+        projectPdfCandidates,
         compareCanonicalPdfCandidates
     });
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

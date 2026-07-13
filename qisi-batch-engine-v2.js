@@ -172,6 +172,8 @@
         const picked = chooseEvidenceSourceTextV2(evidence);
         const source = asText(picked.source || '');
 
+        evidence.selectedSourceKind = picked.sourceKind;
+
         if (!source) return [];
 
         evidence.warnings = [
@@ -222,7 +224,9 @@
         const rows = [];
 
         for (const evidence of evidences) {
-            const source = asText(chooseEvidenceSourceTextV2(evidence).source || '');
+            const picked = chooseEvidenceSourceTextV2(evidence);
+            evidence.selectedSourceKind = picked.sourceKind;
+            const source = asText(picked.source || '');
             for (const block of splitQuestionBlocksV2(source)) {
                 const split = stripAnswerSolution(block.body || block.rawBlock);
                 const fallback = kind === 'solution' ? split.solution || split.stem : split.answer || split.stem;
@@ -885,6 +889,7 @@
                     rawBlock: block.rawBlock || '',
                     pageText: block.pageText || evidence.textLayer || evidence.ocrMarkdown || '',
                     evidenceId: evidence.id || '',
+                    sourceKind: block.sourceKind || evidence.selectedSourceKind || '',
                     layout: evidence.layout || null,
                     warnings: evidence.warnings || [],
                     errors: evidence.errors || []
@@ -1352,8 +1357,20 @@
         }
 
         const unmatched = [];
-        attachSupportItems(drafts, extractSupportItemsV2(answerEvidence, 'answer', helpers), 'answer', helpers, unmatched);
-        attachSupportItems(drafts, extractSupportItemsV2(solutionEvidence, 'solution', helpers), 'solution', helpers, unmatched);
+        const answerSupportItems = extractSupportItemsV2(
+            answerEvidence, 'answer', helpers
+        );
+        const solutionSupportItems = extractSupportItemsV2(
+            solutionEvidence, 'solution', helpers
+        );
+        if (helpers.deferPdfCandidateProjection !== true) {
+            attachSupportItems(
+                drafts, answerSupportItems, 'answer', helpers, unmatched
+            );
+            attachSupportItems(
+                drafts, solutionSupportItems, 'solution', helpers, unmatched
+            );
+        }
 
         drafts = drafts
             .sort((a, b) => {

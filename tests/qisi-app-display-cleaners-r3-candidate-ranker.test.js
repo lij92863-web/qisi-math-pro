@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const { rankCallsite, rankAll, RISK_PATTERNS } = require('../scripts/bm-a4-r3-candidate-ranker');
 
 const appLines = fs.readFileSync('app.js', 'utf8').split('\n');
-const EXPECTED_REMAINING_CALLSITES = 39;
+const EXPECTED_REMAINING_CALLSITES = 34;
 
 describe('bm-a4-r3-candidate-ranker', () => {
     it('tool exists', () => { assert.equal(fs.existsSync('scripts/bm-a4-r3-candidate-ranker.js'), true); });

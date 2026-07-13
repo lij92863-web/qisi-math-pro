@@ -288,10 +288,10 @@
     {
       "id": "pdf-candidate-projection", "file": "qisi-pdf-candidate-projection.js",
       "layer": 2, "domainOwner": "pdfCandidateProjectionOwner",
-      "publicApi": ["FIELDS", "PdfCandidateProjectionError", "projectPdfCandidate", "compareCanonicalPdfCandidates"],
+      "publicApi": ["FIELDS", "PdfCandidateProjectionError", "mergeControlledWriteDecisions", "createPdfEngineProjectionContext", "projectPdfCandidate", "projectPdfCandidates", "compareCanonicalPdfCandidates"],
       "allowedDependencies": ["controlled-write", "support-aligner", "support-parser"],
       "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
-      "status": "scaffold"
+      "status": "production-wired"
     },
     {
       "id": "candidate-normalizer", "file": "qisi-candidate-normalizer.js",
@@ -342,6 +342,7 @@
         "production-import-status-port", "production-import-output-port",
         "production-docx-source-port", "docx-import-coordinator",
         "production-pdf-sources-port", "pdf-import-coordinator",
+        "pdf-candidate-projection",
         "candidate-normalizer", "import-validation-service", "review-draft-builder",
         "draft-persistence-service", "import-diagnostics"
       ],
@@ -362,6 +363,7 @@
         "production-import-status-port", "production-import-output-port",
         "production-docx-source-port", "docx-import-coordinator",
         "production-pdf-sources-port", "pdf-import-coordinator", "candidate-normalizer",
+        "pdf-candidate-projection",
         "import-validation-service", "review-draft-builder",
         "draft-persistence-service", "import-diagnostics"
       ],

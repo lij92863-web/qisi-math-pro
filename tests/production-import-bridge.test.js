@@ -14,6 +14,8 @@ const Validation = require('../qisi-import-validation-service.js');
 const ReviewBuilder = require('../qisi-review-draft-builder.js');
 const OutputPort = require('../qisi-production-import-output-port.js');
 const Diagnostics = require('../qisi-import-diagnostics.js');
+const Projection = require('../qisi-pdf-candidate-projection.js');
+const ControlledWrite = require('../qisi-pdf-support-controlled-write.js');
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -38,16 +40,68 @@ const docxDraft = () => ({
     source: { mode: 'docx-deterministic', sourceId: 'docx-1' }
 });
 const pdfDraft = () => ({
-    id: 'draft-pdf-1', questionNumber: '1', type: '解答题',
-    stem: 'safe pdf stem', options: [], answer: '', solution: 'safe solution',
-    warnings: ['missing-answer'], supportLevel: 'prefix',
-    manualReviewRequired: true,
-    source: { mode: 'pdf-ai', sourceId: 'pdf-question' },
-    fieldProvenance: {
-        answer: { status: 'rejected', reasonCode: 'ownership-gap' },
-        solution: { status: 'controlled-write', controlledWriteAccepted: true }
+    id: 'draft-pdf-1', questionNumber: '1', type: 'choice',
+    stem: 'safe pdf stem',
+    options: [
+        { label: 'A', text: 'alpha' }, { label: 'B', text: 'beta' },
+        { label: 'C', text: 'gamma' }, { label: 'D', text: 'delta' }
+    ],
+    answer: '', solution: '', images: [], warnings: ['missing-answer'],
+    sourceQuestionFileId: 'pdf-question', sourceFileId: 'pdf-question',
+    sourcePage: 1,
+    sourceTrace: {
+        sourceFileId: 'pdf-question', sourcePage: 1,
+        evidenceId: 'question-block', sourceKind: 'textLayer'
     }
 });
+
+const pdfProjectionInput = (draft = pdfDraft()) => ({
+    source: {
+        sourceId: 'pdf-question', sourceType: 'pdf', sourceOrder: 1
+    },
+    engineResult: { sourceKind: 'textLayer', engine: 'pdf-text-layer' },
+    parsedQuestion: draft,
+    alignmentResult: {
+        mode: 'prefix', safeQuestionNumbers: ['1'],
+        fusedQuestionNumbers: [], warnings: [{ code: 'sequence-prefix' }]
+    },
+    controlledWriteDecision: {
+        ...ControlledWrite.buildPdfSupportFieldLevelControlledWrite({
+            drafts: [draft],
+            parserSafeAnswerItems: [{
+                questionNumber: '1', answer: '{"unsafe":"shell"}'
+            }],
+            parserSafeSolutionItems: [{
+                questionNumber: '1', solution: 'safe solution'
+            }]
+        }),
+        decisionId: 'cw:bridge:1'
+    },
+    evidence: {
+        fields: Object.fromEntries([
+            'questionNumber', 'stem', 'options', 'answer', 'solution', 'images'
+        ].map(field => [field, { page: 1, blockIds: [`${field}-block`] }])),
+        rawEvidenceRefs: [{ evidenceId: 'question-block' }]
+    },
+    pageContext: { page: 1, sourceOrder: 1 },
+    validation: {
+        schemaValid: true, sequenceValid: true, ownershipValid: true
+    }
+});
+
+const pdfProjectionContext = (draft = pdfDraft()) => {
+    const input = pdfProjectionInput(draft);
+    return {
+        drafts: [draft],
+        sources: pdfFiles(),
+        controlledWriteDecisions: [input.controlledWriteDecision],
+        controlledWriteDecisionId: input.controlledWriteDecision.decisionId,
+        alignmentResults: [input.alignmentResult],
+        routeContext: {
+            sourceMode: 'pdf-deterministic', engine: 'pdf-text-layer'
+        }
+    };
+};
 
 const normalizerHelpers = {
     hasUnescapedLatexCommandInJsonString: () => false,
@@ -156,6 +210,9 @@ function createHarness(overrides = {}) {
                 {
                     processSources: async () => ({
                         drafts: clone(overrides.sourceDrafts || [pdfDraft()]),
+                        projectionContext: clone(
+                            overrides.projectionContext || pdfProjectionContext()
+                        ),
                         draftImages: [], unmatched: [], warnings: ['safe-prefix'], errors: []
                     }),
                     createSafePartial: draft => ({
@@ -165,6 +222,10 @@ function createHarness(overrides = {}) {
                 },
                 signal
             );
+        },
+        projectPdfCandidates: inputs => {
+            calls.push('pdf-project');
+            return Projection.projectPdfCandidates(inputs);
         },
         normalizeCandidates: drafts => {
             calls.push('normalize');
@@ -229,6 +290,8 @@ test('PDF safe partial uses the recognition path and preserves rejected ownershi
     assert.equal(result.state.state, 'WAITING_CONFIRMATION');
     assert.equal(result.drafts[0].supportLevel, 'prefix');
     assert.equal(result.drafts[0].fieldProvenance.answer.status, 'rejected');
+    assert.equal(result.drafts[0].fieldProvenance.solution.status, 'controlled-write');
+    assert.equal(harness.calls.includes('pdf-project'), true);
     assert.equal(harness.calls.includes('pdf'), true);
     assert.equal(harness.calls.includes('docx'), false);
 });
