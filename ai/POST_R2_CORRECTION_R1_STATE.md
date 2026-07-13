@@ -3,9 +3,8 @@
 - Start commit: `6ab88d0551be5af24d134f17906ba0c42631b2ea`
 - Baseline tag: `pre-post-r2-correction-r1-6ab88d0`
 - Current branch: `stage/post-r2-correction-r1`
-- Current phase: Program A / Phase 2
-- Current work package: A2-9 architecture ownership manifest accepted;
-  preparing atomic commit
+- Current phase: Program A / Phase 8
+- Current work package: final report prepared; Git ff-only seal pending
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Completed
@@ -75,7 +74,8 @@
 
 ## Pending
 
-- Phase 3 through Phase 8 attacks, audits, benchmark, CTO review, and sealing.
+- Phase 8 ff-only main merge, annotated tag, and remote verification.
+- Program B OCR quality measurement and Program C app-shell slimming.
 
 ## Commits
 
@@ -298,6 +298,10 @@
   is `POST_R2_CORRECTION_ACCEPTED_WITH_LIMITATIONS`.
 - Phase 7 full mandatory matrix and browser preflight/dry-run passed with no
   real API call. Real OCR remains explicitly unmeasured for Program B.
+- Phase 8 fetched live main and confirmed it remained at the verified baseline;
+  work branch was clean and the proposed release tag was available.
+- Phase 8 final mandatory matrix passed; preflight/dry-run remained healthy with
+  no real API call. Final report failure-first gate was established.
 
 ## Blockers
 
@@ -306,4 +310,5 @@
 
 ## Next exact action
 
-Commit/push Phase 7 CTO review, then execute Phase 8 final report and Git seal.
+Commit/push the Phase 8 final report, then perform the authorized ff-only merge,
+annotated tag, pushes, and local/remote verification.
