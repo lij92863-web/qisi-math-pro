@@ -162,7 +162,7 @@
       "id": "injected-import-path", "file": "qisi-injected-import-path.js",
       "layer": 2, "domainOwner": "injectedImportPathOwner",
       "publicApi": ["createInjectedImportPath"],
-      "allowedDependencies": ["storage-repository"],
+      "allowedDependencies": ["storage-repository", "import-diagnostics"],
       "forbiddenDependencies": ["app-shell", "formal-admission"],
       "status": "production-wired"
     },
@@ -278,6 +278,14 @@
       "status": "production-wired"
     },
     {
+      "id": "import-diagnostics", "file": "qisi-import-diagnostics.js",
+      "layer": 2, "domainOwner": "importDiagnosticsOwner",
+      "publicApi": ["createImportDiagnostics"],
+      "allowedDependencies": ["secure-logger"],
+      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "controlled-write", "route-b-research"],
+      "status": "production-wired"
+    },
+    {
       "id": "app-shell", "file": "app.js", "layer": 4,
       "domainOwner": "appShellOwner", "publicApi": ["App.setup"],
       "allowedDependencies": [
@@ -290,7 +298,7 @@
         "secure-logger", "batch-context-service", "source-role-classifier",
         "docx-import-coordinator", "pdf-import-coordinator", "candidate-normalizer",
         "import-validation-service", "review-draft-builder",
-        "draft-persistence-service"
+        "draft-persistence-service", "import-diagnostics"
       ],
       "forbiddenDependencies": ["route-b-research"],
       "status": "production-wired"

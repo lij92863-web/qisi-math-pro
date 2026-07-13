@@ -183,7 +183,14 @@
                                 buildReviewDrafts:
                                     Qisi.ReviewDraftBuilder.buildReviewDrafts,
                                 persistDraftBatch:
-                                    draftPersistenceService.persistDraftBatch
+                                    draftPersistenceService.persistDraftBatch,
+                                diagnostics:
+                                    Qisi.ImportDiagnostics.createImportDiagnostics({
+                                        clock: () =>
+                                            globalThis.performance?.now?.() ?? Date.now(),
+                                        logger: event =>
+                                            console.info('[QISI_IMPORT_DIAGNOSTICS]', event)
+                                    })
                             })
                                 .run(batchId, Qisi.Runtime.getRuntimeDependency('InjectedImportTransport'))
                             : processDraftImportBatch(batchId),

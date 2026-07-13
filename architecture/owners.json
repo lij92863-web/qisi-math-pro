@@ -35,5 +35,6 @@
   "importValidationServiceOwner": "qisi-import-validation-service.js",
   "reviewDraftBuilderOwner": "qisi-review-draft-builder.js",
   "draftPersistenceServiceOwner": "qisi-draft-persistence-service.js",
+  "importDiagnosticsOwner": "qisi-import-diagnostics.js",
   "appShellOwner": "app.js"
 }

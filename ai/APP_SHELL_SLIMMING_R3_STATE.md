@@ -305,9 +305,40 @@
   layers, 37 modules, and 55 declared dependency edges with no missing target,
   cycle, upward dependency, or owner mismatch.
 
+- Wave C2-10 implemented and production-wired `qisi-import-diagnostics.js` as
+  the single owner for allowlisted import lifecycle diagnostics.
+- Events contain only requestId, batchId, a fixed lifecycle stage, measured
+  duration, a catalogued stable error code, an approved engine token, and capped
+  count fields. Caller-supplied duration, unknown count keys, arbitrary error
+  strings, private source text, base64, keys, filenames, and model responses are
+  never copied into the event or immutable snapshot.
+- Duration is derived from the injected monotonic clock and clamped against clock
+  rollback and runaway values. Identifiers, counts, event volume, and engine
+  tokens have explicit caps; a throwing secure logger port is isolated and cannot
+  change import success, failure, or cancellation behavior.
+- The injected production path now records context load, candidate production,
+  safe-prefix selection, validation, review projection, and persistence. Known
+  owner errors retain stable codes, AbortError maps to `import-cancelled`, and all
+  arbitrary Error data maps to `import-failed` without copying the message.
+- C2-10 failure-first began with module-not-found. The pure owner then passed 5/6
+  tests while the deliberately absent production link remained red. Production
+  wiring completed the gate; the app instance was inlined into the existing
+  coordinator configuration so the frozen responsibility map stayed at 315
+  functions without adding a new shell owner.
+- Final diagnostics and real injected-path targets passed 7/7, architecture and
+  baseline targets passed 11/11, true DOCX/PDF/admission/reload browser
+  characterization passed 7/7, the full suite passed 1,319/1,319, and all 11
+  mandatory gates passed. Browser preflight/dry-run recorded
+  `realApiCalled=false` and `underlyingApiCallCount=0`; no PDF real-run occurred.
+- `app.js` is now 21,690 physical lines, 88 below the Program C baseline, with
+  315 inventoried functions and complete immutable baseline-name coverage.
+  `processDraftImportBatch` remains 5,108 lines. The manifest now records 5
+  layers, 38 modules, and 58 declared dependency edges with no missing target,
+  cycle, upward dependency, or owner mismatch.
+
 ## Pending
 
-- Phase 2 Waves C2-10 through C2-14, then attacks, audits, benchmark, CTO review,
+- Phase 2 Waves C2-11 through C2-14, then attacks, audits, benchmark, CTO review,
   and seal.
 
 ## Blockers / limitations
@@ -321,6 +352,6 @@
 
 ## Next exact action
 
-Commit and push C2-9, then begin Wave C2-10 Import Diagnostics with failure-first
-characterization of the metadata allowlist, field caps, stable error mapping,
-cancellation, and private-content exclusion.
+Commit and push C2-10, then begin Wave C2-11 retirement of the giant legacy owner
+only after verifying every migrated path is production-wired and shadow-equivalent;
+retain at most a thin wrapper and no unreachable or duplicate legacy branch.
