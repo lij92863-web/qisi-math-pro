@@ -122,12 +122,17 @@ describe('stripBatchImagePlaceholders', () => {
 });
 
 describe('app.js checks', () => {
-    it('app.js explicit calls present', () => {
+    it('media-token helpers remain namespaced in their production owner after shell deletion', () => {
         const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
         const utils = fs.readFileSync(path.join(__dirname, '..', 'qisi-utils.js'), 'utf8');
-        assert.match(app, /window\.Qisi\.Utils\.protectBatchMediaTokens\s*\(/);
-        assert.match(app, /window\.Qisi\.Utils\.restoreBatchMediaTokens\s*\(/);
-        assert.match(app, /window\.Qisi\.Utils\.hasBatchMediaToken\s*\(/);
+        const pipeline = fs.readFileSync(
+            path.join(__dirname, '..', 'qisi-docx-pipeline.js'), 'utf8'
+        );
+        assert.doesNotMatch(app, /const\s+protectBatchMediaTokens\s*=/);
+        assert.doesNotMatch(app, /const\s+restoreBatchMediaTokens\s*=/);
+        assert.match(pipeline, /utils\(\)\.protectBatchMediaTokens/);
+        assert.match(pipeline, /utils\(\)\.restoreBatchMediaTokens/);
+        assert.match(utils, /const\s+hasBatchMediaToken\s*=/);
         const appCallsStrip = /window\.Qisi\.Utils\.stripBatchImagePlaceholders\s*\(/.test(app);
         const utilsHasDisplayCleaner = /cleanDisplayTextForBatchSave/.test(utils);
         assert.ok(

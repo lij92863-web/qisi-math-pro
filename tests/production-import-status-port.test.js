@@ -121,5 +121,6 @@ test('production progress and outer failure paths use the shared owner', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
     assert.match(app, /ProductionImportStatusPort\.reportProgress\s*\(/);
     const failures = app.match(/ProductionImportStatusPort\.reportImportFailure\s*\(/g) || [];
-    assert.equal(failures.length, 2);
+    assert.equal(failures.length, 1);
+    assert.doesNotMatch(app, /processDraftImportBatchV2/);
 });

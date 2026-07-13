@@ -86,15 +86,27 @@ test('source failures are mapped without leaking their message', async () => {
     );
 });
 
-test('production V2 path uses the coordinator and the owner has no forbidden authority', () => {
+test('production DOCX runner owns coordinator composition and has no forbidden authority', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
     const html = fs.readFileSync(path.join(ROOT, 'main.html'), 'utf8');
-    const implementation = fs.readFileSync(path.join(ROOT, 'qisi-docx-import-coordinator.js'), 'utf8');
-    assert.match(app, /Qisi\.DocxImportCoordinator\.runDocxImport\s*\(/);
-    assert.match(app, /Qisi\.ProductionDocxSourcePort\.parseDocxSource\s*\(/);
+    const coordinator = fs.readFileSync(
+        path.join(ROOT, 'qisi-docx-import-coordinator.js'), 'utf8'
+    );
+    const sourcePort = fs.readFileSync(
+        path.join(ROOT, 'qisi-production-docx-source-port.js'), 'utf8'
+    );
+    assert.match(
+        app,
+        /ProductionDocxSourcePort\s*\.createProductionImportRunner\s*\(/
+    );
+    assert.doesNotMatch(app, /DocxImportCoordinator\.runDocxImport\s*\(/);
+    assert.doesNotMatch(app, /ProductionDocxSourcePort\.parseDocxSource\s*\(/);
     assert.doesNotMatch(app, /QisiBatchImporter\.parseDocxFile\s*\(/);
-    assert.match(app, /\{ \.\.\.helpers, baseOrder: candidateOffset, signal \}/);
+    assert.match(sourcePort, /ports\.coordinator\.runDocxImport\s*\(/);
+    assert.match(sourcePort, /parseSource:\s*\(\{ source, candidateOffset \}\)\s*=>\s*parseDocxSource\s*\(/);
     assert.ok(html.indexOf('qisi-docx-import-coordinator.js') < html.indexOf('app.js'));
-    assert.doesNotMatch(implementation, /document\.|window\.|Vue|\.put\s*\(|\.add\s*\(|\.delete\s*\(|\.transaction\s*\(/);
-    assert.doesNotMatch(implementation, /pdf|ocr|vision|FormalAdmission|controlledWrite|saveQuestion/i);
+    for (const implementation of [coordinator, sourcePort]) {
+        assert.doesNotMatch(implementation, /document\.|window\.|Vue|\.put\s*\(|\.add\s*\(|\.delete\s*\(|\.transaction\s*\(/);
+        assert.doesNotMatch(implementation, /pdf|ocr|vision|FormalAdmission|controlledWrite|saveQuestion/i);
+    }
 });

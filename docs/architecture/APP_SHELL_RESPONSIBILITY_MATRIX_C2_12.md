@@ -138,3 +138,19 @@ Planned independent waves:
 Each wave requires characterization, one unique target owner, production
 wiring, old implementation deletion, targeted tests, and its own commit before
 the next wave.
+
+## Wave 2 result: unreachable deterministic precursor retired
+
+The unreachable `processDraftImportBatchV2` block and its app-local DOCX
+deterministic parser/normalizer helpers were deleted. The existing
+`qisi-production-docx-source-port.js` owner now exposes
+`createProductionImportRunner`, which composes `DocxImportCoordinator` with the
+same `parseDocxSource` producer boundary. `app.js` only constructs that runner
+and passes it to `ProductionImportBridge`; it no longer calls the importer,
+coordinator, or deterministic source parser directly.
+
+Post-wave metrics are 18,833 `app.js` inventory lines and at most 379 detected
+functions (down from 19,494 and 396). The 216-line unreachable V2 owner and all
+of its deterministic/visual fallback precursor helpers are absent. This wave
+does not claim that the remaining active DOCX/PDF adapters or validation policy
+have moved; those are the next owner-extraction wave.

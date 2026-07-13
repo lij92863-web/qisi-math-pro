@@ -256,7 +256,7 @@
     {
       "id": "production-docx-source-port", "file": "qisi-production-docx-source-port.js",
       "layer": 2, "domainOwner": "productionDocxSourcePortOwner",
-      "publicApi": ["parseDocxSource"],
+      "publicApi": ["parseDocxSource", "createProductionImportRunner"],
       "allowedDependencies": [],
       "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
       "status": "production-wired"

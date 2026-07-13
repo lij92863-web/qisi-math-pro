@@ -21,10 +21,11 @@ test('C2-12 matrix freezes the post-C2-11 shell baseline honestly', () => {
     );
 
     assert.equal(baseline.split(/\r?\n/).length, 19494);
-    assert.equal(result.appJsLines <= 19497, true);
-    assert.equal(result.totalFunctionsFound, 396);
+    assert.equal(result.appJsLines <= 18833, true);
+    assert.equal(result.totalFunctionsFound <= 379, true);
     assert.doesNotMatch(app, /const processDraftImportBatch\s*=/);
-    assert.match(app, /const processDraftImportBatchV2\s*=/);
+    assert.match(baseline, /const processDraftImportBatchV2\s*=/);
+    assert.doesNotMatch(app, /const processDraftImportBatchV2\s*=/);
     assert.match(matrix, /processDraftImportBatchV2` \| 216 lines \/ unreachable/);
     assert.match(matrix, /direct Qwen\/DashScope transport callsites \| 17/);
     assert.match(matrix, /direct `db\.questions\.put` \| 6/);

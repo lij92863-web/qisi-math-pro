@@ -190,7 +190,8 @@ test('all production final review writes delegate to the persistence owner', () 
         /draftPersistenceService\.persistReviewDraftBatch\s*\(/g
     ) || [];
 
-    assert.equal(calls.length, 3);
+    assert.equal(calls.length, 2);
+    assert.doesNotMatch(app, /processDraftImportBatchV2/);
     assert.doesNotMatch(
         app,
         /db\.draftQuestions\.(?:bulkPut|bulkDelete)\((?:drafts|finalDrafts|oldDrafts)/

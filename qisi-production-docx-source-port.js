@@ -82,5 +82,60 @@
         };
     }
 
-    return Object.freeze({ parseDocxSource });
+    function createProductionImportRunner(ports = {}) {
+        if (
+            typeof ports.coordinator?.runDocxImport !== 'function' ||
+            typeof ports.importer?.parseDocxFile !== 'function'
+        ) throw createError('DOCX_PRODUCTION_PORT_REQUIRED');
+        const cleanText = typeof ports.cleanText === 'function'
+            ? ports.cleanText : value => String(value || '').trim();
+        const cleanOptions = typeof ports.cleanOptions === 'function'
+            ? ports.cleanOptions : values => (Array.isArray(values) ? values : []);
+        const makeId = typeof ports.makeId === 'function'
+            ? ports.makeId : prefix => `${prefix}_${Date.now()}`;
+        const defaultMeta = typeof ports.getDefaultMeta === 'function'
+            ? ports.getDefaultMeta : () => ({});
+
+        return async function runProductionDocxImport(context = {}, signal) {
+            const batch = context.batch || {};
+            return ports.coordinator.runDocxImport({
+                batchId: context.batchId,
+                sources: context.sources
+            }, {
+                parseSource: ({ source, candidateOffset }) => parseDocxSource({
+                    source,
+                    batch,
+                    defaultMeta: batch.defaultMeta || defaultMeta(),
+                    signal,
+                    importerHelpers: {
+                        cleanDisplayTextForBatchSave: cleanText,
+                        makeBatchId: makeId
+                    }
+                }, {
+                    importer: ports.importer,
+                    convertDraft: (draft, index) => ({
+                        ...draft,
+                        id: draft.id || makeId('dq'),
+                        batchId: batch.id || context.batchId,
+                        order: candidateOffset + index + 1,
+                        stem: cleanText(draft.stem),
+                        options: cleanOptions(draft.options),
+                        answer: cleanText(draft.answer),
+                        solution: cleanText(draft.solution),
+                        updatedAt: ports.clock ? ports.clock() : Date.now()
+                    }),
+                    acceptDraft: draft => Boolean(
+                        cleanText(draft.stem) ||
+                        cleanOptions(draft.options).some(value =>
+                            cleanText(value) || /\[\[(?:IMAGE|FORMULA_IMAGE):/.test(
+                                String(value || '')
+                            )
+                        )
+                    )
+                })
+            }, signal);
+        };
+    }
+
+    return Object.freeze({ parseDocxSource, createProductionImportRunner });
 });

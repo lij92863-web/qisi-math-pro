@@ -166,10 +166,46 @@ test('source port has no DB, UI, FormalAdmission, transport, OCR, or fallback ow
     assert.doesNotMatch(implementation, /recognize|vision|ocr/i);
 });
 
-test('the remaining deterministic precursor uses the owner with no direct importer call in app', () => {
+test('production runner composes the coordinator and deterministic source owner', async () => {
+    const runner = Port.createProductionImportRunner({
+        coordinator: {
+            runDocxImport: async (input, ports, signal) => {
+                const value = await ports.parseSource({
+                    source: input.sources[0], candidateOffset: 4, signal
+                });
+                return value;
+            }
+        },
+        importer: {
+            parseDocxFile: async () => ({
+                drafts: [{
+                    id: 'draft-1', questionNumber: '5',
+                    stem: '  stem  ', options: [' A ']
+                }]
+            })
+        },
+        cleanText: value => String(value || '').trim(),
+        cleanOptions: values => (values || []).map(value => String(value).trim()),
+        makeId: prefix => `${prefix}-1`,
+        clock: () => 100
+    });
+    const result = await runner({
+        batchId: 'batch-1', batch: { id: 'batch-1' }, sources: [source()]
+    });
+    assert.equal(result.drafts[0].order, 5);
+    assert.equal(result.drafts[0].stem, 'stem');
+    assert.equal(result.drafts[0].producer.mode, 'deterministic-docx');
+    assert.equal(result.drafts[0].fieldProvenance.stem.kind, 'deterministic-source');
+});
+
+test('the app composes the deterministic owner without a local parser precursor', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
-    const calls = app.match(/ProductionDocxSourcePort\.parseDocxSource\s*\(/g) || [];
+    const calls = app.match(
+        /ProductionDocxSourcePort\s*\.createProductionImportRunner\s*\(/g
+    ) || [];
     assert.equal(calls.length, 1);
     assert.doesNotMatch(app, /const\s+processDraftImportBatch\s*=/);
+    assert.doesNotMatch(app, /const\s+processDraftImportBatchV2\s*=/);
+    assert.doesNotMatch(app, /parseDocxQuestionFilesWithImporterForV2/);
     assert.doesNotMatch(app, /QisiBatchImporter\.parseDocxFile\s*\(/);
 });

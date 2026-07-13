@@ -107,14 +107,16 @@ test('adapter errors are sanitized and unsafe candidates are rejected', async ()
     );
 });
 
-test('production PDF-only V2 route uses the coordinator without moving frozen owners', () => {
+test('production PDF route uses the coordinator without a retired V2 precursor', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
     const html = fs.readFileSync(path.join(ROOT, 'main.html'), 'utf8');
     const engine = fs.readFileSync(path.join(ROOT, 'qisi-batch-engine-v2.js'), 'utf8');
     const implementation = fs.readFileSync(path.join(ROOT, 'qisi-pdf-import-coordinator.js'), 'utf8');
     assert.match(app, /Qisi\.PdfImportCoordinator\.runPdfImport\s*\(/);
     assert.match(app, /Qisi\.ProductionPdfSourcesPort\.processPdfSources\s*\(/);
-    assert.match(app, /pdfOnlyEngineFiles/);
+    assert.match(app, /const\s+questionSources\s*=\s*orderedSources/);
+    assert.match(app, /const\s+supportSources\s*=\s*orderedSources/);
+    assert.doesNotMatch(app, /pdfOnlyEngineFiles|processDraftImportBatchV2/);
     assert.ok(html.indexOf('qisi-pdf-import-coordinator.js') < html.indexOf('app.js'));
     assert.match(engine, /onPdfPageProgress/);
     assert.match(engine, /pdfSignal/);
