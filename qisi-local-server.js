@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const fsp = require('fs/promises');
 const { spawn } = require('child_process');
+const { createTempJobManager } = require('./qisi-temp-job-manager');
 
 const ROOT = __dirname;
 const TMP_DIR = path.join(ROOT, 'tmp');
@@ -20,6 +21,7 @@ const CONVERTER_MODE = String(process.env.QISI_DOCX_CONVERTER || 'auto').toLower
 const DASHSCOPE_API_KEY = String(process.env.DASHSCOPE_API_KEY || '').trim();
 const AI_BODY_LIMIT = String(process.env.AI_BODY_LIMIT || '60mb');
 const AI_REQUEST_TIMEOUT_MS = Math.max(10000, Number(process.env.AI_REQUEST_TIMEOUT_MS || 90000));
+const TEMP_JOB_MAX_AGE_MS = Math.max(60000, Number(process.env.QISI_TEMP_JOB_MAX_AGE_MS || 24 * 60 * 60 * 1000));
 const DASHSCOPE_CHAT_UPSTREAM = 'https://dashscope.aliyuncs.com/' + 'compatible-mode/v1/' + 'chat/completions';
 const DASHSCOPE_OCR_UPSTREAM = 'https://dashscope.aliyuncs.com/' + 'api/v1/services/aigc/' + 'multimodal-generation/' + 'generation';
 // Supported modes: auto / libreoffice-first / word-first / libreoffice-only / word-only
@@ -27,6 +29,11 @@ const DASHSCOPE_OCR_UPSTREAM = 'https://dashscope.aliyuncs.com/' + 'api/v1/servi
 for (const dir of [TMP_DIR, UPLOAD_DIR, CONVERTED_DIR, TOOLS_DIR]) {
   fs.mkdirSync(dir, { recursive: true });
 }
+
+const tempJobManager = createTempJobManager({
+  roots: [UPLOAD_DIR, CONVERTED_DIR],
+  maxAgeMs: TEMP_JOB_MAX_AGE_MS
+});
 
 const app = express();
 const aiJsonParser = express.json({ limit: AI_BODY_LIMIT, type: 'application/json' });
@@ -423,10 +430,12 @@ async function convertWithLibreOffice(inputPath, outputDir) {
   throw new Error(`LibreOffice conversion failed: ${errors.join(' | ')}`);
 }
 
-async function convertDocxToPdf(inputPath) {
+async function convertDocxToPdf(inputPath, job = {}) {
   const jobId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const outDir = path.join(CONVERTED_DIR, jobId);
   const errors = [];
+
+  job.outputDir = outDir;
 
   await fsp.mkdir(outDir, { recursive: true });
 
@@ -607,6 +616,7 @@ app.get('/api/convert/self-test', async (req, res) => {
 
 app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => {
   const uploaded = req.file;
+  const cleanupJob = { uploadPath: uploaded?.path || '', outputDir: '' };
 
   try {
     if (!uploaded) {
@@ -625,7 +635,7 @@ app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => 
       });
     }
 
-    const pdfPath = await convertDocxToPdf(uploaded.path);
+    const pdfPath = await convertDocxToPdf(uploaded.path, cleanupJob);
     const pdfBuffer = await fsp.readFile(pdfPath);
     const pdfHeader = pdfBuffer.slice(0, 5).toString('latin1');
     const looksLikePdf = pdfHeader === '%PDF-';
@@ -676,18 +686,23 @@ app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => 
       }
     });
   } finally {
-    if (uploaded?.path) {
-      fsp.unlink(uploaded.path).catch(() => {});
-    }
+    await tempJobManager.cleanupRequest(cleanupJob);
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`[qisi-local-server] running at http://localhost:${PORT}`);
-  console.log(`[qisi-local-server] open http://localhost:${PORT}/main.html`);
-  console.log(`[qisi-local-server] health check: http://localhost:${PORT}/api/health`);
-  console.log(`[qisi-local-server] converter self-test: http://localhost:${PORT}/api/convert/self-test`);
-  console.log(`[qisi-local-server] converter mode: ${CONVERTER_MODE}`);
-  console.log('[qisi-local-server] LibreOffice candidates:');
-  findLibreOfficeExecutable().forEach(p => console.log(`  - ${p}`));
+async function startServer() {
+  await tempJobManager.cleanupExpired();
+  app.listen(PORT, () => {
+    console.log(`[qisi-local-server] running at http://localhost:${PORT}`);
+    console.log(`[qisi-local-server] open http://localhost:${PORT}/main.html`);
+    console.log(`[qisi-local-server] health check: http://localhost:${PORT}/api/health`);
+    console.log(`[qisi-local-server] converter self-test: http://localhost:${PORT}/api/convert/self-test`);
+    console.log(`[qisi-local-server] converter mode: ${CONVERTER_MODE}`);
+    console.log('[qisi-local-server] LibreOffice candidates:');
+    findLibreOfficeExecutable().forEach(p => console.log(`  - ${p}`));
+  });
+}
+
+startServer().catch(error => {
+  console.error('[SERVER_START_ERROR]', { code: error?.code || 'SERVER_START_FAILED' });
 });

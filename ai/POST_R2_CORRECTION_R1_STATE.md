@@ -75,7 +75,7 @@
 
 ## Pending
 
-- A2-10 temporary-file lifecycle and log-data minimization domains.
+- A2-10 log-data minimization domain.
 - Phase 3 through Phase 8 attacks, audits, benchmark, CTO review, and sealing.
 
 ## Commits
@@ -91,6 +91,7 @@
 - A2-7 production review validator wiring `173fa19`.
 - A2-8 true deterministic import E2E `36c919b`.
 - A2-9 architecture ownership guards `10e1240`.
+- A2-10 hostile archive hardening `52f6252`.
 
 ## Gates
 
@@ -181,6 +182,14 @@
 - A2-10 ZIP full mandatory matrix: passed.
 - A2-10 ZIP browser preflight/dry-run: passed with `realApiCalled=false`,
   `underlyingApiCallCount=0`, and browser chain healthy.
+- A2-10 temporary-file failure-first evidence: the upload file used a swallowed
+  best-effort unlink, converted job directories were retained, and no startup
+  expiry cleanup existed.
+- A2-10 temporary-file lifecycle and production-wiring tests: passed 5/5,
+  including success, failure, expired startup job, and code-only cleanup log.
+- A2-10 temporary-file `verify:safe` and full mandatory matrix: passed.
+- A2-10 temporary-file browser preflight/dry-run: passed with the cleanup-first
+  server startup healthy, `realApiCalled=false`, and `underlyingApiCallCount=0`.
 
 ## Blockers
 
@@ -189,5 +198,5 @@
 
 ## Next exact action
 
-Run exact A2-10 ZIP diff-scope verification, commit/push, then begin the
-A2-10 temporary-file lifecycle domain.
+Run exact A2-10 temporary-file diff-scope verification, commit/push, then begin
+the A2-10 log-data minimization domain.
