@@ -3,9 +3,37 @@
 - Start commit: `b15e6fbe24c525c95a573b51a0c7ab68e77f4790`
 - Baseline tag: `pre-app-shell-slimming-r3-b15e6fb`
 - Current branch: `stage/app-shell-slimming-r3`
-- Current phase: Program C / C2-11 accepted
-- Current work package: normal UI production cutover and legacy batch owner retirement accepted; C2-12 is next
+- Current phase: Program C / lost-session recovery accepted / C2-12 Wave 12 in progress
+- Current work package: finish recovered DOCX vision support-source producer Wave 12
 - Status updated: 2026-07-14 Asia/Shanghai
+
+## Lost-session recovery R2 checkpoint
+
+- Historical accepted marker: `Current phase: Program C / C2-11 accepted`.
+  This remains the sealed predecessor state; the live resume state is the
+  C2-12 Wave 12 line above.
+- Recovery decision: `PROGRAM_C_RESUME_ALLOWED`.
+- Local, tracking, and live branch heads are equal at
+  `7a4b945a3c0c50c33166c5c63689b7fca4e0c797`.
+- The last fully proven stage is C2-12 Wave 11, DOCX vision question-source
+  producer extraction.
+- The pre-existing uncommitted tree is an explainable Recovery Case B2 for Wave
+  12, DOCX vision support-source producer extraction.
+- The complete pre-inspection tree, index, untracked test, log, reflog, and fsck
+  evidence are preserved outside the repository at
+  `C:\Users\Administrator\Desktop\qisi-program-c-recovery-20260714-024343`.
+- Four unreachable commits were audited and are unrelated historical main/stash
+  objects; no later Program C commit exists in reflog or fsck evidence.
+- Current recovered-tree metrics are 16,980 `app.js` lines, 375 detected
+  functions, and a 242-line largest function.
+- Recovery targeted tests, Phase 5/C2-11 browser evidence, and all 11 mandatory
+  gates are green after one bounded Wave 12 diagnostic-owner correction.
+- `verify:safe` passed 1560/1560 tests across 54 suites; DOCX stable passed
+  20/20, PDF known-bad 65/65, and controlled-write ownership 21/21.
+- Browser preflight/dry-run recorded `realApiCalled=false` and zero underlying
+  calls. No real-run was performed.
+- Next exact action: complete, test, document, commit, and push Wave 12. Do not
+  begin Wave 13 until Wave 12 is accepted and the three Git heads are equal.
 
 ## Entry conditions
 
