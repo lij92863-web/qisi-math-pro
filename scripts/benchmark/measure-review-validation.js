@@ -2,6 +2,26 @@ const { performance } = require('node:perf_hooks');
 const Policy = require('../../qisi-formal-admission-policy.js');
 const Validation = require('../../qisi-production-review-validator.js');
 
+const readIntegerArg = (name, fallback, minimum, maximum) => {
+    const prefix = `--${name}=`;
+    const raw = process.argv.slice(2).find(value => value.startsWith(prefix));
+    const value = Number(raw ? raw.slice(prefix.length) : fallback);
+    if (!Number.isInteger(value) || value < minimum || value > maximum) {
+        throw new Error(`${name}-must-be-${minimum}-to-${maximum}`);
+    }
+    return value;
+};
+
+const sampleRuns = readIntegerArg('runs', 10, 1, 50);
+const warmupRuns = readIntegerArg('warmup', 5, 0, 20);
+const percentile = (values, ratio) => {
+    const ordered = [...values].sort((left, right) => left - right);
+    return ordered[Math.max(
+        0,
+        Math.min(ordered.length - 1, Math.ceil(ordered.length * ratio) - 1)
+    )];
+};
+
 const createDraft = index => ({
     id: `benchmark-draft-${index}`,
     version: 1,
@@ -33,13 +53,13 @@ const validator = Validation.createProductionReviewValidator({
     clock: () => Date.parse('2026-07-13T00:00:00.000Z')
 });
 
-const results = [10, 50, 100].map(count => {
+const results = [50, 100, 300].map(count => {
     const rows = Array.from({ length: count }, (_, index) => createDraft(index));
-    for (let warmup = 0; warmup < 5; warmup += 1) {
+    for (let warmup = 0; warmup < warmupRuns; warmup += 1) {
         rows.forEach(row => validator.validate(row));
     }
     const samplesMs = [];
-    for (let run = 0; run < 7; run += 1) {
+    for (let run = 0; run < sampleRuns; run += 1) {
         const started = performance.now();
         const validations = rows.map(row => validator.validate(row));
         if (!validations.every(result => result.valid)) {
@@ -47,18 +67,19 @@ const results = [10, 50, 100].map(count => {
         }
         samplesMs.push(performance.now() - started);
     }
-    samplesMs.sort((left, right) => left - right);
     return {
         count,
         samplesMs,
-        medianMs: samplesMs[Math.floor(samplesMs.length / 2)]
+        medianMs: percentile(samplesMs, 0.5),
+        p50Ms: percentile(samplesMs, 0.5),
+        p95Ms: percentile(samplesMs, 0.95)
     };
 });
 
 process.stdout.write(`${JSON.stringify({
     node: process.version,
     platform: `${process.platform}-${process.arch}`,
-    warmupRuns: 5,
-    sampleRuns: 7,
+    warmupRuns,
+    sampleRuns,
     results
 }, null, 2)}\n`);

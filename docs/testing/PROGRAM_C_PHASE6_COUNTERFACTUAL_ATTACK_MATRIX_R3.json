@@ -1,0 +1,308 @@
+{
+  "schemaVersion": "qisi.program-c-phase6-counterfactual.r3",
+  "productionBaseline": "6b1dcc81d22b0d31a0d3cd3c621b26c6bffae34b",
+  "realApiCalled": false,
+  "attacks": [
+    {
+      "attackId": "P6A-DEP-01", "attack": "bridge-port-missing", "route": "normal-ui-to-bridge",
+      "expected": "startup rejects missing required port", "actual": "factory threw before run",
+      "diagnostic": "PRODUCTION_IMPORT_PORT_REQUIRED", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "startup-blocked",
+      "pass": true, "evidence": ["tests/c2-13-owner-runtime-closure.test.js", "tests/production-import-bridge.test.js"]
+    },
+    {
+      "attackId": "P6A-DEP-02", "attack": "validator-missing", "route": "bridge-validation",
+      "expected": "missing validator rejects", "actual": "validation factory/run rejected",
+      "diagnostic": "IMPORT_PRODUCTION_VALIDATION_DEPENDENCY_REQUIRED", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/c2-13-owner-runtime-closure.test.js", "tests/post-r2-counterfactual-validator-missing.test.js"]
+    },
+    {
+      "attackId": "P6A-DEP-03", "attack": "validator-throws", "route": "bridge-validation",
+      "expected": "throw is normalized and stops persistence", "actual": "typed validation failure",
+      "diagnostic": "IMPORT_VALIDATOR_FAILED", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/import-validation-service.test.js", "tests/post-r2-counterfactual-validator-throws.test.js"]
+    },
+    {
+      "attackId": "P6A-DEP-04", "attack": "controlled-write-missing", "route": "pdf-projection",
+      "expected": "projection context rejects missing controlled-write owner", "actual": "context rejected",
+      "diagnostic": "pdf-projection-context-invalid", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/c2-13-owner-runtime-closure.test.js", "tests/pdf-candidate-projection.test.js"]
+    },
+    {
+      "attackId": "P6A-DEP-05", "attack": "projection-missing", "route": "pdf-production-source",
+      "expected": "production projection factory fails closed", "actual": "factory rejected missing graph",
+      "diagnostic": "pdf-production-projection-dependency-missing", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "startup-blocked",
+      "pass": true, "evidence": ["tests/c2-13-owner-runtime-closure.test.js", "tests/production-pdf-sources-port.test.js"]
+    },
+    {
+      "attackId": "P6A-DEP-06", "attack": "persistence-missing", "route": "review-draft-persistence",
+      "expected": "missing persistence/repository rejects", "actual": "repository contract rejected",
+      "diagnostic": "DRAFT_PERSISTENCE_REPOSITORY_REQUIRED", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/c2-13-owner-runtime-closure.test.js", "tests/draft-persistence-service.test.js"]
+    },
+    {
+      "attackId": "P6A-DEP-07", "attack": "persistence-throws", "route": "bridge-persist",
+      "expected": "transaction failure stops review transition", "actual": "Bridge entered failed state",
+      "diagnostic": "IMPORT_DRAFT_PERSIST_FAILED", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/production-import-bridge.test.js", "tests/import-cutover-persistence-transaction.test.js"]
+    },
+    {
+      "attackId": "P6A-DEP-08", "attack": "repository-missing", "route": "formal-and-draft-repository",
+      "expected": "repository creation rejects", "actual": "database contract rejected",
+      "diagnostic": "database-unavailable", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "startup-blocked",
+      "pass": true, "evidence": ["tests/c2-13-owner-runtime-closure.test.js", "tests/storage-repository.test.js"]
+    },
+    {
+      "attackId": "P6A-DEP-09", "attack": "formal-admission-missing", "route": "teacher-confirmation",
+      "expected": "formal submit factory rejects", "actual": "dependency rejected before command",
+      "diagnostic": "BATCH_FORMAL_SUBMIT_DEPENDENCY_REQUIRED", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "waiting-confirmation",
+      "pass": true, "evidence": ["tests/c2-13-owner-runtime-closure.test.js", "tests/batch-formal-submit-state-machine.test.js"]
+    },
+    {
+      "attackId": "P6A-DEP-10", "attack": "state-machine-missing", "route": "teacher-confirmation",
+      "expected": "formal submit factory rejects", "actual": "dependency rejected before command",
+      "diagnostic": "BATCH_FORMAL_SUBMIT_DEPENDENCY_REQUIRED", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "waiting-confirmation",
+      "pass": true, "evidence": ["tests/c2-13-owner-runtime-closure.test.js", "tests/import-state-machine.test.js"]
+    },
+    {
+      "attackId": "P6A-DEP-11", "attack": "source-classifier-missing", "route": "bridge-source-classification",
+      "expected": "missing/empty manifest rejects", "actual": "classifier rejected source",
+      "diagnostic": "SOURCE_ROLE_MISSING_SOURCE", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/c2-13-owner-runtime-closure.test.js", "tests/source-role-classifier.test.js"]
+    },
+    {
+      "attackId": "P6A-DEP-12", "attack": "production-source-port-missing", "route": "pdf-and-docx-production-source",
+      "expected": "source runner rejects incomplete ports", "actual": "both source runners rejected",
+      "diagnostic": "PDF_PRODUCTION_PORT_REQUIRED/DOCX_VISION_PRODUCTION_PORT_REQUIRED", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "startup-blocked",
+      "pass": true, "evidence": ["tests/c2-13-owner-runtime-closure.test.js", "tests/production-docx-source-port.test.js", "tests/production-pdf-sources-port.test.js"]
+    },
+    {
+      "attackId": "P6A-DATA-01", "attack": "source-mode-missing", "route": "pdf-candidate-projection",
+      "expected": "candidate is rejected", "actual": "projection rejected identity",
+      "diagnostic": "source-mode-missing", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/pdf-candidate-projection-invariants.test.js"]
+    },
+    {
+      "attackId": "P6A-DATA-02", "attack": "field-provenance-missing", "route": "validation-and-formal-admission",
+      "expected": "missing required provenance rejects", "actual": "validation/admission rejected",
+      "diagnostic": "admission-required-field-missing", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "waiting-confirmation",
+      "pass": true, "evidence": ["tests/production-review-validator.test.js", "tests/formal-admission-policy.test.js"]
+    },
+    {
+      "attackId": "P6A-DATA-03", "attack": "contradictory-provenance", "route": "formal-admission",
+      "expected": "contradictory ownership rejects", "actual": "admission rejected",
+      "diagnostic": "admission-producer-provenance-invalid", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "waiting-confirmation",
+      "pass": true, "evidence": ["tests/manual-review-provenance-formal-lifecycle.test.js", "tests/formal-admission-policy.test.js"]
+    },
+    {
+      "attackId": "P6A-DATA-04", "attack": "controlled-write-decision-missing", "route": "pdf-projection",
+      "expected": "support field remains rejected/missing", "actual": "projection did not promote field",
+      "diagnostic": "controlled-write-missing", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/pdf-candidate-projection-invariants.test.js", "tests/import-validation-service.test.js"]
+    },
+    {
+      "attackId": "P6A-DATA-05", "attack": "duplicate-accepted-decision-conflict", "route": "pdf-projection",
+      "expected": "conflict fails closed", "actual": "candidate projection rejected",
+      "diagnostic": "controlled-write-conflict", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/pdf-candidate-projection-invariants.test.js", "tests/e2e/production-normal-ui-import-cutover.test.js"]
+    },
+    {
+      "attackId": "P6A-DATA-06", "attack": "multiple-support-source-ambiguity", "route": "pdf-projection",
+      "expected": "ambiguous support rejects before write", "actual": "projection context rejected",
+      "diagnostic": "pdf-support-source-ambiguous", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/pdf-candidate-projection-invariants.test.js", "tests/e2e/production-normal-ui-import-cutover.test.js"]
+    },
+    {
+      "attackId": "P6A-DATA-07", "attack": "raw-json", "route": "candidate-normalization",
+      "expected": "wrapper content never reaches review", "actual": "candidate rejected",
+      "diagnostic": "unsafe-wrapper", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/post-r2-counterfactual-raw-json.test.js", "tests/e2e/production-normal-ui-import-cutover.test.js"]
+    },
+    {
+      "attackId": "P6A-DATA-08", "attack": "placeholder", "route": "review-validation",
+      "expected": "placeholder never reaches formal data", "actual": "draft validation rejected",
+      "diagnostic": "unconverted-image-placeholder", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/qisi-utils-unconverted-image-placeholders.test.js", "tests/import-validation-service.test.js"]
+    },
+    {
+      "attackId": "P6A-DATA-09", "attack": "answer-solution-swap", "route": "pdf-controlled-write",
+      "expected": "field-specific ownership cannot swap", "actual": "wrong field stayed rejected",
+      "diagnostic": "field-owner-mismatch", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/pdf-support-controlled-write-answer-ownership.test.js", "tests/manual-review-provenance-formal-lifecycle.test.js"]
+    },
+    {
+      "attackId": "P6A-DATA-10", "attack": "sequence-gap", "route": "pdf-aligner-validation",
+      "expected": "only reliable prefix or reject", "actual": "full alignment denied",
+      "diagnostic": "sequence-gap", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/counterfactual-attack-suite.test.js", "tests/pdf-support-aligner.test.js"]
+    },
+    {
+      "attackId": "P6A-DATA-11", "attack": "sequence-rewind", "route": "pdf-aligner-validation",
+      "expected": "rewind fails closed", "actual": "full alignment denied",
+      "diagnostic": "jump-back", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/post-r2-counterfactual-ownership-rewind.test.js", "tests/pdf-support-aligner.test.js"]
+    },
+    {
+      "attackId": "P6A-DATA-12", "attack": "wrong-ownership", "route": "pdf-validation",
+      "expected": "wrong attachment is rejected", "actual": "no ReviewDraft persisted",
+      "diagnostic": "wrong-attachment", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/e2e/true-import-admission.test.js", "tests/e2e/production-normal-ui-import-cutover.test.js"]
+    },
+    {
+      "attackId": "P6A-DATA-13", "attack": "stale-evidence", "route": "formal-admission",
+      "expected": "stale evidence/draft rejects", "actual": "formal transaction denied",
+      "diagnostic": "stale-draft", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "waiting-confirmation",
+      "pass": true, "evidence": ["tests/post-r2-counterfactual-stale-draft.test.js", "tests/formal-question-concurrency.test.js"]
+    },
+    {
+      "attackId": "P6A-DATA-14", "attack": "formula-fallback", "route": "pdf-safe-partial",
+      "expected": "fallback remains evidence-bound and reviewable", "actual": "one ReviewDraft with no bypass",
+      "diagnostic": "formula-fallback-review-required", "draftWrites": 1, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "review",
+      "pass": true, "evidence": ["tests/pdf-candidate-projection.test.js", "tests/e2e/production-normal-ui-import-cutover.test.js"]
+    },
+    {
+      "attackId": "P6A-DATA-15", "attack": "malformed-engine-result", "route": "production-source-to-bridge",
+      "expected": "malformed result rejects", "actual": "Bridge normalized typed failure",
+      "diagnostic": "PRODUCTION_IMPORT_RESULT_MALFORMED", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/production-import-bridge.test.js", "tests/production-pdf-sources-port.test.js"]
+    },
+    {
+      "attackId": "P6A-RUN-01", "attack": "partial-write", "route": "repository-transaction",
+      "expected": "transaction rolls back", "actual": "no partial rows remained",
+      "diagnostic": "interrupted-write", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/post-r2-counterfactual-transaction-abort.test.js", "tests/import-cutover-persistence-transaction.test.js"]
+    },
+    {
+      "attackId": "P6A-RUN-02", "attack": "readback-mismatch", "route": "draft-persistence-readback",
+      "expected": "mismatch rejects commit result", "actual": "readback verification failed",
+      "diagnostic": "DRAFT_PERSISTENCE_READBACK_MISMATCH", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/draft-persistence-service.test.js", "tests/production-import-bridge.test.js"]
+    },
+    {
+      "attackId": "P6A-RUN-03", "attack": "duplicate-click", "route": "normal-ui-controller",
+      "expected": "one in-flight import and one draft set", "actual": "duplicate joined/blocked",
+      "diagnostic": "duplicate-run-blocked", "draftWrites": 1, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "review",
+      "pass": true, "evidence": ["tests/e2e/production-normal-ui-import-cutover.test.js", "tests/normal-ui-import-production-owner.test.js"]
+    },
+    {
+      "attackId": "P6A-RUN-04", "attack": "duplicate-request-id", "route": "draft-and-formal-persistence",
+      "expected": "idempotent replay or conflict", "actual": "no duplicate rows",
+      "diagnostic": "idempotent-replay", "draftWrites": 1, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "review",
+      "pass": true, "evidence": ["tests/draft-persistence-service.test.js", "tests/post-r2-counterfactual-duplicate-submit.test.js"]
+    },
+    {
+      "attackId": "P6A-RUN-05", "attack": "cancellation-race", "route": "bridge-and-persistence",
+      "expected": "cancel before transaction or complete atomic transaction", "actual": "no partial write",
+      "diagnostic": "IMPORT_CANCELLED", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "cancelled",
+      "pass": true, "evidence": ["tests/import-cutover-cancellation.test.js", "tests/import-cancellation.test.js"]
+    },
+    {
+      "attackId": "P6A-RUN-06", "attack": "stale-batch-context", "route": "batch-context-load",
+      "expected": "stale source version rejects", "actual": "context load rejected",
+      "diagnostic": "BATCH_CONTEXT_STALE_SOURCE", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/batch-context-service.test.js", "tests/production-import-bridge.test.js"]
+    },
+    {
+      "attackId": "P6A-RUN-07", "attack": "refresh", "route": "review-reload",
+      "expected": "persisted ReviewDraft survives reload", "actual": "browser reloaded exact draft",
+      "diagnostic": "readback-verified", "draftWrites": 1, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "review",
+      "pass": true, "evidence": ["tests/e2e/seeded-persistence.test.js"]
+    },
+    {
+      "attackId": "P6A-RUN-08", "attack": "two-tab-import", "route": "formal-repository-concurrency",
+      "expected": "one compare-and-swap winner", "actual": "stale tab rejected",
+      "diagnostic": "write-conflict", "draftWrites": 0, "formalWrites": 1,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "waiting-confirmation",
+      "pass": true, "evidence": ["tests/post-r2-counterfactual-two-tab-race.test.js", "tests/formal-question-concurrency.test.js"]
+    },
+    {
+      "attackId": "P6A-RUN-09", "attack": "response-lost-after-commit", "route": "formal-repository-idempotency",
+      "expected": "retry returns existing commit", "actual": "idempotent replay without second write",
+      "diagnostic": "idempotent-replay", "draftWrites": 0, "formalWrites": 1,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "completed",
+      "pass": true, "evidence": ["tests/formal-question-concurrency.test.js", "tests/post-r2-counterfactual-duplicate-submit.test.js"]
+    },
+    {
+      "attackId": "P6A-RUN-10", "attack": "unknown-progress", "route": "production-status-port",
+      "expected": "unknown/non-monotonic progress rejects", "actual": "status command rejected",
+      "diagnostic": "IMPORT_PROGRESS_INVALID", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/import-cutover-progress.test.js", "tests/production-import-status-port.test.js"]
+    },
+    {
+      "attackId": "P6A-RUN-11", "attack": "malformed-bridge-result", "route": "normal-ui-controller",
+      "expected": "controller rejects malformed result", "actual": "visible typed failure",
+      "diagnostic": "NORMAL_UI_IMPORT_RESULT_MALFORMED", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/normal-ui-import-production-owner.test.js", "tests/production-import-bridge.test.js"]
+    },
+    {
+      "attackId": "P6A-RUN-12", "attack": "production-shadow-only", "route": "normal-ui-to-bridge",
+      "expected": "normal UI always requests production mode", "actual": "shadow-only result rejected/unreachable",
+      "diagnostic": "PRODUCTION_IMPORT_MODE_REQUIRED", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/production-import-bridge-production-mode.test.js", "tests/normal-ui-import-production-owner.test.js"]
+    },
+    {
+      "attackId": "P6A-RUN-13", "attack": "shadow-writes", "route": "docx-vision-shadow",
+      "expected": "any shadow write report rejects", "actual": "Bridge rejected malformed shadow",
+      "diagnostic": "PRODUCTION_IMPORT_RESULT_MALFORMED", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/production-import-bridge-production-mode.test.js", "tests/pdf-bridge-shadow-equivalence.test.js"]
+    },
+    {
+      "attackId": "P6A-RUN-14", "attack": "catch-fallback", "route": "bridge-error-path",
+      "expected": "error reports and stops", "actual": "no legacy caller invoked",
+      "diagnostic": "PRODUCTION_IMPORT_FAILED", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "failed",
+      "pass": true, "evidence": ["tests/normal-ui-import-no-legacy-fallback.test.js", "tests/c2-13-owner-runtime-closure.test.js"]
+    },
+    {
+      "attackId": "P6A-RUN-15", "attack": "feature-flag-fallback", "route": "production-runtime",
+      "expected": "no flag can select legacy or Route B", "actual": "no selector exists",
+      "diagnostic": "static-reachability-closed", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "unchanged",
+      "pass": true, "evidence": ["tests/c2-13-owner-runtime-closure.test.js", "tests/pdf-route-b-hold.test.js"]
+    },
+    {
+      "attackId": "P6A-RUN-16", "attack": "dynamic-retired-owner-invocation", "route": "production-runtime",
+      "expected": "deprecated owner has no runtime entry/caller", "actual": "runtime and namespace gate found none",
+      "diagnostic": "deprecated-owner-unreachable", "draftWrites": 0, "formalWrites": 0,
+      "fallbackCalls": 0, "wrongAttachment": 0, "leakage": 0, "finalUiState": "unchanged",
+      "pass": true, "evidence": ["tests/c2-13-owner-runtime-closure.test.js", "tests/legacy-batch-owner-retirement.test.js"]
+    }
+  ]
+}

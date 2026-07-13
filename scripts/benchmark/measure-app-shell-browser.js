@@ -44,6 +44,19 @@ function median(samples, key) {
     return values[Math.floor(values.length / 2)];
 }
 
+function percentile(samples, key, ratio) {
+    const values = samples
+        .map(sample => sample[key])
+        .filter(Number.isFinite)
+        .sort((left, right) => left - right);
+    if (values.length === 0) throw new Error(`missing-browser-metric:${key}`);
+    const index = Math.max(
+        0,
+        Math.min(values.length - 1, Math.ceil(values.length * ratio) - 1)
+    );
+    return values[index];
+}
+
 async function measure() {
     const purpose = String(process.env.QISI_BENCHMARK_PURPOSE || '').trim();
     if (!purpose) throw new Error('QISI_BENCHMARK_PURPOSE-is-required');
@@ -120,6 +133,15 @@ async function measure() {
                 nodes: median(samples, 'nodes'),
                 documents: median(samples, 'documents')
             },
+            p50: Object.fromEntries([
+                'coldStartMs', 'domContentLoadedMs', 'loadEventMs',
+                'jsHeapUsedBytes', 'jsHeapTotalBytes', 'nodes', 'documents'
+            ].map(key => [key, percentile(samples, key, 0.5)])),
+            p95: Object.fromEntries([
+                'coldStartMs', 'domContentLoadedMs', 'loadEventMs',
+                'jsHeapUsedBytes', 'jsHeapTotalBytes', 'nodes', 'documents'
+            ].map(key => [key, percentile(samples, key, 0.95)])),
+            timeoutCount: 0,
             samples
         };
     } finally {
