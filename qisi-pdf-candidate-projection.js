@@ -966,100 +966,155 @@
             JSON.stringify(stripVolatile(right));
     }
 
+    function canonicalProvenance(entry) {
+        const value = isRecord(entry) ? entry : {};
+        const kind = cleanString(value.kind || value.status) || 'missing';
+        const numericPage = Number(value.page);
+        const reasonCode = cleanString(value.reasonCode || value.reason);
+        return {
+            kind,
+            sourceId: cleanString(value.sourceId),
+            page: Number.isInteger(numericPage) && numericPage > 0
+                ? numericPage
+                : null,
+            blockIds: [...new Set(
+                (Array.isArray(value.blockIds) ? value.blockIds : [])
+                    .map(cleanString)
+                    .filter(Boolean)
+            )].sort(),
+            controlledWriteDecisionId: cleanString(
+                value.controlledWriteDecisionId
+            ),
+            controlledWriteAccepted: value.controlledWriteAccepted === true,
+            manuallyEdited: value.manuallyEdited === true,
+            reasonCode: reasonCode || (kind === 'missing' ? 'missing' : '')
+        };
+    }
+
     function compareCanonicalPdfCandidates(legacy, bridge) {
+        const provenanceProperties = [
+            'kind',
+            'sourceId',
+            'page',
+            'blockIds',
+            'controlledWriteDecisionId',
+            'controlledWriteAccepted',
+            'manuallyEdited',
+            'reasonCode'
+        ];
+        const provenanceChecks = FIELDS.flatMap(field => {
+            const legacyProvenance = canonicalProvenance(
+                legacy?.fieldProvenance?.[field]
+            );
+            const bridgeProvenance = canonicalProvenance(
+                bridge?.fieldProvenance?.[field]
+            );
+            return provenanceProperties.map(property => [
+                `fieldProvenance.${field}.${property}`,
+                legacyProvenance[property],
+                bridgeProvenance[property],
+                'error',
+                'pdf-canonical-provenance-mismatch'
+            ]);
+        });
         const checks = [
-            ['source.mode', legacy?.source?.mode, bridge?.source?.mode, 'error'],
-            ['source.sourceOrder', legacy?.source?.sourceOrder, bridge?.source?.sourceOrder, 'error'],
-            ['questionNumber', legacy?.questionNumber, bridge?.questionNumber, 'error'],
-            ['type', legacy?.type, bridge?.type, 'error'],
-            ['stem', legacy?.stem, bridge?.stem, 'error'],
-            ['options', legacy?.options, bridge?.options, 'error'],
-            ['answer', legacy?.answer, bridge?.answer, 'error'],
-            ['solution', legacy?.solution, bridge?.solution, 'error'],
-            ['images', legacy?.images, bridge?.images, 'error'],
-            ...FIELDS.map(field => [
-                `fieldProvenance.${field}.kind`,
-                legacy?.fieldProvenance?.[field]?.kind ||
-                    legacy?.fieldProvenance?.[field]?.status,
-                bridge?.fieldProvenance?.[field]?.kind ||
-                    bridge?.fieldProvenance?.[field]?.status,
-                'error'
-            ]),
+            ['source.mode', legacy?.source?.mode, bridge?.source?.mode, 'error', 'pdf-canonical-value-mismatch'],
+            ['source.sourceOrder', legacy?.source?.sourceOrder, bridge?.source?.sourceOrder, 'error', 'pdf-canonical-value-mismatch'],
+            ['questionNumber', legacy?.questionNumber, bridge?.questionNumber, 'error', 'pdf-canonical-value-mismatch'],
+            ['type', legacy?.type, bridge?.type, 'error', 'pdf-canonical-value-mismatch'],
+            ['stem', legacy?.stem, bridge?.stem, 'error', 'pdf-canonical-value-mismatch'],
+            ['options', legacy?.options, bridge?.options, 'error', 'pdf-canonical-value-mismatch'],
+            ['answer', legacy?.answer, bridge?.answer, 'error', 'pdf-canonical-value-mismatch'],
+            ['solution', legacy?.solution, bridge?.solution, 'error', 'pdf-canonical-value-mismatch'],
+            ['images', legacy?.images, bridge?.images, 'error', 'pdf-canonical-value-mismatch'],
+            ...provenanceChecks,
             [
                 'controlledWrite.evaluated',
                 legacy?.controlledWrite?.evaluated,
                 bridge?.controlledWrite?.evaluated,
-                'error'
+                'error',
+                'pdf-canonical-controlled-write-mismatch'
             ],
             [
                 'controlledWrite.acceptedFields',
                 legacy?.controlledWrite?.acceptedFields,
                 bridge?.controlledWrite?.acceptedFields,
-                'error'
+                'error',
+                'pdf-canonical-controlled-write-mismatch'
             ],
             [
                 'controlledWrite.rejectedFields',
                 legacy?.controlledWrite?.rejectedFields,
                 bridge?.controlledWrite?.rejectedFields,
-                'error'
+                'error',
+                'pdf-canonical-controlled-write-mismatch'
             ],
             [
                 'controlledWrite.errors',
                 stableCodes(legacy?.controlledWrite?.errors),
                 stableCodes(bridge?.controlledWrite?.errors),
-                'error'
+                'error',
+                'pdf-canonical-controlled-write-mismatch'
             ],
             [
                 'controlledWrite.warnings',
                 stableCodes(legacy?.controlledWrite?.warnings),
                 stableCodes(bridge?.controlledWrite?.warnings),
-                'warning'
+                'warning',
+                'pdf-canonical-controlled-write-mismatch'
             ],
-            ['supportLevel', legacy?.supportLevel, bridge?.supportLevel, 'error'],
+            ['supportLevel', legacy?.supportLevel, bridge?.supportLevel, 'error', 'pdf-canonical-value-mismatch'],
             [
                 'manualReviewRequired',
                 legacy?.manualReviewRequired,
                 bridge?.manualReviewRequired,
-                'error'
+                'error',
+                'pdf-canonical-value-mismatch'
             ],
             [
                 'validation.schemaValid',
                 legacy?.validation?.schemaValid,
                 bridge?.validation?.schemaValid,
-                'error'
+                'error',
+                'pdf-canonical-validation-mismatch'
             ],
             [
                 'validation.sequenceValid',
                 legacy?.validation?.sequenceValid,
                 bridge?.validation?.sequenceValid,
-                'error'
+                'error',
+                'pdf-canonical-validation-mismatch'
             ],
             [
                 'validation.ownershipValid',
                 legacy?.validation?.ownershipValid,
                 bridge?.validation?.ownershipValid,
-                'error'
+                'error',
+                'pdf-canonical-validation-mismatch'
             ],
             [
                 'warnings',
                 stableWarningCodes(legacy),
                 stableWarningCodes(bridge),
-                'warning'
+                'warning',
+                'pdf-canonical-warning-mismatch'
             ],
             [
                 'rawEvidenceRefs',
                 stableEvidenceIdentities(legacy),
                 stableEvidenceIdentities(bridge),
-                'warning'
+                'warning',
+                'pdf-canonical-evidence-mismatch'
             ]
         ];
 
         return checks.filter(([, left, right]) => !same(left, right))
-            .map(([path, left, right, severity]) => ({
+            .map(([path, left, right, severity, code]) => ({
                 path,
                 legacyValue: clone(left),
                 bridgeValue: clone(right),
-                severity
+                severity,
+                code
             }));
     }
 
