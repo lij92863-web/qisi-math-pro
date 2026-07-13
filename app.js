@@ -15922,15 +15922,14 @@ ${source}`;
                     const batchStartedAt = performance.now();
                     try {
                         console.log('[BATCH_DEBUG][stage]', 'start processDraftImportBatch legacy fallback', { batchId });
-                        const batch = await db.draftImportBatches.get(batchId);
-                        if (!batch) return;
-                        const files = await db.draftImportFiles.where('batchId').equals(batchId).toArray();
-                        const batchContext = window.Qisi.BatchContextService.createBatchContext({
+                        const loadedBatch = await window.Qisi.BatchContextService.loadBatchAndFiles({
                             batchId,
-                            batch,
-                            files,
                             getRoles: getBatchFileRoles
+                        }, {
+                            repository: storageRepository
                         });
+                        if (!loadedBatch) return;
+                        const { batch, files, batchContext } = loadedBatch;
                         const batchExpectedCount = batchContext.userSettings.expectedQuestionCount;
 
                         console.log('[BATCH_DEBUG][batch-expected-count]', {

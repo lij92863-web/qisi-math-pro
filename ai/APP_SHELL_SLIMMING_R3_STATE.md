@@ -391,11 +391,39 @@
   `realApiCalled=false` and `underlyingApiCallCount=0`; no PDF real-run or real
   AI/OCR call occurred.
 
+- Wave C2-10.5 Phase 3 extracted the first shared production port,
+  `BatchContextService.loadBatchAndFiles`. It composes only the existing
+  `StorageRepository.get/findBy` reads with the existing context builder,
+  preserves repository source order and the legacy missing-batch no-op, returns
+  independent batch/file records, and has no write, UI, FormalAdmission,
+  external transport, OCR, or vision authority.
+- The port fails closed on missing repository/files, retains repository error
+  identity, and checks cancellation before and between its two reads. The legacy
+  production entry now calls the shared port; its inline batch/file table reads
+  were deleted. The initial processing status write remains deliberately inline
+  for the later progress/status port, so this commit does not mix domains.
+- Diff audit exposed that the newly allowed storage dependency was still present
+  in the same manifest entry's forbidden list. A strengthened architecture gate
+  failed on the overlap, the manifest was corrected without weakening the state
+  machine boundary, and the complete mandatory gate set was rerun afterward.
+- The load-port failure-first target began at 1/7 with six failures for the
+  absent API and still-inline production reads. Final load/context/architecture
+  targets passed 25/25, the full suite passed 1,341/1,341 with no failed,
+  skipped, or todo tests, and all 11 mandatory gates passed. Browser
+  preflight/dry-run recorded `realApiCalled=false` and
+  `underlyingApiCallCount=0`; no PDF real-run or real AI/OCR call occurred.
+- `app.js` is now 21,689 physical lines with 315 inventoried functions and
+  complete immutable baseline-name coverage. The conservative lexical metric
+  for `processDraftImportBatch` is now 5,107 lines. The manifest records 39
+  modules and 59 declared dependency edges with no missing target, cycle,
+  upward dependency, or owner mismatch.
+
 ## Pending
 
-- Wave C2-10.5 Phases 2 through 6 and its hard acceptance gates. C2-11 through
-  C2-14, attacks, audits, benchmark, CTO review, and seal remain blocked until
-  the production bridge and shadow-equivalence package is accepted.
+- Remaining Wave C2-10.5 Phase 3 ports, Phases 4 through 6, and the hard
+  acceptance gates. C2-11 through C2-14, attacks, audits, benchmark, CTO review,
+  and seal remain blocked until the production bridge and shadow-equivalence
+  package is accepted.
 
 ## Blockers / limitations
 
@@ -408,7 +436,7 @@
 
 ## Next exact action
 
-Commit and push Wave C2-10.5 Phase 2, then begin Phase 3 with one failure-first
-characterization of the shared `loadBatchAndFiles` production port. Move rather
-than copy any trapped implementation, keep the legacy output unchanged, and do
+Commit and push the shared `loadBatchAndFiles` port, then characterize exactly
+one `parseDocxSource` adapter boundary. Move rather than copy trapped adapter
+logic, keep QisiBatchImporter and DOCX coordinator algorithms untouched, and do
 not enter C2-11 until all C2-10.5 hard acceptance gates pass.

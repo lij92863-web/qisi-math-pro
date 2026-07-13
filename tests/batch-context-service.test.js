@@ -52,7 +52,8 @@ for (const [name, mutate, code] of [
 test('production app uses the context owner and loads it before app', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
     const html = fs.readFileSync(path.join(ROOT, 'main.html'), 'utf8');
-    assert.match(app, /Qisi\.BatchContextService\.createBatchContext\s*\(/);
+    assert.match(app, /Qisi\.BatchContextService\.loadBatchAndFiles\s*\(/);
+    assert.match(app, /repository:\s*storageRepository/);
     assert.match(app, /batchContext\.userSettings\.expectedQuestionCount/);
     assert.match(app, /batchContext\.engineConfig\.recognitionMode/);
     assert.match(app, /files:\s*batchContext\.sourceManifest/);

@@ -28,6 +28,13 @@ test('architecture manifest covers required modules with complete metadata', () 
         assert.ok(Array.isArray(item.publicApi) && item.publicApi.length, item.id);
         assert.ok(Array.isArray(item.allowedDependencies), item.id);
         assert.ok(Array.isArray(item.forbiddenDependencies), item.id);
+        assert.deepEqual(
+            item.allowedDependencies.filter(dependency =>
+                item.forbiddenDependencies.includes(dependency)
+            ),
+            [],
+            `${item.id} allowed/forbidden dependency overlap`
+        );
         assert.ok(
             ['scaffold', 'production-wired', 'research-only'].includes(item.status),
             item.id

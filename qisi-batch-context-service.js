@@ -10,6 +10,19 @@
         throw error;
     }
 
+    function failCancelled() {
+        const error = new Error('IMPORT_CANCELLED_LOADING');
+        error.name = 'AbortError';
+        error.code = 'IMPORT_CANCELLED_LOADING';
+        throw error;
+    }
+
+    function clone(value) {
+        if (value === undefined) return undefined;
+        if (typeof structuredClone === 'function') return structuredClone(value);
+        return JSON.parse(JSON.stringify(value));
+    }
+
     function freeze(value) {
         if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
         Object.values(value).forEach(freeze);
@@ -104,7 +117,38 @@
         });
     }
 
-    const api = Object.freeze({ createBatchContext });
+    async function loadBatchAndFiles(input = {}, ports = {}) {
+        const repository = ports.repository;
+        if (
+            typeof repository?.get !== 'function' ||
+            typeof repository?.findBy !== 'function'
+        ) fail('BATCH_CONTEXT_REPOSITORY_REQUIRED');
+        const signal = input.signal;
+        if (signal?.aborted) failCancelled();
+        const batchId = String(input.batchId || '').trim();
+        const loadedBatch = await repository.get('draftImportBatches', batchId);
+        if (signal?.aborted) failCancelled();
+        if (!loadedBatch) return null;
+        const loadedFiles = await repository.findBy(
+            'draftImportFiles', 'batchId', batchId
+        );
+        if (signal?.aborted) failCancelled();
+        const batch = clone(loadedBatch);
+        const files = clone(Array.isArray(loadedFiles) ? loadedFiles : []);
+        const batchContext = createBatchContext({
+            batchId,
+            batch,
+            files,
+            getRoles: input.getRoles,
+            expectedSourceVersion: input.expectedSourceVersion,
+            supportedTypes: input.supportedTypes,
+            userSettings: input.userSettings,
+            engineConfig: input.engineConfig
+        });
+        return Object.freeze({ batch, files, batchContext });
+    }
+
+    const api = Object.freeze({ createBatchContext, loadBatchAndFiles });
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (root) {
         root.Qisi = root.Qisi || {};

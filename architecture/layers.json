@@ -224,9 +224,9 @@
     {
       "id": "batch-context-service", "file": "qisi-batch-context-service.js",
       "layer": 2, "domainOwner": "batchContextServiceOwner",
-      "publicApi": ["createBatchContext"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository"],
+      "publicApi": ["createBatchContext", "loadBatchAndFiles"],
+      "allowedDependencies": ["storage-repository"],
+      "forbiddenDependencies": ["app-shell", "formal-admission"],
       "status": "production-wired"
     },
     {
