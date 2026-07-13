@@ -239,6 +239,10 @@
   and real transport paths already rejected the wrapper before persistence.
 - Phase 3 raw-JSON contract and UI transport regressions passed 4/4; full
   mandatory matrix and browser dry-run passed with no real API call.
+- Phase 3 ownership-rewind failure-first evidence: its matrix row was absent;
+  Formal Admission and real PDF safe-partial already preserved rejection.
+- Phase 3 ownership-rewind regressions passed 3/3; full mandatory matrix and
+  browser dry-run passed with no real API call.
 
 ## Blockers
 
@@ -247,4 +251,4 @@
 
 ## Next exact action
 
-Commit/push raw JSON, then execute the ownership-rewind attack.
+Commit/push ownership rewind, then execute the script-missing attack.
