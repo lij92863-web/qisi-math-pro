@@ -15,6 +15,7 @@
         request,
         engineVersion = 'unknown',
         maxBytes = 20 * 1024 * 1024,
+        maxResponseChars = 5 * 1024 * 1024,
         logger,
         checkHealth
     } = {}) => {
@@ -41,7 +42,8 @@
             try {
                 const response = boundary.validateResponse(
                     await request(input, { ...options, requestId, signal: controller.signal }),
-                    requestId
+                    requestId,
+                    { maxResponseChars }
                 );
                 const candidate = contracts().createRecognitionCandidate({
                     engine: 'qwen-vl-plus', engineVersion, requestId,
@@ -100,7 +102,8 @@
                 formulas: true,
                 images: true,
                 mimeTypes: [...adapterContract().ALLOWED_MIME],
-                maxBytes
+                maxBytes,
+                maxResponseChars
             }),
             recognizePage: recognize,
             recognizeDocument: recognize,

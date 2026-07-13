@@ -17,7 +17,9 @@ eligibleForFormalAdmission = false
 ## Deterministic extraction
 
 - An explicit `question-anchor` starts a group. Question number parsing accepts
-  only a strict numeric anchor marker; invalid anchors remain visible with warning.
+  only a strict numeric anchor marker; explicit full-width digits are mapped one
+  by one, while compatibility characters such as circled numbers are not folded
+  into question numbers. Invalid anchors remain visible with warning.
 - Only explicit `stem`, `option`, `answer`, `solution`, `formula`, and `image`
   block types populate their matching evidence fields.
 - Stem, answer, and solution retain raw text and block ids plus a deterministic

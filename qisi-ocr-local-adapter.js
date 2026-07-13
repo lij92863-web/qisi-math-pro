@@ -14,6 +14,7 @@
         transport,
         endpoint = 'http://127.0.0.1:8765',
         maxBytes = 20 * 1024 * 1024,
+        maxResponseChars = 5 * 1024 * 1024,
         logger
     } = {}) => {
         if (typeof transport !== 'function') throw new TypeError('Local OCR transport is required.');
@@ -44,7 +45,8 @@
             try {
                 const response = boundary.validateResponse(
                     await transport(endpoint, input, { ...options, requestId, signal: controller.signal }),
-                    requestId
+                    requestId,
+                    { maxResponseChars }
                 );
                 const responseVersion = response?.engineVersion || 'unknown';
                 const candidate = contracts().createRecognitionCandidate({
@@ -101,7 +103,8 @@
                 documents: true,
                 loopbackOnly: true,
                 mimeTypes: [...adapterContract().ALLOWED_MIME],
-                maxBytes
+                maxBytes,
+                maxResponseChars
             }),
             recognizePage: recognize, recognizeDocument: recognize,
             cancel(requestId) { const c = controllers.get(requestId); if (!c) return false; c.abort(); return true; }

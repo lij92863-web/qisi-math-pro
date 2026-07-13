@@ -13,6 +13,19 @@ const MIME_EXTENSION = Object.freeze({
     'application/pdf': '.pdf'
 });
 
+const detectMimeType = buffer => {
+    if (buffer.length >= 8 && buffer.subarray(0, 8).equals(
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    )) return 'image/png';
+    if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+        return 'image/jpeg';
+    }
+    if (buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' &&
+        buffer.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
+    if (buffer.length >= 5 && buffer.toString('ascii', 0, 5) === '%PDF-') return 'application/pdf';
+    return '';
+};
+
 const serviceError = (code, message, statusCode) => {
     const error = new Error(message);
     error.code = code;
@@ -201,6 +214,9 @@ const createLocalOcrService = ({
             activeRequestIds.add(requestId);
             activeCount += 1;
             const buffer = await readBody(request, configuredMaxBytes);
+            if (detectMimeType(buffer) !== mimeType) {
+                throw serviceError('mime-spoofed', 'OCR body does not match its MIME type.', 415);
+            }
             await fs.promises.mkdir(managedTempRoot, { recursive: true });
             jobDirectory = await fs.promises.mkdtemp(path.join(managedTempRoot, 'job-'));
             const tempFilePath = path.join(jobDirectory, `source${MIME_EXTENSION[mimeType]}`);
@@ -352,6 +368,7 @@ if (require.main === module) {
 module.exports = {
     LOOPBACK_HOSTS,
     MIME_EXTENSION,
+    detectMimeType,
     createUnavailableEngine,
     createLocalOcrService
 };

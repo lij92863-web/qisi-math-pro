@@ -27,6 +27,7 @@
         'size-rejected',
         'duplicate-request-id',
         'ocr-malformed-response',
+        'ocr-response-too-large',
         'ocr-cancelled'
     ]);
 
@@ -72,7 +73,7 @@
         }
     };
 
-    const validateResponse = (response, requestId) => {
+    const validateResponse = (response, requestId, { maxResponseChars = 5 * 1024 * 1024 } = {}) => {
         if (!response || typeof response !== 'object' || Array.isArray(response)) {
             throw createError(
                 'ocr-malformed-response',
@@ -96,6 +97,29 @@
                 'ocr-malformed-response',
                 requestId,
                 'OCR engine returned a malformed response.'
+            );
+        }
+        let responseChars;
+        try {
+            responseChars = JSON.stringify({
+                rawText: response.rawText || '',
+                blocks: response.blocks || [],
+                formulas: response.formulas || [],
+                images: response.images || [],
+                warnings: response.warnings || []
+            }).length;
+        } catch (_error) {
+            throw createError(
+                'ocr-malformed-response',
+                requestId,
+                'OCR engine returned a malformed response.'
+            );
+        }
+        if (!Number.isInteger(maxResponseChars) || maxResponseChars < 1 || responseChars > maxResponseChars) {
+            throw createError(
+                'ocr-response-too-large',
+                requestId,
+                'OCR engine response exceeds the configured limit.'
             );
         }
         return response;

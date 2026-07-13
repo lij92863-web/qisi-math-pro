@@ -11,6 +11,7 @@ const {
 
 const root = path.resolve(__dirname, '..');
 const tempRoot = () => fs.mkdtempSync(path.join(os.tmpdir(), 'qisi-local-ocr-test-'));
+const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
 
 const mockEngine = (recognize = async () => ({ rawText: 'recognized' })) => ({
     getMetadata: () => ({ name: 'mock-local', version: '1.0.0', model: 'none' }),
@@ -27,7 +28,7 @@ const start = async options => {
     };
 };
 
-const post = (endpoint, body = 'image-bytes', headers = {}) => fetch(
+const post = (endpoint, body = pngBytes, headers = {}) => fetch(
     `${endpoint}/v1/recognize`,
     {
         method: 'POST',
@@ -127,9 +128,9 @@ test('concurrency overflow is explicit and does not enter the engine', async t =
         })
     });
     t.after(() => service.stop());
-    const first = post(endpoint, 'first', { 'x-qisi-request-id': 'concurrent-1' });
+    const first = post(endpoint, pngBytes, { 'x-qisi-request-id': 'concurrent-1' });
     while (calls === 0) await new Promise(resolve => setImmediate(resolve));
-    const second = await post(endpoint, 'second', { 'x-qisi-request-id': 'concurrent-2' });
+    const second = await post(endpoint, pngBytes, { 'x-qisi-request-id': 'concurrent-2' });
     assert.equal(second.status, 429);
     assert.equal((await second.json()).code, 'concurrency-limit');
     assert.equal(calls, 1);
@@ -151,7 +152,7 @@ test('timeout is explicit, aborts the engine signal, and cleans temp files', asy
         }))
     });
     t.after(() => service.stop());
-    const response = await post(endpoint, 'timeout');
+    const response = await post(endpoint, pngBytes);
     const body = await response.json();
     assert.equal(response.status, 504);
     assert.equal(body.code, 'ocr-timeout');
@@ -170,7 +171,10 @@ test('default unavailable engine fails closed and logs no raw request content', 
     const health = await (await fetch(`${endpoint}/health`)).json();
     assert.equal(health.ok, false);
     assert.equal(health.engine.available, false);
-    const response = await post(endpoint, 'PRIVATE_REQUEST_CONTENT');
+    const response = await post(endpoint, Buffer.concat([
+        pngBytes,
+        Buffer.from('PRIVATE_REQUEST_CONTENT')
+    ]));
     assert.equal(response.status, 503);
     assert.equal((await response.json()).code, 'ocr-engine-unavailable');
     assert.equal(JSON.stringify(logs).includes('PRIVATE_REQUEST_CONTENT'), false);

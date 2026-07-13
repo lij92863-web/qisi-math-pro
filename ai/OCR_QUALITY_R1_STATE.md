@@ -3,7 +3,7 @@
 - Start commit: `1361d7e7f81d2f23819a995a0f9d1808adf19982`
 - Baseline tag: `pre-ocr-quality-r1-1361d7e`
 - Current branch: `stage/ocr-quality-r1`
-- Current phase: Program B / Phase 2 complete; B2-10 evaluated and held
+- Current phase: Program B / Phase 3 complete
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -126,10 +126,22 @@
 - B2-10 added no canary module, flag, UI, route, or production wiring. Its evidence
   gate plus shadow/selection regressions passed 15/15 and all 11 mandatory gates
   passed. Phase 2 is complete without production promotion.
+- Phase 3 added 22 individually named counterfactual attacks and a 22-row evidence
+  matrix covering image degradation/layout, structural ambiguity, page attacks,
+  malicious/oversized responses, timeout/unavailability/version/conflict,
+  confidence/fabrication, path traversal, and MIME spoofing.
+- The failure-first run passed 19/23 and exposed three real boundary defects:
+  circled-number compatibility folding, missing response-size limit, and trusting
+  MIME without magic bytes. One in-scope repair added strict digit mapping,
+  `ocr-response-too-large`, and MIME magic validation.
+- Final attack suite (22 attacks plus matrix/aggregate invariants) passed 24/24;
+  affected owner regressions passed 47/47; all 11 mandatory gates passed. Wrong
+  attachments, fabricated formal questions, bypasses, real API calls, and enabled
+  canary remained 0.
 
 ## Pending
 
-- Phases 3–8 attacks, audits, final benchmark, CTO review, and seal.
+- Phases 4–8 code audit, architecture audit, final benchmark, CTO review, and seal.
 
 ## Blockers / limitations
 
@@ -140,5 +152,5 @@
 
 ## Next exact action
 
-Commit and push the B2-10 hold decision, then begin Phase 3 failure-first
-counterfactual attacks across all 22 required classes.
+Commit and push Phase 3, then perform the Phase 4 code quality audit against all
+ten required review questions without changing code unless an audit finding fails.

@@ -53,6 +53,8 @@ evidence preservation, but it is never emitted by the adapter logger.
 - Optional response fields are type-checked before candidate construction.
   Malformed results use `ocr-malformed-response`; they are not returned as invalid
   candidates.
+- The serialized candidate payload is bounded by `maxResponseChars`; oversized
+  output fails with `ocr-response-too-large` before candidate construction.
 - Stable operational errors include `ocr-cancelled`, `ocr-engine-unavailable`,
   `ocr-request-failed`, `mime-rejected`, `size-rejected`,
   `local-path-forbidden`, and `duplicate-request-id`.

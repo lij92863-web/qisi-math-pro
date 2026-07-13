@@ -13,7 +13,12 @@
         .trim();
 
     const parseQuestionNumber = value => {
-        const match = normalizeText(value).match(/^(?:第\s*)?([0-9]+)(?:\s*题)?\s*[.、:)]?$/);
+        const marker = String(value ?? '')
+            .normalize('NFC')
+            .replace(/[０-９]/g, digit => String(digit.charCodeAt(0) - 0xFF10))
+            .replace(/\s+/g, ' ')
+            .trim();
+        const match = marker.match(/^(?:第\s*)?([0-9]+)(?:\s*题)?\s*[.．、:：)）]?$/);
         return match ? match[1] : '';
     };
 
