@@ -7,8 +7,8 @@ const {
     assertValidFrozenItem,
     buildFreezeRegister
 } = require('../scripts/bm-a4-r3-freeze-register');
-// Wave 16 retired fourteen unreachable OCR/Vision producer callsites.
-const EXPECTED_REMAINING_CALLSITES = 12;
+// C2-12 retired the final app-owned display-cleaner wrapper callsites.
+const EXPECTED_REMAINING_CALLSITES = 0;
 
 const unsafeProof = {
     callsiteId: 'R3-TEST',

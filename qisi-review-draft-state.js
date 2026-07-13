@@ -365,6 +365,164 @@
             return output;
         };
 
+        const escapeImageIdForRegExp = (value = '') =>
+            String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        const escapeRegExpForImageId = escapeImageIdForRegExp;
+
+        const extractQisiImageIdFromCode = (source = '') => {
+            const text = String(source || '');
+            const tokenMatch = text.match(/\[\[(?:IMAGE|FORMULA_IMAGE):([^\]]+)\]\]/);
+
+            if (tokenMatch?.[1]) {
+                return String(tokenMatch[1]).trim();
+            }
+
+            const graphicMatch = text.match(/\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}/);
+            return graphicMatch?.[1] ? String(graphicMatch[1]).trim() : '';
+        };
+
+        const normalizeImagePlacementDuplicates = (source = '') => {
+            let output = String(source || '');
+            const protectedBlocks = [];
+            const protectBlock = (block) => {
+                const placeholder = `@@QISI_POSITIONED_IMAGE_${protectedBlocks.length}@@`;
+                protectedBlocks.push(block);
+                return placeholder;
+            };
+
+            output = output.replace(
+                /\\begin\{wrapfigure\}\s*\{[lr]\}\s*\{[^}]+\}[\s\S]*?\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\][\s\S]*?\\end\{wrapfigure\}/g,
+                protectBlock
+            );
+
+            output = output.replace(
+                /\\begin\{(?:center|flushleft|flushright)\}[\s\S]*?\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\][\s\S]*?\\end\{(?:center|flushleft|flushright)\}/g,
+                protectBlock
+            );
+
+            const positionedIds = protectedBlocks
+                .map(extractQisiImageIdFromCode)
+                .filter(Boolean);
+
+            for (const imageId of positionedIds) {
+                const escapedId = escapeRegExpForImageId(imageId);
+                const bareTokenPattern = new RegExp(
+                    `\\n?\\[\\[(?:IMAGE|FORMULA_IMAGE):${escapedId}\\]\\]`,
+                    'g'
+                );
+
+                output = output.replace(bareTokenPattern, '');
+            }
+
+            protectedBlocks.forEach((block, index) => {
+                output = output.replace(`@@QISI_POSITIONED_IMAGE_${index}@@`, block);
+            });
+
+            return output
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+        };
+
+        const migrateLegacyIncludegraphicsToQisiTokens = (source = '', images = []) => {
+            const validIds = new Set(
+                (images || [])
+                    .map(image => String(image?.id || '').trim())
+                    .filter(Boolean)
+            );
+
+            return String(source || '').replace(
+                /\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}/g,
+                (match, rawId) => {
+                    const id = String(rawId || '').trim();
+                    return validIds.has(id) ? `[[IMAGE:${id}]]` : match;
+                }
+            );
+        };
+
+        const ensureLatexPackage = (source = '', packageName = '') => {
+            let output = String(source || '');
+            const name = String(packageName || '').trim();
+
+            if (!name) return output;
+
+            const escapedName = escapeImageIdForRegExp(name);
+            const packagePattern = new RegExp(
+                `\\\\usepackage(?:\\[[^\\]]*\\])?\\{${escapedName}\\}`
+            );
+
+            if (packagePattern.test(output)) {
+                return output;
+            }
+
+            return output.replace(
+                /\\begin\{document\}/,
+                `\\usepackage{${name}}\n\n\\begin{document}`
+            );
+        };
+
+        const ensureImagePackagesForLatex = (source = '') => {
+            let output = String(source || '');
+
+            if (/\\includegraphics|\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\]/.test(output)) {
+                output = ensureLatexPackage(output, 'graphicx');
+            }
+
+            if (/\\begin\{wrapfigure\}/.test(output)) {
+                output = ensureLatexPackage(output, 'wrapfig');
+            }
+
+            return output;
+        };
+
+        const removeImageTokenFromStemForV2 = (stem = '', imageId = '') => {
+            const id = String(imageId || '').trim();
+            if (!id) return String(stem || '');
+
+            const escapedId = escapeRegExpForImageId(id);
+            let output = String(stem || '');
+            const tokenSource = `\\[\\[(?:IMAGE|FORMULA_IMAGE):${escapedId}\\]\\]`;
+            const includeSource =
+                `\\\\includegraphics` +
+                `(?:\\[[^\\]]*\\])?` +
+                `\\{${escapedId}\\}`;
+
+            const wrapFigurePattern = new RegExp(
+                `\\n?\\\\begin\\{wrapfigure\\}` +
+                `\\s*\\{[lr]\\}` +
+                `\\s*\\{[^}]+\\}` +
+                `[\\s\\S]*?` +
+                `(?:${tokenSource}|${includeSource})` +
+                `[\\s\\S]*?` +
+                `\\\\end\\{wrapfigure\\}`,
+                'g'
+            );
+            const alignedBlockPattern = new RegExp(
+                `\\n?\\\\begin\\{(center|flushleft|flushright)\\}` +
+                `[\\s\\S]*?` +
+                `(?:${tokenSource}|${includeSource})` +
+                `[\\s\\S]*?` +
+                `\\\\end\\{\\1\\}`,
+                'g'
+            );
+            const includeGraphicsPattern = new RegExp(`\\n?${includeSource}`, 'g');
+            const bareTokenPattern = new RegExp(
+                `\\n?${tokenSource}`,
+                'g'
+            );
+
+            output = output
+                .replace(wrapFigurePattern, '')
+                .replace(alignedBlockPattern, '')
+                .replace(includeGraphicsPattern, '')
+                .replace(bareTokenPattern, '');
+
+            return output
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+        };
+
+
         const attachDraftImageTokensIntoStemsForV2 = (drafts = [], draftImages = []) => {
             if (!Array.isArray(drafts) || !drafts.length) return drafts;
 
@@ -414,6 +572,11 @@
             mergeDocxVisualDraftsByQuestionNumberForV2,
             buildDraftImagePlacementCode,
             shouldInlineDraftImageInStemForV2,
+            appendImageTokensToStemForV2,
+            normalizeImagePlacementDuplicates,
+            migrateLegacyIncludegraphicsToQisiTokens,
+            ensureImagePackagesForLatex,
+            removeImageTokenFromStemForV2,
             attachDraftImageTokensIntoStemsForV2
         };
     }

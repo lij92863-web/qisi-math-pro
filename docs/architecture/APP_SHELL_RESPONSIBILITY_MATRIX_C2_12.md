@@ -510,3 +510,66 @@ largest remaining Program C function remains the 146-line
 `extractTextFromDraftFile`. Decision:
 `APP_STORAGE_FORMAL_REPOSITORY_BOUNDARY_ACCEPTED`. Wave 18 remains the final
 independent C2-12 UI-shell reachability and metric audit.
+
+## Wave 18 final responsibility matrix
+
+The final inventory contains 5,253 lines and 172 detected functions. Every
+Program C function and assembly block was reclassified against the A–G model:
+
+| Current range | Responsibility | Class | Final evidence |
+| --- | --- | --- | --- |
+| 1–213 | repository/service construction and thin command facades | A wiring | calls named owners; no transaction or policy implementation |
+| 214–332 | library/knowledge view-model helpers and batch labels | A/G | UI state and unrelated library presentation only |
+| 333–1,066 | batch-create, file-purpose, review editor, and draft command UI | A | maps visible state to owner commands; no import algorithm |
+| 1,068–1,178 | local-convert presentation, transport construction, cost diagnostics | A/E wiring | AI proxy request ownership remains in `OcrQwenAdapter`; three task-client callbacks are explicit source-port injection |
+| 1,179–2,008 | focused source/policy/Bridge owner assembly | A wiring | parser, projection, validation, ReviewDraft, and persistence operations delegate to named owners |
+| 2,013–2,935 | normal-UI controller, review commands, crop UI, confirmation, summaries | A | controller commands and UI/readback projection only |
+| 2,937–5,253 | library, external-bank, manual-entry, exam, print, template, and knowledge features | G with bounded E | outside Program C; retained without restoring formal-table or AI transport ownership |
+
+Final Program C class result:
+
+| Class | Final result |
+| --- | --- |
+| A | retained UI commands, view-model mapping, and explicit dependency assembly |
+| B | `0` import orchestration implementations |
+| C | `0` policy implementations; named owner calls exist only as thin assembly/delegation |
+| D | `0` transaction or repository business implementations |
+| E | bounded local diagnostics and cost/progress presentation |
+| F | `0` audited Program C dead or unreachable functions |
+| G | retained unrelated product behavior; three remaining Dexie transactions touch only external-package tables |
+
+The former active browser document, PDF render, visual-support, strict-question,
+recognition-structure, support-text/LaTeX, question-content/image, page-parser,
+solution-quality, visual-question, and review-normalization implementations now
+live in focused owner modules. The app-local definitions and the audited dead
+legacy merge/self-test closure are absent. Missing required ports fail closed.
+
+## Final hard metrics
+
+| Metric | C2-12 start | Wave 17 | Wave 18 final |
+| --- | ---: | ---: | ---: |
+| `app.js` lines | 19,494 | 13,167 | 5,253 |
+| detected functions | 396 | 305 | 172 |
+| largest function | 242 | 164 | 164 (`startExamPointerDrag`, G) |
+| largest Program C function | 242 | 146 | 116 (`saveManualCropToDraft`, A) |
+| direct AI proxy requests | 17 | 0 | 0 |
+| frozen PDF parser/aligner/controlled-write references | 5 | 0 | 0 |
+| direct formal DB writes | 6 | 0 | 0 |
+| direct draft-table transaction logic | present | 0 | 0 |
+| legacy fallback | 0 | 0 | 0 |
+| duplicate normal-UI production owner | 0 | 0 | 0 |
+
+Owner-delegation callsites are recorded separately from implementation
+ownership: one PDF projection delegation, one import-validation delegation, one
+ReviewDraft-builder delegation, and 21 draft-persistence command/readback
+delegations. These are explicit Bridge/UI ports; none contains the delegated
+policy or transaction. `processDraftImportBatch` and
+`processDraftImportBatchV2` are both absent. The normal UI owner is
+`ProductionImportBridge`.
+
+Wave 18 verification passed the 15-scenario normal-UI browser canary, true
+DOCX/PDF import, review edit/reload/error recovery, formal confirmation, full
+1,622-test safe suite, and all 11 mandatory gates. Wrong attachment, raw JSON,
+placeholder leakage, controlled-write bypass, legacy fallback, Bridge formal
+write, real API call, failed, cancelled, skipped, todo, and timeout counts are
+zero. Final decision: `C2_12_APP_SHELL_CONVERGENCE_ACCEPTED`.

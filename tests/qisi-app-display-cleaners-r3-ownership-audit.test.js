@@ -9,8 +9,26 @@ const candidateNormalizerLines = fs.readFileSync(
     'qisi-candidate-normalizer.js',
     'utf8'
 ).split('\n');
-// Wave 16 retired fourteen unreachable OCR/Vision producer callsites.
-const EXPECTED_REMAINING_CALLSITES = 12;
+const supportTextParserLines = fs.readFileSync(
+    'qisi-support-text-parser.js',
+    'utf8'
+).split('\n');
+const questionContentPolicyLines = fs.readFileSync(
+    'qisi-question-content-policy.js',
+    'utf8'
+).split('\n');
+const recognitionPolicyLines = fs.readFileSync(
+    'qisi-recognition-structure-policy.js',
+    'utf8'
+).split('\n');
+// C2-12 retired the final app-owned display-cleaner wrapper callsites.
+const EXPECTED_REMAINING_CALLSITES = 0;
+
+function findLineIn(lines, fragment) {
+    const index = lines.findIndex(line => line.includes(fragment));
+    assert.notEqual(index, -1, `missing owner callsite anchor: ${fragment}`);
+    return index + 1;
+}
 
 function findLineContaining(fragment, startLine = 1) {
     const index = appLines.findIndex((line, idx) =>
@@ -72,12 +90,15 @@ describe('bm-a4-r3-ownership-audit', () => {
     });
 
     it('PDF support context blocked', () => {
-        const site = makeCallsite(
-            'R3-TEST-02',
-            'cleanDisplayTextForBatchSave',
-            'solution: window.Qisi.Utils.cleanDisplayTextForBatchSave(stripQuestionSectionNoise(block)),'
-        );
-        const result = auditCallsite(site, appLines);
+        const site = {
+            callsiteId: 'R3-TEST-02',
+            helper: 'cleanDisplayTextForBatchSave',
+            line: findLineIn(
+                supportTextParserLines,
+                'solution: root.Qisi.Utils.cleanDisplayTextForBatchSave(stripQuestionSectionNoise(block)),'
+            )
+        };
+        const result = auditCallsite(site, supportTextParserLines);
         assert.equal(result.decision.startsWith('BLOCKED'), true);
     });
 
@@ -110,12 +131,15 @@ describe('bm-a4-r3-ownership-audit', () => {
     });
 
     it('plain save display cleanup requires fixture', () => {
-        const site = makeCallsite(
-            'R3-TEST-05',
-            'cleanDisplayTextForBatchSave',
-            'const next = window.Qisi.Utils.cleanDisplayTextForBatchSave(candidate);'
-        );
-        const result = auditCallsite(site, appLines);
+        const site = {
+            callsiteId: 'R3-TEST-05',
+            helper: 'cleanDisplayTextForBatchSave',
+            line: findLineIn(
+                questionContentPolicyLines,
+                'const next = root.Qisi.Utils.cleanDisplayTextForBatchSave(candidate);'
+            )
+        };
+        const result = auditCallsite(site, questionContentPolicyLines);
         assert.equal(result.fixtureRequired, true);
         assert.equal(result.decision.startsWith('BLOCKED'), false);
         assert.equal(result.replacementAllowed, false);
@@ -132,12 +156,18 @@ describe('bm-a4-r3-ownership-audit', () => {
     });
 
     it('module-style support repair callsites remain audited at their production owner', () => {
-        const repairSite = makeCallsite(
-            'R3-TEST-07',
-            'repairChoiceOptions',
-            'window.Qisi.SupportRepair.repairChoiceOptions(rawStem, rawOptions'
+        const repairSite = {
+            callsiteId: 'R3-TEST-07',
+            helper: 'repairChoiceOptions',
+            line: findLineIn(
+                recognitionPolicyLines,
+                'root.Qisi.SupportRepair.repairChoiceOptions(rawStem, rawOptions'
+            )
+        };
+        const repairResult = auditCallsite(
+            repairSite,
+            recognitionPolicyLines
         );
-        const repairResult = auditCallsite(repairSite, appLines);
         assert.equal(repairResult.replacementAllowed, false);
 
         const jsonRepairLine = candidateNormalizerLines.findIndex(line =>

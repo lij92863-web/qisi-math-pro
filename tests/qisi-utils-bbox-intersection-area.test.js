@@ -46,11 +46,16 @@ describe('bboxIntersectionArea', () => {
         assert.equal(typeof bboxIntersectionArea([0, 0, 10, 10], [5, 5, 15, 15]), 'number');
     });
 
-    it('app.js explicit call: uses window.Qisi.Utils.bboxIntersectionArea', () => {
+    it('strict question policy owns bboxIntersectionArea callsites', () => {
         const fs = require('node:fs');
         const path = require('node:path');
         const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
-        assert.match(app, /window\.Qisi\.Utils\.bboxIntersectionArea\s*\(/);
+        const owner = fs.readFileSync(
+            path.join(__dirname, '..', 'qisi-strict-question-policy.js'),
+            'utf8'
+        );
+        assert.doesNotMatch(app, /bboxIntersectionArea\s*\(/);
+        assert.match(owner, /root\.Qisi\.Utils\.bboxIntersectionArea\s*\(/);
     });
 
     it('app.js: no naked bboxIntersectionArea calls', () => {

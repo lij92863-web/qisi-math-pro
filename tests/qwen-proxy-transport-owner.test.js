@@ -84,6 +84,14 @@ test('Qwen proxy transport aborts timed-out work with the legacy safe message', 
 
 test('app shell assembles owners but contains zero AI proxy requests', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+    const adapter = fs.readFileSync(
+        path.join(ROOT, 'qisi-ocr-qwen-adapter.js'),
+        'utf8'
+    );
+    const visualSupport = fs.readFileSync(
+        path.join(ROOT, 'qisi-visual-support-source.js'),
+        'utf8'
+    );
 
     assert.doesNotMatch(app, /const fetchWithTimeout\s*=/);
     assert.doesNotMatch(app, /DASHSCOPE_(?:CHAT|OCR)_URL/);
@@ -94,5 +102,10 @@ test('app shell assembles owners but contains zero AI proxy requests', () => {
     );
     assert.doesNotMatch(app, /qwenProxyTransport\.getEndpoint\(/);
     assert.match(app, /createQwenTaskClient\s*\(/);
-    assert.match(app, /qwenTaskClient\.checkHealth\(\)/);
+    assert.match(
+        app,
+        /createVisualSupportSource\s*\(\{[\s\S]*?qwenTaskClient[\s\S]*?\}\)/
+    );
+    assert.match(visualSupport, /qwenTaskClient\.chatJson\s*\(/);
+    assert.match(adapter, /checkHealth:\s*\(\)\s*=>\s*transport\.checkHealth\(\)/);
 });

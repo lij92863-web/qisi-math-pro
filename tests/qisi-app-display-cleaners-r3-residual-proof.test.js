@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
 const { decideResidual, buildResidualProofs } = require('../scripts/bm-a4-r3-residual-proof');
-// Wave 16 retired fourteen unreachable OCR/Vision producer callsites.
-const EXPECTED_REMAINING_CALLSITES = 12;
+// C2-12 retired the final app-owned display-cleaner wrapper callsites.
+const EXPECTED_REMAINING_CALLSITES = 0;
 
 function decide(overrides) {
     return decideResidual({

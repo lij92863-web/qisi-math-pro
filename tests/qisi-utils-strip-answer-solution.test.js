@@ -94,13 +94,18 @@ describe('stripAnswerSolution', () => {
         assert.equal(result.answer, 'ＡＢＣ');
     });
 
-    it('app.js explicit call: uses window.Qisi.Utils.stripAnswerSolution', () => {
+    it('recognition structure policy owns stripAnswerSolution callsites', () => {
         const fs = require('node:fs');
         const path = require('node:path');
 
         const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+        const owner = fs.readFileSync(
+            path.join(__dirname, '..', 'qisi-recognition-structure-policy.js'),
+            'utf8'
+        );
 
-        assert.match(app, /window\.Qisi\.Utils\.stripAnswerSolution\s*\(/);
+        assert.doesNotMatch(app, /stripAnswerSolution\s*\(/);
+        assert.match(owner, /root\.Qisi\.Utils\.stripAnswerSolution\s*\(/);
     });
 
     it('app.js: no naked stripAnswerSolution calls', () => {

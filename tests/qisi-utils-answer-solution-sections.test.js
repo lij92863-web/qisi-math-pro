@@ -84,13 +84,23 @@ describe('splitAnswerSolutionSections', () => {
         assert.ok('answerPart' in split);
         assert.ok('solutionPart' in split);
     });
-    it('app.js explicit call: normalizeAnswerSolutionSource', () => {
+    it('support text parser owns normalizeAnswerSolutionSource callsites', () => {
         const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
-        assert.match(app, /window\.Qisi\.Utils\.normalizeAnswerSolutionSource\s*\(/);
+        const owner = fs.readFileSync(
+            path.join(__dirname, '..', 'qisi-support-text-parser.js'),
+            'utf8'
+        );
+        assert.doesNotMatch(app, /normalizeAnswerSolutionSource\s*\(/);
+        assert.match(owner, /root\.Qisi\.Utils\.normalizeAnswerSolutionSource\s*\(/);
     });
-    it('app.js explicit call: splitAnswerSolutionSections', () => {
+    it('support text parser owns splitAnswerSolutionSections callsites', () => {
         const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
-        assert.match(app, /window\.Qisi\.Utils\.splitAnswerSolutionSections\s*\(/);
+        const owner = fs.readFileSync(
+            path.join(__dirname, '..', 'qisi-support-text-parser.js'),
+            'utf8'
+        );
+        assert.doesNotMatch(app, /splitAnswerSolutionSections\s*\(/);
+        assert.match(owner, /root\.Qisi\.Utils\.splitAnswerSolutionSections\s*\(/);
     });
     it('app.js: no naked normalizeAnswerSolutionSource calls', () => {
         const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');

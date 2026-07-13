@@ -61,13 +61,18 @@ describe('expandPageRange', () => {
         assert.deepEqual(result, [1, 3]);
     });
 
-    it('app.js explicit call: uses window.Qisi.Utils.expandPageRange', () => {
+    it('browser source owners call expandPageRange outside app.js', () => {
         const fs = require('node:fs');
         const path = require('node:path');
 
         const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+        const renderer = fs.readFileSync(
+            path.join(__dirname, '..', 'qisi-browser-pdf-renderer.js'),
+            'utf8'
+        );
 
-        assert.match(app, /window\.Qisi\.Utils\.expandPageRange\s*\(/);
+        assert.doesNotMatch(app, /expandPageRange\s*\(/);
+        assert.match(renderer, /root\.Qisi\.Utils\.expandPageRange\s*\(/);
     });
 
     it('app.js: no naked expandPageRange calls', () => {

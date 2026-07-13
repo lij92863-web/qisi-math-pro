@@ -4,8 +4,8 @@ const fs = require('node:fs');
 const { rankCallsite, rankAll, RISK_PATTERNS } = require('../scripts/bm-a4-r3-candidate-ranker');
 
 const appLines = fs.readFileSync('app.js', 'utf8').split('\n');
-// Wave 16 retired fourteen unreachable OCR/Vision producer callsites.
-const EXPECTED_REMAINING_CALLSITES = 12;
+// C2-12 retired the final app-owned display-cleaner wrapper callsites.
+const EXPECTED_REMAINING_CALLSITES = 0;
 
 describe('bm-a4-r3-candidate-ranker', () => {
     it('tool exists', () => { assert.equal(fs.existsSync('scripts/bm-a4-r3-candidate-ranker.js'), true); });

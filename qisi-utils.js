@@ -992,6 +992,7 @@
             stripBatchImagePlaceholders,
             splitQuestionForStorage,
             stripAnswerSolution,
+            tokenizeLatexSource,
             validatePageRange
         };
 

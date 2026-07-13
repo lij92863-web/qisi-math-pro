@@ -135,14 +135,20 @@ describe('itemHasUnconvertedImagePlaceholder', () => {
     });
 });
 
-describe('app.js migration checks', () => {
+describe('C2-12 placeholder owner migration checks', () => {
     const appPath = path.join(__dirname, '..', 'app.js');
 
-    it('app.js explicit call check', () => {
+    it('focused policies own placeholder checks outside app.js', () => {
         const app = fs.readFileSync(appPath, 'utf8');
-        assert.match(app, /window\.Qisi\.Utils\.hasUnconvertedImagePlaceholder/);
-        assert.match(app, /window\.Qisi\.Utils\.hasUnconvertedOptionPlaceholder/);
-        assert.match(app, /window\.Qisi\.Utils\.itemHasUnconvertedImagePlaceholder/);
+        const strictPolicy = fs.readFileSync(
+            path.join(__dirname, '..', 'qisi-strict-question-policy.js'),
+            'utf8'
+        );
+        assert.doesNotMatch(app, /hasUnconverted(?:Image|Option)Placeholder/);
+        assert.doesNotMatch(app, /itemHasUnconvertedImagePlaceholder/);
+        assert.match(strictPolicy, /root\.Qisi\.Utils\.hasUnconvertedImagePlaceholder/);
+        assert.match(strictPolicy, /root\.Qisi\.Utils\.hasUnconvertedOptionPlaceholder/);
+        assert.match(strictPolicy, /root\.Qisi\.Utils\.itemHasUnconvertedImagePlaceholder/);
     });
 
     it('app.js no naked call check', () => {

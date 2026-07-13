@@ -1,26 +1,16 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const vm = require('node:vm');
-
-const { HELPERS, extractHelpers } = require('../scripts/bm-a4-helper-extract');
 const qisiUtils = require('../qisi-utils.js');
 
 function loadAppHelpers() {
-    const extracted = extractHelpers('app.js');
-    assert.equal(extracted.ok, true, extracted.errors.join('\n'));
-    const sandbox = {
-        window: {
-            Qisi: {
-                Utils: qisiUtils
-            }
-        },
-        console
-    };
-    vm.createContext(sandbox);
-    const source = HELPERS.map((helper) => extracted.helpers[helper].source).join('\n') +
-        `\nglobalThis.__helpers = { ${HELPERS.join(', ')} };`;
-    vm.runInContext(source, sandbox, { timeout: 1000 });
-    return sandbox.__helpers;
+    const names = [
+        'cleanDisplayTextForBatchSave',
+        'cleanDisplayOptionsForBatchSave',
+        'addWarningOnce',
+        'cleanDisplayFieldsOnly'
+    ];
+    for (const name of names) assert.equal(typeof qisiUtils[name], 'function');
+    return Object.fromEntries(names.map(name => [name, qisiUtils[name]]));
 }
 
 function clone(value) {

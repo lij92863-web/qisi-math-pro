@@ -9,9 +9,10 @@ describe('bm-a4-r3-shard-verify', () => {
         assert.equal(fs.existsSync('scripts/bm-a4-r3-shard-verify.js'), true);
     });
 
-    it('passes allowed replacement', () => {
+    it('historical shard cannot run after C2-12 wrapper retirement', () => {
         const result = verifyShard('R3-S001', { replaced: 2, deferred: 8, blocked: 0 });
-        assert.equal(result.ok, true);
+        assert.equal(result.ok, false);
+        assert.ok(result.errors.some(error => /wrapper/i.test(error)));
     });
 
     it('fails replacement without fixture', () => {

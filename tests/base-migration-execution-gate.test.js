@@ -35,7 +35,8 @@ function removeTemp(name) {
 test('BM-AUTO inventory: scans app.js and finds functions', () => {
     const result = runScript(inventoryPath);
     assert.ok(typeof result.appJsLines === 'number', 'has appJsLines');
-    assert.ok(result.appJsLines > 10000, 'app.js has substantial line count');
+    assert.ok(result.appJsLines > 4000, 'app.js still contains the UI shell');
+    assert.ok(result.appJsLines <= 12000, 'app.js stays within the C2-12 shell convergence ceiling');
     assert.ok(Array.isArray(result.functions), 'functions is array');
     assert.ok(result.functions.length > 50, 'finds many functions');
 

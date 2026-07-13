@@ -61,11 +61,16 @@ describe('normalizeFigureBbox', () => {
         assert.ok(Array.isArray(result));
     });
 
-    it('app.js explicit call: uses window.Qisi.Utils.normalizeFigureBbox', () => {
+    it('strict question policy owns normalizeFigureBbox callsites', () => {
         const fs = require('node:fs');
         const path = require('node:path');
         const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
-        assert.match(app, /window\.Qisi\.Utils\.normalizeFigureBbox\s*\(/);
+        const owner = fs.readFileSync(
+            path.join(__dirname, '..', 'qisi-strict-question-policy.js'),
+            'utf8'
+        );
+        assert.doesNotMatch(app, /normalizeFigureBbox\s*\(/);
+        assert.match(owner, /root\.Qisi\.Utils\.normalizeFigureBbox\s*\(/);
     });
 
     it('app.js: no naked normalizeFigureBbox calls', () => {

@@ -54,10 +54,11 @@ describe('bm-a4-r3-shard-planner', () => {
         assert.equal(fs.existsSync('scripts/bm-a4-r3-shard-planner.js'), true);
     });
 
-    it('planner outputs shards', () => {
+    it('planner reports zero residual shards after C2-12 convergence', () => {
         const plan = generatePlan();
-        assert.ok(plan.totalShards > 0);
-        assert.ok(Array.isArray(plan.shards));
+        assert.equal(plan.totalShards, 0);
+        assert.deepEqual(plan.shards, []);
+        assert.deepEqual(plan.callsites, []);
     });
 
     it('each shard has max 10 callsites', () => {

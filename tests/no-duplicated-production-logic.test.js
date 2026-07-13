@@ -65,12 +65,19 @@ test('batch smoke exercises production parser, aligner, and controlled-write own
     assert.doesNotMatch(source, /node scripts\/pdf-master-browser-runner\.js real-run/);
 });
 
-test('app.js delegates JSON/LaTeX repair to the production SupportRepair owner', () => {
+test('focused recognition owners delegate JSON/LaTeX repair to SupportRepair', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+    const recognitionPolicy = fs.readFileSync(
+        path.join(ROOT, 'qisi-recognition-structure-policy.js'),
+        'utf8'
+    );
+    const candidateNormalizer = fs.readFileSync(
+        path.join(ROOT, 'qisi-candidate-normalizer.js'),
+        'utf8'
+    );
 
     assert.doesNotMatch(app, /LATEX_JSON_BACKSLASH_REPAIR_COMMANDS\s*=\s*new Set/);
-    assert.match(
-        app,
-        /window\.Qisi\.SupportRepair\s*\n\s*\.escapeLatexBackslashesInJsonCandidate/
-    );
+    assert.doesNotMatch(app, /escapeLatexBackslashesInJsonCandidate/);
+    assert.match(recognitionPolicy, /SupportRepair[\s\S]*escapeLatexBackslashesInJsonCandidate/);
+    assert.match(candidateNormalizer, /helpers\.escapeLatexBackslashesInJsonCandidate/);
 });
