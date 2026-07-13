@@ -4,7 +4,7 @@
 - Baseline tag: `pre-app-shell-slimming-r3-b15e6fb`
 - Current branch: `stage/app-shell-slimming-r3`
 - Current phase: Program C / Phase 5 blocked
-- Current work package: Phase 5 real-browser shadow equivalence blocker sealed
+- Current work package: DOCX normal-UI route identity correction R1 blocked
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -711,6 +711,34 @@
   blocker:
   `DOCX_NORMAL_UI_LEGACY_VISUAL_PROVENANCE_NOT_EQUIVALENT_TO_DETERMINISTIC_BRIDGE`;
   `C2_11_PROHIBITED`; later Program C phases not entered.
+- The independent DOCX normal-UI route identity audit started from clean pushed
+  commit `82f44d5bfc12983e1467151ec600d95b2b7c61fb` and made no production code
+  change. Upload, batch context, and source-role classification all preserve the
+  real file as `docx`; MIME and the browser fixture do not select the PDF route.
+- The first producer divergence is inside the active legacy owner. Every normal
+  DOCX question/full source is deliberately passed to
+  `processDocxByLocalConvertAndStrictVision`; a virtual PDF is created and
+  strict vision produces the fields. Success exits the file loop and failure is
+  rethrown, so the later XML importer block is not an active deterministic
+  fallback for this case. Root-cause classification is C, not A, B, or D.
+- The Bridge scaffold selects the deterministic DOCX source port, but neither
+  the legacy vision producer nor the deterministic production adapter owns a
+  complete canonical per-field provenance projection. Existing Bridge/browser
+  tests hand-author `docx-deterministic` mode in fixtures.
+- Formal Admission permits only `manual`, `docx-deterministic`, `pdf-ai`, and
+  `imported-package`. There is no legal DOCX-vision mode; `pdf-ai` also requires
+  controlled-write evidence absent from the legacy DOCX vision route. The task
+  therefore reached its explicit C-case immediate stop condition before code.
+- The read-only route/schema owner matrix passed 65/65 with no failure,
+  cancellation, skipped, todo, or timeout. Post-correction mandatory gates were
+  not run because no legal narrow correction was available.
+- Evidence is sealed in
+  `docs/architecture/DOCX_NORMAL_UI_ROUTE_IDENTITY_AUDIT_R1.md` and
+  `docs/release/DOCX_NORMAL_UI_ROUTE_IDENTITY_CORRECTION_R1.md`.
+- Decision: `DOCX_ROUTE_IDENTITY_CORRECTION_BLOCKED`;
+  blocker:
+  `DOCX_VISION_ROUTE_HAS_NO_LEGAL_SOURCE_MODE_OR_PRODUCER_TIME_CONTROLLED_PROVENANCE`;
+  production code unchanged; `C2_11_PROHIBITED`; full Phase 5 not resumed.
 
 ## Blockers / limitations
 
@@ -723,6 +751,7 @@
 
 ## Next exact action
 
-Program C is blocked at Phase 5. Define and authorize a prerequisite migration
-that gives the normal UI DOCX route a truthful deterministic production owner,
-then restart Phase 5. Do not enter C2-11 under the current gate.
+Program C remains blocked at Phase 5. Before resuming this correction or Phase
+5, define and separately authorize a schema-and-provenance design for the real
+DOCX vision route and producer-time DOCX provenance. Do not enter C2-11 under
+the current gate.
