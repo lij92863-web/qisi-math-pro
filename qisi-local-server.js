@@ -8,6 +8,9 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const { spawn } = require('child_process');
 const { createTempJobManager } = require('./qisi-temp-job-manager');
+const { createSecureLogger } = require('./qisi-secure-logger');
+
+createSecureLogger(console).install();
 
 const ROOT = __dirname;
 const TMP_DIR = path.join(ROOT, 'tmp');
@@ -53,14 +56,6 @@ function safeAiModelName(body) {
   return model;
 }
 
-function aiRequestBodySize(body) {
-  try {
-    return Buffer.byteLength(JSON.stringify(body || {}), 'utf8');
-  } catch {
-    return 0;
-  }
-}
-
 function validateAiRequestBody(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return { ok: false, status: 400, code: 'INVALID_AI_BODY', error: 'AI request body must be a JSON object.' };
@@ -97,12 +92,15 @@ async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
   const bodyText = JSON.stringify(req.body);
   const model = validation.model;
   const startedAt = Date.now();
+  const requestId = String(req.get('x-request-id') || `req-${Date.now()}`)
+    .replace(/[^a-zA-Z0-9_.:-]/g, '')
+    .slice(0, 80) || `req-${Date.now()}`;
 
   try {
     console.log('[AI_PROXY][request]', {
-      route: routeName,
-      model,
-      bytes: aiRequestBodySize(req.body)
+      requestId,
+      stage: `${routeName}.request`,
+      engine: model
     });
 
     const upstream = await fetch(upstreamUrl, {
@@ -116,31 +114,14 @@ async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
     });
 
     const responseBuffer = Buffer.from(await upstream.arrayBuffer());
-    const responseText = responseBuffer.toString('utf8');
     const contentType = upstream.headers.get('content-type') || 'application/json; charset=utf-8';
-    let upstreamErrorSummary = '';
-
-    if (!upstream.ok) {
-      try {
-        const payload = JSON.parse(responseText);
-        upstreamErrorSummary = String(
-          payload?.error?.message ||
-          payload?.message ||
-          payload?.code ||
-          ''
-        ).slice(0, 800);
-      } catch (_) {
-        upstreamErrorSummary = responseText.slice(0, 800);
-      }
-    }
 
     console.log('[AI_PROXY][response]', {
-      route: routeName,
-      model,
-      status: upstream.status,
+      requestId,
+      stage: `${routeName}.response`,
+      engine: model,
       durationMs: Date.now() - startedAt,
-      responseBytes: responseBuffer.length,
-      upstreamError: upstream.ok ? '' : upstreamErrorSummary
+      code: upstream.ok ? 'AI_PROXY_OK' : `AI_PROXY_HTTP_${upstream.status}`
     });
 
     res.status(upstream.status);
@@ -149,10 +130,11 @@ async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
   } catch (error) {
     const aborted = error?.name === 'AbortError';
     console.error('[AI_PROXY][error]', {
-      route: routeName,
-      model,
-      code: aborted ? 'AI_PROXY_TIMEOUT' : 'AI_PROXY_FETCH_FAILED',
-      message: error?.message || String(error)
+      requestId,
+      stage: `${routeName}.error`,
+      engine: model,
+      durationMs: Date.now() - startedAt,
+      code: aborted ? 'AI_PROXY_TIMEOUT' : 'AI_PROXY_FETCH_FAILED'
     });
 
     return res.status(aborted ? 504 : 502).json({
@@ -662,10 +644,8 @@ app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => 
     });
   } catch (error) {
     console.error('[DOCX_CONVERT_ERROR]', {
-      message: error?.message || String(error),
-      stack: error?.stack,
-      file: uploaded?.originalname,
-      path: uploaded?.path
+      stage: 'docx.convert',
+      code: error?.code || 'DOCX_CONVERT_FAILED'
     });
 
     res.status(500).json({

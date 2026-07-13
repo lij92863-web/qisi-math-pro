@@ -9,6 +9,13 @@
   ],
   "modules": [
     {
+      "id": "secure-logger", "file": "qisi-secure-logger.js",
+      "layer": 0, "domainOwner": "secureLoggerOwner",
+      "publicApi": ["createSecureLogger", "sanitizeLogArgs"],
+      "allowedDependencies": [], "forbiddenDependencies": ["app-shell", "storage-repository"],
+      "status": "production-wired"
+    },
+    {
       "id": "archive-security", "file": "qisi-archive-security.js",
       "layer": 0, "domainOwner": "archiveSecurityOwner",
       "publicApi": ["createArchivePolicy", "validateArchive", "load"],
@@ -169,7 +176,8 @@
         "export-service", "legacy-batch-run", "injected-import-path",
         "batch-formal-submit", "ocr-registry", "ocr-qwen-adapter",
         "ocr-local-adapter", "ocr-shadow-mode", "performance-monitor",
-        "controlled-write", "support-aligner", "support-parser", "archive-security"
+        "controlled-write", "support-aligner", "support-parser", "archive-security",
+        "secure-logger"
       ],
       "forbiddenDependencies": ["route-b-research"],
       "status": "production-wired"

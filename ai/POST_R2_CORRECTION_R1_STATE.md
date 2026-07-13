@@ -75,7 +75,6 @@
 
 ## Pending
 
-- A2-10 log-data minimization domain.
 - Phase 3 through Phase 8 attacks, audits, benchmark, CTO review, and sealing.
 
 ## Commits
@@ -92,6 +91,7 @@
 - A2-8 true deterministic import E2E `36c919b`.
 - A2-9 architecture ownership guards `10e1240`.
 - A2-10 hostile archive hardening `52f6252`.
+- A2-10 temporary-job lifecycle `52316ba`.
 
 ## Gates
 
@@ -190,6 +190,13 @@
 - A2-10 temporary-file `verify:safe` and full mandatory matrix: passed.
 - A2-10 temporary-file browser preflight/dry-run: passed with the cleanup-first
   server startup healthy, `realApiCalled=false`, and `underlyingApiCallCount=0`.
+- A2-10 log failure-first evidence: browser and server console calls could emit
+  OCR/model text, filenames, error messages, paths, and arbitrary payloads.
+- A2-10 secure-log and production-wiring tests: passed 4/4; live-browser leak
+  injection emitted none of the five forbidden marker classes.
+- A2-10 log `verify:safe` and full mandatory matrix: passed.
+- A2-10 log browser preflight/dry-run: passed with `realApiCalled=false`,
+  `underlyingApiCallCount=0`, and browser chain healthy.
 
 ## Blockers
 
@@ -198,5 +205,5 @@
 
 ## Next exact action
 
-Run exact A2-10 temporary-file diff-scope verification, commit/push, then begin
-the A2-10 log-data minimization domain.
+Run exact A2-10 log diff-scope verification, commit/push, then begin Phase 3
+counterfactual attack packages.
