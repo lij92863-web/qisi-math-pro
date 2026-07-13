@@ -152,6 +152,10 @@
                         Qisi.DraftPersistenceService.persistDraftBatch(
                             command, storageRepository
                         ),
+                    persistReviewDraftBatch: command =>
+                        Qisi.DraftPersistenceService.persistReviewDraftBatch(
+                            command, storageRepository
+                        ),
                     reloadDraftBatch: batchId =>
                         Qisi.DraftPersistenceService.reloadDraftBatch(
                             batchId, storageRepository
@@ -15448,21 +15452,18 @@ ${source}`;
                         const unmatched = result.unmatched || [];
                         const problemCount = drafts.filter(q => draftQuestionProblems(q).length > 0).length;
 
-                        await db.transaction('rw', db.draftQuestions, db.draftImages, db.draftImportBatches, db.draftImportFiles, async () => {
-                            const oldDrafts = await db.draftQuestions.where('batchId').equals(batchId).toArray();
-                            const oldImages = await db.draftImages.where('batchId').equals(batchId).toArray();
-                            if (oldDrafts.length) await db.draftQuestions.bulkDelete(oldDrafts.map(item => item.id));
-                            if (oldImages.length) await db.draftImages.bulkDelete(oldImages.map(item => item.id));
-                            if (drafts.length) await db.draftQuestions.bulkPut(drafts);
-                            if (finalDraftImages.length) await db.draftImages.bulkPut(finalDraftImages);
-
-                            await Promise.all(files.map(file => db.draftImportFiles.update(file.id, {
+                        const persistedAt = Date.now();
+                        await draftPersistenceService.persistReviewDraftBatch({
+                            batchId,
+                            drafts,
+                            images: finalDraftImages,
+                            files: files.map(file => ({
+                                ...file,
                                 parseStatus: 'success',
                                 errorMessage: '',
-                                updatedAt: Date.now()
-                            })));
-
-                            await db.draftImportBatches.update(batchId, {
+                                updatedAt: persistedAt
+                            })),
+                            batchPatch: {
                                 status: 'review',
                                 progress: 100,
                                 totalCount: drafts.length,
@@ -15471,9 +15472,9 @@ ${source}`;
                                 problemCount,
                                 unassignedImageCount: finalDraftImages.filter(img => !img.questionId && img.status === 'unassigned').length,
                                 unmatchedAnswers: unmatched,
-                                updatedAt: Date.now(),
+                                updatedAt: persistedAt,
                                 errorMessage: ''
-                            });
+                            }
                         });
 
                         console.groupCollapsed('[BATCH_V2][final-drafts-before-save]');
@@ -17997,12 +17998,11 @@ ${source}`;
                             draftCount: drafts.length,
                             draftImageCount: finalDraftImages.length
                         });
-                        await db.transaction('rw', db.draftImportBatches, db.draftQuestions, db.draftImages, async () => {
-                            await db.draftQuestions.where('batchId').equals(batchId).delete();
-                            await db.draftImages.where('batchId').equals(batchId).delete();
-                            if (drafts.length) await db.draftQuestions.bulkPut(drafts);
-                            if (finalDraftImages.length) await db.draftImages.bulkPut(finalDraftImages);
-                            await db.draftImportBatches.update(batchId, {
+                        await draftPersistenceService.persistReviewDraftBatch({
+                            batchId,
+                            drafts,
+                            images: finalDraftImages,
+                            batchPatch: {
                                 status: 'review',
                                 progress: 100,
                                 totalCount: drafts.length,
@@ -18013,7 +18013,7 @@ ${source}`;
                                 unmatchedAnswers: unmatched,
                                 updatedAt: Date.now(),
                                 errorMessage: drafts.length ? '' : '没有识别到题目，请确认文件内容清晰，或重新上传 DOCX / PDF。'
-                            });
+                            }
                         });
                         console.log('[BATCH_DEBUG][stage]', 'after bulkPut drafts');
                         await loadBatchImportData();
@@ -18812,19 +18812,16 @@ ${source}`;
                         return isChoice && optionCount < 4;
                     }).length;
 
-                    await db.transaction('rw', db.draftImportBatches, db.draftQuestions, db.draftImages, async () => {
-                        await db.draftQuestions.where('batchId').equals(batchId).delete();
-                        await db.draftImages.where('batchId').equals(batchId).delete();
-
-                        if (finalDrafts.length) await db.draftQuestions.bulkPut(finalDrafts);
-                        if (finalDraftImages.length) await db.draftImages.bulkPut(finalDraftImages);
-
-                        await db.draftImportBatches.update(batchId, {
+                    await draftPersistenceService.persistReviewDraftBatch({
+                        batchId,
+                        drafts: finalDrafts,
+                        images: finalDraftImages,
+                        batchPatch: {
                             totalCount: finalDrafts.length,
                             problemCount,
                             unassignedImageCount: finalDraftImages.filter(img => img.status === 'unassigned').length,
                             updatedAt: Date.now()
-                        });
+                        }
                     });
 
                     await loadBatchImportData();

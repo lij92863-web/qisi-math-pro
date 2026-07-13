@@ -70,34 +70,50 @@
         });
     };
 
-    const metadataSignature = commandValue => JSON.stringify({
-        batch: {
-            id: commandValue.batch.id,
-            status: commandValue.batch.status,
-            progress: commandValue.batch.progress,
-            updatedAt: commandValue.batch.updatedAt
-        },
-        files: commandValue.files.map(file => ({
-            id: file.id,
-            batchId: file.batchId,
-            parseStatus: file.parseStatus,
-            updatedAt: file.updatedAt
-        })).sort((left, right) => String(left.id).localeCompare(String(right.id))),
-        drafts: commandValue.drafts.map(draft => ({
-            id: draft.id,
-            batchId: draft.batchId,
-            version: draft.version,
-            order: draft.order,
-            status: draft.status,
-            updatedAt: draft.updatedAt
-        })).sort((left, right) => String(left.id).localeCompare(String(right.id)))
-    });
+    const metadataSignature = commandValue => {
+        const metadata = {
+            batch: {
+                id: commandValue.batch.id,
+                status: commandValue.batch.status,
+                progress: commandValue.batch.progress,
+                updatedAt: commandValue.batch.updatedAt
+            },
+            files: commandValue.files.map(file => ({
+                id: file.id,
+                batchId: file.batchId,
+                parseStatus: file.parseStatus,
+                updatedAt: file.updatedAt
+            })).sort((left, right) => String(left.id).localeCompare(String(right.id))),
+            drafts: commandValue.drafts.map(draft => ({
+                id: draft.id,
+                batchId: draft.batchId,
+                version: draft.version,
+                order: draft.order,
+                status: draft.status,
+                updatedAt: draft.updatedAt
+            })).sort((left, right) => String(left.id).localeCompare(String(right.id)))
+        };
+        if (Array.isArray(commandValue.images)) {
+            metadata.images = commandValue.images.map(image => ({
+                id: image.id,
+                batchId: image.batchId,
+                questionId: image.questionId,
+                status: image.status,
+                updatedAt: image.updatedAt
+            })).sort((left, right) => String(left.id).localeCompare(String(right.id)));
+        }
+        return JSON.stringify(metadata);
+    };
 
     const normalizeCommand = commandValue => {
         if (
             !isRecord(commandValue) || !isRecord(commandValue.batch) ||
             !Array.isArray(commandValue.files) ||
-            !Array.isArray(commandValue.drafts) || !commandValue.drafts.length
+            !Array.isArray(commandValue.drafts) ||
+            (
+                commandValue.images !== undefined &&
+                !Array.isArray(commandValue.images)
+            )
         ) {
             throw createError('DRAFT_PERSISTENCE_INPUT_INVALID');
         }
@@ -113,7 +129,11 @@
         ) {
             throw createError('DRAFT_PERSISTENCE_VERSION_REQUIRED');
         }
-        for (const rows of [command.files, command.drafts]) {
+        for (const rows of [
+            command.files,
+            command.drafts,
+            ...(Array.isArray(command.images) ? [command.images] : [])
+        ]) {
             for (const row of rows) {
                 if (!isRecord(row) || !String(row.id || '').trim()) {
                     throw createError('DRAFT_PERSISTENCE_INPUT_INVALID');
@@ -181,7 +201,8 @@
                 const result = await repository.persistReviewDraftBatch({
                     batch,
                     files: command.files,
-                    drafts: command.drafts
+                    drafts: command.drafts,
+                    images: command.images
                 });
                 const verified = await repository.get(
                     'draftImportBatches', command.batchId
@@ -203,6 +224,49 @@
                 rethrowOrWrap(error, 'DRAFT_PERSISTENCE_WRITE_FAILED');
             }
         });
+    };
+
+    const persistReviewDraftBatch = async (rawInput, repository) => {
+        requirePorts(repository, [
+            'get', 'findBy', 'persistReviewDraftBatch', 'loadDraftBatch'
+        ]);
+        if (
+            !isRecord(rawInput) || !isRecord(rawInput.batchPatch) ||
+            !Array.isArray(rawInput.drafts) ||
+            !Array.isArray(rawInput.images) ||
+            (
+                rawInput.files !== undefined &&
+                !Array.isArray(rawInput.files)
+            )
+        ) {
+            throw createError('DRAFT_PERSISTENCE_INPUT_INVALID');
+        }
+        const input = cloneValue(rawInput);
+        const batchId = requireId(input.batchId);
+        try {
+            const currentBatch = await repository.get(
+                'draftImportBatches', batchId
+            );
+            if (!currentBatch) throw createError('DRAFT_BATCH_NOT_FOUND');
+            const files = input.files === undefined
+                ? await repository.findBy('draftImportFiles', 'batchId', batchId)
+                : input.files;
+            const expectedVersion = currentVersion(currentBatch);
+            return await persistDraftBatch({
+                batch: {
+                    ...currentBatch,
+                    ...input.batchPatch,
+                    id: batchId
+                },
+                files,
+                drafts: input.drafts,
+                images: input.images,
+                expectedVersion,
+                idempotencyKey: `review:${batchId}:${expectedVersion + 1}`
+            }, repository);
+        } catch (error) {
+            rethrowOrWrap(error, 'DRAFT_PERSISTENCE_WRITE_FAILED');
+        }
     };
 
     const reloadDraftBatch = async (batchIdValue, repository) => {
@@ -252,6 +316,7 @@
     const api = Object.freeze({
         DraftPersistenceError,
         persistDraftBatch,
+        persistReviewDraftBatch,
         reloadDraftBatch,
         deleteDraftBatch
     });

@@ -550,12 +550,48 @@
   and 64 declared dependency edges with no missing target, cycle, upward
   dependency, or owner mismatch.
 
+- Wave C2-10.5 Phase 3 completed the production review-draft persistence
+  wiring through the existing `DraftPersistenceService` and
+  `StorageRepository` owners. The new service-level
+  `persistReviewDraftBatch` port loads the current batch and, when omitted by
+  the caller, current file records; it derives the existing optimistic version
+  and idempotency key before delegating to the established locked
+  `persistDraftBatch` transaction path.
+- The repository transaction primitive now includes `draftImages` in the same
+  atomic replacement as drafts, files, and the batch. Image batch association
+  and duplicate ids fail before persistence. An explicitly supplied empty image
+  set clears stale images, while older low-level callers that omit `images`
+  retain their previous image rows and pre-image metadata signature exactly.
+- V2 final persistence, legacy final persistence, and manual active-batch
+  dedupe now call the same service facade. Their former direct draft/image DB
+  transactions were deleted. V2 still supplies its all-success file projection;
+  legacy and manual paths retain the current per-file parse states. Batch
+  counters, unmatched answers, error text, and unassigned-image counting remain
+  caller projections, and FormalAdmission remains outside review persistence.
+- Failure-first began at 0/5 because the production port and its three call
+  sites did not exist. The first implementation reached 3/5; one bounded repair
+  forwarded the already-validated image set from service to repository. A later
+  compatibility counterfactual proved that unconditional `images:null` would
+  conflict with an upgrade-era idempotent replay, so image metadata is now added
+  to signatures only for explicit image-aware commands. The old signature and
+  old image rows replay unchanged.
+- Final persistence/storage tests passed 15/15 and the broader persistence,
+  output, review, responsibility, architecture, and runtime target passed
+  46/46. The full suite passed 1,375/1,375 with no failed, skipped, or todo
+  tests, and all 11 mandatory gates passed. Browser preflight/dry-run recorded
+  `realApiCalled=false` and `underlyingApiCallCount=0`; no PDF real-run or real
+  AI/OCR call occurred.
+- `app.js` is now 21,286 physical lines with 299 inventoried functions and
+  complete immutable baseline-name coverage. The conservative lexical metric
+  for `processDraftImportBatch` is 5,110 lines. The manifest remains at 43
+  modules and 64 declared dependency edges with no missing target, cycle,
+  upward dependency, or owner mismatch.
+
 ## Pending
 
-- Remaining Wave C2-10.5 Phase 3 ports, Phases 4 through 6, and the hard
-  acceptance gates. C2-11 through C2-14, attacks, audits, benchmark, CTO review,
-  and seal remain blocked until the production bridge and shadow-equivalence
-  package is accepted.
+- Wave C2-10.5 Phases 4 through 6 and the hard acceptance gates. C2-11 through
+  C2-14, attacks, audits, benchmark, CTO review, and seal remain blocked until
+  the production bridge and shadow-equivalence package is accepted.
 
 ## Blockers / limitations
 
@@ -568,8 +604,9 @@
 
 ## Next exact action
 
-Commit and push the shared output/image projection port, then characterize the
-existing review-draft persistence wiring as the next single bounded Phase 3
-port. Reuse `DraftPersistenceService` and `StorageRepository`; do not copy
-persistence, transaction, FormalAdmission, crop/OCR, or controlled-write logic,
-and do not enter C2-11 until all C2-10.5 hard acceptance gates pass.
+Commit and push the production review-draft persistence wiring, then begin Phase
+4 with failure-first tests for the real `ProductionImportBridge`. Compose only
+the production-wired state machine, context/classification, DOCX/PDF,
+normalization, validation, review, output, persistence, status, and diagnostics
+owners; do not add direct DB, FormalAdmission, Route B, hidden legacy fallback,
+or copied parser/aligner/controlled-write/OCR logic.

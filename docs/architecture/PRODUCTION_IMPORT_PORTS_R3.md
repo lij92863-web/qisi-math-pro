@@ -22,7 +22,7 @@ port works; every B/C port still needs characterization and a one-port switch.
 | normalizeCandidates | A | CandidateNormalizer `normalizeCandidates` | inject current API and SupportRepair helper ports | immutable canonical candidates; no ownership or persistence |
 | validateCandidates | A | ImportValidationService `validateImportDrafts` | inject existing five validation ports | fail closed; schema/sequence/ownership/safe-partial/controlled-write decisions retained |
 | buildReviewDrafts | A | ReviewDraftBuilder `buildReviewDrafts` | inject current API | preserves missing/rejected/manual/warning metadata; no formal write |
-| persistReviewDraftBatch | A | DraftPersistenceService `persistDraftBatch` | inject repository-backed facade | atomic idempotent review-only write, version conflict, rollback |
+| persistReviewDraftBatch | A | DraftPersistenceService `persistReviewDraftBatch` + StorageRepository transaction primitive | reuse repository-backed facade; current file state is retained when the caller omits files | atomic idempotent review-only draft/image/file/batch write, version conflict, rollback; no formal write |
 | recordDiagnostics | A | ImportDiagnostics `createImportDiagnostics` | create one run-scoped instance and inject its four methods | allowlisted metadata only; logger failure cannot affect import |
 
 ## Required supplemental shared ports

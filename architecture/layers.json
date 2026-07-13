@@ -312,7 +312,7 @@
     {
       "id": "draft-persistence-service", "file": "qisi-draft-persistence-service.js",
       "layer": 2, "domainOwner": "draftPersistenceServiceOwner",
-      "publicApi": ["persistDraftBatch", "reloadDraftBatch", "deleteDraftBatch"],
+      "publicApi": ["persistDraftBatch", "persistReviewDraftBatch", "reloadDraftBatch", "deleteDraftBatch"],
       "allowedDependencies": ["storage-repository"],
       "forbiddenDependencies": ["app-shell", "formal-admission", "controlled-write", "route-b-research"],
       "status": "production-wired"
