@@ -75,9 +75,7 @@
 
 ## Pending
 
-- A2-10 operational hardening.
-  boundary, review validation, true E2E, architecture manifest, and operational
-  hardening.
+- A2-10 temporary-file lifecycle and log-data minimization domains.
 - Phase 3 through Phase 8 attacks, audits, benchmark, CTO review, and sealing.
 
 ## Commits
@@ -92,6 +90,7 @@
 - A2-6 truthful import coordinator boundary `f33cf7a`.
 - A2-7 production review validator wiring `173fa19`.
 - A2-8 true deterministic import E2E `36c919b`.
+- A2-9 architecture ownership guards `10e1240`.
 
 ## Gates
 
@@ -174,6 +173,14 @@
 - A2-9 full mandatory matrix: passed.
 - A2-9 browser preflight/dry-run: passed with `realApiCalled=false`,
   `underlyingApiCallCount=0`, and browser chain healthy.
+- A2-10 ZIP failure-first evidence: the production readers directly called
+  `JSZip.loadAsync` and no hostile-archive security owner existed.
+- A2-10 ZIP attack and production-wiring tests: passed 7/7; real DOCX browser
+  import plus admission and DOCX regression checks passed 20/20.
+- A2-10 ZIP `verify:safe`: passed; batch mock smoke passed 20/20.
+- A2-10 ZIP full mandatory matrix: passed.
+- A2-10 ZIP browser preflight/dry-run: passed with `realApiCalled=false`,
+  `underlyingApiCallCount=0`, and browser chain healthy.
 
 ## Blockers
 
@@ -182,5 +189,5 @@
 
 ## Next exact action
 
-Run exact A2-9 diff-scope verification, commit/push, then begin A2-10 security
-and operations hardening.
+Run exact A2-10 ZIP diff-scope verification, commit/push, then begin the
+A2-10 temporary-file lifecycle domain.

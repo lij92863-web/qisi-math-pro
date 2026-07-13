@@ -9,6 +9,13 @@
   ],
   "modules": [
     {
+      "id": "archive-security", "file": "qisi-archive-security.js",
+      "layer": 0, "domainOwner": "archiveSecurityOwner",
+      "publicApi": ["createArchivePolicy", "validateArchive", "load"],
+      "allowedDependencies": [], "forbiddenDependencies": ["app-shell", "storage-repository"],
+      "status": "production-wired"
+    },
+    {
       "id": "recognition-contracts", "file": "qisi-recognition-contracts.js",
       "layer": 0, "domainOwner": "recognitionContractsOwner",
       "publicApi": ["createRecognitionCandidate", "validateStructuredDraft", "validateQuestionV2"],
@@ -162,7 +169,7 @@
         "export-service", "legacy-batch-run", "injected-import-path",
         "batch-formal-submit", "ocr-registry", "ocr-qwen-adapter",
         "ocr-local-adapter", "ocr-shadow-mode", "performance-monitor",
-        "controlled-write", "support-aligner", "support-parser"
+        "controlled-write", "support-aligner", "support-parser", "archive-security"
       ],
       "forbiddenDependencies": ["route-b-research"],
       "status": "production-wired"

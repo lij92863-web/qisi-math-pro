@@ -89,7 +89,12 @@
                 throw new Error('JSZip is not loaded; backup cannot be verified');
             }
 
-            const zip = await globalThis.JSZip.loadAsync(blob);
+            const zip = await globalThis.Qisi.ArchiveSecurity.load(
+                globalThis.JSZip,
+                blob,
+                'full-backup',
+                { name: blob?.name || '', type: blob?.type || '' }
+            );
             const errors = [];
             const warnings = [];
 

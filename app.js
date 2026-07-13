@@ -4146,7 +4146,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     }
                     if (file.fileType === 'docx') {
                         if (!window.JSZip) return '';
-                        const zip = await JSZip.loadAsync(await dataUrlToBlob(file.uploadPath));
+                        const zip = await window.Qisi.ArchiveSecurity.load(JSZip, await dataUrlToBlob(file.uploadPath), 'office-document', { name: file.filename || 'document.docx', type: file.mime || '' });
                         const doc = await zip.file('word/document.xml')?.async('string');
                         window.Qisi.DocxPipeline.debugDocxXmlStructure(doc || '', file.filename);
 
@@ -4245,7 +4245,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     if (file.fileType === 'excel') {
                         if (file.filename?.toLowerCase().endsWith('.csv')) return await (await dataUrlToBlob(file.uploadPath)).text();
                         if (!window.JSZip) return '';
-                        const zip = await JSZip.loadAsync(await dataUrlToBlob(file.uploadPath));
+                        const zip = await window.Qisi.ArchiveSecurity.load(JSZip, await dataUrlToBlob(file.uploadPath), 'office-document', { name: file.filename || 'spreadsheet.xlsx', type: file.mime || '' });
                         const sharedXml = await zip.file('xl/sharedStrings.xml')?.async('string');
                         const shared = [];
                         String(sharedXml || '').replace(/<si[^>]*>([\s\S]*?)<\/si>/g, (_, si) => {
@@ -4289,7 +4289,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                 const extractImagesFromDraftFile = async (file) => {
                     if (file.fileType !== 'docx' || !window.JSZip) return [];
-                    const zip = await JSZip.loadAsync(await dataUrlToBlob(file.uploadPath));
+                    const zip = await window.Qisi.ArchiveSecurity.load(JSZip, await dataUrlToBlob(file.uploadPath), 'office-document', { name: file.filename || 'document.docx', type: file.mime || '' });
                     const mediaFiles = zip.file(/^word\/media\/.+/);
                     const images = [];
                     for (const media of mediaFiles) {
@@ -20045,7 +20045,7 @@ ${source}`;
 
                 const parseQuestionBankPackage = async (file) => {
                     if (!window.JSZip) throw new Error('JSZip 未加载，暂时无法导入题库数据。');
-                    const zip = await JSZip.loadAsync(file);
+                    const zip = await window.Qisi.ArchiveSecurity.load(JSZip, file, 'question-bank', { name: file.name || '', type: file.type || '' });
                     const manifestText = await zip.file('manifest.json')?.async('string');
                     const questionsText = await zip.file('questions.json')?.async('string');
                     if (!questionsText) throw new Error('题库数据包格式不正确：缺少 questions.json。');

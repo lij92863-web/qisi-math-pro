@@ -7,7 +7,15 @@
     const loadDocxZip = async (fileRecord) => {
         if (!window.JSZip) throw new Error('JSZip not loaded, cannot parse DOCX.');
         const buffer = await dataUrlToArrayBuffer(fileRecord.uploadPath);
-        return await window.JSZip.loadAsync(buffer);
+        return await window.Qisi.ArchiveSecurity.load(
+            window.JSZip,
+            buffer,
+            'office-document',
+            {
+                name: fileRecord.filename || fileRecord.name || 'document.docx',
+                type: fileRecord.mime || fileRecord.type || ''
+            }
+        );
     };
 
     const readDocxCoreXml = async (zip) => {
