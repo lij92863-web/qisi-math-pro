@@ -33,5 +33,6 @@
   "pdfImportCoordinatorOwner": "qisi-pdf-import-coordinator.js",
   "candidateNormalizerOwner": "qisi-candidate-normalizer.js",
   "importValidationServiceOwner": "qisi-import-validation-service.js",
+  "reviewDraftBuilderOwner": "qisi-review-draft-builder.js",
   "appShellOwner": "app.js"
 }

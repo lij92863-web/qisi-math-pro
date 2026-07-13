@@ -22,6 +22,7 @@
     const createInjectedImportPath = ({
         repository,
         validateDrafts,
+        buildReviewDrafts,
         clock = () => Date.now()
     } = {}) => {
         if (
@@ -33,6 +34,9 @@
         }
         if (typeof validateDrafts !== 'function') {
             throw new TypeError('Import validation service is required.');
+        }
+        if (typeof buildReviewDrafts !== 'function') {
+            throw new TypeError('Review draft builder is required.');
         }
 
         const run = async (batchId, transport) => {
@@ -97,51 +101,51 @@
                     );
                 }
                 const now = clock();
-                const drafts = selected.map((candidate, index) => ({
-                        ...clone(candidate),
-                        id: candidate.id || `draft_${id}_${index + 1}`,
-                        batchId: id,
-                        version: Number.isInteger(candidate.version)
-                            ? candidate.version : 1,
-                        order: index + 1,
-                        status: 'pending',
-                        duplicateStatus: 'none',
-                        selected: true,
-                        createdAt: candidate.createdAt || now,
-                        updatedAt: now
-                    }));
-                const validatedDrafts = validateDrafts(drafts, {
+                const validatedDrafts = validateDrafts(selected, {
                     batch: clone(batch),
                     files: clone(files),
                     expectedQuestionNumbers: expected,
-                    prefixTruncated: expected.length > drafts.length
+                    prefixTruncated: expected.length > selected.length
                 });
                 if (
                     !Array.isArray(validatedDrafts) ||
-                    validatedDrafts.length !== drafts.length
+                    validatedDrafts.length !== selected.length
                 ) {
                     throw new InjectedImportError(
                         'import-validation-malformed',
                         'Import validation returned a malformed draft set.'
                     );
                 }
+                const reviewDrafts = buildReviewDrafts(validatedDrafts, {
+                    batchId: id,
+                    now
+                });
+                if (
+                    !Array.isArray(reviewDrafts) ||
+                    reviewDrafts.length !== validatedDrafts.length
+                ) {
+                    throw new InjectedImportError(
+                        'review-draft-build-malformed',
+                        'Review draft builder returned a malformed draft set.'
+                    );
+                }
                 await repository.persistReviewDraftBatch({
-                    drafts: validatedDrafts,
+                    drafts: reviewDrafts,
                     files: files.map(file => ({
                         ...file, parseStatus: 'success', updatedAt: now, errorMessage: ''
                     })),
                     batch: {
                         ...batch, status: 'review', progress: 100,
-                        totalCount: validatedDrafts.length, reviewedCount: 0,
+                        totalCount: reviewDrafts.length, reviewedCount: 0,
                         submittedCount: 0, problemCount: 0,
-                        prefixTruncated: expected.length > drafts.length,
+                        prefixTruncated: expected.length > reviewDrafts.length,
                         updatedAt: now, errorMessage: ''
                     }
                 });
                 return {
                     batchId: id,
-                    drafts: validatedDrafts,
-                    prefixTruncated: expected.length > validatedDrafts.length
+                    drafts: reviewDrafts,
+                    prefixTruncated: expected.length > reviewDrafts.length
                 };
             } catch (error) {
                 await repository.update('draftImportBatches', id, {

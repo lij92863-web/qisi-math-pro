@@ -262,6 +262,14 @@
       "status": "production-wired"
     },
     {
+      "id": "review-draft-builder", "file": "qisi-review-draft-builder.js",
+      "layer": 2, "domainOwner": "reviewDraftBuilderOwner",
+      "publicApi": ["buildReviewDrafts"],
+      "allowedDependencies": [],
+      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "controlled-write", "route-b-research"],
+      "status": "production-wired"
+    },
+    {
       "id": "app-shell", "file": "app.js", "layer": 4,
       "domainOwner": "appShellOwner", "publicApi": ["App.setup"],
       "allowedDependencies": [
@@ -273,7 +281,7 @@
         "controlled-write", "support-aligner", "support-parser", "archive-security",
         "secure-logger", "batch-context-service", "source-role-classifier",
         "docx-import-coordinator", "pdf-import-coordinator", "candidate-normalizer",
-        "import-validation-service"
+        "import-validation-service", "review-draft-builder"
       ],
       "forbiddenDependencies": ["route-b-research"],
       "status": "production-wired"

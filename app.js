@@ -49,11 +49,12 @@
                             warnings: []
                         };
                     },
-                    validateSchema(draft) {
+                    validateSchema(draft, { index }) {
                         const structured =
                             Qisi.RecognitionContracts.createStructuredQuestionDraft({
                                 sourceId: draft.source?.sourceId || '',
-                                sourceOrder: draft.order,
+                                sourceOrder: Number.isInteger(draft.order)
+                                    ? draft.order : index + 1,
                                 questionNumber: draft.questionNumber,
                                 type: draft.type,
                                 stem: draft.stem,
@@ -86,7 +87,7 @@
                             warnings: result.warnings || []
                         };
                     },
-                    validateOwnership(draft, { context }) {
+                    validateOwnership(draft, { context, index }) {
                         const requiredFileType = draft.source?.mode === 'docx-deterministic'
                             ? 'docx'
                             : draft.source?.mode === 'pdf-ai'
@@ -104,7 +105,12 @@
                                 warnings: []
                             };
                         }
-                        const result = productionReviewValidator.validate(draft);
+                        const result = productionReviewValidator.validate({
+                            ...draft,
+                            id: draft.id || `validation-draft-${index + 1}`,
+                            version: Number.isInteger(draft.version)
+                                ? draft.version : 1
+                        });
                         const reviewableRejected =
                             draft.source?.mode === 'pdf-ai' &&
                             draft.manualReviewRequired === true &&
@@ -159,7 +165,9 @@
                                     Qisi.ImportValidationService.validateImportDrafts(
                                         drafts,
                                         { ...importValidationPorts, context }
-                                    )
+                                    ),
+                                buildReviewDrafts:
+                                    Qisi.ReviewDraftBuilder.buildReviewDrafts
                             })
                                 .run(batchId, Qisi.Runtime.getRuntimeDependency('InjectedImportTransport'))
                             : processDraftImportBatch(batchId),

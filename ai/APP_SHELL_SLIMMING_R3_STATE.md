@@ -242,10 +242,40 @@
   `processDraftImportBatch` remains 5,108 lines. The manifest now records 5
   layers, 35 modules, and 52 declared dependency edges with no missing target,
   cycle, upward dependency, or owner mismatch.
+- Wave C2-8 implemented and production-wired `qisi-review-draft-builder.js` as
+  the single pure owner for ValidatedDraft-to-ReviewDraft projection.
+- The builder now owns review id/batch/version/order/status/selection/timestamp
+  metadata that was previously mapped inline in the injected import path. It
+  clones and recursively freezes outputs while preserving warnings, empty or
+  absent optional fields, source trace, field provenance, manual-review flags,
+  and rejected reason codes exactly.
+- The production order is now C2-7 validation, C2-8 review projection, then the
+  existing repository review persistence boundary. The old inline candidate map
+  was removed. Temporary id/version/order values used only to call existing
+  validators are not persisted; the builder remains the only review-record
+  metadata owner in this path.
+- The builder has no DOM, Vue, external transport, FormalAdmission,
+  controlled-write, Repository, persistence, or formal-question-write access.
+  It does not create question content, fill missing fields, change warnings,
+  derive manual provenance, or convert rejected evidence into accepted data.
+- C2-8 failure-first began with module-not-found. The first true browser run
+  exposed one stale reference to the removed inline `drafts` variable in batch
+  summary projection; one bounded repair switched it to the builder's sole
+  `reviewDrafts` output without weakening validation or persistence gates.
+- Final builder/validation targets passed 9/9, architecture targets passed
+  20/20, true DOCX/PDF/raw-JSON/wrong-attachment/teacher-rewrite browser
+  characterization passed 5/5, the full suite passed 1,306/1,306, and all 11
+  mandatory gates passed. Browser preflight/dry-run recorded
+  `realApiCalled=false` and `underlyingApiCallCount=0`; no PDF real-run occurred.
+- `app.js` is now 21,666 physical lines, 112 below the Program C baseline, with
+  315 inventoried functions and complete immutable baseline-name coverage.
+  `processDraftImportBatch` remains 5,108 lines. The manifest now records 5
+  layers, 36 modules, and 53 declared dependency edges with no missing target,
+  cycle, upward dependency, or owner mismatch.
 
 ## Pending
 
-- Phase 2 Waves C2-8–C2-14, then attacks, audits, benchmark, CTO review, and seal.
+- Phase 2 Waves C2-9–C2-14, then attacks, audits, benchmark, CTO review, and seal.
 
 ## Blockers / limitations
 
@@ -258,6 +288,6 @@
 
 ## Next exact action
 
-Commit and push C2-7, then begin Wave C2-8 Review Draft Builder with
-failure-first characterization of candidate-to-review mapping, warnings,
-provenance, source trace, and manual-review preservation.
+Commit and push C2-8, then begin Wave C2-9 Draft Persistence Service with
+failure-first characterization of transactional batch persistence, idempotency,
+reload, delete-refresh, cleanup, and the no-formal-question-write boundary.
