@@ -162,4 +162,3 @@ Next exact action: define and authorize a prerequisite migration that makes the
 normal UI DOCX route use a truthful deterministic production owner before
 restarting Phase 5. That action cannot be performed inside this blocked task
 because C2-11 remains gated on Phase 5 acceptance.
-

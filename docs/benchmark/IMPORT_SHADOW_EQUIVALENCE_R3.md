@@ -105,4 +105,3 @@ Global stop condition:
 `normal UI cannot generate a credible legacy snapshot canonically equivalent to
 the deterministic Bridge snapshot without fabricated provenance or an early
 production-owner migration`.
-
