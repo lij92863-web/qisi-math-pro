@@ -66,6 +66,10 @@
         const commands = options.commands && typeof options.commands === 'object'
             ? options.commands
             : {};
+        const initialState = options.initialState || 'IDLE';
+        if (!['IDLE', 'WAITING_CONFIRMATION'].includes(initialState)) {
+            throw stableError('IMPORT_INITIAL_STATE_INVALID');
+        }
         const maxRetries = Number.isInteger(options.maxRetries) && options.maxRetries >= 0
             ? options.maxRetries
             : 2;
@@ -74,7 +78,9 @@
         let activeToken = null;
         let retryCount = 0;
         let data = {
-            state: 'IDLE', progress: 0, sequence: 0, retryCount: 0,
+            state: initialState,
+            progress: PROGRESS[initialState] || 0,
+            sequence: 0, retryCount: 0,
             error: null, updatedAt: clock()
         };
 

@@ -108,3 +108,15 @@ test('state snapshots contain data only and do not expose injected commands', ()
     assert.equal(JSON.stringify(snapshot).includes('command'), false);
     assert.equal(Object.values(snapshot).some(value => typeof value === 'function'), false);
 });
+
+test('formal flow may resume only from the explicit review boundary', () => {
+    const machine = Machine.createImportStateMachine({
+        initialState: 'WAITING_CONFIRMATION'
+    });
+    assert.equal(machine.snapshot().state, 'WAITING_CONFIRMATION');
+    assert.equal(machine.snapshot().progress, 90);
+    assert.throws(
+        () => Machine.createImportStateMachine({ initialState: 'COMMITTING' }),
+        error => error.code === 'IMPORT_INITIAL_STATE_INVALID'
+    );
+});

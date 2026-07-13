@@ -11,7 +11,10 @@
                     }
                 });
                 const batchFormalSubmit = Qisi.BatchFormalSubmit.createBatchFormalSubmit({
-                    policy: Qisi.FormalAdmissionPolicy, repository: storageRepository
+                    policy: Qisi.FormalAdmissionPolicy,
+                    repository: storageRepository,
+                    createStateMachine: options =>
+                        Qisi.ImportStateMachine.createImportStateMachine(options)
                 });
                 const libraryService = Qisi.LibraryService.createLibraryService({
                     repository: storageRepository,

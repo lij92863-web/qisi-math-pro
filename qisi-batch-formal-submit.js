@@ -11,6 +11,7 @@
     const createBatchFormalSubmit = ({
         policy,
         repository,
+        createStateMachine,
         clock = () => Date.now(),
         random = () => Math.random()
     } = {}) => {
@@ -22,6 +23,9 @@
         }
         if (typeof repository?.confirmDraftToQuestion !== 'function') {
             throw new TypeError('Formal question repository is required.');
+        }
+        if (typeof createStateMachine !== 'function') {
+            throw new TypeError('Import State Machine is required.');
         }
 
         const buildManualFieldProvenance = (draft, field) => {
@@ -63,25 +67,67 @@
                 producer: draft?.producer || {},
                 route: draft?.route || {}
             });
-            const decision = policy.evaluateDraftAdmission(draft, context);
-            if (!decision.accepted) {
-                return { accepted: false, decision };
-            }
-            const questionId = `q_${clockValue}_${random().toString(36).slice(2, 7)}`;
-            const committed = await repository.confirmDraftToQuestion(
-                draft.id,
-                decision,
-                {
-                    expectedDraftVersion: draft.version,
-                    idempotencyKey: requestId,
-                    actorId,
-                    requestId,
-                    questionId,
-                    context,
-                    imageRecords
+            let decision = null;
+            let committed = null;
+            const questionId =
+                `q_${clockValue}_${random().toString(36).slice(2, 7)}`;
+            const machine = createStateMachine({
+                initialState: 'WAITING_CONFIRMATION',
+                commands: {
+                    'teacher-confirm': () => {
+                        decision = policy.evaluateDraftAdmission(draft, context);
+                    },
+                    admitted: async () => {
+                        committed = await repository.confirmDraftToQuestion(
+                            draft.id,
+                            decision,
+                            {
+                                expectedDraftVersion: draft.version,
+                                idempotencyKey: requestId,
+                                actorId,
+                                requestId,
+                                questionId,
+                                context,
+                                imageRecords
+                            }
+                        );
+                    }
                 }
-            );
-            return { accepted: true, decision, committed };
+            });
+            if (
+                !machine || typeof machine.transition !== 'function' ||
+                typeof machine.snapshot !== 'function'
+            ) throw new TypeError('Import State Machine is malformed.');
+            const trace = [machine.snapshot()];
+            const transition = async trigger => {
+                try {
+                    const snapshot = await machine.transition(trigger);
+                    trace.push(snapshot);
+                    return snapshot;
+                } catch (error) {
+                    trace.push(machine.snapshot());
+                    throw error;
+                }
+            };
+            await transition('teacher-confirm');
+            if (!decision.accepted) {
+                await transition('admission-rejected');
+                return {
+                    accepted: false,
+                    decision,
+                    state: machine.snapshot(),
+                    trace: Object.freeze([...trace])
+                };
+            }
+            await transition('admitted');
+            await transition('repository-committed');
+            return {
+                accepted: true,
+                decision,
+                committed,
+                state: machine.snapshot(),
+                trace: Object.freeze([...trace])
+            };
         };
 
         return Object.freeze({

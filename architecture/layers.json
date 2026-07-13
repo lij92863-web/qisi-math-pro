@@ -194,7 +194,7 @@
       "id": "batch-formal-submit", "file": "qisi-batch-formal-submit.js",
       "layer": 3, "domainOwner": "batchFormalSubmitOwner",
       "publicApi": ["createBatchFormalSubmit"],
-      "allowedDependencies": ["formal-admission", "storage-repository"],
+      "allowedDependencies": ["formal-admission", "storage-repository", "import-state-machine"],
       "forbiddenDependencies": ["app-shell"], "status": "production-wired"
     },
     {
