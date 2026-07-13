@@ -3,8 +3,8 @@
 - Start commit: `b15e6fbe24c525c95a573b51a0c7ab68e77f4790`
 - Baseline tag: `pre-app-shell-slimming-r3-b15e6fb`
 - Current branch: `stage/app-shell-slimming-r3`
-- Current phase: Program C / Phase 2 implementation in progress
-- Current work package: Wave C2-10.5 — Real Production Import Bridge and Shadow Equivalence
+- Current phase: Program C / Phase 5 resume allowed; Phase 5 not yet accepted
+- Current work package: Phase 5 pre-resume safety patch complete
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -669,6 +669,22 @@
   `docs/release/PDF_PROJECTION_OWNER_CORRECTION_R3.md`. Phase 5 browser
   equivalence may resume. C2-11 through C2-14, attacks, audits, benchmark, CTO
   review, and seal remain blocked until Phase 5 itself is accepted.
+- The Phase 5 pre-resume safety patch verified all four review findings before
+  code changes, then corrected raw-JSON provenance rebuilding, per-field
+  canonical provenance comparison, ambiguous multi-support inputs, and
+  duplicate accepted controlled-write conflicts in the existing unique
+  `qisi-pdf-candidate-projection.js` owner. No frozen file, validator, normal UI
+  entry, or FormalAdmission path changed.
+- The expanded true-browser shadow passed all eight required cases with zero
+  canonical differences for accepted behavior and zero wrong attachments, raw
+  JSON leakage, placeholders, controlled-write bypass, review persistence for
+  negative cases, formal writes, or real API calls. The full suite passed
+  1,434/1,434, all 11 mandatory gates passed, and preflight/dry-run made zero
+  underlying API calls. Evidence is sealed in
+  `docs/release/PHASE5_PRE_RESUME_SAFETY_PATCH_R1.md`.
+- Decision: `PHASE5_PRE_RESUME_SAFETY_PATCH_ACCEPTED`;
+  `PHASE_5_RESUME_ALLOWED`; `PHASE_5_NOT_YET_ACCEPTED`;
+  `C2_11_PROHIBITED`.
 
 ## Blockers / limitations
 
