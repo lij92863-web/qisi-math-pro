@@ -10408,318 +10408,6 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                     throw lastError || new Error('所有视觉模型均未识别出题目');
                 };
 
-                const processStandaloneDocxSupportByVision = async ({
-                    file,
-                    expectedQuestionNumbers = [],
-                    requiredKinds = {
-                        answers: true,
-                        solutions: false
-                    },
-                    onPageProgress = null
-                }) => {
-                    if (!file || file.fileType !== 'docx') {
-                        const error = new Error(
-                            'processStandaloneDocxSupportByVision 只接受 DOCX 文件。'
-                        );
-
-                        error.code =
-                            'INVALID_DOCX_SUPPORT_INPUT';
-
-                        throw error;
-                    }
-
-                    let pdfRecord;
-
-                    try {
-                        const startedAt =
-                            performance.now();
-
-                        pdfRecord =
-                            await convertDocxRecordToPdfRecord(
-                                file
-                            );
-
-                        console.log(
-                            '[BATCH_TIME][docx-support-convert]',
-                            {
-                                filename:
-                                    file.filename,
-                                pdfFilename:
-                                    pdfRecord.filename,
-                                durationMs:
-                                    Math.round(
-                                        performance.now() -
-                                        startedAt
-                                    )
-                            }
-                        );
-                    } catch (error) {
-                        const wrapped = new Error(
-                            `答案/解析 DOCX 转 PDF 失败：${error?.message || String(error)}`
-                        );
-
-                        wrapped.code =
-                            'DOCX_SUPPORT_CONVERT_FAILED';
-
-                        wrapped.stage =
-                            'docx-support-convert';
-
-                        wrapped.cause =
-                            error;
-
-                        throw wrapped;
-                    }
-
-                    let pages;
-
-                    try {
-                        const startedAt =
-                            performance.now();
-
-                        pages =
-                            await renderPdfFilePages(
-                                pdfRecord,
-                                {
-                                    scale:
-                                        PDF_PROCESS_CONFIG
-                                            .renderScale,
-                                    jpegQuality:
-                                        PDF_PROCESS_CONFIG
-                                            .jpegQuality,
-                                    sequential: true
-                                }
-                            );
-
-                        if (
-                            !Array.isArray(pages) ||
-                            pages.length === 0
-                        ) {
-                            throw new Error(
-                                '转换后的 PDF 没有渲染出页面图。'
-                            );
-                        }
-
-                        console.log(
-                            '[BATCH_TIME][docx-support-render]',
-                            {
-                                filename:
-                                    file.filename,
-                                pdfFilename:
-                                    pdfRecord.filename,
-                                pageCount:
-                                    pages.length,
-                                durationMs:
-                                    Math.round(
-                                        performance.now() -
-                                        startedAt
-                                    )
-                            }
-                        );
-                    } catch (error) {
-                        const wrapped = new Error(
-                            '答案/解析 DOCX 已转为 PDF，' +
-                            `但页面渲染失败：${error?.message || String(error)}`
-                        );
-
-                        wrapped.code =
-                            'DOCX_SUPPORT_RENDER_FAILED';
-
-                        wrapped.stage =
-                            'docx-support-render';
-
-                        wrapped.cause =
-                            error;
-
-                        wrapped.pdfRecord =
-                            pdfRecord;
-
-                        if (error?.renderDiagnostics) {
-                            wrapped.renderDiagnostics =
-                                error.renderDiagnostics;
-                        }
-
-                        throw wrapped;
-                    }
-
-                    let supportResult;
-
-                    try {
-                        supportResult =
-                            await recognizeVisualSupportFromPreparedPages({
-                                file,
-                                pages,
-                                onPageProgress,
-                                strict: true,
-                                expectedQuestionNumbers,
-                                requiredKinds
-                            });
-                    } catch (error) {
-                        const wrapped = new Error(
-                            `答案/解析 DOCX 页面视觉识别失败：${error?.message || String(error)}`
-                        );
-
-                        wrapped.code =
-                            error?.code ||
-                            'DOCX_SUPPORT_VISION_FAILED';
-
-                        wrapped.stage =
-                            error?.stage ||
-                            'docx-support-vision';
-
-                        wrapped.cause =
-                            error;
-
-                        wrapped.pdfRecord =
-                            pdfRecord;
-
-                        throw wrapped;
-                    }
-
-                    const answers =
-                        Array.isArray(supportResult.answers)
-                            ? supportResult.answers
-                            : [];
-
-                    const solutions =
-                        Array.isArray(supportResult.solutions)
-                            ? supportResult.solutions
-                            : [];
-
-                    if (
-                        answers.length === 0 &&
-                        solutions.length === 0
-                    ) {
-                        const error = new Error(
-                            '答案/解析 DOCX 已成功转为 PDF 并完成页面 OCR，' +
-                            '但没有识别到任何答案或解析。' +
-                            '已禁止回退到公式缺失的 Word 文本层。'
-                        );
-
-                        error.code =
-                            'DOCX_SUPPORT_VISUAL_EMPTY';
-
-                        error.stage =
-                            'docx-support-vision';
-
-                        error.pdfRecord =
-                            pdfRecord;
-
-                        throw error;
-                    }
-
-                    if (
-                        supportResult.coverage &&
-                        !supportResult.coverage.ok
-                    ) {
-                        const error = new Error(
-                            '答案/解析 DOCX 覆盖率检查失败。'
-                        );
-
-                        error.code =
-                            'DOCX_SUPPORT_COVERAGE_FAILED';
-
-                        error.coverage =
-                            supportResult.coverage;
-
-                        throw error;
-                    }
-
-                    const attachOriginalDocxTrace =
-                        item => ({
-                            ...item,
-                            sourceFileId:
-                                file.id,
-                            sourceFileName:
-                                file.filename || '',
-                            sourceTrace: {
-                                ...(item.sourceTrace || {}),
-                                source:
-                                    'docx-converted-pdf-visual-support',
-                                sourceFileId:
-                                    file.id,
-                                sourceFileName:
-                                    file.filename || '',
-                                convertedPdfFileName:
-                                    pdfRecord.filename || ''
-                            }
-                        });
-
-                    const normalizedResult = {
-                        ...supportResult,
-                        answers:
-                            answers.map(
-                                attachOriginalDocxTrace
-                            ),
-                        solutions:
-                            solutions.map(
-                                attachOriginalDocxTrace
-                            ),
-                        pdfRecord,
-                        renderedPageCount:
-                            pages.length
-                    };
-
-                    console.groupCollapsed(
-                        '[BATCH_DEBUG][docx-support-visual-result]'
-                    );
-
-                    console.log({
-                        filename:
-                            file.filename,
-                        convertedPdf:
-                            pdfRecord.filename,
-                        renderedPageCount:
-                            pages.length,
-                        answerCount:
-                            normalizedResult.answers.length,
-                        solutionCount:
-                            normalizedResult.solutions.length,
-                        failedPageCount:
-                            normalizedResult.failedPages
-                                ?.length || 0
-                    });
-
-                    console.table(
-                        normalizedResult.answers.map(
-                            item => ({
-                                question:
-                                    item.question,
-                                answer:
-                                    item.answer,
-                                mathSignal:
-                                    window.Qisi.Utils.mathSignalCount(
-                                        item.answer || ''
-                                    ),
-                                sourcePage:
-                                    item.sourcePage || 0
-                            })
-                        )
-                    );
-
-                    console.table(
-                        normalizedResult.solutions.map(
-                            item => ({
-                                question:
-                                    item.question,
-                                solutionLength:
-                                    String(
-                                        item.solution || ''
-                                    ).length,
-                                mathSignal:
-                                    window.Qisi.Utils.mathSignalCount(
-                                        item.solution || ''
-                                    ),
-                                sourcePage:
-                                    item.sourcePage || 0
-                            })
-                        )
-                    );
-
-                    console.groupEnd();
-
-                    return normalizedResult;
-                };
-
                 const recognizeDocxPageImagesWithQwen = async (file, onProgress = null) => {
                     const pages = await docxPageLikeImages(file);
                     const items = [];
@@ -13796,6 +13484,25 @@ ${source}`;
                             now: () => performance.now()
                         });
 
+                const docxVisionSupportSourceProducer =
+                    window.Qisi.ProductionDocxVisionSourcePort
+                        .createSupportSourceProducer({
+                            convertDocxToPdf:
+                                convertDocxRecordToPdfRecord,
+                            renderPdfPages: renderPdfFilePages,
+                            renderOptions: {
+                                scale: PDF_PROCESS_CONFIG.renderScale,
+                                jpegQuality:
+                                    PDF_PROCESS_CONFIG.jpegQuality,
+                                sequential: true
+                            },
+                            recognizePreparedSupport:
+                                recognizeVisualSupportFromPreparedPages,
+                            mathSignalCount:
+                                window.Qisi.Utils.mathSignalCount,
+                            now: () => performance.now()
+                        });
+
                 const productionImportEngineHelpers = () => ({
                     makeBatchId,
                     getBatchFileRoles,
@@ -13848,11 +13555,12 @@ ${source}`;
                                     input.expectedQuestionCount
                                 }),
                             processSupportSource: input =>
-                                processStandaloneDocxSupportByVision({
+                                docxVisionSupportSourceProducer({
                                     file: input.source,
                                     expectedQuestionNumbers:
                                         input.expectedQuestionNumbers,
-                                    requiredKinds: input.requiredKinds
+                                    requiredKinds: input.requiredKinds,
+                                    signal: input.signal
                                 })
                         });
                 const runProductionFixtureImport =

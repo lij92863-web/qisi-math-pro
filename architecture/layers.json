@@ -280,7 +280,7 @@
     {
       "id": "production-docx-vision-source-port", "file": "qisi-production-docx-vision-source-port.js",
       "layer": 2, "domainOwner": "productionDocxVisionSourcePortOwner",
-      "publicApi": ["runDocxVision", "runDocxVisionShadow", "runDocxVisionProduction", "createQuestionSourceProducer", "createProductionImportRunner"],
+      "publicApi": ["runDocxVision", "runDocxVisionShadow", "runDocxVisionProduction", "createQuestionSourceProducer", "createSupportSourceProducer", "createProductionImportRunner"],
       "allowedDependencies": ["docx-producer-identity-contract"],
       "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
       "status": "production-wired"

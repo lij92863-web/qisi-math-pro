@@ -332,3 +332,28 @@ Post-wave inventory is 17,273 `app.js` lines and 375 detected functions; the
 largest detected function remains 242 lines. The remaining DOCX support-source
 producer and lower-level converter/reconciler algorithms are still pending B
 responsibilities.
+
+## Wave 12 result: DOCX vision support-source producer extracted
+
+The existing `qisi-production-docx-vision-source-port.js` now owns the DOCX
+answer/solution source lifecycle through `createSupportSourceProducer`: DOCX
+input validation, virtual-PDF conversion, sequential rendering, strict
+prepared-page recognition, empty/malformed/coverage fail-closed checks,
+original DOCX source-trace projection, and cancellation checks around every
+awaited producer boundary. The production runner continues to own exact
+question-number attachment and declared support-source order.
+
+The former app-local `processStandaloneDocxSupportByVision` implementation is
+deleted. The shell only assembles the producer from existing converter,
+renderer, recognition, diagnostic, and clock ports, then forwards the source,
+required evidence kinds, expected question numbers, and cancellation signal.
+Characterization covers answer-only, solution-only, answer+solution, missing or
+malformed evidence, conflict, source identity/order, cancellation, missing
+ports, and ownership mismatch. The normal-UI browser canary remains green with
+all attachment, leakage, bypass, fallback, formal-write, and real-API counters
+at zero.
+
+Post-wave inventory is 16,981 `app.js` lines and 375 detected functions; the
+largest detected function remains 242 lines. All six frozen PDF high-risk files
+remain byte-unchanged. Lower-level DOCX conversion/reconciliation and other
+remaining B responsibilities stay pending for Wave 13 inventory and proof.

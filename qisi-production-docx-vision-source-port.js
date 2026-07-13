@@ -499,6 +499,198 @@
         };
     }
 
+    function createSupportSourceProducer(ports = {}) {
+        if (
+            typeof ports.convertDocxToPdf !== 'function' ||
+            typeof ports.renderPdfPages !== 'function' ||
+            !isRecord(ports.renderOptions) ||
+            typeof ports.recognizePreparedSupport !== 'function' ||
+            typeof ports.mathSignalCount !== 'function'
+        ) throw fail('DOCX_SUPPORT_PRODUCER_PORT_REQUIRED');
+        const now = typeof ports.now === 'function'
+            ? ports.now
+            : () => (
+                typeof performance !== 'undefined' &&
+                typeof performance.now === 'function'
+                    ? performance.now()
+                    : Date.now()
+            );
+
+        return async function processDocxSupportSource({
+            file,
+            expectedQuestionNumbers = [],
+            requiredKinds = { answers: true, solutions: false },
+            onPageProgress = null,
+            signal = null
+        }) {
+            if (!file || file.fileType !== 'docx') {
+                const error = new Error(
+                    'processStandaloneDocxSupportByVision 只接受 DOCX 文件。'
+                );
+                error.code = 'INVALID_DOCX_SUPPORT_INPUT';
+                throw error;
+            }
+
+            let pdfRecord;
+            assertActive(signal);
+            try {
+                const startedAt = now();
+                pdfRecord = await ports.convertDocxToPdf(file);
+                console.log('[BATCH_TIME][docx-support-convert]', {
+                    filename: file.filename,
+                    pdfFilename: pdfRecord.filename,
+                    durationMs: Math.round(now() - startedAt)
+                });
+            } catch (error) {
+                assertActive(signal);
+                const wrapped = new Error(
+                    '答案/解析 DOCX 转 PDF 失败：' +
+                    `${error?.message || String(error)}`
+                );
+                wrapped.code = 'DOCX_SUPPORT_CONVERT_FAILED';
+                wrapped.stage = 'docx-support-convert';
+                wrapped.cause = error;
+                throw wrapped;
+            }
+            assertActive(signal);
+
+            let pages;
+            assertActive(signal);
+            try {
+                const startedAt = now();
+                pages = await ports.renderPdfPages(
+                    pdfRecord,
+                    ports.renderOptions
+                );
+                if (!Array.isArray(pages) || pages.length === 0) {
+                    throw new Error('转换后的 PDF 没有渲染出页面图。');
+                }
+                console.log('[BATCH_TIME][docx-support-render]', {
+                    filename: file.filename,
+                    pdfFilename: pdfRecord.filename,
+                    pageCount: pages.length,
+                    durationMs: Math.round(now() - startedAt)
+                });
+            } catch (error) {
+                assertActive(signal);
+                const wrapped = new Error(
+                    '答案/解析 DOCX 已转为 PDF，' +
+                    `但页面渲染失败：${error?.message || String(error)}`
+                );
+                wrapped.code = 'DOCX_SUPPORT_RENDER_FAILED';
+                wrapped.stage = 'docx-support-render';
+                wrapped.cause = error;
+                wrapped.pdfRecord = pdfRecord;
+                if (error?.renderDiagnostics) {
+                    wrapped.renderDiagnostics = error.renderDiagnostics;
+                }
+                throw wrapped;
+            }
+            assertActive(signal);
+
+            let supportResult;
+            assertActive(signal);
+            try {
+                supportResult = await ports.recognizePreparedSupport({
+                    file,
+                    pages,
+                    onPageProgress,
+                    strict: true,
+                    expectedQuestionNumbers,
+                    requiredKinds,
+                    signal
+                });
+            } catch (error) {
+                assertActive(signal);
+                const wrapped = new Error(
+                    '答案/解析 DOCX 页面视觉识别失败：' +
+                    `${error?.message || String(error)}`
+                );
+                wrapped.code = error?.code || 'DOCX_SUPPORT_VISION_FAILED';
+                wrapped.stage = error?.stage || 'docx-support-vision';
+                wrapped.cause = error;
+                wrapped.pdfRecord = pdfRecord;
+                throw wrapped;
+            }
+            assertActive(signal);
+
+            if (
+                !isRecord(supportResult) ||
+                !Array.isArray(supportResult.answers) ||
+                !Array.isArray(supportResult.solutions)
+            ) {
+                const error = fail('DOCX_SUPPORT_RESULT_MALFORMED');
+                error.stage = 'docx-support-vision';
+                throw error;
+            }
+            const answers = supportResult.answers;
+            const solutions = supportResult.solutions;
+            if (answers.length === 0 && solutions.length === 0) {
+                const error = new Error(
+                    '答案/解析 DOCX 已成功转为 PDF 并完成页面视觉识别，' +
+                    '但没有识别到任何答案或解析。' +
+                    '已禁止回退到公式缺失的 Word 文本层。'
+                );
+                error.code = 'DOCX_SUPPORT_VISUAL_EMPTY';
+                error.stage = 'docx-support-vision';
+                error.pdfRecord = pdfRecord;
+                throw error;
+            }
+            if (supportResult.coverage && !supportResult.coverage.ok) {
+                const error = new Error('答案/解析 DOCX 覆盖率检查失败。');
+                error.code = 'DOCX_SUPPORT_COVERAGE_FAILED';
+                error.coverage = supportResult.coverage;
+                throw error;
+            }
+
+            const attachOriginalDocxTrace = item => ({
+                ...item,
+                sourceFileId: file.id,
+                sourceFileName: file.filename || '',
+                sourceTrace: {
+                    ...(item.sourceTrace || {}),
+                    source: 'docx-converted-pdf-visual-support',
+                    sourceFileId: file.id,
+                    sourceFileName: file.filename || '',
+                    convertedPdfFileName: pdfRecord.filename || ''
+                }
+            });
+            const normalizedResult = {
+                ...supportResult,
+                answers: answers.map(attachOriginalDocxTrace),
+                solutions: solutions.map(attachOriginalDocxTrace),
+                pdfRecord,
+                renderedPageCount: pages.length
+            };
+
+            console.groupCollapsed(
+                '[BATCH_DEBUG][docx-support-visual-result]'
+            );
+            console.log({
+                filename: file.filename,
+                convertedPdf: pdfRecord.filename,
+                renderedPageCount: pages.length,
+                answerCount: normalizedResult.answers.length,
+                solutionCount: normalizedResult.solutions.length,
+                failedPageCount: normalizedResult.failedPages?.length || 0
+            });
+            console.table(normalizedResult.answers.map(item => ({
+                question: item.question,
+                answer: item.answer,
+                mathSignal: ports.mathSignalCount(item.answer || ''),
+                sourcePage: item.sourcePage || 0
+            })));
+            console.table(normalizedResult.solutions.map(item => ({
+                question: item.question,
+                solutionLength: String(item.solution || '').length,
+                mathSignal: ports.mathSignalCount(item.solution || ''),
+                sourcePage: item.sourcePage || 0
+            })));
+            console.groupEnd();
+            return normalizedResult;
+        };
+    }
+
     function createProductionImportRunner(ports = {}) {
         if (
             typeof ports.hasQuestionRole !== 'function' ||
@@ -562,6 +754,7 @@
             let drafts = [...base.drafts];
             const warnings = [...base.warnings];
             for (const source of supportSources) {
+                assertActive(signal);
                 const expectedQuestionNumbers = drafts
                     .map(draft =>
                         ports.normalizeQuestionNumber(draft.questionNumber)
@@ -576,6 +769,7 @@
                     },
                     signal
                 });
+                assertActive(signal);
                 for (const [field, items] of [
                     ['answer', support?.answers || []],
                     ['solution', support?.solutions || []]
@@ -612,6 +806,7 @@
                     }
                 }
             }
+            assertActive(signal);
             return Object.freeze({
                 ...base,
                 drafts: Object.freeze(drafts),
@@ -625,6 +820,7 @@
         runDocxVisionShadow,
         runDocxVisionProduction,
         createQuestionSourceProducer,
+        createSupportSourceProducer,
         createProductionImportRunner
     });
 });

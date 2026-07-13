@@ -3,8 +3,8 @@
 - Start commit: `b15e6fbe24c525c95a573b51a0c7ab68e77f4790`
 - Baseline tag: `pre-app-shell-slimming-r3-b15e6fb`
 - Current branch: `stage/app-shell-slimming-r3`
-- Current phase: Program C / lost-session recovery accepted / C2-12 Wave 12 in progress
-- Current work package: finish recovered DOCX vision support-source producer Wave 12
+- Current phase: Program C / C2-12 Wave 12 accepted / Wave 13 ready
+- Current work package: inventory and prove the remaining C2-12 responsibilities
 - Status updated: 2026-07-14 Asia/Shanghai
 
 ## Lost-session recovery R2 checkpoint
@@ -13,8 +13,10 @@
   This remains the sealed predecessor state; the live resume state is the
   C2-12 Wave 12 line above.
 - Recovery decision: `PROGRAM_C_RESUME_ALLOWED`.
-- Local, tracking, and live branch heads are equal at
+- Recovery inspection began with local, tracking, and live branch heads equal at
   `7a4b945a3c0c50c33166c5c63689b7fca4e0c797`.
+- The recovery audit/resume checkpoint was committed and pushed as
+  `2ebe00b390caae556fdb8ed0e03087ad0965cb24` before Wave 12 resumed.
 - The last fully proven stage is C2-12 Wave 11, DOCX vision question-source
   producer extraction.
 - The pre-existing uncommitted tree is an explainable Recovery Case B2 for Wave
@@ -34,6 +36,30 @@
   calls. No real-run was performed.
 - Next exact action: complete, test, document, commit, and push Wave 12. Do not
   begin Wave 13 until Wave 12 is accepted and the three Git heads are equal.
+
+## C2-12 Wave 12 accepted
+
+- Decision: `C2_12_WAVE12_DOCX_SUPPORT_SOURCE_PRODUCER_ACCEPTED`.
+- The recovered app-local `processStandaloneDocxSupportByVision` owner is
+  deleted. `qisi-production-docx-vision-source-port.js` now owns conversion,
+  rendering, strict support recognition, fail-closed result validation, and
+  original DOCX trace projection through `createSupportSourceProducer`.
+- Cancellation is checked around each awaited producer boundary and again in
+  the production runner before any late support result can be attached.
+- Focused source-port/architecture tests passed 24/24. The normal-UI browser
+  canary passed 1/1 across all 15 scenarios with every safety counter at zero.
+- Final `verify:safe` passed 1569/1569 tests across 54 suites. All 11 mandatory
+  gates passed; DOCX stable was 20/20, PDF known-bad 65/65, controlled-write
+  ownership 21/21, and Route B hold 6/6.
+- Preflight and dry-run passed with `realApiCalled=false` and zero underlying
+  calls. No real-run was performed and all six frozen PDF files are unchanged.
+- Post-wave metrics are 16,981 `app.js` lines, 375 detected functions, and a
+  242-line largest function. The Wave 11-to-12 shell reduction is 292 lines.
+- Formal evidence is in
+  `docs/release/PROGRAM_C_C2_12_WAVE12_DOCX_SUPPORT_SOURCE_PRODUCER_REPORT.md`
+  and `docs/architecture/APP_SHELL_RESPONSIBILITY_MATRIX_C2_12.md`.
+- Wave 13 remains blocked until the Wave 12 commit is pushed and local,
+  tracking, and live branch heads agree.
 
 ## Entry conditions
 
@@ -904,7 +930,7 @@
 
 ## Next exact action
 
-C2-11 is accepted and sealed as its own stage. Begin C2-12 by auditing the
-remaining `app.js` import/review/formal-admission/storage responsibilities; do
-not claim C2-13 or later phases before C2-12 has its own gates, commit, push,
-state update, and accepted decision.
+After the Wave 12 commit is pushed and all three branch heads agree, begin Wave
+13 with a fresh responsibility inventory and reachability/unique-owner audit.
+Do not claim C2-12 complete or enter C2-13 until every remaining B
+responsibility has an evidence-backed disposition and all gates are rerun.
