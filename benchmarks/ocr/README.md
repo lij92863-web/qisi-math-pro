@@ -30,3 +30,32 @@ reported gap until separately authorized materials exist.
 
 Run: `node scripts/benchmark/score-ocr-result.js truth.json result.json`.
 No engine execution, network request, or real API call occurs.
+
+## OCR Quality R1 runner
+
+The R1 runner scores pre-generated document results. It does not invoke an OCR
+adapter, download a model, read a source PDF/image, or make a network request:
+
+```text
+node scripts/benchmark/run-ocr-benchmark.js <config.json>
+```
+
+The JSON config must explicitly pin:
+
+- `benchmarkId`, `corpusVersion`, and `scorerVersion: ocr-scoring-r1`
+- engine `name` and immutable `version` (not `latest`, `current`, or `unknown`)
+- hardware `profileId`, OS, CPU, GPU and memory
+- timeout, integer random seed, and bootstrap iteration count
+- JSON truth/result paths and separate JSON/Markdown output paths
+- input kind: `synthetic` or `private`
+
+Private JSON is accepted only under
+`local-test-materials/ocr-quality-r1/` and only when
+`QISI_ALLOW_REAL_OCR_BENCH=1`. The source documents themselves are never runner
+inputs. Synthetic input cannot point into the private directory.
+
+The JSON and Markdown reports are generated from the same deterministic score
+object. They contain config metadata, hashes, aggregate metrics, sanitized
+per-document metrics, status and failure code. They exclude full truth, recognized
+text, raw responses, source paths and failure messages. Timeout, missing and other
+failed documents remain explicit and make `promotionEligible=false`.

@@ -3,7 +3,7 @@
 - Start commit: `1361d7e7f81d2f23819a995a0f9d1808adf19982`
 - Baseline tag: `pre-ocr-quality-r1-1361d7e`
 - Current branch: `stage/ocr-quality-r1`
-- Current phase: Program B / Phase 1 complete
+- Current phase: Program B / Phase 2 / B2-1 complete
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -42,10 +42,16 @@
   document-level stratified-bootstrap scoring.
 - Phase 1 targeted tests passed 9/9; all 11 mandatory gates passed with browser
   preflight/dry-run `realApiCalled=false`.
+- B2-1 implemented and unit-tested the offline reproducible Benchmark Runner and
+  R1 document scorer. Fixed config, pinned engine/hardware metadata, seeded
+  document-level bootstrap, JSON/Markdown parity, explicit timeout/failure status,
+  and sanitized aggregate-only output are enforced.
+- B2-1 targeted tests passed 12/12 including the existing R2 scorer regression;
+  all 11 mandatory gates passed. No OCR engine or API was invoked.
 
 ## Pending
 
-- Phase 2 work packages B2-1 through B2-10, subject to their evidence gates.
+- Phase 2 work packages B2-2 through B2-10, subject to their evidence gates.
 - Phases 3–8 attacks, audits, final benchmark, CTO review, and seal.
 
 ## Blockers / limitations
@@ -57,6 +63,6 @@
 
 ## Next exact action
 
-Commit and push the Phase 1 architect package, then start B2-1 with a failing test
-for the reproducible Benchmark Runner. Keep real engines and private documents
-disabled while `QISI_ALLOW_REAL_OCR_BENCH=1` is absent.
+Commit and push B2-1, then start B2-2 with failing adapter-contract tests for
+timeout, cancellation, malformed response, unavailable engine, privacy, MIME,
+size, and duplicate requestId. Keep all transports mocked.
