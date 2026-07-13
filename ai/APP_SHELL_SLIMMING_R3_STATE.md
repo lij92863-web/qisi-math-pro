@@ -3,7 +3,7 @@
 - Start commit: `b15e6fbe24c525c95a573b51a0c7ab68e77f4790`
 - Baseline tag: `pre-app-shell-slimming-r3-b15e6fb`
 - Current branch: `stage/app-shell-slimming-r3`
-- Current phase: Program C / Phase 0 complete
+- Current phase: Program C / Phase 1 architecture in progress
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -44,11 +44,20 @@
 - All 11 mandatory gates passed. Browser preflight/dry-run recorded
   `realApiCalled=false` and `underlyingApiCallCount=0`; `verify:safe` included the
   live local browser baseline harness.
+- C2.1 added a deterministic responsibility inventory and generated a complete
+  318-row `app.js` map. Every row records name/range/lines, domain, all lexical
+  callers, function/Qisi dependencies, reactive state, side effects, named tests,
+  target module, extraction risk, and migration wave.
+- C2.1 explicitly freezes controlled-write, FormalAdmission, Repository, Route B,
+  and Program B OCR policy owners. Planning classifications do not authorize
+  extraction or deletion.
+- C2.1 failure-first gate began at 0/3; final map/inventory gates passed 3/3 and
+  all 11 mandatory gates passed with browser modes making zero real calls.
 
 ## Pending
 
-- Phase 1 app.js responsibility map, Import State Machine design, target modules,
-  and wave-by-wave migration protocol.
+- Phase 1 Import State Machine design, target modules, and wave-by-wave migration
+  protocol.
 - Phases 2–8 implementation, attacks, audits, benchmark, CTO review, and Git seal.
 
 ## Blockers / limitations
@@ -62,5 +71,5 @@
 
 ## Next exact action
 
-Commit and push the exact Phase 0 state/report/harness/test scope, then enter
-Phase 1 architecture design without modifying production behavior.
+Commit and push C2.1, then define C2.2 Import State Machine transitions with
+preconditions, actions, outputs, recovery, error codes, and cancellation behavior.
