@@ -227,6 +227,10 @@
   repository already rejected the losing tab after the first atomic commit.
 - Phase 3 two-tab-race and concurrency regressions passed 5/5; full mandatory
   matrix and browser dry-run passed with no real API call.
+- Phase 3 transaction-abort failure-first evidence: its matrix row was absent;
+  the repository transaction already rolled back all isolated mutations.
+- Phase 3 transaction-abort and transaction regressions passed 8/8; full
+  mandatory matrix and browser dry-run passed with no real API call.
 
 ## Blockers
 
@@ -235,4 +239,4 @@
 
 ## Next exact action
 
-Commit/push the two-tab race package, then execute transaction abort.
+Commit/push transaction abort, then execute the stale-draft attack.
