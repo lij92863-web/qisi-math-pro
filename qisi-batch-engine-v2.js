@@ -594,29 +594,43 @@
     };
 
     const buildPdfEvidence = async (file, helpers) => {
+        const assertCoordinatorActive = () => {
+            if (helpers.pdfSignal?.aborted) {
+                const error = new Error('PDF_COORDINATOR_ABORTED');
+                error.code = 'PDF_COORDINATOR_ABORTED';
+                throw error;
+            }
+        };
         let pageImages = [];
         let textLayer = '';
         let layoutPages = [];
         const fileWarnings = [];
         const fileErrors = [];
 
+        assertCoordinatorActive();
         try {
             pageImages = await helpers.renderPdfFilePages(file);
+            assertCoordinatorActive();
         } catch (error) {
+            if (String(error?.code || '').startsWith('PDF_COORDINATOR_')) throw error;
             fileWarnings.push(`PDF 页面图渲染失败，继续尝试文本层兜底：${error?.message || String(error)}`);
         }
 
         try {
             textLayer = await helpers.extractPdfTextWithPdfJs(file);
+            assertCoordinatorActive();
         } catch (error) {
+            if (String(error?.code || '').startsWith('PDF_COORDINATOR_')) throw error;
             fileWarnings.push(`PDF 文本层提取失败：${error?.message || String(error)}`);
         }
 
         try {
             if (helpers.extractPdfLayoutWithPdfJs) {
                 layoutPages = await helpers.extractPdfLayoutWithPdfJs(file);
+                assertCoordinatorActive();
             }
         } catch (error) {
+            if (String(error?.code || '').startsWith('PDF_COORDINATOR_')) throw error;
             fileWarnings.push(`PDF 文本坐标提取失败：${error?.message || String(error)}`);
         }
 
@@ -625,6 +639,7 @@
         const evidences = [];
 
         for (let i = 0; i < count; i += 1) {
+            assertCoordinatorActive();
             const page = pageImages[i] || {};
             const pageNo = page.pageNo || i + 1;
             const layout = (layoutPages || []).find(row => Number(row.pageNo) === Number(pageNo)) || null;
@@ -641,6 +656,15 @@
                 evidence.errors.push('该页既无页面图也无文本层。');
             } else {
                 await addLooseVisionOcr(evidence, helpers);
+            }
+
+            assertCoordinatorActive();
+            if (typeof helpers.onPdfPageProgress === 'function') {
+                await helpers.onPdfPageProgress({
+                    sourceId: String(file.id || ''),
+                    pageNo: i + 1,
+                    totalPages: count
+                });
             }
 
             evidences.push(evidence);
@@ -1265,6 +1289,7 @@
                 const rows = await buildPageEvidenceForFile(file, helpers);
                 rows.forEach(evidence => evidences.push(evidence));
             } catch (error) {
+                if (String(error?.code || '').startsWith('PDF_COORDINATOR_')) throw error;
                 if (helpers.isFatalQwenServiceError?.(error)) throw error;
                 fatalErrors.push(`${file.filename || file.id}: ${error?.message || String(error)}`);
             }

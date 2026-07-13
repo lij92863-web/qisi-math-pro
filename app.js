@@ -15878,16 +15878,25 @@ ${source}`;
                             )
                             : { drafts: [], draftImages: [], warnings: [], errors: [] };
 
+                        const pdfOnlyEngineFiles = engineFiles.length > 0 && engineFiles.every(file => file.fileType === 'pdf');
                         const engineResult = engineFiles.length
-                            ? await window.QisiBatchEngineV2.processBatchV2({ batch, files: engineFiles, helpers })
-                            : {
-                                evidences: [],
-                                drafts: [],
-                                draftImages: [],
-                                unmatched: [],
-                                warnings: [],
-                                errors: []
-                            };
+                            ? (pdfOnlyEngineFiles
+                                ? await window.Qisi.PdfImportCoordinator.runPdfImport(
+                                    { batchId, batch, sources: engineFiles },
+                                    {
+                                        processSources: ({ sources, signal, onPageProgress }) =>
+                                            window.QisiBatchEngineV2.processBatchV2({
+                                                batch, files: sources, helpers: { ...helpers, pdfSignal: signal, onPdfPageProgress: onPageProgress }
+                                            }),
+                                        createSafePartial: (draft, evidence) => ({
+                                            ...window.Qisi.PdfSafePartialPipeline.normalizePdfPipelineResult({ answerQuestionNumbers: [], warnings: evidence.warnings }),
+                                            draft
+                                        }),
+                                        reportProgress: ({ progress }) => updateBatchProgress(batchId, 25 + Math.round(progress * 0.25), 'processing')
+                                    }
+                                )
+                                : await window.QisiBatchEngineV2.processBatchV2({ batch, files: engineFiles, helpers }))
+                            : { evidences: [], drafts: [], draftImages: [], unmatched: [], warnings: [], errors: [] };
 
                         const result = {
                             evidences: engineResult.evidences || [],

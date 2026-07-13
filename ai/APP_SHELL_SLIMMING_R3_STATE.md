@@ -152,10 +152,35 @@
   gates passed with browser preflight/dry-run making zero real calls.
 - `app.js` is now 21,768 lines, 10 lines below the Program C baseline, with the
   same 318 inventoried function names and complete baseline-name coverage.
+- Wave C2-5 implemented and production-wired `qisi-pdf-import-coordinator.js`
+  for deterministic PDF-only V2 intake, injected engine execution, page-level
+  progress, AbortSignal boundaries, sanitized adapter errors, and immutable
+  safe-partial candidate contracts.
+- The coordinator delegates candidate status to the existing
+  `PdfSafePartialPipeline` port and contains no parser, aligner, controlled-write,
+  FormalAdmission, answer-ownership, storage, UI, or Route B implementation.
+- `qisi-batch-engine-v2.js` now emits page-completion events and checks the
+  coordinator signal before/after render, text/layout extraction, page OCR, and
+  page publication. Coordinator cancellation codes propagate rather than being
+  converted into manual fallback drafts; a completed late page is ignored after
+  the next signal boundary.
+- The V2 production path routes all-PDF engine inputs through
+  `Qisi.PdfImportCoordinator.runPdfImport`; the prior engine remains an injected
+  adapter, and mixed non-PDF/PDF engine inputs retain their legacy combined path
+  to avoid breaking cross-source matching. No parser/aligner/controlled-write
+  owner was moved.
+- C2-5 failure-first began with module-not-found. A first implementation passed
+  behavior tests but was blocked at 21,795 app lines; the port assembly was
+  compacted without removing any gate or dependency, restoring the shell bound.
+  Final PDF/architecture/attack targets passed 35/35, true DOCX/PDF import
+  characterization passed 4/4, known-bad passed 65/65, the full suite passed
+  1,290/1,290, and all 11 mandatory gates passed with no real calls.
+- `app.js` is now 21,777 lines, one line below the Program C baseline, with the
+  same 318 inventoried function names and complete baseline-name coverage.
 
 ## Pending
 
-- Phase 2 Waves C2-5–C2-14, then attacks, audits, benchmark, CTO review, and seal.
+- Phase 2 Waves C2-6–C2-14, then attacks, audits, benchmark, CTO review, and seal.
 
 ## Blockers / limitations
 
@@ -168,7 +193,6 @@
 
 ## Next exact action
 
-Commit and push C2-4, then begin Wave C2-5 PDF Coordinator with failure-first
-tests for PDF intake, page/OCR adapter orchestration, safe-partial candidates,
-progress/cancel, adapter failure, and preservation of parser/aligner/
-controlled-write ownership.
+Commit and push C2-5, then begin Wave C2-6 Candidate Normalizer with
+failure-first tests for production-helper delegation, raw JSON and formula
+wrappers, immutable evidence, and prohibition of repair-owner duplication.
