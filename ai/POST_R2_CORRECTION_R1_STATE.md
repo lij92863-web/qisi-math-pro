@@ -235,6 +235,10 @@
   conflict handling already blocked all formal writes.
 - Phase 3 stale-draft and concurrency regressions passed 5/5; full mandatory
   matrix and browser dry-run passed with no real API call.
+- Phase 3 raw-JSON failure-first evidence: its matrix row was absent; contract
+  and real transport paths already rejected the wrapper before persistence.
+- Phase 3 raw-JSON contract and UI transport regressions passed 4/4; full
+  mandatory matrix and browser dry-run passed with no real API call.
 
 ## Blockers
 
@@ -243,4 +247,4 @@
 
 ## Next exact action
 
-Commit/push stale draft, then execute the raw-JSON attack.
+Commit/push raw JSON, then execute the ownership-rewind attack.
