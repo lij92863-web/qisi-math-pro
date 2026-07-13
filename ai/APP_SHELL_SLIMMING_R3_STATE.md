@@ -62,10 +62,14 @@
 - C2.2 preserves controlled-write, FormalAdmission, Repository, PDF manual review,
   and privacy owners. Failure-first gate began at 0/3; final design passed 3/3 and
   all 11 mandatory gates passed with zero real calls.
+- C2.3 defined unique owner/public API/dependency/test contracts for all ten target
+  modules, with no DOM, Vue, direct external-call, or frozen-owner duplication.
+- C2.3 failure-first gate began at 0/2; final design passed 2/2 and all 11
+  mandatory gates passed with browser preflight/dry-run making zero real calls.
 
 ## Pending
 
-- Phase 1 target modules and wave-by-wave migration protocol.
+- Phase 1 wave-by-wave migration protocol.
 - Phases 2–8 implementation, attacks, audits, benchmark, CTO review, and Git seal.
 
 ## Blockers / limitations
@@ -79,6 +83,5 @@
 
 ## Next exact action
 
-Commit and push C2.2, then define C2.3 target-module public APIs, dependency
-direction, ownership, DOM/Vue/external-call prohibitions, and production-linked
-test obligations.
+Commit and push C2.3, then define C2.4 migration gates for characterization,
+shadow equivalence, production switch, old-owner removal, true E2E, and rollback.
