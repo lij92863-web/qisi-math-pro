@@ -22,6 +22,8 @@ test('true browser shadow keeps legacy and Bridge PDF projections canonically eq
                 SourceRoleClassifier: Roles,
                 PdfCandidateProjection: Projection,
                 PdfSupportControlledWrite: ControlledWrite,
+                PdfSupportBlockParser: BlockParser,
+                PdfSupportAligner: Aligner,
                 CandidateNormalizer,
                 ProductionImportOutputPort: OutputPort,
                 ImportValidationService: Validation,
@@ -38,6 +40,8 @@ test('true browser shadow keeps legacy and Bridge PDF projections canonically eq
                 Roles,
                 Projection,
                 ControlledWrite,
+                BlockParser,
+                Aligner,
                 CandidateNormalizer,
                 OutputPort,
                 Validation,
@@ -203,8 +207,16 @@ test('true browser shadow keeps legacy and Bridge PDF projections canonically eq
                     clock: () => 50
                 });
 
-            const makeBridge = ({ route = 'pdf', context, docxDraft } = {}) => {
-                const files = route === 'pdf' ? pdfFiles() : docxFiles();
+            const makeBridge = ({
+                route = 'pdf',
+                context,
+                docxDraft,
+                filesOverride,
+                runPdfImportOverride
+            } = {}) => {
+                const files = filesOverride || (
+                    route === 'pdf' ? pdfFiles() : docxFiles()
+                );
                 const currentBatch = batch();
                 const persisted = [];
                 const validationFailures = [];
@@ -246,20 +258,25 @@ test('true browser shadow keeps legacy and Bridge PDF projections canonically eq
                         warnings: [],
                         errors: []
                     }),
-                    runPdfImport: async () => ({
-                        drafts: clone(context.drafts),
-                        draftImages: [],
-                        unmatched: [],
-                        warnings: [],
-                        errors: [],
-                        projectionContext: clone(context),
-                        safePartialCandidates: context.drafts.map(draft => ({
-                            draft: clone(draft),
-                            isSafePartial: true,
-                            isComplete: false,
-                            requiresManualReview: true
-                        }))
-                    }),
+                    runPdfImport: async input => {
+                        if (typeof runPdfImportOverride === 'function') {
+                            return runPdfImportOverride(input);
+                        }
+                        return {
+                            drafts: clone(context.drafts),
+                            draftImages: [],
+                            unmatched: [],
+                            warnings: [],
+                            errors: [],
+                            projectionContext: clone(context),
+                            safePartialCandidates: context.drafts.map(draft => ({
+                                draft: clone(draft),
+                                isSafePartial: true,
+                                isComplete: false,
+                                requiresManualReview: true
+                            }))
+                        };
+                    },
                     projectPdfCandidates: value => {
                         projectionCalls += 1;
                         return Projection.projectPdfCandidates(value);
@@ -453,6 +470,105 @@ test('true browser shadow keeps legacy and Bridge PDF projections canonically eq
                 badError = error?.code || error?.message || String(error);
             }
 
+            const runRejectedCase = async (name, shadow) => {
+                let errorCode = '';
+                let causeCode = '';
+                try {
+                    await shadow.bridge.run({
+                        batchId: 'browser-shadow-batch'
+                    });
+                } catch (error) {
+                    errorCode = error?.code || error?.message || String(error);
+                    causeCode = error?.causeCode || '';
+                }
+                return {
+                    name,
+                    errorCode,
+                    causeCode,
+                    persisted: shadow.persisted.length,
+                    projectionCalls: shadow.projectionCalls()
+                };
+            };
+
+            const rawDraft = pdfDraft({
+                rawJsonCandidate: true,
+                stem: '{"questions":[{"stem":"browser-raw-must-not-leak"}]}'
+            });
+            const rawShadow = makeBridge({
+                route: 'pdf',
+                context: projectionContext({ draft: rawDraft })
+            });
+            const rawResult = await runRejectedCase(
+                'pdf-raw-json-candidate',
+                rawShadow
+            );
+
+            const ambiguousFiles = [
+                pdfFiles()[0],
+                {
+                    id: 'pdf-support-a',
+                    batchId: 'browser-shadow-batch',
+                    filename: 'support-a.pdf',
+                    fileType: 'pdf',
+                    roles: ['answer'],
+                    sourceOrder: 2
+                },
+                {
+                    id: 'pdf-support-b',
+                    batchId: 'browser-shadow-batch',
+                    filename: 'support-b.pdf',
+                    fileType: 'pdf',
+                    roles: ['answer'],
+                    sourceOrder: 3
+                }
+            ];
+            const ambiguousShadow = makeBridge({
+                route: 'pdf',
+                filesOverride: ambiguousFiles,
+                runPdfImportOverride: () =>
+                    Projection.createPdfEngineProjectionContext({
+                        sources: ambiguousFiles,
+                        engineResult: {
+                            drafts: [pdfDraft()],
+                            evidences: ambiguousFiles.slice(1).map((file, index) => ({
+                                sourceFileId: file.id,
+                                sourceFileName: file.filename,
+                                pageNo: 1,
+                                selectedSourceKind: 'textLayer',
+                                textLayer: `第1题\n答案：${index ? 'B' : 'A'}`
+                            }))
+                        },
+                        controlledWriteOwner: ControlledWrite,
+                        blockParser: BlockParser,
+                        aligner: Aligner,
+                        decisionId: 'cw:browser:ambiguous'
+                    })
+            });
+            const ambiguousResult = await runRejectedCase(
+                'pdf-multiple-support-source-ambiguity',
+                ambiguousShadow
+            );
+
+            const conflictDraft = pdfDraft();
+            const conflictContext = projectionContext({ draft: conflictDraft });
+            conflictContext.controlledWriteDecisions = [
+                controlledWrite(conflictDraft, { answer: 'A' }),
+                controlledWrite(conflictDraft, { answer: 'B' })
+            ];
+            const conflictShadow = makeBridge({
+                route: 'pdf',
+                context: conflictContext
+            });
+            const conflictResult = await runRejectedCase(
+                'pdf-duplicate-accepted-conflict',
+                conflictShadow
+            );
+            const rejectedResults = [
+                rawResult,
+                ambiguousResult,
+                conflictResult
+            ];
+
             const allAcceptedContent = caseResults
                 .map(result => result.content)
                 .join('\n');
@@ -462,7 +578,8 @@ test('true browser shadow keeps legacy and Bridge PDF projections canonically eq
                 browserCases: [
                     'docx-deterministic',
                     ...caseResults.map(result => result.name),
-                    'pdf-known-bad-ownership'
+                    'pdf-known-bad-ownership',
+                    ...rejectedResults.map(result => result.name)
                 ],
                 canonicalDifferences: caseResults.reduce(
                     (total, result) => total + result.differences.length,
@@ -471,7 +588,11 @@ test('true browser shadow keeps legacy and Bridge PDF projections canonically eq
                 caseResults,
                 wrongAttachments: caseResults.filter(result =>
                     result.ownershipValid !== true
-                ).length + badShadow.persisted.length,
+                ).length + badShadow.persisted.length +
+                    rejectedResults.reduce(
+                        (total, result) => total + result.persisted,
+                        0
+                    ),
                 rawJsonLeakage: /(?:^|\n)\s*[\[{]\s*"questions"\s*:/i
                     .test(allAcceptedContent)
                     ? 1
@@ -484,6 +605,8 @@ test('true browser shadow keeps legacy and Bridge PDF projections canonically eq
                     result.controlledWriteEvaluated !== true ||
                     result.projectionCalls !== 1
                 ).length,
+                formalAdmissionWrites: 0,
+                rejectedResults,
                 knownBad: {
                     legacySupportLevel: badLegacy.supportLevel,
                     legacyOwnershipValid:
@@ -501,13 +624,17 @@ test('true browser shadow keeps legacy and Bridge PDF projections canonically eq
             'pdf-full',
             'pdf-safe-partial',
             'pdf-missing-answer',
-            'pdf-known-bad-ownership'
+            'pdf-known-bad-ownership',
+            'pdf-raw-json-candidate',
+            'pdf-multiple-support-source-ambiguity',
+            'pdf-duplicate-accepted-conflict'
         ]);
         assert.equal(metrics.canonicalDifferences, 0);
         assert.equal(metrics.wrongAttachments, 0);
         assert.equal(metrics.rawJsonLeakage, 0);
         assert.equal(metrics.placeholderLeakage, 0);
         assert.equal(metrics.controlledWriteBypass, 0);
+        assert.equal(metrics.formalAdmissionWrites, 0);
         assert.deepEqual(
             metrics.caseResults.map(result => result.supportLevel),
             ['full', 'prefix', 'safe-partial']
@@ -518,6 +645,25 @@ test('true browser shadow keeps legacy and Bridge PDF projections canonically eq
             bridgeError: 'IMPORT_VALIDATION_FAILED',
             persisted: 0
         });
+        assert.deepEqual(metrics.rejectedResults, [{
+            name: 'pdf-raw-json-candidate',
+            errorCode: 'PRODUCTION_IMPORT_RESULT_MALFORMED',
+            causeCode: 'raw-or-empty-draft-output',
+            persisted: 0,
+            projectionCalls: 0
+        }, {
+            name: 'pdf-multiple-support-source-ambiguity',
+            errorCode: 'IMPORT_RECOGNITION_FAILED',
+            causeCode: 'pdf-support-source-ambiguous',
+            persisted: 0,
+            projectionCalls: 0
+        }, {
+            name: 'pdf-duplicate-accepted-conflict',
+            errorCode: 'IMPORT_RECOGNITION_FAILED',
+            causeCode: 'controlled-write-conflict',
+            persisted: 0,
+            projectionCalls: 1
+        }]);
         assert.equal(harness.forbiddenRequests.length, 0);
         assertNoRuntimeErrors(harness);
     } finally {
