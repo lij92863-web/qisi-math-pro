@@ -113,6 +113,7 @@ test('production PDF-only V2 route uses the coordinator without moving frozen ow
     const engine = fs.readFileSync(path.join(ROOT, 'qisi-batch-engine-v2.js'), 'utf8');
     const implementation = fs.readFileSync(path.join(ROOT, 'qisi-pdf-import-coordinator.js'), 'utf8');
     assert.match(app, /Qisi\.PdfImportCoordinator\.runPdfImport\s*\(/);
+    assert.match(app, /Qisi\.ProductionPdfSourcesPort\.processPdfSources\s*\(/);
     assert.match(app, /pdfOnlyEngineFiles/);
     assert.ok(html.indexOf('qisi-pdf-import-coordinator.js') < html.indexOf('app.js'));
     assert.match(engine, /onPdfPageProgress/);

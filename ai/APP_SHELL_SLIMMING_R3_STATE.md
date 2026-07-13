@@ -455,6 +455,34 @@
   and 60 declared dependency edges with no missing target, cycle, upward
   dependency, or owner mismatch.
 
+- Wave C2-10.5 Phase 3 extracted the third shared production port,
+  `ProductionPdfSourcesPort.processPdfSources`. It is the minimal adapter that
+  forwards the coordinator's batch, already ordered PDF sources, AbortSignal,
+  page-progress callback, and existing helper set to the existing
+  `QisiBatchEngineV2.processBatchV2` owner.
+- The PDF-only V2 production route now calls the shared port from
+  `PdfImportCoordinator`; the former inline engine adapter was deleted. Engine
+  result identity is preserved and malformed-result validation remains solely
+  in the existing coordinator, so this extraction does not change the old
+  stable coordinator error classification or create a second result gate.
+- Invalid/non-PDF/duplicate/cross-batch sources and a missing engine port fail
+  closed before engine entry. Engine errors retain identity for coordinator
+  sanitization, cancellation stops before engine entry and discards a late
+  result, and the caller's helper object is not mutated. The adapter owns no
+  parser, aligner, controlled-write, answer ownership, DB, UI, FormalAdmission,
+  Route B, or persistence logic.
+- Failure-first began with the new port test failing at file load because the
+  module did not exist. Final PDF-port/coordinator/runtime/architecture targets
+  passed 29/29, Base Migration passed 15/15, the full suite passed
+  1,356/1,356 with no failed, skipped, or todo tests, and all 11 mandatory gates
+  passed. Browser preflight/dry-run recorded `realApiCalled=false` and
+  `underlyingApiCallCount=0`; no PDF real-run or real AI/OCR call occurred.
+- `app.js` remains 21,694 physical lines with 315 inventoried functions and
+  complete immutable baseline-name coverage. The conservative lexical metric
+  for `processDraftImportBatch` remains 5,114 lines. The manifest records 41
+  modules and 61 declared dependency edges with no missing target, cycle,
+  upward dependency, or owner mismatch.
+
 ## Pending
 
 - Remaining Wave C2-10.5 Phase 3 ports, Phases 4 through 6, and the hard
@@ -473,7 +501,7 @@
 
 ## Next exact action
 
-Commit and push the shared `parseDocxSource` port, then characterize exactly one
-`processPdfSources` adapter boundary. Reuse `PdfImportCoordinator` and
-`QisiBatchEngineV2`, do not move parser/aligner/controlled-write ownership, and
-do not enter C2-11 until all C2-10.5 hard acceptance gates pass.
+Commit and push the shared `processPdfSources` port, then characterize exactly
+one progress/status/error boundary. Preserve UI callbacks and file/batch status
+semantics, keep diagnostics separate from persistence, and do not enter C2-11
+until all C2-10.5 hard acceptance gates pass.

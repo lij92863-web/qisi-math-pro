@@ -32,6 +32,7 @@
   "sourceRoleClassifierOwner": "qisi-source-role-classifier.js",
   "productionDocxSourcePortOwner": "qisi-production-docx-source-port.js",
   "docxImportCoordinatorOwner": "qisi-docx-import-coordinator.js",
+  "productionPdfSourcesPortOwner": "qisi-production-pdf-sources-port.js",
   "pdfImportCoordinatorOwner": "qisi-pdf-import-coordinator.js",
   "candidateNormalizerOwner": "qisi-candidate-normalizer.js",
   "importValidationServiceOwner": "qisi-import-validation-service.js",

@@ -15797,9 +15797,9 @@ ${source}`;
                                     { batchId, batch, sources: engineFiles },
                                     {
                                         processSources: ({ sources, signal, onPageProgress }) =>
-                                            window.QisiBatchEngineV2.processBatchV2({
-                                                batch, files: sources, helpers: { ...helpers, pdfSignal: signal, onPdfPageProgress: onPageProgress }
-                                            }),
+                                            window.Qisi.ProductionPdfSourcesPort.processPdfSources({
+                                                batch, sources, helpers, signal, onPageProgress
+                                            }, { engine: window.QisiBatchEngineV2 }),
                                         createSafePartial: (draft, evidence) => ({
                                             ...window.Qisi.PdfSafePartialPipeline.normalizePdfPipelineResult({ answerQuestionNumbers: [], warnings: evidence.warnings }),
                                             draft
