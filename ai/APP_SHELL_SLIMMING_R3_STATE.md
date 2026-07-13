@@ -3,8 +3,8 @@
 - Start commit: `b15e6fbe24c525c95a573b51a0c7ab68e77f4790`
 - Baseline tag: `pre-app-shell-slimming-r3-b15e6fb`
 - Current branch: `stage/app-shell-slimming-r3`
-- Current phase: Program C / Phase 5 resume allowed; Phase 5 not yet accepted
-- Current work package: Phase 5 pre-resume safety patch complete
+- Current phase: Program C / Phase 5 blocked
+- Current work package: Phase 5 real-browser shadow equivalence blocker sealed
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -685,6 +685,32 @@
 - Decision: `PHASE5_PRE_RESUME_SAFETY_PATCH_ACCEPTED`;
   `PHASE_5_RESUME_ALLOWED`; `PHASE_5_NOT_YET_ACCEPTED`;
   `C2_11_PROHIBITED`.
+- Phase 5 resumed from clean pushed commit
+  `d7f0f8b5d2daaca94ca3d164cf730fbe7fdae1ab` and used the ordinary browser
+  batch-import UI with the real 12-question DOCX fixture. No
+  `InjectedImportTransport`, review-draft seed, real AI, real-run, or AI proxy
+  was used.
+- The 1-question failure-first raw engine result was rejected by the real
+  authoritative DOCX question-number gate for missing questions 2 through 12.
+  The 12-question run then reached `status=review` and persisted 12 legacy
+  drafts, proving the normal UI legacy call graph.
+- The persisted legacy draft had no `source.mode` and no `fieldProvenance`; its
+  actual source trace was `docx-local-convert-pdf-strict-vision`. The Bridge
+  DOCX route is the deterministic `ProductionDocxSourcePort` route. The
+  mandatory stable-provenance comparator therefore cannot return zero
+  differences.
+- Marking the legacy visual output as `docx-deterministic` would fabricate
+  provenance. Ignoring the missing safety fields would weaken the comparator.
+  Switching the normal UI to the deterministic owner would enter C2-11 before
+  Phase 5 acceptance. Each alternative is explicitly forbidden.
+- All temporary trial code and tests were removed. Production code and the six
+  frozen high-risk PDF files remain unchanged. Evidence is recorded in
+  `docs/benchmark/IMPORT_SHADOW_EQUIVALENCE_R3.md` and
+  `docs/release/PROGRAM_C_PHASE5_REAL_BROWSER_SHADOW_EQUIVALENCE_R3.md`.
+- Decision: `PHASE_5_BLOCKED`;
+  blocker:
+  `DOCX_NORMAL_UI_LEGACY_VISUAL_PROVENANCE_NOT_EQUIVALENT_TO_DETERMINISTIC_BRIDGE`;
+  `C2_11_PROHIBITED`; later Program C phases not entered.
 
 ## Blockers / limitations
 
@@ -697,5 +723,6 @@
 
 ## Next exact action
 
-Resume Phase 5 browser equivalence. Do not enter C2-11 until Phase 5 itself is
-accepted.
+Program C is blocked at Phase 5. Define and authorize a prerequisite migration
+that gives the normal UI DOCX route a truthful deterministic production owner,
+then restart Phase 5. Do not enter C2-11 under the current gate.
