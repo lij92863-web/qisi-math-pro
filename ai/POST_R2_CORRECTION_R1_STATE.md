@@ -253,6 +253,10 @@
   mandatory matrix and browser dry-run passed with no real API call.
 - Phase 3 package-schema-injection failure-first evidence: its matrix row was absent; the policy already rejected invalid package context.
 - Phase 3 package-schema-injection regressions passed 14/14; full mandatory matrix and browser dry-run passed with no real API call.
+- Phase 3 XSS failure-first evidence: its designated matrix row was absent;
+  startup and preview boundaries already escaped executable markup.
+- Phase 3 XSS and security regressions passed 9/9; full mandatory matrix and
+  browser dry-run passed with no real API call.
 
 ## Blockers
 
@@ -261,4 +265,4 @@
 
 ## Next exact action
 
-Commit/push package schema injection, then execute XSS.
+Commit/push XSS, then execute path traversal.
