@@ -3,7 +3,7 @@
 - Start commit: `1361d7e7f81d2f23819a995a0f9d1808adf19982`
 - Baseline tag: `pre-ocr-quality-r1-1361d7e`
 - Current branch: `stage/ocr-quality-r1`
-- Current phase: Program B / Phase 2 / B2-3 complete
+- Current phase: Program B / Phase 2 / B2-4 evaluated and held
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -73,10 +73,15 @@
 - B2-3 failure-first tests passed 8/8 after two small lifecycle/script syntax
   repairs; architecture/adapter targeted coverage passed 20/20 and all 11
   mandatory gates passed with `realApiCalled=false`.
+- B2-4 evaluated the mandatory baseline evidence gate and recorded
+  `NOT_IMPLEMENTED_NO_BASELINE`: eligible private documents remain 0 and real OCR
+  authority is absent, so all nine preprocessing candidates remain disabled.
+- B2-4 added no preprocessing module, browser hook, service hook, or production
+  flag. Its evidence-gate tests passed 2/2 and all 11 mandatory gates passed.
 
 ## Pending
 
-- Phase 2 work packages B2-4 through B2-10, subject to their evidence gates.
+- Phase 2 work packages B2-5 through B2-10, subject to their evidence gates.
 - Phases 3–8 attacks, audits, final benchmark, CTO review, and seal.
 
 ## Blockers / limitations
@@ -88,6 +93,6 @@
 
 ## Next exact action
 
-Commit and push B2-3, then evaluate the B2-4 evidence gate. With no authorized
-real baseline, preprocessing must remain unimplemented/disabled and the skip
-decision must be auditable before B2-5.
+Commit and push the B2-4 hold decision, then start B2-5 with failing deterministic
+reading-order tests for single/two-column, mixed figures, cross-column anchors,
+multiline formulas, and header/footer interference.
