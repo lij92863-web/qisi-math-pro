@@ -21,6 +21,8 @@ const makeConfig = root => ({
     benchmarkId: 'synthetic-r1-test',
     corpusVersion: 'public-synthetic-1',
     scorerVersion: 'ocr-scoring-r1',
+    runPurpose: 'development',
+    evaluationSplit: 'development',
     engine: { name: 'mock-synthetic', version: '1.0.0' },
     hardwareProfile: {
         profileId: 'test-node',
@@ -45,7 +47,8 @@ const makeConfig = root => ({
 
 const writeInputs = root => {
     fs.writeFileSync(path.join(root, 'truth.json'), JSON.stringify([{
-        documentId: 'doc-1', qualityTags: ['synthetic'], questions: [makeQuestion()]
+        documentId: 'doc-1', split: 'development', qualityTags: ['synthetic'],
+        questions: [makeQuestion()]
     }]));
     fs.writeFileSync(path.join(root, 'result.json'), JSON.stringify([{
         documentId: 'doc-1', status: 'ok', questions: [makeQuestion()], safetyEvents: []

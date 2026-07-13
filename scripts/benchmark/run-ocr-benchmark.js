@@ -27,6 +27,22 @@ const validateConfig = (config, { env = process.env, repoRoot = process.cwd() } 
     const corpusVersion = assertText(config.corpusVersion, 'corpusVersion');
     const scorerVersion = assertText(config.scorerVersion, 'scorerVersion');
     if (scorerVersion !== 'ocr-scoring-r1') throw new Error('scorerVersion must be ocr-scoring-r1.');
+    const runPurpose = assertText(config.runPurpose, 'runPurpose');
+    const evaluationSplit = assertText(config.evaluationSplit, 'evaluationSplit');
+    const purposeSplit = {
+        calibration: 'calibration',
+        development: 'development',
+        'final-holdout': 'holdout'
+    };
+    if (!Object.prototype.hasOwnProperty.call(purposeSplit, runPurpose)) {
+        throw new Error('runPurpose must be calibration, development, or final-holdout.');
+    }
+    if (!['calibration', 'development', 'holdout'].includes(evaluationSplit)) {
+        throw new Error('evaluationSplit must be calibration, development, or holdout.');
+    }
+    if (purposeSplit[runPurpose] !== evaluationSplit) {
+        throw new Error('runPurpose and evaluationSplit do not match.');
+    }
 
     const engineName = assertText(config.engine?.name, 'engine.name');
     const engineVersion = assertText(config.engine?.version, 'engine.version');
@@ -93,6 +109,8 @@ const validateConfig = (config, { env = process.env, repoRoot = process.cwd() } 
         benchmarkId,
         corpusVersion,
         scorerVersion,
+        runPurpose,
+        evaluationSplit,
         engine: { name: engineName, version: engineVersion },
         hardwareProfile: normalizedHardware,
         timeoutMs,
@@ -144,6 +162,8 @@ const reportConfig = config => ({
     benchmarkId: config.benchmarkId,
     corpusVersion: config.corpusVersion,
     scorerVersion: config.scorerVersion,
+    runPurpose: config.runPurpose,
+    evaluationSplit: config.evaluationSplit,
     engine: config.engine,
     hardwareProfile: config.hardwareProfile,
     timeoutMs: config.timeoutMs,
@@ -163,6 +183,8 @@ const toMarkdown = report => {
         `- Run: ${report.runId}`,
         `- Benchmark: ${report.benchmarkId}`,
         `- Corpus: ${report.corpusVersion}`,
+        `- Purpose: ${report.runPurpose}`,
+        `- Evaluation split: ${report.evaluationSplit}`,
         `- Engine: ${report.engine.name} ${report.engine.version}`,
         `- Hardware: ${report.hardwareProfile.profileId}`,
         `- Timeout: ${report.timeoutMs} ms`,
@@ -202,7 +224,25 @@ const runBenchmark = (config, options = {}) => {
     const resultBytes = fs.readFileSync(validated.input.resultPath);
     const truthDocuments = asDocuments(JSON.parse(truthBytes.toString('utf8')));
     const resultDocuments = asDocuments(JSON.parse(resultBytes.toString('utf8')));
+    const ensureUniqueDocuments = (documents, label) => {
+        const seen = new Set();
+        for (const document of documents) {
+            const id = assertText(document.documentId, `${label}.documentId`);
+            if (seen.has(id)) throw new Error(`Duplicate ${label} documentId: ${id}`);
+            seen.add(id);
+        }
+    };
+    ensureUniqueDocuments(truthDocuments, 'truth');
+    ensureUniqueDocuments(resultDocuments, 'result');
+    for (const document of truthDocuments) {
+        if (document.split !== validated.evaluationSplit) {
+            throw new Error(
+                `Corpus split mismatch for ${document.documentId}: expected ${validated.evaluationSplit}.`
+            );
+        }
+    }
     const resultByDocument = new Map(resultDocuments.map(row => [String(row.documentId), row]));
+    const truthIds = new Set(truthDocuments.map(row => String(row.documentId)));
     const scores = truthDocuments.map(truth => {
         const result = resultByDocument.get(String(truth.documentId)) || {
             documentId: truth.documentId,
@@ -211,6 +251,17 @@ const runBenchmark = (config, options = {}) => {
         };
         return Scoring.scoreDocumentR1(truth, result);
     });
+    for (const result of resultDocuments.filter(row => !truthIds.has(String(row.documentId)))) {
+        scores.push({
+            documentId: String(result.documentId),
+            qualityTags: [],
+            status: 'unexpected',
+            failure: { code: 'unexpected-result-document' },
+            metrics: null,
+            safety: Scoring.emptySafetyR1(),
+            humanCost: null
+        });
+    }
     const summaryConfig = reportConfig(validated);
     const inputHashes = {
         truthSha256: sha256(truthBytes),

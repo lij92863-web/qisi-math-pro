@@ -3,7 +3,7 @@
 - Start commit: `1361d7e7f81d2f23819a995a0f9d1808adf19982`
 - Baseline tag: `pre-ocr-quality-r1-1361d7e`
 - Current branch: `stage/ocr-quality-r1`
-- Current phase: Program B / Phase 3 complete
+- Current phase: Program B / Phase 4 complete
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -138,10 +138,19 @@
   affected owner regressions passed 47/47; all 11 mandatory gates passed. Wrong
   attachments, fabricated formal questions, bypasses, real API calls, and enabled
   canary remained 0.
+- Phase 4 code audit reviewed all ten required areas. It found and fixed two
+  benchmark-integrity gaps: purpose/split was not code-enforced and unexpected
+  result documents were ignored. Runner now pins matching purpose/split, rejects
+  mismatch/duplicate ids, and reports unexpected results as failures.
+- Phase 4 audit/runner/scorer tests passed 12/12 and all 11 mandatory gates passed.
+  Decision: `OCR_QUALITY_CODE_AUDIT_R1_ACCEPTED_WITH_LIMITATIONS`.
+- Remaining code-audit limitation: legacy app.js current-engine configuration still
+  names `qwen-vl-plus`; no local model implementation or new Program B engine branch
+  exists in app.js. This remains Program C shell debt.
 
 ## Pending
 
-- Phases 4–8 code audit, architecture audit, final benchmark, CTO review, and seal.
+- Phases 5–8 architecture audit, final benchmark, CTO review, and seal.
 
 ## Blockers / limitations
 
@@ -152,5 +161,6 @@
 
 ## Next exact action
 
-Commit and push Phase 3, then perform the Phase 4 code quality audit against all
-ten required review questions without changing code unless an audit finding fails.
+Commit and push Phase 4, then perform the Phase 5 architecture consistency audit
+for pluggability, unique promotion ownership, no-write shadow, safety invariants,
+Route B freeze, and config traceability.

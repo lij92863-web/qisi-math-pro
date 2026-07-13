@@ -43,6 +43,8 @@ node scripts/benchmark/run-ocr-benchmark.js <config.json>
 The JSON config must explicitly pin:
 
 - `benchmarkId`, `corpusVersion`, and `scorerVersion: ocr-scoring-r1`
+- fixed `runPurpose` and matching `evaluationSplit` (`calibration`,
+  `development`, or `final-holdout` + `holdout`)
 - engine `name` and immutable `version` (not `latest`, `current`, or `unknown`)
 - hardware `profileId`, OS, CPU, GPU and memory
 - timeout, integer random seed, and bootstrap iteration count
@@ -59,3 +61,6 @@ object. They contain config metadata, hashes, aggregate metrics, sanitized
 per-document metrics, status and failure code. They exclude full truth, recognized
 text, raw responses, source paths and failure messages. Timeout, missing and other
 failed documents remain explicit and make `promotionEligible=false`.
+Every truth document must declare the configured split. A mismatch aborts before
+report writing, duplicate document ids are rejected, and unexpected result
+documents are reported as failures instead of being silently ignored.
