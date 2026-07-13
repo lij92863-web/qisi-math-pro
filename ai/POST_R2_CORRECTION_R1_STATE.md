@@ -257,6 +257,10 @@
   startup and preview boundaries already escaped executable markup.
 - Phase 3 XSS and security regressions passed 9/9; full mandatory matrix and
   browser dry-run passed with no real API call.
+- Phase 3 path-traversal failure-first evidence: its matrix row was absent;
+  archive and temp-root guards already rejected both traversal forms.
+- Phase 3 path-traversal security regressions passed 14/14; full mandatory
+  matrix and browser dry-run passed with no real API call.
 
 ## Blockers
 
@@ -265,4 +269,4 @@
 
 ## Next exact action
 
-Commit/push XSS, then execute path traversal.
+Commit/push path traversal, then execute ZIP bomb.
