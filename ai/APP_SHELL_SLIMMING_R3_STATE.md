@@ -3,7 +3,7 @@
 - Start commit: `b15e6fbe24c525c95a573b51a0c7ab68e77f4790`
 - Baseline tag: `pre-app-shell-slimming-r3-b15e6fb`
 - Current branch: `stage/app-shell-slimming-r3`
-- Current phase: Program C / Phase 1 architecture in progress
+- Current phase: Program C / Phase 1 complete
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -66,10 +66,15 @@
   modules, with no DOM, Vue, direct external-call, or frozen-owner duplication.
 - C2.3 failure-first gate began at 0/2; final design passed 2/2 and all 11
   mandatory gates passed with browser preflight/dry-run making zero real calls.
+- C2.4 fixed the ordered 11-step per-wave protocol, complete evidence packet,
+  three-bounded-repair stop policy, exact Git scope, rollback proof, and all 14
+  wave-specific switch/removal obligations.
+- C2.4 failure-first gate began at 0/3; final protocol passed 3/3 and all 11
+  mandatory gates passed. Phase 1 architecture is complete without production
+  behavior changes.
 
 ## Pending
 
-- Phase 1 wave-by-wave migration protocol.
 - Phases 2–8 implementation, attacks, audits, benchmark, CTO review, and Git seal.
 
 ## Blockers / limitations
@@ -83,5 +88,6 @@
 
 ## Next exact action
 
-Commit and push C2.3, then define C2.4 migration gates for characterization,
-shadow equivalence, production switch, old-owner removal, true E2E, and rollback.
+Commit and push C2.4, then start Phase 2 Wave C2-1 with failure-first tests for the
+side-effect-free Import State Machine transition table, cancellation, retry,
+progress, and stable error mapping.
