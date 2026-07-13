@@ -177,10 +177,42 @@
   1,290/1,290, and all 11 mandatory gates passed with no real calls.
 - `app.js` is now 21,777 lines, one line below the Program C baseline, with the
   same 318 inventoried function names and complete baseline-name coverage.
+- Wave C2-6 implemented and production-wired `qisi-candidate-normalizer.js` as
+  the single owner for AI wrapper cleanup, deterministic candidate selection,
+  question-array contract conversion, and normalization orchestration.
+- The normalizer accepts only injected production repair ports and delegates all
+  malformed LaTeX JSON repair to the existing `qisi-support-repair.js` owner. It
+  contains no repair command table or scanner, DOM, Vue, external transport,
+  controlled-write, FormalAdmission, Repository, ownership, or formal-write
+  logic.
+- Strict DOCX/PDF recognition payload parsing now calls
+  `Qisi.CandidateNormalizer.normalizeCandidates`; the old inline fence cleanup,
+  JSON alternative generation, repair scheduling, and contract extraction were
+  removed. Other legacy consumers use a thin `extractQuestionArray` delegation,
+  so there is no second normalization owner in `app.js`.
+- Candidate inputs and returned raw evidence are cloned and recursively frozen.
+  Raw arrays, direct/nested wrappers, legal JSON escapes, malformed formula JSON,
+  empty payloads, and invalid payloads are covered with the real production
+  SupportRepair helper rather than a test copy.
+- C2-6 failure-first began with module-not-found. The first full suite exposed
+  two stale migration audits: one required the live app to retain exactly all
+  318 baseline functions, and one required repair scheduling to remain in
+  `app.js`. One bounded repair kept the immutable 318-row baseline map while
+  enforcing a non-growing current function count and moved the callsite audit to
+  the new production owner.
+- Final candidate/repair/architecture/attack targets passed 42/42, true
+  DOCX/PDF import characterization passed 4/4, the full suite passed 1,296/1,296,
+  and all 11 mandatory gates passed. Browser preflight/dry-run recorded
+  `realApiCalled=false` and `underlyingApiCallCount=0`.
+- `app.js` is now 21,534 physical lines, 244 below the Program C baseline, with
+  315 inventoried functions. Every remaining function name is still covered
+  exactly once by the immutable 318-row baseline map; the three removed names
+  belonged to the migrated normalization owner. `processDraftImportBatch` is
+  5,108 lines and remains explicitly pending the later retirement wave.
 
 ## Pending
 
-- Phase 2 Waves C2-6–C2-14, then attacks, audits, benchmark, CTO review, and seal.
+- Phase 2 Waves C2-7–C2-14, then attacks, audits, benchmark, CTO review, and seal.
 
 ## Blockers / limitations
 
@@ -193,6 +225,6 @@
 
 ## Next exact action
 
-Commit and push C2-5, then begin Wave C2-6 Candidate Normalizer with
-failure-first tests for production-helper delegation, raw JSON and formula
-wrappers, immutable evidence, and prohibition of repair-owner duplication.
+Commit and push C2-6, then begin Wave C2-7 Import Validation Service with
+failure-first characterization of the existing schema, sequence, ownership,
+safe-partial, and controlled-write evidence validators.

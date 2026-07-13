@@ -5,6 +5,10 @@ const fs = require('node:fs');
 const { auditCallsite, auditShard, auditAll, RISK_PATTERNS } = require('../scripts/bm-a4-r3-ownership-audit');
 
 const appLines = fs.readFileSync('app.js', 'utf8').split('\n');
+const candidateNormalizerLines = fs.readFileSync(
+    'qisi-candidate-normalizer.js',
+    'utf8'
+).split('\n');
 const EXPECTED_REMAINING_CALLSITES = 39;
 
 function findLineContaining(fragment, startLine = 1) {
@@ -112,7 +116,7 @@ describe('bm-a4-r3-ownership-audit', () => {
         assert.ok(result.decision.startsWith('BLOCKED') || result.fixtureRequired);
     });
 
-    it('module-style support repair callsites are still audited by app.js context', () => {
+    it('module-style support repair callsites remain audited at their production owner', () => {
         const repairSite = makeCallsite(
             'R3-TEST-07',
             'repairChoiceOptions',
@@ -121,13 +125,20 @@ describe('bm-a4-r3-ownership-audit', () => {
         const repairResult = auditCallsite(repairSite, appLines);
         assert.equal(repairResult.replacementAllowed, false);
 
-        const jsonRepairSite = makeCallsite(
-            'R3-TEST-08',
-            'tryRepairedCandidate',
-            'window.Qisi.SupportRepair.tryRepairedCandidate({'
-        );
-        const jsonRepairResult = auditCallsite(jsonRepairSite, appLines);
+        const jsonRepairLine = candidateNormalizerLines.findIndex(line =>
+            line.includes('helpers.tryRepairedCandidate({')
+        ) + 1;
+        assert.ok(jsonRepairLine > 0, 'candidate normalizer repair delegation');
+        const jsonRepairResult = auditCallsite({
+            callsiteId: 'R3-TEST-08',
+            helper: 'tryRepairedCandidate',
+            line: jsonRepairLine
+        }, candidateNormalizerLines);
         assert.equal(jsonRepairResult.replacementAllowed, false);
+        assert.match(
+            fs.readFileSync('app.js', 'utf8'),
+            /Qisi\.CandidateNormalizer\.normalizeCandidates/
+        );
     });
 
     it('auditAll returns results for all callsites', () => {

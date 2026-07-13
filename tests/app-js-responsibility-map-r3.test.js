@@ -12,8 +12,14 @@ test('R3 responsibility inventory keeps the shell within the frozen baseline', (
     const { buildResponsibilityInventory } = require(INVENTORY_SCRIPT);
     const inventory = buildResponsibilityInventory();
     assert.ok(inventory.appJsLines <= 21778, `app.js grew beyond the 21778-line baseline: ${inventory.appJsLines}`);
-    assert.equal(inventory.functions.length, 318);
-    assert.equal(new Set(inventory.functions.map(item => item.name)).size, 318);
+    assert.ok(
+        inventory.functions.length <= 318,
+        `app.js function count grew beyond the 318-function baseline: ${inventory.functions.length}`
+    );
+    assert.equal(
+        new Set(inventory.functions.map(item => item.name)).size,
+        inventory.functions.length
+    );
     for (const item of inventory.functions) {
         for (const field of [
             'name', 'startLine', 'endLine', 'domain', 'callers', 'dependencies',

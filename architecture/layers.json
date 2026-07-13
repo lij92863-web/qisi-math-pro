@@ -246,6 +246,14 @@
       "status": "production-wired"
     },
     {
+      "id": "candidate-normalizer", "file": "qisi-candidate-normalizer.js",
+      "layer": 2, "domainOwner": "candidateNormalizerOwner",
+      "publicApi": ["normalizeCandidates"],
+      "allowedDependencies": [],
+      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "controlled-write", "route-b-research"],
+      "status": "production-wired"
+    },
+    {
       "id": "app-shell", "file": "app.js", "layer": 4,
       "domainOwner": "appShellOwner", "publicApi": ["App.setup"],
       "allowedDependencies": [
@@ -256,7 +264,7 @@
         "ocr-local-adapter", "ocr-shadow-mode", "performance-monitor",
         "controlled-write", "support-aligner", "support-parser", "archive-security",
         "secure-logger", "batch-context-service", "source-role-classifier",
-        "docx-import-coordinator", "pdf-import-coordinator"
+        "docx-import-coordinator", "pdf-import-coordinator", "candidate-normalizer"
       ],
       "forbiddenDependencies": ["route-b-research"],
       "status": "production-wired"

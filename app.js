@@ -5368,271 +5368,29 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                     );
                 };
 
-                const extractQuestionArray = (parsed) => {
-                    if (!parsed) return [];
+                const candidateNormalizerHelpers = Object.freeze({
+                    hasUnescapedLatexCommandInJsonString:
+                        window.Qisi.SupportRepair
+                            .hasUnescapedLatexCommandInJsonString,
+                    escapeLatexBackslashesInJsonCandidate:
+                        window.Qisi.SupportRepair
+                            .escapeLatexBackslashesInJsonCandidate,
+                    tryRepairedCandidate:
+                        window.Qisi.SupportRepair
+                            .tryRepairedCandidate
+                });
 
-                    if (Array.isArray(parsed)) {
-                        return parsed;
-                    }
+                const extractQuestionArray = parsed =>
+                    window.Qisi.CandidateNormalizer.normalizeCandidates(
+                        [parsed],
+                        candidateNormalizerHelpers
+                    ).questions;
 
-                    const directCandidates = [
-                        parsed.questions,
-                        parsed.items,
-                        parsed.题目,
-                        parsed.questions_list,
-                        parsed.questionList,
-                        parsed.question_list,
-                        parsed.data,
-                        parsed.result,
-                        parsed.output
-                    ];
-
-                    for (const candidate of directCandidates) {
-                        if (Array.isArray(candidate)) {
-                            return candidate;
-                        }
-                    }
-
-                    const nestedCandidates = [
-                        parsed.data?.questions,
-                        parsed.data?.items,
-                        parsed.data?.题目,
-                        parsed.data?.questionList,
-                        parsed.result?.questions,
-                        parsed.result?.items,
-                        parsed.result?.题目,
-                        parsed.result?.questionList,
-                        parsed.output?.questions,
-                        parsed.output?.items
-                    ];
-
-                    for (const candidate of nestedCandidates) {
-                        if (Array.isArray(candidate)) {
-                            return candidate;
-                        }
-                    }
-
-                    return [];
-                };
-
-                const stripAiCodeFence = (text = '') => String(text || '')
-                    .trim()
-                    .replace(/^```(?:json|javascript|js)?\s*/i, '')
-                    .replace(/\s*```$/i, '')
-                    .trim();
-
-                const tryJsonParse = (text = '') => {
-                    try {
-                        return JSON.parse(text);
-                    } catch {
-                        return null;
-                    }
-                };
-
-                const hasUnescapedLatexCommandInJsonString =
-                    window.Qisi.SupportRepair
-                        .hasUnescapedLatexCommandInJsonString;
-
-                const escapeLatexBackslashesInJsonCandidate =
-                    window.Qisi.SupportRepair
-                        .escapeLatexBackslashesInJsonCandidate;
-                const parseStrictQuestionPayload = (
-                    rawText = ''
-                ) => {
-                    const source =
-                        String(rawText || '').trim();
-
-                    if (!source) {
-                        return {
-                            ok: false,
-                            parsed: null,
-                            questions: [],
-                            method: 'none',
-                            reason: 'empty-response',
-                            message: '模型返回内容为空'
-                        };
-                    }
-
-                    const cleaned =
-                        stripAiCodeFence(source);
-
-                    const candidates = [
-                        cleaned
-                    ];
-
-                    const objectStart =
-                        cleaned.indexOf('{');
-
-                    const objectEnd =
-                        cleaned.lastIndexOf('}');
-
-                    if (
-                        objectStart >= 0 &&
-                        objectEnd > objectStart
-                    ) {
-                        candidates.push(
-                            cleaned.slice(
-                                objectStart,
-                                objectEnd + 1
-                            )
-                        );
-                    }
-
-                    const arrayStart =
-                        cleaned.indexOf('[');
-
-                    const arrayEnd =
-                        cleaned.lastIndexOf(']');
-
-                    if (
-                        arrayStart >= 0 &&
-                        arrayEnd > arrayStart
-                    ) {
-                        candidates.push(
-                            cleaned.slice(
-                                arrayStart,
-                                arrayEnd + 1
-                            )
-                        );
-                    }
-
-                    const uniqueCandidates = [
-                        ...new Set(
-                            candidates
-                                .map(candidate =>
-                                    String(
-                                        candidate || ''
-                                    ).trim()
-                                )
-                                .filter(Boolean)
-                        )
-                    ];
-
-                    let lastParseError = null;
-                    let parsedWithoutQuestions = null;
-                    let repairDiagnostics = null;
-
-                    for (
-                        const candidate of
-                        uniqueCandidates
-                    ) {
-                        const needsLatexRepair =
-                            hasUnescapedLatexCommandInJsonString(
-                                candidate
-                            );
-
-                        const runSupportRepairCandidate = () => {
-                            const repairAttempt =
-                                window.Qisi.SupportRepair.tryRepairedCandidate({
-                                    candidate,
-                                    lastParseError,
-                                    escapeLatexBackslashesInJsonCandidate,
-                                    extractQuestionArray
-                                });
-
-                            if (repairAttempt.repairDiagnostics) {
-                                repairDiagnostics =
-                                    repairAttempt
-                                        .repairDiagnostics;
-                            }
-
-                            if (repairAttempt.parsedWithoutQuestions) {
-                                parsedWithoutQuestions =
-                                    repairAttempt
-                                        .parsedWithoutQuestions;
-                            }
-
-                            return repairAttempt.result;
-                        };
-
-                        if (needsLatexRepair) {
-                            const repairedResult =
-                                runSupportRepairCandidate();
-
-                            if (repairedResult) {
-                                return repairedResult;
-                            }
-
-                            lastParseError =
-                                new Error(
-                                    'JSON 字符串内检测到 LaTeX 单反斜杠命令，但修复后仍无法解析。'
-                                );
-
-                            continue;
-                        }
-
-                        try {
-                            const rawParsed =
-                                JSON.parse(candidate);
-
-                            const parsed =
-                                Array.isArray(rawParsed)
-                                    ? {
-                                        questions:
-                                            rawParsed
-                                    }
-                                    : rawParsed;
-
-                            const questions =
-                                extractQuestionArray(
-                                    parsed
-                                );
-
-                            if (questions.length) {
-                                return {
-                                    ok: true,
-                                    parsed,
-                                    questions,
-                                    method: 'JSON.parse',
-                                    reason: '',
-                                    message: ''
-                                };
-                            }
-
-                            parsedWithoutQuestions =
-                                parsed;
-                        } catch (error) {
-                            lastParseError =
-                                error;
-                        }
-
-                        const repairedResult =
-                            runSupportRepairCandidate();
-
-                        if (repairedResult) {
-                            return repairedResult;
-                        }
-                    }
-
-                    if (parsedWithoutQuestions) {
-                        return {
-                            ok: false,
-                            parsed:
-                                parsedWithoutQuestions,
-                            questions: [],
-                            method: 'JSON.parse',
-                            reason:
-                                'json-without-questions',
-                            message:
-                                'JSON 可以解析，但没有找到非空 questions 数组',
-                            diagnostics:
-                                repairDiagnostics
-                        };
-                    }
-
-                    return {
-                        ok: false,
-                        parsed: null,
-                        questions: [],
-                        method: 'none',
-                        reason: 'invalid-json',
-                        message:
-                            lastParseError?.message ||
-                            '返回内容不是合法 JSON',
-                        diagnostics:
-                            repairDiagnostics
-                    };
-                };
+                const parseStrictQuestionPayload = rawText =>
+                    window.Qisi.CandidateNormalizer.normalizeCandidates(
+                        [rawText],
+                        candidateNormalizerHelpers
+                    );
 
                 if (typeof window !== 'undefined') {
                     window.__qisiStrictQuestionPayloadRepairSelfTest =
