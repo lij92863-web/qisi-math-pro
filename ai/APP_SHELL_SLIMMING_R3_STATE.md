@@ -418,6 +418,43 @@
   modules and 59 declared dependency edges with no missing target, cycle,
   upward dependency, or owner mismatch.
 
+- Wave C2-10.5 Phase 3 extracted the second shared production port,
+  `ProductionDocxSourcePort.parseDocxSource`. It is the sole single-source
+  adapter that invokes the existing `QisiBatchImporter.parseDocxFile`, projects
+  importer drafts through caller-supplied conversion and acceptance policies,
+  and returns the importer images, unmatched answers, and warnings without
+  reimplementing the importer or DOCX visual-enhancement algorithms.
+- Both the V2 `DocxImportCoordinator` adapter and the normal legacy DOCX path now
+  call the same production port. The two former direct importer invocations were
+  deleted from `app.js`; caller-specific behavior remains outside the port so V2
+  still accepts deterministic media/formula-placeholder drafts while the legacy
+  path retains its original text-content predicate and fallback behavior.
+- Missing or malformed ports and malformed importer output fail closed with
+  stable codes. Importer errors retain identity for the existing coordinator
+  mapping and legacy text fallback, AbortSignal is checked before and after the
+  importer and projection, and the legacy V2 missing-importer warning, Array
+  callback coordinates, source order, and warning values are characterized for
+  strict output equivalence.
+- The port has no DB, UI, Vue, FormalAdmission, external transport, OCR, vision,
+  controlled-write, or fallback authority. It is production-loaded before the
+  coordinator/app and registered as the unique owner in both architecture
+  manifests; the production port map now classifies `parseDocxSource` as A.
+- Failure-first began with the new port test failing at file load because the
+  module did not exist. The first mandatory Base Migration run exposed a
+  synthetic-fixture false positive caused by splitting `window.Qisi.Utils` from
+  its method dot across lines; restoring the established call formatting fixed
+  the fixture without changing the gate. The final targeted DOCX/runtime/
+  architecture set passed 41/41, Base Migration passed 15/15, the full suite
+  passed 1,349/1,349 with no failed, skipped, or todo tests, and all 11 mandatory
+  gates passed after the final equivalence audit.
+- Browser preflight/dry-run recorded `realApiCalled=false` and
+  `underlyingApiCallCount=0`; no PDF real-run or real AI/OCR call occurred.
+  `app.js` is now 21,694 physical lines with 315 inventoried functions and
+  complete immutable baseline-name coverage. The conservative lexical metric
+  for `processDraftImportBatch` is 5,114 lines. The manifest records 40 modules
+  and 60 declared dependency edges with no missing target, cycle, upward
+  dependency, or owner mismatch.
+
 ## Pending
 
 - Remaining Wave C2-10.5 Phase 3 ports, Phases 4 through 6, and the hard
@@ -436,7 +473,7 @@
 
 ## Next exact action
 
-Commit and push the shared `loadBatchAndFiles` port, then characterize exactly
-one `parseDocxSource` adapter boundary. Move rather than copy trapped adapter
-logic, keep QisiBatchImporter and DOCX coordinator algorithms untouched, and do
-not enter C2-11 until all C2-10.5 hard acceptance gates pass.
+Commit and push the shared `parseDocxSource` port, then characterize exactly one
+`processPdfSources` adapter boundary. Reuse `PdfImportCoordinator` and
+`QisiBatchEngineV2`, do not move parser/aligner/controlled-write ownership, and
+do not enter C2-11 until all C2-10.5 hard acceptance gates pass.

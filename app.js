@@ -15595,31 +15595,25 @@ ${source}`;
                     }
                 };
 
-                const parseDocxQuestionFilesWithImporterForV2 = async (docxFiles = [], batch, engineHelpers = {}) => {
+                const parseDocxQuestionFilesWithImporterForV2 = async (file, batch, engineHelpers = {}) => {
                     const drafts = [];
                     const draftImages = [];
                     const warnings = [];
 
-                    if (docxFiles.length > 1) {
-                        const error = new Error('DOCX 多文件导入必须由 DocxImportCoordinator 排序和编排。');
-                        error.code = 'DOCX_COORDINATOR_REQUIRED';
-                        throw error;
-                    }
-                    if (!docxFiles.length) {
-                        return { drafts, draftImages, warnings };
-                    }
-
+                    if (!file) return { drafts, draftImages, warnings };
                     if (!window.QisiBatchImporter?.parseDocxFile) {
                         warnings.push('DOCX importer 未加载，无法使用 Word XML 解析。');
                         return { drafts, draftImages, warnings };
                     }
-
-                    for (const file of docxFiles) {
+                    {
                         try {
-                            const result = await window.QisiBatchImporter.parseDocxFile(file, {
+                            const baseOrder = Math.max(0, Number(engineHelpers.baseOrder || 0));
+                            const result = await window.Qisi.ProductionDocxSourcePort.parseDocxSource({
+                                source: file,
                                 batch,
                                 defaultMeta: toRaw(batch.defaultMeta || batchDefaultMeta || {}),
-                                helpers: {
+                                signal: engineHelpers.signal,
+                                importerHelpers: {
                                     cleanRecognizedText,
                                     cleanDisplayTextForBatchSave: cleanDocxImporterTextForV2,
                                     cleanDisplayOptionsForBatchSave: cleanDocxImporterOptionsForV2,
@@ -15627,22 +15621,27 @@ ${source}`;
                                     recognizeTextQuestionsWithQwen,
                                     isFatalQwenServiceError
                                 }
-                            });
-
-                            const baseOrder = Math.max(0, Number(engineHelpers.baseOrder || 0)) + drafts.length;
-
-                            let normalizedDrafts = (result.drafts || [])
-                                .map((draft, idx) => normalizeDocxImporterDraftForV2(draft, file, batch, baseOrder + idx + 1))
-                                .filter(draft => {
-                                    const stemOk = window.Qisi.Utils.cleanRecognizedText(draft.stem || '').length > 0;
+                            }, {
+                                importer: window.QisiBatchImporter,
+                                convertDraft: (draft, index) =>
+                                    normalizeDocxImporterDraftForV2(
+                                        draft, file, batch, baseOrder + index + 1
+                                    ),
+                                acceptDraft: draft => {
+                                    const stemOk = window.Qisi.Utils.cleanRecognizedText(
+                                        draft.stem || ''
+                                    ).length > 0;
                                     const optionOk = Array.isArray(draft.options) &&
-                                        draft.options.some(opt =>
-                                            window.Qisi.Utils.cleanRecognizedText(opt || '') ||
-                                            window.Qisi.Utils.hasBatchMediaToken(opt || '') ||
-                                            hasDocxFormulaPlaceholderForV2(opt || '')
+                                        draft.options.some(option =>
+                                            window.Qisi.Utils.cleanRecognizedText(option || '') ||
+                                            window.Qisi.Utils.hasBatchMediaToken(option || '') ||
+                                            hasDocxFormulaPlaceholderForV2(option || '')
                                         );
                                     return stemOk || optionOk;
-                                });
+                                }
+                            });
+
+                            let normalizedDrafts = result.drafts || [];
 
                             const needVisualEnhance = docxDraftsNeedVisualEnhanceForV2(normalizedDrafts);
 
@@ -15780,10 +15779,10 @@ ${source}`;
                             ? await window.Qisi.DocxImportCoordinator.runDocxImport(
                                 { batchId, sources: docxQuestionFiles },
                                 {
-                                    parseSource: ({ source, candidateOffset }) =>
+                                    parseSource: ({ source, candidateOffset, signal }) =>
                                         parseDocxQuestionFilesWithImporterForV2(
-                                            [source], batch,
-                                            { ...helpers, baseOrder: candidateOffset }
+                                            source, batch,
+                                            { ...helpers, baseOrder: candidateOffset, signal }
                                         ),
                                     reportProgress: ({ progress }) =>
                                         updateBatchProgress(batchId, 5 + Math.round(progress * 0.2), 'processing')
@@ -17428,7 +17427,6 @@ ${source}`;
                                 }
                                 if (!usedVisualRecognition && file.fileType === 'docx' && hasQuestionRole) {
                                     let docxImporterItems = [];
-                                    let docxImporterResult = null;
                                     const expectedDocxQuestionCount = 0;
                                     const companionVisualFile = window.Qisi.DocxPipeline.findUploadedVisualCompanionForDocx(file, processFiles);
 
@@ -17506,9 +17504,11 @@ ${source}`;
                                             throw new Error('批量录题 DOCX 模块未加载，请检查 qisi-batch-importer.js 引入顺序。');
                                         }
 
-                                        docxImporterResult = await window.QisiBatchImporter.parseDocxFile(file, {
+                                        const docxSourceResult = await window.Qisi.ProductionDocxSourcePort.parseDocxSource({
+                                            source: file,
+                                            batch,
                                             defaultMeta: toRaw(batchDefaultMeta),
-                                            helpers: {
+                                            importerHelpers: {
                                                 cleanRecognizedText,
                                                 cleanDisplayTextForBatchSave,
                                                 cleanDisplayOptionsForBatchSave,
@@ -17523,17 +17523,24 @@ ${source}`;
                                                     'processing'
                                                 )
                                             }
-                                        });
-
-                                        docxImporterItems = (docxImporterResult.drafts || [])
-                                            .map(window.Qisi.ReviewDraftState.convertDocxImporterDraftToRecognitionItem)
-                                            .filter(item => {
-                                                const stem = window.Qisi.Utils.cleanRecognizedText(item?.stem || '');
+                                        }, {
+                                            importer: window.QisiBatchImporter,
+                                            convertDraft: window.Qisi.ReviewDraftState
+                                                .convertDocxImporterDraftToRecognitionItem,
+                                            acceptDraft: item => {
+                                                const stem = window.Qisi.Utils.cleanRecognizedText(
+                                                    item?.stem || ''
+                                                );
                                                 const optionCount = Array.isArray(item?.options)
-                                                    ? item.options.filter(opt => window.Qisi.Utils.cleanRecognizedText(opt || '')).length
+                                                    ? item.options.filter(option =>
+                                                        window.Qisi.Utils.cleanRecognizedText(option || '')
+                                                    ).length
                                                     : 0;
                                                 return stem.length > 0 || optionCount > 0;
-                                            });
+                                            }
+                                        });
+
+                                        docxImporterItems = docxSourceResult.drafts || [];
                                     } catch (error) {
                                         if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
 
@@ -17543,7 +17550,6 @@ ${source}`;
                                         }, error);
 
                                         docxImporterItems = [];
-                                        docxImporterResult = null;
                                     }
                                     }
 

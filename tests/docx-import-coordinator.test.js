@@ -91,9 +91,9 @@ test('production V2 path uses the coordinator and the owner has no forbidden aut
     const html = fs.readFileSync(path.join(ROOT, 'main.html'), 'utf8');
     const implementation = fs.readFileSync(path.join(ROOT, 'qisi-docx-import-coordinator.js'), 'utf8');
     assert.match(app, /Qisi\.DocxImportCoordinator\.runDocxImport\s*\(/);
-    assert.doesNotMatch(app, /const docxResult\s*=\s*await parseDocxQuestionFilesWithImporterForV2\s*\(/);
-    assert.match(app, /docxFiles\.length > 1[\s\S]*DOCX_COORDINATOR_REQUIRED/);
-    assert.match(app, /\{ \.\.\.helpers, baseOrder: candidateOffset \}/);
+    assert.match(app, /Qisi\.ProductionDocxSourcePort\.parseDocxSource\s*\(/);
+    assert.doesNotMatch(app, /QisiBatchImporter\.parseDocxFile\s*\(/);
+    assert.match(app, /\{ \.\.\.helpers, baseOrder: candidateOffset, signal \}/);
     assert.ok(html.indexOf('qisi-docx-import-coordinator.js') < html.indexOf('app.js'));
     assert.doesNotMatch(implementation, /document\.|window\.|Vue|\.put\s*\(|\.add\s*\(|\.delete\s*\(|\.transaction\s*\(/);
     assert.doesNotMatch(implementation, /pdf|ocr|vision|FormalAdmission|controlledWrite|saveQuestion/i);

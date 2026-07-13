@@ -30,6 +30,7 @@
   "importStateMachineOwner": "qisi-import-state-machine.js",
   "batchContextServiceOwner": "qisi-batch-context-service.js",
   "sourceRoleClassifierOwner": "qisi-source-role-classifier.js",
+  "productionDocxSourcePortOwner": "qisi-production-docx-source-port.js",
   "docxImportCoordinatorOwner": "qisi-docx-import-coordinator.js",
   "pdfImportCoordinatorOwner": "qisi-pdf-import-coordinator.js",
   "candidateNormalizerOwner": "qisi-candidate-normalizer.js",
