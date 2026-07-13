@@ -309,3 +309,26 @@ Post-wave inventory is 17,817 `app.js` lines and 375 detected functions; the
 largest function remains 242 lines. Lower-level recognition, repair, DOCX
 conversion/reconciliation, and support producer algorithms remain active
 app-local B responsibilities and keep C2-12 pending.
+
+## Wave 11 result: DOCX vision question-source producer extracted
+
+The existing `qisi-production-docx-vision-source-port.js` now owns the DOCX
+question-source lifecycle through `createQuestionSourceProducer`: explicit
+question-skeleton extraction and validation, conflict fail-closed handling,
+DOCX-to-virtual-PDF conversion, invocation of the shared strict visual engine,
+skeleton reconciliation, diagnosable failure snapshots, final validation, and
+DOCX source trace projection. The importer, converter, strict engine,
+reconciler, and validator remain explicit production ports.
+
+The former 560-line app-local failure-snapshot and
+`processDocxByLocalConvertAndStrictVision` block is deleted. The shell only
+assembles the source producer and maps the source-port input. Characterization
+covers authoritative skeleton success, converted-source identity, conflicting
+skeleton rejection, mismatch diagnostics, and missing-port fail-closed
+behavior; normal-UI production and DOCX vision shadow browser evidence remain
+equal.
+
+Post-wave inventory is 17,273 `app.js` lines and 375 detected functions; the
+largest detected function remains 242 lines. The remaining DOCX support-source
+producer and lower-level converter/reconciler algorithms are still pending B
+responsibilities.
