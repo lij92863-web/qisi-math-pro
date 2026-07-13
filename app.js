@@ -718,9 +718,9 @@
                 };
 
                 const updateBatchProgress = async (batchId, progress, status = 'processing') => {
-                    const safeProgress = Math.max(0, Math.min(100, Math.round(progress || 0)));
-                    const patch = { progress: safeProgress, status, updatedAt: Date.now() };
-                    await db.draftImportBatches.update(batchId, patch);
+                    const { patch } = await window.Qisi.ProductionImportStatusPort.reportProgress(
+                        { batchId, progress, status }, { repository: storageRepository }
+                    );
                     const applyLocal = (batch) => batch && Object.assign(batch, patch);
                     applyLocal(batchImportBatches.value.find(batch => batch.id === batchId));
                 };
@@ -15899,18 +15899,10 @@ ${source}`;
                     } catch (error) {
                         console.error('[BATCH_V2][batch-failed]', error);
                         const isFatal = window.Qisi.Utils.isFatalQwenServiceError(error);
-                        await db.draftImportBatches.update(batchId, {
-                            status: 'failed',
-                            progress: 100,
-                            updatedAt: Date.now(),
-                            errorMessage: error?.message || String(error)
-                        });
-                        const files = await db.draftImportFiles.where('batchId').equals(batchId).toArray().catch(() => []);
-                        await Promise.all(files.map(file => db.draftImportFiles.update(file.id, {
-                            parseStatus: 'failed',
-                            errorMessage: error?.message || String(error),
-                            updatedAt: Date.now()
-                        })));
+                        await window.Qisi.ProductionImportStatusPort.reportImportFailure(
+                            { batchId, error, failFiles: true },
+                            { repository: storageRepository }
+                        );
                         await loadBatchImportData();
                         showBatchToast(`${isFatal ? 'V2 批量识别遇到服务错误' : 'V2 批量识别失败'}：${error?.message || String(error)}`);
                     }
@@ -18436,12 +18428,10 @@ ${source}`;
                             batchId,
                             message: error?.message || String(error)
                         }, error);
-                        await db.draftImportBatches.update(batchId, {
-                            status: 'failed',
-                            progress: 100,
-                            errorMessage: error?.message || String(error),
-                            updatedAt: Date.now()
-                        });
+                        await window.Qisi.ProductionImportStatusPort.reportImportFailure(
+                            { batchId, error, failFiles: false },
+                            { repository: storageRepository }
+                        );
                         showBatchToast(`批量识别失败：${error?.message || String(error)}`);
                         await loadBatchImportData();
                         activeBatchCostStats = null;

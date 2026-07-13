@@ -483,6 +483,36 @@
   modules and 61 declared dependency edges with no missing target, cycle,
   upward dependency, or owner mismatch.
 
+- Wave C2-10.5 Phase 3 extracted the fourth shared production port,
+  `ProductionImportStatusPort`, with the same-domain `reportProgress` and
+  `reportImportFailure` commands. Progress and outer failure status persistence
+  now use the existing StorageRepository update/find ports instead of direct
+  draft-import table calls in the app adapters.
+- `reportProgress` preserves the legacy rounding/coercion and 0..100 bound,
+  caller status, and update time, and returns the exact patch for the existing
+  Vue reactive list update. That reactive apply remains in `app.js`; the status
+  owner has no DOM, Vue, toast, reload, or other UI authority.
+- `reportImportFailure` preserves the V2 behavior of marking both the batch and
+  all discoverable files failed, including best-effort file lookup, while the
+  legacy path still marks only the batch failed. UI toast/reload, fatal-service
+  wording, state-machine policy, and ImportDiagnostics remain separate caller
+  concerns. Repository failures retain their existing identity.
+- Failure-first began with the new status-port test failing at file load because
+  the module did not exist. The first full suite reached 1,362/1,363: the sole
+  failure was the code-quality scanner treating a test stub named
+  `createRepository` as a copied high-risk production owner. One bounded test-
+  only rename fixed the false positive without changing production code or the
+  gate. Final status/coordinator/code-quality/runtime/architecture targets
+  passed 31/31, the full suite passed 1,363/1,363 with no failed, skipped, or
+  todo tests, and all 11 mandatory gates passed.
+- Browser preflight/dry-run recorded `realApiCalled=false` and
+  `underlyingApiCallCount=0`; no PDF real-run or real AI/OCR call occurred.
+  `app.js` is now 21,684 physical lines with 315 inventoried functions and
+  complete immutable baseline-name coverage. The conservative lexical metric
+  for `processDraftImportBatch` is now 5,112 lines. The manifest records 42
+  modules and 63 declared dependency edges with no missing target, cycle,
+  upward dependency, or owner mismatch.
+
 ## Pending
 
 - Remaining Wave C2-10.5 Phase 3 ports, Phases 4 through 6, and the hard
@@ -501,7 +531,8 @@
 
 ## Next exact action
 
-Commit and push the shared `processPdfSources` port, then characterize exactly
-one progress/status/error boundary. Preserve UI callbacks and file/batch status
-semantics, keep diagnostics separate from persistence, and do not enter C2-11
-until all C2-10.5 hard acceptance gates pass.
+Commit and push the shared progress/error status port, then characterize exactly
+one bounded output/image projection port. Preserve draft count/order, source
+associations, warnings, unmatched evidence, and final dedupe behavior; do not
+move crop/OCR algorithms or persistence in the same commit, and do not enter
+C2-11 until all C2-10.5 hard acceptance gates pass.

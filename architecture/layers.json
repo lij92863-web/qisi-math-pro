@@ -238,6 +238,14 @@
       "status": "production-wired"
     },
     {
+      "id": "production-import-status-port", "file": "qisi-production-import-status-port.js",
+      "layer": 2, "domainOwner": "productionImportStatusPortOwner",
+      "publicApi": ["reportProgress", "reportImportFailure"],
+      "allowedDependencies": ["storage-repository"],
+      "forbiddenDependencies": ["app-shell", "formal-admission", "controlled-write", "route-b-research"],
+      "status": "production-wired"
+    },
+    {
       "id": "production-docx-source-port", "file": "qisi-production-docx-source-port.js",
       "layer": 2, "domainOwner": "productionDocxSourcePortOwner",
       "publicApi": ["parseDocxSource"],
@@ -320,6 +328,7 @@
         "ocr-local-adapter", "ocr-shadow-mode", "performance-monitor",
         "controlled-write", "support-aligner", "support-parser", "archive-security",
         "secure-logger", "batch-context-service", "source-role-classifier",
+        "production-import-status-port",
         "production-docx-source-port", "docx-import-coordinator",
         "production-pdf-sources-port", "pdf-import-coordinator", "candidate-normalizer",
         "import-validation-service", "review-draft-builder",

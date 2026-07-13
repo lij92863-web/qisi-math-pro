@@ -16,7 +16,7 @@ port works; every B/C port still needs characterization and a one-port switch.
 | Port | Class | Existing source/owner | Required action | Contract and side effects |
 | --- | --- | --- | --- | --- |
 | loadBatchAndFiles | A | StorageRepository `get/findBy`; BatchContextService | inject repository facade; no direct DB in bridge | returns independent batch/files in source order; no UI mutation |
-| reportProgress | B | `app.js:720–726`, scattered legacy status writes | move repository progress/status patch to one owner; leave UI callback in shell | monotonic bounded progress, explicit batch/file status, stable failure |
+| reportProgress | A | ProductionImportStatusPort `reportProgress` | reuse repository-backed production owner; keep reactive UI apply in shell | bounded progress, explicit status, stable repository failure, optional AbortSignal |
 | parseDocxSource | A | ProductionDocxSourcePort + QisiBatchImporter; legacy and DocxImportCoordinator both consume it | reuse the production-wired single-source adapter; keep importer and caller-specific enhancement/fallback policies separate | one declared DOCX source to ordered drafts/images/warnings; AbortSignal; no direct persistence |
 | processPdfSources | A | ProductionPdfSourcesPort + PdfImportCoordinator + QisiBatchEngineV2 `processBatchV2` | reuse the production-wired engine adapter; no duplicate parser/aligner/write | ordered PDF sources to safe-partial candidates/images/warnings; AbortSignal and page progress forwarded; controlled-write remains existing owner |
 | normalizeCandidates | A | CandidateNormalizer `normalizeCandidates` | inject current API and SupportRepair helper ports | immutable canonical candidates; no ownership or persistence |
@@ -33,7 +33,7 @@ They are extracted only if their characterization proves a move is possible.
 | Port | Class | Reason | Required action |
 | --- | --- | --- | --- |
 | projectImportOutput | B | legacy final dedupe, image association, unmatched and batch counts affect persisted equality | move one bounded projection at a time; old branch calls it first, then bridge calls the same owner |
-| reportImportFailure | B | file/batch failure status and sanitized error mapping are scattered | move status mapping only; state-machine policy and UI toast remain separate |
+| reportImportFailure | A | ProductionImportStatusPort `reportImportFailure` | reuse batch/optional-file failure owner; state-machine policy, diagnostics, reload, and UI toast remain separate |
 
 ## Ownership and dependency constraints
 
