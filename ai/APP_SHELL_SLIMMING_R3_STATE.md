@@ -109,10 +109,34 @@
   Phase 1 responsibility report remains the immutable 21,778-line baseline map;
   its gate now freezes all 318 baseline rows while proving every current function
   name is still represented exactly once and the shell has not grown.
+- Wave C2-3 implemented and production-wired `qisi-source-role-classifier.js` as
+  the batch-level owner for deterministic source-role classification from only
+  manifest id, file type, declared roles, and source order.
+- Question/answer DOCX and PDF, explicit answer-plus-solution, full, and
+  supplemental-image roles are represented as immutable data. Missing,
+  duplicate, unsupported, and ambiguous role declarations fail closed with
+  stable error codes; raw text and semantic keywords are never inspected.
+- `processDraftImportBatch` now delegates supplemental-image exclusion,
+  recognition priority, and PDF role counts to the classifier. Its old inline
+  `recognitionFileRank` and repeated diagnostic filters were removed. Existing
+  `FileDispatcher` remains the per-file primitive predicate owner used by later
+  parsing paths.
+- C2-3 failure-first began with module-not-found. The first full gate exposed a
+  historical Program B audit that compared all committed `app.js` changes to the
+  Program A seal, which is incompatible with Program C's authorized shell
+  migration. The repaired audit still byte-freezes controlled-write,
+  FormalAdmission, and Route B files and now proves the live app has no duplicate
+  implementations or Route B reference.
+- Final C2-3 architecture/security targets passed 57/57, true DOCX/PDF import
+  characterization passed 4/4, audit/attack repair targets passed 36/36, the
+  final full suite passed 1,279/1,279, and all 11 mandatory gates passed with
+  browser preflight/dry-run making zero real calls.
+- `app.js` is now 21,754 lines, 24 lines below the Program C baseline, with the
+  same 318 inventoried function names and complete baseline-name coverage.
 
 ## Pending
 
-- Phase 2 Waves C2-3–C2-14, then attacks, audits, benchmark, CTO review, and seal.
+- Phase 2 Waves C2-4–C2-14, then attacks, audits, benchmark, CTO review, and seal.
 
 ## Blockers / limitations
 
@@ -125,6 +149,6 @@
 
 ## Next exact action
 
-Commit and push C2-2, then begin Wave C2-3 Source Role Classifier with
-failure-first tests for deterministic declared-role evidence, ambiguity,
-duplicates, missing roles, and prohibition of semantic content guessing.
+Commit and push C2-3, then begin Wave C2-4 DOCX Coordinator with failure-first
+tests for deterministic ordering, candidate creation, progress, error mapping,
+cancellation, no formal write/UI/PDF/OCR ownership, and DOCX stable preservation.

@@ -222,6 +222,14 @@
       "status": "production-wired"
     },
     {
+      "id": "source-role-classifier", "file": "qisi-source-role-classifier.js",
+      "layer": 2, "domainOwner": "sourceRoleClassifierOwner",
+      "publicApi": ["DECLARED_ROLES", "classifySourceRoles"],
+      "allowedDependencies": [],
+      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository"],
+      "status": "production-wired"
+    },
+    {
       "id": "app-shell", "file": "app.js", "layer": 4,
       "domainOwner": "appShellOwner", "publicApi": ["App.setup"],
       "allowedDependencies": [
@@ -231,7 +239,7 @@
         "batch-formal-submit", "ocr-registry", "ocr-qwen-adapter",
         "ocr-local-adapter", "ocr-shadow-mode", "performance-monitor",
         "controlled-write", "support-aligner", "support-parser", "archive-security",
-        "secure-logger", "batch-context-service"
+        "secure-logger", "batch-context-service", "source-role-classifier"
       ],
       "forbiddenDependencies": ["route-b-research"],
       "status": "production-wired"

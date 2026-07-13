@@ -51,16 +51,19 @@ test('adapter registry enforces the five-method pluggable contract', () => {
     }
 });
 
-test('Program A controlled-write, FormalAdmission, Route B, and app stay unchanged from seal', () => {
+test('Program A controlled-write, FormalAdmission, and Route B stay unchanged from seal', () => {
     const diff = execFileSync('git', [
         'diff', '--name-only',
         '1361d7e7f81d2f23819a995a0f9d1808adf19982..HEAD', '--',
         'qisi-pdf-support-controlled-write.js',
         'qisi-formal-admission-policy.js',
-        'qisi-answer-only-ai-pass.js',
-        'app.js'
+        'qisi-answer-only-ai-pass.js'
     ], { cwd: root, encoding: 'utf8' });
     assert.equal(diff.trim(), '');
+    const app = read('app.js');
+    assert.doesNotMatch(app, /(?:function|const)\s+buildPdfSupportFieldLevelControlledWrite\b/);
+    assert.doesNotMatch(app, /(?:function|const)\s+createAdmissionContext\b/);
+    assert.doesNotMatch(app, /AnswerOnlyAiPass|qisi-answer-only-ai-pass/);
 });
 
 test('production and benchmark OCR configuration are traceable without false promotion', () => {

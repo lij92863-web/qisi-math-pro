@@ -16014,39 +16014,25 @@ ${source}`;
                         await db.draftImportBatches.update(batchId, { status: 'processing', progress: 3, updatedAt: now, errorMessage: '' });
                         await loadBatchImportData();
 
-                        const supplementalImageFiles = files.filter(batchIsSupplementalImage);
-
-                        let processFiles = files.filter(file => !batchIsSupplementalImage(file));
-                        const recognitionFileRank = file => {
-                            const hasQuestion =
-                                batchHasQuestionRole(file);
-
-                            const hasSupport =
-                                batchHasAnswerRole(file) ||
-                                batchHasSolutionRole(file);
-
-                            if (hasQuestion) return 0;
-
-                            if (
-                                hasSupport &&
-                                !hasQuestion
-                            ) {
-                                return 1;
-                            }
-
-                            if (
-                                batchIsSupplementalImage(file)
-                            ) {
-                                return 2;
-                            }
-
-                            return 3;
-                        };
+                        const sourceRoleClassification =
+                            window.Qisi.SourceRoleClassifier.classifySourceRoles(
+                                batchContext.sourceManifest
+                            );
+                        const classifiedRoleById = new Map(
+                            sourceRoleClassification.sources.map(source => [source.id, source])
+                        );
+                        const roleForFile = file => classifiedRoleById.get(String(file?.id || ''));
+                        const supplementalImageFiles = files.filter(file =>
+                            roleForFile(file)?.isSupplementalImage
+                        );
+                        let processFiles = files.filter(file =>
+                            !roleForFile(file)?.isSupplementalImage
+                        );
 
                         processFiles = [...processFiles].sort(
                             (left, right) =>
-                                recognitionFileRank(left) -
-                                recognitionFileRank(right) ||
+                                (roleForFile(left)?.recognitionRank ?? 3) -
+                                (roleForFile(right)?.recognitionRank ?? 3) ||
                                 Number(
                                     left.createdAt || 0
                                 ) -
@@ -16062,17 +16048,8 @@ ${source}`;
                             fileCount: files.length,
                             processFileCount: processFiles.length,
                             files: batchContext.sourceManifest,
-                            questionPdfCount: files.filter(file =>
-                                file.fileType === 'pdf' &&
-                                batchHasQuestionRole(file)
-                            ).length,
-                            answerSupportPdfCount: files.filter(file =>
-                                file.fileType === 'pdf' &&
-                                (
-                                    batchHasAnswerRole(file) ||
-                                    batchHasSolutionRole(file)
-                                )
-                            ).length
+                            questionPdfCount: sourceRoleClassification.summary.questionPdfCount,
+                            answerSupportPdfCount: sourceRoleClassification.summary.answerSupportPdfCount
                         });
 
                         const consumedVisualFileIds = new Set();
