@@ -12,6 +12,27 @@ cancel(requestId)
 
 All recognize methods return a `RecognitionCandidate` or a structured error. They never return review drafts or confirmed questions.
 
+Program B R1 hardens the candidate envelope to require:
+
+```text
+engine
+engineVersion
+requestId
+sourceId
+page
+rawText
+blocks
+formulas
+images
+rawEvidenceRef
+warnings
+durationMs
+```
+
+`rawEvidenceRef` is a stable request-scoped reference, not a log copy of source
+content. The legacy in-memory `rawEvidence` field remains for compatibility and
+evidence preservation, but it is never emitted by the adapter logger.
+
 ## Adapter set
 
 - Current Qwen adapter: wraps existing request/response, requestId, timeout, error mapping, and raw result without changing prompts in the initial migration.
@@ -19,6 +40,24 @@ All recognize methods return a `RecognitionCandidate` or a structured error. The
 - Document-VL adapter: future capability; registry entry remains unavailable until benchmarked.
 - Mock adapter: deterministic fixtures, no network.
 - Future adapter: must pass the same contract suite.
+
+## Input, response, and error boundary
+
+- Byte-aware requests use the common PNG/JPEG/WebP/PDF MIME allowlist and a
+  configured maximum byte size. The local adapter requires both MIME and byte
+  count; the Qwen adapter preserves legacy non-byte requests but validates either
+  field whenever supplied.
+- Arbitrary local paths are rejected before transport.
+- Each active `requestId` is unique per adapter. A duplicate fails closed rather
+  than replacing the cancellation controller.
+- Optional response fields are type-checked before candidate construction.
+  Malformed results use `ocr-malformed-response`; they are not returned as invalid
+  candidates.
+- Stable operational errors include `ocr-cancelled`, `ocr-engine-unavailable`,
+  `ocr-request-failed`, `mime-rejected`, `size-rejected`,
+  `local-path-forbidden`, and `duplicate-request-id`.
+- Transport cause messages are not copied into public errors. Optional adapter
+  logs contain only event, engine/version, requestId, error code and duration.
 
 ## Registry
 

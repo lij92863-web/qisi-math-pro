@@ -8,7 +8,7 @@ const read = file => fs.readFileSync(path.join(ROOT, file), 'utf8');
 const json = file => JSON.parse(read(file));
 
 const required = [
-    'recognition-contracts', 'formal-admission', 'storage-repository',
+    'recognition-contracts', 'ocr-adapter-contract', 'formal-admission', 'storage-repository',
     'library-service', 'review-controller', 'export-service',
     'import-coordinator', 'ocr-registry', 'ocr-qwen-adapter',
     'ocr-local-adapter', 'ocr-shadow-mode', 'performance-monitor',

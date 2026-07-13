@@ -3,7 +3,7 @@
 - Start commit: `1361d7e7f81d2f23819a995a0f9d1808adf19982`
 - Baseline tag: `pre-ocr-quality-r1-1361d7e`
 - Current branch: `stage/ocr-quality-r1`
-- Current phase: Program B / Phase 2 / B2-1 complete
+- Current phase: Program B / Phase 2 / B2-2 complete
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -48,10 +48,22 @@
   and sanitized aggregate-only output are enforced.
 - B2-1 targeted tests passed 12/12 including the existing R2 scorer regression;
   all 11 mandatory gates passed. No OCR engine or API was invoked.
+- B2-2 hardened the shared adapter boundary and both existing adapters: the five
+  methods remain transport/format-only; `RecognitionCandidate.rawEvidenceRef`,
+  input/response validation, stable errors, duplicate active requestId rejection,
+  cancellation, unavailable-engine mapping, and metadata-only logs are enforced.
+- B2-2 added the browser-loaded adapter-contract owner and architecture manifest
+  dependency. The first full gate run exposed its missing script order and stopped
+  at `verify:safe`; one in-scope repair fixed the startup error. Targeted browser,
+  architecture, contract, timeout, cancellation, malformed, unavailable, privacy,
+  MIME, size, and duplicate-id tests passed; the complete 11-gate rerun passed.
+- Adapter infrastructure is implemented/unit-tested and browser-loaded as an
+  existing scaffold boundary. No candidate engine was benchmark-measured or
+  production-promoted.
 
 ## Pending
 
-- Phase 2 work packages B2-2 through B2-10, subject to their evidence gates.
+- Phase 2 work packages B2-3 through B2-10, subject to their evidence gates.
 - Phases 3–8 attacks, audits, final benchmark, CTO review, and seal.
 
 ## Blockers / limitations
@@ -63,6 +75,5 @@
 
 ## Next exact action
 
-Commit and push B2-1, then start B2-2 with failing adapter-contract tests for
-timeout, cancellation, malformed response, unavailable engine, privacy, MIME,
-size, and duplicate requestId. Keep all transports mocked.
+Commit and push B2-2, then start B2-3 with a failure-first Local OCR Service
+boundary. Do not download a model while `QISI_ALLOW_MODEL_DOWNLOAD=1` is absent.

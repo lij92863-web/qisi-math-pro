@@ -30,6 +30,13 @@
       "status": "production-wired"
     },
     {
+      "id": "ocr-adapter-contract", "file": "qisi-ocr-adapter-contract.js",
+      "layer": 0, "domainOwner": "ocrAdapterContractOwner",
+      "publicApi": ["validateInput", "validateResponse", "mapTransportError"],
+      "allowedDependencies": [], "forbiddenDependencies": ["app-shell", "storage-repository"],
+      "status": "production-wired"
+    },
+    {
       "id": "support-parser", "file": "qisi-pdf-support-block-parser.js",
       "layer": 0, "domainOwner": "supportParserOwner",
       "publicApi": ["parsePdfSupportBlocks"],
@@ -61,14 +68,14 @@
     {
       "id": "ocr-qwen-adapter", "file": "qisi-ocr-qwen-adapter.js",
       "layer": 1, "domainOwner": "qwenAdapterOwner",
-      "publicApi": ["createQwenAdapter"], "allowedDependencies": ["recognition-contracts"],
+      "publicApi": ["createQwenAdapter"], "allowedDependencies": ["recognition-contracts", "ocr-adapter-contract"],
       "forbiddenDependencies": ["formal-admission", "storage-repository"],
       "status": "scaffold"
     },
     {
       "id": "ocr-local-adapter", "file": "qisi-ocr-local-adapter.js",
       "layer": 1, "domainOwner": "localAdapterOwner",
-      "publicApi": ["createLocalAdapter"], "allowedDependencies": ["recognition-contracts"],
+      "publicApi": ["createLocalAdapter"], "allowedDependencies": ["recognition-contracts", "ocr-adapter-contract"],
       "forbiddenDependencies": ["formal-admission", "storage-repository"],
       "status": "scaffold"
     },

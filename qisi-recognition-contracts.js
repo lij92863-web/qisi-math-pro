@@ -209,6 +209,11 @@
             blocks: valueOrDefault(input, 'blocks', []),
             formulas: valueOrDefault(input, 'formulas', []),
             images: valueOrDefault(input, 'images', []),
+            rawEvidenceRef: valueOrDefault(
+                input,
+                'rawEvidenceRef',
+                `${String(input.engine || 'ocr')}://${String(input.requestId || 'unknown')}`
+            ),
             rawEvidence: valueOrDefault(input, 'rawEvidence', null),
             engineConfidence: valueOrDefault(
                 input,
@@ -255,6 +260,7 @@
             requireArray(candidate.blocks, 'blocks', errors);
             requireArray(candidate.formulas, 'formulas', errors);
             requireArray(candidate.images, 'images', errors);
+            requireString(candidate.rawEvidenceRef, 'rawEvidenceRef', errors);
             requireArray(candidate.warnings, 'warnings', errors);
             validateConfidence(
                 candidate.engineConfidence,
