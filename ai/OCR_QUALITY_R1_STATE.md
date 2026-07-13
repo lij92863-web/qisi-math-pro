@@ -3,7 +3,7 @@
 - Start commit: `1361d7e7f81d2f23819a995a0f9d1808adf19982`
 - Baseline tag: `pre-ocr-quality-r1-1361d7e`
 - Current branch: `stage/ocr-quality-r1`
-- Current phase: Program B / Phase 2 / B2-6 complete
+- Current phase: Program B / Phase 2 / B2-7 evaluated and held
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -97,10 +97,16 @@
   not loaded by the production page or benchmark-measured on real documents.
 - B2-6 reading-order/extractor tests passed 14/14; behavior, architecture, and
   code-boundary targeted tests passed 26/26; all 11 mandatory gates passed.
+- B2-7 audited the ownership/safe-partial evidence gate and recorded
+  `NO_HIGH_RISK_CHANGE_WITHOUT_HOLDOUT_FAILURE`: real Holdout failures remain 0,
+  so aligner, controlled-write, and FormalAdmission code were not modified.
+- Existing deterministic full/prefix/fail-closed ownership targeted tests plus the
+  new decision gate passed 50/50; all 11 mandatory gates passed. Structure
+  candidates remain ownership-unvalidated and ineligible for any formal write.
 
 ## Pending
 
-- Phase 2 work packages B2-7 through B2-10, subject to their evidence gates.
+- Phase 2 work packages B2-8 through B2-10, subject to their evidence gates.
 - Phases 3–8 attacks, audits, final benchmark, CTO review, and seal.
 
 ## Blockers / limitations
@@ -112,5 +118,5 @@
 
 ## Next exact action
 
-Commit and push B2-6, then audit B2-7 ownership evidence. Do not modify any
-high-risk owner without an authorized real Holdout failing case.
+Commit and push the B2-7 hold decision, then start B2-8 with failing measured
+Shadow Mode tests that preserve production output and omit private raw content.
