@@ -92,6 +92,7 @@
 - A2-9 architecture ownership guards `10e1240`.
 - A2-10 hostile archive hardening `52f6252`.
 - A2-10 temporary-job lifecycle `52316ba`.
+- A2-10 private-safe logging `c8e6ab2`.
 
 ## Gates
 
@@ -197,6 +198,11 @@
 - A2-10 log `verify:safe` and full mandatory matrix: passed.
 - A2-10 log browser preflight/dry-run: passed with `realApiCalled=false`,
   `underlyingApiCallCount=0`, and browser chain healthy.
+- Phase 3 validator-missing failure-first evidence: the designated matrix was
+  absent; the attack itself already failed closed at both controller boundaries.
+- Phase 3 validator-missing attack and controller regressions: passed 10/10.
+- Phase 3 validator-missing full mandatory matrix: passed; browser preflight and
+  dry-run remained healthy with `realApiCalled=false`.
 
 ## Blockers
 
@@ -205,5 +211,5 @@
 
 ## Next exact action
 
-Run exact A2-10 log diff-scope verification, commit/push, then begin Phase 3
-counterfactual attack packages.
+Commit/push the Phase 3 validator-missing package, then execute the
+validator-throws attack class.
