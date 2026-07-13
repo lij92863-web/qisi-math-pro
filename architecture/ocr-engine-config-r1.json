@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "qisi.ocr-engine-config-trace.r1",
+  "asOf": "2026-07-13",
+  "productionCurrent": {
+    "engine": "qwen-vl-plus",
+    "version": null,
+    "versionStatus": "legacy-unpinned",
+    "configurationOwner": "legacy-app-model-list",
+    "sourceRefs": [
+      "app.js:1339",
+      "app.js:1358"
+    ],
+    "productionPromotedByProgramB": false,
+    "changedByProgramB": false
+  },
+  "benchmark": {
+    "runner": "scripts/benchmark/run-ocr-benchmark.js",
+    "scorer": "scripts/benchmark/score-ocr-result.js",
+    "scorerVersion": "ocr-scoring-r1",
+    "requiredTraceFields": [
+      "runPurpose",
+      "evaluationSplit",
+      "engine.name",
+      "engine.version",
+      "hardwareProfile",
+      "timeoutMs",
+      "randomSeed",
+      "bootstrapIterations",
+      "inputHashes"
+    ],
+    "realRunAuthorized": false,
+    "measuredPrivateDocuments": 0
+  },
+  "candidateScaffolds": [
+    "qwen-vl-plus-adapter",
+    "local-ocr-adapter",
+    "local-ocr-service-unavailable",
+    "mock-synthetic"
+  ],
+  "promotionOwner": "qisi-ocr-candidate-selection-policy.js",
+  "promotionRegistry": [],
+  "shadow": {
+    "owner": "qisi-ocr-shadow-mode.js",
+    "benchmarkOnly": true,
+    "formalWriteAllowed": false
+  },
+  "canary": {
+    "enabled": false,
+    "reason": "CANARY_DISABLED_PROMOTION_GATE_NOT_MET"
+  },
+  "realOcrCalls": 0,
+  "modelDownloads": 0
+}
