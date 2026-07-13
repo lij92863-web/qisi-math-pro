@@ -265,6 +265,12 @@
   expansion and ratio limits already rejected all indicators before reads.
 - Phase 3 ZIP-bomb regressions passed 9/9; full mandatory matrix and browser
   dry-run passed with no real API call.
+- Phase 3 local-OCR-path failure-first evidence: its matrix row was absent;
+  adapter boundary already rejected arbitrary paths before transport.
+- Phase 3 local-OCR-path regressions passed 4/4; full mandatory matrix and
+  browser dry-run passed with no real API call.
+- Phase 3 counterfactual matrix now contains all 18 required attack classes,
+  each sealed by an independent commit and full mandatory gate run.
 
 ## Blockers
 
@@ -273,4 +279,4 @@
 
 ## Next exact action
 
-Commit/push ZIP bomb, then execute local OCR arbitrary path.
+Commit/push local OCR arbitrary path, then begin Phase 4 code-quality audit.
