@@ -292,6 +292,12 @@
   formal transaction/reload/image/export, 1000/5000 library, and write counts.
 - Phase 6 full mandatory matrix and browser preflight/dry-run passed with no
   real API call. Benchmark audit decision: PASS.
+- Phase 7 failure-first evidence: the required CTO decision document was absent
+  while manifest status classes were internally consistent.
+- Phase 7 CTO/architecture/benchmark cross-check passed 7/7; the sole decision
+  is `POST_R2_CORRECTION_ACCEPTED_WITH_LIMITATIONS`.
+- Phase 7 full mandatory matrix and browser preflight/dry-run passed with no
+  real API call. Real OCR remains explicitly unmeasured for Program B.
 
 ## Blockers
 
@@ -300,4 +306,4 @@
 
 ## Next exact action
 
-Commit/push Phase 6 benchmark audit, then begin Phase 7 CTO review.
+Commit/push Phase 7 CTO review, then execute Phase 8 final report and Git seal.
