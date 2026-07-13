@@ -207,6 +207,10 @@
   absent; the attack itself already failed closed at both controller boundaries.
 - Phase 3 validator-throws attack and controller regressions: passed 10/10; full
   mandatory matrix passed with preflight/dry-run and no real API call.
+- Phase 3 malformed-admission failure-first evidence: its matrix row was absent;
+  null and structurally invalid validator results already failed closed.
+- Phase 3 malformed-admission attack passed 2/2; full mandatory matrix and
+  browser preflight/dry-run passed with no real API call.
 
 ## Blockers
 
@@ -215,5 +219,5 @@
 
 ## Next exact action
 
-Commit/push the Phase 3 validator-throws package, then execute the malformed
-admission attack class.
+Commit/push the Phase 3 malformed-admission package, then execute the fake
+manual-flag attack class.
