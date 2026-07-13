@@ -25,6 +25,122 @@
                     Qisi.ProductionReviewValidator.createProductionReviewValidator({
                         policy: Qisi.FormalAdmissionPolicy
                     });
+                const importValidationPorts = Object.freeze({
+                    validateSequence(drafts, { context }) {
+                        const expected = context.expectedQuestionNumbers || [];
+                        if (!expected.length) {
+                            return { valid: true, errors: [], warnings: [] };
+                        }
+                        const items = drafts.map(draft => ({
+                            question: draft.questionNumber
+                        }));
+                        const result = Qisi.PdfSupportAligner.validatePdfSupportSequence({
+                            answerItems: items,
+                            solutionItems: items,
+                            expectedQuestionNumbers: expected
+                        });
+                        const valid = result.mode === 'full' || (
+                            result.mode === 'prefix' &&
+                            result.safeQuestionNumbers.length === drafts.length
+                        );
+                        return {
+                            valid,
+                            errors: valid ? [] : [{ code: 'sequence-invalid' }],
+                            warnings: []
+                        };
+                    },
+                    validateSchema(draft) {
+                        const structured =
+                            Qisi.RecognitionContracts.createStructuredQuestionDraft({
+                                sourceId: draft.source?.sourceId || '',
+                                sourceOrder: draft.order,
+                                questionNumber: draft.questionNumber,
+                                type: draft.type,
+                                stem: draft.stem,
+                                options: draft.options,
+                                answer: draft.answer,
+                                solution: draft.solution,
+                                images: draft.images,
+                                provenance: draft.fieldProvenance || {},
+                                confidenceByField: draft.confidenceByField || {},
+                                warnings: draft.warnings || [],
+                                rawEvidence: draft.rawText ?? null
+                            });
+                        const result =
+                            Qisi.RecognitionContracts.validateStructuredQuestionDraft(
+                                structured
+                            );
+                        const reviewableRejected =
+                            draft.source?.mode === 'pdf-ai' &&
+                            draft.manualReviewRequired === true;
+                        const errors = (result.errors || []).filter(error => {
+                            const field = error.field || error.path;
+                            return !(
+                                reviewableRejected &&
+                                draft.fieldProvenance?.[field]?.status === 'rejected'
+                            );
+                        });
+                        return {
+                            valid: errors.length === 0,
+                            errors,
+                            warnings: result.warnings || []
+                        };
+                    },
+                    validateOwnership(draft, { context }) {
+                        const requiredFileType = draft.source?.mode === 'docx-deterministic'
+                            ? 'docx'
+                            : draft.source?.mode === 'pdf-ai'
+                                ? 'pdf'
+                                : '';
+                        if (
+                            !requiredFileType ||
+                            !(context.files || []).some(file =>
+                                file.fileType === requiredFileType
+                            )
+                        ) {
+                            return {
+                                valid: false,
+                                errors: [{ code: 'wrong-attachment' }],
+                                warnings: []
+                            };
+                        }
+                        const result = productionReviewValidator.validate(draft);
+                        const reviewableRejected =
+                            draft.source?.mode === 'pdf-ai' &&
+                            draft.manualReviewRequired === true &&
+                            result.errors.length > 0 &&
+                            result.errors.every(error =>
+                                error.code === 'admission-field-rejected'
+                            );
+                        return {
+                            valid: result.valid || reviewableRejected,
+                            errors: reviewableRejected ? [] : result.errors,
+                            warnings: result.warnings || []
+                        };
+                    },
+                    validateSafePartial(draft) {
+                        if (draft.source?.mode !== 'pdf-ai') {
+                            return { valid: true, errors: [], warnings: [] };
+                        }
+                        const valid = draft.supportLevel === 'prefix' &&
+                            draft.manualReviewRequired === true;
+                        try {
+                            Qisi.PdfSafePartialPipeline.assertSafePartialInvariants({
+                                isComplete: !valid
+                            });
+                        } catch (_error) {
+                            return {
+                                valid: false,
+                                errors: [{ code: 'pdf-safe-partial-invalid' }],
+                                warnings: []
+                            };
+                        }
+                        return { valid: true, errors: [], warnings: [] };
+                    },
+                    validateControlledWriteEvidence(draft, input) {
+                        return importValidationPorts.validateOwnership(draft, input);
+                    }
+                });
                 const reviewController = Qisi.ReviewController.createReviewController({
                     validateDraft: draft => validateDraftForReview(draft)
                 });
@@ -37,7 +153,14 @@
                 const legacyBatchRunCoordinator =
                     Qisi.LegacyBatchRunCoordinator.createLegacyBatchRunCoordinator({
                         runLegacyBatch: batchId => Qisi.Runtime.getRuntimeDependency('InjectedImportTransport')
-                            ? Qisi.InjectedImportPath.createInjectedImportPath({ repository: storageRepository })
+                            ? Qisi.InjectedImportPath.createInjectedImportPath({
+                                repository: storageRepository,
+                                validateDrafts: (drafts, context) =>
+                                    Qisi.ImportValidationService.validateImportDrafts(
+                                        drafts,
+                                        { ...importValidationPorts, context }
+                                    )
+                            })
                                 .run(batchId, Qisi.Runtime.getRuntimeDependency('InjectedImportTransport'))
                             : processDraftImportBatch(batchId),
                         loadBatchState: batchId => db.draftImportBatches.get(batchId)

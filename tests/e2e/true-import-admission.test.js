@@ -5,7 +5,7 @@ const {
     startBrowserApp, callProxy, installImportTransport, createImportThroughUi,
     getDbSnapshot, clearE2eData
 } = require('./browser-harness.js');
-const { pdfCandidate } = require('./true-import-fixtures.js');
+const { docxCandidate, pdfCandidate } = require('./true-import-fixtures.js');
 
 test('raw JSON transport candidate is rejected before review persistence', {
     timeout: 90000
@@ -22,6 +22,28 @@ test('raw JSON transport candidate is rejected before review persistence', {
         assert.equal(snapshot.batches[0].status, 'failed');
         assert.equal(snapshot.drafts.length, 0);
         assert.match(snapshot.batches[0].errorMessage, /Raw JSON candidates/);
+        assert.equal(harness.forbiddenRequests.length, 0);
+        await clearE2eData(harness.page);
+    } finally {
+        await harness.close();
+    }
+});
+
+test('candidate from the wrong attachment type is rejected before review persistence', {
+    timeout: 90000
+}, async () => {
+    const harness = await startBrowserApp(32116);
+    try {
+        await installImportTransport(harness.page, {
+            expectedQuestionNumbers: ['1'], candidates: [docxCandidate()]
+        });
+        const { snapshot } = await createImportThroughUi(harness.page, {
+            name: 'wrong-attachment.pdf', mimeType: 'application/pdf',
+            buffer: Buffer.from('%PDF wrong attachment')
+        });
+        assert.equal(snapshot.batches[0].status, 'failed');
+        assert.equal(snapshot.drafts.length, 0);
+        assert.equal(snapshot.batches[0].errorMessage, 'IMPORT_VALIDATION_REJECTED');
         assert.equal(harness.forbiddenRequests.length, 0);
         await clearE2eData(harness.page);
     } finally {

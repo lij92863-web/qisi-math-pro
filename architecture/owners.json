@@ -32,5 +32,6 @@
   "docxImportCoordinatorOwner": "qisi-docx-import-coordinator.js",
   "pdfImportCoordinatorOwner": "qisi-pdf-import-coordinator.js",
   "candidateNormalizerOwner": "qisi-candidate-normalizer.js",
+  "importValidationServiceOwner": "qisi-import-validation-service.js",
   "appShellOwner": "app.js"
 }

@@ -254,6 +254,14 @@
       "status": "production-wired"
     },
     {
+      "id": "import-validation-service", "file": "qisi-import-validation-service.js",
+      "layer": 3, "domainOwner": "importValidationServiceOwner",
+      "publicApi": ["validateImportDrafts"],
+      "allowedDependencies": [],
+      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
+      "status": "production-wired"
+    },
+    {
       "id": "app-shell", "file": "app.js", "layer": 4,
       "domainOwner": "appShellOwner", "publicApi": ["App.setup"],
       "allowedDependencies": [
@@ -264,7 +272,8 @@
         "ocr-local-adapter", "ocr-shadow-mode", "performance-monitor",
         "controlled-write", "support-aligner", "support-parser", "archive-security",
         "secure-logger", "batch-context-service", "source-role-classifier",
-        "docx-import-coordinator", "pdf-import-coordinator", "candidate-normalizer"
+        "docx-import-coordinator", "pdf-import-coordinator", "candidate-normalizer",
+        "import-validation-service"
       ],
       "forbiddenDependencies": ["route-b-research"],
       "status": "production-wired"

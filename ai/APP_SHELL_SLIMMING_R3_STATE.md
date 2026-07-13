@@ -209,10 +209,43 @@
   exactly once by the immutable 318-row baseline map; the three removed names
   belonged to the migrated normalization owner. `processDraftImportBatch` is
   5,108 lines and remains explicitly pending the later retirement wave.
+- Wave C2-7 implemented and production-wired
+  `qisi-import-validation-service.js` as the side-effect-free composition owner
+  for sequence, schema, source ownership, PDF safe-partial, and controlled-write
+  evidence validation ports.
+- The service clones and recursively freezes inputs and outputs, requires every
+  validator port, aggregates only sanitized stable failure codes, and fails
+  closed on missing, throwing, malformed, or rejecting validators. It contains
+  no DOM, Vue, transport, FormalAdmission, sequence-validator implementation,
+  Repository, persistence, or formal-write authority.
+- The injected true-import path now validates the complete draft set before the
+  first review persistence call. DOCX full sequence and PDF safe-prefix remain
+  accepted; raw JSON, empty prefix, invalid sequence, wrong attachment type,
+  invalid schema/provenance, unsafe controlled-write evidence, and malformed
+  validator output remain out of review storage.
+- Existing RecognitionContracts, PdfSupportAligner, PdfSafePartialPipeline, and
+  ProductionReviewValidator owners are injected rather than copied. Explicitly
+  rejected PDF fields remain reviewable only for the existing prefix/manual
+  review contract; the same rejected evidence remains barred from formal data
+  until an actual teacher edit creates manual provenance.
+- C2-7 failure-first began with module-not-found and then with the deliberately
+  absent production call. A bounded repair aligned RecognitionContracts' `path`
+  error coordinate with the admission owner's `field` coordinate without
+  weakening either validator; the teacher-rewrite counterfactual then passed.
+- Final C2-7 service/architecture targets passed 22/22, true DOCX/PDF/raw-JSON/
+  wrong-attachment/teacher-rewrite browser characterization passed 5/5, the
+  full suite passed 1,302/1,302, and all 11 mandatory gates passed. Browser
+  preflight/dry-run recorded `realApiCalled=false` and
+  `underlyingApiCallCount=0`; no PDF real-run was performed.
+- `app.js` is now 21,658 physical lines, 120 below the Program C baseline, with
+  315 inventoried functions and complete immutable baseline-name coverage.
+  `processDraftImportBatch` remains 5,108 lines. The manifest now records 5
+  layers, 35 modules, and 52 declared dependency edges with no missing target,
+  cycle, upward dependency, or owner mismatch.
 
 ## Pending
 
-- Phase 2 Waves C2-7–C2-14, then attacks, audits, benchmark, CTO review, and seal.
+- Phase 2 Waves C2-8–C2-14, then attacks, audits, benchmark, CTO review, and seal.
 
 ## Blockers / limitations
 
@@ -225,6 +258,6 @@
 
 ## Next exact action
 
-Commit and push C2-6, then begin Wave C2-7 Import Validation Service with
-failure-first characterization of the existing schema, sequence, ownership,
-safe-partial, and controlled-write evidence validators.
+Commit and push C2-7, then begin Wave C2-8 Review Draft Builder with
+failure-first characterization of candidate-to-review mapping, warnings,
+provenance, source trace, and manual-review preservation.
