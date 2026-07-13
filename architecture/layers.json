@@ -286,6 +286,14 @@
       "status": "production-wired"
     },
     {
+      "id": "pdf-candidate-projection", "file": "qisi-pdf-candidate-projection.js",
+      "layer": 2, "domainOwner": "pdfCandidateProjectionOwner",
+      "publicApi": ["FIELDS", "PdfCandidateProjectionError", "projectPdfCandidate", "compareCanonicalPdfCandidates"],
+      "allowedDependencies": ["controlled-write", "support-aligner", "support-parser"],
+      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
+      "status": "scaffold"
+    },
+    {
       "id": "candidate-normalizer", "file": "qisi-candidate-normalizer.js",
       "layer": 2, "domainOwner": "candidateNormalizerOwner",
       "publicApi": ["normalizeCandidates"],

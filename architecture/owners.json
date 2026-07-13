@@ -23,6 +23,7 @@
   "shadowModeOwner": "qisi-ocr-shadow-mode.js",
   "performanceMonitorOwner": "qisi-performance-monitor.js",
   "controlledWriteOwner": "qisi-pdf-support-controlled-write.js",
+  "pdfCandidateProjectionOwner": "qisi-pdf-candidate-projection.js",
   "supportAlignerOwner": "qisi-pdf-support-aligner.js",
   "supportParserOwner": "qisi-pdf-support-block-parser.js",
   "routeBResearchOwner": "qisi-answer-only-ai-pass.js",

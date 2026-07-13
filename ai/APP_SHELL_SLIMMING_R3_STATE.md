@@ -620,6 +620,17 @@
 
 ## Pending
 
+- The PDF candidate projection corrective package started from clean pushed
+  commit `7c854d9516f86cf030deed1c22df6229f002a15b`. The legacy projection audit and
+  production-linked characterization were independently tested, committed, and
+  pushed as `1ed14fcf9a5bef324ad3674392d8e575a18c13bc`.
+- `qisi-pdf-candidate-projection.js` is implemented and browser-loaded as a
+  layer-2 scaffold. Its tests consume the real controlled-write result and
+  enforce source-context mode derivation, per-field provenance, fail-closed
+  missing mode/decision behavior, support/manual-review projection, structured
+  canonical comparison, evidence preservation, and no fake manual provenance.
+  It is not yet called by either production path, so no production-wired claim
+  is made at this stage.
 - Wave C2-10.5 Phases 5 through 6 and the hard acceptance gates. C2-11 through
   C2-14, attacks, audits, benchmark, CTO review, and seal remain blocked until
   the production bridge and shadow-equivalence package is accepted.
@@ -635,8 +646,7 @@
 
 ## Next exact action
 
-Commit and push the real `ProductionImportBridge`, then begin Phase 5 with
-failure-first real-browser shadow-equivalence tests through the normal upload UI.
-Run legacy and bridge modes against separate isolated IndexedDB identities using
-the real production adapters; do not use `InjectedImportTransport`, do not share
-side effects between modes, and do not run PDF real-run or any real AI/OCR call.
+Wire both `processDraftImportBatch` and `ProductionImportBridge` to the shared
+PDF projection owner using the same real controlled-write decision, then remove
+the bounded inline category-A projection. Phase 5 and C2-11 remain blocked until
+the corrective package's browser equivalence and mandatory gates are accepted.
