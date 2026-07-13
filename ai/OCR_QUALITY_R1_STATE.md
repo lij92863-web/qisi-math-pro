@@ -3,7 +3,8 @@
 - Start commit: `1361d7e7f81d2f23819a995a0f9d1808adf19982`
 - Baseline tag: `pre-ocr-quality-r1-1361d7e`
 - Current branch: `stage/ocr-quality-r1`
-- Current phase: Program B / Phase 7 complete
+- Current phase: Program B / Phase 8
+- Current work package: final report prepared; Git ff-only seal pending
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -185,10 +186,20 @@
   storage, and target-machine performance proof.
 - Phase 7 CTO/audit/benchmark/attack targets passed 44/44 and all 11 mandatory
   gates passed with browser preflight/dry-run `realApiCalled=false`.
+- Phase 8 fetched and independently queried live main. Local `main`,
+  `origin/main`, and live `refs/heads/main` all remained at the Program A seal
+  `1361d7e7f81d2f23819a995a0f9d1808adf19982`; the proposed Program B tag was
+  available.
+- Phase 8 final-report failure-first gate was established at 0/5 before the
+  report existed. The completed final report gate passed 5/5, and the expanded
+  Program B target set passed 70/70 with `verify:no-real-ai` passing.
+- Phase 8 final mandatory matrix passed. Browser preflight/dry-run both remained
+  healthy with `realApiCalled=false` and `underlyingApiCallCount=0`.
 
 ## Pending
 
-- Phase 8: final report and Git seal.
+- Phase 8 ff-only main merge, annotated tag, and remote verification.
+- Program C app-shell slimming after the Program B seal.
 
 ## Blockers / limitations
 
@@ -199,6 +210,6 @@
 
 ## Next exact action
 
-Commit and push Phase 7, then create the Phase 8 final report and failure-first
-report gate. Re-run mandatory gates, verify live remote main is still the Program A
-seal, and only then perform the authorized ff-only merge/tag sequence.
+Commit and push the Phase 8 final report, then repeat the live remote check and
+perform the authorized ff-only merge, main push, annotated tag push, and
+local/remote/tag equality verification.
