@@ -203,6 +203,10 @@
 - Phase 3 validator-missing attack and controller regressions: passed 10/10.
 - Phase 3 validator-missing full mandatory matrix: passed; browser preflight and
   dry-run remained healthy with `realApiCalled=false`.
+- Phase 3 validator-throws failure-first evidence: the designated matrix row was
+  absent; the attack itself already failed closed at both controller boundaries.
+- Phase 3 validator-throws attack and controller regressions: passed 10/10; full
+  mandatory matrix passed with preflight/dry-run and no real API call.
 
 ## Blockers
 
@@ -211,5 +215,5 @@
 
 ## Next exact action
 
-Commit/push the Phase 3 validator-missing package, then execute the
-validator-throws attack class.
+Commit/push the Phase 3 validator-throws package, then execute the malformed
+admission attack class.
