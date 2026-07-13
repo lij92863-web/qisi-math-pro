@@ -27,6 +27,10 @@ test('PDF candidate projection has one production owner and one browser-loaded A
     ]);
     assert.match(owner, /function projectPdfCandidate\s*\(/);
     assert.match(owner, /function compareCanonicalPdfCandidates\s*\(/);
+    assert.match(owner, /function mergeControlledWriteDecisions\s*\(/);
+    assert.match(owner, /row\.provenance\s*=\s*provenanceEntry\s*\(\{/);
+    assert.match(owner, /acceptedItemMaps\s*=\s*\{/);
+    assert.match(owner, /createError\('controlled-write-conflict'\)/);
     assert.ok(main.indexOf('qisi-pdf-candidate-projection.js') >
         main.indexOf('qisi-pdf-support-controlled-write.js'));
     assert.ok(main.indexOf('qisi-pdf-candidate-projection.js') < main.indexOf('app.js'));
@@ -74,7 +78,10 @@ test('no second PDF projection implementation appears in production files', () =
         /(?:const|let|var)\s+pdf\w*Provenance\s*=/i,
         /(?:const|let|var)\s+pdf\w*SupportLevel\s*=/i,
         /(?:const|let|var)\s+pdf\w*ManualReviewRequired\s*=/i,
-        /compareCanonicalPdfCandidates\s*=|function\s+compareCanonicalPdfCandidates/
+        /compareCanonicalPdfCandidates\s*=|function\s+compareCanonicalPdfCandidates/,
+        /function\s+mergeControlledWriteDecisions\s*\(/,
+        /(?:const|let|var)\s+acceptedItemMaps\s*=/,
+        /controlled-write-conflict/
     ];
 
     for (const file of productionFiles) {

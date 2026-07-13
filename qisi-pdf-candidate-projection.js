@@ -573,6 +573,10 @@
         if (!results.length) throw createError('controlled-write-missing');
 
         const fieldDecisionMap = new Map();
+        const acceptedItemMaps = {
+            answer: new Map(),
+            solution: new Map()
+        };
         const acceptDecision = item => item?.source && item.source !== 'none';
         for (const result of results) {
             for (const item of result.fieldDecisions) {
@@ -584,25 +588,58 @@
                 if (!current || (!acceptDecision(current) && acceptDecision(item))) {
                     fieldDecisionMap.set(key, clone({ ...item, questionNumber, field }));
                 }
+                if (!acceptDecision(item)) continue;
+
+                const effectiveItems = field === 'answer'
+                    ? result.effectiveAnswerItems
+                    : result.effectiveSolutionItems;
+                const effectiveItem = effectiveItems.find(candidate =>
+                    normalizeQuestionNumber(
+                        candidate?.questionNumber ?? candidate?.question ??
+                        candidate?.no ?? candidate?.order
+                    ) === questionNumber
+                );
+                if (!effectiveItem) throw createError('controlled-write-conflict');
+
+                const sourceId = cleanString(
+                    effectiveItem.sourceId ||
+                    effectiveItem.sourceFileId ||
+                    effectiveItem.sourceTrace?.sourceFileId ||
+                    effectiveItem.sourceTrace?.sourceId ||
+                    effectiveItem.evidence?.sourceId
+                );
+                const evidenceIds = [...new Set([
+                    effectiveItem.evidenceId,
+                    effectiveItem.evidence?.evidenceId,
+                    effectiveItem.sourceTrace?.evidenceId
+                ].map(cleanString).filter(Boolean))].sort();
+                const conflictIdentity = {
+                    value: supportItemValue(effectiveItem, field),
+                    sourceId,
+                    page: evidencePage(null, effectiveItem, null),
+                    blockIds: evidenceBlockIds(null, effectiveItem).sort(),
+                    evidenceIds,
+                    decisionReason: cleanString(item.reason),
+                    normalizationRule: cleanString(
+                        effectiveItem.normalizeReason || effectiveItem.reason
+                    )
+                };
+                const acceptedMap = acceptedItemMaps[field];
+                const existing = acceptedMap.get(questionNumber);
+                if (existing && !same(existing.identity, conflictIdentity)) {
+                    throw createError('controlled-write-conflict');
+                }
+                if (!existing) {
+                    acceptedMap.set(questionNumber, {
+                        identity: conflictIdentity,
+                        item: clone(effectiveItem)
+                    });
+                }
             }
         }
 
         const acceptedByField = field => {
-            const itemMap = new Map();
-            for (const result of results) {
-                const items = field === 'answer'
-                    ? result.effectiveAnswerItems
-                    : result.effectiveSolutionItems;
-                for (const item of items) {
-                    const questionNumber = normalizeQuestionNumber(
-                        item?.questionNumber ?? item?.question ?? item?.no ?? item?.order
-                    );
-                    if (!questionNumber || itemMap.has(questionNumber)) continue;
-                    const decision = fieldDecisionMap.get(`${questionNumber}:${field}`);
-                    if (acceptDecision(decision)) itemMap.set(questionNumber, clone(item));
-                }
-            }
-            return [...itemMap.values()];
+            return [...acceptedItemMaps[field].values()].map(entry => entry.item);
         };
         const effectiveAnswerItems = acceptedByField('answer');
         const effectiveSolutionItems = acceptedByField('solution');
@@ -666,6 +703,9 @@
             const roles = sourceRoles(source);
             return roles.has('answer') || roles.has('solution') || roles.has('full');
         });
+        if (supportSources.length > 1) {
+            throw createError('pdf-support-source-ambiguous');
+        }
         const supportSourceIds = new Set(
             supportSources.map(source => cleanString(source?.id || source?.sourceId))
         );
