@@ -1,7 +1,7 @@
 # Post-R2 Correction Benchmark R1
 
-Date: 2026-07-13 Asia/Shanghai  
-Platform: Windows win32-x64, Node v24.16.0  
+Date: 2026-07-13 Asia/Shanghai
+Platform: Windows win32-x64, Node v24.16.0
 Real OCR/AI: not called; deterministic fixtures only.
 
 ## Workload results
