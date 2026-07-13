@@ -243,3 +243,24 @@ Post-wave inventory is 18,302 lines and 378 detected functions; the eight-line
 increase from Wave 6 is readable repository delegation around the rollback,
 not hidden business logic. The largest function remains 242 lines. Direct
 formal question table mutations in `app.js` are zero.
+
+## Wave 8 result: Qwen proxy transport extracted
+
+The 18 Qwen chat/OCR proxy calls and the proxy health check now delegate HTTP
+routing, same-origin endpoint allowlisting, timeout/Abort handling, and batch
+cost accounting to `qisi-ocr-qwen-adapter.js`. The app shell injects only the
+cost callback and continues to own the existing request bodies, prompts,
+response validation, retry selection, and UI diagnostics. No prompt, model,
+timeout, response parser, or acceptance rule changed.
+
+The transport accepts only `/api/ai/*` same-origin routes, rejects unknown route
+kinds, and cannot be configured with a direct DashScope URL. The module is now
+accurately marked production-wired while its existing candidate adapter API is
+unchanged. `app.js` contains no AI proxy `fetch`, no inline timeout transport,
+and no DashScope endpoint constants.
+
+Post-wave inventory is 18,269 lines and 377 detected functions; the largest
+function remains 242 lines. Direct OCR/AI HTTP transport in `app.js` is zero.
+The remaining request/prompt producer functions are active legacy source
+producers, not a second HTTP transport owner; their reachability and final
+disposition remain subject to C2-12/C2-13 owner proof.

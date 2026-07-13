@@ -1189,13 +1189,11 @@
                     }[ext] || 'application/octet-stream';
                 };
 
-                const DASHSCOPE_CHAT_URL = "/api/ai/chat";
-                const DASHSCOPE_OCR_URL = "/api/ai/ocr";
                 const buildAiRequestHeaders = () => ({ "Content-Type": "application/json" });
-                const isAiRequestUrl = (url) => (
-                    String(url || '') === DASHSCOPE_CHAT_URL ||
-                    String(url || '') === DASHSCOPE_OCR_URL
-                );
+                const qwenProxyTransport =
+                    Qisi.OcrQwenAdapter.createQwenProxyTransport({
+                        onAiRequest: label => recordBatchCostCall(label)
+                    });
                 const withTimeout = (promise, ms, label = '任务') => {
                     let timer = null;
 
@@ -1210,45 +1208,8 @@
                     });
                 };
 
-                const fetchWithTimeout = async (url, options = {}, ms = 90000, label = '网络请求') => {
-                    const controller = new AbortController();
-                    const timer = setTimeout(() => controller.abort(), ms);
-
-                    try {
-                        const dashScopeHost = ['dashscope', 'aliyuncs', 'com'].join('.');
-                        if (String(url || '').includes(dashScopeHost)) {
-                            throw new Error('禁止浏览器直连 DashScope，请通过本地 AI 代理请求。');
-                        }
-                        if (isAiRequestUrl(url)) {
-                            recordBatchCostCall(label);
-                        }
-                        const resp = await fetch(url, {
-                            ...options,
-                            signal: controller.signal
-                        });
-                        return resp;
-                    } catch (error) {
-                        if (error?.name === 'AbortError') {
-                            throw new Error(`${label} 超时：超过 ${Math.round(ms / 1000)} 秒未返回`);
-                        }
-                        throw error;
-                    } finally {
-                        clearTimeout(timer);
-                    }
-                };
-
                 window.__qisiCheckAiProxy = async function () {
-                    const resp = await fetch('/api/ai/health', {
-                        cache: 'no-store'
-                    });
-                    const data = await resp.json();
-                    const result = {
-                        ok: resp.ok && Boolean(data?.ok),
-                        status: resp.status,
-                        configured: Boolean(data?.configured),
-                        chatUrl: DASHSCOPE_CHAT_URL,
-                        ocrUrl: DASHSCOPE_OCR_URL
-                    };
+                    const result = await qwenProxyTransport.checkHealth();
 
                     console.groupCollapsed('[QISI_AI_PROXY_HEALTH]');
                     console.log(result);
@@ -1559,7 +1520,7 @@
 
                 const callDashScopeOcrTask = async (imageUrl, task = 'document_parsing') => {
                     if (!imageUrl) return '';
-                    const resp = await fetchWithTimeout(DASHSCOPE_OCR_URL, {
+                    const resp = await qwenProxyTransport.request('ocr', {
                         method: "POST",
                         headers: buildAiRequestHeaders(),
                         body: JSON.stringify({
@@ -1624,9 +1585,12 @@
                             top_p: 0.001,
                             max_tokens: 8192
                         };
-                        logOcrRequestDebug(DASHSCOPE_CHAT_URL, requestBody);
+                        logOcrRequestDebug(
+                            qwenProxyTransport.getEndpoint('chat'),
+                            requestBody
+                        );
 
-                        const resp = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
+                        const resp = await qwenProxyTransport.request('chat', {
                             method: "POST",
                             headers: buildAiRequestHeaders(),
                             body: JSON.stringify(requestBody)
@@ -1717,7 +1681,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                     for (const model of getVisionModelsForMode(activeRecognitionMode || 'standard')) {
                         try {
-                            const resp = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
+                            const resp = await qwenProxyTransport.request('chat', {
                                 method: 'POST',
                                 headers: buildAiRequestHeaders(),
                                 body: JSON.stringify({
@@ -5692,7 +5656,7 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
 
 材料：
 ${source}`;
-                    const resp = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
+                    const resp = await qwenProxyTransport.request('chat', {
                         method: "POST",
                         headers: buildAiRequestHeaders(),
                         body: JSON.stringify({
@@ -5754,7 +5718,7 @@ ${source}`;
 
 材料：
 ${source}`;
-                    const resp = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
+                    const resp = await qwenProxyTransport.request('chat', {
                         method: "POST",
                         headers: buildAiRequestHeaders(),
                         body: JSON.stringify({
@@ -5962,7 +5926,7 @@ ${source}`;
                     let lastError = null;
                     for (const model of models) {
                         try {
-                            const resp = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
+                            const resp = await qwenProxyTransport.request('chat', {
                                 method: "POST",
                                 headers: buildAiRequestHeaders(),
                                 body: JSON.stringify({
@@ -6048,7 +6012,7 @@ ${pageMarkdown || '空'}
 
                     for (const model of getVisionModelsForMode(activeRecognitionMode)) {
                         try {
-                            const resp = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
+                            const resp = await qwenProxyTransport.request('chat', {
                                 method: "POST",
                                 headers: buildAiRequestHeaders(),
                                 body: JSON.stringify({
@@ -6254,7 +6218,7 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
 
                     for (const model of models) {
                         try {
-                            const resp = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
+                            const resp = await qwenProxyTransport.request('chat', {
                                 method: "POST",
                                 headers: buildAiRequestHeaders(),
                                 body: JSON.stringify({
@@ -7429,8 +7393,8 @@ ${rawBlock}
 }`;
 
                         const resp =
-                            await fetchWithTimeout(
-                                DASHSCOPE_CHAT_URL,
+                            await qwenProxyTransport.request(
+                                'chat',
                                 {
                                     method: 'POST',
                                     headers:
@@ -9735,7 +9699,7 @@ ${repairInfo ? `上一次识别结果有问题：\n${repairInfo}\n请根据原�
 
                     for (const model of models) {
                         try {
-                            const resp = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
+                            const resp = await qwenProxyTransport.request('chat', {
                                 method: "POST",
                                 headers: buildAiRequestHeaders(),
                                 body: JSON.stringify({
@@ -10089,7 +10053,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                                 expected
                             });
 
-                            const resp = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
+                            const resp = await qwenProxyTransport.request('chat', {
                                 method: 'POST',
                                 headers: buildAiRequestHeaders(),
                                 body: JSON.stringify({
@@ -11881,7 +11845,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                     let lastError = null;
                     for (const model of models) {
                         try {
-                            const resp = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
+                            const resp = await qwenProxyTransport.request('chat', {
                                 method: "POST",
                                 headers: buildAiRequestHeaders(),
                                 body: JSON.stringify({
@@ -12118,7 +12082,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                     let lastError = null;
                     for (const model of models) {
                         try {
-                            const resp = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
+                            const resp = await qwenProxyTransport.request('chat', {
                                 method: "POST",
                                 headers: buildAiRequestHeaders(),
                                 body: JSON.stringify({
@@ -12282,7 +12246,7 @@ answers=${JSON.stringify(answers)}
 返回格式：
 {"patches":[{"index":1,"answer":"A"}]}`;
 
-                    const resp = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
+                    const resp = await qwenProxyTransport.request('chat', {
                         method: "POST",
                         headers: buildAiRequestHeaders(),
                         body: JSON.stringify({
@@ -12451,7 +12415,7 @@ ${JSON.stringify(targets, null, 2)}
 
                     for (const model of getVisionModelsForMode(activeRecognitionMode)) {
                         try {
-                            const resp = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
+                            const resp = await qwenProxyTransport.request('chat', {
                                 method: "POST",
                                 headers: buildAiRequestHeaders(),
                                 body: JSON.stringify({
@@ -12949,7 +12913,7 @@ ${JSON.stringify(targets, null, 2)}
 原始文本：
 ${source}`;
 
-                    const resp = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
+                    const resp = await qwenProxyTransport.request('chat', {
                         method: "POST",
                         headers: buildAiRequestHeaders(),
                         body: JSON.stringify({
@@ -12994,7 +12958,7 @@ ${source}`;
 解析：${window.Qisi.Utils.cleanRecognizedText(q.solution || '').slice(0, 1800)}
 原始文本：${window.Qisi.Utils.cleanRecognizedText(draftRawOptionSource(q)).slice(0, 1800)}`;
 
-                    const resp = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
+                    const resp = await qwenProxyTransport.request('chat', {
                         method: "POST",
                         headers: buildAiRequestHeaders(),
                         body: JSON.stringify({
@@ -17136,8 +17100,11 @@ ${source}`;
                         try {
                             const p = "请精准识别图中数学题。要求：中文文字和标点自然排版，行内短小公式或字母【必须】使用单 $ 包围，只有独立占行的大型公式才使用 $$ 包围。如果包含选项A,B,C,D，请务必独立换行展示。严禁将整道题打包进一个大环境中。";
                             const requestBody = { model: getAiModelForTask(AI_TASKS.STRUCTURED_OCR), messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: reader.result } }, { type: "text", text: p }] }] };
-                            logOcrRequestDebug(DASHSCOPE_CHAT_URL, requestBody);
-                            const resp = await fetchWithTimeout(DASHSCOPE_CHAT_URL, {
+                            logOcrRequestDebug(
+                                qwenProxyTransport.getEndpoint('chat'),
+                                requestBody
+                            );
+                            const resp = await qwenProxyTransport.request('chat', {
                                 method: "POST", headers: buildAiRequestHeaders(),
                                 body: JSON.stringify(requestBody)
                             }, 90000, 'Qwen OCR 请求');

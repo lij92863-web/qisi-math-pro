@@ -91,9 +91,9 @@
     {
       "id": "ocr-qwen-adapter", "file": "qisi-ocr-qwen-adapter.js",
       "layer": 1, "domainOwner": "qwenAdapterOwner",
-      "publicApi": ["createQwenAdapter"], "allowedDependencies": ["recognition-contracts", "ocr-adapter-contract"],
+      "publicApi": ["createQwenProxyTransport", "createQwenAdapter"], "allowedDependencies": ["recognition-contracts", "ocr-adapter-contract"],
       "forbiddenDependencies": ["formal-admission", "storage-repository"],
-      "status": "scaffold"
+      "status": "production-wired"
     },
     {
       "id": "ocr-local-adapter", "file": "qisi-ocr-local-adapter.js",
