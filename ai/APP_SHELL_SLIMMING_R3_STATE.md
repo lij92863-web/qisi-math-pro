@@ -513,6 +513,43 @@
   modules and 63 declared dependency edges with no missing target, cycle,
   upward dependency, or owner mismatch.
 
+- Wave C2-10.5 Phase 3 extracted the bounded deterministic output/image
+  projection into `ProductionImportOutputPort.projectImportOutput`. The shared
+  owner preserves the legacy same-source/question grouping, quality ordering,
+  complementary field and evidence merge, warning merge, final source/question
+  ordering, update clock, removed-id mapping, draft-image rebinding, and orphan
+  image rejection. It returns sanitized diagnostic rows while the existing app
+  adapter retains console presentation.
+- V2 final persistence, legacy final persistence, and the manual active-batch
+  gate now pass draft images through the same production owner and consume its
+  rebound image result. The two intermediate legacy gates use the same draft
+  projection without image input. Image-token attachment, unmatched evidence,
+  batch counters, UI state, and persistence remain in their previous owners.
+- The former inline quality, merge, dedupe, and image-rebinding implementation
+  was deleted from `app.js` in the same work package. Only the two thin legacy-
+  named adapters remain for call-site stability and inventory coverage. The new
+  layer-2 owner has no DB, DOM/Vue, persistence, FormalAdmission,
+  controlled-write, Route B, external transport, or OCR invocation authority;
+  the production port map now classifies `projectImportOutput` as A.
+- Failure-first began with the output-port target failing at file load because
+  the owner did not exist. Six characterization tests now cover stronger-
+  candidate selection, complementary evidence/image preservation, source
+  isolation and order, media-only options, deterministic helper fallbacks,
+  authority boundaries, production delegation, and deletion of the old core.
+  A final static audit found that an expression-body adapter obscured the next
+  function from the responsibility scanner; one behavior-neutral formatting
+  repair restored complete inventory visibility before every gate was rerun.
+- Final targeted output/responsibility/baseline tests passed 11/11, the full
+  suite passed 1,369/1,369 with no failed, skipped, or todo tests, and all 11
+  mandatory gates passed on the final code shape. Browser preflight/dry-run
+  recorded `realApiCalled=false` and `underlyingApiCallCount=0`; no PDF real-run
+  or real AI/OCR call occurred.
+- `app.js` is now 21,289 physical lines with 299 inventoried functions and
+  complete immutable baseline-name coverage. The conservative lexical metric
+  for `processDraftImportBatch` is 5,114 lines. The manifest records 43 modules
+  and 64 declared dependency edges with no missing target, cycle, upward
+  dependency, or owner mismatch.
+
 ## Pending
 
 - Remaining Wave C2-10.5 Phase 3 ports, Phases 4 through 6, and the hard
@@ -531,8 +568,8 @@
 
 ## Next exact action
 
-Commit and push the shared progress/error status port, then characterize exactly
-one bounded output/image projection port. Preserve draft count/order, source
-associations, warnings, unmatched evidence, and final dedupe behavior; do not
-move crop/OCR algorithms or persistence in the same commit, and do not enter
-C2-11 until all C2-10.5 hard acceptance gates pass.
+Commit and push the shared output/image projection port, then characterize the
+existing review-draft persistence wiring as the next single bounded Phase 3
+port. Reuse `DraftPersistenceService` and `StorageRepository`; do not copy
+persistence, transaction, FormalAdmission, crop/OCR, or controlled-write logic,
+and do not enter C2-11 until all C2-10.5 hard acceptance gates pass.

@@ -32,7 +32,7 @@ They are extracted only if their characterization proves a move is possible.
 
 | Port | Class | Reason | Required action |
 | --- | --- | --- | --- |
-| projectImportOutput | B | legacy final dedupe, image association, unmatched and batch counts affect persisted equality | move one bounded projection at a time; old branch calls it first, then bridge calls the same owner |
+| projectImportOutput | A | ProductionImportOutputPort; legacy final dedupe and image association now share one production owner | reuse the production-wired deterministic projection; keep logging, unmatched/batch counts, image-token attachment, and persistence in their existing callers |
 | reportImportFailure | A | ProductionImportStatusPort `reportImportFailure` | reuse batch/optional-file failure owner; state-machine policy, diagnostics, reload, and UI toast remain separate |
 
 ## Ownership and dependency constraints

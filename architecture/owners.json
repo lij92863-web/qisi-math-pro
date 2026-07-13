@@ -31,6 +31,7 @@
   "batchContextServiceOwner": "qisi-batch-context-service.js",
   "sourceRoleClassifierOwner": "qisi-source-role-classifier.js",
   "productionImportStatusPortOwner": "qisi-production-import-status-port.js",
+  "productionImportOutputPortOwner": "qisi-production-import-output-port.js",
   "productionDocxSourcePortOwner": "qisi-production-docx-source-port.js",
   "docxImportCoordinatorOwner": "qisi-docx-import-coordinator.js",
   "productionPdfSourcesPortOwner": "qisi-production-pdf-sources-port.js",
