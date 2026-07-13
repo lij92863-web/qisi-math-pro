@@ -3,7 +3,7 @@
 - Start commit: `1361d7e7f81d2f23819a995a0f9d1808adf19982`
 - Baseline tag: `pre-ocr-quality-r1-1361d7e`
 - Current branch: `stage/ocr-quality-r1`
-- Current phase: Program B / Phase 5 complete
+- Current phase: Program B / Phase 6 complete
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -157,10 +157,24 @@
 - Phase 5 architecture and Program A invariant targets passed 53/53 and all 11
   mandatory gates passed. Decision:
   `OCR_QUALITY_ARCHITECTURE_AUDIT_R1_ACCEPTED_WITH_LIMITATIONS`.
+- Phase 6 produced the final benchmark availability report from authorized
+  evidence only. The private corpus and both authority flags remain absent:
+  eligible documents, real OCR/API calls, model downloads, and real Holdout runs
+  are all 0.
+- Per-document, category, raw/normalized CER, formula, structure, ownership,
+  paired confidence interval, and human-correction metrics are explicitly not
+  measured. API cost is CNY 0; exact test hardware and engine deployment status
+  are recorded without presenting synthetic fixtures as real quality evidence.
+- Phase 6 final-report tests passed 5/5; combined runner/scorer/attack/report
+  targets passed 37/37; all 11 mandatory gates passed. Browser preflight and
+  dry-run both recorded `realApiCalled=false` and zero underlying calls.
+- Final benchmark decision: `NO_ENGINE_ELIGIBLE_FOR_PROMOTION`. Production engine
+  additions/replacements remain none, canary and preprocessing remain disabled,
+  and current production behavior is unchanged.
 
 ## Pending
 
-- Phases 6–8 final benchmark, CTO review, and seal.
+- Phases 7–8: CTO review and seal.
 
 ## Blockers / limitations
 
@@ -171,6 +185,6 @@
 
 ## Next exact action
 
-Commit and push Phase 5, then produce the Phase 6 final benchmark report from
-authorized evidence only. With corpus size 0, report all real metrics as not
-measured and forbid production promotion.
+Commit and push Phase 6, then perform the Phase 7 CTO review from the complete
+code, architecture, attack, and benchmark evidence set. Do not infer real quality
+or production eligibility from synthetic evidence.
