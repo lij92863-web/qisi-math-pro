@@ -20527,7 +20527,7 @@ ${source}`;
                             if(!entryForm.personalKnowledge && entryForm.knowledgeType === 'personal') entryForm.personalKnowledge = entryForm.knowledge || '';
                             syncEntryLegacyKnowledge();
                         }
-                    } catch (e) {}
+                    } catch (e) { console.warn('[ENTRY_DRAFT][restore-failed]', { code: 'ENTRY_DRAFT_RESTORE_FAILED' }); }
                     
                     const isCustom = customTemplates.value.find(t => t.code === latexTemplate.value);
                     if (isCustom) { editMode.value = 'custom'; currentPresetKey.value = isCustom.id; editTplName.value = isCustom.name; } 

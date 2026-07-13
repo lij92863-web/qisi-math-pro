@@ -271,6 +271,12 @@
   browser dry-run passed with no real API call.
 - Phase 3 counterfactual matrix now contains all 18 required attack classes,
   each sealed by an independent commit and full mandatory gate run.
+- Phase 4 failure-first evidence: the required audit report was absent and one
+  entry-draft restore path still contained an empty catch.
+- Phase 4 audit and boundary regressions passed 10/10; the empty catch now emits
+  a stable private-safe error code and `app.js` remains 21,777 lines.
+- Phase 4 full mandatory matrix and browser preflight/dry-run passed with no
+  real API call. Audit decision: PASS with documented residual shell debt.
 
 ## Blockers
 
@@ -279,4 +285,4 @@
 
 ## Next exact action
 
-Commit/push local OCR arbitrary path, then begin Phase 4 code-quality audit.
+Commit/push Phase 4 code-quality audit, then begin Phase 5 architecture audit.
