@@ -85,13 +85,15 @@
                 draft?.version ?? 'missing'
             }`;
             const context = policy.createAdmissionContext({
-                mode: draft?.source?.mode || '',
+                mode: draft?.producer?.mode || draft?.source?.mode || '',
                 actorId: 'review-precheck',
                 explicitConfirmation: true,
                 requestId,
                 idempotencyKey: requestId,
                 evaluatedAt,
-                source: isRecord(draft?.source) ? draft.source : {}
+                source: isRecord(draft?.source) ? draft.source : {},
+                producer: isRecord(draft?.producer) ? draft.producer : {},
+                route: isRecord(draft?.route) ? draft.route : {}
             });
             const admissionDecision = policy.evaluateDraftAdmission(
                 draft,

@@ -1,9 +1,14 @@
 (function (root, factory) {
-    const api = factory();
+    const identityContract = root?.Qisi?.DocxProducerIdentityContract || (
+        typeof module !== 'undefined' && module.exports
+            ? require('./qisi-docx-producer-identity-contract.js')
+            : null
+    );
+    const api = factory(identityContract);
     root.Qisi = root.Qisi || {};
     root.Qisi.FormalAdmissionPolicy = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (identityContract) {
     'use strict';
 
     const ADMISSION_SCHEMA_VERSION = 'qisi.admission.v1';
@@ -12,7 +17,10 @@
         'manual',
         'docx-deterministic',
         'pdf-ai',
-        'imported-package'
+        'imported-package',
+        'deterministic-docx',
+        'deterministic-pdf',
+        'vision-ai'
     ]);
     const FORMAL_FIELDS = Object.freeze([
         'questionNumber',
@@ -82,6 +90,8 @@
         idempotencyKey: input.idempotencyKey || '',
         evaluatedAt: input.evaluatedAt || new Date().toISOString(),
         source: isRecord(input.source) ? input.source : {},
+        producer: isRecord(input.producer) ? input.producer : {},
+        route: isRecord(input.route) ? input.route : {},
         packageSchemaValid: input.packageSchemaValid,
         policyVersion: POLICY_VERSION
     });
@@ -105,7 +115,16 @@
         return { entries: [], duplicateFields: [] };
     };
 
-    const validateContext = (context, draft, errors) => {
+    const modeFamily = mode => {
+        if (mode === 'manual') return 'manual';
+        if (['docx-deterministic', 'deterministic-docx', 'deterministic-pdf']
+            .includes(mode)) return 'deterministic';
+        if (['pdf-ai', 'vision-ai'].includes(mode)) return 'vision';
+        if (mode === 'imported-package') return 'imported-package';
+        return 'unknown';
+    };
+
+    const validateContext = (context, draft, errors, identity) => {
         if (!isRecord(context) || !ADMISSION_MODES.includes(context.mode)) {
             errors.push(errorOf(
                 'admission-mode-unsupported',
@@ -128,15 +147,24 @@
                 'Explicit teacher confirmation is required.'
             ));
         }
-        if (
-            draft?.source?.mode &&
-            String(draft.source.mode) !== String(context.mode)
-        ) {
+        if (!identity || ['invalid', 'legacy-unknown'].includes(identity.status)) {
             errors.push(errorOf(
-                'admission-context-invalid',
-                'source.mode',
-                'Draft source mode does not match admission mode.'
+                'admission-producer-identity-invalid',
+                'producer',
+                'Draft producer identity is missing, unknown, or invalid.',
+                identity?.errors || identity?.status || ''
             ));
+        } else {
+            const expectedMode = identity.status === 'canonical'
+                ? identity.producer?.mode
+                : identity.legacyMode;
+            if (String(expectedMode || '') !== String(context.mode)) {
+                errors.push(errorOf(
+                    'admission-context-invalid',
+                    identity.status === 'canonical' ? 'producer.mode' : 'source.mode',
+                    'Draft producer mode does not match admission mode.'
+                ));
+            }
         }
         if (
             context.mode === 'imported-package' &&
@@ -150,7 +178,48 @@
         }
     };
 
-    const validateFieldDecision = (field, value, provenance, mode, draft, errors) => {
+    const validateCanonicalProvenance = (
+        field, provenance, identity, errors
+    ) => {
+        if (identity?.status !== 'canonical' ||
+            ['manual', 'missing', 'rejected'].includes(provenance.status)) return;
+        const expectedBoundary = identity.producer?.mode === 'vision-ai'
+            ? 'docx-vision-engine-output-to-candidate'
+            : 'docx-deterministic-source-to-candidate';
+        if (
+            (identity.producer?.mode === 'vision-ai' &&
+                provenance.status !== 'controlled-write') ||
+            (identity.producer?.mode === 'deterministic-docx' &&
+                provenance.status !== 'deterministic-source')
+        ) {
+            errors.push(errorOf(
+                'admission-producer-provenance-invalid',
+                field,
+                `Producer mode and provenance kind disagree for ${field}.`
+            ));
+        }
+        if (
+            provenance.kind !== provenance.status ||
+            provenance.sourceId !== identity.source?.sourceId ||
+            provenance.sourceFormat !== identity.source?.format ||
+            provenance.producerMode !== identity.producer?.mode ||
+            provenance.routeId !== identity.route?.identity ||
+            !provenance.engine ||
+            provenance.manuallyEdited !== false ||
+            provenance.producerBoundary !== expectedBoundary ||
+            provenance.contractVersion !== identityContract?.CONTRACT_VERSION
+        ) {
+            errors.push(errorOf(
+                'admission-producer-provenance-invalid',
+                field,
+                `Canonical producer-time provenance is invalid for ${field}.`
+            ));
+        }
+    };
+
+    const validateFieldDecision = (
+        field, value, provenance, mode, draft, errors, identity
+    ) => {
         if (!isRecord(provenance)) {
             errors.push(errorOf(
                 'admission-provenance-missing',
@@ -167,6 +236,13 @@
                 `Valid provenance status is required for ${field}.`
             ));
             return;
+        }
+        if (provenance.kind && provenance.kind !== status) {
+            errors.push(errorOf(
+                'admission-producer-provenance-invalid',
+                field,
+                `Provenance kind and status disagree for ${field}.`
+            ));
         }
         const present = hasValue(value);
         if (status === 'rejected') {
@@ -209,7 +285,9 @@
             }
             return;
         }
-        if (mode === 'manual') {
+        validateCanonicalProvenance(field, provenance, identity, errors);
+        const family = modeFamily(mode);
+        if (family === 'manual') {
             errors.push(errorOf(
                 'admission-provenance-missing',
                 field,
@@ -217,7 +295,7 @@
             ));
             return;
         }
-        if (mode === 'docx-deterministic' || mode === 'imported-package') {
+        if (family === 'deterministic' || family === 'imported-package') {
             if (status !== 'deterministic-source') {
                 errors.push(errorOf(
                     'admission-provenance-missing',
@@ -233,7 +311,7 @@
             }
             return;
         }
-        if (mode === 'pdf-ai') {
+        if (family === 'vision') {
             if (status !== 'controlled-write') {
                 errors.push(errorOf(
                     'admission-controlled-write-required',
@@ -269,7 +347,10 @@
                 policyVersion: POLICY_VERSION
             });
         }
-        validateContext(context, draft, errors);
+        const identity = typeof identityContract?.resolveIdentity === 'function'
+            ? identityContract.resolveIdentity(draft, { allowLegacyRead: true })
+            : { status: 'invalid', errors: [{ code: 'identity-contract-missing' }] };
+        validateContext(context, draft, errors, identity);
         if (!draft.id || !Number.isInteger(draft.version) || !draft.type) {
             errors.push(errorOf(
                 'admission-context-invalid',
@@ -298,7 +379,8 @@
                 item,
                 context.mode,
                 draft,
-                errors
+                errors,
+                identity
             );
             return {
                 field,
@@ -429,6 +511,18 @@
         const fieldProvenance = Object.fromEntries(
             decision.fieldDecisions.map(item => [item.field, clone(item)])
         );
+        const identity = identityContract.resolveIdentity(
+            draft, { allowLegacyRead: true }
+        );
+        const formalSource = {
+            ...clone(draft.source || {}),
+            ...clone(context.source)
+        };
+        if (identity.status === 'canonical') {
+            delete formalSource.mode;
+        } else {
+            formalSource.mode = context.mode;
+        }
         return immutable({
             id,
             schemaVersion: 'qisi.question.v2',
@@ -439,7 +533,11 @@
             answer: draft.answer || '',
             solution: draft.solution || '',
             images: clone(draft.images || []),
-            source: { ...clone(draft.source || {}), ...clone(context.source), mode: context.mode },
+            source: formalSource,
+            ...(identity.status === 'canonical' ? {
+                producer: clone(draft.producer),
+                route: clone(draft.route)
+            } : {}),
             admission: {
                 schemaVersion: ADMISSION_SCHEMA_VERSION,
                 decisionId: decision.decisionId,

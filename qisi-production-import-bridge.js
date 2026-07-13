@@ -242,6 +242,29 @@
         assertPorts(ports);
         const clock = typeof ports.clock === 'function' ? ports.clock : Date.now;
 
+        async function runDocxVisionShadow(input = {}) {
+            if (typeof ports.runDocxVisionShadow !== 'function') {
+                throw createError('PRODUCTION_IMPORT_PORT_REQUIRED', {
+                    port: 'runDocxVisionShadow'
+                });
+            }
+            const value = await ports.runDocxVisionShadow({
+                ...input,
+                shadow: true
+            });
+            if (
+                !isRecord(value) || value.shadow !== true ||
+                !Array.isArray(value.drafts) || value.drafts.length === 0 ||
+                value.formalWrites !== 0 || value.reviewDraftWrites !== 0 ||
+                value.realApiCalled !== false
+            ) {
+                throw createError('PRODUCTION_IMPORT_RESULT_MALFORMED', {
+                    causeCode: 'docx-vision-shadow-result-malformed'
+                });
+            }
+            return value;
+        }
+
         async function run(input = {}) {
             const batchId = String(input.batchId || '').trim();
             if (!batchId) throw createError('PRODUCTION_IMPORT_INPUT_INVALID');
@@ -590,7 +613,7 @@
             }
         }
 
-        return Object.freeze({ run });
+        return Object.freeze({ run, runDocxVisionShadow });
     }
 
     const api = Object.freeze({

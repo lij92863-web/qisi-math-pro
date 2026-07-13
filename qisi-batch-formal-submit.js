@@ -29,8 +29,10 @@
             if (!policy.FORMAL_FIELDS.includes(field)) return existing;
             const current = existing[field] || {};
             existing[field] = {
+                kind: 'manual',
                 status: 'manual',
                 sourceId: current.sourceId || draft?.source?.sourceId || '',
+                manuallyEdited: true,
                 manualEditRevision:
                     (Number.isInteger(current.manualEditRevision)
                         ? current.manualEditRevision
@@ -51,13 +53,15 @@
             const evaluatedAt = new Date(clockValue).toISOString();
             const requestId = `batch-submit:${draft?.id}:${draft?.version}`;
             const context = policy.createAdmissionContext({
-                mode: draft?.source?.mode || '',
+                mode: draft?.producer?.mode || draft?.source?.mode || '',
                 actorId,
                 explicitConfirmation: true,
                 requestId,
                 idempotencyKey: requestId,
                 evaluatedAt,
-                source: draft?.source || {}
+                source: draft?.source || {},
+                producer: draft?.producer || {},
+                route: draft?.route || {}
             });
             const decision = policy.evaluateDraftAdmission(draft, context);
             if (!decision.accepted) {

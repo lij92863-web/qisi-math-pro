@@ -1,4 +1,18 @@
-(function initProductionDocxSourcePort(root) {
+(function initProductionDocxSourcePort(root, factory) {
+    'use strict';
+
+    const contract = root?.Qisi?.DocxProducerIdentityContract || (
+        typeof module !== 'undefined' && module.exports
+            ? require('./qisi-docx-producer-identity-contract.js')
+            : null
+    );
+    const api = factory(contract);
+    if (typeof module !== 'undefined' && module.exports) module.exports = api;
+    if (root) {
+        root.Qisi = root.Qisi || {};
+        root.Qisi.ProductionDocxSourcePort = api;
+    }
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (contract) {
     'use strict';
 
     function createError(code, name = 'Error') {
@@ -36,7 +50,24 @@
         }
 
         const convertedDrafts = result.drafts.map(ports.convertDraft);
-        const drafts = convertedDrafts.filter((draft, index, allDrafts) =>
+        const projectedDrafts = convertedDrafts.map((draft, index) =>
+            contract.projectDeterministicDocxCandidate({
+                candidate: draft,
+                source: {
+                    sourceId: source.id,
+                    format: 'docx',
+                    filename: source.filename || '',
+                    mimeType: source.mimeType || source.type || '',
+                    sourceOrder: Number.isInteger(source.sourceOrder)
+                        ? source.sourceOrder : 0
+                },
+                engine: 'docx-xml-importer',
+                page: 1,
+                blockIds: draft?.sourceTrace?.blockIds || [],
+                index
+            })
+        );
+        const drafts = projectedDrafts.filter((draft, index, allDrafts) =>
             draft && typeof draft === 'object' &&
             ports.acceptDraft(draft, index, allDrafts) === true
         );
@@ -51,10 +82,5 @@
         };
     }
 
-    const api = Object.freeze({ parseDocxSource });
-    if (typeof module !== 'undefined' && module.exports) module.exports = api;
-    if (root) {
-        root.Qisi = root.Qisi || {};
-        root.Qisi.ProductionDocxSourcePort = api;
-    }
-})(typeof globalThis !== 'undefined' ? globalThis : this);
+    return Object.freeze({ parseDocxSource });
+});

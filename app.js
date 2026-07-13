@@ -88,11 +88,18 @@
                         };
                     },
                     validateOwnership(draft, { context, index }) {
-                        const requiredFileType = draft.source?.mode === 'docx-deterministic'
-                            ? 'docx'
-                            : draft.source?.mode === 'pdf-ai'
-                                ? 'pdf'
-                                : '';
+                        const canonicalFormat = String(
+                            draft.source?.format || ''
+                        );
+                        const requiredFileType = ['docx', 'pdf'].includes(
+                            canonicalFormat
+                        )
+                            ? canonicalFormat
+                            : draft.source?.mode === 'docx-deterministic'
+                                ? 'docx'
+                                : draft.source?.mode === 'pdf-ai'
+                                    ? 'pdf'
+                                    : '';
                         if (
                             !requiredFileType ||
                             !(context.files || []).some(file =>
@@ -1291,6 +1298,8 @@
                         convertedFromDocx: true,
                         sourceDocxFileId: fileRecord.id,
                         sourceDocxFileName: fileRecord.filename || '',
+                        sourceDocxMimeType: fileRecord.mimeType || fileRecord.type ||
+                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                         parseStatus: 'pending',
                         errorMessage: ''
                     };
@@ -10356,41 +10365,68 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                                 }
                             );
 
-                            const items = processed.map(q => ({
-                                ...q,
-                                type: q.type || '单选题',
-                                sourceFileId: file.id,
-                                sourceFileName: file.filename || '',
-                                sourcePage: pageNo,
-                                sourcePageImage: imageUrl,
-                                sourceTrace: {
-                                    ...(q.sourceTrace || {}),
-                                    source: 'strict-visual-page-qwen',
-                                    model,
-                                    strictProtocol: {
-                                        accepted: true,
-                                        decisionId:
-                                            `strict-pdf:${file.id}:${pageNo}:${model}`,
-                                        fields: [
-                                            'questionNumber',
-                                            'stem',
-                                            'options'
-                                        ],
-                                        method:
-                                            payload.method ||
-                                            'strict-json-contract'
-                                    },
+                            const items = processed.map((q, itemIndex) => {
+                                const producerSourceId = file.convertedFromDocx
+                                    ? file.sourceDocxFileId
+                                    : file.id;
+                                const strictProtocol = {
+                                    accepted: true,
+                                    decisionId: `${file.convertedFromDocx
+                                        ? 'strict-docx'
+                                        : 'strict-pdf'}:${producerSourceId}:${pageNo}:${model}`,
+                                    fields: [
+                                        'questionNumber',
+                                        'stem',
+                                        'options'
+                                    ],
+                                    method: payload.method || 'strict-json-contract',
+                                    sourceId: producerSourceId,
+                                    engine: model
+                                };
+                                const candidate = {
+                                    ...q,
+                                    type: q.type || '单选题',
                                     sourceFileId: file.id,
                                     sourceFileName: file.filename || '',
                                     sourcePage: pageNo,
-                                    pageIndex: pageNo,
-                                    sourcePageImage: imageUrl
-                                },
-                                warnings: [
-                                    ...(q.warnings || []),
-                                    '本题由整页视觉识别生成，请核对题型、题干和 LaTeX 公式。'
-                                ]
-                            }));
+                                    sourcePageImage: imageUrl,
+                                    sourceTrace: {
+                                        ...(q.sourceTrace || {}),
+                                        source: 'strict-visual-page-qwen',
+                                        model,
+                                        strictProtocol,
+                                        sourceFileId: file.id,
+                                        sourceFileName: file.filename || '',
+                                        sourcePage: pageNo,
+                                        pageIndex: pageNo,
+                                        sourcePageImage: imageUrl
+                                    },
+                                    warnings: [
+                                        ...(q.warnings || []),
+                                        '本题由整页视觉识别生成，请核对题型、题干和 LaTeX 公式。'
+                                    ]
+                                };
+                                if (!file.convertedFromDocx) return candidate;
+                                return window.Qisi.DocxProducerIdentityContract
+                                    .projectDocxVisionCandidate({
+                                        candidate,
+                                        source: {
+                                            sourceId: file.sourceDocxFileId,
+                                            format: 'docx',
+                                            filename: file.sourceDocxFileName || '',
+                                            mimeType: file.sourceDocxMimeType ||
+                                                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                            sourceOrder: Number.isInteger(file.sourceOrder)
+                                                ? file.sourceOrder : 0
+                                        },
+                                        engine: model,
+                                        page: pageNo,
+                                        blockIds: q.sourceTrace?.blockIds || [
+                                            `page:${pageNo}:candidate:${itemIndex + 1}`
+                                        ],
+                                        controlledWriteDecision: strictProtocol
+                                    });
+                            });
 
                             console.groupCollapsed('[BATCH_DEBUG][strict-postprocess-result]');
                             console.log({
@@ -13768,7 +13804,33 @@ ${source}`;
                             grade: meta.grade || '高一',
                             diff: meta.diff || '中等',
                             year: meta.year || '',
-                            source: meta.source || '',
+                            source: item.source && typeof item.source === 'object' &&
+                                !Array.isArray(item.source)
+                                ? item.source
+                                : meta.source || '',
+                            ...(item.producer ? { producer: item.producer } : {}),
+                            ...(item.route ? { route: item.route } : {}),
+                            ...(item.fieldProvenance
+                                ? { fieldProvenance: item.fieldProvenance }
+                                : {}),
+                            ...(item.controlledWrite
+                                ? { controlledWrite: item.controlledWrite }
+                                : {}),
+                            ...(item.supportLevel
+                                ? { supportLevel: item.supportLevel }
+                                : {}),
+                            ...(typeof item.manualReviewRequired === 'boolean'
+                                ? { manualReviewRequired: item.manualReviewRequired }
+                                : {}),
+                            ...(typeof item.canonicalReviewHandoff === 'boolean'
+                                ? { canonicalReviewHandoff: item.canonicalReviewHandoff }
+                                : {}),
+                            ...(item.producerIdentityContractVersion
+                                ? {
+                                    producerIdentityContractVersion:
+                                        item.producerIdentityContractVersion
+                                }
+                                : {}),
                             province: meta.province || '',
                             tags: Array.isArray(meta.tags) ? meta.tags : [],
                             systemKnowledge,
@@ -15074,7 +15136,7 @@ ${source}`;
                         meta.defaultType || ''
                     );
 
-                    return {
+                    const normalized = {
                         id: draft.id || makeBatchId('dq'),
                         batchId: batch.id,
                         order,
@@ -15083,7 +15145,7 @@ ${source}`;
                         grade: draft.grade || meta.grade || '高一',
                         diff: draft.diff || meta.diff || '中等',
                         year: draft.year || meta.year || '',
-                        source: draft.source || meta.source || '',
+                        sourceLabel: draft.source || meta.source || '',
                         province: draft.province || meta.province || '',
                         tags: Array.isArray(draft.tags)
                             ? draft.tags
@@ -15127,6 +15189,7 @@ ${source}`;
                         createdAt: draft.createdAt || now,
                         updatedAt: now
                     };
+                    return normalized;
                 };
 
                 const buildDocxVisualOcrDraftsForV2 = async (file, batch, engineHelpers = {}) => {

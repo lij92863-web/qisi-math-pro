@@ -1,5 +1,10 @@
 (function (root, factory) {
-    const api = factory();
+    const identityContract = root?.Qisi?.DocxProducerIdentityContract || (
+        typeof module !== 'undefined' && module.exports
+            ? require('./qisi-docx-producer-identity-contract.js')
+            : null
+    );
+    const api = factory(identityContract);
 
     root.Qisi = root.Qisi || {};
     root.Qisi.RecognitionContracts = api;
@@ -14,7 +19,7 @@
     typeof globalThis !== 'undefined'
         ? globalThis
         : this,
-    function () {
+    function (identityContract) {
         'use strict';
 
         const SCHEMA_VERSION = 'qisi.question.v1';
@@ -25,7 +30,10 @@
             'manual',
             'docx-deterministic',
             'pdf-ai',
-            'imported-package'
+            'imported-package',
+            'deterministic-docx',
+            'deterministic-pdf',
+            'vision-ai'
         ]);
         const FORMAL_FIELDS = Object.freeze([
             'questionNumber',
@@ -558,13 +566,23 @@
                 errors
             );
 
-            const mode = sourceValid ? question.source.mode : '';
-            if (sourceValid && !ADMISSION_MODES.includes(mode)) {
+            const identity = typeof identityContract?.resolveIdentity === 'function'
+                ? identityContract.resolveIdentity(question, { allowLegacyRead: true })
+                : { status: 'invalid', errors: [] };
+            const mode = identity.status === 'canonical'
+                ? identity.producer?.mode || ''
+                : identity.status === 'legacy-exact'
+                    ? identity.legacyMode || ''
+                    : '';
+            if (sourceValid && (
+                !ADMISSION_MODES.includes(mode) ||
+                ['invalid', 'legacy-unknown'].includes(identity.status)
+            )) {
                 errors.push(errorOf(
                     'invalid-source-mode',
-                    'source.mode',
-                    'Question source mode is unsupported.',
-                    mode
+                    identity.status === 'canonical' ? 'producer.mode' : 'source.mode',
+                    'Question producer identity is unsupported.',
+                    identity.errors || mode
                 ));
             }
             if (sourceValid) {
@@ -752,7 +770,7 @@
                         }
                     }
                     if (item.status === 'controlled-write') {
-                        if (mode !== 'pdf-ai') {
+                        if (!['pdf-ai', 'vision-ai'].includes(mode)) {
                             errors.push(errorOf(
                                 'controlled-write-mode-invalid',
                                 `provenance.${field}`,
@@ -767,6 +785,30 @@
                                 'controlled-write-evidence-invalid',
                                 `provenance.${field}`,
                                 `Controlled-write evidence for ${field} is invalid.`
+                            ));
+                        }
+                    }
+                    if (
+                        identity.status === 'canonical' &&
+                        !['manual', 'missing', 'rejected'].includes(item.status)
+                    ) {
+                        const expectedBoundary = mode === 'vision-ai'
+                            ? 'docx-vision-engine-output-to-candidate'
+                            : 'docx-deterministic-source-to-candidate';
+                        if (
+                            item.kind !== item.status ||
+                            item.sourceId !== question.source.sourceId ||
+                            item.sourceFormat !== question.source.format ||
+                            item.producerMode !== mode ||
+                            item.routeId !== question.route?.identity ||
+                            !item.engine ||
+                            item.producerBoundary !== expectedBoundary ||
+                            item.contractVersion !== identityContract.CONTRACT_VERSION
+                        ) {
+                            errors.push(errorOf(
+                                'producer-provenance-invalid',
+                                `provenance.${field}`,
+                                `Canonical producer-time provenance for ${field} is invalid.`
                             ));
                         }
                     }
