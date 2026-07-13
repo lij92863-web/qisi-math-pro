@@ -283,6 +283,15 @@
   invariants; no production remediation was required.
 - Phase 5 full mandatory matrix and browser preflight/dry-run passed with no
   real API call. Architecture audit decision: PASS.
+- Phase 6 failure-first evidence: the benchmark report was absent and the first
+  valid isolated metadata representative regressed 11.84% versus R2 final.
+- Phase 6 removed per-row metadata closure calls without changing output; three
+  isolated post-fix medians were 332.295/340.796/317.338 ms, representative
+  +3.42% versus R2 final and all within the 10% gate.
+- Phase 6 benchmark/functional suite passed 32/32, including 10/50/100 review,
+  formal transaction/reload/image/export, 1000/5000 library, and write counts.
+- Phase 6 full mandatory matrix and browser preflight/dry-run passed with no
+  real API call. Benchmark audit decision: PASS.
 
 ## Blockers
 
@@ -291,4 +300,4 @@
 
 ## Next exact action
 
-Commit/push Phase 5 architecture audit, then begin Phase 6 benchmark audit.
+Commit/push Phase 6 benchmark audit, then begin Phase 7 CTO review.

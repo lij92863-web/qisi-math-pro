@@ -86,14 +86,18 @@
         const difficulties = new Map();
         let withAnswer = 0;
         let withImages = 0;
-        const increment = (map, value) => {
-            const key = String(value || '');
-            if (key) map.set(key, (map.get(key) || 0) + 1);
-        };
         for (const item of rows) {
-            increment(types, item?.type || item?.meta?.type);
-            increment(grades, item?.grade || item?.meta?.grade);
-            increment(difficulties, item?.diff || item?.meta?.diff);
+            const type = String(item?.type || item?.meta?.type || '');
+            const grade = String(item?.grade || item?.meta?.grade || '');
+            const difficulty = String(item?.diff || item?.meta?.diff || '');
+            if (type) types.set(type, (types.get(type) || 0) + 1);
+            if (grade) grades.set(grade, (grades.get(grade) || 0) + 1);
+            if (difficulty) {
+                difficulties.set(
+                    difficulty,
+                    (difficulties.get(difficulty) || 0) + 1
+                );
+            }
             if (String(item?.answer || '').trim()) withAnswer += 1;
             if (Array.isArray(item?.images) && item.images.length) withImages += 1;
         }
