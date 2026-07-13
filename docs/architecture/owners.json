@@ -1,0 +1,500 @@
+{
+  "schemaVersion": "qisi.program-c-owners.r3",
+  "authority": "Program C production and retirement ownership",
+  "owners": [
+    {
+      "ownerId": "utils", "module": "qisi-utils.js", "layer": 0,
+      "responsibilities": ["shared-pure-text-and-latex-utilities"],
+      "allowedCallers": [], "allowedDependencies": [],
+      "forbiddenDependencies": ["ui-shell", "question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "secure-logger", "module": "qisi-secure-logger.js", "layer": 0,
+      "responsibilities": ["security-log-redaction"],
+      "allowedCallers": ["import-diagnostics"], "allowedDependencies": [],
+      "forbiddenDependencies": ["ui-shell", "question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "archive-security", "module": "qisi-archive-security.js", "layer": 0,
+      "responsibilities": ["archive-input-safety-policy"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": [],
+      "forbiddenDependencies": ["question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "recognition-contracts", "module": "qisi-recognition-contracts.js", "layer": 0,
+      "responsibilities": ["recognition-and-question-contracts"],
+      "allowedCallers": [], "allowedDependencies": [],
+      "forbiddenDependencies": ["ui-shell", "question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "ocr-adapter-contract", "module": "qisi-ocr-adapter-contract.js", "layer": 0,
+      "responsibilities": ["ocr-adapter-input-output-and-error-contract"],
+      "allowedCallers": ["ocr-qwen-adapter", "ocr-local-adapter"], "allowedDependencies": [],
+      "forbiddenDependencies": ["ui-shell", "formal-admission", "question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "import-state-machine", "module": "qisi-import-state-machine.js", "layer": 0,
+      "responsibilities": ["import-lifecycle-transition-ownership"],
+      "allowedCallers": ["production-import-bridge", "batch-formal-submit"], "allowedDependencies": [],
+      "forbiddenDependencies": ["ui-shell", "formal-admission", "question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "support-block-parser", "module": "qisi-pdf-support-block-parser.js", "layer": 0,
+      "responsibilities": ["pdf-support-block-parsing"],
+      "allowedCallers": ["support-aligner", "controlled-write", "pdf-import-coordinator"], "allowedDependencies": [],
+      "forbiddenDependencies": ["ui-shell", "question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "pdf-safe-partial", "module": "qisi-pdf-safe-partial-pipeline.js", "layer": 0,
+      "responsibilities": ["pdf-safe-partial-invariants-and-trace"],
+      "allowedCallers": ["candidate-normalizer", "ui-shell"], "allowedDependencies": [],
+      "forbiddenDependencies": ["question-repository", "formal-admission"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "source-role-classifier", "module": "qisi-source-role-classifier.js", "layer": 0,
+      "responsibilities": ["source-role-classification"],
+      "allowedCallers": ["production-import-bridge"], "allowedDependencies": [],
+      "forbiddenDependencies": ["ui-shell", "formal-admission", "question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "question-image-policy", "module": "qisi-question-image-policy.js", "layer": 0,
+      "responsibilities": ["question-image-list-policy"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": [],
+      "forbiddenDependencies": ["question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "solution-quality-policy", "module": "qisi-solution-quality-policy.js", "layer": 0,
+      "responsibilities": ["solution-quality-classification"],
+      "allowedCallers": ["review-draft-normalization", "ui-shell"], "allowedDependencies": [],
+      "forbiddenDependencies": ["question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "support-latex-policy", "module": "qisi-support-latex-policy.js", "layer": 0,
+      "responsibilities": ["support-field-latex-normalization"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": [],
+      "forbiddenDependencies": ["question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "support-document-parser", "module": "qisi-support-parser.js", "layer": 0,
+      "responsibilities": ["support-document-coverage-parsing"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": [],
+      "forbiddenDependencies": ["question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "support-repair", "module": "qisi-support-repair.js", "layer": 0,
+      "responsibilities": ["support-json-repair-policy"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": [],
+      "forbiddenDependencies": ["question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "docx-producer-identity", "module": "qisi-docx-producer-identity-contract.js", "layer": 0,
+      "responsibilities": ["docx-producer-identity-and-projection-contract"],
+      "allowedCallers": ["production-docx-source-port", "production-docx-vision-source-port", "qwen-vision-source-port"],
+      "allowedDependencies": [], "forbiddenDependencies": ["ui-shell", "question-repository", "formal-admission"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "import-equivalence-normalizer", "module": "qisi-import-equivalence-normalizer.js", "layer": 0,
+      "responsibilities": ["retired-shadow-import-comparator"],
+      "allowedCallers": [], "allowedDependencies": [],
+      "forbiddenDependencies": ["ui-shell", "production-import-bridge"],
+      "productionEntry": false, "writeAuthority": "none", "status": "deprecated"
+    },
+    {
+      "ownerId": "formal-admission", "module": "qisi-formal-admission-policy.js", "layer": 1,
+      "responsibilities": ["formal-question-admission-decision"],
+      "allowedCallers": ["batch-formal-submit", "production-review-validator", "ui-shell"],
+      "allowedDependencies": ["recognition-contracts"],
+      "forbiddenDependencies": ["question-repository", "production-import-bridge"],
+      "productionEntry": true, "writeAuthority": "admission-decision-only", "status": "production"
+    },
+    {
+      "ownerId": "question-repository", "module": "qisi-storage-repository.js", "layer": 1,
+      "responsibilities": ["draft-and-formal-question-transactions"],
+      "allowedCallers": ["batch-formal-submit", "draft-persistence", "library-service", "export-service", "batch-context", "production-status-port", "ui-shell"],
+      "allowedDependencies": ["recognition-contracts"],
+      "forbiddenDependencies": ["ui-shell"],
+      "productionEntry": true, "writeAuthority": "repository-transaction-only", "status": "production"
+    },
+    {
+      "ownerId": "support-aligner", "module": "qisi-pdf-support-aligner.js", "layer": 1,
+      "responsibilities": ["pdf-support-sequence-alignment"],
+      "allowedCallers": ["controlled-write", "pdf-candidate-projection", "candidate-normalizer", "pdf-import-coordinator"],
+      "allowedDependencies": ["support-block-parser"],
+      "forbiddenDependencies": ["ui-shell", "question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "ocr-qwen-adapter", "module": "qisi-ocr-qwen-adapter.js", "layer": 1,
+      "responsibilities": ["qwen-proxy-transport-and-task-client"],
+      "allowedCallers": ["qwen-vision-source-port", "ocr-registry"],
+      "allowedDependencies": ["recognition-contracts", "ocr-adapter-contract"],
+      "forbiddenDependencies": ["ui-shell", "formal-admission", "question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "ocr-local-adapter", "module": "qisi-ocr-local-adapter.js", "layer": 1,
+      "responsibilities": ["local-ocr-shadow-adapter"],
+      "allowedCallers": ["ocr-registry"], "allowedDependencies": ["recognition-contracts", "ocr-adapter-contract"],
+      "forbiddenDependencies": ["ui-shell", "formal-admission", "question-repository"],
+      "productionEntry": false, "writeAuthority": "none", "status": "shadow"
+    },
+    {
+      "ownerId": "performance-monitor", "module": "qisi-performance-monitor.js", "layer": 1,
+      "responsibilities": ["ocr-shadow-performance-measurement"],
+      "allowedCallers": ["ocr-shadow-mode"], "allowedDependencies": [],
+      "forbiddenDependencies": ["formal-admission", "question-repository"],
+      "productionEntry": false, "writeAuthority": "none", "status": "shadow"
+    },
+    {
+      "ownerId": "browser-document-source", "module": "qisi-browser-document-source.js", "layer": 1,
+      "responsibilities": ["browser-document-text-and-layout-source"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": ["utils"],
+      "forbiddenDependencies": ["question-repository", "formal-admission"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "browser-pdf-renderer", "module": "qisi-browser-pdf-renderer.js", "layer": 1,
+      "responsibilities": ["browser-pdf-page-rendering"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": [],
+      "forbiddenDependencies": ["question-repository", "formal-admission"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "page-question-parser", "module": "qisi-page-question-parser.js", "layer": 1,
+      "responsibilities": ["page-question-block-parsing"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": ["utils"],
+      "forbiddenDependencies": ["question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "question-content-policy", "module": "qisi-question-content-policy.js", "layer": 1,
+      "responsibilities": ["question-display-and-choice-content-policy"],
+      "allowedCallers": ["ui-shell", "recognition-structure-policy", "review-draft-normalization"],
+      "allowedDependencies": ["utils"], "forbiddenDependencies": ["question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "support-text-parser", "module": "qisi-support-text-parser.js", "layer": 1,
+      "responsibilities": ["answer-and-solution-text-parsing"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": ["utils"],
+      "forbiddenDependencies": ["question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "recognition-structure-policy", "module": "qisi-recognition-structure-policy.js", "layer": 1,
+      "responsibilities": ["recognized-question-structure-policy"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": ["utils", "question-content-policy"],
+      "forbiddenDependencies": ["question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "review-draft-state", "module": "qisi-review-draft-state.js", "layer": 1,
+      "responsibilities": ["review-draft-editor-and-image-token-state"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": ["utils"],
+      "forbiddenDependencies": ["question-repository", "formal-admission"],
+      "productionEntry": true, "writeAuthority": "in-memory-draft-only", "status": "production"
+    },
+    {
+      "ownerId": "review-draft-normalization", "module": "qisi-review-draft-normalization-policy.js", "layer": 1,
+      "responsibilities": ["review-draft-content-normalization"],
+      "allowedCallers": ["ui-shell"],
+      "allowedDependencies": ["utils", "question-content-policy", "solution-quality-policy"],
+      "forbiddenDependencies": ["question-repository", "formal-admission"],
+      "productionEntry": true, "writeAuthority": "in-memory-draft-only", "status": "production"
+    },
+    {
+      "ownerId": "strict-question-policy", "module": "qisi-strict-question-policy.js", "layer": 1,
+      "responsibilities": ["strict-visual-question-validation"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": [],
+      "forbiddenDependencies": ["question-repository", "formal-admission"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "production-review-validator", "module": "qisi-production-review-validator.js", "layer": 1,
+      "responsibilities": ["formal-policy-backed-review-validation"],
+      "allowedCallers": ["import-validation", "ui-shell"], "allowedDependencies": ["formal-admission"],
+      "forbiddenDependencies": ["question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "docx-converter", "module": "qisi-docx-converter.js", "layer": 1,
+      "responsibilities": ["docx-to-pdf-conversion-port"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": [],
+      "forbiddenDependencies": ["question-repository", "formal-admission"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "docx-vision-reconciler", "module": "qisi-docx-vision-reconciler.js", "layer": 1,
+      "responsibilities": ["docx-deterministic-and-vision-reconciliation"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": [],
+      "forbiddenDependencies": ["question-repository", "formal-admission"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "qwen-vision-source-port", "module": "qisi-qwen-vision-source-port.js", "layer": 2,
+      "responsibilities": ["qwen-production-ocr-runtime-and-vision-source"],
+      "allowedCallers": ["production-docx-vision-source-port", "ui-shell"],
+      "allowedDependencies": ["ocr-qwen-adapter", "docx-producer-identity"],
+      "forbiddenDependencies": ["question-repository", "formal-admission"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "visual-question-source", "module": "qisi-visual-question-source.js", "layer": 2,
+      "responsibilities": ["visual-question-repair-and-figure-source"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": ["ocr-qwen-adapter"],
+      "forbiddenDependencies": ["question-repository", "formal-admission"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "visual-support-source", "module": "qisi-visual-support-source.js", "layer": 2,
+      "responsibilities": ["visual-answer-and-solution-evidence-source"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": ["ocr-qwen-adapter"],
+      "forbiddenDependencies": ["question-repository", "formal-admission"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "controlled-write", "module": "qisi-pdf-support-controlled-write.js", "layer": 2,
+      "responsibilities": ["pdf-support-field-level-controlled-write-decision"],
+      "allowedCallers": ["pdf-candidate-projection", "pdf-import-coordinator"],
+      "allowedDependencies": ["support-block-parser", "support-aligner"],
+      "forbiddenDependencies": ["ui-shell", "question-repository", "formal-admission"],
+      "productionEntry": true, "writeAuthority": "candidate-fields-only-no-db", "status": "production"
+    },
+    {
+      "ownerId": "pdf-candidate-projection", "module": "qisi-pdf-candidate-projection.js", "layer": 2,
+      "responsibilities": ["pdf-candidate-projection-and-provenance"],
+      "allowedCallers": ["production-import-bridge", "production-pdf-source-port"],
+      "allowedDependencies": ["controlled-write", "support-aligner", "support-block-parser"],
+      "forbiddenDependencies": ["ui-shell", "question-repository", "formal-admission"],
+      "productionEntry": true, "writeAuthority": "candidate-projection-only", "status": "production"
+    },
+    {
+      "ownerId": "candidate-normalizer", "module": "qisi-candidate-normalizer.js", "layer": 2,
+      "responsibilities": ["candidate-normalization-and-safety-projection"],
+      "allowedCallers": ["production-import-bridge"],
+      "allowedDependencies": ["recognition-contracts", "support-aligner", "pdf-safe-partial", "production-review-validator"],
+      "forbiddenDependencies": ["ui-shell", "question-repository", "formal-admission", "controlled-write"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "import-validation", "module": "qisi-import-validation-service.js", "layer": 2,
+      "responsibilities": ["production-import-draft-validation"],
+      "allowedCallers": ["production-import-bridge"], "allowedDependencies": ["production-review-validator"],
+      "forbiddenDependencies": ["ui-shell", "question-repository", "draft-persistence"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "review-draft-builder", "module": "qisi-review-draft-builder.js", "layer": 2,
+      "responsibilities": ["review-draft-construction"],
+      "allowedCallers": ["production-import-bridge"], "allowedDependencies": [],
+      "forbiddenDependencies": ["ui-shell", "question-repository", "formal-admission"],
+      "productionEntry": true, "writeAuthority": "in-memory-draft-only", "status": "production"
+    },
+    {
+      "ownerId": "draft-persistence", "module": "qisi-draft-persistence-service.js", "layer": 2,
+      "responsibilities": ["review-draft-persistence-and-readback"],
+      "allowedCallers": ["production-import-bridge", "ui-shell"], "allowedDependencies": ["question-repository"],
+      "forbiddenDependencies": ["formal-admission", "controlled-write"],
+      "productionEntry": true, "writeAuthority": "review-draft-only", "status": "production"
+    },
+    {
+      "ownerId": "review-controller", "module": "qisi-review-controller.js", "layer": 2,
+      "responsibilities": ["review-workspace-interaction-controller"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": [],
+      "forbiddenDependencies": ["question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "library-service", "module": "qisi-library-service.js", "layer": 2,
+      "responsibilities": ["question-library-application-service"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": ["question-repository"],
+      "forbiddenDependencies": ["formal-admission"],
+      "productionEntry": true, "writeAuthority": "repository-mediated-only", "status": "production"
+    },
+    {
+      "ownerId": "export-service", "module": "qisi-export-service.js", "layer": 2,
+      "responsibilities": ["question-export-projection"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": ["question-repository"],
+      "forbiddenDependencies": ["formal-admission"],
+      "productionEntry": true, "writeAuthority": "read-only", "status": "production"
+    },
+    {
+      "ownerId": "ocr-registry", "module": "qisi-ocr-engine-registry.js", "layer": 2,
+      "responsibilities": ["ocr-engine-registration-and-selection"],
+      "allowedCallers": ["ocr-shadow-mode", "ui-shell"],
+      "allowedDependencies": ["ocr-qwen-adapter", "ocr-local-adapter"],
+      "forbiddenDependencies": ["formal-admission", "question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "ocr-shadow-mode", "module": "qisi-ocr-shadow-mode.js", "layer": 2,
+      "responsibilities": ["non-authoritative-ocr-shadow-comparison"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": ["ocr-registry", "performance-monitor"],
+      "forbiddenDependencies": ["formal-admission", "question-repository", "controlled-write"],
+      "productionEntry": false, "writeAuthority": "none", "status": "shadow"
+    },
+    {
+      "ownerId": "batch-context", "module": "qisi-batch-context-service.js", "layer": 2,
+      "responsibilities": ["batch-and-source-context-loading"],
+      "allowedCallers": ["production-import-bridge", "ui-shell"], "allowedDependencies": ["question-repository"],
+      "forbiddenDependencies": ["formal-admission"],
+      "productionEntry": true, "writeAuthority": "read-only", "status": "production"
+    },
+    {
+      "ownerId": "production-status-port", "module": "qisi-production-import-status-port.js", "layer": 2,
+      "responsibilities": ["production-import-status-reporting"],
+      "allowedCallers": ["production-import-bridge", "ui-shell"], "allowedDependencies": ["question-repository"],
+      "forbiddenDependencies": ["formal-admission", "controlled-write"],
+      "productionEntry": true, "writeAuthority": "batch-status-only", "status": "production"
+    },
+    {
+      "ownerId": "production-output-port", "module": "qisi-production-import-output-port.js", "layer": 2,
+      "responsibilities": ["production-import-output-projection"],
+      "allowedCallers": ["production-import-bridge", "ui-shell"], "allowedDependencies": [],
+      "forbiddenDependencies": ["formal-admission", "question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "production-docx-source-port", "module": "qisi-production-docx-source-port.js", "layer": 2,
+      "responsibilities": ["deterministic-docx-production-source"],
+      "allowedCallers": ["docx-import-coordinator", "production-import-bridge"],
+      "allowedDependencies": ["docx-producer-identity"],
+      "forbiddenDependencies": ["ui-shell", "formal-admission", "question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "production-docx-vision-source-port", "module": "qisi-production-docx-vision-source-port.js", "layer": 2,
+      "responsibilities": ["docx-vision-question-and-support-source"],
+      "allowedCallers": ["docx-import-coordinator", "production-import-bridge"],
+      "allowedDependencies": ["docx-producer-identity", "qwen-vision-source-port"],
+      "forbiddenDependencies": ["ui-shell", "formal-admission", "question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "batch-engine-v2", "module": "qisi-batch-engine-v2.js", "layer": 2,
+      "responsibilities": ["production-batch-candidate-engine"],
+      "allowedCallers": ["production-import-bridge", "ui-shell"], "allowedDependencies": [],
+      "forbiddenDependencies": ["formal-admission", "question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "docx-import-coordinator", "module": "qisi-docx-import-coordinator.js", "layer": 2,
+      "responsibilities": ["docx-route-coordination"],
+      "allowedCallers": ["production-import-bridge"],
+      "allowedDependencies": ["production-docx-source-port", "production-docx-vision-source-port"],
+      "forbiddenDependencies": ["ui-shell", "formal-admission", "question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "production-pdf-source-port", "module": "qisi-production-pdf-sources-port.js", "layer": 2,
+      "responsibilities": ["pdf-question-and-support-production-source"],
+      "allowedCallers": ["pdf-import-coordinator", "production-import-bridge"],
+      "allowedDependencies": ["pdf-candidate-projection"],
+      "forbiddenDependencies": ["ui-shell", "formal-admission", "question-repository", "route-b"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "pdf-import-coordinator", "module": "qisi-pdf-import-coordinator.js", "layer": 2,
+      "responsibilities": ["pdf-route-and-support-coordination"],
+      "allowedCallers": ["production-import-bridge"],
+      "allowedDependencies": ["production-pdf-source-port", "controlled-write", "support-aligner", "support-block-parser"],
+      "forbiddenDependencies": ["ui-shell", "formal-admission", "question-repository", "route-b"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "import-diagnostics", "module": "qisi-import-diagnostics.js", "layer": 2,
+      "responsibilities": ["sanitized-import-diagnostics"],
+      "allowedCallers": ["production-import-bridge", "ui-shell"], "allowedDependencies": ["secure-logger"],
+      "forbiddenDependencies": ["formal-admission", "question-repository"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "production-import-bridge", "module": "qisi-production-import-bridge.js", "layer": 3,
+      "responsibilities": ["normal-ui-production-import-workflow"],
+      "allowedCallers": ["normal-ui-controller"],
+      "allowedDependencies": ["import-state-machine", "batch-context", "source-role-classifier", "production-status-port", "production-output-port", "production-docx-source-port", "production-docx-vision-source-port", "batch-engine-v2", "docx-import-coordinator", "production-pdf-source-port", "pdf-import-coordinator", "pdf-candidate-projection", "candidate-normalizer", "import-validation", "review-draft-builder", "draft-persistence", "import-diagnostics"],
+      "forbiddenDependencies": ["ui-shell", "formal-admission", "question-repository", "controlled-write", "route-b"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "batch-formal-submit", "module": "qisi-batch-formal-submit.js", "layer": 3,
+      "responsibilities": ["teacher-confirmed-formal-submit-command"],
+      "allowedCallers": ["ui-shell"],
+      "allowedDependencies": ["formal-admission", "question-repository", "import-state-machine"],
+      "forbiddenDependencies": ["production-import-bridge"],
+      "productionEntry": true, "writeAuthority": "formal-question-confirmation-only", "status": "production"
+    },
+    {
+      "ownerId": "route-b", "module": "tests/pdf-answer-only-ai-pass.test.js", "layer": 3,
+      "responsibilities": ["route-b-answer-only-research"],
+      "allowedCallers": [], "allowedDependencies": ["controlled-write"],
+      "forbiddenDependencies": ["ui-shell", "production-import-bridge", "question-repository"],
+      "productionEntry": false, "writeAuthority": "none", "status": "research-only"
+    },
+    {
+      "ownerId": "legacy-batch-run", "module": "qisi-legacy-batch-run-coordinator.js", "layer": 3,
+      "responsibilities": ["retired-legacy-batch-run-fixture"],
+      "allowedCallers": [], "allowedDependencies": [],
+      "forbiddenDependencies": ["ui-shell", "production-import-bridge"],
+      "productionEntry": false, "writeAuthority": "none", "status": "deprecated"
+    },
+    {
+      "ownerId": "injected-import-path", "module": "qisi-injected-import-path.js", "layer": 3,
+      "responsibilities": ["retired-injected-import-path-fixture"],
+      "allowedCallers": [], "allowedDependencies": [],
+      "forbiddenDependencies": ["ui-shell", "production-import-bridge"],
+      "productionEntry": false, "writeAuthority": "none", "status": "deprecated"
+    },
+    {
+      "ownerId": "import-orchestrator-scaffold", "module": "qisi-import-orchestrator.js", "layer": 3,
+      "responsibilities": ["retired-import-orchestrator-scaffold"],
+      "allowedCallers": [], "allowedDependencies": ["recognition-contracts"],
+      "forbiddenDependencies": ["ui-shell", "production-import-bridge"],
+      "productionEntry": false, "writeAuthority": "none", "status": "deprecated"
+    },
+    {
+      "ownerId": "normal-ui-controller", "module": "qisi-normal-ui-import-controller.js", "layer": 4,
+      "responsibilities": ["normal-ui-import-event-controller"],
+      "allowedCallers": ["ui-shell"], "allowedDependencies": ["production-import-bridge"],
+      "forbiddenDependencies": ["formal-admission", "question-repository", "controlled-write", "route-b"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "ui-shell", "module": "app.js", "layer": 4,
+      "responsibilities": ["vue-ui-shell-and-production-composition-root"],
+      "allowedCallers": [],
+      "allowedDependencies": ["normal-ui-controller", "batch-formal-submit", "question-repository", "formal-admission", "review-controller", "library-service", "export-service", "draft-persistence", "production-review-validator", "qwen-vision-source-port", "visual-question-source", "visual-support-source", "browser-document-source", "browser-pdf-renderer", "page-question-parser", "question-content-policy", "question-image-policy", "recognition-structure-policy", "review-draft-state", "review-draft-normalization", "solution-quality-policy", "strict-question-policy", "support-latex-policy", "support-text-parser", "support-document-parser", "support-repair", "pdf-safe-partial", "archive-security", "utils"],
+      "forbiddenDependencies": ["ocr-qwen-adapter", "support-block-parser", "support-aligner", "controlled-write", "route-b", "legacy-batch-run", "injected-import-path", "import-orchestrator-scaffold"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
+      "ownerId": "legacy-process-draft-import-batch", "module": "app.js#processDraftImportBatch", "layer": 4,
+      "responsibilities": ["removed-legacy-import-owner"],
+      "allowedCallers": [], "allowedDependencies": [],
+      "forbiddenDependencies": ["ui-shell", "normal-ui-controller"],
+      "productionEntry": false, "writeAuthority": "none", "status": "removed"
+    },
+    {
+      "ownerId": "legacy-process-draft-import-batch-v2", "module": "app.js#processDraftImportBatchV2", "layer": 4,
+      "responsibilities": ["removed-v2-import-owner"],
+      "allowedCallers": [], "allowedDependencies": [],
+      "forbiddenDependencies": ["ui-shell", "normal-ui-controller"],
+      "productionEntry": false, "writeAuthority": "none", "status": "removed"
+    }
+  ]
+}

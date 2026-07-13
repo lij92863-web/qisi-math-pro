@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "qisi.program-c-layers.r3",
+  "layers": [
+    {
+      "id": 0,
+      "name": "contracts-and-pure-policy",
+      "ownerIds": [
+        "utils", "secure-logger", "archive-security", "recognition-contracts",
+        "ocr-adapter-contract",
+        "import-state-machine", "support-block-parser", "pdf-safe-partial",
+        "source-role-classifier", "question-image-policy", "solution-quality-policy",
+        "support-latex-policy", "support-document-parser", "support-repair",
+        "docx-producer-identity", "import-equivalence-normalizer"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "policy-parser-storage-and-adapter",
+      "ownerIds": [
+        "formal-admission", "question-repository", "support-aligner",
+        "ocr-qwen-adapter", "ocr-local-adapter", "performance-monitor",
+        "browser-document-source", "browser-pdf-renderer", "page-question-parser",
+        "question-content-policy", "support-text-parser", "recognition-structure-policy",
+        "review-draft-state", "review-draft-normalization", "strict-question-policy",
+        "production-review-validator", "docx-converter", "docx-vision-reconciler"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "application-services-and-source-ports",
+      "ownerIds": [
+        "qwen-vision-source-port", "visual-question-source", "visual-support-source",
+        "controlled-write", "pdf-candidate-projection", "candidate-normalizer",
+        "import-validation", "review-draft-builder", "draft-persistence",
+        "review-controller", "library-service", "export-service", "ocr-registry",
+        "ocr-shadow-mode", "batch-context", "production-status-port",
+        "production-output-port", "production-docx-source-port",
+        "production-docx-vision-source-port", "batch-engine-v2",
+        "docx-import-coordinator", "production-pdf-source-port",
+        "pdf-import-coordinator", "import-diagnostics"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "workflow-composition-and-retired-routes",
+      "ownerIds": [
+        "production-import-bridge", "batch-formal-submit", "route-b",
+        "legacy-batch-run", "injected-import-path", "import-orchestrator-scaffold"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "ui-shell",
+      "ownerIds": [
+        "normal-ui-controller", "ui-shell", "legacy-process-draft-import-batch",
+        "legacy-process-draft-import-batch-v2"
+      ]
+    }
+  ]
+}

@@ -101,11 +101,18 @@ test('app shell assembles owners but contains zero AI proxy requests', () => {
         0
     );
     assert.doesNotMatch(app, /qwenProxyTransport\.getEndpoint\(/);
-    assert.match(app, /createQwenTaskClient\s*\(/);
+    assert.match(app, /createProductionOcrRuntime\s*\(/);
+    assert.doesNotMatch(app, /Qisi\.OcrQwenAdapter/);
+    assert.doesNotMatch(app, /qwenTaskClient\.(?:ocrText|chatText|chatJson)\s*\(/);
     assert.match(
         app,
         /createVisualSupportSource\s*\(\{[\s\S]*?qwenTaskClient[\s\S]*?\}\)/
     );
     assert.match(visualSupport, /qwenTaskClient\.chatJson\s*\(/);
+    const source = fs.readFileSync(
+        path.join(ROOT, 'qisi-qwen-vision-source-port.js'),
+        'utf8'
+    );
+    assert.match(source, /createQwenTaskClient\s*\(/);
     assert.match(adapter, /checkHealth:\s*\(\)\s*=>\s*transport\.checkHealth\(\)/);
 });

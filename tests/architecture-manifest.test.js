@@ -36,7 +36,7 @@ test('architecture manifest covers required modules with complete metadata', () 
             `${item.id} allowed/forbidden dependency overlap`
         );
         assert.ok(
-            ['scaffold', 'production-wired', 'research-only'].includes(item.status),
+            ['scaffold', 'production-wired', 'research-only', 'deprecated'].includes(item.status),
             item.id
         );
         assert.equal(owners[item.domainOwner], item.file, item.domainOwner);

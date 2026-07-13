@@ -1087,25 +1087,19 @@
 
                     return data;
                 };
-                const qwenProxyTransport =
-                    Qisi.OcrQwenAdapter.createQwenProxyTransport({
-                        onAiRequest: label => recordBatchCostCall(label)
-                    });
-                const qwenTaskClient =
-                    Qisi.OcrQwenAdapter.createQwenTaskClient({
-                        transport: qwenProxyTransport,
-                        getMode: () => activeRecognitionMode
-                    });
-                const qwenDocumentOcrSource =
-                    Qisi.QwenVisionSourcePort.createDocumentOcrSource({
-                        ocrText: options => qwenTaskClient.ocrText(options),
-                        chatText: options => qwenTaskClient.chatText(options),
+                const qwenOcrRuntime =
+                    Qisi.QwenVisionSourcePort.createProductionOcrRuntime({
+                        onAiRequest: label => recordBatchCostCall(label),
+                        getMode: () => activeRecognitionMode,
                         cleanText: value =>
                             window.Qisi.Utils.cleanRecognizedText(value),
                         isFatalError: error =>
                             window.Qisi.Utils.isFatalQwenServiceError(error),
                         warn: code => console.warn(code)
                     });
+                const qwenTaskClient = qwenOcrRuntime.taskClient;
+                const qwenDocumentOcrSource =
+                    qwenOcrRuntime.documentOcrSource;
                 const PDF_PROCESS_CONFIG = {
                     maxPagesWithoutConfirm: 20,
                     pageRenderTimeoutMs: 45000,
@@ -1709,7 +1703,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     window.Qisi.QwenVisionSourcePort
                         .createStrictQuestionPageRecognizer({
                             requestText: options =>
-                                qwenTaskClient.chatText(options),
+                                qwenOcrRuntime.requestText(options),
                             parseStrictQuestionPayload,
                             postprocessRecognizedItems,
                             getDefaultType: () =>

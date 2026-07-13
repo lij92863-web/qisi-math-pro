@@ -6,6 +6,11 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
     'use strict';
 
+    const dependencyError = message => Object.assign(
+        new TypeError(message),
+        { code: 'BATCH_FORMAL_SUBMIT_DEPENDENCY_REQUIRED' }
+    );
+
     const createBatchFormalSubmit = ({
         policy,
         repository,
@@ -17,13 +22,13 @@
             typeof policy?.createAdmissionContext !== 'function' ||
             typeof policy?.evaluateDraftAdmission !== 'function'
         ) {
-            throw new TypeError('Formal Admission Policy is required.');
+            throw dependencyError('Formal Admission Policy is required.');
         }
         if (typeof repository?.confirmDraftToQuestion !== 'function') {
-            throw new TypeError('Formal question repository is required.');
+            throw dependencyError('Formal question repository is required.');
         }
         if (typeof createStateMachine !== 'function') {
-            throw new TypeError('Import State Machine is required.');
+            throw dependencyError('Import State Machine is required.');
         }
 
         const submit = async ({

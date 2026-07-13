@@ -1,9 +1,9 @@
 (function (root, factory) {
-    const api = factory();
+    const api = factory(root);
     root.Qisi = root.Qisi || {};
     root.Qisi.QwenVisionSourcePort = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
     'use strict';
 
     const buildStrictQuestionPrompt = ({
@@ -50,6 +50,50 @@ ${repairInfo ? `需要重点修复：\n${repairInfo}` : ''}`;
                 throw error;
             }
         }
+    };
+
+    const createProductionOcrRuntime = ({
+        onAiRequest,
+        getMode,
+        cleanText,
+        isFatalError,
+        warn
+    } = {}) => {
+        const adapter = root?.Qisi?.OcrQwenAdapter;
+        requiredFunctions(adapter, [
+            'createQwenProxyTransport',
+            'createQwenTaskClient'
+        ]);
+        requiredFunctions({ cleanText, isFatalError }, [
+            'cleanText',
+            'isFatalError'
+        ]);
+        if (typeof getMode !== 'function') {
+            const error = new TypeError(
+                'Qwen production OCR runtime requires getMode.'
+            );
+            error.code = 'QWEN_VISION_SOURCE_PORT_REQUIRED';
+            throw error;
+        }
+
+        const transport = adapter.createQwenProxyTransport({ onAiRequest });
+        const taskClient = adapter.createQwenTaskClient({
+            transport,
+            getMode
+        });
+        const documentOcrSource = createDocumentOcrSource({
+            ocrText: options => taskClient.ocrText(options),
+            chatText: options => taskClient.chatText(options),
+            cleanText,
+            isFatalError,
+            warn
+        });
+
+        return Object.freeze({
+            taskClient,
+            documentOcrSource,
+            requestText: options => taskClient.chatText(options)
+        });
     };
 
     const createStrictQuestionPageRecognizer = (ports = {}) => {
@@ -364,6 +408,7 @@ ${repairInfo ? `需要重点修复：\n${repairInfo}` : ''}`;
 
     return Object.freeze({
         buildStrictQuestionPrompt,
+        createProductionOcrRuntime,
         createStrictQuestionPageRecognizer,
         createDocumentOcrSource
     });

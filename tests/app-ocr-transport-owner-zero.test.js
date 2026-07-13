@@ -24,7 +24,9 @@ test('app shell has zero direct OCR transport, model, and strict producer owners
     assert.doesNotMatch(app, /const\s+recognizeStrictQuestionPageWithQwen\b/);
     assert.doesNotMatch(app, /const\s+recognizeExamPageStructuredWithQwen\b/);
     assert.doesNotMatch(app, /InjectedImportTransport/);
-    assert.match(app, /createQwenTaskClient\s*\(/);
+    assert.match(app, /createProductionOcrRuntime\s*\(/);
+    assert.doesNotMatch(app, /Qisi\.OcrQwenAdapter/);
+    assert.doesNotMatch(app, /qwenTaskClient\.(?:ocrText|chatText|chatJson)\s*\(/);
     assert.match(app, /QwenVisionSourcePort/);
 });
 
