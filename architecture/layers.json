@@ -222,6 +222,14 @@
       "status": "production-wired"
     },
     {
+      "id": "docx-producer-identity-contract", "file": "qisi-docx-producer-identity-contract.js",
+      "layer": 1, "domainOwner": "docxProducerIdentityContractOwner",
+      "publicApi": ["resolveIdentity", "validateCanonicalIdentity", "buildDocxVisionControlledWriteDecision", "projectDocxVisionCandidate", "applyDocxVisionSupportField", "projectDeterministicDocxCandidate", "compareCanonicalDocxCandidates"],
+      "allowedDependencies": [],
+      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
+      "status": "production-wired"
+    },
+    {
       "id": "batch-context-service", "file": "qisi-batch-context-service.js",
       "layer": 2, "domainOwner": "batchContextServiceOwner",
       "publicApi": ["createBatchContext", "loadBatchAndFiles"],
@@ -257,15 +265,15 @@
       "id": "production-docx-source-port", "file": "qisi-production-docx-source-port.js",
       "layer": 2, "domainOwner": "productionDocxSourcePortOwner",
       "publicApi": ["parseDocxSource", "createProductionImportRunner"],
-      "allowedDependencies": [],
+      "allowedDependencies": ["docx-producer-identity-contract"],
       "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
       "status": "production-wired"
     },
     {
       "id": "production-docx-vision-source-port", "file": "qisi-production-docx-vision-source-port.js",
       "layer": 2, "domainOwner": "productionDocxVisionSourcePortOwner",
-      "publicApi": ["runDocxVision", "runDocxVisionShadow", "runDocxVisionProduction"],
-      "allowedDependencies": [],
+      "publicApi": ["runDocxVision", "runDocxVisionShadow", "runDocxVisionProduction", "createProductionImportRunner"],
+      "allowedDependencies": ["docx-producer-identity-contract"],
       "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
       "status": "production-wired"
     },

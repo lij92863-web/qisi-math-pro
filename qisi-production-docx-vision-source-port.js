@@ -142,9 +142,131 @@
     const runDocxVisionProduction = (input = {}, ports = {}) =>
         runDocxVision({ ...input, mode: 'production' }, ports);
 
+    function createProductionImportRunner(ports = {}) {
+        if (
+            typeof ports.hasQuestionRole !== 'function' ||
+            typeof ports.isFullRole !== 'function' ||
+            typeof ports.hasAnswerRole !== 'function' ||
+            typeof ports.hasSolutionRole !== 'function' ||
+            typeof ports.normalizeQuestionNumber !== 'function' ||
+            typeof ports.processQuestionSource !== 'function' ||
+            typeof ports.processSupportSource !== 'function' ||
+            typeof contract?.buildDocxVisionControlledWriteDecision !== 'function' ||
+            typeof contract?.applyDocxVisionSupportField !== 'function'
+        ) throw fail('DOCX_VISION_PRODUCTION_PORT_REQUIRED');
+
+        return async function runProductionDocxVisionImport(context = {}, signal) {
+            const sources = Array.isArray(context.sources) ? context.sources : [];
+            const questionSources = sources.filter(source =>
+                ports.hasQuestionRole(source) || ports.isFullRole(source)
+            );
+            const supportSources = sources.filter(source =>
+                !ports.hasQuestionRole(source) &&
+                !ports.isFullRole(source) &&
+                (ports.hasAnswerRole(source) || ports.hasSolutionRole(source))
+            );
+            if (!questionSources.length) {
+                const error = fail('PRODUCTION_IMPORT_SOURCE_UNSUPPORTED');
+                error.message = 'docx-question-source-required';
+                throw error;
+            }
+            const base = await runDocxVisionProduction({
+                ...context,
+                sources,
+                signal
+            }, {
+                runVisionProducer: async () => {
+                    const candidates = [];
+                    const warnings = [];
+                    for (const source of questionSources) {
+                        const result = await ports.processQuestionSource({
+                            source,
+                            batch: context.batch,
+                            sources,
+                            expectedQuestionCount:
+                                context.batch?.expectedQuestionCount || 0,
+                            signal
+                        });
+                        candidates.push(...(result?.questions || []));
+                        warnings.push(...(result?.check?.warningReasons || []));
+                    }
+                    return {
+                        engine: candidates[0]?.producer?.engine || '',
+                        candidates,
+                        controlledWriteDecisions: candidates.map(candidate =>
+                            contract.buildDocxVisionControlledWriteDecision(candidate)
+                        ),
+                        draftImages: [],
+                        warnings,
+                        realApiCalled: true
+                    };
+                }
+            });
+            let drafts = [...base.drafts];
+            const warnings = [...base.warnings];
+            for (const source of supportSources) {
+                const expectedQuestionNumbers = drafts
+                    .map(draft =>
+                        ports.normalizeQuestionNumber(draft.questionNumber)
+                    )
+                    .filter(Boolean);
+                const support = await ports.processSupportSource({
+                    source,
+                    expectedQuestionNumbers,
+                    requiredKinds: {
+                        answers: ports.hasAnswerRole(source),
+                        solutions: ports.hasSolutionRole(source)
+                    },
+                    signal
+                });
+                for (const [field, items] of [
+                    ['answer', support?.answers || []],
+                    ['solution', support?.solutions || []]
+                ]) {
+                    for (const item of items) {
+                        const questionNumber =
+                            ports.normalizeQuestionNumber(item.question);
+                        const matches = drafts.map((draft, index) => ({
+                            draft,
+                            index
+                        })).filter(entry =>
+                            ports.normalizeQuestionNumber(
+                                entry.draft.questionNumber
+                            ) === questionNumber
+                        );
+                        if (matches.length !== 1) {
+                            throw fail('DOCX_SUPPORT_OWNERSHIP_INVALID');
+                        }
+                        const index = matches[0].index;
+                        drafts[index] = contract.applyDocxVisionSupportField({
+                            candidate: drafts[index],
+                            field,
+                            support: item,
+                            source: {
+                                sourceId: source.id,
+                                format: 'docx',
+                                filename: source.filename || '',
+                                mimeType: source.mimeType || source.type || '',
+                                sourceOrder: Number.isInteger(source.sourceOrder)
+                                    ? source.sourceOrder : 0
+                            },
+                            controlledWriteDecision: item.controlledWriteDecision
+                        });
+                    }
+                }
+            }
+            return Object.freeze({
+                ...base,
+                drafts: Object.freeze(drafts),
+                warnings: Object.freeze(warnings)
+            });
+        };
+    }
+
     return Object.freeze({
         runDocxVision,
         runDocxVisionShadow,
-        runDocxVisionProduction
+        runDocxVisionProduction,
+        createProductionImportRunner
     });
 });

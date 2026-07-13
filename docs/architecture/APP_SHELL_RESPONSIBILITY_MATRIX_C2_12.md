@@ -170,3 +170,19 @@ validator, and safe-partial owner objects. It contains no direct validation
 method call and no validation-policy builder. Post-wave inventory is 18,586
 lines, 379 detected functions, and a 242-line largest function. Active DOCX/PDF
 source adapter extraction remains a later wave.
+
+## Wave 4 result: active DOCX vision source adapter extracted
+
+The active DOCX vision route selection, controlled-write decision projection,
+support-source matching, and support provenance application were removed from
+`app.js`. `qisi-production-docx-vision-source-port.js` now owns the production
+runner and delegates producer evidence normalization to the existing
+`qisi-docx-producer-identity-contract.js` owner. The identity contract is now
+explicit in `owners.json` and `layers.json`; neither the source port nor Bridge
+reconstructs provenance independently.
+
+`app.js` only injects the existing question and support producer transports and
+role predicates. The old decision builder and support projection loop are
+deleted. Post-wave inventory is 18,475 lines and 378 detected functions; the
+largest function remains 242 lines. PDF adapter and fixture-port extraction are
+not included in this wave.

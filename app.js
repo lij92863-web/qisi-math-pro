@@ -14866,141 +14866,30 @@ ${source}`;
                             clock: Date.now
                         });
 
-                const docxVisionDecisionFromCandidate = candidate => {
-                    const strict = candidate.sourceTrace?.strictProtocol || {};
-                    const provenFields = Object.entries(
-                        candidate.fieldProvenance || {}
-                    ).filter(([, evidence]) =>
-                        evidence?.status === 'controlled-write' &&
-                        evidence?.controlledWriteAccepted === true
-                    ).map(([field]) => field);
-                    return {
-                        ...strict,
-                        accepted: strict.accepted === true ||
-                            candidate.controlledWrite?.evaluated === true,
-                        decisionId: strict.decisionId ||
-                            candidate.controlledWrite?.decisionId || '',
-                        sourceId: strict.sourceId ||
-                            candidate.source?.sourceId ||
-                            candidate.sourceDocxFileId || '',
-                        fields: [...new Set([
-                            ...(strict.fields || []),
-                            ...(candidate.controlledWrite?.acceptedFields || []),
-                            ...provenFields
-                        ])],
-                        engine: strict.engine || strict.model ||
-                            candidate.producer?.engine || ''
-                    };
-                };
-
-                const runProductionDocxVisionImport = async (context, signal) => {
-                    const sources = context.sources || [];
-                    const questionSources = sources.filter(source =>
-                        batchHasQuestionRole(source) || batchIsFullRole(source)
-                    );
-                    const supportSources = sources.filter(source =>
-                        !batchHasQuestionRole(source) &&
-                        !batchIsFullRole(source) &&
-                        (batchHasAnswerRole(source) || batchHasSolutionRole(source))
-                    );
-                    if (!questionSources.length) {
-                        const error = new Error('docx-question-source-required');
-                        error.code = 'PRODUCTION_IMPORT_SOURCE_UNSUPPORTED';
-                        throw error;
-                    }
-                    const base = await window.Qisi.ProductionDocxVisionSourcePort
-                        .runDocxVisionProduction({
-                            ...context,
-                            sources,
-                            signal
-                        }, {
-                            runVisionProducer: async () => {
-                                const candidates = [];
-                                const warnings = [];
-                                for (const source of questionSources) {
-                                    const result =
-                                        await processDocxByLocalConvertAndStrictVision({
-                                            file: source,
-                                            batch: context.batch,
-                                            processFiles: sources,
-                                            expectedQuestionCount:
-                                                context.batch.expectedQuestionCount || 0
-                                        });
-                                    candidates.push(...(result.questions || []));
-                                    warnings.push(...(result.check?.warningReasons || []));
-                                }
-                                return {
-                                    engine: candidates[0]?.producer?.engine || '',
-                                    candidates,
-                                    controlledWriteDecisions:
-                                        candidates.map(docxVisionDecisionFromCandidate),
-                                    draftImages: [],
-                                    warnings,
-                                    realApiCalled: true
-                                };
-                            }
+                const runProductionDocxVisionImport =
+                    window.Qisi.ProductionDocxVisionSourcePort
+                        .createProductionImportRunner({
+                            hasQuestionRole: batchHasQuestionRole,
+                            isFullRole: batchIsFullRole,
+                            hasAnswerRole: batchHasAnswerRole,
+                            hasSolutionRole: batchHasSolutionRole,
+                            normalizeQuestionNumber: normalizeQuestionKey,
+                            processQuestionSource: input =>
+                                processDocxByLocalConvertAndStrictVision({
+                                    file: input.source,
+                                    batch: input.batch,
+                                    processFiles: input.sources,
+                                    expectedQuestionCount:
+                                        input.expectedQuestionCount
+                                }),
+                            processSupportSource: input =>
+                                processStandaloneDocxSupportByVision({
+                                    file: input.source,
+                                    expectedQuestionNumbers:
+                                        input.expectedQuestionNumbers,
+                                    requiredKinds: input.requiredKinds
+                                })
                         });
-                    let drafts = [...base.drafts];
-                    const warnings = [...base.warnings];
-                    for (const source of supportSources) {
-                        const expectedQuestionNumbers = drafts
-                            .map(draft => normalizeQuestionKey(draft.questionNumber))
-                            .filter(Boolean);
-                        const support = await processStandaloneDocxSupportByVision({
-                            file: source,
-                            expectedQuestionNumbers,
-                            requiredKinds: {
-                                answers: batchHasAnswerRole(source),
-                                solutions: batchHasSolutionRole(source)
-                            }
-                        });
-                        for (const [field, items] of [
-                            ['answer', support.answers || []],
-                            ['solution', support.solutions || []]
-                        ]) {
-                            for (const item of items) {
-                                const questionNumber = normalizeQuestionKey(item.question);
-                                const matches = drafts.map((draft, index) => ({
-                                    draft,
-                                    index
-                                })).filter(entry =>
-                                    normalizeQuestionKey(entry.draft.questionNumber) ===
-                                    questionNumber
-                                );
-                                if (matches.length !== 1) {
-                                    const error = new Error(
-                                        'docx-support-question-ownership-invalid'
-                                    );
-                                    error.code = 'DOCX_SUPPORT_OWNERSHIP_INVALID';
-                                    throw error;
-                                }
-                                const index = matches[0].index;
-                                drafts[index] = window.Qisi.DocxProducerIdentityContract
-                                    .applyDocxVisionSupportField({
-                                        candidate: drafts[index],
-                                        field,
-                                        support: item,
-                                        source: {
-                                            sourceId: source.id,
-                                            format: 'docx',
-                                            filename: source.filename || '',
-                                            mimeType: source.mimeType || source.type || '',
-                                            sourceOrder: Number.isInteger(source.sourceOrder)
-                                                ? source.sourceOrder : 0
-                                        },
-                                        controlledWriteDecision:
-                                            item.controlledWriteDecision
-                                    });
-                            }
-                        }
-                    }
-                    return Object.freeze({
-                        ...base,
-                        drafts: Object.freeze(drafts),
-                        warnings: Object.freeze(warnings)
-                    });
-                };
-
                 const runProductionFixtureImport = async context => {
                     const transport = Qisi.Runtime.getRuntimeDependency(
                         'InjectedImportTransport'

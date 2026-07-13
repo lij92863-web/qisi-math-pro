@@ -50,6 +50,28 @@ const deterministic = overrides => Contract.projectDeterministicDocxCandidate({
     engine: 'docx-xml-importer',
     page: 1
 });
+
+test('vision producer evidence becomes one stable controlled-write decision', () => {
+    const value = Contract.buildDocxVisionControlledWriteDecision({
+        ...candidate(),
+        sourceTrace: {
+            strictProtocol: {
+                accepted: true, decisionId: 'strict-docx:1',
+                sourceId: 'docx-source-1', fields: ['stem'],
+                engine: 'mock-engine'
+            }
+        },
+        fieldProvenance: {
+            answer: {
+                status: 'controlled-write', controlledWriteAccepted: true
+            }
+        }
+    });
+    assert.equal(value.decisionId, 'strict-docx:1');
+    assert.deepEqual(value.fields, ['stem', 'answer']);
+    assert.equal(value.sourceId, 'docx-source-1');
+    assert.equal(Object.isFrozen(value), true);
+});
 const admissionContext = draft => Policy.createAdmissionContext({
     mode: draft.producer.mode,
     actorId: 'teacher-1',

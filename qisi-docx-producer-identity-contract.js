@@ -332,6 +332,36 @@
         }
     }
 
+    function buildDocxVisionControlledWriteDecision(candidate) {
+        if (!isRecord(candidate)) throw fail('DOCX_VISION_CANDIDATE_INVALID');
+        const strict = isRecord(candidate.sourceTrace?.strictProtocol)
+            ? candidate.sourceTrace.strictProtocol : {};
+        const provenFields = Object.entries(
+            isRecord(candidate.fieldProvenance) ? candidate.fieldProvenance : {}
+        ).filter(([, evidence]) =>
+            evidence?.status === 'controlled-write' &&
+            evidence?.controlledWriteAccepted === true
+        ).map(([field]) => field);
+        return immutable({
+            ...strict,
+            accepted: strict.accepted === true ||
+                candidate.controlledWrite?.evaluated === true,
+            decisionId: strict.decisionId ||
+                candidate.controlledWrite?.decisionId || '',
+            sourceId: strict.sourceId ||
+                candidate.source?.sourceId ||
+                candidate.sourceDocxFileId ||
+                candidate.sourceFileId || '',
+            fields: stableStrings([
+                ...(strict.fields || []),
+                ...(candidate.controlledWrite?.acceptedFields || []),
+                ...provenFields
+            ]),
+            engine: strict.engine || strict.model ||
+                candidate.producer?.engine || ''
+        });
+    }
+
     function projectDocxVisionCandidate(input = {}) {
         const candidate = input.candidate;
         if (!isRecord(candidate)) throw fail('DOCX_VISION_CANDIDATE_INVALID');
@@ -618,6 +648,7 @@
         legacyIdentityForMode,
         resolveIdentity,
         validateCanonicalIdentity,
+        buildDocxVisionControlledWriteDecision,
         projectDocxVisionCandidate,
         applyDocxVisionSupportField,
         projectDeterministicDocxCandidate,

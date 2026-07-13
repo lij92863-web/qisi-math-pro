@@ -26,6 +26,7 @@
   "pdfCandidateProjectionOwner": "qisi-pdf-candidate-projection.js",
   "supportAlignerOwner": "qisi-pdf-support-aligner.js",
   "supportParserOwner": "qisi-pdf-support-block-parser.js",
+  "docxProducerIdentityContractOwner": "qisi-docx-producer-identity-contract.js",
   "routeBResearchOwner": "qisi-answer-only-ai-pass.js",
   "importEquivalenceNormalizerOwner": "qisi-import-equivalence-normalizer.js",
   "importStateMachineOwner": "qisi-import-state-machine.js",
