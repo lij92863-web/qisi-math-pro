@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qisi.local/schemas/ocr-quality-ground-truth-r1.json",
+  "title": "Qisi OCR Quality Ground Truth R1 Document",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "documentId",
+    "sourceHash",
+    "documentType",
+    "qualityTags",
+    "pageCount",
+    "hardwareProfile",
+    "split",
+    "questions",
+    "annotation"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "ground-truth-r1" },
+    "documentId": { "type": "string", "minLength": 1 },
+    "sourceHash": {
+      "type": "string",
+      "pattern": "^[A-Fa-f0-9]{64}$",
+      "description": "SHA-256 of the private source; source bytes are never committed."
+    },
+    "documentType": {
+      "enum": ["electronic-pdf", "scanned-pdf", "image", "docx-converted-image"]
+    },
+    "qualityTags": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "pageCount": { "type": "integer", "minimum": 1 },
+    "hardwareProfile": { "$ref": "#/$defs/hardwareProfile" },
+    "split": { "enum": ["calibration", "development", "holdout"] },
+    "questions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/question" }
+    },
+    "annotation": { "$ref": "#/$defs/annotation" }
+  },
+  "$defs": {
+    "hardwareProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profileId", "os", "cpu", "gpu", "memoryBytes"],
+      "properties": {
+        "profileId": { "type": "string", "minLength": 1 },
+        "os": { "type": "string", "minLength": 1 },
+        "cpu": { "type": "string", "minLength": 1 },
+        "gpu": { "type": ["string", "null"] },
+        "memoryBytes": { "type": "integer", "minimum": 1 },
+        "vramBytes": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "option": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "rawText", "normalizedText", "bbox", "missing"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "rawText": { "type": "string" },
+        "normalizedText": { "type": "string" },
+        "bbox": { "$ref": "#/$defs/bboxOrNull" },
+        "missing": { "type": "boolean" }
+      }
+    },
+    "bbox": {
+      "type": "array",
+      "prefixItems": [
+        { "type": "number" },
+        { "type": "number" },
+        { "type": "number" },
+        { "type": "number" }
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "bboxOrNull": {
+      "oneOf": [
+        { "$ref": "#/$defs/bbox" },
+        { "type": "null" }
+      ]
+    },
+    "formula": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rawText", "latex", "bbox"],
+      "properties": {
+        "rawText": { "type": "string" },
+        "latex": { "type": "string" },
+        "bbox": { "$ref": "#/$defs/bboxOrNull" }
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["imageId", "bbox", "role"],
+      "properties": {
+        "imageId": { "type": "string", "minLength": 1 },
+        "bbox": { "$ref": "#/$defs/bbox" },
+        "role": { "enum": ["question-figure", "option-figure", "source-page-reference"] }
+      }
+    },
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "page",
+        "sourceOrder",
+        "questionNumber",
+        "stem",
+        "options",
+        "answer",
+        "solution",
+        "formulas",
+        "images",
+        "expectedSafePartial",
+        "expectedOwnership",
+        "notes"
+      ],
+      "properties": {
+        "page": { "type": "integer", "minimum": 1 },
+        "sourceOrder": { "type": "integer", "minimum": 1 },
+        "questionNumber": { "type": "string", "minLength": 1 },
+        "stem": { "type": "string" },
+        "options": { "type": "array", "items": { "$ref": "#/$defs/option" } },
+        "answer": { "type": ["string", "null"] },
+        "solution": { "type": ["string", "null"] },
+        "formulas": { "type": "array", "items": { "$ref": "#/$defs/formula" } },
+        "images": { "type": "array", "items": { "$ref": "#/$defs/image" } },
+        "expectedSafePartial": { "enum": ["full", "prefix", "fail-closed"] },
+        "expectedOwnership": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["answerQuestionNumber", "solutionQuestionNumber", "machineAcceptable"],
+          "properties": {
+            "answerQuestionNumber": { "type": ["string", "null"] },
+            "solutionQuestionNumber": { "type": ["string", "null"] },
+            "machineAcceptable": { "type": "boolean" }
+          }
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewerId", "completedAt", "decision"],
+      "properties": {
+        "reviewerId": { "type": "string", "minLength": 1 },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "decision": { "enum": ["accepted", "changes-requested"] }
+      }
+    },
+    "annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["annotatorA", "verifierB", "disagreementResolution"],
+      "properties": {
+        "annotatorA": { "$ref": "#/$defs/reviewer" },
+        "verifierB": { "$ref": "#/$defs/reviewer" },
+        "disagreementResolution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["required", "status", "resolverId", "notes"],
+          "properties": {
+            "required": { "type": "boolean" },
+            "status": { "enum": ["not-needed", "resolved", "unresolved"] },
+            "resolverId": { "type": ["string", "null"] },
+            "notes": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}
