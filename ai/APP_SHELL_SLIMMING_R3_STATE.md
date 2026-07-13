@@ -365,6 +365,32 @@
   recorded `realApiCalled=false` and `underlyingApiCallCount=0`; no PDF real-run
   or real AI/OCR call occurred.
 
+- Wave C2-10.5 Phase 2 added the pure layer-0
+  `qisi-import-equivalence-normalizer.js` owner. It canonicalizes isolated DB
+  entity identifiers while preserving their associations and ignores only
+  request ids, timestamps, and progress-event time. Source order, draft order,
+  content, images, warnings, rejected evidence, ownership, controlled-write,
+  prefix, batch state, and file parse state remain comparison inputs.
+- The comparison contract returns `EXACT`, `SAFE_REFINEMENT`, or
+  `NOT_EQUIVALENT`. DOCX differences can never be safe refinements. PDF
+  refinement requires explicit independently approved evidence covering every
+  difference, can only remove a suffix or clear answer/solution fields with
+  rejected provenance, cannot add drafts or broaden file state, and cannot alter
+  protected question content or associations.
+- Three executable shadow-contract specifications fix the required isolated DB
+  names, seed-only-batch/files boundary, no pre-seeded review draft, no
+  `InjectedImportTransport`, and DOCX/PDF/known-bad canonical expectations. They
+  are not recorded as true browser equivalence: Phase 5 must replace their
+  in-memory contract snapshots with normal-UI legacy/bridge browser runs against
+  two real isolated IndexedDB databases.
+- Phase 2 failure-first produced four file-level failures because the normalizer
+  owner was absent. The completed equivalence and E2E-contract targets passed
+  12/12; combined equivalence and architecture targets passed 20/20, the full
+  suite passed 1,334/1,334 with no failed, skipped, or todo tests, and all 11
+  mandatory gates passed. Browser preflight/dry-run recorded
+  `realApiCalled=false` and `underlyingApiCallCount=0`; no PDF real-run or real
+  AI/OCR call occurred.
+
 ## Pending
 
 - Wave C2-10.5 Phases 2 through 6 and its hard acceptance gates. C2-11 through
@@ -382,6 +408,7 @@
 
 ## Next exact action
 
-Commit and push Wave C2-10.5 Phase 1, then implement the failure-first production
-import equivalence normalizer and DOCX/PDF/known-bad browser harness required by
-Phase 2. Do not enter C2-11 until all C2-10.5 hard acceptance gates pass.
+Commit and push Wave C2-10.5 Phase 2, then begin Phase 3 with one failure-first
+characterization of the shared `loadBatchAndFiles` production port. Move rather
+than copy any trapped implementation, keep the legacy output unchanged, and do
+not enter C2-11 until all C2-10.5 hard acceptance gates pass.

@@ -26,6 +26,7 @@
   "supportAlignerOwner": "qisi-pdf-support-aligner.js",
   "supportParserOwner": "qisi-pdf-support-block-parser.js",
   "routeBResearchOwner": "qisi-answer-only-ai-pass.js",
+  "importEquivalenceNormalizerOwner": "qisi-import-equivalence-normalizer.js",
   "importStateMachineOwner": "qisi-import-state-machine.js",
   "batchContextServiceOwner": "qisi-batch-context-service.js",
   "sourceRoleClassifierOwner": "qisi-source-role-classifier.js",

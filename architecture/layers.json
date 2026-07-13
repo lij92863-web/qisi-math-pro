@@ -206,6 +206,14 @@
       "status": "research-only"
     },
     {
+      "id": "import-equivalence-normalizer", "file": "qisi-import-equivalence-normalizer.js",
+      "layer": 0, "domainOwner": "importEquivalenceNormalizerOwner",
+      "publicApi": ["RESULTS", "canonicalizeImportSnapshot", "compareImportSnapshots"],
+      "allowedDependencies": [],
+      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
+      "status": "scaffold"
+    },
+    {
       "id": "import-state-machine", "file": "qisi-import-state-machine.js",
       "layer": 2, "domainOwner": "importStateMachineOwner",
       "publicApi": ["STATES", "TRANSITIONS", "createImportStateMachine"],
