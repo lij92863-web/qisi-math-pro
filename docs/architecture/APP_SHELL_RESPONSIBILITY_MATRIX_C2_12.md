@@ -154,3 +154,19 @@ functions (down from 19,494 and 396). The 216-line unreachable V2 owner and all
 of its deterministic/visual fallback precursor helpers are absent. This wave
 does not claim that the remaining active DOCX/PDF adapters or validation policy
 have moved; those are the next owner-extraction wave.
+
+## Wave 3 result: import validation policy owner extracted
+
+The 248-line app-local validation policy was moved into the existing
+`qisi-import-validation-service.js` owner as
+`createProductionValidationPorts`. Sequence, schema, attachment ownership,
+safe-partial, reviewability, DOCX support evidence, and controlled-write
+evidence rules are unchanged. All five real dependencies are explicit and a
+missing dependency fails with
+`IMPORT_PRODUCTION_VALIDATION_DEPENDENCY_REQUIRED`.
+
+`app.js` now only injects the aligner, recognition contract, production review
+validator, and safe-partial owner objects. It contains no direct validation
+method call and no validation-policy builder. Post-wave inventory is 18,586
+lines, 379 detected functions, and a 242-line largest function. Active DOCX/PDF
+source adapter extraction remains a later wave.

@@ -320,7 +320,7 @@
     {
       "id": "import-validation-service", "file": "qisi-import-validation-service.js",
       "layer": 3, "domainOwner": "importValidationServiceOwner",
-      "publicApi": ["validateImportDrafts"],
+      "publicApi": ["validateImportDrafts", "createProductionValidationPorts"],
       "allowedDependencies": [],
       "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
       "status": "production-wired"

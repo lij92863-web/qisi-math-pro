@@ -38,6 +38,27 @@ const passingPorts = (calls = []) => ({
     }
 });
 
+const productionDependencies = (overrides = {}) => ({
+    supportAligner: {
+        validatePdfSupportSequence: () => ({
+            mode: 'full', safeQuestionNumbers: ['1']
+        })
+    },
+    contracts: {
+        createStructuredQuestionDraft: value => value,
+        validateStructuredQuestionDraft: () => ({
+            valid: true, errors: [], warnings: []
+        })
+    },
+    reviewValidator: {
+        validate: () => ({ valid: true, errors: [], warnings: [] })
+    },
+    safePartialPipeline: {
+        assertSafePartialInvariants: () => true
+    },
+    ...overrides
+});
+
 test('composes sequence, schema, ownership, safe-partial, and controlled-write ports', () => {
     const calls = [];
     const input = [draft(), draft({ id: 'draft-2', questionNumber: '2' })];
@@ -112,6 +133,46 @@ test('missing, throwing, and malformed validator ports have stable errors', () =
     );
 });
 
+test('production policy owner preserves deterministic acceptance and PDF fail-closed evidence', () => {
+    const ports = Validation.createProductionValidationPorts(
+        productionDependencies()
+    );
+    const deterministic = Validation.validateImportDrafts([draft()], {
+        ...ports,
+        context: { files: [{ fileType: 'docx' }] }
+    });
+    assert.equal(deterministic.length, 1);
+
+    const pdf = draft({
+        source: { format: 'pdf', mode: 'pdf-ai', sourceId: 'pdf-1' },
+        producer: { routeId: 'pdf-vision-controlled-write' },
+        supportLevel: 'full',
+        validation: {
+            schemaValid: true,
+            sequenceValid: true,
+            ownershipValid: true
+        }
+    });
+    assert.throws(
+        () => Validation.validateImportDrafts([pdf], {
+            ...ports,
+            context: { files: [{ fileType: 'pdf' }] }
+        }),
+        error => error.code === 'IMPORT_VALIDATION_REJECTED' &&
+            error.failures.some(failure =>
+                failure.code === 'controlled-write-missing'
+            )
+    );
+});
+
+test('production policy owner requires every real validation dependency', () => {
+    assert.throws(
+        () => Validation.createProductionValidationPorts({}),
+        error => error.code ===
+            'IMPORT_PRODUCTION_VALIDATION_DEPENDENCY_REQUIRED'
+    );
+});
+
 test('production path requires the service before review persistence', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
     const injectedPath = fs.readFileSync(path.join(ROOT, 'qisi-injected-import-path.js'), 'utf8');
@@ -121,6 +182,10 @@ test('production path requires the service before review persistence', () => {
     const html = fs.readFileSync(path.join(ROOT, 'main.html'), 'utf8');
 
     assert.match(app, /Qisi\.ImportValidationService\.validateImportDrafts\s*\(/);
+    assert.match(
+        app,
+        /Qisi\.ImportValidationService\.createProductionValidationPorts\s*\(/
+    );
     assert.match(injectedPath, /validatedDrafts\s*=\s*validateDrafts\s*\(/);
     assert.ok(
         injectedPath.indexOf('validatedDrafts = validateDrafts') <
@@ -128,6 +193,11 @@ test('production path requires the service before review persistence', () => {
     );
     assert.ok(html.indexOf('qisi-import-validation-service.js') < html.indexOf('app.js'));
     assert.doesNotMatch(implementation, /document\.|window\.|Vue|fetch\s*\(|XMLHttpRequest/);
-    assert.doesNotMatch(implementation, /FormalAdmission|evaluateDraftAdmission|validatePdfSupportSequence|fieldProvenance\s*\[/);
+    assert.doesNotMatch(implementation, /FormalAdmission|evaluateDraftAdmission/);
     assert.doesNotMatch(implementation, /saveQuestion|persistReviewDraftBatch|db\.|\.put\s*\(|\.add\s*\(/i);
+    assert.doesNotMatch(
+        app,
+        /\.validatePdfSupportSequence\s*\(|\.validateStructuredQuestionDraft\s*\(|\.assertSafePartialInvariants\s*\(/
+    );
+    assert.doesNotMatch(app, /const\s+canonicalPdf\s*=|const\s+reviewablePartial\s*=/);
 });

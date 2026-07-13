@@ -104,7 +104,236 @@
         return immutable(candidates);
     };
 
-    const api = Object.freeze({ validateImportDrafts });
+    const createProductionValidationPorts = (dependencies = {}) => {
+        const supportAligner = dependencies.supportAligner;
+        const contracts = dependencies.contracts;
+        const reviewValidator = dependencies.reviewValidator;
+        const safePartialPipeline = dependencies.safePartialPipeline;
+        if (
+            typeof supportAligner?.validatePdfSupportSequence !== 'function' ||
+            typeof contracts?.createStructuredQuestionDraft !== 'function' ||
+            typeof contracts?.validateStructuredQuestionDraft !== 'function' ||
+            typeof reviewValidator?.validate !== 'function' ||
+            typeof safePartialPipeline?.assertSafePartialInvariants !== 'function'
+        ) throw createError('IMPORT_PRODUCTION_VALIDATION_DEPENDENCY_REQUIRED');
+
+        const canonicalPdf = draft =>
+            draft.source?.format === 'pdf' ||
+            draft.producer?.routeId === 'pdf-vision-controlled-write';
+        const reviewablePartial = draft =>
+            (
+                draft.source?.mode === 'pdf-ai' ||
+                draft.producer?.routeId === 'pdf-vision-controlled-write'
+            ) &&
+            ['prefix', 'safe-partial'].includes(draft.supportLevel) &&
+            draft.manualReviewRequired === true &&
+            draft.controlledWrite?.evaluated === true &&
+            draft.validation?.ownershipValid === true;
+
+        const validateOwnership = (draft, { context, index }) => {
+            const canonicalFormat = String(draft.source?.format || '');
+            const requiredFileType = ['docx', 'pdf'].includes(canonicalFormat)
+                ? canonicalFormat
+                : draft.source?.mode === 'docx-deterministic'
+                    ? 'docx'
+                    : draft.source?.mode === 'pdf-ai' ? 'pdf' : '';
+            if (
+                !requiredFileType ||
+                !(context.files || []).some(file =>
+                    file.fileType === requiredFileType
+                )
+            ) {
+                return {
+                    valid: false,
+                    errors: [{ code: 'wrong-attachment' }],
+                    warnings: []
+                };
+            }
+            if (
+                canonicalPdf(draft) &&
+                (
+                    draft.validation?.ownershipValid !== true ||
+                    draft.supportLevel === 'rejected'
+                )
+            ) {
+                return {
+                    valid: false,
+                    errors: [{ code: 'wrong-attachment' }],
+                    warnings: []
+                };
+            }
+            const result = reviewValidator.validate({
+                ...draft,
+                id: draft.id || `validation-draft-${index + 1}`,
+                version: Number.isInteger(draft.version) ? draft.version : 1
+            });
+            const acceptedPartial =
+                reviewablePartial(draft) &&
+                result.errors.length > 0 &&
+                result.errors.every(error => {
+                    const status = draft.fieldProvenance?.[error.field]?.status;
+                    return [
+                        'admission-field-rejected',
+                        'admission-required-field-missing'
+                    ].includes(error.code) &&
+                        ['rejected', 'missing'].includes(status);
+                });
+            const supportDecisions = Array.isArray(
+                draft.controlledWrite?.supportDecisions
+            ) ? draft.controlledWrite.supportDecisions : [];
+            const reviewableDocxSupport =
+                draft.source?.format === 'docx' &&
+                draft.producer?.routeId === 'docx-rendered-to-pdf-vision' &&
+                draft.manualReviewRequired === true &&
+                result.errors.length > 0 &&
+                result.errors.every(error => {
+                    if (
+                        error.code !== 'admission-producer-provenance-invalid' ||
+                        !['answer', 'solution'].includes(error.field)
+                    ) return false;
+                    const provenance = draft.fieldProvenance?.[error.field];
+                    return supportDecisions.some(decision =>
+                        decision.field === error.field &&
+                        decision.sourceId === provenance?.sourceId &&
+                        decision.decisionId ===
+                            provenance?.controlledWriteDecisionId
+                    );
+                });
+            return {
+                valid: result.valid || acceptedPartial || reviewableDocxSupport,
+                errors: acceptedPartial || reviewableDocxSupport
+                    ? [] : result.errors,
+                warnings: result.warnings || []
+            };
+        };
+
+        const ports = {
+            validateSequence(drafts, { context }) {
+                const invalidCanonicalPdf = drafts.some(draft =>
+                    canonicalPdf(draft) &&
+                    draft.validation?.sequenceValid !== true
+                );
+                if (invalidCanonicalPdf) {
+                    return {
+                        valid: false,
+                        errors: [{ code: 'sequence-invalid' }],
+                        warnings: []
+                    };
+                }
+                const expected = context.expectedQuestionNumbers || [];
+                if (!expected.length) {
+                    return { valid: true, errors: [], warnings: [] };
+                }
+                const items = drafts.map(draft => ({
+                    question: draft.questionNumber
+                }));
+                const result = supportAligner.validatePdfSupportSequence({
+                    answerItems: items,
+                    solutionItems: items,
+                    expectedQuestionNumbers: expected
+                });
+                const valid = result.mode === 'full' || (
+                    result.mode === 'prefix' &&
+                    result.safeQuestionNumbers.length === drafts.length
+                );
+                return {
+                    valid,
+                    errors: valid ? [] : [{ code: 'sequence-invalid' }],
+                    warnings: []
+                };
+            },
+            validateSchema(draft, { index }) {
+                if (
+                    canonicalPdf(draft) &&
+                    draft.validation?.schemaValid !== true
+                ) {
+                    return {
+                        valid: false,
+                        errors: [{ code: 'schema-invalid' }],
+                        warnings: []
+                    };
+                }
+                const structured = contracts.createStructuredQuestionDraft({
+                    sourceId: draft.source?.sourceId || '',
+                    sourceOrder: Number.isInteger(draft.order)
+                        ? draft.order : index + 1,
+                    questionNumber: draft.questionNumber,
+                    type: draft.type,
+                    stem: draft.stem,
+                    options: draft.options,
+                    answer: draft.answer,
+                    solution: draft.solution,
+                    images: draft.images,
+                    provenance: draft.fieldProvenance || {},
+                    confidenceByField: draft.confidenceByField || {},
+                    warnings: draft.warnings || [],
+                    rawEvidence: draft.rawText ?? null
+                });
+                const result = contracts.validateStructuredQuestionDraft(structured);
+                const errors = (result.errors || []).filter(error => {
+                    const field = error.field || error.path;
+                    return !(
+                        reviewablePartial(draft) &&
+                        ['rejected', 'missing'].includes(
+                            draft.fieldProvenance?.[field]?.status
+                        )
+                    );
+                });
+                return {
+                    valid: errors.length === 0,
+                    errors,
+                    warnings: result.warnings || []
+                };
+            },
+            validateOwnership,
+            validateSafePartial(draft) {
+                if (draft.source?.mode !== 'pdf-ai' && !canonicalPdf(draft)) {
+                    return { valid: true, errors: [], warnings: [] };
+                }
+                const complete = draft.supportLevel === 'full';
+                const validPartial =
+                    ['prefix', 'safe-partial'].includes(draft.supportLevel) &&
+                    draft.manualReviewRequired === true &&
+                    draft.validation?.sequenceValid === true &&
+                    draft.validation?.ownershipValid === true;
+                if (complete) {
+                    return { valid: true, errors: [], warnings: [] };
+                }
+                try {
+                    safePartialPipeline.assertSafePartialInvariants({
+                        isComplete: !validPartial
+                    });
+                } catch (_error) {
+                    return {
+                        valid: false,
+                        errors: [{ code: 'pdf-safe-partial-invalid' }],
+                        warnings: []
+                    };
+                }
+                return { valid: true, errors: [], warnings: [] };
+            },
+            validateControlledWriteEvidence(draft, input) {
+                const ownership = validateOwnership(draft, input);
+                if (
+                    ownership.valid && canonicalPdf(draft) &&
+                    draft.controlledWrite?.evaluated !== true
+                ) {
+                    return {
+                        valid: false,
+                        errors: [{ code: 'controlled-write-missing' }],
+                        warnings: []
+                    };
+                }
+                return ownership;
+            }
+        };
+        return Object.freeze(ports);
+    };
+
+    const api = Object.freeze({
+        validateImportDrafts,
+        createProductionValidationPorts
+    });
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (root) {
         root.Qisi = root.Qisi || {};
