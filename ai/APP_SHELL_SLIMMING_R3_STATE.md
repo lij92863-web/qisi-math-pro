@@ -3,8 +3,8 @@
 - Start commit: `b15e6fbe24c525c95a573b51a0c7ab68e77f4790`
 - Baseline tag: `pre-app-shell-slimming-r3-b15e6fb`
 - Current branch: `stage/app-shell-slimming-r3`
-- Current phase: Program C / C2-12 Wave 12 accepted / Wave 13 ready
-- Current work package: inventory and prove the remaining C2-12 responsibilities
+- Current phase: Program C / C2-12 Wave 13 accepted / Wave 14 audit ready
+- Current work package: audit ReviewDraft command and persistence ownership
 - Status updated: 2026-07-14 Asia/Shanghai
 
 ## Lost-session recovery R2 checkpoint
@@ -60,6 +60,38 @@
   and `docs/architecture/APP_SHELL_RESPONSIBILITY_MATRIX_C2_12.md`.
 - Wave 13 remains blocked until the Wave 12 commit is pushed and local,
   tracking, and live branch heads agree.
+
+## C2-12 Wave 13 accepted
+
+- Decision: `DOCX_CONVERTER_RECONCILER_OWNER_CLOSURE_ACCEPTED`.
+- Active conversion health/request/result logic moved from the shell to the
+  single-purpose `qisi-docx-converter.js` owner. Active authoritative skeleton
+  filtering/order/conflict/trace logic moved to
+  `qisi-docx-vision-reconciler.js`.
+- Both owners are architecture-registered, production-loaded, explicit-port
+  modules with no UI, database, controlled-write, persistence, or Formal
+  Admission authority.
+- The old app converter and reconciler are absent. A 586-line DOCX option
+  parse/fill/repair closure had no caller or export and was deleted as C/D
+  unreachable duplicate behavior.
+- Cancellation now reaches question/support conversion and question strict
+  production/reconciliation boundaries. Malformed conversion/merge results,
+  skeleton conflict, and conflicting duplicate option evidence fail closed.
+- Focused tests passed 38/38, residual ownership proofs 74/74, architecture
+  checks 10/10, and both required browser suites passed 1/1. The 15-scenario
+  canary retained zero attachment, leakage, bypass, fallback, formal-write,
+  console, and real-API counters.
+- Final `verify:safe` passed 1578/1578 across 54 suites. All 11 mandatory gates,
+  DOCX stable 20/20, PDF known-bad 65/65, controlled-write ownership 21/21,
+  and Route B hold 6/6 passed. Preflight/dry-run recorded zero underlying calls;
+  no real-run was performed.
+- Post-wave metrics are 16,144 `app.js` lines, 363 detected functions, and a
+  239-line largest function. All six frozen PDF files remain unchanged.
+- Formal evidence is in
+  `docs/release/PROGRAM_C_C2_12_WAVE13_DOCX_CONVERTER_RECONCILER_REPORT.md`
+  and `docs/architecture/APP_SHELL_RESPONSIBILITY_MATRIX_C2_12.md`.
+- C2-12 remains open. Wave 14 is conditional and requires a fresh ReviewDraft
+  command/persistence audit before any implementation or N/A decision.
 
 ## Entry conditions
 
@@ -930,7 +962,7 @@
 
 ## Next exact action
 
-After the Wave 12 commit is pushed and all three branch heads agree, begin Wave
-13 with a fresh responsibility inventory and reachability/unique-owner audit.
-Do not claim C2-12 complete or enter C2-13 until every remaining B
-responsibility has an evidence-backed disposition and all gates are rerun.
+After the Wave 13 commit is pushed and all three branch heads agree, begin the
+conditional Wave 14 ReviewDraft command/persistence inventory. Do not claim it
+applicable or N/A without production reachability, transaction, cancellation,
+readback, reload, duplicate, error-recovery, and no-formal-write evidence.

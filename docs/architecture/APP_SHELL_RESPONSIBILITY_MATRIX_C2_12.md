@@ -357,3 +357,28 @@ Post-wave inventory is 16,981 `app.js` lines and 375 detected functions; the
 largest detected function remains 242 lines. All six frozen PDF high-risk files
 remain byte-unchanged. Lower-level DOCX conversion/reconciliation and other
 remaining B responsibilities stay pending for Wave 13 inventory and proof.
+
+## Wave 13 result: DOCX converter/reconciler owners closed
+
+The active local conversion health/request/result lifecycle moved to the new
+single-purpose `qisi-docx-converter.js` owner. The active authoritative
+question-skeleton filtering, ordering, missing/outside diagnostics, trace
+projection, and conflict rejection moved to
+`qisi-docx-vision-reconciler.js`. Both lower-layer owners use explicit ports,
+are architecture-registered and production-loaded, and have no UI, database,
+controlled-write, persistence, or Formal Admission authority. Question and
+support producers now forward cancellation into conversion; the question path
+also checks cancellation around strict production and reconciliation.
+
+The former app-local converter and skeleton reconciler are absent. A separate
+586-line DOCX text-option parse/fill/repair closure was classified C/D after
+identifier, export, proxy, controller, and runtime-entry inspection found no
+root caller. It was deleted rather than copied. The deletion removed one naked
+display-cleaner residual callsite, so the live static proof inventory is now 26
+instead of 27; all 26 remain audited and none became replacement-allowed.
+
+Post-wave inventory is 16,144 `app.js` lines and 363 detected functions. The
+largest detected function is 239 lines. Focused tests, two browser suites, all
+11 mandatory gates, DOCX stable, PDF known-bad, and Route B hold are green; all
+safety counters and real API calls remain zero. ReviewDraft command/persistence
+ownership is the next conditional audit and has not been claimed complete.

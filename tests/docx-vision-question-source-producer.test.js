@@ -52,7 +52,16 @@ const ports = overrides => ({
 
 test('DOCX question producer preserves skeleton, visual call, and DOCX source trace', async () => {
     const calls = [];
+    const convertCalls = [];
+    const reconcileCalls = [];
     const producer = Port.createQuestionSourceProducer(ports({
+        convertDocxToPdf: async (source, options) => {
+            convertCalls.push({ source, options });
+            return {
+                id: `${source.id}-pdf`, filename: 'paper.pdf', fileType: 'pdf',
+                convertedFromDocx: true
+            };
+        },
         processStrictQuestionFile: async input => {
             calls.push(input);
             return {
@@ -60,21 +69,36 @@ test('DOCX question producer preserves skeleton, visual call, and DOCX source tr
                 pageImages: [{ pageNo: 1, imageUrl: 'page-1' }],
                 check: validation()
             };
+        },
+        reconcileQuestions: (items, sourceSkeleton, options) => {
+            reconcileCalls.push({ items, sourceSkeleton, options });
+            return {
+                applied: sourceSkeleton.authoritative,
+                questions: items,
+                questionNumbers: sourceSkeleton.questionNumbers,
+                missingQuestionNumbers: [],
+                rejectedCandidates: []
+            };
         }
     }));
     const source = file();
     const progress = () => {};
+    const controller = new AbortController();
     const result = await producer({
         file: source,
         batch: { id: 'batch-1' },
         expectedQuestionCount: 3,
-        onPageProgress: progress
+        onPageProgress: progress,
+        signal: controller.signal
     });
 
+    assert.equal(convertCalls[0].options.signal, controller.signal);
     assert.equal(calls.length, 1);
     assert.equal(calls[0].file.fileType, 'pdf');
     assert.equal(calls[0].expectedQuestionCount, 1);
     assert.equal(calls[0].onPageProgress, progress);
+    assert.equal(calls[0].signal, controller.signal);
+    assert.equal(reconcileCalls[0].options.signal, controller.signal);
     assert.equal(result.questions.length, 1);
     assert.equal(result.questions[0].sourceFileId, 'docx-1');
     assert.equal(result.questions[0].sourceDocxFileId, 'docx-1');

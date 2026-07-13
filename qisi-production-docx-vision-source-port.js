@@ -237,7 +237,8 @@
             batch,
             processFiles = [],
             expectedQuestionCount = 0,
-            onPageProgress = null
+            onPageProgress = null,
+            signal = null
         }) {
             void processFiles;
             const expected = Math.max(
@@ -256,10 +257,12 @@
             }
 
             let questionSkeleton;
+            assertActive(signal);
             try {
                 questionSkeleton =
                     await importer.extractDocxQuestionSkeleton(file);
             } catch (error) {
+                assertActive(signal);
                 const wrapped = new Error(
                     `读取 DOCX 显式题号骨架失败：${error?.message || String(error)}`
                 );
@@ -268,6 +271,7 @@
                 wrapped.cause = error;
                 throw wrapped;
             }
+            assertActive(signal);
             if (
                 !questionSkeleton ||
                 !Array.isArray(questionSkeleton.questionNumbers) ||
@@ -313,15 +317,17 @@
                 : expected;
 
             let pdfRecord;
+            assertActive(signal);
             try {
                 const convertStartedAt = now();
-                pdfRecord = await ports.convertDocxToPdf(file);
+                pdfRecord = await ports.convertDocxToPdf(file, { signal });
                 console.log('[BATCH_TIME][docx-convert]', {
                     filename: file.filename,
                     durationMs: Math.round(now() - convertStartedAt),
                     pdfFilename: pdfRecord.filename
                 });
             } catch (error) {
+                assertActive(signal);
                 const wrapped = new Error(
                     `DOCX 转 PDF 失败：${error?.message || String(error)}`
                 );
@@ -329,6 +335,7 @@
                 wrapped.cause = error;
                 throw wrapped;
             }
+            assertActive(signal);
 
             console.groupCollapsed(
                 '[BATCH_DEBUG][docx-local-pdf-then-strict-vision]'
@@ -345,14 +352,17 @@
             console.groupEnd();
 
             let strictResult;
+            assertActive(signal);
             try {
                 strictResult = await ports.processStrictQuestionFile({
                     file: pdfRecord,
                     batch,
                     expectedQuestionCount: effectiveExpected,
-                    onPageProgress
+                    onPageProgress,
+                    signal
                 });
             } catch (error) {
+                assertActive(signal);
                 const wrapped = new Error(
                     'DOCX 已成功转为 PDF，但页面视觉识别未完成：' +
                     `${error?.message || String(error)}`
@@ -365,11 +375,14 @@
                 }
                 throw wrapped;
             }
+            assertActive(signal);
 
             const reconciliation = ports.reconcileQuestions(
                 strictResult.questions || [],
-                questionSkeleton
+                questionSkeleton,
+                { signal }
             );
+            assertActive(signal);
             if (questionSkeleton.authoritative && !reconciliation.applied) {
                 const error = new Error(
                     'DOCX 题号骨架已标记为 authoritative，' +
@@ -535,7 +548,7 @@
             assertActive(signal);
             try {
                 const startedAt = now();
-                pdfRecord = await ports.convertDocxToPdf(file);
+                pdfRecord = await ports.convertDocxToPdf(file, { signal });
                 console.log('[BATCH_TIME][docx-support-convert]', {
                     filename: file.filename,
                     pdfFilename: pdfRecord.filename,

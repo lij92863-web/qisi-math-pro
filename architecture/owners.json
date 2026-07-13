@@ -35,6 +35,8 @@
   "sourceRoleClassifierOwner": "qisi-source-role-classifier.js",
   "productionImportStatusPortOwner": "qisi-production-import-status-port.js",
   "productionImportOutputPortOwner": "qisi-production-import-output-port.js",
+  "docxConverterOwner": "qisi-docx-converter.js",
+  "docxVisionReconcilerOwner": "qisi-docx-vision-reconciler.js",
   "productionDocxSourcePortOwner": "qisi-production-docx-source-port.js",
   "productionDocxVisionSourcePortOwner": "qisi-production-docx-vision-source-port.js",
   "batchEngineV2Owner": "qisi-batch-engine-v2.js",

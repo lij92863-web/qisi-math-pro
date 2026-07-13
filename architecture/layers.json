@@ -270,6 +270,22 @@
       "status": "production-wired"
     },
     {
+      "id": "docx-converter", "file": "qisi-docx-converter.js",
+      "layer": 1, "domainOwner": "docxConverterOwner",
+      "publicApi": ["createDocxToPdfConverter"],
+      "allowedDependencies": [],
+      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "controlled-write", "route-b-research"],
+      "status": "production-wired"
+    },
+    {
+      "id": "docx-vision-reconciler", "file": "qisi-docx-vision-reconciler.js",
+      "layer": 1, "domainOwner": "docxVisionReconcilerOwner",
+      "publicApi": ["createDocxVisionReconciler"],
+      "allowedDependencies": [],
+      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "controlled-write", "route-b-research"],
+      "status": "production-wired"
+    },
+    {
       "id": "production-docx-source-port", "file": "qisi-production-docx-source-port.js",
       "layer": 2, "domainOwner": "productionDocxSourcePortOwner",
       "publicApi": ["parseDocxSource", "createProductionImportRunner"],
@@ -402,6 +418,7 @@
         "controlled-write", "support-aligner", "support-parser", "pdf-safe-partial-pipeline", "archive-security",
         "secure-logger", "batch-context-service", "source-role-classifier",
         "production-import-status-port", "production-import-output-port",
+        "docx-converter", "docx-vision-reconciler",
         "production-docx-source-port", "production-docx-vision-source-port", "docx-import-coordinator",
         "production-pdf-sources-port", "pdf-import-coordinator", "candidate-normalizer",
         "pdf-candidate-projection",
