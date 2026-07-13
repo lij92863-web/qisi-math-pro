@@ -261,6 +261,10 @@
   archive and temp-root guards already rejected both traversal forms.
 - Phase 3 path-traversal security regressions passed 14/14; full mandatory
   matrix and browser dry-run passed with no real API call.
+- Phase 3 ZIP-bomb failure-first evidence: its matrix row was absent; archive
+  expansion and ratio limits already rejected all indicators before reads.
+- Phase 3 ZIP-bomb regressions passed 9/9; full mandatory matrix and browser
+  dry-run passed with no real API call.
 
 ## Blockers
 
@@ -269,4 +273,4 @@
 
 ## Next exact action
 
-Commit/push path traversal, then execute ZIP bomb.
+Commit/push ZIP bomb, then execute local OCR arbitrary path.
