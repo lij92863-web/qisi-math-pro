@@ -243,6 +243,10 @@
   Formal Admission and real PDF safe-partial already preserved rejection.
 - Phase 3 ownership-rewind regressions passed 3/3; full mandatory matrix and
   browser dry-run passed with no real API call.
+- Phase 3 script-missing failure-first evidence: the matrix row was absent and
+  the initial designated assertion used `file` instead of the audit's `path`.
+- Phase 3 script-missing and runtime-dependency regressions passed 10/10; full
+  mandatory matrix and browser dry-run passed with no real API call.
 
 ## Blockers
 
@@ -251,4 +255,4 @@
 
 ## Next exact action
 
-Commit/push ownership rewind, then execute the script-missing attack.
+Commit/push script missing, then execute formal-submit direct DB bypass.
