@@ -3,9 +3,9 @@
 - Start commit: `b15e6fbe24c525c95a573b51a0c7ab68e77f4790`
 - Baseline tag: `pre-app-shell-slimming-r3-b15e6fb`
 - Current branch: `stage/app-shell-slimming-r3`
-- Current phase: Program C / Phase 5 accepted
-- Current work package: Real Browser Shadow Equivalence accepted; stop before C2-11
-- Status updated: 2026-07-13 Asia/Shanghai
+- Current phase: Program C / C2-11 accepted
+- Current work package: normal UI production cutover and legacy batch owner retirement accepted; C2-12 is next
+- Status updated: 2026-07-14 Asia/Shanghai
 
 ## Entry conditions
 
@@ -820,6 +820,51 @@
   `docs/audit/PROGRAM_C_PHASE5_INTERNAL_CTO_REVIEW_R3.md`.
 - Decision: `PHASE_5_ACCEPTED`; this task must stop before C2-11.
 
+- C2-11 started from the clean, pushed, three-way-equal Phase 5 commit
+  `c77523c590b424a9c7f011ae2c0881ca8188f69a`. The route inventory proved all
+  visible batch create/retry/rerun events converged on the giant legacy owner,
+  while deterministic DOCX remained truthfully absent from the normal UI.
+- The normal UI now calls `NormalUiImportController`, then
+  `ProductionImportBridge.run` with explicit `mode=production`. DOCX uses the
+  truthful vision producer/provenance contract and PDF uses the existing
+  coordinator plus unique PDF candidate projection and real controlled-write
+  evidence.
+- Production success is emitted only after atomic ReviewDraft persistence,
+  repository readback verification, and UI review-model installation. Duplicate
+  clicks, lost-response retry, stale identity, progress, cancellation at every
+  pre-commit boundary, transaction rollback, and sanitized errors are covered.
+  The Bridge has no Formal Admission or formal-question write authority.
+- The 2,495-line baseline `processDraftImportBatch` owner, its public proxy
+  entry, legacy coordinator assembly, injected legacy dispatch, and runtime
+  script dependencies were removed. Chromium runtime evidence records Bridge
+  production calls and normal-UI review successes above zero with legacy
+  production/fallback and formal writes at zero.
+- The 15-scenario normal-UI Chromium canary passed. Wrong attachments, raw JSON
+  leakage, placeholders, controlled-write/Formal Admission bypass, formal
+  writes, white screens, unexpected console errors, and real API calls were all
+  zero. Known-bad, conflict, ambiguity, cancellation, raw JSON, and persistence
+  failure stayed fail-closed.
+- C2-11 targeted tests passed `28/28`; the production browser canary passed
+  `1/1` covering `15/15` cases; Phase 5 regressions passed `70/70` plus browser
+  and acceptance `8/8`; runtime/architecture owner gates passed; the final full
+  suite passed `1,517/1,517` across 54 suites. All 11 mandatory gates passed,
+  with no failed, cancelled, skipped, todo, timeout, or real AI call.
+- `app.js` inventory decreased from 21,349 to 19,494 lines. No current function
+  exceeds 250 lines. The unreachable 216-line `processDraftImportBatchV2`
+  precursor remains for the independent C2-12 responsibility convergence; it
+  has no normal-UI callsite or proxy export.
+- All six frozen PDF files are byte-unchanged. DOCX stable, PDF known-bad,
+  controlled-write ownership, Route B hold, preflight, dry-run, and no-real-AI
+  remained green. No real-run or AI proxy command was executed.
+- Production cutover/retirement commit:
+  `3a26001409ce61221e2f491d527f52ddf1b0a869`. Formal evidence is in
+  `docs/architecture/NORMAL_UI_IMPORT_ROUTE_INVENTORY_C2_11.md`,
+  `docs/architecture/PRODUCTION_IMPORT_BRIDGE_CUTOVER_CONTRACT_C2_11.md`,
+  `docs/architecture/LEGACY_BATCH_OWNER_RETIREMENT_AUDIT_C2_11.md`, and
+  `docs/release/PROGRAM_C_C2_11_LEGACY_BATCH_OWNER_RETIREMENT_REPORT.md`.
+- Decision: `C2_11_LEGACY_BATCH_OWNER_RETIREMENT_ACCEPTED`; C2-12 may begin as
+  the next independent stage only.
+
 ## Blockers / limitations
 
 - Upload-to-review, switch p50/p95, draft persist, formal submit, reload, export,
@@ -831,6 +876,7 @@
 
 ## Next exact action
 
-Phase 5 is accepted. Stop this task. C2-11 may be considered only in a new,
-independent task; do not begin production-entry migration or legacy-owner
-deletion in this Phase 5 acceptance task.
+C2-11 is accepted and sealed as its own stage. Begin C2-12 by auditing the
+remaining `app.js` import/review/formal-admission/storage responsibilities; do
+not claim C2-13 or later phases before C2-12 has its own gates, commit, push,
+state update, and accepted decision.

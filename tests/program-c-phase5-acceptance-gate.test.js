@@ -82,11 +82,15 @@ test('Phase 5 browser and acceptance gates contain no hidden skip or todo', () =
     assert.doesNotMatch(sources, /\b(?:test|it)\.(?:skip|todo)\b/);
 });
 
-test('state accepts Phase 5 but requires a separate future C2-11 task', () => {
+test('state preserves Phase 5 acceptance and records the later C2-11 cutover', () => {
     const state = read('ai/APP_SHELL_SLIMMING_R3_STATE.md');
-    assert.match(state, /Current phase: Program C \/ Phase 5 accepted/);
+    assert.match(state, /Current phase: Program C \/ C2-11 accepted/);
     assert.match(state, /Decision: `PHASE_5_ACCEPTED`/);
-    assert.match(state, /C2-11 may be considered only in a new,[\s\S]*independent task/);
-    assert.match(state, /Legacy remains the user-visible normal UI owner/);
-    assert.match(state, /Bridge[\s\S]*remains shadow-only/);
+    assert.match(
+        state,
+        /Decision: `C2_11_LEGACY_BATCH_OWNER_RETIREMENT_ACCEPTED`/
+    );
+    assert.match(state, /normal UI now calls `NormalUiImportController`/);
+    assert.match(state, /2,495-line baseline `processDraftImportBatch` owner[\s\S]*removed/);
+    assert.match(state, /C2-12 may begin as[\s\S]*next independent stage only/);
 });
