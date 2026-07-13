@@ -41,5 +41,6 @@
   "reviewDraftBuilderOwner": "qisi-review-draft-builder.js",
   "draftPersistenceServiceOwner": "qisi-draft-persistence-service.js",
   "importDiagnosticsOwner": "qisi-import-diagnostics.js",
+  "productionImportBridgeOwner": "qisi-production-import-bridge.js",
   "appShellOwner": "app.js"
 }

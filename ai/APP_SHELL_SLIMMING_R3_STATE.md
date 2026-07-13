@@ -587,9 +587,40 @@
   modules and 64 declared dependency edges with no missing target, cycle,
   upward dependency, or owner mismatch.
 
+- Wave C2-10.5 Phase 4 added the real layer-3
+  `ProductionImportBridge` workflow owner. It composes only injected production
+  owners for the state machine, batch/file context, role classification,
+  deterministic DOCX and safe-partial PDF coordination, candidate normalization,
+  output projection, validation, review construction, atomic draft persistence,
+  progress/failure status, and sanitized diagnostics.
+- The bridge drives the existing explicit DOCX and PDF state paths and stops at
+  `WAITING_CONFIRMATION`; it never performs FormalAdmission or a formal write.
+  Mixed attachment types, missing/duplicate context, raw JSON output, malformed
+  source results, sequence gaps, ownership mismatch, missing ports, persistence
+  failure, cancellation/late output, and diagnostic privacy attacks all fail
+  closed with stable errors before unsafe persistence.
+- No `processDraftImportBatch` logic was copied or deleted. The bridge owns no
+  DB, DOM/Vue, external transport, OCR invocation, parser/aligner,
+  controlled-write, Route B, silent legacy fallback, or FormalAdmission
+  authority. It is browser-loaded and registered as a layer-3 `scaffold`; the
+  normal UI still uses the legacy path until real browser shadow equivalence is
+  proven and Phase 6 explicitly switches it.
+- Failure-first began with the bridge module absent (0/1 file-level target). The
+  first implementation reached 10/11; one bounded test-contract repair retained
+  the existing state-machine distinction between duplicate context
+  (`IMPORT_START_INVALID`) and missing source role (`IMPORT_CONTEXT_INVALID`).
+  Final bridge tests passed 12/12, the combined owner/architecture target passed
+  95/95, and the full suite passed 1,387/1,387 with no failed, skipped, or todo
+  tests. All 11 mandatory gates passed in order. Browser preflight/dry-run
+  recorded `realApiCalled=false` and `underlyingApiCallCount=0`; no PDF real-run
+  or real AI/OCR call occurred.
+- `app.js` remains behaviorally unchanged in this work package. The manifest now
+  records 44 modules and 78 declared dependency edges with no missing target,
+  cycle, upward dependency, or owner mismatch.
+
 ## Pending
 
-- Wave C2-10.5 Phases 4 through 6 and the hard acceptance gates. C2-11 through
+- Wave C2-10.5 Phases 5 through 6 and the hard acceptance gates. C2-11 through
   C2-14, attacks, audits, benchmark, CTO review, and seal remain blocked until
   the production bridge and shadow-equivalence package is accepted.
 
@@ -604,9 +635,8 @@
 
 ## Next exact action
 
-Commit and push the production review-draft persistence wiring, then begin Phase
-4 with failure-first tests for the real `ProductionImportBridge`. Compose only
-the production-wired state machine, context/classification, DOCX/PDF,
-normalization, validation, review, output, persistence, status, and diagnostics
-owners; do not add direct DB, FormalAdmission, Route B, hidden legacy fallback,
-or copied parser/aligner/controlled-write/OCR logic.
+Commit and push the real `ProductionImportBridge`, then begin Phase 5 with
+failure-first real-browser shadow-equivalence tests through the normal upload UI.
+Run legacy and bridge modes against separate isolated IndexedDB identities using
+the real production adapters; do not use `InjectedImportTransport`, do not share
+side effects between modes, and do not run PDF real-run or any real AI/OCR call.

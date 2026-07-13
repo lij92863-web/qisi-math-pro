@@ -326,6 +326,21 @@
       "status": "production-wired"
     },
     {
+      "id": "production-import-bridge", "file": "qisi-production-import-bridge.js",
+      "layer": 3, "domainOwner": "productionImportBridgeOwner",
+      "publicApi": ["REQUIRED_PORTS", "ProductionImportBridgeError", "createProductionImportBridge"],
+      "allowedDependencies": [
+        "import-state-machine", "batch-context-service", "source-role-classifier",
+        "production-import-status-port", "production-import-output-port",
+        "production-docx-source-port", "docx-import-coordinator",
+        "production-pdf-sources-port", "pdf-import-coordinator",
+        "candidate-normalizer", "import-validation-service", "review-draft-builder",
+        "draft-persistence-service", "import-diagnostics"
+      ],
+      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "controlled-write", "route-b-research"],
+      "status": "scaffold"
+    },
+    {
       "id": "app-shell", "file": "app.js", "layer": 4,
       "domainOwner": "appShellOwner", "publicApi": ["App.setup"],
       "allowedDependencies": [
