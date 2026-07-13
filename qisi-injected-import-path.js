@@ -23,12 +23,12 @@
         repository,
         validateDrafts,
         buildReviewDrafts,
+        persistDraftBatch,
         clock = () => Date.now()
     } = {}) => {
         if (
             typeof repository?.get !== 'function' ||
-            typeof repository?.findBy !== 'function' ||
-            typeof repository?.persistReviewDraftBatch !== 'function'
+            typeof repository?.findBy !== 'function'
         ) {
             throw new TypeError('Storage repository is required.');
         }
@@ -37,6 +37,9 @@
         }
         if (typeof buildReviewDrafts !== 'function') {
             throw new TypeError('Review draft builder is required.');
+        }
+        if (typeof persistDraftBatch !== 'function') {
+            throw new TypeError('Draft persistence service is required.');
         }
 
         const run = async (batchId, transport) => {
@@ -129,7 +132,10 @@
                         'Review draft builder returned a malformed draft set.'
                     );
                 }
-                await repository.persistReviewDraftBatch({
+                const expectedVersion = Number.isInteger(
+                    batch.draftPersistence?.version
+                ) ? batch.draftPersistence.version : 0;
+                await persistDraftBatch({
                     drafts: reviewDrafts,
                     files: files.map(file => ({
                         ...file, parseStatus: 'success', updatedAt: now, errorMessage: ''
@@ -140,7 +146,9 @@
                         submittedCount: 0, problemCount: 0,
                         prefixTruncated: expected.length > reviewDrafts.length,
                         updatedAt: now, errorMessage: ''
-                    }
+                    },
+                    expectedVersion,
+                    idempotencyKey: `review:${id}:${expectedVersion + 1}`
                 });
                 return {
                     batchId: id,

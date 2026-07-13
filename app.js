@@ -147,6 +147,20 @@
                         return importValidationPorts.validateOwnership(draft, input);
                     }
                 });
+                const draftPersistenceService = Object.freeze({
+                    persistDraftBatch: command =>
+                        Qisi.DraftPersistenceService.persistDraftBatch(
+                            command, storageRepository
+                        ),
+                    reloadDraftBatch: batchId =>
+                        Qisi.DraftPersistenceService.reloadDraftBatch(
+                            batchId, storageRepository
+                        ),
+                    deleteDraftBatch: batchId =>
+                        Qisi.DraftPersistenceService.deleteDraftBatch(
+                            batchId, storageRepository
+                        )
+                });
                 const reviewController = Qisi.ReviewController.createReviewController({
                     validateDraft: draft => validateDraftForReview(draft)
                 });
@@ -167,7 +181,9 @@
                                         { ...importValidationPorts, context }
                                     ),
                                 buildReviewDrafts:
-                                    Qisi.ReviewDraftBuilder.buildReviewDrafts
+                                    Qisi.ReviewDraftBuilder.buildReviewDrafts,
+                                persistDraftBatch:
+                                    draftPersistenceService.persistDraftBatch
                             })
                                 .run(batchId, Qisi.Runtime.getRuntimeDependency('InjectedImportTransport'))
                             : processDraftImportBatch(batchId),
@@ -488,12 +504,10 @@
                     if (!ok) return;
 
                     try {
-                        await db.transaction('rw', db.draftQuestions, db.draftImportBatches, db.draftImportFiles, db.draftImages, async () => {
-                            await db.draftQuestions.clear();
-                            await db.draftImportBatches.clear();
-                            await db.draftImportFiles.clear();
-                            await db.draftImages.clear();
-                        });
+                        const batches = await storageRepository.listRecentTasks();
+                        for (const batch of batches) {
+                            await draftPersistenceService.deleteDraftBatch(batch.id);
+                        }
 
                         activeBatchId.value = '';
                         activeDraftQuestionId.value = '';
@@ -684,12 +698,15 @@
                 };
 
                 const loadBatchImportData = async () => {
-                    batchImportBatches.value = await db.draftImportBatches.orderBy('createdAt').reverse().toArray();
+                    batchImportBatches.value = await storageRepository.listRecentTasks();
                     if (activeBatchId.value) {
-                        batchImportFiles.value = await db.draftImportFiles.where('batchId').equals(activeBatchId.value).toArray();
-                        batchDraftQuestions.value = await db.draftQuestions.where('batchId').equals(activeBatchId.value).sortBy('order');
-                        batchDraftImages.value = await db.draftImages.where('batchId').equals(activeBatchId.value).toArray();
-                        unmatchedAnswers.value = (batchImportBatches.value.find(batch => batch.id === activeBatchId.value)?.unmatchedAnswers) || [];
+                        const loaded = await draftPersistenceService.reloadDraftBatch(
+                            activeBatchId.value
+                        );
+                        batchImportFiles.value = loaded.files;
+                        batchDraftQuestions.value = loaded.questions;
+                        batchDraftImages.value = loaded.images;
+                        unmatchedAnswers.value = loaded.batch.unmatchedAnswers || [];
                     }
                 };
 
@@ -19280,7 +19297,7 @@ ${source}`;
 
                 const deleteBatchImport = async (batchId) => {
                     if (!confirm('确定删除这个批量录题任务吗？已入库的正式题目不会受影响。')) return;
-                    await storageRepository.deleteDraftBatch(batchId);
+                    await draftPersistenceService.deleteDraftBatch(batchId);
                     await openBatchList();
                 };
 

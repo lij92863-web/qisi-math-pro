@@ -273,9 +273,42 @@
   layers, 36 modules, and 53 declared dependency edges with no missing target,
   cycle, upward dependency, or owner mismatch.
 
+- Wave C2-9 implemented and production-wired
+  `qisi-draft-persistence-service.js` as the single owner for review-draft batch
+  persistence, idempotency, batch association, reload, delete, and cleanup.
+- The service validates batch/id/version association, duplicate draft ids,
+  idempotency-key reuse, expected-version conflicts, and a metadata-only payload
+  signature. Per-repository serialization and pre/post-write verification make
+  two-tab conflicts deterministic while the frozen Repository remains the sole
+  atomic storage implementation.
+- The injected import path now calls C2-9 only after C2-7 validation and C2-8
+  projection. App reload, single-batch delete, and whole-workspace cleanup also
+  use the service. Reload returns an independent mutable work copy for the
+  existing editor, while persistence inputs and stored records remain isolated.
+- Formal question tables and FormalAdmission are outside the service API. Delete
+  and cleanup remove only review tasks, review drafts, draft images, and unmatched
+  answers owned by the selected batch; tests prove formal questions survive.
+- C2-9 failure-first began with module-not-found and then the deliberately absent
+  production persistence port. Three bounded repairs preserved the gates: stable
+  Repository errors were normalized without leaking messages; reload changed
+  from a recursively frozen snapshot to an independent editable clone; and the
+  service stopped nesting a second transaction around Repository APIs that are
+  already atomic, retaining version checks and post-write verification.
+- Final C2-9 service tests passed 6/6, combined persistence/architecture targets
+  passed 30/30, true DOCX/PDF/reload/delete browser characterization passed 7/7,
+  the full suite passed 1,312/1,312, and all 11 mandatory gates passed. Browser
+  preflight/dry-run recorded `realApiCalled=false` and
+  `underlyingApiCallCount=0`; no PDF real-run occurred.
+- `app.js` is now 21,683 physical lines, 95 below the Program C baseline, with
+  315 inventoried functions and complete immutable baseline-name coverage.
+  `processDraftImportBatch` remains 5,108 lines. The manifest now records 5
+  layers, 37 modules, and 55 declared dependency edges with no missing target,
+  cycle, upward dependency, or owner mismatch.
+
 ## Pending
 
-- Phase 2 Waves C2-9–C2-14, then attacks, audits, benchmark, CTO review, and seal.
+- Phase 2 Waves C2-10 through C2-14, then attacks, audits, benchmark, CTO review,
+  and seal.
 
 ## Blockers / limitations
 
@@ -288,6 +321,6 @@
 
 ## Next exact action
 
-Commit and push C2-8, then begin Wave C2-9 Draft Persistence Service with
-failure-first characterization of transactional batch persistence, idempotency,
-reload, delete-refresh, cleanup, and the no-formal-question-write boundary.
+Commit and push C2-9, then begin Wave C2-10 Import Diagnostics with failure-first
+characterization of the metadata allowlist, field caps, stable error mapping,
+cancellation, and private-content exclusion.

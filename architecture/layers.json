@@ -270,6 +270,14 @@
       "status": "production-wired"
     },
     {
+      "id": "draft-persistence-service", "file": "qisi-draft-persistence-service.js",
+      "layer": 2, "domainOwner": "draftPersistenceServiceOwner",
+      "publicApi": ["persistDraftBatch", "reloadDraftBatch", "deleteDraftBatch"],
+      "allowedDependencies": ["storage-repository"],
+      "forbiddenDependencies": ["app-shell", "formal-admission", "controlled-write", "route-b-research"],
+      "status": "production-wired"
+    },
+    {
       "id": "app-shell", "file": "app.js", "layer": 4,
       "domainOwner": "appShellOwner", "publicApi": ["App.setup"],
       "allowedDependencies": [
@@ -281,7 +289,8 @@
         "controlled-write", "support-aligner", "support-parser", "archive-security",
         "secure-logger", "batch-context-service", "source-role-classifier",
         "docx-import-coordinator", "pdf-import-coordinator", "candidate-normalizer",
-        "import-validation-service", "review-draft-builder"
+        "import-validation-service", "review-draft-builder",
+        "draft-persistence-service"
       ],
       "forbiddenDependencies": ["route-b-research"],
       "status": "production-wired"

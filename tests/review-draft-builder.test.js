@@ -103,7 +103,7 @@ test('production path builds only after validation and before persistence', () =
     );
     assert.ok(
         injected.indexOf('reviewDrafts = buildReviewDrafts') <
-        injected.indexOf('await repository.persistReviewDraftBatch')
+        injected.indexOf('await persistDraftBatch')
     );
     assert.doesNotMatch(injected, /selected\.map\(\(candidate/);
     assert.doesNotMatch(injected, /duplicateStatus:\s*'none'/);

@@ -124,7 +124,7 @@ test('production path requires the service before review persistence', () => {
     assert.match(injectedPath, /validatedDrafts\s*=\s*validateDrafts\s*\(/);
     assert.ok(
         injectedPath.indexOf('validatedDrafts = validateDrafts') <
-        injectedPath.indexOf('await repository.persistReviewDraftBatch')
+        injectedPath.indexOf('await persistDraftBatch')
     );
     assert.ok(html.indexOf('qisi-import-validation-service.js') < html.indexOf('app.js'));
     assert.doesNotMatch(implementation, /document\.|window\.|Vue|fetch\s*\(|XMLHttpRequest/);

@@ -34,5 +34,6 @@
   "candidateNormalizerOwner": "qisi-candidate-normalizer.js",
   "importValidationServiceOwner": "qisi-import-validation-service.js",
   "reviewDraftBuilderOwner": "qisi-review-draft-builder.js",
+  "draftPersistenceServiceOwner": "qisi-draft-persistence-service.js",
   "appShellOwner": "app.js"
 }
