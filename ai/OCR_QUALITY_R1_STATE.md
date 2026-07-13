@@ -3,7 +3,7 @@
 - Start commit: `1361d7e7f81d2f23819a995a0f9d1808adf19982`
 - Baseline tag: `pre-ocr-quality-r1-1361d7e`
 - Current branch: `stage/ocr-quality-r1`
-- Current phase: Program B / Phase 2 / B2-8 complete
+- Current phase: Program B / Phase 2 / B2-9 complete
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -111,10 +111,19 @@
   a scaffold; no real/private shadow execution occurred.
 - B2-8 shadow tests passed 5/5; behavior/privacy/architecture targeted tests passed
   17/17; all 11 mandatory gates passed with `realApiCalled=false`.
+- B2-9 implemented a pure candidate selection policy gated by exact promoted
+  engine/version plus schema, sequence, ownership, formula, completeness,
+  provenance, confidence, and zero safety errors.
+- Selection compares complete candidates only by deterministic Pareto dominance on
+  completeness/confidence. Ties/tradeoffs require manual review, retain original
+  candidates, and never merge fields, guess semantically, or synthesize an answer.
+- The promotion registry remains empty and the policy is not production-wired;
+  no engine can currently be selected. B2-9 tests passed 7/7, behavior/architecture
+  targeted tests passed 19/19, and all 11 mandatory gates passed.
 
 ## Pending
 
-- Phase 2 work packages B2-9 through B2-10, subject to their evidence gates.
+- Phase 2 work package B2-10, subject to its Holdout promotion gate.
 - Phases 3–8 attacks, audits, final benchmark, CTO review, and seal.
 
 ## Blockers / limitations
@@ -126,5 +135,5 @@
 
 ## Next exact action
 
-Commit and push B2-8, then start B2-9 with failing deterministic candidate
-selection tests for promotion eligibility, conflicts, and retained evidence.
+Commit and push B2-9, then audit B2-10 canary eligibility. Keep canary disabled
+because no Holdout promotion gate or production-promoted engine exists.

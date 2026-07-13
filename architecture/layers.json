@@ -52,6 +52,14 @@
       "status": "scaffold"
     },
     {
+      "id": "ocr-candidate-selection", "file": "qisi-ocr-candidate-selection-policy.js",
+      "layer": 1, "domainOwner": "ocrCandidateSelectionOwner",
+      "publicApi": ["evaluateCandidate", "selectProductionCandidate"],
+      "allowedDependencies": [],
+      "forbiddenDependencies": ["app-shell", "storage-repository", "formal-admission"],
+      "status": "scaffold"
+    },
+    {
       "id": "support-parser", "file": "qisi-pdf-support-block-parser.js",
       "layer": 0, "domainOwner": "supportParserOwner",
       "publicApi": ["parsePdfSupportBlocks"],

@@ -9,7 +9,7 @@ const json = file => JSON.parse(read(file));
 
 const required = [
     'recognition-contracts', 'ocr-adapter-contract', 'ocr-reading-order',
-    'ocr-structure-extractor',
+    'ocr-structure-extractor', 'ocr-candidate-selection',
     'formal-admission', 'storage-repository',
     'library-service', 'review-controller', 'export-service',
     'import-coordinator', 'ocr-registry', 'ocr-qwen-adapter',
