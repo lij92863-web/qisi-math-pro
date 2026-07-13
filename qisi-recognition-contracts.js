@@ -792,9 +792,13 @@
                         identity.status === 'canonical' &&
                         !['manual', 'missing', 'rejected'].includes(item.status)
                     ) {
-                        const expectedBoundary = mode === 'vision-ai'
-                            ? 'docx-vision-engine-output-to-candidate'
-                            : 'docx-deterministic-source-to-candidate';
+                        const expectedBoundary = question.source?.format === 'pdf'
+                            ? mode === 'vision-ai'
+                                ? 'pdf-vision-engine-output-to-candidate'
+                                : 'pdf-deterministic-source-to-candidate'
+                            : mode === 'vision-ai'
+                                ? 'docx-vision-engine-output-to-candidate'
+                                : 'docx-deterministic-source-to-candidate';
                         if (
                             item.kind !== item.status ||
                             item.sourceId !== question.source.sourceId ||

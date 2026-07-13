@@ -51,15 +51,22 @@ test('adapter registry enforces the five-method pluggable contract', () => {
     }
 });
 
-test('Program A controlled-write, FormalAdmission, and Route B stay unchanged from seal', () => {
+test('Program A controlled-write and Route B stay frozen while FormalAdmission remains fail-closed', () => {
     const diff = execFileSync('git', [
         'diff', '--name-only',
         '1361d7e7f81d2f23819a995a0f9d1808adf19982..HEAD', '--',
         'qisi-pdf-support-controlled-write.js',
-        'qisi-formal-admission-policy.js',
         'qisi-answer-only-ai-pass.js'
     ], { cwd: root, encoding: 'utf8' });
     assert.equal(diff.trim(), '');
+    const admission = read('qisi-formal-admission-policy.js');
+    assert.match(admission, /admission-producer-identity-invalid/);
+    assert.match(admission, /pdf-vision-engine-output-to-candidate/);
+    assert.match(admission, /pdf-deterministic-source-to-candidate/);
+    assert.doesNotMatch(
+        admission,
+        /manualReviewRequired[^\n]{0,160}(?:accepted|controlledWriteAccepted)\s*:\s*true/
+    );
     const app = read('app.js');
     assert.doesNotMatch(app, /(?:function|const)\s+buildPdfSupportFieldLevelControlledWrite\b/);
     assert.doesNotMatch(app, /(?:function|const)\s+createAdmissionContext\b/);

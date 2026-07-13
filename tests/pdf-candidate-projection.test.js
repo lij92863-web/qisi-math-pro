@@ -105,7 +105,8 @@ const project = overrides => {
 test('projects a fully supported deterministic PDF candidate from real controlled-write output', () => {
     const result = project();
 
-    assert.equal(result.source.mode, 'pdf-deterministic');
+    assert.equal(result.source.format, 'pdf');
+    assert.equal(result.producer.mode, 'deterministic-pdf');
     assert.equal(result.source.sourceId, 'pdf-question');
     assert.equal(result.source.sourceOrder, 1);
     assert.equal(result.answer, 'A');
@@ -147,7 +148,8 @@ test('projects PDF AI question fields only from explicit strict-engine field dec
         controlledWriteDecision: buildControlledWrite({ draft })
     });
 
-    assert.equal(result.source.mode, 'pdf-ai');
+    assert.equal(result.source.format, 'pdf');
+    assert.equal(result.producer.mode, 'vision-ai');
     assert.equal(result.supportLevel, 'full');
     assert.equal(result.manualReviewRequired, false);
     for (const field of ['questionNumber', 'stem', 'options', 'images']) {
@@ -275,7 +277,8 @@ test('production batch adapter projects PDF drafts while preserving non-PDF draf
     });
 
     assert.equal(results.length, 2);
-    assert.equal(results[0].source.mode, 'pdf-ai');
+    assert.equal(results[0].source.format, 'pdf');
+    assert.equal(results[0].producer.mode, 'vision-ai');
     assert.equal(results[0].fieldProvenance.stem.kind, 'controlled-write');
     assert.equal(results[0].fieldProvenance.answer.kind, 'controlled-write');
     assert.equal(results[0].fieldProvenance.images.kind, 'missing');
@@ -324,7 +327,8 @@ test('V2 engine context is built by the owner from real parser, aligner, and con
 
     assert.equal(context.controlledWriteDecisions.length, 1);
     assert.equal(context.controlledWriteDecisions[0].decisionId, 'cw:v2:1');
-    assert.equal(result.source.mode, 'pdf-deterministic');
+    assert.equal(result.source.format, 'pdf');
+    assert.equal(result.producer.mode, 'deterministic-pdf');
     assert.equal(result.answer, 'A');
     assert.equal(result.solution, 'because');
     assert.equal(result.fieldProvenance.answer.kind, 'controlled-write');
@@ -415,7 +419,7 @@ test('canonical comparator reports structured safety differences and ignores onl
     );
 
     const different = structuredClone(left);
-    different.source.mode = 'pdf-ai';
+    different.producer.mode = 'vision-ai';
     different.supportLevel = 'safe-partial';
     different.fieldProvenance.answer.kind = 'rejected';
     different.controlledWrite.evaluated = false;
@@ -428,7 +432,7 @@ test('canonical comparator reports structured safety differences and ignores onl
 
     const differences = Projection.compareCanonicalPdfCandidates(left, different);
     assert.deepEqual(differences.map(item => item.path), [
-        'source.mode',
+        'producer.mode',
         'fieldProvenance.answer.kind',
         'controlledWrite.evaluated',
         'controlledWrite.acceptedFields',

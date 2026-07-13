@@ -183,9 +183,13 @@
     ) => {
         if (identity?.status !== 'canonical' ||
             ['manual', 'missing', 'rejected'].includes(provenance.status)) return;
-        const expectedBoundary = identity.producer?.mode === 'vision-ai'
-            ? 'docx-vision-engine-output-to-candidate'
-            : 'docx-deterministic-source-to-candidate';
+        const expectedBoundary = identity.source?.format === 'pdf'
+            ? identity.producer?.mode === 'vision-ai'
+                ? 'pdf-vision-engine-output-to-candidate'
+                : 'pdf-deterministic-source-to-candidate'
+            : identity.producer?.mode === 'vision-ai'
+                ? 'docx-vision-engine-output-to-candidate'
+                : 'docx-deterministic-source-to-candidate';
         if (
             (identity.producer?.mode === 'vision-ai' &&
                 provenance.status !== 'controlled-write') ||

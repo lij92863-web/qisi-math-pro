@@ -70,7 +70,8 @@ test('PDF AI fields without explicit controlled-write decisions remain rejected'
         engineResult: { sourceKind: 'ocrMarkdown', engine: 'mock-ocr' }
     }));
 
-    assert.equal(result.source.mode, 'pdf-ai');
+    assert.equal(result.source.format, 'pdf');
+    assert.equal(result.producer.mode, 'vision-ai');
     assert.equal(result.supportLevel, 'rejected');
     assert.equal(result.manualReviewRequired, true);
     assert.equal(result.questionNumber, '');

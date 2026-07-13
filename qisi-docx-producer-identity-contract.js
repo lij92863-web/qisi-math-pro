@@ -21,7 +21,9 @@
     ]);
     const ROUTES = Object.freeze({
         DOCX_DETERMINISTIC: 'docx-deterministic-import',
-        DOCX_VISION: 'docx-rendered-to-pdf-vision'
+        DOCX_VISION: 'docx-rendered-to-pdf-vision',
+        PDF_DETERMINISTIC: 'pdf-deterministic-import',
+        PDF_VISION: 'pdf-vision-controlled-write'
     });
     const DOCX_VISION_TRANSITIONS = Object.freeze([
         Object.freeze({ code: 'docx-selected', reason: 'source-manifest-docx-selected' }),
@@ -36,6 +38,21 @@
         Object.freeze({ code: 'docx-selected', reason: 'source-manifest-docx-selected' }),
         Object.freeze({ code: 'deterministic-route-selected', reason: 'docx-xml-importer-selected' }),
         Object.freeze({ code: 'deterministic-fields-produced', reason: 'docx-xml-importer-returned' }),
+        Object.freeze({ code: 'provenance-projected', reason: 'producer-boundary-projection-complete' }),
+        Object.freeze({ code: 'review-candidate-built', reason: 'canonical-review-candidate-created' })
+    ]);
+    const PDF_VISION_TRANSITIONS = Object.freeze([
+        Object.freeze({ code: 'pdf-selected', reason: 'source-manifest-pdf-selected' }),
+        Object.freeze({ code: 'vision-engine-result-produced', reason: 'pdf-vision-engine-returned' }),
+        Object.freeze({ code: 'controlled-write-evaluated', reason: 'pdf-controlled-write-evaluated' }),
+        Object.freeze({ code: 'provenance-projected', reason: 'producer-boundary-projection-complete' }),
+        Object.freeze({ code: 'review-candidate-built', reason: 'canonical-review-candidate-created' })
+    ]);
+    const PDF_DETERMINISTIC_TRANSITIONS = Object.freeze([
+        Object.freeze({ code: 'pdf-selected', reason: 'source-manifest-pdf-selected' }),
+        Object.freeze({ code: 'deterministic-route-selected', reason: 'pdf-deterministic-source-selected' }),
+        Object.freeze({ code: 'deterministic-fields-produced', reason: 'pdf-deterministic-source-returned' }),
+        Object.freeze({ code: 'controlled-write-evaluated', reason: 'pdf-controlled-write-evaluated' }),
         Object.freeze({ code: 'provenance-projected', reason: 'producer-boundary-projection-complete' }),
         Object.freeze({ code: 'review-candidate-built', reason: 'canonical-review-candidate-created' })
     ]);
@@ -222,6 +239,20 @@
                     'DOCX deterministic producer identity is invalid.'));
             }
             validateTransitionOrder(route, DOCX_DETERMINISTIC_TRANSITIONS, errors);
+        }
+        if (source?.format === 'pdf' && producer?.mode === 'vision-ai') {
+            if (producer.routeId !== ROUTES.PDF_VISION || producer.deterministic !== false) {
+                errors.push(errorOf('pdf-vision-identity-invalid', 'producer',
+                    'PDF vision producer identity is invalid.'));
+            }
+            validateTransitionOrder(route, PDF_VISION_TRANSITIONS, errors);
+        }
+        if (source?.format === 'pdf' && producer?.mode === 'deterministic-pdf') {
+            if (producer.routeId !== ROUTES.PDF_DETERMINISTIC || producer.deterministic !== true) {
+                errors.push(errorOf('pdf-deterministic-identity-invalid', 'producer',
+                    'PDF deterministic producer identity is invalid.'));
+            }
+            validateTransitionOrder(route, PDF_DETERMINISTIC_TRANSITIONS, errors);
         }
         if (source?.format === 'pdf' && producer?.routeId === ROUTES.DOCX_VISION) {
             errors.push(errorOf('docx-vision-source-contaminated', 'source.format',
@@ -484,6 +515,8 @@
         ROUTES,
         DOCX_VISION_TRANSITIONS,
         DOCX_DETERMINISTIC_TRANSITIONS,
+        PDF_VISION_TRANSITIONS,
+        PDF_DETERMINISTIC_TRANSITIONS,
         legacyIdentityForMode,
         resolveIdentity,
         validateCanonicalIdentity,

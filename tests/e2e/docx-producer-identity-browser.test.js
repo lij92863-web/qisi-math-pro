@@ -8,6 +8,7 @@ const {
     assertNoRuntimeErrors,
     callProxy
 } = require('./browser-harness.js');
+const Contract = require('../../qisi-docx-producer-identity-contract.js');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const MOCK_CHAT_ROUTE = ['**', 'api', 'ai', 'chat'].join('/');
@@ -169,9 +170,10 @@ test('normal UI DOCX vision and Bridge shadow share producer identity contract',
             const legacy = await new window.Dexie('QisiMathVueDB').open()
                 .then(async db => {
                     try {
-                        return await db.table('draftQuestions')
+                        const drafts = await db.table('draftQuestions')
                             .where('batchId').equals('normal-ui-docx-identity')
-                            .first();
+                            .sortBy('order');
+                        return drafts[0];
                     } finally {
                         db.close();
                     }
@@ -250,6 +252,7 @@ test('normal UI DOCX vision and Bridge shadow share producer identity contract',
                     legacy.fieldProvenance || {}
                 ).map(([field, item]) => [field, item.kind])),
                 controlledWriteEvaluated: legacy.controlledWrite?.evaluated,
+                legacyCanonical: canonical(legacy),
                 canonicalDifferences: Contract.compareCanonicalDocxCandidates(
                     canonical(legacy), canonical(shadow.drafts[0])
                 ),
@@ -289,6 +292,27 @@ test('normal UI DOCX vision and Bridge shadow share producer identity contract',
                 count: result.drafts.length,
                 mode: result.drafts[0]?.producer?.mode,
                 format: result.drafts[0]?.source?.format,
+                canonical: {
+                    questionNumber: result.drafts[0]?.questionNumber,
+                    type: result.drafts[0]?.type,
+                    stem: result.drafts[0]?.stem,
+                    options: result.drafts[0]?.options,
+                    answer: result.drafts[0]?.answer,
+                    solution: result.drafts[0]?.solution,
+                    images: result.drafts[0]?.images,
+                    source: result.drafts[0]?.source,
+                    producer: result.drafts[0]?.producer,
+                    route: result.drafts[0]?.route,
+                    fieldProvenance: result.drafts[0]?.fieldProvenance,
+                    controlledWrite: result.drafts[0]?.controlledWrite,
+                    supportLevel: result.drafts[0]?.supportLevel,
+                    manualReviewRequired:
+                        result.drafts[0]?.manualReviewRequired,
+                    canonicalReviewHandoff:
+                        result.drafts[0]?.canonicalReviewHandoff,
+                    producerIdentityContractVersion:
+                        result.drafts[0]?.producerIdentityContractVersion
+                },
                 aiProvenance: Object.values(
                     result.drafts[0]?.fieldProvenance || {}
                 ).some(item => item.kind === 'controlled-write')
@@ -325,6 +349,20 @@ test('normal UI DOCX vision and Bridge shadow share producer identity contract',
         assert.equal(deterministicMetrics.mode, 'deterministic-docx');
         assert.equal(deterministicMetrics.format, 'docx');
         assert.equal(deterministicMetrics.aiProvenance, false);
+        const crossProducerDifferences = Contract.compareCanonicalDocxCandidates(
+            browserMetrics.legacyCanonical,
+            deterministicMetrics.canonical
+        );
+        assert.ok(crossProducerDifferences.some(item =>
+            item.path === '$.producer.mode'
+        ));
+        assert.equal(
+            browserMetrics.legacyProducerMode === 'vision-ai' &&
+                deterministicMetrics.mode === 'deterministic-docx'
+                ? 'non-applicable-different-producers'
+                : 'invalid-scenario-classification',
+            'non-applicable-different-producers'
+        );
         assert.equal(mockAiCalls, 1, 'deterministic source must not call vision');
         assert.equal(harness.forbiddenRequests.length, 0);
         assertNoRuntimeErrors(harness);

@@ -1,6 +1,12 @@
 (function initPdfCandidateProjection(root) {
     'use strict';
 
+    const identityContract = root?.Qisi?.DocxProducerIdentityContract || (
+        typeof module !== 'undefined' && module.exports
+            ? require('./qisi-docx-producer-identity-contract.js')
+            : null
+    );
+
     const FIELDS = Object.freeze([
         'questionNumber', 'stem', 'options', 'answer', 'solution', 'images'
     ]);
@@ -14,7 +20,8 @@
     ]);
     const VOLATILE_KEYS = new Set([
         'requestId', 'timestamp', 'timestamps', 'createdAt', 'updatedAt',
-        'durationMs', 'temporaryFilePath', 'tempFilePath', 'filePath'
+        'duration', 'durationMs', 'temporaryPath', 'temporaryFilePath',
+        'tempPath', 'tempFilePath', 'filePath', 'randomDiagnosticId'
     ]);
 
     class PdfCandidateProjectionError extends Error {
@@ -100,6 +107,43 @@
             return 'pdf-ai';
         }
         throw createError('source-mode-missing');
+    }
+
+    function producerIdentity(sourceMode, engine) {
+        const deterministic = sourceMode === 'pdf-deterministic';
+        if (!deterministic && sourceMode !== 'pdf-ai') {
+            throw createError('pdf-source-mode-invalid');
+        }
+        const routeId = deterministic
+            ? identityContract?.ROUTES?.PDF_DETERMINISTIC
+            : identityContract?.ROUTES?.PDF_VISION;
+        const routeReason = deterministic
+            ? 'pdf-deterministic-source-selected'
+            : 'pdf-engine-controlled-write-projection';
+        const transitions = deterministic
+            ? identityContract?.PDF_DETERMINISTIC_TRANSITIONS
+            : identityContract?.PDF_VISION_TRANSITIONS;
+        if (!routeId || !Array.isArray(transitions)) {
+            throw createError('pdf-producer-identity-contract-missing');
+        }
+        return {
+            sourceFormat: 'pdf',
+            producer: {
+                mode: deterministic ? 'deterministic-pdf' : 'vision-ai',
+                routeId,
+                routeReason,
+                engine,
+                deterministic
+            },
+            route: {
+                identity: routeId,
+                reason: routeReason,
+                transitions: transitions.map(item => ({ ...item }))
+            },
+            producerBoundary: deterministic
+                ? 'pdf-deterministic-source-to-candidate'
+                : 'pdf-vision-engine-output-to-candidate'
+        };
     }
 
     function assertControlledWrite(decision) {
@@ -233,7 +277,8 @@
         engine,
         decisionId,
         manuallyEdited = false,
-        reason
+        reason,
+        identity
     }) {
         return {
             kind,
@@ -248,7 +293,12 @@
                 : {}),
             manuallyEdited,
             reason,
-            reasonCode: reason
+            reasonCode: reason,
+            sourceFormat: identity.sourceFormat,
+            producerMode: identity.producer.mode,
+            routeId: identity.producer.routeId,
+            producerBoundary: identity.producerBoundary,
+            contractVersion: identityContract.CONTRACT_VERSION
         };
     }
 
@@ -263,7 +313,8 @@
         sourceId,
         pageContext,
         engine,
-        decisionId
+        decisionId,
+        identity
     }) {
         const accepted = decision && decision.source !== 'none' && item;
         const rejected = decision && decision.source === 'none';
@@ -276,7 +327,8 @@
                     value: supportItemValue(item, field),
                     provenance: provenanceEntry({
                         kind: 'controlled-write', sourceId, page, blockIds,
-                        engine, decisionId, reason: cleanString(decision.reason) ||
+                        engine, decisionId, identity,
+                        reason: cleanString(decision.reason) ||
                             'controlled-write-accepted'
                     })
                 };
@@ -284,7 +336,7 @@
             return {
                 value: '',
                 provenance: provenanceEntry({
-                    kind: rejected ? 'rejected' : 'missing',
+                    kind: rejected ? 'rejected' : 'missing', identity,
                     sourceId, page, blockIds, engine, decisionId,
                     reason: rejected
                         ? cleanString(decision.reason) || 'controlled-write-rejected'
@@ -300,7 +352,7 @@
                     provenance: provenanceEntry({
                         kind: 'controlled-write', sourceId, page, blockIds,
                         engine,
-                        decisionId: cleanString(
+                        identity, decisionId: cleanString(
                             engineDecision.decisionId || decisionId
                         ),
                         reason: cleanString(engineDecision.reason) ||
@@ -311,7 +363,7 @@
             return {
                 value: Array.isArray(rawValue) ? [] : '',
                 provenance: provenanceEntry({
-                    kind: hasValue(rawValue) ? 'rejected' : 'missing',
+                    kind: hasValue(rawValue) ? 'rejected' : 'missing', identity,
                     sourceId, page, blockIds, engine, decisionId,
                     reason: hasValue(rawValue)
                         ? 'pdf-ai-controlled-write-field-missing'
@@ -328,7 +380,8 @@
                 value: rawValue,
                 provenance: provenanceEntry({
                     kind: 'manual', sourceId, page, blockIds, engine,
-                    decisionId, manuallyEdited: true, reason: 'manual-field-edit'
+                    decisionId, manuallyEdited: true, identity,
+                    reason: 'manual-field-edit'
                 })
             };
         }
@@ -342,7 +395,7 @@
                 ? (Array.isArray(rawValue) ? [] : '')
                 : rawValue,
             provenance: provenanceEntry({
-                kind, sourceId, page, blockIds, engine, decisionId,
+                kind, sourceId, page, blockIds, engine, decisionId, identity,
                 reason: kind === 'deterministic-source'
                     ? 'deterministic-source-evidence'
                     : `${field}-missing`
@@ -389,6 +442,8 @@
             input.engineResult?.engine ||
             input.engineResult?.executionContext?.engine
         );
+        if (!engine) throw createError('pdf-producer-engine-missing');
+        const identity = producerIdentity(sourceMode, engine);
         const decisionId = cleanString(controlledWrite.decisionId);
         const fieldRows = {};
 
@@ -415,7 +470,8 @@
                 sourceId,
                 pageContext: input.pageContext,
                 engine,
-                decisionId
+                decisionId,
+                identity
             });
         }
 
@@ -432,7 +488,8 @@
                     engine: row.provenance.engine,
                     decisionId: row.provenance.controlledWriteDecisionId,
                     manuallyEdited: false,
-                    reason: 'raw-json-candidate'
+                    reason: 'raw-json-candidate',
+                    identity
                 });
             }
         }
@@ -511,17 +568,21 @@
             incompleteProvenance ||
             input.evidence?.userInterventionRequired === true;
 
-        return immutable({
+        const output = {
             id: cleanString(question.id),
             source: {
                 sourceId,
+                format: identity.sourceFormat,
                 sourceType: cleanString(input.source?.sourceType) || 'pdf',
-                mode: sourceMode,
+                filename: cleanString(input.source?.filename),
+                mimeType: cleanString(input.source?.mimeType),
                 page: evidencePage(null, null, input.pageContext),
                 sourceOrder: finiteNumberOrNull(
                     input.source?.sourceOrder ?? input.pageContext?.sourceOrder
                 )
             },
+            producer: identity.producer,
+            route: identity.route,
             questionNumber: fieldRows.questionNumber.value,
             type: rawJsonCandidate ? '' : cleanString(question.type),
             stem: fieldRows.stem.value,
@@ -564,7 +625,12 @@
                 ),
                 controlledWriteDecisionId: decisionId
             }
-        });
+        };
+        const identityValidation = identityContract.validateCanonicalIdentity(output);
+        if (!identityValidation.valid) {
+            throw createError('pdf-producer-identity-invalid');
+        }
+        return immutable(output);
     }
 
     function mergeControlledWriteDecisions(decisions = [], decisionId = '') {
@@ -1014,6 +1080,10 @@
         return {
             kind,
             sourceId: cleanString(value.sourceId),
+            sourceFormat: cleanString(value.sourceFormat),
+            producerMode: cleanString(value.producerMode),
+            routeId: cleanString(value.routeId),
+            engine: cleanString(value.engine),
             page: Number.isInteger(numericPage) && numericPage > 0
                 ? numericPage
                 : null,
@@ -1027,20 +1097,36 @@
             ),
             controlledWriteAccepted: value.controlledWriteAccepted === true,
             manuallyEdited: value.manuallyEdited === true,
-            reasonCode: reasonCode || (kind === 'missing' ? 'missing' : '')
+            reasonCode: reasonCode || (kind === 'missing' ? 'missing' : ''),
+            producerBoundary: cleanString(value.producerBoundary),
+            contractVersion: cleanString(value.contractVersion)
         };
+    }
+
+    function canonicalRouteTransitions(route) {
+        return (Array.isArray(route?.transitions) ? route.transitions : [])
+            .map(item => ({
+                code: cleanString(item?.code),
+                reason: cleanString(item?.reason)
+            }));
     }
 
     function compareCanonicalPdfCandidates(legacy, bridge) {
         const provenanceProperties = [
             'kind',
             'sourceId',
+            'sourceFormat',
+            'producerMode',
+            'routeId',
+            'engine',
             'page',
             'blockIds',
             'controlledWriteDecisionId',
             'controlledWriteAccepted',
             'manuallyEdited',
-            'reasonCode'
+            'reasonCode',
+            'producerBoundary',
+            'contractVersion'
         ];
         const provenanceChecks = FIELDS.flatMap(field => {
             const legacyProvenance = canonicalProvenance(
@@ -1058,8 +1144,18 @@
             ]);
         });
         const checks = [
-            ['source.mode', legacy?.source?.mode, bridge?.source?.mode, 'error', 'pdf-canonical-value-mismatch'],
+            ['source.sourceId', legacy?.source?.sourceId, bridge?.source?.sourceId, 'error', 'pdf-canonical-source-mismatch'],
+            ['source.format', legacy?.source?.format, bridge?.source?.format, 'error', 'pdf-canonical-source-mismatch'],
+            ['source.page', legacy?.source?.page, bridge?.source?.page, 'error', 'pdf-canonical-source-mismatch'],
             ['source.sourceOrder', legacy?.source?.sourceOrder, bridge?.source?.sourceOrder, 'error', 'pdf-canonical-value-mismatch'],
+            ['producer.mode', legacy?.producer?.mode, bridge?.producer?.mode, 'error', 'pdf-canonical-producer-mismatch'],
+            ['producer.routeId', legacy?.producer?.routeId, bridge?.producer?.routeId, 'error', 'pdf-canonical-producer-mismatch'],
+            ['producer.routeReason', legacy?.producer?.routeReason, bridge?.producer?.routeReason, 'error', 'pdf-canonical-producer-mismatch'],
+            ['producer.engine', legacy?.producer?.engine, bridge?.producer?.engine, 'error', 'pdf-canonical-producer-mismatch'],
+            ['producer.deterministic', legacy?.producer?.deterministic, bridge?.producer?.deterministic, 'error', 'pdf-canonical-producer-mismatch'],
+            ['route.identity', legacy?.route?.identity, bridge?.route?.identity, 'error', 'pdf-canonical-route-mismatch'],
+            ['route.reason', legacy?.route?.reason, bridge?.route?.reason, 'error', 'pdf-canonical-route-mismatch'],
+            ['route.transitions', canonicalRouteTransitions(legacy?.route), canonicalRouteTransitions(bridge?.route), 'error', 'pdf-canonical-route-mismatch'],
             ['questionNumber', legacy?.questionNumber, bridge?.questionNumber, 'error', 'pdf-canonical-value-mismatch'],
             ['type', legacy?.type, bridge?.type, 'error', 'pdf-canonical-value-mismatch'],
             ['stem', legacy?.stem, bridge?.stem, 'error', 'pdf-canonical-value-mismatch'],
@@ -1072,6 +1168,13 @@
                 'controlledWrite.evaluated',
                 legacy?.controlledWrite?.evaluated,
                 bridge?.controlledWrite?.evaluated,
+                'error',
+                'pdf-canonical-controlled-write-mismatch'
+            ],
+            [
+                'controlledWrite.decisionId',
+                legacy?.controlledWrite?.decisionId,
+                bridge?.controlledWrite?.decisionId,
                 'error',
                 'pdf-canonical-controlled-write-mismatch'
             ],
