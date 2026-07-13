@@ -277,6 +277,12 @@
   a stable private-safe error code and `app.js` remains 21,777 lines.
 - Phase 4 full mandatory matrix and browser preflight/dry-run passed with no
   real API call. Audit decision: PASS with documented residual shell debt.
+- Phase 5 failure-first evidence: the required architecture audit report was
+  absent while the executable source-level owner chain already passed.
+- Phase 5 architecture proof suite passed 27/27 with all ten required
+  invariants; no production remediation was required.
+- Phase 5 full mandatory matrix and browser preflight/dry-run passed with no
+  real API call. Architecture audit decision: PASS.
 
 ## Blockers
 
@@ -285,4 +291,4 @@
 
 ## Next exact action
 
-Commit/push Phase 4 code-quality audit, then begin Phase 5 architecture audit.
+Commit/push Phase 5 architecture audit, then begin Phase 6 benchmark audit.
