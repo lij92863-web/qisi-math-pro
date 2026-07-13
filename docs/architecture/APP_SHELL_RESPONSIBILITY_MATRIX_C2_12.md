@@ -475,3 +475,38 @@ Focused tests pass 59/59, `verify:safe` passes 1,607/1,607 across 54 suites,
 and all 11 mandatory gates and browser canaries pass with real-API counts at
 zero. Decision: `APP_OCR_TRANSPORT_OWNER_ZERO_ACCEPTED`. Wave 17 remains an
 independent conditional D-boundary audit.
+
+## Wave 17 result: storage and formal repository boundary closed
+
+The conditional audit was applicable. The shell still called formal question
+repository mutations for manual create/edit/delete and safe migration, while
+external merge and undo retained a `questions` transaction, rollback
+snapshots, and restoration loops. Manual image blobs were also written before
+the question instead of in the question transaction.
+
+`LibraryService` now owns question save/replace/soft-delete, version-aware safe
+LaTeX migration, and atomic external merge/undo commands. It delegates every
+table operation and transaction to `StorageRepository`, verifies committed
+readback, rejects malformed/duplicate/stale commands, and preserves Blob and
+soft-delete state. The shell maps UI data into commands and reloads the
+committed state; it has no formal repository mutation call, question-table
+transaction, rollback loop, or direct migration mutation.
+
+The formal ReviewDraft route remains Formal Admission followed by the formal
+repository transaction, and Bridge formal writes remain zero. Read-only audit,
+backup, and Stage-0 diagnostics are E/G. The three remaining direct Dexie
+transactions are unrelated G-class external-package staging/maintenance and
+touch neither formal nor draft tables; Wave 18 must classify their reachability
+without deleting unrelated product behavior.
+
+Focused lifecycle tests pass 58/58; the full suite passes 1,614/1,614 across 54
+suites; the 15-case normal-UI canary and six true-import browser tests pass.
+All 11 mandatory gates pass with safety and real-API counters at zero. The six
+frozen PDF files are unchanged.
+
+Post-wave inventory is 13,167 `app.js` lines and 305 detected functions. The
+largest function remains the unrelated 164-line `startExamPointerDrag`; the
+largest remaining Program C function remains the 146-line
+`extractTextFromDraftFile`. Decision:
+`APP_STORAGE_FORMAL_REPOSITORY_BOUNDARY_ACCEPTED`. Wave 18 remains the final
+independent C2-12 UI-shell reachability and metric audit.

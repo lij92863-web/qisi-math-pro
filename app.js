@@ -11292,46 +11292,8 @@ const normalizeRecognizedFigureDescriptor = (raw = {}) => {
                 };
 
                 const migrateSafeQuestionLatexData = async () => {
-                    const storedQuestions = await db.questions.toArray();
-                    let changedCount = 0;
-
-                    for (const question of storedQuestions) {
-                        const validImageIds = new Set(
-                            (question.images || []).map(image => String(image?.id || '')).filter(Boolean)
-                        );
-                        const migrateField = (value) => {
-                            let source = String(value || '');
-                            source = source
-                                .replace(/_*MATHPROTECT[_-]?\d+_*/gi, '')
-                                .replace(/@@QISI_MATH_(?:SEGMENT_)?\d+@@/g, '');
-                            source = source.replace(
-                                /\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}/g,
-                                (fullMatch, rawId) => {
-                                    const id = String(rawId || '').trim();
-                                    return validImageIds.has(id) ? `[[IMAGE:${id}]]` : fullMatch;
-                                }
-                            );
-                            return source;
-                        };
-
-                        const next = {
-                            ...question,
-                            stem: migrateField(question.stem),
-                            answer: migrateField(question.answer),
-                            solution: migrateField(question.solution),
-                            options: (question.options || []).map(migrateField),
-                            updatedAt: Date.now()
-                        };
-                        const changed =
-                            next.stem !== question.stem ||
-                            next.answer !== question.answer ||
-                            next.solution !== question.solution ||
-                            JSON.stringify(next.options) !== JSON.stringify(question.options || []);
-
-                        if (!changed) continue;
-                        await storageRepository.put('questions', next);
-                        changedCount += 1;
-                    }
+                    const changedCount = await libraryService
+                        .migrateSafeQuestionLatexData();
 
                     await loadData();
                     console.log('[LATEX_MIGRATION][done]', { changedCount });
@@ -11758,39 +11720,40 @@ const normalizeRecognizedFigureDescriptor = (raw = {}) => {
                     };
                 };
 
-                const fillExistingQuestionFromExternal = async (localQ, extQ, item) => {
+                const buildFilledQuestionFromExternal = (localQ, extQ, item) => {
                     const now = Date.now();
-                    if (!hasText(localQ.answer) && hasText(extQ.answer)) localQ.answer = extQ.answer;
-                    if (!hasText(localQ.solution) && hasText(extQ.solution)) localQ.solution = extQ.solution;
-                    if (!localQ.meta) localQ.meta = {};
+                    const next = JSON.parse(JSON.stringify(toRaw(localQ)));
+                    if (!hasText(next.answer) && hasText(extQ.answer)) next.answer = extQ.answer;
+                    if (!hasText(next.solution) && hasText(extQ.solution)) next.solution = extQ.solution;
+                    if (!next.meta) next.meta = {};
 
                     const personalToFill = item.personalKnowledge || getQuestionKnowledge(extQ, 'personal');
                     const systemToFill = item.systemKnowledge || getQuestionKnowledge(extQ, 'system');
 
-                    if (!hasText(localQ.personalKnowledge) && personalToFill) {
-                        localQ.personalKnowledge = personalToFill;
-                        localQ.meta.personalKnowledge = personalToFill;
+                    if (!hasText(next.personalKnowledge) && personalToFill) {
+                        next.personalKnowledge = personalToFill;
+                        next.meta.personalKnowledge = personalToFill;
                     }
-                    if (!hasText(localQ.systemKnowledge) && systemToFill) {
-                        localQ.systemKnowledge = systemToFill;
-                        localQ.meta.systemKnowledge = systemToFill;
+                    if (!hasText(next.systemKnowledge) && systemToFill) {
+                        next.systemKnowledge = systemToFill;
+                        next.meta.systemKnowledge = systemToFill;
                     }
 
-                    const primaryKnowledge = localQ.personalKnowledge || localQ.systemKnowledge || localQ.knowledge || '';
-                    const primaryKnowledgeType = localQ.personalKnowledge ? 'personal' : (localQ.systemKnowledge ? 'system' : localQ.knowledgeType || 'system');
-                    localQ.knowledge = primaryKnowledge;
-                    localQ.knowledgeType = primaryKnowledgeType;
-                    localQ.meta.knowledge = primaryKnowledge;
-                    localQ.meta.knowledgeType = primaryKnowledgeType;
+                    const primaryKnowledge = next.personalKnowledge || next.systemKnowledge || next.knowledge || '';
+                    const primaryKnowledgeType = next.personalKnowledge ? 'personal' : (next.systemKnowledge ? 'system' : next.knowledgeType || 'system');
+                    next.knowledge = primaryKnowledge;
+                    next.knowledgeType = primaryKnowledgeType;
+                    next.meta.knowledge = primaryKnowledge;
+                    next.meta.knowledgeType = primaryKnowledgeType;
 
-                    const oldTags = Array.isArray(localQ.meta.tags) ? localQ.meta.tags : (Array.isArray(localQ.tags) ? localQ.tags : []);
-                    localQ.meta.tags = [...new Set([...oldTags, '外部补全', `来源_${extQ.sourceTeacher || '外部教师'}`])];
-                    localQ.meta.sources = [
-                        ...(localQ.meta.sources || []),
+                    const oldTags = Array.isArray(next.meta.tags) ? next.meta.tags : (Array.isArray(next.tags) ? next.tags : []);
+                    next.meta.tags = [...new Set([...oldTags, '外部补全', `来源_${extQ.sourceTeacher || '外部教师'}`])];
+                    next.meta.sources = [
+                        ...(next.meta.sources || []),
                         { type: 'external-fill', sourceTeacher: extQ.sourceTeacher || '外部教师', batchId: extQ.batchId, externalId: extQ.id, filledAt: now }
                     ];
-                    localQ.updatedAt = now;
-                    await storageRepository.put('questions', toRaw(localQ));
+                    next.updatedAt = now;
+                    return next;
                 };
 
                 const confirmAddExternalToPersonal = async () => {
@@ -11804,69 +11767,60 @@ const normalizeRecognizedFigureDescriptor = (raw = {}) => {
                             if (!ok) return;
                         }
 
-                        let added = 0;
-                        let filled = 0;
-                        let skipped = 0;
                         const now = Date.now();
-                        const mergeBatch = {
-                            id: `merge_${now}_${Math.random().toString(36).slice(2, 8)}`,
-                            createdAt: now,
-                            source: 'externalConfirm',
-                            addedQuestionIds: [],
-                            filledQuestionSnapshots: [],
-                            externalStatusSnapshots: [],
-                            summary: { added: 0, filled: 0, skipped: 0 },
-                            revertedAt: 0
-                        };
-
-                        await db.transaction('rw', db.questions, db.externalQuestions, db.mergeBatches, async () => {
-                            for (const item of confirmItems.value) {
-                                const extQ = item.question;
-                                const freshExt = await db.externalQuestions.get(extQ.id);
-                                mergeBatch.externalStatusSnapshots.push({
-                                    id: extQ.id,
-                                    processStatus: freshExt?.processStatus || 'unprocessed',
-                                    linkedQuestionId: freshExt?.linkedQuestionId || '',
-                                    processedAt: freshExt?.processedAt || 0
+                        const operations = [];
+                        for (const item of confirmItems.value) {
+                            const extQ = item.question;
+                            if (item.action === 'skip') {
+                                operations.push({
+                                    action: 'skip',
+                                    externalId: extQ.id
                                 });
-
+                                continue;
+                            }
+                            if (item.action === 'fill') {
                                 const matchInfo = getExternalMatchInfo(extQ);
-
-                                if (item.action === 'skip') {
-                                    await db.externalQuestions.update(extQ.id, { processStatus: 'skipped', processedAt: now });
-                                    skipped += 1;
+                                const localQ = matchInfo.matchedQuestion ||
+                                    questions.value.find(question =>
+                                        question.id === item.matchedQuestionId
+                                    );
+                                if (localQ) {
+                                    operations.push({
+                                        action: 'fill',
+                                        externalId: extQ.id,
+                                        question: buildFilledQuestionFromExternal(
+                                            localQ,
+                                            extQ,
+                                            item
+                                        ),
+                                        expectedUpdatedAt: localQ.updatedAt
+                                    });
                                     continue;
-                                }
-
-                                if (item.action === 'fill') {
-                                    const localQ = matchInfo.matchedQuestion || questions.value.find(q => q.id === item.matchedQuestionId);
-                                    if (localQ) {
-                                        const localSnapshot = await db.questions.get(localQ.id);
-                                        if (localSnapshot) mergeBatch.filledQuestionSnapshots.push(JSON.parse(JSON.stringify(localSnapshot)));
-                                        await fillExistingQuestionFromExternal(localQ, extQ, item);
-                                        await db.externalQuestions.update(extQ.id, { processStatus: 'filled', linkedQuestionId: localQ.id, processedAt: now });
-                                        filled += 1;
-                                    } else {
-                                        const newQ = copyExternalToPersonalQuestion(extQ, item);
-                                        await storageRepository.put('questions', newQ);
-                                        mergeBatch.addedQuestionIds.push(newQ.id);
-                                        await db.externalQuestions.update(extQ.id, { processStatus: 'added', linkedQuestionId: newQ.id, processedAt: now });
-                                        added += 1;
-                                    }
-                                    continue;
-                                }
-
-                                if (item.action === 'add') {
-                                    const newQ = copyExternalToPersonalQuestion(extQ, item);
-                                    await storageRepository.put('questions', newQ);
-                                    mergeBatch.addedQuestionIds.push(newQ.id);
-                                    await db.externalQuestions.update(extQ.id, { processStatus: 'added', linkedQuestionId: newQ.id, processedAt: now });
-                                    added += 1;
                                 }
                             }
-                            mergeBatch.summary = { added, filled, skipped };
-                            await db.mergeBatches.put(mergeBatch);
+                            if (item.action === 'add' || item.action === 'fill') {
+                                operations.push({
+                                    action: 'add',
+                                    externalId: extQ.id,
+                                    question: copyExternalToPersonalQuestion(
+                                        extQ,
+                                        item
+                                    )
+                                });
+                            }
+                        }
+                        if (!operations.length) return;
+
+                        const result = await libraryService.commitExternalMerge({
+                            id: `merge_${now}_${Math.random().toString(36).slice(2, 8)}`,
+                            createdAt: now,
+                            operations
                         });
+                        const {
+                            added = 0,
+                            filled = 0,
+                            skipped = 0
+                        } = result.summary || {};
 
                         await loadData();
                         selectedExternalIds.value = [];
@@ -11881,8 +11835,8 @@ const normalizeRecognizedFigureDescriptor = (raw = {}) => {
                 };
 
                 const undoLatestExternalMerge = async () => {
-                    const batches = await db.mergeBatches.orderBy('createdAt').reverse().toArray();
-                    const latest = batches.find(batch => !batch.revertedAt);
+                    const latest = await libraryService
+                        .getLatestReversibleExternalMerge();
                     if (!latest) {
                         alert('暂无可撤销的加入记录。');
                         return;
@@ -11891,30 +11845,9 @@ const normalizeRecognizedFigureDescriptor = (raw = {}) => {
                     if (!ok) return;
 
                     try {
-                        const now = Date.now();
-                        await db.transaction('rw', db.questions, db.externalQuestions, db.mergeBatches, async () => {
-                            const addedIds = latest.addedQuestionIds || [];
-                            if (addedIds.length) {
-                                await storageRepository.deleteMany(
-                                    'questions', addedIds
-                                );
-                            }
-                            for (const snapshot of latest.filledQuestionSnapshots || []) {
-                                if (snapshot?.id) {
-                                    await storageRepository.put(
-                                        'questions', snapshot
-                                    );
-                                }
-                            }
-                            for (const snapshot of latest.externalStatusSnapshots || []) {
-                                if (!snapshot?.id) continue;
-                                await db.externalQuestions.update(snapshot.id, {
-                                    processStatus: snapshot.processStatus || 'unprocessed',
-                                    linkedQuestionId: snapshot.linkedQuestionId || '',
-                                    processedAt: snapshot.processedAt || 0
-                                });
-                            }
-                            await db.mergeBatches.update(latest.id, { revertedAt: now });
+                        await libraryService.undoExternalMerge({
+                            mergeBatchId: latest.id,
+                            revertedAt: Date.now()
                         });
                         await loadData();
                         alert('已撤销最近一次加入。');
@@ -12100,10 +12033,15 @@ const normalizeRecognizedFigureDescriptor = (raw = {}) => {
                         const primaryKnowledge = personalKnowledge || systemKnowledge || '';
                         const primaryKnowledgeType = personalKnowledge ? 'personal' : 'system';
 
+                        const imageRecords = [];
                         for (const img of entryForm.images) {
                             if (img?.url && img.url.startsWith('data:')) {
                                 const blob = await (await fetch(img.url)).blob();
-                                await db.images.put({ id: img.id, blob, createdAt: now });
+                                imageRecords.push({
+                                    id: img.id,
+                                    blob,
+                                    createdAt: now
+                                });
                             }
                         }
 
@@ -12134,7 +12072,10 @@ const normalizeRecognizedFigureDescriptor = (raw = {}) => {
                             updatedAt: now
                         };
 
-                        await storageRepository.put('questions', newQ);
+                        await libraryService.saveQuestion(newQ, {
+                            imageRecords,
+                            confirmationToken: `manual-entry:${newQ.id}`
+                        });
 
                         entryForm.stem = ''; entryForm.options = ['', '', '', '']; entryForm.answer = ''; entryForm.solution = ''; entryForm.images = [];
                         safeStorage.remove('qisi_draft_v2');
@@ -12384,7 +12325,7 @@ const normalizeRecognizedFigureDescriptor = (raw = {}) => {
                 const resetExamOrder = () => { cart.value = [...cart.value].sort((a, b) => String(a).localeCompare(String(b))); };
                 const clearCart = () => { if (confirm("确定清空试卷篮吗？")) cart.value = []; };
                 const deleteQuestion = async (id) => {
-                    await storageRepository.softDeleteQuestion(id);
+                    await libraryService.softDelete(id);
                     await loadData();
                     cart.value = cart.value.filter(i => i !== id);
                 };
@@ -12393,6 +12334,7 @@ const normalizeRecognizedFigureDescriptor = (raw = {}) => {
                     const q = questions.value.find(q => q.id === id);
                     if(q) {
                         const expectedUpdatedAt = q.updatedAt;
+                        const next = JSON.parse(JSON.stringify(toRaw(q)));
                         const now = Date.now();
                         const imageRecords = [];
                         for (const img of imgs || []) {
@@ -12405,26 +12347,25 @@ const normalizeRecognizedFigureDescriptor = (raw = {}) => {
                                 });
                             }
                         }
-                        q.stem = stem;
-                        q.images = (imgs || []).filter(i => i && i.id).map(i => ({ id: i.id, align: i.align || 'center' }));
-                        q.type = t; q.answer = ans; q.solution = sol; q.options = opts;
-                        q.grade = g; q.diff = d;
+                        next.stem = stem;
+                        next.images = (imgs || []).filter(i => i && i.id).map(i => ({ id: i.id, align: i.align || 'center' }));
+                        next.type = t; next.answer = ans; next.solution = sol; next.options = opts;
+                        next.grade = g; next.diff = d;
                         const systemKnowledge = systemKnowledgeArg || '';
                         const personalKnowledge = personalKnowledgeArg || '';
                         const primaryKnowledge = personalKnowledge || systemKnowledge || knowledge || '';
                         const primaryKnowledgeType = personalKnowledge ? 'personal' : 'system';
-                        q.knowledge = primaryKnowledge;
-                        q.knowledgeType = primaryKnowledgeType;
-                        if(!q.meta) q.meta = {};
-                        q.systemKnowledge = systemKnowledge;
-                        q.personalKnowledge = personalKnowledge;
-                        q.meta.systemKnowledge = systemKnowledge;
-                        q.meta.personalKnowledge = personalKnowledge;
-                        q.meta.grade = g; q.meta.diff = d; q.meta.knowledge = primaryKnowledge; q.meta.knowledgeType = primaryKnowledgeType; q.meta.tags = String(tagsStr || '').split(',').filter(x => x.trim());
-                        q.userEdited = true;
-                        q.updatedAt = now;
-                        await storageRepository.saveQuestion(toRaw(q), {
-                            allowUpdate: true,
+                        next.knowledge = primaryKnowledge;
+                        next.knowledgeType = primaryKnowledgeType;
+                        if(!next.meta) next.meta = {};
+                        next.systemKnowledge = systemKnowledge;
+                        next.personalKnowledge = personalKnowledge;
+                        next.meta.systemKnowledge = systemKnowledge;
+                        next.meta.personalKnowledge = personalKnowledge;
+                        next.meta.grade = g; next.meta.diff = d; next.meta.knowledge = primaryKnowledge; next.meta.knowledgeType = primaryKnowledgeType; next.meta.tags = String(tagsStr || '').split(',').filter(x => x.trim());
+                        next.userEdited = true;
+                        next.updatedAt = now;
+                        await libraryService.replaceQuestion(next, {
                             expectedUpdatedAt,
                             imageRecords
                         });

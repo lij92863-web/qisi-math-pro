@@ -15,14 +15,17 @@ test('app shell delegates every formal question table mutation to the repository
         app,
         /\bdb\.questions\.(?:put|add|bulkPut|update|delete|bulkDelete|clear)\s*\(/
     );
-    assert.equal(
-        (app.match(/storageRepository\.put\(\s*['"]questions['"]/g) || []).length,
-        6
-    );
-    assert.match(
+    assert.doesNotMatch(
         app,
-        /storageRepository\.deleteMany\(\s*['"]questions['"]\s*,\s*addedIds\s*\)/
+        /storageRepository\.(?:put|deleteMany)\(\s*['"]questions['"]/
     );
+    assert.doesNotMatch(
+        app,
+        /storageRepository\.(?:saveQuestion|updateQuestion|softDeleteQuestion|restoreQuestion|confirmDraftToQuestion)\s*\(/
+    );
+    assert.match(app, /libraryService\.saveQuestion\s*\(/);
+    assert.match(app, /libraryService\.commitExternalMerge\s*\(/);
+    assert.match(app, /libraryService\.undoExternalMerge\s*\(/);
 });
 
 test('repository bulk deletion is clone-safe and owns the questions table mutation', async () => {

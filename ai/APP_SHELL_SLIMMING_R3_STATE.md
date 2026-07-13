@@ -3,8 +3,8 @@
 - Start commit: `b15e6fbe24c525c95a573b51a0c7ab68e77f4790`
 - Baseline tag: `pre-app-shell-slimming-r3-b15e6fb`
 - Current branch: `stage/app-shell-slimming-r3`
-- Current phase: Program C / C2-12 Wave 15 accepted / Wave 16 audit ready
-- Current work package: audit remaining OCR/Vision transport and producer ownership
+- Current phase: Program C / C2-12 Wave 17 accepted / Wave 18 audit ready
+- Current work package: final UI-shell reachability and responsibility audit
 - Status updated: 2026-07-14 Asia/Shanghai
 
 ## Lost-session recovery R2 checkpoint
@@ -1036,6 +1036,30 @@
 - Wave 17 is the next independent conditional storage/Formal Repository/D
   inventory and is not pre-accepted.
 
+## C2-12 Wave 17 accepted
+
+- Decision: `APP_STORAGE_FORMAL_REPOSITORY_BOUNDARY_ACCEPTED`.
+- The audit was applicable: formal question create/edit/delete/migration calls,
+  an external-merge question transaction, rollback snapshots/loops, and
+  non-atomic manual image writes remained in `app.js`.
+- `LibraryService` now owns save/replace/soft-delete, version-aware safe LaTeX
+  migration, and atomic external merge/undo commands. `StorageRepository`
+  remains the transaction/table owner and returns verified readback.
+- App direct formal repository mutation, question transaction, direct draft
+  transaction business logic, rollback ownership, and migration mutation are
+  zero. Formal ReviewDraft submission remains Admission then Repository;
+  Bridge formal writes remain zero.
+- Focused lifecycle tests pass 58/58; `verify:safe` passes 1,614/1,614 across 54
+  suites; the 15-case normal-UI canary and six true-import browser tests pass.
+  All 11 mandatory gates pass with all safety/real-API counters zero.
+- Post-wave metrics are 13,167 lines, 305 functions, a 164-line largest
+  unrelated function, and a 146-line largest remaining Program C function.
+  The six frozen PDF files are unchanged and no `real-run` occurred.
+- Evidence is in
+  `docs/release/PROGRAM_C_C2_12_WAVE17_STORAGE_FORMAL_REPOSITORY_REPORT.md`.
+- Wave 18 is the next and final independent C2-12 UI-shell reachability,
+  responsibility, browser, and metric audit. It is not pre-accepted.
+
 ## Blockers / limitations
 
 - Upload-to-review, switch p50/p95, draft persist, formal submit, reload, export,
@@ -1047,7 +1071,7 @@
 
 ## Next exact action
 
-After the Wave 16 commit is pushed and all three branch heads agree, begin the
-conditional Wave 17 storage, Formal Repository, and remaining D-responsibility
-inventory. Do not claim it applicable or N/A without production reachability,
-transaction, admission, rollback, failure, duplicate, and readback evidence.
+After the Wave 17 commit is pushed and all three branch heads agree, begin the
+mandatory Wave 18 final UI-shell reachability and responsibility audit. Do not
+pre-accept C2-12 before the final metrics, browser scenarios, unique-owner
+checks, and A/G residual classification are complete.
