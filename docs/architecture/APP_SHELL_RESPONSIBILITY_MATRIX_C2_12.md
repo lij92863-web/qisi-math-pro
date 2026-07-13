@@ -1,0 +1,140 @@
+# App Shell Responsibility Matrix — C2-12
+
+## Audit baseline and method
+
+- Branch: `stage/app-shell-slimming-r3`
+- C2-12 start commit: `f92f8e909aa53047755f71f5b9d9d45d3e849303`
+- `app.js`: 19,494 inventory lines, 396 inventory-recognized functions
+- Import/review/DOCX/PDF/recognition functions: 205
+- Largest function: `parseDocxOptionsFromText`, 242 lines
+- Normal UI production owner: `ProductionImportBridge`
+- Retired owner: `processDraftImportBatch` (absent)
+
+This matrix combines current function inventory, template events, Vue proxy
+exports, lexical callers, runtime dependency order, C2-11 Chromium traces, and
+production-linked tests. Template/proxy references count as reachability even
+when a function has no lexical `name(...)` caller. Conversely, an isolated
+function name is not treated as a live route.
+
+Classifications:
+
+- A — UI shell responsibility;
+- B — import-domain orchestration;
+- C — validation, ownership, or policy;
+- D — persistence or repository responsibility;
+- E — diagnostics;
+- F — dead or unreachable;
+- G — unrelated application feature.
+
+Only A, necessary E, and G may remain in `app.js` after C2-12. A UI handler may
+call a unique owner but may not implement B/C/D itself.
+
+## Setup and owner assembly blocks
+
+| Current range | Function/block | Class | Evidence and current responsibility | Final disposition |
+| --- | --- | --- | --- | --- |
+| 1–19 | repository, Formal Admission, batch submit setup | A wiring | setup-only dependency injection | keep as thin construction; formal lifecycle must use the state-machine owner |
+| 31–260 | `importValidationPorts` anonymous validators | C | sequence/schema/ownership/safe-partial/controlled-write policy is implemented inline | move to `qisi-import-validation-service.js`; app injects dependencies only |
+| 276–298 | `draftPersistenceService` facade | A wiring | thin calls to the unique service/repository | keep or reduce; no transaction logic |
+| 15,950–16,217 | Bridge ports and production adapters | B/C/D mixed | truthful producer selection, projection context, validation and persistence callbacks | move producer behavior to existing source-port owners and validation policy to its owner; keep bounded dependency assembly only |
+| 16,219–16,250 | normal UI controller assembly | A | batch route lookup and review-view mapping | keep; route lookup may delegate but has no import algorithm |
+
+## Normal batch-import UI functions
+
+| Current range | Functions | Class | Side effects / owner boundary | Final disposition |
+| --- | --- | --- | --- | --- |
+| 509–523 | `batchStatusText`, `draftQuestionStatusText` | A | display labels only | keep |
+| 567–815 | `showBatchToast`, `openBatchCreate`, `openBatchList`, `clearBatchDraftWorkspace`, `openBatchFilePicker`, `readFileAsDataUrl`, `queueBatchFiles`, `handleBatchFileChange`, `handleBatchDrop`, `handleBatchHomeDrop`, `togglePurposeRole`, `confirmBatchFilePurpose`, `cancelBatchFilePurpose`, `editBatchFilePurpose`, `removeBatchCreateFile` | A | visible template state and file-picker mapping | keep; storage calls must delegate |
+| 817–836 | `loadBatchImportData`, `updateBatchProgress` | A/D | maps repository records into Vue state; progress write is a status-owner concern | keep only UI reload mapping; delegate every write |
+| 841–979 | preview-image computed helpers, `toggleImagePositionMenu`, `copyDraftImagePlacementLatex` | A | review presentation and clipboard behavior | keep |
+| 984–1,152 | editor source/projection and editor UI helpers | A | edit/view-model projection, no import acceptance | keep; producer provenance may only be changed through Formal Admission's manual-edit helper |
+| 1,204–1,276 | `defaultMetaForStorage`, `createDraftImportBatch` | A/D | visible form mapping plus direct batch/file transaction | move transaction to `qisi-draft-persistence-service.js`; keep form-to-command mapping |
+| 16,252–16,290 | `runBatchRecognition`, `cancelBatchRecognition`, `openBatchReview` | A | bounded controller commands and review navigation | keep |
+| 16,292–17,113 | review select/edit/image/crop/review/submit/stats/dedupe/cleanup/delete handlers | A/C/D | UI mapping is valid; inline review normalization/validation and draft writes are not | keep UI commands; move C to review/validation owners and D to draft persistence owner |
+
+Review functions covered by the last row are:
+`selectDraftQuestion`, `cleanSingleDraftForSave`, `markDraftFieldManual`,
+`markActiveDraftUserEdited`, `updateDraftQuestionField`,
+`commitDraftEditorBufferToQuestion`, `saveActiveDraftQuestion`,
+`confirmDraftImages`, `deleteDraftImage`, `openSourcePageCrop`, crop pointer
+handlers, `loadImageForCrop`, `saveManualCropToDraft`,
+`bindUnassignedImage`, `deleteUnassignedImage`,
+`validateDraftContentForReview`, `validateDraftForReview`,
+`normalizeDraftQuestionBeforeSave`, `markDraftReviewed`,
+`detectDraftDuplicate`, `duplicateLabel`, `submitDraftQuestion`,
+`refreshBatchStats`, `openBatchSubmitSummary`,
+`rerunActiveBatchRecognition`, `dedupeActiveBatchDraftsNow`,
+`showUnmatchedAnswerList`, `showActiveRawText`,
+`cleanupActiveBatchDisplayPollution`, `showCropNotice`,
+`confirmBatchSubmit`, and `deleteBatchImport`.
+
+## Import producer and recognition blocks
+
+| Current range | Functions/block | Class | Reachability | Final disposition |
+| --- | --- | --- | --- | --- |
+| 1,286–2,064 | local conversion health/convert, AI request helpers, page OCR/vision helpers | B/E | reachable from active DOCX/PDF producer and separate manual OCR feature | move HTTP transport to `qisi-ocr-qwen-adapter.js`; producer orchestration must be owned by the DOCX/PDF source ports; retain only UI health presentation if needed |
+| 2,159–5,029 | candidate cleaning, option parsing, DOCX XML/media and PDF text/layout extraction | B/C | partial active producer dependency closure plus legacy helpers | move active algorithms to CandidateNormalizer/DOCX/PDF owners; delete unreachable roots after call-graph proof |
+| 5,795–9,921 | text/image/PDF recognition, figure binding, PDF render and segmentation | B/C/E | active producer dependency closure and orphaned legacy roots | same owner-directed move; no app transport or ownership logic remains |
+| 9,948–13,717 | strict DOCX/PDF page recognition, support extraction, draft repair/merge | B/C/E | active strict producer plus legacy repair roots | move active strict producer behavior to DOCX/PDF port owners; delete unreachable post-import repair roots |
+| 14,631–14,808 | draft problem/golden/final gate helpers | C/E | only a bounded subset is used by current UI cleanup or producer adapters | validation belongs to existing validators; UI text-only checks may remain A |
+| 14,827–15,520 | deterministic DOCX/V2 normalization, image-token and visual merge helpers | B/F | most callers are the unreachable V2 precursor; deterministic normal UI is N/A | delete unreachable closure; move any still-required pure helper to existing DOCX/review owners |
+| 15,521–15,736 | `processDraftImportBatchV2` | F | no template event, Vue proxy export, controller call, or runtime canary call | delete completely |
+| 15,738–15,759 | `productionImportEngineHelpers` | B | active Bridge dependency bag includes app-local domain helpers | replace with owner factories; app retains thin explicit dependency injection only |
+| 15,761–15,786 | `docxVisionDecisionFromCandidate` | C | active DOCX vision adapter reconstructs controlled-write decision | move to `qisi-production-docx-vision-source-port.js` |
+| 15,788–15,894 | `runProductionDocxVisionImport` | B/C | active normal DOCX production route | move to the existing DOCX vision source port; no copied algorithm |
+| 15,896–15,948 | `runProductionFixtureImport` | E/F(test-only) | reachable only when an injected deterministic test transport exists | move behind Bridge's explicit fixture port helper; production route cannot select it |
+
+The named producer/recognition functions in these ranges include every current
+inventory row classified as DOCX import, PDF safe-partial, recognition/images,
+or batch producer behavior. The complete current name/range source is
+`scripts/app-shell-responsibility-inventory.js`; this matrix deliberately
+groups mutually dependent helpers by their contiguous owner extraction boundary
+instead of pretending each nested one-line wrapper is an independent owner.
+
+## Formal admission and storage-related application features
+
+| Current range | Functions/block | Class | Current issue | Final disposition |
+| --- | --- | --- | --- | --- |
+| 16,881–16,957 | `submitDraftQuestion` | A/C/D | UI confirmation delegates admission, but reads draft/images directly | keep UI mapping; all read/write and lifecycle transitions delegate to BatchFormalSubmit/DraftPersistence/StateMachine owners |
+| 17,343–18,209 | library/import-package/external merge functions | G with D boundary | unrelated library feature; six direct formal `db.questions.put` calls remain | retain feature, replace formal writes with repository owner calls; do not broaden Program C semantics |
+| 18,292–18,405 | manual entry/OCR handlers | G | separate manual OCR feature, but one direct Qwen HTTP call and one direct formal write remain | retain UI behavior; delegate transport to OCR adapter and formal write to repository owner |
+| 19,205–19,341 | custom-template/personal-knowledge storage | G | unrelated application storage | retain; not an import owner |
+
+Package import/export, exam assembly, printing, templates, knowledge trees,
+library filtering, external-bank review, and manual single-question entry are G.
+They are not deleted merely to reach a line target. Their formal writes and OCR
+transport still delegate to the existing owners because the hard shell boundary
+is repository/transport-wide.
+
+## Baseline hard metrics and migration waves
+
+| Metric | C2-12 baseline | Required final |
+| --- | ---: | ---: |
+| app.js inventory lines | 19,494 | directional <= 12,000; otherwise explain unrelated G |
+| largest function | 242 | <= 250 |
+| `processDraftImportBatch` | deleted | deleted |
+| `processDraftImportBatchV2` | 216 lines / unreachable | deleted |
+| import-related inventory functions | 205 | only A/E wrappers remain |
+| direct Qwen/DashScope transport callsites | 17 | 0 |
+| direct `db.questions.put` | 6 | 0 |
+| `PdfSupportAligner` references | 3 | 0 in app |
+| `PdfSupportControlledWrite` references | 2 | 0 in app |
+| inline field-provenance assignment/construction | 2 | manual owner call only; construction 0 |
+| support-level comparisons/construction | 3 | 0 in app |
+| direct ReviewDraft builder call | 1 | bounded owner call allowed only in owner assembly; business construction 0 |
+| draft persistence service calls | 4 | UI command delegation only; transaction logic 0 |
+| legacy fallback | 0 | 0 |
+| duplicate normal-UI production owner | 0 | 0 |
+
+Planned independent waves:
+
+1. state-machine and production-policy port closure;
+2. unreachable V2/legacy helper deletion;
+3. DOCX/PDF production adapter owner extraction;
+4. review/draft persistence command extraction;
+5. OCR transport and formal repository boundary cleanup;
+6. final reachability, duplicate-owner, browser, and metric proof.
+
+Each wave requires characterization, one unique target owner, production
+wiring, old implementation deletion, targeted tests, and its own commit before
+the next wave.
