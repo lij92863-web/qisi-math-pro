@@ -4,161 +4,202 @@
 
 `PHASE 5 — REAL BROWSER SHADOW EQUIVALENCE`
 
-## Baseline
+## Baseline and scope
 
-- start production commit:
-  `d7f0f8b5d2daaca94ca3d164cf730fbe7fdae1ab`
-- end production commit:
-  `d7f0f8b5d2daaca94ca3d164cf730fbe7fdae1ab`
+- start commit: `84e1b8a70f8a927345b8b3f55189585ec61d37ec`
+- production/test end commit:
+  `bba2fc48840fb8d11968b5fa86a820f51a6464f4`
 - branch: `stage/app-shell-slimming-r3`
-- working tree before investigation: clean
-- normal UI owner: legacy `processDraftImportBatch`
-- Bridge status: layer-3 scaffold; not the normal UI owner
+- normal UI owner: legacy `processDraftImportBatch` (unchanged)
+- Bridge: shadow-only; not the normal UI owner
+- C2-11: not entered
+- real-run / AI proxy / real AI: not used
 
-## Browser scenarios
+This resumed Phase 5 after the accepted DOCX producer-identity correction. It
+compares only candidates produced by the same truthful producer contract.
+DOCX vision and DOCX deterministic outputs are never declared equivalent.
 
-### Failure-first DOCX deterministic complete import
+## True-browser scenarios
 
-- Used the normal browser batch-import UI.
-- Uploaded the real 12-question DOCX fixture.
-- Did not register `InjectedImportTransport`.
-- Did not seed a review draft or final question.
-- Used a temporary deterministic adapter only at the raw recognition boundary.
-- Made no real AI/API call.
-- The 1-question counterfactual was rejected by the production authoritative
-  question-number contract as missing questions 2–12.
-- The 12-question run reached the production review state and persisted 12
-  legacy drafts.
-- The persisted legacy result had no `source.mode` and no `fieldProvenance`.
-- Its real route evidence was `docx-local-convert-pdf-strict-vision`.
+| Scenario | Real entry/result | Decision |
+| --- | --- | --- |
+| DOCX vision | normal `AppProxy.runBatchRecognition`, actual DOCX conversion, legacy vision producer, Bridge vision shadow | exact, 0 differences |
+| DOCX deterministic | real independent deterministic source port exists, but no normal-UI deterministic production route exists | non-applicable; different producer |
+| PDF normal-UI full | normal `AppProxy.runBatchRecognition`, legacy coordinator and `processDraftImportBatch`; captured at the shared projection boundary and replayed through isolated Bridge shadow | exact, 0 differences |
+| PDF full | production projection + Bridge in Chromium | exact, 0 differences |
+| PDF safe-partial | production projection + Bridge in Chromium | exact, 0 differences |
+| PDF missing answer | rejected/missing field remains explicit | exact, 0 differences |
+| PDF formula fallback | full candidate with mandatory manual review and stable warning | exact, 0 differences |
+| PDF ownership failure | legacy projection rejected; Bridge validation rejected; no persistence | fail closed on both paths |
+| raw JSON candidate | rejected before projection/persistence | fail closed |
+| multiple support ambiguity | rejected before parser/controlled-write | fail closed |
+| conflicting controlled-write decisions | rejected with `controlled-write-conflict` | fail closed |
+| cancellation | `IMPORT_CANCELLED`; late result discarded; no persistence | fail closed |
 
-The evidence is recorded in
-`docs/benchmark/IMPORT_SHADOW_EQUIVALENCE_R3.md`.
-
-The remaining required PDF, known-bad, ambiguity, conflict, formula-fallback,
-and cancellation scenarios were not run after the global stop condition was
-triggered.
+The browser tests use deterministic network fixtures. Every `/api/ai/chat` or
+`/api/ai/ocr` request used by the normal UI is intercepted in-browser; no
+underlying AI request is permitted.
 
 ## Production call graphs
 
-Legacy:
+DOCX vision legacy and shadow:
 
 ```text
-normal UI entry
-→ runBatchRecognition
-→ LegacyBatchRunCoordinator
-→ processDraftImportBatch
-→ processDocxByLocalConvertAndStrictVision
-→ processStrictVisualQuestionFile
-→ legacy persistence
+AppProxy.runBatchRecognition
+  -> LegacyBatchRunCoordinator
+  -> processDraftImportBatch
+  -> processDocxByLocalConvertAndStrictVision
+  -> processStrictVisualQuestionFile
+  -> DocxProducerIdentityContract producer-time projection
+  -> legacy review persistence (user-visible)
+
+ProductionImportBridge.runDocxVisionShadow
+  -> ProductionDocxVisionSourcePort
+  -> same DocxProducerIdentityContract
+  -> isolated shadow result only
+  -> canonical deep comparator
 ```
 
-Bridge:
+PDF legacy and shadow:
 
 ```text
-ProductionImportBridge
-→ deterministic-source-loaded
-→ runDocxImport
-→ ProductionDocxSourcePort.parseDocxSource
-→ shared validation / review-draft persistence
+AppProxy.runBatchRecognition
+  -> LegacyBatchRunCoordinator
+  -> processDraftImportBatch
+  -> processStrictVisualQuestionFile / support parser / aligner
+  -> PdfSupportControlledWrite
+  -> PdfCandidateProjection.projectPdfCandidates
+  -> legacy review persistence (user-visible)
+
+ProductionImportBridge.run
+  -> isolated runPdfImport fixture at the engine boundary
+  -> same PdfCandidateProjection.projectPdfCandidates
+  -> validation and isolated shadow sink
+  -> canonical deep comparator
 ```
 
-## Comparator coverage and result
+The normal-UI PDF test instruments the immutable production module by replacing
+only the browser namespace reference with a delegating wrapper. The wrapper
+calls the exact production owner, records its real input/output, and implements
+no parser, aligner, controlled-write, provenance, support-level, or validation
+rule.
 
-The required comparison cannot legally produce zero differences for the DOCX
-case:
+## Comparator coverage
 
-- `source.mode` is mandatory but absent from the legacy review draft;
-- stable field provenance is mandatory but absent from the legacy review draft;
-- the legacy route is visual, while the Bridge route is deterministic;
-- ignoring those differences would weaken the comparator;
-- setting `docx-deterministic` on the legacy visual result would fabricate
-  provenance;
-- switching the normal UI route to the deterministic owner is C2-11 and is not
-  allowed before Phase 5 acceptance.
+The PDF comparator now protects all stable safety identity:
 
-Therefore no `EXACT` result, approved safety refinement, or canonical hash is
-claimed.
+- `source.format`, `sourceId`, page and source order;
+- producer mode, route ID/reason, engine and deterministic flag;
+- route identity/reason and ordered transitions;
+- question number and every field value;
+- every field's provenance kind, source, format, producer, route, engine,
+  boundary, controlled-write decision, acceptance and stable contract version;
+- controlled-write evaluated state, decision ID, accepted/rejected fields,
+  errors and warning/rejection codes;
+- support level, manual-review requirement, schema/sequence/ownership validity;
+- warning codes and stable evidence identities.
+
+Only request IDs, timestamps, durations, temporary paths and random diagnostic
+IDs are volatile. Producer, route, provenance, controlled-write, validation and
+warning differences cannot be suppressed. A counterfactual vision-versus-
+deterministic comparison is required to produce producer and field-provenance
+differences.
 
 ## Safety counters
 
-- canonical accepted cases: `0`
-- wrong attachments observed: `0`
-- raw JSON leakage observed: `0`
-- placeholder leakage observed: `0`
-- controlled-write bypass observed: `0`
-- Formal Admission bypass observed: `0`
+- same-producer accepted canonical differences: `0`
+- different-producer false equivalence: `0`
+- wrong attachments: `0`
+- raw JSON leakage: `0`
+- placeholder leakage: `0`
+- controlled-write bypass: `0`
+- Formal Admission bypass: `0`
+- Bridge production review writes: `0`
 - Bridge formal writes: `0`
+- normal UI formal writes during shadow runs: `0`
 - real API called: `false`
+- underlying real API calls: `0`
 
-These zero observations do not constitute Phase 5 acceptance because the first
-mandatory accepted case is not canonically equivalent.
+The Bridge test-local sink records accepted shadow output for comparison. It is
+an isolated in-memory diagnostic sink, not production review or formal storage.
 
 ## Tests and gates
 
-- source-level call-graph inspection: completed
-- true-browser normal-UI failure-first runs: `2`
-- first run result: expected production coverage failure (1/12 questions)
-- second run result: production review reached; mandatory source-mode assertion
-  failed
-- skipped/todo/timeout: `0/0/0` in the failure-first browser executions
-- Phase 5 full browser suite: not run after global stop
-- `verify:safe`: not run after global stop
-- 11 mandatory gates: not run after global stop
-- DOCX stable / PDF known-bad / Route B / controlled-write ownership / runtime /
-  architecture owner / no-real-AI / preflight / dry-run: not rerun after global
-  stop
+- failure-first comparator contract: initially `1/5` passed, with four expected
+  failures proving missing PDF producer/source identity was observable; after
+  correction `5/5` passed
+- final Phase 5 targeted matrix: `135/135`
+- true-browser suites: `2/2`, covering all scenarios listed above
+- Phase 5 acceptance gate: `6/6`
+- final `verify:safe` after the acceptance gate: `1484/1484` across 54 suites
+- Base Migration: `15/15`
+- Route B hold: `6/6`
+- batch smoke: `20/20`
+- PDF known-bad: `65/65`
+- controlled-write answer ownership: `21/21`
+- DOCX stable: `20/20`
+- runtime dependency + architecture owner audit: `9/9`
+- preflight: passed, `realApiCalled=false`, `underlyingApiCallCount=0`
+- dry-run: passed in a real browser, `realApiCalled=false`,
+  `underlyingApiCallCount=0`
+- batch safety and no-real-AI: passed
+- failed / cancelled / skipped / todo / timeout: `0 / 0 / 0 / 0 / 0`
 
-Stopping before the remaining gates follows the instruction to stop immediately
-when a credible normal-UI legacy/Bridge snapshot cannot be produced without
-fabricated provenance or weakened validation.
+All 11 mandatory gates passed. The first full-suite attempt exposed one stale
+historical byte-freeze assertion for Formal Admission. The bounded audit-only
+correction retained byte freezes for controlled-write and Route B and replaced
+the stale assertion with positive fail-closed checks for both truthful PDF
+producer boundaries. The corrected full suite passed.
 
 ## Changed files
 
-Production code changes: none. All temporary trial modules, tests, and `app.js`
-or `main.html` edits were removed before this report was created.
+Production contract and validation:
 
-Permanent changes are evidence only:
+- `qisi-docx-producer-identity-contract.js`
+- `qisi-pdf-candidate-projection.js`
+- `qisi-formal-admission-policy.js`
+- `qisi-recognition-contracts.js`
 
-- `docs/benchmark/IMPORT_SHADOW_EQUIVALENCE_R3.md`
-- `docs/release/PROGRAM_C_PHASE5_REAL_BROWSER_SHADOW_EQUIVALENCE_R3.md`
-- `ai/APP_SHELL_SLIMMING_R3_STATE.md`
+Tests and browser evidence:
 
-## Frozen files
+- `tests/phase5-canonical-producer-comparator.test.js`
+- `tests/e2e/docx-producer-identity-browser.test.js`
+- `tests/e2e/pdf-projection-browser-shadow.test.js`
+- `tests/pdf-candidate-projection.test.js`
+- `tests/pdf-candidate-projection-known-bad.test.js`
+- `tests/ocr-quality-architecture-audit.test.js`
 
-All six frozen high-risk PDF files remain unchanged. No validator, comparator,
-controlled-write owner, Formal Admission owner, parser, aligner, or normal UI
-production owner was modified.
+No normal UI owner, parser, aligner, controlled-write algorithm, persistence
+owner, or application shell was moved or deleted.
 
-## Git
+## Frozen files and ownership
 
-- start production commit:
-  `d7f0f8b5d2daaca94ca3d164cf730fbe7fdae1ab`
-- end production commit:
-  `d7f0f8b5d2daaca94ca3d164cf730fbe7fdae1ab`
-- evidence disposition: committed and pushed as a documentation-only blocker
-  seal
-- working tree target after seal: clean
-- local/tracking/live target after seal: equal
+Relative to the start commit, `app.js` and all six frozen PDF high-risk files
+are unchanged:
+
+- `qisi-pdf-support-controlled-write.js`
+- `qisi-pdf-support-aligner.js`
+- `qisi-pdf-support-block-parser.js`
+- `qisi-pdf-answer-only-extraction.js`
+- `qisi-pdf-answer-extraction-quality.js`
+- `scripts/pdf-master-browser-runner.js`
+
+The existing unique PDF candidate projection owner remains the only production
+owner. Legacy normal UI and Bridge both delegate to it. Bridge remains shadow-
+only, and legacy remains user-visible.
 
 ## Remaining limitations
 
-- Phase 5 is not accepted.
-- C2-11 is prohibited.
-- No old owner was deleted.
-- No production entry was migrated.
-- C2-12 through C2-14, attack campaign, architecture audit, benchmark,
-  internal CTO review, and Phase 8 Git seal were not entered.
+- The normal UI has no deterministic DOCX production route. Deterministic DOCX
+  browser equivalence is therefore truthfully non-applicable in Phase 5.
+- Phase 5 does not migrate the production entry or delete the legacy owner.
+  Those are C2-11 concerns and were not started.
+- Performance baselines belong to later phases and are not claimed here.
+- This review is an internal CTO review, not an independent external review.
 
 ## Decision
 
-`PHASE_5_BLOCKED`
+`PHASE_5_ACCEPTED`
 
-Exact blocker:
-
-`DOCX_NORMAL_UI_LEGACY_VISUAL_PROVENANCE_NOT_EQUIVALENT_TO_DETERMINISTIC_BRIDGE`
-
-Next exact action: define and authorize a prerequisite migration that makes the
-normal UI DOCX route use a truthful deterministic production owner before
-restarting Phase 5. That action cannot be performed inside this blocked task
-because C2-11 remains gated on Phase 5 acceptance.
+Next exact action: stop this task. C2-11 may be considered only in a separate
+subsequent task; it was not entered or mixed into the Phase 5 commits.

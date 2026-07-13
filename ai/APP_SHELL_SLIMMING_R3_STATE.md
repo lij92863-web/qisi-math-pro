@@ -3,8 +3,8 @@
 - Start commit: `b15e6fbe24c525c95a573b51a0c7ab68e77f4790`
 - Baseline tag: `pre-app-shell-slimming-r3-b15e6fb`
 - Current branch: `stage/app-shell-slimming-r3`
-- Current phase: Program C / Phase 5 blocked
-- Current work package: DOCX producer identity and route contract correction R1 accepted
+- Current phase: Program C / Phase 5 accepted
+- Current work package: Real Browser Shadow Equivalence accepted; stop before C2-11
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -783,6 +783,42 @@
 - Architecture decision commit: `4cb1ed44fca0860254de35588532851921181dac`;
   production contract, wiring, and regression commit:
   `456f9ce83e0639614476a62c308c2007dd16ba5f`.
+- Phase 5 resumed from the clean three-way-equal commit
+  `84e1b8a70f8a927345b8b3f55189585ec61d37ec`. Same-producer browser
+  equivalence is now separated from cross-producer counterfactuals; DOCX
+  deterministic equivalence is explicitly non-applicable because normal UI has
+  no deterministic DOCX production route.
+- True-browser tests used the normal `AppProxy.runBatchRecognition` entry for
+  both DOCX vision and PDF full. DOCX legacy/Bridge vision and PDF legacy/Bridge
+  shadow each used the same producer contract, controlled-write result,
+  producer-time provenance and canonical comparator. PDF safe-partial,
+  missing-answer, formula fallback, ownership failure, raw JSON, support-source
+  ambiguity, controlled-write conflict and cancellation were also covered.
+- Same-producer canonical differences, wrong attachments, raw JSON leakage,
+  placeholders, controlled-write bypass, Formal Admission bypass, Bridge
+  production review/formal writes, and real API calls all remained zero.
+  Vision-versus-deterministic counterfactuals produced required producer and
+  field-provenance differences instead of false equivalence.
+- The PDF canonical owner now uses the accepted split `source.format` plus
+  producer/route identity contract and compares stable producer-time evidence.
+  Formal Admission and recognition schemas accept only the matching truthful
+  PDF producer boundary. No parser, aligner, controlled-write rule, validator,
+  normal UI owner or persistence owner was weakened or moved.
+- Phase 5 targeted tests passed 135/135; true-browser suites passed 2/2; the
+  acceptance gate passed 6/6; final `verify:safe` passed 1,484/1,484 across 54
+  suites. Base Migration passed 15/15, Route B hold 6/6, PDF known-bad
+  65/65, controlled-write ownership 21/21, DOCX stable 20/20, runtime/owner
+  audits 9/9, and all 11 mandatory gates passed. Preflight and dry-run used a
+  real browser and recorded `realApiCalled=false` with zero underlying calls.
+- `app.js` and all six frozen PDF high-risk files are unchanged from the Phase
+  5 start commit. Legacy remains the user-visible normal UI owner, Bridge
+  remains shadow-only, no old owner was deleted, and C2-11 was not entered.
+- Production/test Phase 5 commit:
+  `bba2fc48840fb8d11968b5fa86a820f51a6464f4`. Formal evidence is in
+  `docs/benchmark/IMPORT_SHADOW_EQUIVALENCE_R3.md`,
+  `docs/release/PROGRAM_C_PHASE5_REAL_BROWSER_SHADOW_EQUIVALENCE_R3.md`, and
+  `docs/audit/PROGRAM_C_PHASE5_INTERNAL_CTO_REVIEW_R3.md`.
+- Decision: `PHASE_5_ACCEPTED`; this task must stop before C2-11.
 
 ## Blockers / limitations
 
@@ -795,7 +831,6 @@
 
 ## Next exact action
 
-Program C remains blocked at Phase 5, but the DOCX producer identity corrective
-package is accepted. In the next independent task only, resume the complete
-Phase 5 browser equivalence using separate deterministic and vision scenarios.
-Do not enter C2-11 until Phase 5 itself is accepted.
+Phase 5 is accepted. Stop this task. C2-11 may be considered only in a new,
+independent task; do not begin production-entry migration or legacy-owner
+deletion in this Phase 5 acceptance task.
