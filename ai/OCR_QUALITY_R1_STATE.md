@@ -3,7 +3,7 @@
 - Start commit: `1361d7e7f81d2f23819a995a0f9d1808adf19982`
 - Baseline tag: `pre-ocr-quality-r1-1361d7e`
 - Current branch: `stage/ocr-quality-r1`
-- Current phase: Program B / Phase 2 / B2-2 complete
+- Current phase: Program B / Phase 2 / B2-3 complete
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -60,10 +60,23 @@
 - Adapter infrastructure is implemented/unit-tested and browser-loaded as an
   existing scaffold boundary. No candidate engine was benchmark-measured or
   production-promoted.
+- B2-3 implemented and unit-tested a pure Node loopback Local OCR Service
+  boundary. It enforces raw-body MIME/size limits, no client paths, managed temp
+  cleanup, concurrency, timeout/abort, request-id uniqueness, health/engine
+  metadata, response validation, and content-free logs.
+- B2-3 added syntax-validated Windows install/start/stop/health/diagnostics/
+  uninstall scripts. Install performs no network/model action; start is hidden;
+  uninstall resolves managed paths and preserves models unless explicitly asked.
+- The default local engine is `unavailable`; local models/runtime/tmp are ignored.
+  Model count is 0, no service process was started, no model was downloaded, and
+  no recognition was executed against a real engine.
+- B2-3 failure-first tests passed 8/8 after two small lifecycle/script syntax
+  repairs; architecture/adapter targeted coverage passed 20/20 and all 11
+  mandatory gates passed with `realApiCalled=false`.
 
 ## Pending
 
-- Phase 2 work packages B2-3 through B2-10, subject to their evidence gates.
+- Phase 2 work packages B2-4 through B2-10, subject to their evidence gates.
 - Phases 3–8 attacks, audits, final benchmark, CTO review, and seal.
 
 ## Blockers / limitations
@@ -75,5 +88,6 @@
 
 ## Next exact action
 
-Commit and push B2-2, then start B2-3 with a failure-first Local OCR Service
-boundary. Do not download a model while `QISI_ALLOW_MODEL_DOWNLOAD=1` is absent.
+Commit and push B2-3, then evaluate the B2-4 evidence gate. With no authorized
+real baseline, preprocessing must remain unimplemented/disabled and the skip
+decision must be auditable before B2-5.

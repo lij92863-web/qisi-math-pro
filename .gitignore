@@ -48,6 +48,11 @@ local-test-materials/ocr-benchmark/
 # local real-run artifacts
 local-run-artifacts/
 
+# optional local OCR runtime and model artifacts
+local-ocr/models/
+local-ocr/runtime/
+local-ocr/tmp/
+
 # test reports
 playwright-report/
 test-results/

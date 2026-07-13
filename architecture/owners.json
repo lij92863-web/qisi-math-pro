@@ -16,6 +16,7 @@
   "ocrRegistryOwner": "qisi-ocr-engine-registry.js",
   "qwenAdapterOwner": "qisi-ocr-qwen-adapter.js",
   "localAdapterOwner": "qisi-ocr-local-adapter.js",
+  "localOcrServiceOwner": "local-ocr/server.js",
   "shadowModeOwner": "qisi-ocr-shadow-mode.js",
   "performanceMonitorOwner": "qisi-performance-monitor.js",
   "controlledWriteOwner": "qisi-pdf-support-controlled-write.js",

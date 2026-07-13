@@ -80,6 +80,14 @@
       "status": "scaffold"
     },
     {
+      "id": "local-ocr-service", "file": "local-ocr/server.js",
+      "layer": 1, "domainOwner": "localOcrServiceOwner",
+      "publicApi": ["createLocalOcrService", "createUnavailableEngine"],
+      "allowedDependencies": ["ocr-adapter-contract"],
+      "forbiddenDependencies": ["formal-admission", "storage-repository", "app-shell"],
+      "status": "scaffold"
+    },
+    {
       "id": "performance-monitor", "file": "qisi-performance-monitor.js",
       "layer": 1, "domainOwner": "performanceMonitorOwner",
       "publicApi": ["createPerformanceMonitor"], "allowedDependencies": [],

@@ -11,7 +11,7 @@ const required = [
     'recognition-contracts', 'ocr-adapter-contract', 'formal-admission', 'storage-repository',
     'library-service', 'review-controller', 'export-service',
     'import-coordinator', 'ocr-registry', 'ocr-qwen-adapter',
-    'ocr-local-adapter', 'ocr-shadow-mode', 'performance-monitor',
+    'ocr-local-adapter', 'local-ocr-service', 'ocr-shadow-mode', 'performance-monitor',
     'controlled-write', 'support-aligner', 'support-parser', 'app-shell'
 ];
 
