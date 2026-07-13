@@ -3,7 +3,7 @@
 - Start commit: `1361d7e7f81d2f23819a995a0f9d1808adf19982`
 - Baseline tag: `pre-ocr-quality-r1-1361d7e`
 - Current branch: `stage/ocr-quality-r1`
-- Current phase: Program B / Phase 2 / B2-7 evaluated and held
+- Current phase: Program B / Phase 2 / B2-8 complete
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -103,10 +103,18 @@
 - Existing deterministic full/prefix/fail-closed ownership targeted tests plus the
   new decision gate passed 50/50; all 11 mandatory gates passed. Structure
   candidates remain ownership-unvalidated and ineligible for any formal write.
+- B2-8 extended the existing Shadow Mode owner with sanitized allowlisted metrics,
+  numeric deltas, benchmark-only flags, stable failure codes, and explicit fallback
+  to the untouched production candidate. Reports/logs omit raw content/evidence.
+- All UI, review, controlled-write, FormalAdmission, auto-selection, field merge,
+  and answer-supplement permissions remain false. The browser-loaded module remains
+  a scaffold; no real/private shadow execution occurred.
+- B2-8 shadow tests passed 5/5; behavior/privacy/architecture targeted tests passed
+  17/17; all 11 mandatory gates passed with `realApiCalled=false`.
 
 ## Pending
 
-- Phase 2 work packages B2-8 through B2-10, subject to their evidence gates.
+- Phase 2 work packages B2-9 through B2-10, subject to their evidence gates.
 - Phases 3–8 attacks, audits, final benchmark, CTO review, and seal.
 
 ## Blockers / limitations
@@ -118,5 +126,5 @@
 
 ## Next exact action
 
-Commit and push the B2-7 hold decision, then start B2-8 with failing measured
-Shadow Mode tests that preserve production output and omit private raw content.
+Commit and push B2-8, then start B2-9 with failing deterministic candidate
+selection tests for promotion eligibility, conflicts, and retained evidence.

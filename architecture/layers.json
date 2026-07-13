@@ -177,7 +177,7 @@
     {
       "id": "ocr-shadow-mode", "file": "qisi-ocr-shadow-mode.js",
       "layer": 3, "domainOwner": "shadowModeOwner",
-      "publicApi": ["createShadowMode"],
+      "publicApi": ["compareCandidates", "runShadow", "runMeasuredShadow"],
       "allowedDependencies": ["ocr-registry", "performance-monitor"],
       "forbiddenDependencies": ["formal-admission", "storage-repository"],
       "status": "scaffold"

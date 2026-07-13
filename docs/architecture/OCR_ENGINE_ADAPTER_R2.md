@@ -78,6 +78,12 @@ Registry owns registration, lookup, capability checks, health, timeout, cancella
 
 New engines run benchmark-only. Shadow candidates never reach controlled-write, review, candidate field merging, or automatic supplementation. Conflicts preserve both evidence sets and require manual review.
 
+Program B R1 measured shadow uses a fixed metric allowlist and numeric deltas.
+Reports and optional logs omit raw text/evidence. An unavailable, timeout, or
+measurement failure returns a stable code and falls back to the untouched
+production candidate. It never changes the default UI result or synthesizes a
+winner.
+
 ## Promotion gate
 
 Promotion requires zero wrong attachments, fabrication, raw JSON, and placeholders; non-regressed structure; at least one improved weakness; reduced manual correction; deployability; safe fallback; and validator enforcement.
