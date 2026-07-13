@@ -3,9 +3,69 @@
 - Start commit: `b15e6fbe24c525c95a573b51a0c7ab68e77f4790`
 - Baseline tag: `pre-app-shell-slimming-r3-b15e6fb`
 - Current branch: `stage/app-shell-slimming-r3`
-- Current phase: Program C / C2-12 Wave 17 accepted / Wave 18 audit ready
-- Current work package: final UI-shell reachability and responsibility audit
+- Current phase: Program C / Phase 8 Git seal accepted
+- Current work package: final engineering closure seal
 - Status updated: 2026-07-14 Asia/Shanghai
+
+## Program C Phase 8 seal state
+
+```text
+Program:
+APP SHELL SLIMMING R3
+
+Status:
+ACCEPTED
+
+Resume baseline:
+2ebe00b390caae556fdb8ed0e03087ad0965cb24
+
+End commit:
+Resolved by annotated tag v1.2.0-rc2-app-shell-slimming-r3
+(a commit cannot embed its own SHA; Git/tag verification is authoritative)
+
+Normal UI owner:
+ProductionImportBridge
+
+Legacy owner:
+0
+
+processDraftImportBatch:
+absent
+
+app.js:
+21,778 -> 5,247 inventory lines
+
+Direct formal DB writes:
+0
+
+Duplicate owner:
+0
+
+Legacy fallback:
+0
+
+Bridge formal writes:
+0
+
+DOCX stable:
+passed
+
+PDF known-bad:
+passed
+
+Route B:
+frozen
+
+realApiCalled:
+false
+
+Phase 7:
+PROGRAM_C_PHASE7_CTO_ACCEPTED
+```
+
+The exact seal commit is the commit peeled from the annotated tag above. The
+post-commit local/tracking/live-remote and local/remote-tag equality check is
+the authoritative non-self-referential seal record.
 
 ## Lost-session recovery R2 checkpoint
 
