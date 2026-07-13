@@ -223,16 +223,18 @@ legacy `sourceTrace` evidence.
 
 - `PdfCandidateProjection` owns PDF field provenance construction from real
   controlled-write and evidence results.
-- `BatchFormalSubmit.buildManualFieldProvenance` may mark a specific field
-  manual only after an actual user edit.
+- `ReviewController` explicit edit commands may mark only the fields named by
+  an actual user edit as manual; confirmation alone does not create manual
+  provenance.
 - Formal Admission validates supplied provenance and fails closed when it is
   missing.
 - The XML DOCX importer produces field values and block/media trace, but no
   canonical per-field provenance.
 - The legacy DOCX vision producer also creates no canonical per-field
   provenance.
-- Review and persistence layers do not construct provenance, which is correct;
-  post-hoc construction there would be forbidden.
+- Persistence does not construct provenance. Review owns only explicit manual
+  edit provenance; any post-hoc inference from confirmation or global flags is
+  forbidden.
 
 ## Fallback audit
 

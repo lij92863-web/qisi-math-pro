@@ -89,3 +89,51 @@ test('teacher rewrite converts only the rejected PDF answer to manual provenance
         await harness.close();
     }
 });
+
+test('untouched confirmation preserves controlled-write provenance in the browser', {
+    timeout: 90000
+}, async () => {
+    const harness = await startBrowserApp(32117);
+    const { page } = harness;
+    const dialogs = [];
+    page.on('dialog', async dialog => {
+        dialogs.push(dialog.message());
+        await dialog.dismiss();
+    });
+    try {
+        const candidate = pdfCandidate({ includeAnswer: true });
+        await installImportTransport(page, {
+            expectedQuestionNumbers: ['1'], candidates: [candidate]
+        });
+        const { batchId, snapshot } = await createImportThroughUi(page, {
+            name: 'confirm-untouched.pdf', mimeType: 'application/pdf',
+            buffer: Buffer.from('%PDF untouched confirmation')
+        });
+        const before = snapshot.drafts[0];
+        await callProxy(page, 'openBatchReview', batchId);
+        await callProxy(page, 'markDraftReviewed');
+
+        const reviewed = await getDbSnapshot(page);
+        const after = reviewed.drafts[0];
+        assert.equal(after.status, 'reviewed', dialogs.join('\n'));
+        assert.equal(after.manualConfirmed, true);
+        assert.notEqual(after.userEdited, true);
+        assert.notEqual(after.manualEdited, true);
+        assert.deepEqual(after.fieldProvenance, before.fieldProvenance);
+
+        assert.equal(
+            await callProxy(page, 'submitDraftQuestion', after.id, true),
+            true
+        );
+        const submitted = await getDbSnapshot(page);
+        assert.equal(submitted.questions.length, 1);
+        assert.equal(
+            submitted.questions[0].provenance.stem.status,
+            'controlled-write'
+        );
+        assert.equal(harness.forbiddenRequests.length, 0);
+        await clearE2eData(page);
+    } finally {
+        await harness.close();
+    }
+});

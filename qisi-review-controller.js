@@ -20,8 +20,13 @@
 
     const createReviewController = ({
         validateDraft,
+        formalFields = [],
         clock = () => Date.now()
     } = {}) => {
+        const formalFieldSet = new Set(
+            Array.isArray(formalFields) ? formalFields : []
+        );
+
         const open = draft => ({
             draft: clone(draft),
             baseline: clone(draft),
@@ -29,15 +34,57 @@
             cancelled: false
         });
 
-        const editField = (draft, field, value) => {
+        const markFieldsManual = (draft, fields = []) => {
             if (!draft || draft.status === 'submitted') return clone(draft);
             const next = clone(draft);
-            next[field] = clone(value);
+            const explicitFields = [...new Set(
+                (Array.isArray(fields) ? fields : [fields])
+                    .map(field => String(field || '').trim())
+                    .filter(Boolean)
+            )];
+            if (!explicitFields.length) return next;
+
+            const fieldProvenance = clone(next.fieldProvenance || {});
+            for (const field of explicitFields) {
+                if (!formalFieldSet.has(field)) continue;
+                const current = fieldProvenance[field] || {};
+                fieldProvenance[field] = {
+                    kind: 'manual',
+                    status: 'manual',
+                    sourceId:
+                        current.sourceId || next?.source?.sourceId || '',
+                    manuallyEdited: true,
+                    manualEditRevision:
+                        (Number.isInteger(current.manualEditRevision)
+                            ? current.manualEditRevision
+                            : 0) + 1
+                };
+            }
+            next.fieldProvenance = fieldProvenance;
             next.userEdited = true;
             next.manualEdited = true;
             next.updatedAt = clock();
             return next;
         };
+
+        const editFields = (draft, changes = {}) => {
+            if (!draft || draft.status === 'submitted') return clone(draft);
+            const next = clone(draft);
+            const changedFields = [];
+            for (const [field, value] of Object.entries(changes || {})) {
+                if (JSON.stringify(next[field]) === JSON.stringify(value)) {
+                    continue;
+                }
+                next[field] = clone(value);
+                changedFields.push(field);
+            }
+            return changedFields.length
+                ? markFieldsManual(next, changedFields)
+                : next;
+        };
+
+        const editField = (draft, field, value) =>
+            editFields(draft, { [field]: value });
 
         const addWarning = (draft, warning) => {
             const next = clone(draft);
@@ -59,7 +106,8 @@
         };
 
         const provenanceDisplay = draft => {
-            const provenance = draft?.provenance || draft?.sourceTrace || {};
+            const provenance = draft?.fieldProvenance ||
+                draft?.provenance || draft?.sourceTrace || {};
             return Object.entries(provenance).map(([field, evidence]) => ({
                 field,
                 sourceFile: evidence?.file || evidence?.sourceFileName || '',
@@ -68,7 +116,8 @@
                 engine: evidence?.engine || provenance.engine || '',
                 repair: Boolean(evidence?.repair || evidence?.repaired),
                 manualEdit: Boolean(
-                    evidence?.manualEdit || draft?.manualEdited || draft?.userEdited
+                    evidence?.manualEdit || evidence?.manuallyEdited ||
+                    evidence?.status === 'manual' || evidence?.kind === 'manual'
                 ),
                 decision: evidence?.decision || evidence?.reason || ''
             }));
@@ -129,8 +178,6 @@
             }
             const next = clone(draft);
             next.status = 'reviewed';
-            next.userEdited = true;
-            next.manualEdited = true;
             next.manualConfirmed = true;
             next.confirmedAt = new Date(clock()).toISOString();
             next.updatedAt = clock();
@@ -150,6 +197,8 @@
         return Object.freeze({
             open,
             editField,
+            editFields,
+            markFieldsManual,
             addWarning,
             removeWarning,
             provenanceDisplay,

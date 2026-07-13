@@ -414,3 +414,36 @@ operations; no new business owner or function above 250 lines was added.
 Decision: `REVIEW_DRAFT_COMMAND_PERSISTENCE_BOUNDARY_ACCEPTED`. Manual edit,
 provenance, validation, duplicate policy, and Formal Admission lifecycle remain
 an independent conditional Wave 15 audit.
+
+## Wave 15 result: manual provenance and formal lifecycle closed
+
+The conditional audit was applicable. `app.js` directly assigned
+`fieldProvenance`, the Formal Submit owner exposed the construction helper, and
+click-only confirmation set global manual-edit flags. Image edit commands also
+changed formal content without field-scoped review evidence.
+
+`ReviewController` now owns explicit single-field, multi-field, and v-model
+manual-edit commands. Only a named changed formal field receives manual
+provenance; untouched deterministic or controlled-write evidence is preserved
+exactly. Confirmation changes review state only and provenance display no
+longer infers manual evidence from global flags. The shell has zero direct
+`fieldProvenance` assignments and no formal-table mutation.
+
+`BatchFormalSubmit` now exposes only the Formal Submit command. It evaluates
+Formal Admission before calling the repository and supports a stable
+pre-repository cancellation. The state machine records
+`FORMAL_ADMISSION -> CANCELLED`; cancellation at that boundary performs zero
+formal writes. Admission rejection, repository failure, duplicate confirmation,
+and two-tab conflict remain covered by the existing owner tests. Bridge formal
+writes remain zero.
+
+Failure-first Wave 15 tests finish at 6/6. The real-browser suite proves both
+single-field teacher rewrite and untouched click-only confirmation through the
+normal import UI and formal transaction. `verify:safe` passes 1,592/1,592
+across 54 suites, all 11 mandatory gates pass, and all safety/real-API counters
+remain zero. The six frozen PDF files are unchanged.
+
+Post-wave inventory is 16,301 `app.js` lines and 362 detected functions. The
+largest detected function remains 239 lines. Decision:
+`MANUAL_REVIEW_PROVENANCE_FORMAL_LIFECYCLE_ACCEPTED`. Remaining OCR/Vision
+transport and producer ownership is the independent conditional Wave 16 audit.

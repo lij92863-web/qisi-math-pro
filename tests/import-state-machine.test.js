@@ -16,7 +16,12 @@ test('exports the complete immutable state and transition contracts', () => {
         'CANCELLED', 'FAILED'
     ]);
     assert.equal(Object.isFrozen(Machine.STATES), true);
-    assert.equal(Machine.TRANSITIONS.length, 29);
+    assert.equal(Machine.TRANSITIONS.length, 30);
+    assert.equal(Machine.TRANSITIONS.some(edge =>
+        edge.from === 'FORMAL_ADMISSION' &&
+        edge.trigger === 'cancel' &&
+        edge.to === 'CANCELLED'
+    ), true);
     assert.equal(Object.isFrozen(Machine.TRANSITIONS), true);
 });
 

@@ -3,8 +3,8 @@
 - Start commit: `b15e6fbe24c525c95a573b51a0c7ab68e77f4790`
 - Baseline tag: `pre-app-shell-slimming-r3-b15e6fb`
 - Current branch: `stage/app-shell-slimming-r3`
-- Current phase: Program C / C2-12 Wave 13 accepted / Wave 14 audit ready
-- Current work package: audit ReviewDraft command and persistence ownership
+- Current phase: Program C / C2-12 Wave 15 accepted / Wave 16 audit ready
+- Current work package: audit remaining OCR/Vision transport and producer ownership
 - Status updated: 2026-07-14 Asia/Shanghai
 
 ## Lost-session recovery R2 checkpoint
@@ -980,6 +980,32 @@
   the next independent conditional manual-edit/provenance/formal-lifecycle
   inventory and is not pre-accepted.
 
+## C2-12 Wave 15 accepted
+
+- Decision: `MANUAL_REVIEW_PROVENANCE_FORMAL_LIFECYCLE_ACCEPTED`.
+- The audit was applicable: `app.js` directly replaced field provenance,
+  Formal Submit exposed the manual constructor, click-only confirmation
+  invented global edit flags, and image changes lacked field-scoped review
+  evidence.
+- `ReviewController` now owns explicit single/multi-field manual commands and
+  preserves all untouched provenance. Confirmation changes review state only;
+  the shell has zero direct provenance assignment or formal DB mutation.
+- Formal Submit exposes only `submit`, evaluates Formal Admission before the
+  repository, and supports a stable pre-repository cancellation. The state
+  machine records `FORMAL_ADMISSION -> CANCELLED`; cancelled writes are zero.
+- Failure-first Wave 15 tests finish at 6/6. True browser evidence covers a
+  rejected answer rewritten manually and an untouched confirmation retaining
+  controlled-write evidence through formal insertion.
+- `verify:safe` passes 1,592/1,592 across 54 suites. All 11 mandatory gates,
+  the 15-case normal-UI canary, DOCX stable, PDF known-bad, controlled-write,
+  Route B, preflight, and dry-run are green with all safety/real-API counters
+  zero. No real-run occurred; all six frozen PDF files remain unchanged.
+- Post-wave metrics are 16,301 lines, 362 functions, and a 239-line largest
+  function. Evidence is in
+  `docs/release/PROGRAM_C_C2_12_WAVE15_MANUAL_REVIEW_PROVENANCE_FORMAL_LIFECYCLE_REPORT.md`.
+- Wave 16 is the next independent conditional transport/producer inventory and
+  is not pre-accepted.
+
 ## Blockers / limitations
 
 - Upload-to-review, switch p50/p95, draft persist, formal submit, reload, export,
@@ -991,8 +1017,7 @@
 
 ## Next exact action
 
-After the Wave 14 commit is pushed and all three branch heads agree, begin the
-conditional Wave 15 manual-review-edit, provenance, and Formal Admission
-lifecycle inventory. Do not claim it applicable or N/A without production
-reachability, manual-field, rejected-provenance, retry, review-confirmation,
-formal-isolation, and browser evidence.
+After the Wave 15 commit is pushed and all three branch heads agree, begin the
+conditional Wave 16 remaining OCR/Vision transport and producer inventory. Do
+not claim it applicable or N/A without production reachability, runtime
+dependency, transport, producer, cancellation, failure, and browser evidence.

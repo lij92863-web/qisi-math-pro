@@ -63,7 +63,8 @@
                         )
                 });
                 const reviewController = Qisi.ReviewController.createReviewController({
-                    validateDraft: draft => validateDraftForReview(draft)
+                    validateDraft: draft => validateDraftForReview(draft),
+                    formalFields: Qisi.FormalAdmissionPolicy.FORMAL_FIELDS
                 });
                 const exportService = Qisi.ExportService.createExportService({
                     coreFingerprint: questionCoreFingerprint,
@@ -13020,18 +13021,13 @@ ${source}`;
                     return q;
                 };
 
-                const markDraftFieldManual = (q, field) => {
-                    if (!q) return;
-                    q.fieldProvenance = batchFormalSubmit
-                        .buildManualFieldProvenance(q, field);
-                };
                 const markActiveDraftUserEdited = (field = '') => {
                     const q = activeDraftQuestion.value;
                     if (!q || q.status === 'submitted') return;
-                    q.userEdited = true;
-                    q.manualEdited = true;
-                    markDraftFieldManual(q, field);
-                    q.updatedAt = Date.now();
+                    Object.assign(
+                        q,
+                        reviewController.markFieldsManual(q, [field])
+                    );
                 };
 
                 const updateDraftQuestionField = async (field, value) => {
@@ -13043,7 +13039,6 @@ ${source}`;
                         q,
                         reviewController.editField(q, field, value)
                     );
-                    markDraftFieldManual(q, field);
 
                     cleanSingleDraftForSave(q);
                     const persisted = await runReviewDraftPersistenceCommand({
@@ -13065,11 +13060,6 @@ ${source}`;
                 const commitDraftEditorBufferToQuestion = (q) => {
                     if (!q) return null;
 
-                    const previousStem = q.stem;
-                    const previousOptions = Array.isArray(q.options)
-                        ? [...q.options]
-                        : q.options;
-
                     const migratedSource = migrateLegacyIncludegraphicsToQisiTokens(
                         activeDraftEditorBuffer.value,
                         activeDraftPreviewImages.value || []
@@ -13083,29 +13073,31 @@ ${source}`;
 
                     q.editorSource = source;
 
+                    let nextStem;
+                    let nextOptions;
                     if (isChoice && projection.parsedOptions) {
-                        q.stem = projection.stem;
-                        q.options = projection.options.map(option => String(option || ''));
+                        nextStem = projection.stem;
+                        nextOptions = projection.options.map(
+                            option => String(option || '')
+                        );
                         removeEditorOptionWarning(q);
                     } else if (isChoice) {
-                        q.stem = source;
-                        q.options = ['', '', '', ''];
+                        nextStem = source;
+                        nextOptions = ['', '', '', ''];
                         window.Qisi.Utils.addWarningOnce(
                             q,
                             '题目编辑源码暂未识别出规范的 A/B/C/D 选项，请检查选项是否分别以行首 A.、B.、C.、D. 开始。'
                         );
                     } else {
-                        q.stem = source;
-                        q.options = ['', '', '', ''];
+                        nextStem = source;
+                        nextOptions = ['', '', '', ''];
                         removeEditorOptionWarning(q);
                     }
 
-                    q.userEdited = true;
-                    q.manualEdited = true;
-                    if (q.stem !== previousStem) markDraftFieldManual(q, 'stem');
-                    if (JSON.stringify(q.options) !== JSON.stringify(previousOptions)) {
-                        markDraftFieldManual(q, 'options');
-                    }
+                    Object.assign(q, reviewController.editFields(q, {
+                        stem: nextStem,
+                        options: nextOptions
+                    }));
                     q.updatedAt = Date.now();
 
                     return projection;
@@ -13117,7 +13109,6 @@ ${source}`;
                     const expectedDraftVersion = q.version;
 
                     commitDraftEditorBufferToQuestion(q);
-                    q.userEdited = true;
                     cleanSingleDraftForSave(q);
                     normalizeDraftQuestionBeforeSave(q);
                     const persisted = await runReviewDraftPersistenceCommand({
@@ -13169,8 +13160,14 @@ ${source}`;
                     if (!image || !q) return;
                     const expectedDraftVersion = q.version;
                     image.status = 'deleted';
-                    q.images = (q.images || []).filter(img => img.id !== imageId);
-                    q.stem = removeImageTokenFromStemForV2(q.stem || '', imageId);
+                    Object.assign(q, reviewController.editFields(q, {
+                        images: (q.images || []).filter(
+                            img => img.id !== imageId
+                        ),
+                        stem: removeImageTokenFromStemForV2(
+                            q.stem || '', imageId
+                        )
+                    }));
                     const cleanedEditorSource = removeImageTokenFromStemForV2(
                         q.editorSource ||
                             activeDraftEditorBuffer.value ||
@@ -13378,7 +13375,13 @@ ${source}`;
 
                     const nextStem = appendImageTokensToStemForV2(q.stem || '', [croppedImage]);
 
-                    q.stem = nextStem;
+                    Object.assign(q, reviewController.editFields(q, {
+                        stem: nextStem,
+                        images: [
+                            ...(q.images || []),
+                            { id: croppedImage.id, url, align: 'center' }
+                        ]
+                    }));
                     q.hasImage = true;
                     q.imageReviewStatus = 'confirmed';
                     q.updatedAt = now;
@@ -13404,8 +13407,20 @@ ${source}`;
                     image.questionId = q.id;
                     image.status = 'need_confirm';
                     image.confidence = image.confidence || 0.78;
-                    q.images = [...(q.images || []), { id: image.id, url: image.url, align: 'center' }];
-                    q.stem = appendImageTokensToStemForV2(q.stem || '', [{ ...image, source: image.source || 'uploaded-question-image' }]);
+                    Object.assign(q, reviewController.editFields(q, {
+                        images: [
+                            ...(q.images || []),
+                            { id: image.id, url: image.url, align: 'center' }
+                        ],
+                        stem: appendImageTokensToStemForV2(
+                            q.stem || '',
+                            [{
+                                ...image,
+                                source: image.source ||
+                                    'uploaded-question-image'
+                            }]
+                        )
+                    }));
                     q.hasImage = true;
                     q.imageReviewStatus = 'need_confirm';
                     q.warnings = [...new Set([...(q.warnings || []), '该题图片需要确认后才能入库。'])];

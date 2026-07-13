@@ -6,8 +6,6 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
     'use strict';
 
-    const clone = value => JSON.parse(JSON.stringify(value));
-
     const createBatchFormalSubmit = ({
         policy,
         repository,
@@ -28,30 +26,11 @@
             throw new TypeError('Import State Machine is required.');
         }
 
-        const buildManualFieldProvenance = (draft, field) => {
-            const existing = clone(draft?.fieldProvenance || {});
-            if (!policy.FORMAL_FIELDS.includes(field)) return existing;
-            const current = existing[field] || {};
-            existing[field] = {
-                kind: 'manual',
-                status: 'manual',
-                sourceId: current.sourceId || draft?.source?.sourceId || '',
-                manuallyEdited: true,
-                manualEditRevision:
-                    (Number.isInteger(current.manualEditRevision)
-                        ? current.manualEditRevision
-                        : 0) + 1
-            };
-            return existing;
-        };
-
-        const nextDraftVersion = version =>
-            Number.isInteger(version) ? version + 1 : 1;
-
         const submit = async ({
             draft,
             imageRecords = [],
-            actorId = 'local-teacher'
+            actorId = 'local-teacher',
+            signal
         } = {}) => {
             const clockValue = clock();
             const evaluatedAt = new Date(clockValue).toISOString();
@@ -109,7 +88,17 @@
                     throw error;
                 }
             };
+            const stopIfCancelled = async () => {
+                if (!signal?.aborted) return;
+                await transition('cancel');
+                const error = new Error('Formal submission was cancelled.');
+                error.name = 'AbortError';
+                error.code = 'FORMAL_SUBMIT_CANCELLED';
+                throw error;
+            };
+            await stopIfCancelled();
             await transition('teacher-confirm');
+            await stopIfCancelled();
             if (!decision.accepted) {
                 await transition('admission-rejected');
                 return {
@@ -130,11 +119,7 @@
             };
         };
 
-        return Object.freeze({
-            buildManualFieldProvenance,
-            nextDraftVersion,
-            submit
-        });
+        return Object.freeze({ submit });
     };
 
     return Object.freeze({ createBatchFormalSubmit });

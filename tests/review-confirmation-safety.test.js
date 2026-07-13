@@ -26,7 +26,7 @@ test('confirmation fails closed and never calls a repository', () => {
     assert.equal(rejected.draft.status, 'pending');
 });
 
-test('confirmation marks manual evidence but does not invent content', () => {
+test('confirmation marks confirmation evidence but does not invent content', () => {
     const controller = createReviewController({
         validateDraft: () => ({ valid: true, errors: [], warnings: [] }),
         clock: () => 1000

@@ -42,17 +42,24 @@ const docxCandidate = (overrides = {}) => ({
     ...overrides
 });
 
-const pdfCandidate = (overrides = {}) => ({
-    ...productionPdfCandidate({
-        id: overrides.id || 'true_pdf_draft_1',
-        questionNumber: overrides.questionNumber || '1',
-        includeAnswer: false,
-        includeSolution: true,
-        alignmentMode: 'prefix'
-    }),
-    recognition: null,
-    ...overrides
-});
+const pdfCandidate = (overrides = {}) => {
+    const {
+        includeAnswer = false,
+        includeSolution = true,
+        ...candidateOverrides
+    } = overrides;
+    return ({
+        ...productionPdfCandidate({
+            id: candidateOverrides.id || 'true_pdf_draft_1',
+            questionNumber: candidateOverrides.questionNumber || '1',
+            includeAnswer,
+            includeSolution,
+            alignmentMode: 'prefix'
+        }),
+        recognition: null,
+        ...candidateOverrides
+    });
+};
 
 module.exports = {
     deterministicProvenance,
