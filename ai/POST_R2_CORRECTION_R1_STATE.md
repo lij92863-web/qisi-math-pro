@@ -219,6 +219,10 @@
   the real production validator already preserved rejected provenance.
 - Phase 3 rejected-AI-confirm attack and production-validator regressions passed
   8/8; full mandatory matrix and browser dry-run passed with no real API call.
+- Phase 3 duplicate-submit failure-first evidence: its matrix row was absent;
+  repository idempotency already prevented the second formal write.
+- Phase 3 duplicate-submit and concurrency regressions passed 5/5; full
+  mandatory matrix and browser dry-run passed with no real API call.
 
 ## Blockers
 
@@ -227,4 +231,4 @@
 
 ## Next exact action
 
-Commit/push the rejected-AI-confirm package, then execute duplicate submit.
+Commit/push duplicate submit, then execute the two-tab race attack.
