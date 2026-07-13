@@ -287,3 +287,25 @@ Post-wave inventory is 18,188 `app.js` lines and 376 detected functions; the
 largest function remains 242 lines. Both former inline owner definitions are
 absent, and the six frozen PDF high-risk files remain byte-unchanged from the
 C2-12 baseline.
+
+## Wave 10 result: prepared-page recognition orchestration extracted
+
+The existing batch engine now owns the prepared-page recognition lifecycle via
+`createStrictVisualPreparedPagesRecognizer`: bounded page concurrency, source
+page trace, figure-locator coordination, item merge, validation calls,
+targeted choice/solution repair, gap diagnostics, progress completion, and the
+stable result envelope. The validator, recognition producer, figure policy,
+repair producer, and option checks remain injected existing owners/functions;
+none of their acceptance or prompt behavior was copied or changed.
+
+The 406-line app-local `recognizeStrictQuestionsFromPreparedPages` algorithm is
+deleted. The shell constructs the engine recognizer from explicit ports and
+passes that callable to the Wave 9 file producer. Characterization covers the
+success envelope, page trace, progress, fatal validation, targeted repair, and
+missing-port fail-closed behavior. Browser production-cutover and same-producer
+shadow equivalence remain unchanged.
+
+Post-wave inventory is 17,817 `app.js` lines and 375 detected functions; the
+largest function remains 242 lines. Lower-level recognition, repair, DOCX
+conversion/reconciliation, and support producer algorithms remain active
+app-local B responsibilities and keep C2-12 pending.

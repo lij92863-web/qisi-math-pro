@@ -288,7 +288,7 @@
     {
       "id": "batch-engine-v2", "file": "qisi-batch-engine-v2.js",
       "layer": 2, "domainOwner": "batchEngineV2Owner",
-      "publicApi": ["processBatchV2", "splitQuestionBlocksV2", "parseOptionsV2", "buildQuestionBlocksFromEvidenceV2", "createStrictVisualQuestionProducer"],
+      "publicApi": ["processBatchV2", "splitQuestionBlocksV2", "parseOptionsV2", "buildQuestionBlocksFromEvidenceV2", "createStrictVisualPreparedPagesRecognizer", "createStrictVisualQuestionProducer"],
       "allowedDependencies": [],
       "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
       "status": "production-wired"

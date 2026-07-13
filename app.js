@@ -10408,412 +10408,6 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                     throw lastError || new Error('所有视觉模型均未识别出题目');
                 };
 
-                const recognizeStrictQuestionsFromPreparedPages = async ({
-                    file,
-                    batch,
-                    pages,
-                    expectedQuestionCount = 0,
-                    onPageProgress = null,
-                    renderDurationMs = 0
-                }) => {
-                    if (!pages.length) {
-                        throw new Error(`${file.filename} 没有生成任何页面图`);
-                    }
-
-                    const expected = Math.max(0, Number(expectedQuestionCount || 0)) || 0;
-
-                    console.log('[BATCH_TIME][strict-render]', {
-                        filename: file.filename,
-                        pageCount: pages.length,
-                        durationMs: Math.round(renderDurationMs)
-                    });
-
-                    const pageImages = pages.map(page => ({
-                        sourceFileId: file.id,
-                        sourceFileName: file.filename,
-                        pageNo: page.pageNo || 1,
-                        imageUrl: page.url
-                    }));
-
-                    console.groupCollapsed('[BATCH_DEBUG][strict-rendered-pages]');
-                    console.log('filename =', file.filename);
-                    console.log('fileType =', file.fileType);
-                    console.log({
-                        filename: file.filename,
-                        fileType: file.fileType,
-                        pageCount: pages.length,
-                        expectedQuestionCount: expected
-                    });
-                    console.table(pageImages.map(page => ({
-                        pageNo: page.pageNo,
-                        hasUrl: Boolean(page.imageUrl),
-                        urlLength: String(page.imageUrl || '').length
-                    })));
-                    console.groupEnd();
-
-                    const recognitionStart = performance.now();
-                    const pageRecognitionSummary = [];
-                    const summarizeStrictPageItems = (items = []) =>
-                        (items || []).map(item => ({
-                            questionNumber:
-                                item?.questionNumber ||
-                                item?.question ||
-                                item?.no ||
-                                '',
-                            type:
-                                item?.type || '',
-                            stemHead:
-                                String(
-                                    item?.stem ||
-                                    item?.questionText ||
-                                    item?.rawBlock ||
-                                    ''
-                                ).slice(0, 120),
-                            optionCount:
-                                Array.isArray(item?.options)
-                                    ? item.options.filter(Boolean).length
-                                    : 0
-                        }));
-
-                    const pageResults = await mapWithConcurrency(pages, 2, async (page, index) => {
-                        const pageNo = page.pageNo || index + 1;
-                        const pageStartedAt = performance.now();
-
-                        if (!page.url) {
-                            pageRecognitionSummary.push({
-                                pageNo,
-                                hasPageUrl: false,
-                                pageUrlLength: 0,
-                                itemCount: 0,
-                                questionNumbers: [],
-                                itemHeads: [],
-                                protocolRejectedCount: 0,
-                                errorMessage: `${file.filename} 第 ${pageNo} 页没有页面图`,
-                                durationMs: Math.round(performance.now() - pageStartedAt)
-                            });
-                            throw new Error(`${file.filename} 第 ${pageNo} 页没有页面图`);
-                        }
-
-                        if (onPageProgress) {
-                            await onPageProgress(index / Math.max(1, pages.length), {
-                                stage: 'initial-page-recognition',
-                                pageNo
-                            });
-                        }
-
-                        const result = await recognizeStrictQuestionPageWithQwen({
-                            file,
-                            imageUrl: page.url,
-                            pageNo,
-                            expectedQuestionCount: 0,
-                            repairInfo: ''
-                        });
-                        const strictPageDiagnostics =
-                            result?.__strictPageDiagnostics || {};
-
-                        const pageItems = (result || []).map(item => ({
-                            ...item,
-                            sourcePage: item.sourcePage || item.pageIndex || pageNo,
-                            pageIndex: item.pageIndex || item.sourcePage || pageNo,
-                            sourcePageImage: item.sourcePageImage || page.url,
-                            sourcePages: [
-                                ...new Set([
-                                    ...(item.sourcePages || []),
-                                    pageNo
-                                ])
-                            ]
-                        }));
-
-                        for (const item of pageItems) {
-                            item.recognizedImages = collectValidRecognizedFigures(item);
-                        }
-
-                        const figureLocatorTargets = pageItems.filter(item =>
-                            questionHasFigureCue(item) &&
-                            collectValidRecognizedFigures(item).length === 0
-                        );
-
-                        if (figureLocatorTargets.length) {
-                            try {
-                                const locatedFigures = await locateQuestionFiguresWithQwen({
-                                    pageImage: page.url,
-                                    pageNo,
-                                    sourceFileName: file.filename,
-                                    questions: figureLocatorTargets
-                                });
-
-                                const figuresByQuestion = new Map();
-
-                                for (const rawFigure of locatedFigures || []) {
-                                    const questionNumber = window.Qisi.Utils.cleanRecognizedText(
-                                        rawFigure.question ||
-                                        rawFigure.questionNumber ||
-                                        rawFigure.no ||
-                                        ''
-                                    );
-
-                                    if (!questionNumber) continue;
-
-                                    const normalized = normalizeRecognizedFigureDescriptor(rawFigure);
-                                    if (!normalized) continue;
-
-                                    if (!figuresByQuestion.has(questionNumber)) {
-                                        figuresByQuestion.set(questionNumber, []);
-                                    }
-
-                                    figuresByQuestion.get(questionNumber).push(normalized);
-                                }
-
-                                for (const item of pageItems) {
-                                    const questionNumber = window.Qisi.Utils.cleanRecognizedText(
-                                        item.questionNumber ||
-                                        item.question ||
-                                        item.no ||
-                                        ''
-                                    );
-                                    const located = figuresByQuestion.get(questionNumber) || [];
-                                    const validLocated = located.filter(figure =>
-                                        isLikelyRealQuestionFigure(
-                                            figure,
-                                            item.question_bbox || item.sourceBbox || []
-                                        )
-                                    );
-
-                                    if (!validLocated.length) continue;
-
-                                    item.recognizedImages = [
-                                        ...collectValidRecognizedFigures(item),
-                                        ...validLocated
-                                    ];
-                                }
-                            } catch (error) {
-                                if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-
-                                console.warn('[BATCH_IMAGE][figure-locator-failed]', {
-                                    filename: file.filename,
-                                    pageNo,
-                                    message: error?.message || String(error)
-                                });
-                            }
-                        }
-
-                        console.log('[BATCH_DEBUG][strict-page-result]', {
-                            filename: file.filename,
-                            pageNo,
-                            count: pageItems.length,
-                            questionNumbers: pageItems.map(item => item.questionNumber || item.question || ''),
-                            figureCounts: pageItems.map(item => ({
-                                questionNumber: item.questionNumber || item.question || '',
-                                count: collectValidRecognizedFigures(item).length
-                            }))
-                        });
-
-                        pageRecognitionSummary.push({
-                            pageNo,
-                            hasPageUrl: Boolean(page.url),
-                            pageUrlLength: String(page.url || '').length,
-                            itemCount: pageItems.length,
-                            questionNumbers: pageItems.map(item =>
-                                item.questionNumber ||
-                                item.question ||
-                                item.no ||
-                                ''
-                            ),
-                            itemHeads: summarizeStrictPageItems(pageItems),
-                            protocolRejectedCount:
-                                Number(
-                                    strictPageDiagnostics
-                                        .protocolRejectedCount || 0
-                                ) || 0,
-                            errorMessage: pageItems.length
-                                ? ''
-                                : '页面识别完成但没有产出题目',
-                            durationMs: Math.round(performance.now() - pageStartedAt)
-                        });
-
-                        return pageItems;
-                    });
-
-                    let items = mergeStrictQuestionItemsByNumber(pageResults.flat().filter(Boolean));
-
-                    console.log('[BATCH_TIME][strict-initial-recognition]', {
-                        filename: file.filename,
-                        pageCount: pages.length,
-                        rawItemCount: pageResults.flat().length,
-                        mergedItemCount: items.length,
-                        durationMs: Math.round(performance.now() - recognitionStart)
-                    });
-
-                    let check = validateVisualQuestionItems(items, expected);
-
-                    console.groupCollapsed('[BATCH_DEBUG][strict-initial-check]');
-                    console.log({
-                        expected,
-                        actual: items.length,
-                        fatalReasons: check.fatalReasons,
-                        warningReasons: check.warningReasons
-                    });
-                    console.table(check.rows);
-                    console.groupEnd();
-
-                    if (check.fatal) {
-                        throw new Error(`整页视觉识别发生致命错误：${check.fatalReasons.join('；')}`);
-                    }
-
-                    const repairTargets = check.failedQuestions.filter(row =>
-                        isStrictChoiceType(row.type) &&
-                        (row.warnings || []).some(message =>
-                            /选项无效|有效选项不足/.test(message)
-                        )
-                    );
-
-                    let targetedRepairCallCount = 0;
-
-                    console.log('[BATCH_DEBUG][strict-targeted-repair-start]', repairTargets);
-
-                    if (repairTargets.length) {
-                        const targetNumbers = new Set(repairTargets.map(row => String(row.questionNumber)));
-                        const targetPages = pages.filter(page => {
-                            const pageNo = page.pageNo || 1;
-
-                            return items.some(item =>
-                                targetNumbers.has(String(item.questionNumber || '')) &&
-                                (
-                                    Number(item.sourcePage || 0) === pageNo ||
-                                    (item.sourcePages || []).includes(pageNo)
-                                )
-                            );
-                        });
-
-                        for (const page of targetPages) {
-                            const pageNo = page.pageNo || 1;
-                            const pageQuestions = items.filter(item =>
-                                targetNumbers.has(String(item.questionNumber || '')) &&
-                                (
-                                    Number(item.sourcePage || 0) === pageNo ||
-                                    (item.sourcePages || []).includes(pageNo)
-                                )
-                            );
-
-                            if (!pageQuestions.length) continue;
-
-                            targetedRepairCallCount += 1;
-
-                            const repaired = await repairPageChoiceAndSolutionDetailsWithVision(
-                                {
-                                    ...file,
-                                    pageIndex: pageNo,
-                                    sourcePage: pageNo
-                                },
-                                page.url,
-                                pageNo,
-                                pageQuestions,
-                                ''
-                            );
-
-                            items = mergeStrictQuestionItemsByNumber([
-                                ...items,
-                                ...(repaired || []).map(item => ({
-                                    ...item,
-                                    sourcePage: item.sourcePage || pageNo,
-                                    pageIndex: item.pageIndex || pageNo,
-                                    sourcePageImage: item.sourcePageImage || page.url,
-                                    sourcePages: [
-                                        ...new Set([
-                                            ...(item.sourcePages || []),
-                                            pageNo
-                                        ])
-                                    ]
-                                }))
-                            ]);
-                        }
-
-                        check = validateVisualQuestionItems(items, expected);
-
-                        console.groupCollapsed('[BATCH_DEBUG][strict-after-targeted-repair]');
-                        console.log({
-                            targetedRepairCallCount,
-                            fatalReasons: check.fatalReasons,
-                            warningReasons: check.warningReasons
-                        });
-                        console.table(check.rows);
-                        console.groupEnd();
-                    } else {
-                        console.groupCollapsed('[BATCH_DEBUG][strict-after-targeted-repair]');
-                        console.log({
-                            targetedRepairCallCount,
-                            fatalReasons: check.fatalReasons,
-                            warningReasons: check.warningReasons
-                        });
-                        console.table(check.rows);
-                        console.groupEnd();
-                    }
-
-                    if (check.fatal) {
-                        throw new Error(`整页视觉识别发生致命错误：${check.fatalReasons.join('；')}`);
-                    }
-
-                    const gapWarning = window.Qisi.UiEvents.buildQuestionNumberGapWarning(items);
-                    if (gapWarning) {
-                        check.warningReasons = [...new Set([...(check.warningReasons || []), gapWarning])];
-                        check.reasons = [...new Set([...(check.reasons || []), gapWarning])];
-                    }
-
-                    items = items.map(item => {
-                        const row = check.failedQuestions.find(failed =>
-                            String(failed.questionNumber) === String(item.questionNumber)
-                        );
-                        const warnings = [
-                            ...(item.warnings || []),
-                            ...(row?.warnings || []),
-                            ...(row?.failures || []),
-                            gapWarning
-                        ].filter(Boolean);
-
-                        if (!warnings.length) return item;
-
-                        return {
-                            ...item,
-                            warnings: [...new Set(warnings)],
-                            confidence: Math.min(Number(item.confidence || 0.78), 0.65)
-                        };
-                    });
-
-                    console.log('[BATCH_DEBUG][strict-summary]', {
-                        filename: file.filename,
-                        pageCount: pages.length,
-                        initialVisionCallCount: pages.length,
-                        targetedRepairCallCount,
-                        finalItemCount: items.length,
-                        types: items.map(item => ({
-                            questionNumber: item.questionNumber,
-                            type: item.type,
-                            validOptionCount: normalizeFourOptionsForCheck(item.options || [])
-                                .filter(option => !isBadChoiceOption(option)).length
-                        }))
-                    });
-
-                    if (onPageProgress) {
-                        await onPageProgress(1, {
-                            stage: 'done',
-                            done: true
-                        });
-                    }
-
-                    return {
-                        questions: items,
-                        pageImages,
-                        check,
-                        pageRecognitionSummary:
-                            [...pageRecognitionSummary]
-                                .sort(
-                                    (left, right) =>
-                                        Number(left.pageNo || 0) -
-                                        Number(right.pageNo || 0)
-                                )
-                    };
-                };
-
                 const buildDocxQuestionFailureSnapshot = ({
                     file,
                     questionSkeleton,
@@ -14701,11 +14295,46 @@ ${source}`;
                         .trim();
                 };
 
+                const strictVisualPreparedPagesRecognizer =
+                    window.QisiBatchEngineV2
+                        .createStrictVisualPreparedPagesRecognizer({
+                            mapWithConcurrency,
+                            recognizePage:
+                                recognizeStrictQuestionPageWithQwen,
+                            collectValidFigures:
+                                collectValidRecognizedFigures,
+                            hasFigureCue: questionHasFigureCue,
+                            locateQuestionFigures:
+                                locateQuestionFiguresWithQwen,
+                            normalizeFigure:
+                                normalizeRecognizedFigureDescriptor,
+                            isLikelyRealFigure:
+                                isLikelyRealQuestionFigure,
+                            mergeQuestionItems:
+                                mergeStrictQuestionItemsByNumber,
+                            validateQuestionItems:
+                                validateVisualQuestionItems,
+                            isStrictChoiceType,
+                            repairChoiceAndSolutionDetails:
+                                repairPageChoiceAndSolutionDetailsWithVision,
+                            buildQuestionNumberGapWarning:
+                                window.Qisi.UiEvents
+                                    .buildQuestionNumberGapWarning,
+                            normalizeFourOptions:
+                                normalizeFourOptionsForCheck,
+                            isBadChoiceOption,
+                            cleanRecognizedText:
+                                window.Qisi.Utils.cleanRecognizedText,
+                            isFatalServiceError:
+                                window.Qisi.Utils.isFatalQwenServiceError,
+                            now: () => performance.now()
+                        });
+
                 const strictVisualQuestionProducer =
                     window.QisiBatchEngineV2.createStrictVisualQuestionProducer({
                         renderPdfFilePages,
                         recognizePreparedPages:
-                            recognizeStrictQuestionsFromPreparedPages,
+                            strictVisualPreparedPagesRecognizer,
                         getRoles: getBatchFileRoles,
                         logDiagnostic: logBatchPdfDiag,
                         now: () => performance.now()
