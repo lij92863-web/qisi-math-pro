@@ -424,10 +424,16 @@
             for (const field of FIELDS) {
                 const row = fieldRows[field];
                 row.value = Array.isArray(row.value) ? [] : '';
-                row.provenance.kind = 'rejected';
-                row.provenance.status = 'rejected';
-                row.provenance.reason = 'raw-json-candidate';
-                row.provenance.reasonCode = 'raw-json-candidate';
+                row.provenance = provenanceEntry({
+                    kind: 'rejected',
+                    sourceId: row.provenance.sourceId,
+                    page: row.provenance.page,
+                    blockIds: row.provenance.blockIds,
+                    engine: row.provenance.engine,
+                    decisionId: row.provenance.controlledWriteDecisionId,
+                    manuallyEdited: false,
+                    reason: 'raw-json-candidate'
+                });
             }
         }
 
