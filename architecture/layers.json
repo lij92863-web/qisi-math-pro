@@ -368,7 +368,7 @@
     {
       "id": "production-import-bridge", "file": "qisi-production-import-bridge.js",
       "layer": 3, "domainOwner": "productionImportBridgeOwner",
-      "publicApi": ["REQUIRED_PORTS", "ProductionImportBridgeError", "createProductionImportBridge"],
+      "publicApi": ["REQUIRED_PORTS", "ProductionImportBridgeError", "createFixtureImportRunner", "createProductionImportBridge"],
       "allowedDependencies": [
         "import-state-machine", "batch-context-service", "source-role-classifier",
         "production-import-status-port", "production-import-output-port",

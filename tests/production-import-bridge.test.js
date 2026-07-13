@@ -481,6 +481,7 @@ test('bridge is browser-loaded as the production-wired layer-3 owner before the 
     assert.deepEqual(entry.publicApi, [
         'REQUIRED_PORTS',
         'ProductionImportBridgeError',
+        'createFixtureImportRunner',
         'createProductionImportBridge'
     ]);
     for (const dependency of [

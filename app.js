@@ -14887,58 +14887,14 @@ ${source}`;
                                     requiredKinds: input.requiredKinds
                                 })
                         });
-                const runProductionFixtureImport = async context => {
-                    const transport = Qisi.Runtime.getRuntimeDependency(
-                        'InjectedImportTransport'
-                    );
-                    if (
-                        transport?.kind !== 'qisi.mock-import-transport.v1' ||
-                        typeof transport.produceCandidates !== 'function'
-                    ) {
-                        const error = new Error('fixture-transport-invalid');
-                        error.code = 'PRODUCTION_IMPORT_FIXTURE_INVALID';
-                        throw error;
-                    }
-                    const envelope = await transport.produceCandidates({
-                        batch: structuredClone(context.batch),
-                        files: structuredClone(context.files)
+                const runProductionFixtureImport =
+                    window.Qisi.ProductionImportBridge.createFixtureImportRunner({
+                        getTransport: () =>
+                            Qisi.Runtime.getRuntimeDependency(
+                                'InjectedImportTransport'
+                            ),
+                        normalizeQuestionNumber: normalizeQuestionKey
                     });
-                    if (!envelope || !Array.isArray(envelope.candidates)) {
-                        const error = new Error('fixture-result-malformed');
-                        error.code = 'PRODUCTION_IMPORT_FIXTURE_MALFORMED';
-                        throw error;
-                    }
-                    const expected = (envelope.expectedQuestionNumbers || [])
-                        .map(value => normalizeQuestionKey(value)).filter(Boolean);
-                    const byNumber = new Map(envelope.candidates.map(candidate => [
-                        normalizeQuestionKey(candidate?.questionNumber), candidate
-                    ]));
-                    const drafts = [];
-                    if (expected.length) {
-                        for (const number of expected) {
-                            if (!byNumber.has(number)) break;
-                            drafts.push(byNumber.get(number));
-                        }
-                    } else {
-                        drafts.push(...envelope.candidates);
-                    }
-                    return {
-                        drafts,
-                        safePartialCandidates: context.route === 'pdf'
-                            ? drafts.map(draft => ({
-                                draft,
-                                isSafePartial: true,
-                                isComplete: false,
-                                requiresManualReview: true
-                            }))
-                            : undefined,
-                        draftImages: envelope.draftImages || [],
-                        unmatched: [],
-                        warnings: envelope.warnings || [],
-                        expectedQuestionNumbers: expected,
-                        prefixTruncated: expected.length > drafts.length
-                    };
-                };
 
                 const runProductionPdfImport =
                     window.Qisi.ProductionPdfSourcesPort

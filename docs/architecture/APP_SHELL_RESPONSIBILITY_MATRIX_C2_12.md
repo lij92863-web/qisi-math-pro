@@ -205,3 +205,19 @@ resolves its lower-layer production dependencies without app-local policy.
 Post-wave inventory is 18,338 lines and 378 detected functions; the largest
 function remains 242 lines. The test-only fixture adapter and lower-level
 OCR/vision transports remain separate later boundaries.
+
+## Wave 6 result: injected fixture adapter extracted
+
+The explicitly injected mock transport remains test-only and fail-closed, but
+its candidate-envelope validation, expected-sequence prefix selection, and PDF
+review-only projection no longer live in `app.js`. The existing
+`qisi-production-import-bridge.js` owner exposes `createFixtureImportRunner`;
+the shell only resolves the exact `qisi.mock-import-transport.v1` dependency
+and injects the existing question-number normalizer.
+
+The runner rejects missing or wrong transport identities and malformed
+candidate envelopes before review persistence. It has no DB, Formal Admission,
+UI, or real-network authority. Post-wave inventory is 18,294 lines and 378
+detected functions; the largest function remains 242 lines. Lower-level
+OCR/vision transport delegation and unrelated formal-repository writes remain
+separate later boundaries.

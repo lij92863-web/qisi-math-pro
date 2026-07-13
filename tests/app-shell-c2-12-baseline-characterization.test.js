@@ -21,7 +21,7 @@ test('C2-12 matrix freezes the post-C2-11 shell baseline honestly', () => {
     );
 
     assert.equal(baseline.split(/\r?\n/).length, 19494);
-    assert.equal(result.appJsLines <= 18338, true);
+    assert.equal(result.appJsLines <= 18294, true);
     assert.equal(result.totalFunctionsFound <= 378, true);
     assert.doesNotMatch(app, /const processDraftImportBatch\s*=/);
     assert.match(baseline, /const processDraftImportBatchV2\s*=/);

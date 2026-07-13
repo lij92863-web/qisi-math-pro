@@ -321,6 +321,63 @@
         });
     }
 
+    function createFixtureImportRunner(ports = {}) {
+        if (
+            typeof ports.getTransport !== 'function' ||
+            typeof ports.normalizeQuestionNumber !== 'function'
+        ) {
+            throw createError('PRODUCTION_IMPORT_PORT_REQUIRED', {
+                port: 'fixture-import-runner'
+            });
+        }
+        return async function runProductionFixtureImport(context = {}) {
+            const transport = ports.getTransport();
+            if (
+                transport?.kind !== 'qisi.mock-import-transport.v1' ||
+                typeof transport.produceCandidates !== 'function'
+            ) throw createError('PRODUCTION_IMPORT_FIXTURE_INVALID');
+            const envelope = await transport.produceCandidates({
+                batch: structuredClone(context.batch),
+                files: structuredClone(context.files)
+            });
+            if (!isRecord(envelope) || !Array.isArray(envelope.candidates)) {
+                throw createError('PRODUCTION_IMPORT_FIXTURE_MALFORMED');
+            }
+            const expected = (envelope.expectedQuestionNumbers || [])
+                .map(value => ports.normalizeQuestionNumber(value))
+                .filter(Boolean);
+            const byNumber = new Map(envelope.candidates.map(candidate => [
+                ports.normalizeQuestionNumber(candidate?.questionNumber),
+                candidate
+            ]));
+            const drafts = [];
+            if (expected.length) {
+                for (const number of expected) {
+                    if (!byNumber.has(number)) break;
+                    drafts.push(byNumber.get(number));
+                }
+            } else {
+                drafts.push(...envelope.candidates);
+            }
+            return {
+                drafts,
+                safePartialCandidates: context.route === 'pdf'
+                    ? drafts.map(draft => ({
+                        draft,
+                        isSafePartial: true,
+                        isComplete: false,
+                        requiresManualReview: true
+                    }))
+                    : undefined,
+                draftImages: envelope.draftImages || [],
+                unmatched: [],
+                warnings: envelope.warnings || [],
+                expectedQuestionNumbers: expected,
+                prefixTruncated: expected.length > drafts.length
+            };
+        };
+    }
+
     function createProductionImportBridge(ports = {}) {
         assertPorts(ports);
         const clock = typeof ports.clock === 'function' ? ports.clock : Date.now;
@@ -823,6 +880,7 @@
     const api = Object.freeze({
         REQUIRED_PORTS,
         ProductionImportBridgeError,
+        createFixtureImportRunner,
         createProductionImportBridge
     });
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
