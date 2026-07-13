@@ -3,11 +3,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { buildProof, buildAll } = require('../scripts/bm-a4-r3-proof-builder');
 const appLines = fs.readFileSync('app.js', 'utf8').split('\n');
-// Wave 13 deleted one unreachable DOCX option-repair callsite with its owner.
-const EXPECTED_REMAINING_CALLSITES = 26;
+// Wave 16 retired fourteen unreachable OCR/Vision producer callsites.
+const EXPECTED_REMAINING_CALLSITES = 12;
 
 const sampleSafe = { callsiteId: 'R3-TEST', helper: 'addWarningOnce', line: 3739, text: 'x', score: 90, decision: 'AUTO_FIXTURE_CANDIDATE', risks: { controlledWrite: false, pdfOwnership: false, supportAttachment: false, answerSolution: false, unknown: false } };
-const sampleBlocked = { callsiteId: 'R3-TEST-B', helper: 'cleanDisplayTextForBatchSave', line: 13559, text: 'x', score: 40, decision: 'ALWAYS_BLOCK', risks: { controlledWrite: true, pdfOwnership: false, supportAttachment: false, answerSolution: false, unknown: false } };
+const sampleBlocked = { callsiteId: 'R3-TEST-B', helper: 'cleanDisplayTextForBatchSave', line: 2127, text: 'x', score: 40, decision: 'ALWAYS_BLOCK', risks: { controlledWrite: true, pdfOwnership: false, supportAttachment: false, answerSolution: false, unknown: false } };
 
 describe('bm-a4-r3-proof-builder', () => {
     it('tool exists', () => { assert.equal(fs.existsSync('scripts/bm-a4-r3-proof-builder.js'), true); });

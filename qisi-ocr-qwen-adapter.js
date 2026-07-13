@@ -59,15 +59,33 @@
                 throw error;
             }
             const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), ms);
+            const externalSignal = options?.signal;
+            let timedOut = false;
+            const abortFromExternal = () => controller.abort();
+            if (externalSignal?.aborted) abortFromExternal();
+            else externalSignal?.addEventListener(
+                'abort', abortFromExternal, { once: true }
+            );
+            const timer = setTimeout(() => {
+                timedOut = true;
+                controller.abort();
+            }, ms);
             try {
                 if (typeof onAiRequest === 'function') onAiRequest(label);
+                const requestOptions = { ...options };
+                delete requestOptions.signal;
                 return await proxyFetch(url, {
-                    ...options,
+                    ...requestOptions,
                     signal: controller.signal
                 });
             } catch (error) {
                 if (error?.name === 'AbortError') {
+                    if (!timedOut && externalSignal?.aborted) {
+                        const cancelled = new Error('Qwen request cancelled.');
+                        cancelled.name = 'AbortError';
+                        cancelled.code = 'OCR_REQUEST_CANCELLED';
+                        throw cancelled;
+                    }
                     throw new Error(
                         `${label} 超时：超过 ${Math.round(ms / 1000)} 秒未返回`
                     );
@@ -75,6 +93,9 @@
                 throw error;
             } finally {
                 clearTimeout(timer);
+                externalSignal?.removeEventListener(
+                    'abort', abortFromExternal
+                );
             }
         };
         const checkHealth = async () => {
@@ -91,6 +112,240 @@
             };
         };
         return Object.freeze({ request, checkHealth, getEndpoint });
+    };
+
+    const TASK_MODELS = Object.freeze({
+        'structured-ocr': Object.freeze(['qwen-vl-ocr-latest']),
+        'text-structure': Object.freeze(['qwen-plus']),
+        'general-vision': Object.freeze([
+            'qwen3.5-plus', 'qwen3-vl-plus',
+            'qwen-vl-max-latest', 'qwen-vl-plus'
+        ]),
+        'strict-vision': Object.freeze([
+            'qwen3-vl-plus', 'qwen-vl-max-latest', 'qwen-vl-plus'
+        ])
+    });
+
+    const createTaskError = (code, message) => {
+        const error = new Error(message);
+        error.code = code;
+        return error;
+    };
+
+    const extractProxyText = data => {
+        const dashScope = data?.output?.choices?.[0]?.message?.content;
+        if (Array.isArray(dashScope)) {
+            return dashScope.map(part =>
+                String(part?.text || part?.content || '').trim()
+            ).filter(Boolean).join('\n');
+        }
+        return String(
+            dashScope || data?.choices?.[0]?.message?.content || ''
+        ).trim();
+    };
+
+    const parseTaskJson = text => {
+        const source = String(text || '').trim()
+            .replace(/^```(?:json)?\s*/i, '')
+            .replace(/\s*```$/, '');
+        if (!source) return null;
+        try {
+            return JSON.parse(source);
+        } catch (_error) {
+            const objectStart = source.indexOf('{');
+            const objectEnd = source.lastIndexOf('}');
+            const arrayStart = source.indexOf('[');
+            const arrayEnd = source.lastIndexOf(']');
+            const candidates = [
+                objectStart >= 0 && objectEnd > objectStart
+                    ? source.slice(objectStart, objectEnd + 1) : '',
+                arrayStart >= 0 && arrayEnd > arrayStart
+                    ? source.slice(arrayStart, arrayEnd + 1) : ''
+            ].filter(Boolean);
+            for (const candidate of candidates) {
+                try {
+                    return JSON.parse(candidate);
+                } catch (_ignored) {
+                    // Try the next bounded JSON candidate.
+                }
+            }
+            return null;
+        }
+    };
+
+    const createQwenTaskClient = ({
+        transport,
+        getMode = () => 'standard'
+    } = {}) => {
+        if (
+            typeof transport?.request !== 'function' ||
+            typeof transport?.checkHealth !== 'function'
+        ) {
+            throw new TypeError('Qwen proxy transport is required.');
+        }
+
+        const assertResponse = response => {
+            if (response?.ok) return response;
+            const status = Number(response?.status || 0);
+            throw createTaskError(
+                'QWEN_PROXY_HTTP_FAILED',
+                `Qwen proxy failed with HTTP ${status || 'unknown'}.`
+            );
+        };
+
+        const modelsFor = (task, mode) => {
+            const configured = TASK_MODELS[task];
+            if (!configured) {
+                throw createTaskError(
+                    'QWEN_TASK_UNKNOWN', `Unknown Qwen task: ${task}`
+                );
+            }
+            if (
+                (task === 'general-vision' || task === 'strict-vision') &&
+                mode !== 'accurate'
+            ) {
+                return [configured[configured.length - 1]];
+            }
+            return [...configured];
+        };
+
+        const chatText = async ({
+            task,
+            prompt = '',
+            imageUrl = '',
+            imageOptions = {},
+            mode = getMode(),
+            timeoutMs = 90000,
+            maxTokens = 8192,
+            label = 'Qwen task request',
+            validateText,
+            signal
+        } = {}) => {
+            if (!String(prompt || '').trim()) {
+                throw createTaskError(
+                    'QWEN_TASK_INPUT_INVALID', 'Qwen task prompt is required.'
+                );
+            }
+            let lastError = null;
+            for (const model of modelsFor(task, mode)) {
+                if (signal?.aborted) {
+                    const cancelled = createTaskError(
+                        'OCR_REQUEST_CANCELLED', 'Qwen task cancelled.'
+                    );
+                    cancelled.name = 'AbortError';
+                    throw cancelled;
+                }
+                try {
+                    const content = imageUrl
+                        ? [
+                            {
+                                type: 'image_url',
+                                image_url: { url: imageUrl, ...imageOptions }
+                            },
+                            { type: 'text', text: String(prompt) }
+                        ]
+                        : String(prompt);
+                    const response = await transport.request('chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model,
+                            messages: [{ role: 'user', content }],
+                            temperature: 0,
+                            top_p: 0.001,
+                            max_tokens: maxTokens
+                        }),
+                        signal
+                    }, timeoutMs, label);
+                    assertResponse(response);
+                    const text = extractProxyText(await response.json());
+                    if (!text) {
+                        throw createTaskError(
+                            'QWEN_TASK_EMPTY', 'Qwen task returned no text.'
+                        );
+                    }
+                    if (
+                        typeof validateText === 'function' &&
+                        validateText(text, { model, task }) !== true
+                    ) {
+                        throw createTaskError(
+                            'QWEN_TASK_RESPONSE_REJECTED',
+                            'Qwen task response failed producer validation.'
+                        );
+                    }
+                    return Object.freeze({ text, model, task });
+                } catch (error) {
+                    if (error?.name === 'AbortError') throw error;
+                    lastError = error;
+                }
+            }
+            throw lastError || createTaskError(
+                'QWEN_TASK_FAILED', 'Qwen task failed.'
+            );
+        };
+
+        const chatJson = async options => {
+            const result = await chatText(options);
+            const value = parseTaskJson(result.text);
+            if (!value || typeof value !== 'object') {
+                throw createTaskError(
+                    'QWEN_TASK_JSON_INVALID',
+                    'Qwen task returned malformed JSON.'
+                );
+            }
+            return Object.freeze({ ...result, value });
+        };
+
+        const ocrText = async ({
+            imageUrl,
+            ocrTask = 'document_parsing',
+            timeoutMs = 90000,
+            signal
+        } = {}) => {
+            if (!imageUrl) return Object.freeze({ text: '', task: ocrTask });
+            const response = await transport.request('ocr', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: TASK_MODELS['structured-ocr'][0],
+                    input: {
+                        messages: [{
+                            role: 'user',
+                            content: [{
+                                image: imageUrl,
+                                min_pixels: 3072,
+                                max_pixels: 30720000,
+                                enable_rotate: false
+                            }]
+                        }]
+                    },
+                    parameters: {
+                        max_tokens: 8192,
+                        ocr_options: { task: ocrTask }
+                    }
+                }),
+                signal
+            }, timeoutMs, `Qwen OCR ${ocrTask}`);
+            assertResponse(response);
+            const text = extractProxyText(await response.json());
+            if (!text) {
+                throw createTaskError(
+                    'QWEN_TASK_EMPTY', 'Qwen OCR returned no text.'
+                );
+            }
+            return Object.freeze({
+                text,
+                task: ocrTask,
+                model: TASK_MODELS['structured-ocr'][0]
+            });
+        };
+
+        return Object.freeze({
+            chatText,
+            chatJson,
+            ocrText,
+            checkHealth: () => transport.checkHealth()
+        });
     };
 
     const createQwenAdapter = ({
@@ -197,5 +452,9 @@
             }
         });
     };
-    return Object.freeze({ createQwenProxyTransport, createQwenAdapter });
+    return Object.freeze({
+        createQwenProxyTransport,
+        createQwenTaskClient,
+        createQwenAdapter
+    });
 });

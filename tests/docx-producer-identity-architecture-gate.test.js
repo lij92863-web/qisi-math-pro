@@ -12,6 +12,7 @@ test('DOCX source, producer, and route axes have one production contract owner',
     const app = read('app.js');
     const bridge = read('qisi-production-import-bridge.js');
     const shadowPort = read('qisi-production-docx-vision-source-port.js');
+    const qwenSourcePort = read('qisi-qwen-vision-source-port.js');
 
     assert.match(owner, /projectDocxVisionCandidate/);
     assert.match(owner, /projectDeterministicDocxCandidate/);
@@ -20,9 +21,11 @@ test('DOCX source, producer, and route axes have one production contract owner',
     assert.doesNotMatch(bridge, /fieldProvenance\s*[:=]\s*\{/);
     assert.doesNotMatch(shadowPort, /fieldProvenance\s*[:=]\s*\{|provenanceEntry/);
 
-    const strictProjection = app.indexOf('.projectDocxVisionCandidate({');
-    const mergeOwner = app.indexOf('const mergeDraftRecognition =');
-    assert.ok(strictProjection > 0 && strictProjection < mergeOwner);
+    assert.doesNotMatch(app, /\.projectDocxVisionCandidate\s*\(\{/);
+    assert.match(
+        qwenSourcePort,
+        /ports\.projectDocxVisionCandidate\s*\(\{/
+    );
     assert.match(
         read('qisi-production-docx-source-port.js'),
         /contract\.projectDeterministicDocxCandidate\s*\(\{/

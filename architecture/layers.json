@@ -91,7 +91,7 @@
     {
       "id": "ocr-qwen-adapter", "file": "qisi-ocr-qwen-adapter.js",
       "layer": 1, "domainOwner": "qwenAdapterOwner",
-      "publicApi": ["createQwenProxyTransport", "createQwenAdapter"], "allowedDependencies": ["recognition-contracts", "ocr-adapter-contract"],
+      "publicApi": ["createQwenProxyTransport", "createQwenTaskClient", "createQwenAdapter"], "allowedDependencies": ["recognition-contracts", "ocr-adapter-contract"],
       "forbiddenDependencies": ["formal-admission", "storage-repository"],
       "status": "production-wired"
     },
@@ -219,6 +219,14 @@
       "publicApi": ["STATES", "TRANSITIONS", "createImportStateMachine"],
       "allowedDependencies": [],
       "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository"],
+      "status": "production-wired"
+    },
+    {
+      "id": "qwen-vision-source-port", "file": "qisi-qwen-vision-source-port.js",
+      "layer": 2, "domainOwner": "qwenVisionSourcePortOwner",
+        "publicApi": ["buildStrictQuestionPrompt", "createStrictQuestionPageRecognizer", "createDocumentOcrSource"],
+      "allowedDependencies": ["ocr-qwen-adapter", "docx-producer-identity-contract"],
+      "forbiddenDependencies": ["formal-admission", "storage-repository", "app-shell"],
       "status": "production-wired"
     },
     {

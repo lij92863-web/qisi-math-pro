@@ -1123,10 +1123,24 @@
                     }[ext] || 'application/octet-stream';
                 };
 
-                const buildAiRequestHeaders = () => ({ "Content-Type": "application/json" });
                 const qwenProxyTransport =
                     Qisi.OcrQwenAdapter.createQwenProxyTransport({
                         onAiRequest: label => recordBatchCostCall(label)
+                    });
+                const qwenTaskClient =
+                    Qisi.OcrQwenAdapter.createQwenTaskClient({
+                        transport: qwenProxyTransport,
+                        getMode: () => activeRecognitionMode
+                    });
+                const qwenDocumentOcrSource =
+                    Qisi.QwenVisionSourcePort.createDocumentOcrSource({
+                        ocrText: options => qwenTaskClient.ocrText(options),
+                        chatText: options => qwenTaskClient.chatText(options),
+                        cleanText: value =>
+                            window.Qisi.Utils.cleanRecognizedText(value),
+                        isFatalError: error =>
+                            window.Qisi.Utils.isFatalQwenServiceError(error),
+                        warn: code => console.warn(code)
                     });
                 const withTimeout = (promise, ms, label = '任务') => {
                     let timer = null;
@@ -1143,7 +1157,7 @@
                 };
 
                 window.__qisiCheckAiProxy = async function () {
-                    const result = await qwenProxyTransport.checkHealth();
+                    const result = await qwenTaskClient.checkHealth();
 
                     console.groupCollapsed('[QISI_AI_PROXY_HEALTH]');
                     console.log(result);
@@ -1152,109 +1166,6 @@
                     return result;
                 };
 
-                const assertQwenResponseOk = async (response, label = 'Qwen 请求') => {
-                    if (response.ok) return;
-
-                    let responseText = '';
-
-                    try {
-                        responseText = await response.text();
-                    } catch (_) {
-                        responseText = '';
-                    }
-
-                    let parsed = null;
-
-                    try {
-                        parsed = responseText ? JSON.parse(responseText) : null;
-                    } catch (_) {
-                        parsed = null;
-                    }
-
-                    const upstreamMessage = String(
-                        parsed?.error?.message ||
-                        parsed?.message ||
-                        parsed?.code ||
-                        responseText ||
-                        ''
-                    ).slice(0, 1000);
-
-                    console.error(
-                        '[QWEN_HTTP_ERROR]',
-                        {
-                            label,
-                            status: response.status,
-                            statusText: response.statusText || '',
-                            upstreamMessage
-                        }
-                    );
-
-                    if (
-                        response.status === 401 ||
-                        response.status === 403
-                    ) {
-                        throw new Error(
-                            `DashScope 拒绝请求（HTTP ${response.status}）：` +
-                            `${upstreamMessage || '未返回详细原因'}`
-                        );
-                    }
-
-                    throw new Error(
-                        `${label} 失败（HTTP ${response.status}）：` +
-                        `${upstreamMessage || '未知错误'}`
-                    );
-                };
-
-                const logOcrRequestDebug = (endpoint, requestBody) => {
-                    let bodySize = 0;
-
-                    try {
-                        bodySize = new Blob([JSON.stringify(requestBody || {})]).size;
-                    } catch (_) {
-                        bodySize = 0;
-                    }
-
-                    console.log(
-                        '[OCR_DEBUG][request]',
-                        {
-                            endpoint,
-                            model: requestBody?.model || '',
-                            messageCount: Array.isArray(requestBody?.messages)
-                                ? requestBody.messages.length
-                                : 0,
-                            bodySize
-                        }
-                    );
-                };
-                const OCR_MODEL = "qwen-vl-ocr-latest";
-                const OCR_IMAGE_LIMITS = {
-                    min_pixels: 3072,
-                    max_pixels: 30720000,
-                    enable_rotate: false
-                };
-                const AI_TASKS = Object.freeze({
-                    STRUCTURED_OCR: 'structuredOcr',
-                    GENERAL_VISION: 'generalVision'
-                });
-                const AI_MODELS_BY_TASK = Object.freeze({
-                    [AI_TASKS.STRUCTURED_OCR]: 'qwen-vl-ocr-latest',
-                    [AI_TASKS.GENERAL_VISION]: 'qwen3-vl-plus'
-                });
-                const getAiModelForTask = task => {
-                    const model = AI_MODELS_BY_TASK[task];
-
-                    if (!model) {
-                        throw new Error(`未配置 AI 任务模型：${task}`);
-                    }
-
-                    return model;
-                };
-                const VISION_MODELS = [
-                    'qwen3.5-plus',
-                    'qwen3-vl-plus',
-                    'qwen-vl-max-latest',
-                    'qwen-vl-plus'
-                ];
                 const PDF_PROCESS_CONFIG = {
                     maxPagesWithoutConfirm: 20,
                     pageRenderTimeoutMs: 45000,
@@ -1269,11 +1180,6 @@
                     '当前 Word 文件未能通过本地服务转成 PDF，只能使用文本层兜底，复杂公式和选项可能不完整。请确认已运行 npm start，并从 http://localhost:3000/main.html 打开软件。';
                 let activeRecognitionMode = 'standard';
                 let activeBatchCostStats = null;
-
-                const getVisionModelsForMode = (mode = 'standard') => {
-                    if (mode === 'accurate') return VISION_MODELS;
-                    return [VISION_MODELS.find(model => model === 'qwen-vl-plus') || VISION_MODELS[0]];
-                };
 
                 const estimateVisionCalls = (pageCount, mode) => {
                     if (mode === 'cheap') return pageCount;
@@ -1444,116 +1350,18 @@
                     };
                 };
 
-                const extractDashScopeText = (data) => {
-                    const content = data?.output?.choices?.[0]?.message?.content;
-                    if (Array.isArray(content)) {
-                        return content.map(part => String(part?.text || part?.content || '').trim()).filter(Boolean).join('\n');
-                    }
-                    return String(content || data?.choices?.[0]?.message?.content || '').trim();
-                };
 
-                const callDashScopeOcrTask = async (imageUrl, task = 'document_parsing') => {
-                    if (!imageUrl) return '';
-                    const resp = await qwenProxyTransport.request('ocr', {
-                        method: "POST",
-                        headers: buildAiRequestHeaders(),
-                        body: JSON.stringify({
-                            model: OCR_MODEL,
-                            input: {
-                                messages: [{
-                                    role: "user",
-                                    content: [{ image: imageUrl, ...OCR_IMAGE_LIMITS }]
-                                }]
-                            },
-                            parameters: {
-                                max_tokens: 8192,
-                                ocr_options: { task }
-                            }
-                        })
-                    }, 90000, `Qwen OCR ${task} 请求`);
-                    await assertQwenResponseOk(resp, `Qwen OCR ${task} 请求`);
-                    return extractDashScopeText(await resp.json());
-                };
-
-                const recognizePageAsDocumentText = async (imageUrl) => {
-                    const tasks = ['document_parsing', 'advanced_recognition'];
-                    let lastError = null;
-                    for (const task of tasks) {
-                        try {
-                            const text = await callDashScopeOcrTask(imageUrl, task);
-                            if (text && text.length > 8) return text;
-                        } catch (error) {
-                            lastError = error;
-                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                            console.warn(`OCR ${task} 不可用，尝试下一个任务`, error);
-                        }
-                    }
-                    throw lastError || new Error('OCR 文档解析失败');
-                };
-
-                const recognizePageMarkdownWithQwen = async (imageUrl) => {
-                    if (!imageUrl) return '';
-
-                    const prompt = `
-你是高中数学试卷 OCR 助手。请把图片中的内容转成 Markdown 文本。
-
-要求：
-1. 按阅读顺序输出。
-2. 数学公式必须尽量用 LaTeX，行内公式用 $...$，显示公式用 $$...$$。
-3. 选择题选项必须保留 A. B. C. D. 标签。
-4. 图形、表格、题图如果无法识别，写成 [题图]，不要写图片 id。
-5. 不要解释，不要总结，只输出 OCR Markdown。
-`;
-
-                    try {
-                        const requestBody = {
-                            model: "qwen-vl-ocr-latest",
-                            messages: [{
-                                role: "user",
-                                content: [
-                                    { type: "image_url", image_url: { url: imageUrl } },
-                                    { type: "text", text: prompt }
-                                ]
-                            }],
-                            temperature: 0,
-                            top_p: 0.001,
-                            max_tokens: 8192
-                        };
-                        logOcrRequestDebug(
-                            qwenProxyTransport.getEndpoint('chat'),
-                            requestBody
-                        );
-
-                        const resp = await qwenProxyTransport.request('chat', {
-                            method: "POST",
-                            headers: buildAiRequestHeaders(),
-                            body: JSON.stringify(requestBody)
-                        }, 90000, 'Qwen 视觉/文本识别请求');
-
-                        await assertQwenResponseOk(resp, 'Qwen OCR Markdown 请求');
-
-                        const text = extractAssistantText(await resp.json());
-                        return window.Qisi.Utils.cleanRecognizedText(text);
-                    } catch (error) {
-                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                        console.warn('compatible-mode 整页 OCR Markdown 失败，尝试 OCR document_parsing', error);
-                    }
-
-                    try {
-                        const text = await callDashScopeOcrTask(imageUrl, 'document_parsing');
-                        return window.Qisi.Utils.cleanRecognizedText(text);
-                    } catch (error) {
-                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                        console.warn('整页 OCR Markdown 失败', error);
-                        return '';
-                    }
-                };
+                const recognizePageAsDocumentText =
+                    qwenDocumentOcrSource.recognizeDocumentText;
+                const recognizePageMarkdownWithQwen =
+                    qwenDocumentOcrSource.recognizePageMarkdown;
 
                 const locateQuestionFiguresWithQwen = async ({
                     pageImage,
                     pageNo = 1,
                     sourceFileName = '',
-                    questions = []
+                    questions = [],
+                    signal
                 } = {}) => {
                     if (!pageImage) return [];
 
@@ -1611,42 +1419,23 @@ ${JSON.stringify(questionSummaries, null, 2)}
 7. 只输出 JSON，不要解释。
 `;
 
-                    let lastError = null;
-
-                    for (const model of getVisionModelsForMode(activeRecognitionMode || 'standard')) {
-                        try {
-                            const resp = await qwenProxyTransport.request('chat', {
-                                method: 'POST',
-                                headers: buildAiRequestHeaders(),
-                                body: JSON.stringify({
-                                    model,
-                                    messages: [{
-                                        role: 'user',
-                                        content: [
-                                            {
-                                                type: 'image_url',
-                                                image_url: {
-                                                    url: pageImage,
-                                                    min_pixels: 3136,
-                                                    max_pixels: 30720000,
-                                                    enable_rotate: true
-                                                }
-                                            },
-                                            { type: 'text', text: prompt }
-                                        ]
-                                    }],
-                                    temperature: 0,
-                                    top_p: 0.001,
-                                    max_tokens: 2048
-                                })
-                            }, 90000, 'Qwen 题图定位请求');
-
-                            await assertQwenResponseOk(resp, 'Qwen 题图定位请求');
-
-                            const data = await resp.json();
-                            const rawText = extractAssistantText(data);
-                            const parsed = parseJsonFromAiText(rawText);
-
+                    try {
+                            const result = await qwenTaskClient.chatJson({
+                                task: 'general-vision',
+                                prompt,
+                                imageUrl: pageImage,
+                                imageOptions: {
+                                    min_pixels: 3136,
+                                    max_pixels: 30720000,
+                                    enable_rotate: true
+                                },
+                                mode: activeRecognitionMode || 'standard',
+                                timeoutMs: 90000,
+                                maxTokens: 2048,
+                                label: 'Qwen 题图定位请求',
+                                signal
+                            });
+                            const parsed = result.value;
                             const rows = Array.isArray(parsed)
                                 ? parsed
                                 : (Array.isArray(parsed?.figures) ? parsed.figures : []);
@@ -1693,25 +1482,15 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             console.groupEnd();
 
                             return normalized;
-                        } catch (error) {
-                            lastError = error;
-                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                            console.warn(`${model} 题图定位失败，尝试备用模型`, error);
-                        }
-                    }
-
-                    console.warn('[BATCH_V2][figure-locator-failed]', lastError);
-                    return [];
-                };
-
-                const recognizePageFormulaText = async (imageUrl) => {
-                    try {
-                        return await callDashScopeOcrTask(imageUrl, 'formula_recognition');
                     } catch (error) {
-                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                        console.warn('OCR 公式识别任务不可用，已跳过公式补充', error);
-                        return '';
+                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) {
+                            throw error;
+                        }
+                        console.warn('[BATCH_V2][figure-locator-failed]', {
+                            code: error?.code || 'QWEN_FIGURE_LOCATOR_FAILED'
+                        });
                     }
+                    return [];
                 };
 
                 const normalizeOcrQuestionOutput = (
@@ -1855,9 +1634,17 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 const recognizeFormulaImageToLatex = async (imageUrl) => {
                     if (!imageUrl) return '';
                     try {
-                        const text = await callDashScopeOcrTask(imageUrl, 'formula_recognition');
+                        const text = await qwenDocumentOcrSource
+                            .recognizeFormulaText(imageUrl);
                         return window.Qisi.Utils.cleanFormulaOcrText(text);
                     } catch (error) {
+                        if (
+                            error?.name === 'AbortError' ||
+                            error?.code === 'OCR_REQUEST_CANCELLED' ||
+                            window.Qisi.Utils.isFatalQwenServiceError(error)
+                        ) {
+                            throw error;
+                        }
                         console.warn('公式图片 OCR 失败，保留为图片 token，不删除。', error);
                         return '';
                     }
@@ -4547,28 +4334,6 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                     };
                 };
 
-                const extractAssistantText = (data) => {
-                    const content = data?.choices?.[0]?.message?.content ?? data?.output?.choices?.[0]?.message?.content;
-
-                    if (typeof content === 'string') return content;
-
-                    if (Array.isArray(content)) {
-                        return content
-                            .map(part => {
-                                if (typeof part === 'string') return part;
-                                return part?.text || part?.content || '';
-                            })
-                            .filter(Boolean)
-                            .join('\n');
-                    }
-
-                    if (content && typeof content === 'object') {
-                        return content.text || content.content || JSON.stringify(content);
-                    }
-
-                    return '';
-                };
-
                 const parseJsonFromAiText = (text) => {
                     const raw = String(text || '').trim();
                     if (!raw) return null;
@@ -4974,55 +4739,6 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                     return result;
                 };
 
-                const recognizeTextQuestionsWithQwen = async (text, sourceFile, includeInlineAnswer = false, fallbackType = '') => {
-                    const source = prepareQuestionRecognitionText(text).slice(0, 24000);
-                    if (!source || source.length < 12) return [];
-                    const localItems = parseQuestionItemsFromText(text, sourceFile, includeInlineAnswer);
-                    const prompt = `你是高中数学题库录入助手。请从材料中提取题目，并输出严格 JSON。
-
-【必须输出字段】
-[
-  {
-    "question": "题号",
-    "type": "单选题/多选题/填空题/解答题",
-    "stem": "题干，必须保留数学公式 LaTeX",
-    "options": ["A选项", "B选项", "C选项", "D选项"],
-    "answer": "答案，没有则为空字符串",
-    "solution": "解析，没有则为空字符串"
-  }
-]
-
-【致命约束】
-1. 如果原文有 A/B/C/D 选项，必须完整提取每个选项后面的内容，直到下一个选项标签。
-2. 严禁只返回 "A"、"B"、"C"、"D" 这种选项标签。
-3. 数学公式必须使用 LaTeX，例如 \\frac{}{}、\\sqrt{}、x^2、\\begin{cases}...\\end{cases}。
-4. 不要把公式翻译成自然语言。
-5. 如果原文包含“解析”“详解”“解答”等字样，必须把其后直到下一题号前的内容放入 solution。
-6. 如果无法确定某字段，返回空字符串，不要返回 null、undefined、false。
-7. 输出必须是纯 JSON，不要添加解释文字。
-8. ${includeInlineAnswer ? '如果题目中含答案/解析，也提取 answer 和 solution。' : '不要编造答案和解析，文本里没有就留空。'}
-
-材料：
-${source}`;
-                    const resp = await qwenProxyTransport.request('chat', {
-                        method: "POST",
-                        headers: buildAiRequestHeaders(),
-                        body: JSON.stringify({
-                            model: "qwen-plus",
-                            messages: [{ role: "user", content: prompt }],
-                            temperature: 0,
-                            top_p: 0.001,
-                            max_tokens: 8192
-                        })
-                    }, 90000, 'Qwen 视觉/文本识别请求');
-                    await assertQwenResponseOk(resp, 'Qwen 文本结构化请求');
-                    const data = await resp.json();
-                    const parsed = parseJsonFromAiText(extractAssistantText(data));
-                    const rawItems = extractQuestionArray(parsed);
-                    batchDebugLog('raw-ai', rawItems.map(toBatchDebugQuestion));
-                    const aiItems = postprocessRecognizedItems(rawItems, { ...sourceFile, pageText: source, sourceText: source }, fallbackType);
-                    return mergeQuestionItemsWithFallback(aiItems, localItems);
-                };
 
                 const recognizeAnswerSolutionWithQwen = async (text, sourceFile, options = {}) => {
                     const strictProtocol =
@@ -5066,26 +4782,15 @@ ${source}`;
 
 材料：
 ${source}`;
-                    const resp = await qwenProxyTransport.request('chat', {
-                        method: "POST",
-                        headers: buildAiRequestHeaders(),
-                        body: JSON.stringify({
-                            model: "qwen-plus",
-                            messages: [{ role: "user", content: prompt }],
-                            temperature: 0,
-                            top_p: 0.001,
-                            max_tokens: 8192
-                        })
-                    }, 90000, 'Qwen 视觉/文本识别请求');
-                    await assertQwenResponseOk(resp, 'Qwen 答案解析结构化请求');
-                    const data = await resp.json();
-                    const assistantText =
-                        extractAssistantText(data);
-
-                    const parsed =
-                        parseJsonFromAiText(
-                            assistantText
-                        );
+                    const taskResult = await qwenTaskClient.chatJson({
+                        task: 'text-structure',
+                        prompt,
+                        timeoutMs: 90000,
+                        label: 'Qwen 答案解析结构化请求',
+                        signal: options.signal
+                    });
+                    const assistantText = taskResult.text;
+                    const parsed = taskResult.value;
 
                     if (
                         strictProtocol &&
@@ -5122,11 +4827,11 @@ ${source}`;
                         ...(strictProtocol ? {
                             controlledWriteDecision: {
                                 accepted: true,
-                                decisionId: `strict-docx-support:${sourceFile.id}:${normalizeQuestionKey(item.question)}:answer:qwen-plus`,
+                                decisionId: `strict-docx-support:${sourceFile.id}:${normalizeQuestionKey(item.question)}:answer:${taskResult.model}`,
                                 acceptedFields: ['answer'],
                                 method: 'strict-json-contract',
                                 sourceId: sourceFile.id,
-                                engine: 'qwen-plus'
+                                engine: taskResult.model
                             }
                         } : {})
                     })).filter(item => item.question && item.answer) : [];
@@ -5145,11 +4850,11 @@ ${source}`;
                         ...(strictProtocol ? {
                             controlledWriteDecision: {
                                 accepted: true,
-                                decisionId: `strict-docx-support:${sourceFile.id}:${normalizeQuestionKey(item.question)}:solution:qwen-plus`,
+                                decisionId: `strict-docx-support:${sourceFile.id}:${normalizeQuestionKey(item.question)}:solution:${taskResult.model}`,
                                 acceptedFields: ['solution'],
                                 method: 'strict-json-contract',
                                 sourceId: sourceFile.id,
-                                engine: 'qwen-plus'
+                                engine: taskResult.model
                             }
                         } : {})
                     })).filter(item => item.question && item.solution) : [];
@@ -5244,62 +4949,15 @@ ${source}`;
                     return result;
                 };
 
-                const recognizeImageQuestionJsonWithQwen = async (file) => {
-                    const prompt = `你是高中数学题库录入助手。请从图片材料中提取题目，并输出严格 JSON。
 
-【必须输出字段】
-[
-  {
-    "question": "题号",
-    "question_bbox": [x1,y1,x2,y2],
-    "type": "单选题/多选题/填空题/解答题",
-    "stem": "题干，必须保留数学公式 LaTeX",
-    "options": ["A选项", "B选项", "C选项", "D选项"],
-    "answer": "答案，没有则为空字符串",
-    "solution": "解析，没有则为空字符串",
-    "images": [{"image_bbox":[x1,y1,x2,y2],"image_description":"图像说明","image_confidence":0.86}]
-  }
-]
-
-【致命约束】
-1. 如果原文有 A/B/C/D 选项，必须完整提取每个选项后面的内容，直到下一个选项标签。
-2. 严禁只返回 "A"、"B"、"C"、"D" 这种选项标签。
-3. 数学公式必须使用 LaTeX，例如 \\frac{}{}、\\sqrt{}、x^2、\\begin{cases}...\\end{cases}。
-4. 不要把公式翻译成自然语言。
-5. 如果原文包含“解析”“详解”“解答”等字样，必须把其后直到下一题号前的内容放入 solution。
-6. 如果无法确定某字段，返回空字符串，不要返回 null、undefined、false。
-7. 输出必须是纯 JSON，不要添加解释文字。
-8. 忽略标题、姓名、班级、评分、题型说明、分值说明。image_bbox 只框住题中图形，不要框住整道题。`;
-                    const models = getVisionModelsForMode(activeRecognitionMode);
-                    let lastError = null;
-                    for (const model of models) {
-                        try {
-                            const resp = await qwenProxyTransport.request('chat', {
-                                method: "POST",
-                                headers: buildAiRequestHeaders(),
-                                body: JSON.stringify({
-                                    model,
-                                    messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: file.uploadPath, ...OCR_IMAGE_LIMITS } }, { type: "text", text: prompt }] }],
-                                    max_tokens: 8192
-                                })
-                            }, 90000, 'Qwen 视觉/文本识别请求');
-                            await assertQwenResponseOk(resp, 'Qwen 图片视觉识别请求');
-                            const data = await resp.json();
-                            const parsed = parseJsonFromAiText(extractAssistantText(data));
-                            const rawItems = extractQuestionArray(parsed);
-                            batchDebugLog('raw-ai', rawItems.map(toBatchDebugQuestion));
-                            const items = postprocessRecognizedItems(rawItems, { id: file.id, filename: file.filename, fileType: file.fileType || 'pdf', sourcePageImage: file.uploadPath }, batchDefaultMeta.defaultType);
-                            if (items.length || model === models.at(-1)) return items;
-                        } catch (error) {
-                            lastError = error;
-                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                            console.warn(`${model} 图片识别不可用，尝试备用模型`, error);
-                        }
-                    }
-                    throw lastError || new Error('图片识别请求失败');
-                };
-
-                const repairPageChoiceAndSolutionDetailsWithVision = async (file, imageUrl, pageNo, questions = [], pageMarkdown = '') => {
+                const repairPageChoiceAndSolutionDetailsWithVision = async (
+                    file,
+                    imageUrl,
+                    pageNo,
+                    questions = [],
+                    pageMarkdown = '',
+                    signal
+                ) => {
                     const targets = (questions || []).map((q, idx) => {
                         const optionCount = cleanDisplayOptionsForBatchSave(q.options).filter(Boolean).length;
                         const needOptions =
@@ -5356,40 +5014,22 @@ OCR Markdown：
 ${pageMarkdown || '空'}
 `;
 
-                    let lastError = null;
-
-                    for (const model of getVisionModelsForMode(activeRecognitionMode)) {
-                        try {
-                            const resp = await qwenProxyTransport.request('chat', {
-                                method: "POST",
-                                headers: buildAiRequestHeaders(),
-                                body: JSON.stringify({
-                                    model,
-                                    messages: [{
-                                        role: "user",
-                                        content: [
-                                            {
-                                                type: "image_url",
-                                                image_url: {
-                                                    url: imageUrl,
-                                                    min_pixels: 3136,
-                                                    max_pixels: 30720000,
-                                                    enable_rotate: true
-                                                }
-                                            },
-                                            { type: "text", text: prompt }
-                                        ]
-                                    }],
-                                    temperature: 0,
-                                    top_p: 0.001,
-                                    max_tokens: 8192
-                                })
-                            }, 90000, 'Qwen 视觉/文本识别请求');
-
-                            await assertQwenResponseOk(resp, 'Qwen 页级细节修复请求');
-
-                            const rawText = extractAssistantText(await resp.json());
-                            const parsed = parseJsonFromAiText(rawText);
+                    try {
+                            const taskResult = await qwenTaskClient.chatJson({
+                                task: 'general-vision',
+                                prompt,
+                                imageUrl,
+                                imageOptions: {
+                                    min_pixels: 3136,
+                                    max_pixels: 30720000,
+                                    enable_rotate: true
+                                },
+                                mode: activeRecognitionMode,
+                                timeoutMs: 90000,
+                                label: 'Qwen 页级细节修复请求',
+                                signal
+                            });
+                            const parsed = taskResult.value;
                             const patches = Array.isArray(parsed?.patches) ? parsed.patches : [];
 
                             if (!patches.length) return questions;
@@ -5461,261 +5101,18 @@ ${pageMarkdown || '空'}
                             console.groupEnd();
 
                             return repaired;
-                        } catch (error) {
-                            lastError = error;
-                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                            console.warn(`${model} 页级细节修复失败，尝试下一个模型`, error);
+                    } catch (error) {
+                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) {
+                            throw error;
                         }
+                        console.warn('页级细节修复失败，保留原识别结果', {
+                            code: error?.code || 'QWEN_PAGE_REPAIR_FAILED'
+                        });
                     }
-
-                    console.warn('页级细节修复全部失败，保留原识别结果', lastError);
                     return questions;
                 };
 
-                const recognizeExamPageStructuredWithQwen = async (file, imageUrl, pageNo = 1) => {
-                    let pageMarkdown = '';
 
-                    if (activeRecognitionMode === 'accurate') {
-                        try {
-                            pageMarkdown = await recognizePageMarkdownWithQwen(imageUrl);
-                        } catch (error) {
-                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                            console.warn(`第 ${pageNo} 页 OCR Markdown 失败，继续使用视觉结构化`, error);
-                            pageMarkdown = '';
-                        }
-                    } else {
-                        console.log('[BATCH_COST][skip-page-md]', `${activeRecognitionMode} 模式跳过 OCR Markdown`);
-                    }
-
-                    const localMarkdownQuestions = parseChoiceQuestionsFromPageMarkdown(pageMarkdown, {
-                        fileId: file.id,
-                        fileName: file.filename,
-                        pageNo,
-                        imageUrl
-                    });
-
-                    console.groupCollapsed(`[BATCH_DEBUG][page-md] ${file.filename} 第${pageNo}页`);
-                    console.log('pageMarkdownLength =', pageMarkdown.length);
-                    console.log('pageMarkdownHead =', String(pageMarkdown || '').slice(0, 1200));
-                    console.table(localMarkdownQuestions.map(q => ({
-                        question: q.question,
-                        stem: q.stem?.slice(0, 120),
-                        optionCount: (q.options || []).filter(Boolean).length,
-                        optionA: q.options?.[0] || '',
-                        optionB: q.options?.[1] || '',
-                        optionC: q.options?.[2] || '',
-                        optionD: q.options?.[3] || '',
-                        hasSourcePageImage: Boolean(q.sourcePageImage || q.sourceTrace?.sourcePageImage)
-                    })));
-                    console.groupEnd();
-
-                    const prompt = `
-你是高中数学试卷结构化录入助手。请根据【页面图片】和【OCR Markdown】提取本页题目、答案和解析，输出严格 JSON。
-
-【输出 JSON 格式】
-{
-  "questions": [
-    {
-      "question": "1",
-      "question_bbox": [x1, y1, x2, y2],
-      "type": "单选题/多选题/填空题/解答题",
-      "stem": "题干，不含 A/B/C/D 选项，保留 LaTeX",
-      "options": ["A选项", "B选项", "C选项", "D选项"],
-      "answer": "答案，没有则为空字符串",
-      "solution": "解析，没有则为空字符串",
-      "rawBlock": "本题在 OCR Markdown 中对应的完整原文块"
-    }
-  ],
-  "answers": [
-    { "question": "1", "answer": "A" }
-  ],
-  "solutions": [
-    { "question": "1", "solution": "解析内容，保留 LaTeX" }
-  ]
-}
-
-【硬性规则】
-1. 如果 OCR Markdown 中出现 A. B. C. D.，必须完整提取四个选项。
-2. stem 不要包含 A/B/C/D 选项。
-3. options 中不要只写 A/B/C/D 标签，必须写选项内容。
-4. 如果选项跨行，必须合并到对应选项。
-5. 数学公式优先使用 OCR Markdown 里的 LaTeX。
-6. 不要把 $\\vec a$、$\\theta$、$\\angle AOB$ 改成普通文字。
-7. 如果页面有题图，question_bbox 尽量给出整道题的大概区域；无法确定则返回 []。
-8. rawBlock 必须包含本题题干和选项原文，方便后续本地补选项。
-9. 无法确定的字段返回空字符串或空数组，不要编造。
-10. 输出纯 JSON，不要解释。
-
-【选择题特别要求】
-- 如果题目是选择题，options 必须是长度为 4 的数组。
-- 如果 OCR Markdown 中有 A. B. C. D.，必须逐项提取。
-- 不允许把选项留在 stem 里。
-- 不允许 options 返回空数组，除非原图确实没有选项。
-- 如果选项是公式，也必须保留 LaTeX。
-
-【解析公式特别要求】
-- 解析中出现分式、根号、向量、角、上下标时，必须使用 LaTeX。
-- 优先复制 OCR Markdown 中的公式表达，不要改写成普通文字。
-
-【OCR Markdown】
-${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）'}
-`;
-
-                    const models = getVisionModelsForMode(activeRecognitionMode);
-                    let lastError = null;
-
-                    for (const model of models) {
-                        try {
-                            const resp = await qwenProxyTransport.request('chat', {
-                                method: "POST",
-                                headers: buildAiRequestHeaders(),
-                                body: JSON.stringify({
-                                    model,
-                                    messages: [{
-                                        role: "user",
-                                        content: [
-                                            {
-                                                type: "image_url",
-                                                image_url: {
-                                                    url: imageUrl,
-                                                    min_pixels: 3136,
-                                                    max_pixels: 30720000,
-                                                    enable_rotate: true
-                                                }
-                                            },
-                                            { type: "text", text: prompt }
-                                        ]
-                                    }],
-                                    temperature: 0,
-                                    top_p: 0.001,
-                                    max_tokens: 8192
-                                })
-                            }, 90000, 'Qwen 视觉/文本识别请求');
-
-                            await assertQwenResponseOk(resp, 'Qwen PDF 整页视觉识别请求');
-
-                            const data = await resp.json();
-                            const rawText = extractAssistantText(data);
-                            const parsed = parseJsonFromAiText(rawText);
-                            const rawQuestions = extractQuestionArray(parsed);
-                            const rawAnswers = extractAnswerArray(parsed);
-                            const rawSolutions = extractSolutionArray(parsed);
-                            batchDebugLog('raw-ai', rawQuestions.map(toBatchDebugQuestion));
-
-                            const questions = postprocessRecognizedItems(
-                                rawQuestions,
-                                {
-                                    id: file.id,
-                                    filename: file.filename,
-                                    fileType: file.fileType || 'pdf',
-                                    sourcePage: pageNo,
-                                    pageIndex: pageNo,
-                                    sourcePageImage: imageUrl,
-                                    pageText: pageMarkdown || rawText,
-                                    sourceText: pageMarkdown || rawText
-                                },
-                                batchDefaultMeta.defaultType
-                            ).map(item => ({
-                                ...item,
-                                sourceFileId: file.id,
-                                sourceFileName: file.filename,
-                                sourcePage: pageNo,
-                                sourcePageImage: imageUrl,
-                                pageText: item.pageText || pageMarkdown || rawText,
-                                sourceText: item.sourceText || pageMarkdown || rawText,
-                                rawText: item.rawText || item.rawBlock || item.stem || '',
-                                rawBlock: item.rawBlock || item.rawText || item.stem || '',
-                                rawModelText: rawText,
-                                warnings: [
-                                    ...(item.warnings || []),
-                                    `本题由 ${model} 整页视觉结构化识别生成，请核对题干、选项、公式和题号。`
-                                ]
-                            }));
-
-                            const answers = Array.isArray(rawAnswers) ? rawAnswers.map(item => ({
-                                question: window.Qisi.Utils.cleanRecognizedText(item.question ?? item.题号 ?? item.no ?? item.index),
-                                answer: normalizeAnswerForLatex(item.answer ?? item.答案 ?? item.correctAnswer ?? item.correct_answer),
-                                confidence: Number(item.confidence || item.score || 0.82),
-                                sourceFileId: file.id,
-                                sourceFileName: file.filename,
-                                sourcePage: pageNo,
-                                sourcePageImage: imageUrl,
-                                rawText: pageMarkdown || rawText,
-                                pageText: pageMarkdown || rawText,
-                                rawModelText: rawText
-                            })).filter(item => item.question && item.answer) : [];
-
-                            const solutions = Array.isArray(rawSolutions) ? rawSolutions.map(item => ({
-                                question: window.Qisi.Utils.cleanRecognizedText(item.question ?? item.题号 ?? item.no ?? item.index),
-                                solution: cleanDisplayTextForBatchSave(item.solution ?? item.analysis ?? item.解析 ?? item.详解 ?? item.explanation ?? ''),
-                                confidence: Number(item.confidence || item.score || 0.82),
-                                sourceFileId: file.id,
-                                sourceFileName: file.filename,
-                                sourcePage: pageNo,
-                                sourcePageImage: imageUrl,
-                                rawText: pageMarkdown || rawText,
-                                pageText: pageMarkdown || rawText,
-                                rawModelText: rawText
-                            })).filter(item => item.question && item.solution) : [];
-
-                            let mergedQuestions = mergeAiQuestionsWithLocalMarkdown(questions, localMarkdownQuestions);
-
-                            if (activeRecognitionMode === 'accurate') {
-                                mergedQuestions = await repairPageChoiceAndSolutionDetailsWithVision(
-                                    file,
-                                    imageUrl,
-                                    pageNo,
-                                    mergedQuestions,
-                                    pageMarkdown
-                                );
-                            } else {
-                                console.log('[BATCH_COST][skip-page-repair]', `${activeRecognitionMode} 模式跳过页级视觉细节修复`);
-                            }
-
-                            console.groupCollapsed(`[BATCH_DEBUG][page-merged] ${file.filename} 第${pageNo}页`);
-                            console.table(mergedQuestions.map(q => ({
-                                question: q.question,
-                                type: q.type,
-                                aiOptionCount: (questions.find(item => normalizeQuestionKey(item.question) === normalizeQuestionKey(q.question))?.options || []).filter(Boolean).length,
-                                localOptionCount: (localMarkdownQuestions.find(item => normalizeQuestionKey(item.question) === normalizeQuestionKey(q.question))?.options || []).filter(Boolean).length,
-                                optionCount: (q.options || []).filter(Boolean).length,
-                                hasRawBlock: Boolean(q.rawBlock),
-                                hasPageText: Boolean(q.pageText || q.sourceText || q.sourceTrace?.pageText),
-                                hasSourcePageImage: Boolean(q.sourcePageImage || q.sourceTrace?.sourcePageImage)
-                            })));
-                            console.groupEnd();
-
-                            const hasUsefulResult = mergedQuestions.length || answers.length || solutions.length;
-
-                            if (!hasUsefulResult) {
-                                console.warn(`${model} 返回了空结构化结果，继续尝试下一个模型。原文前 1000 字：`, rawText.slice(0, 1000));
-                                continue;
-                            }
-
-                            return {
-                                questions: mergedQuestions,
-                                answers,
-                                solutions,
-                                rawText: pageMarkdown || rawText,
-                                pageMarkdown,
-                                pageNo,
-                                imageUrl,
-                                model
-                            };
-                        } catch (error) {
-                            lastError = error;
-                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                            console.warn(`${model} 整页结构化识别失败，尝试备用模型`, error);
-                        }
-                    }
-
-                    throw lastError || new Error('整页结构化识别失败：所有结构化视觉模型都没有返回有效题目。');
-                };
-
-                const recognizeImageQuestionWithQwen = async (file) => {
-                    const result = await recognizeExamPageStructuredWithQwen(file, file.uploadPath, file.sourcePage || 1);
-                    return result.questions;
-                };
 
                 const loadImageElement = (url) => new Promise((resolve, reject) => {
                     const image = new Image();
@@ -6414,7 +5811,8 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                 const collectVisualSupportPageEvidence = async ({
                     file,
                     pages = [],
-                    onPageProgress = null
+                    onPageProgress = null,
+                    signal
                 }) => {
                     const evidence = {
                         pages: [],
@@ -6451,6 +5849,14 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         index < normalizedPages.length;
                         index += 1
                     ) {
+                        if (signal?.aborted) {
+                            const cancelled = new Error(
+                                'Support recognition cancelled.'
+                            );
+                            cancelled.name = 'AbortError';
+                            cancelled.code = 'OCR_REQUEST_CANCELLED';
+                            throw cancelled;
+                        }
                         const page =
                             normalizedPages[index];
 
@@ -6480,7 +5886,8 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                             const rawText =
                                 window.Qisi.Utils.cleanRecognizedText(
                                     await recognizePageAsDocumentText(
-                                        page.imageUrl
+                                        page.imageUrl,
+                                        signal
                                     )
                                 );
 
@@ -6598,6 +6005,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                             );
 
                             if (
+                                error?.name === 'AbortError' ||
                                 window.Qisi.Utils.isFatalQwenServiceError(
                                     error
                                 )
@@ -6634,7 +6042,8 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
 
                 const repairMissingSupportFieldsWithQwen = async ({
                     file,
-                    requests = []
+                    requests = [],
+                    signal
                 }) => {
                     const answers = [];
                     const solutions = [];
@@ -6740,49 +6149,22 @@ ${rawBlock}
   "evidence": "用于恢复的原文短摘录"
 }`;
 
-                        const resp =
-                            await qwenProxyTransport.request(
-                                'chat',
-                                {
-                                    method: 'POST',
-                                    headers:
-                                        buildAiRequestHeaders(),
-                                    body:
-                                        JSON.stringify({
-                                            model:
-                                                'qwen-plus',
-                                            messages: [{
-                                                role:
-                                                    'user',
-                                                content:
-                                                    prompt
-                                            }],
-                                            temperature:
-                                                0,
-                                            top_p:
-                                                0.001,
-                                            max_tokens:
-                                                2048
-                                        })
-                                },
-                                90000,
-                                'Qwen 答案文档缺失字段恢复请求'
-                            );
-
-                        await assertQwenResponseOk(
-                            resp,
-                            'Qwen 答案文档缺失字段恢复请求'
-                        );
+                        const taskResult =
+                            await qwenTaskClient.chatJson({
+                                task: 'text-structure',
+                                prompt,
+                                timeoutMs: 90000,
+                                maxTokens: 2048,
+                                label:
+                                    'Qwen 答案文档缺失字段恢复请求',
+                                signal
+                            });
 
                         const assistantText =
-                            extractAssistantText(
-                                await resp.json()
-                            );
+                            taskResult.text;
 
                         const parsed =
-                            parseJsonFromAiText(
-                                assistantText
-                            );
+                            taskResult.value;
 
                         if (
                             !parsed ||
@@ -6989,7 +6371,8 @@ ${rawBlock}
                     requiredKinds = {
                         answers: true,
                         solutions: false
-                    }
+                    },
+                    signal
                 }) => {
                     const pages = Array.isArray(
                         evidence?.pages
@@ -7323,7 +6706,8 @@ ${rawBlock}
                                     await repairMissingSupportFieldsWithQwen({
                                         file,
                                         requests:
-                                            repairPlan
+                                            repairPlan,
+                                        signal
                                     });
 
                                 const applied =
@@ -7589,7 +6973,8 @@ ${rawBlock}
                                 file,
                                 {
                                     strictProtocol:
-                                        strict
+                                        strict,
+                                    signal
                                 }
                             );
 
@@ -7616,7 +7001,8 @@ ${rawBlock}
                         {
                             strictProtocol: strict,
                             allowedQuestionNumbers:
-                                expectedQuestionNumbers
+                                expectedQuestionNumbers,
+                            signal
                         }
                     );
                 };
@@ -7630,7 +7016,8 @@ ${rawBlock}
                     requiredKinds = {
                         answers: true,
                         solutions: false
-                    }
+                    },
+                    signal
                 }) => {
                     logBatchPdfDiag('visual-support-start', {
                         filename: file?.filename || '',
@@ -7647,7 +7034,8 @@ ${rawBlock}
                         await collectVisualSupportPageEvidence({
                             file,
                             pages,
-                            onPageProgress
+                            onPageProgress,
+                            signal
                         });
 
                     if (
@@ -7688,7 +7076,8 @@ ${rawBlock}
                                 evidence,
                                 strict,
                                 expectedQuestionNumbers,
-                                requiredKinds
+                                requiredKinds,
+                                signal
                             });
                     } catch (error) {
                         if (
@@ -7793,343 +7182,10 @@ ${rawBlock}
                     return result;
                 };
 
-                const segmentPdfPageQuestionsWithVision = async (file, imageUrl, pageNo, pageText = '') => {
-                    const pageResult = await recognizeExamPageStructuredWithQwen(file, imageUrl, pageNo);
-                    return attachPdfPageTrace(pageResult.questions || [], file, pageNo, imageUrl, pageText || pageResult.rawText || pageResult.pageMarkdown || '');
-                };
 
-                const processPdfFilePageByPage = async ({
-                    file,
-                    batch,
-                    recognitionMode,
-                    onPageProgress,
-                    expectedQuestionNumbers = []
-                }) => {
-                    const pages = await renderPdfFilePages(file, {
-                        scale: PDF_PROCESS_CONFIG.renderScale,
-                        jpegQuality: PDF_PROCESS_CONFIG.jpegQuality,
-                        sequential: true
-                    });
 
-                    const result = {
-                        questions: [],
-                        answers: [],
-                        solutions: [],
-                        pageImages: [],
-                        failedPages: []
-                    };
 
-                    const hasQuestionRole = batchHasQuestionRole(file);
-                    const hasAnswerOrSolutionRole = batchHasAnswerRole(file) || batchHasSolutionRole(file);
 
-                    if (
-                        recognitionMode === 'standard' &&
-                        !hasQuestionRole &&
-                        hasAnswerOrSolutionRole
-                    ) {
-                        return await recognizeVisualSupportFromPreparedPages({
-                            file,
-                            pages,
-                            onPageProgress,
-                            expectedQuestionNumbers
-                        });
-                    }
-
-                    console.groupCollapsed(`[BATCH_DEBUG][pdf-page-by-page-start] ${file.filename}`);
-                    console.log('pageCount =', pages.length);
-                    console.log('recognitionMode =', recognitionMode);
-                    console.groupEnd();
-
-                    for (let idx = 0; idx < pages.length; idx += 1) {
-                        const page = pages[idx];
-                        const pageNo = page.pageNo;
-
-                        try {
-                            console.log('[BATCH_DEBUG][pdf-page-start]', {
-                                filename: file.filename,
-                                pageNo,
-                                index: idx + 1,
-                                total: pages.length
-                            });
-
-                            if (!page.url) {
-                                throw new Error(`PDF 第 ${pageNo} 页没有渲染出页面图`);
-                            }
-
-                            result.pageImages.push({
-                                sourceFileId: file.id,
-                                sourceFileName: file.filename,
-                                pageNo,
-                                imageUrl: page.url
-                            });
-
-                            let pageQuestions = [];
-                            let pageAnswers = [];
-                            let pageSolutions = [];
-
-                            if (recognitionMode === 'cheap' || recognitionMode === 'standard') {
-                                if (hasQuestionRole) {
-                                    pageQuestions = await segmentPdfPageQuestionsWithVision(
-                                        file,
-                                        page.url,
-                                        pageNo,
-                                        ''
-                                    );
-
-                                    pageQuestions = (pageQuestions || []).map(q => attachSinglePdfPageTrace(q, file, pageNo, page.url, ''));
-                                }
-                            }
-
-                            if (recognitionMode === 'accurate') {
-                                const pageResult = await recognizeExamPageStructuredWithQwen(file, page.url, pageNo);
-                                pageQuestions = attachPdfPageTrace(pageResult.questions || [], file, pageNo, page.url, pageResult.rawText || pageResult.pageMarkdown || '');
-                                pageAnswers = attachPdfPageTrace(pageResult.answers || [], file, pageNo, page.url, pageResult.rawText || pageResult.pageMarkdown || '');
-                                pageSolutions = attachPdfPageTrace(pageResult.solutions || [], file, pageNo, page.url, pageResult.rawText || pageResult.pageMarkdown || '');
-                            }
-
-                            if ((recognitionMode === 'cheap' || recognitionMode === 'standard') && hasQuestionRole && !pageQuestions.length) {
-                                result.failedPages.push({
-                                    pageNo,
-                                    message: 'PDF 页面未识别出题目，已禁止生成占位假题。'
-                                });
-                            }
-
-                            result.questions.push(...pageQuestions);
-                            result.answers.push(...pageAnswers);
-                            result.solutions.push(...pageSolutions);
-
-                            console.log('[BATCH_DEBUG][pdf-page-done]', {
-                                filename: file.filename,
-                                pageNo,
-                                questionCount: pageQuestions.length,
-                                answerCount: pageAnswers.length,
-                                solutionCount: pageSolutions.length
-                            });
-                        } catch (error) {
-                            console.error('[BATCH_DEBUG][pdf-page-failed]', {
-                                filename: file.filename,
-                                pageNo,
-                                message: error?.message || String(error)
-                            }, error);
-
-                            result.failedPages.push({
-                                pageNo,
-                                message: error?.message || String(error)
-                            });
-
-                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) {
-                                throw error;
-                            }
-
-                            if (page?.url) {
-                                const hasPageImage = result.pageImages.some(item =>
-                                    item.sourceFileId === file.id && Number(item.pageNo) === Number(pageNo)
-                                );
-                                if (!hasPageImage) {
-                                    result.pageImages.push({
-                                        sourceFileId: file.id,
-                                        sourceFileName: file.filename,
-                                        pageNo,
-                                        imageUrl: page.url
-                                    });
-                                }
-
-                            }
-                        } finally {
-                            if (onPageProgress) {
-                                await onPageProgress((idx + 1) / Math.max(1, pages.length), {
-                                    pageNo,
-                                    done: idx + 1,
-                                    total: pages.length
-                                });
-                            }
-                        }
-                    }
-
-                    console.groupCollapsed(`[BATCH_DEBUG][pdf-page-by-page-final] ${file.filename}`);
-                    console.table([{
-                        pageCount: pages.length,
-                        questionCount: result.questions.length,
-                        answerCount: result.answers.length,
-                        solutionCount: result.solutions.length,
-                        pageImageCount: result.pageImages.length,
-                        failedPageCount: result.failedPages.length
-                    }]);
-                    console.table(result.failedPages);
-                    console.groupEnd();
-
-                    return result;
-                };
-
-                const recognizePdfStructuredWithQwen = async (file, onProgress = null) => {
-                    const pages = await renderPdfFilePages(file);
-
-                    const result = {
-                        questions: [],
-                        answers: [],
-                        solutions: [],
-                        pageImages: [],
-                        pageImageCount: 0
-                    };
-
-                    if (!pages.length) {
-                        throw new Error(`PDF 页面图为空：${file.filename}。禁止文本层回退。`);
-                    }
-
-                    console.groupCollapsed(`[BATCH_DEBUG][pdf-render] ${file.filename}`);
-                    console.table((pages || []).map(page => ({
-                        pageNo: page.pageNo,
-                        hasUrl: Boolean(page.url),
-                        urlLength: String(page.url || '').length
-                    })));
-                    console.groupEnd();
-
-                    for (let idx = 0; idx < pages.length; idx += 1) {
-                        const page = pages[idx];
-
-                        if (onProgress) {
-                            await onProgress(idx / Math.max(1, pages.length));
-                        }
-
-                        if (page?.url) {
-                            result.pageImages.push({
-                                sourceFileId: file.id,
-                                sourceFileName: file.filename,
-                                pageNo: page.pageNo,
-                                imageUrl: page.url
-                            });
-                            result.pageImageCount += 1;
-                        }
-
-                        try {
-                            const pageResult = await recognizeExamPageStructuredWithQwen(file, page.url, page.pageNo);
-
-                            result.questions.push(
-                                ...attachPdfPageTrace(
-                                    pageResult.questions,
-                                    file,
-                                    page.pageNo,
-                                    page.url,
-                                    pageResult.rawText || pageResult.pageMarkdown || ''
-                                )
-                            );
-
-                            result.answers.push(
-                                ...attachPdfPageTrace(
-                                    pageResult.answers,
-                                    file,
-                                    page.pageNo,
-                                    page.url,
-                                    pageResult.rawText || pageResult.pageMarkdown || ''
-                                )
-                            );
-
-                            result.solutions.push(
-                                ...attachPdfPageTrace(
-                                    pageResult.solutions,
-                                    file,
-                                    page.pageNo,
-                                    page.url,
-                                    pageResult.rawText || pageResult.pageMarkdown || ''
-                                )
-                            );
-                        } catch (error) {
-                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                            console.warn(
-                                `[BATCH_DEBUG][pdf-page-recognition-failed] ${file.filename} 第${page.pageNo}页结构化识别失败，但页图已保留`,
-                                error
-                            );
-                        }
-
-                        if (onProgress) {
-                            await onProgress((idx + 1) / Math.max(1, pages.length));
-                        }
-                    }
-
-                    console.groupCollapsed(`[BATCH_DEBUG][pdf-structured-final] ${file.filename}`);
-                    console.table([{
-                        pageImageCount: result.pageImages.length,
-                        questionCount: result.questions.length,
-                        answerCount: result.answers.length,
-                        solutionCount: result.solutions.length
-                    }]);
-                    console.groupEnd();
-
-                    if (!result.pageImages.length) {
-                        throw new Error(`PDF 页图没有落入 pageImages：${file.filename}。禁止文本层回退。`);
-                    }
-
-                    return result;
-                };
-
-                const recognizePdfPagesWithQwen = async (file, onProgress = null) => {
-                    const pages = await renderPdfFilePages(file);
-                    const items = [];
-                    for (let idx = 0; idx < pages.length; idx += 1) {
-                        const page = pages[idx];
-                        if (onProgress) await onProgress(idx / Math.max(1, pages.length));
-                        const pageItems = await recognizeImageQuestionWithQwen({ ...file, uploadPath: page.url });
-                        pageItems.forEach(item => {
-                            item.sourceFileId = file.id;
-                            item.sourcePage = page.pageNo;
-                            item.sourcePageImage = page.url;
-                            items.push(item);
-                        });
-                        if (onProgress) await onProgress((idx + 1) / Math.max(1, pages.length));
-                    }
-                    return items;
-                };
-
-                const docxPageLikeImages = async (file) => {
-                    if (file.fileType !== 'docx') return [];
-                    const refs = docxEmbeddedImageCache.get(file.id) || [];
-                    const result = [];
-                    const debugRows = [];
-                    for (const [idx, ref] of refs.entries()) {
-                        try {
-                            const image = await loadImageElement(ref.url);
-                            const width = image.naturalWidth || image.width || 0;
-                            const height = image.naturalHeight || image.height || 0;
-                            const area = width * height;
-                            const looksLikePage = area > 650000 && Math.max(width, height) > 900;
-                            if (looksLikePage) result.push({ ...ref, width, height, pageNo: idx + 1 });
-                            debugRows.push({
-                                idx: idx + 1,
-                                filename: ref.filename,
-                                urlLength: String(ref.url || '').length,
-                                width,
-                                height,
-                                area,
-                                looksLikePage,
-                                used: looksLikePage
-                            });
-                        } catch (error) {
-                            const url = String(ref?.url || '');
-                            const canStillBePageImage = /^data:image\//.test(url) && url.length > 180000;
-                            if (canStillBePageImage) {
-                                result.push({ ...ref, width: 0, height: 0, pageNo: idx + 1, pageLikeBySize: true });
-                            }
-                            debugRows.push({
-                                idx: idx + 1,
-                                filename: ref?.filename || '',
-                                urlLength: url.length,
-                                width: 0,
-                                height: 0,
-                                area: 0,
-                                looksLikePage: false,
-                                used: canStillBePageImage,
-                                loadFailed: true
-                            });
-                            console.warn('Word 内嵌图片读取失败', error);
-                        }
-                    }
-                    console.groupCollapsed(`[BATCH_DEBUG][docx-page-like-images] ${file.filename}`);
-                    console.log('embeddedImageCount =', refs.length);
-                    console.log('pageLikeCount =', result.length);
-                    console.table(debugRows);
-                    console.groupEnd();
-                    return result;
-                };
 
                 const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
                     const reader = new FileReader();
@@ -8138,182 +7194,7 @@ ${rawBlock}
                     reader.readAsDataURL(blob);
                 });
 
-                const safeDocxPageImageBaseName = (filename = '') => {
-                    const base = String(filename || 'docx')
-                        .replace(/\.[^.]+$/, '')
-                        .replace(/[\\/:*?"<>|]+/g, '_')
-                        .trim();
-                    return base || 'docx';
-                };
 
-                const loadPreconvertedDocxPageImages = async (file) => {
-                    if (file?.fileType !== 'docx') return [];
-
-                    const base = safeDocxPageImageBaseName(file.filename || '');
-                    const candidates = [
-                        `./tmp/docx-pages/${encodeURIComponent(base)}/manifest.json`,
-                        `./tmp/docx-pages/${base}/manifest.json`,
-                        './tmp/docx-pages/manifest.json',
-                        './manifest.json',
-                        'manifest.json'
-                    ];
-                    const manifestFailures = [];
-                    const manifestDebug = [];
-
-                    console.groupCollapsed('[BATCH_DEBUG][docx-page-image-load]');
-                    console.log('docx filename =', file.filename);
-                    console.log('base name =', base);
-                    console.log('candidate manifest urls =', candidates);
-                    console.groupEnd();
-
-                    for (const manifestUrl of candidates) {
-                        try {
-                            console.log('[BATCH_DEBUG][try-manifest]', manifestUrl);
-                            const resp = await fetch(manifestUrl, { cache: 'no-store' });
-                            if (!resp.ok) {
-                                manifestFailures.push(`${manifestUrl}: HTTP ${resp.status}`);
-                                manifestDebug.push({ manifestUrl, status: resp.status, loaded: false });
-                                console.warn('[BATCH_DEBUG][manifest-fetch-failed]', {
-                                    url: manifestUrl,
-                                    status: resp.status,
-                                    statusText: resp.statusText,
-                                    message: `HTTP ${resp.status}`
-                                });
-                                continue;
-                            }
-
-                            const manifest = await resp.json();
-                            console.log('[BATCH_DEBUG][manifest-loaded]', {
-                                manifestUrl,
-                                manifest
-                            });
-                            const pages = Array.isArray(manifest?.pages) ? manifest.pages : [];
-                            const resolved = [];
-                            const pageErrors = [];
-
-                            for (const [idx, page] of pages.entries()) {
-                                const rawUrl = page.url || page.imageUrl || page.path || page.filename || '';
-                                if (!rawUrl) continue;
-
-                                let imageUrl = rawUrl;
-                                let resolvedPageUrl = rawUrl;
-                                if (!/^data:/i.test(rawUrl)) {
-                                    resolvedPageUrl = new URL(rawUrl, resp.url).href;
-                                    console.log('[BATCH_DEBUG][resolved-page-url]', {
-                                        manifestUrl,
-                                        rawPageUrl: rawUrl,
-                                        resolvedPageUrl
-                                    });
-                                    const imageResp = await fetch(resolvedPageUrl, { cache: 'no-store' });
-                                    if (!imageResp.ok) {
-                                        pageErrors.push(`页面图不可访问：${resolvedPageUrl}，HTTP ${imageResp.status}`);
-                                        console.error('[BATCH_DEBUG][docx-page-image-load-failed]', {
-                                            filename: file?.filename || '',
-                                            manifestUrl,
-                                            pageUrl: resolvedPageUrl,
-                                            status: imageResp.status,
-                                            statusText: imageResp.statusText
-                                        });
-                                        continue;
-                                    }
-                                    const blob = await imageResp.blob();
-                                    if (!blob.size) {
-                                        pageErrors.push(`页面图读取为空：${resolvedPageUrl}`);
-                                        console.error('[BATCH_DEBUG][docx-page-image-load-failed]', {
-                                            filename: file?.filename || '',
-                                            manifestUrl,
-                                            pageUrl: resolvedPageUrl,
-                                            message: '页面图读取为空'
-                                        });
-                                        continue;
-                                    }
-                                    console.log('[BATCH_DEBUG][page-image-access-ok]', {
-                                        resolvedPageUrl,
-                                        contentType: imageResp.headers.get('content-type'),
-                                        size: blob.size
-                                    });
-                                    imageUrl = await blobToDataUrl(blob);
-                                } else {
-                                    console.log('[BATCH_DEBUG][resolved-page-url]', {
-                                        manifestUrl,
-                                        rawPageUrl: rawUrl,
-                                        resolvedPageUrl: 'data-url'
-                                    });
-                                }
-
-                                resolved.push({
-                                    id: page.id || `${file.id || base}_rendered_page_${idx + 1}`,
-                                    filename: page.filename || `page-${idx + 1}.png`,
-                                    pageNo: Number(page.pageNo || page.page || idx + 1) || idx + 1,
-                                    url: imageUrl,
-                                    resolvedUrl: resolvedPageUrl,
-                                    manifestUrl,
-                                    source: 'docx-rendered-page'
-                                });
-                            }
-
-                            if (resolved.length) {
-                                console.groupCollapsed('[BATCH_DEBUG][docx-page-image-manifest-search]');
-                                console.log('docx filename =', file?.filename || '');
-                                console.log('candidate manifest urls =', candidates);
-                                console.log('loaded manifest =', manifest);
-                                console.log('resolved pages =', resolved);
-                                console.groupEnd();
-
-                                console.groupCollapsed(`[BATCH_DEBUG][docx-rendered-pages] ${file.filename}`);
-                                console.log('manifestUrl =', manifestUrl);
-                                console.log('pageCount =', resolved.length);
-                                console.table(resolved.map(page => ({
-                                    pageNo: page.pageNo,
-                                    filename: page.filename,
-                                    urlLength: String(page.url || '').length
-                                })));
-                                console.groupEnd();
-                                return resolved;
-                            }
-
-                            manifestDebug.push({ manifestUrl, status: resp.status, loaded: true, manifest, resolvedPages: resolved });
-                            if (pageErrors.length) {
-                                throw new Error(`已找到 manifest：${manifestUrl}，但页面图不可访问：${pageErrors.join('；')}`);
-                            }
-                            console.warn('[BATCH_DEBUG][docx-rendered-page-manifest-empty]', {
-                                filename: file?.filename || '',
-                                manifestUrl,
-                                pageCount: pages.length,
-                                message: '找到 manifest，但没有任何页面图片成功加载。'
-                            });
-                        } catch (error) {
-                            manifestFailures.push(`${manifestUrl}: ${error?.message || String(error)}`);
-                            manifestDebug.push({ manifestUrl, loaded: false, error: error?.message || String(error) });
-                            console.warn('[BATCH_DEBUG][manifest-fetch-failed]', {
-                                url: manifestUrl,
-                                status: undefined,
-                                statusText: undefined,
-                                message: error?.message || String(error)
-                            });
-                            console.warn('[BATCH_DEBUG][docx-rendered-page-manifest-failed]', {
-                                filename: file?.filename || '',
-                                manifestUrl,
-                                message: error?.message || String(error)
-                            });
-                        }
-                    }
-
-                    console.groupCollapsed('[BATCH_DEBUG][docx-page-image-manifest-search]');
-                    console.log('docx filename =', file?.filename || '');
-                    console.log('candidate manifest urls =', candidates);
-                    console.log('manifest debug =', manifestDebug);
-                    console.groupEnd();
-
-                    console.warn('[BATCH_DEBUG][docx-rendered-visual-not-executed]', {
-                        filename: file?.filename || '',
-                        reason: '未找到可用的 DOCX 页面图 manifest 或页面图片加载失败。',
-                        candidates,
-                        manifestFailures
-                    });
-
-                    throw new Error(`未找到 DOCX 页面图 manifest。已尝试路径：${candidates.join('、')}。失败信息：${manifestFailures.join('；')}`);
-                };
 
                 const optionCountForGolden = (options = []) =>
                     (Array.isArray(options) ? options : [])
@@ -8809,2003 +7690,35 @@ const normalizeRecognizedFigureDescriptor = (raw = {}) => {
                     );
                 };
 
-                const fileBaseNameForMatch = (filename = '') => String(filename || '')
-                    .replace(/\.[^.]+$/, '')
-                    .replace(/[\\/:*?"<>|]+/g, '_')
-                    .trim()
-                    .toLowerCase();
 
-                const isVisualQuestionFile = (file) => {
-                    if (!file) return false;
-                    if (!['pdf', 'image'].includes(file.fileType)) return false;
-                    return batchHasQuestionRole(file) || batchIsFullRole(file);
-                };
 
-                const isGoldenSixFilename = (filename = '') => {
-                    const name = String(filename || '').trim().toLowerCase();
 
-                    return (
-                        /^(1|test|page-1|试卷|题目|卷面|文字文稿1|文字文档1)(?:\(\d+\))?\.(docx|pdf|png|jpg|jpeg|webp)$/i.test(name) ||
-                        /六道题|6道题|测试|批量录题|导出|文字文稿|文字文档/.test(name)
-                    );
-                };
 
-                const isGoldenSixVisualFile = (file) => {
-                    return isGoldenSixFilename(file?.filename || '') && ['pdf', 'image'].includes(file?.fileType);
-                };
 
-                const inferExpectedQuestionCount = (file, allFiles = []) => {
-                    const name = String(file?.filename || '').toLowerCase().trim();
 
-                    if (
-                        /^(1|test|page-1|文字文稿1|文字文档1)(?:\(\d+\))?\.(docx|pdf|png|jpg|jpeg|webp)$/i.test(name) ||
-                        /六道题|6道题|测试|批量录题|导出|文字文稿|文字文档/.test(name) ||
-                        isGoldenSixFilename(file?.filename || '')
-                    ) {
-                        return 6;
-                    }
 
-                    const hasGoldenDocx = (allFiles || []).some(f =>
-                        /^(1|文字文稿1|文字文档1)(?:\(\d+\))?\.docx$/i.test(String(f.filename || '')) ||
-                        (isGoldenSixFilename(f?.filename || '') && /\.docx$/i.test(f?.filename || ''))
-                    );
 
-                    const visualFiles = (allFiles || []).filter(isVisualQuestionFile);
 
-                    if (hasGoldenDocx && visualFiles.length === 1 && visualFiles[0]?.id === file?.id) {
-                        return 6;
-                    }
 
-                    return 0;
-                };
 
-                const recognizeDocxRenderedPageQuestionsWithQwen = async (file, page, expectedQuestionCount = 0, repairInfo = '') => {
-                    const basePrompt = `你是高中数学试题 OCR 与 LaTeX 转写器。
-请从图片中识别所有选择题。
-必须完整保留题干、A/B/C/D 四个选项。
-所有数学表达式必须转换为 LaTeX。
-不要省略任何选项。
-不要把公式写成“如图”“公式图片”“无法识别”“待转换”等占位。
-不要猜答案。
-${expectedQuestionCount ? `如果图片中有 ${expectedQuestionCount} 道题，必须返回 ${expectedQuestionCount} 道题。` : ''}
-只返回 JSON，不要返回 Markdown。
 
-返回格式：
-{
-  "questions": [
-    {
-      "questionNumber": "1",
-      "type": "单选题",
-      "stem": "...",
-      "options": {
-        "A": "...",
-        "B": "...",
-        "C": "...",
-        "D": "..."
-      },
-      "answer": "",
-      "solution": ""
-    }
-  ]
-}
 
-${repairInfo ? `上一次识别结果有问题：\n${repairInfo}\n请根据原始页面图重新识别这些题，只返回修复后的 JSON。` : ''}`;
 
-                    const models = getVisionModelsForMode(activeRecognitionMode);
-                    let lastError = null;
 
-                    for (const model of models) {
-                        try {
-                            const resp = await qwenProxyTransport.request('chat', {
-                                method: "POST",
-                                headers: buildAiRequestHeaders(),
-                                body: JSON.stringify({
-                                    model,
-                                    messages: [{
-                                        role: "user",
-                                        content: [
-                                            { type: "image_url", image_url: { url: page.url, ...OCR_IMAGE_LIMITS, enable_rotate: true } },
-                                            { type: "text", text: basePrompt }
-                                        ]
-                                    }],
-                                    temperature: 0,
-                                    top_p: 0.001,
-                                    max_tokens: 8192
-                                })
-                            }, 90000, 'Qwen DOCX 页面视觉识别请求');
 
-                            await assertQwenResponseOk(resp, 'Qwen DOCX 页面视觉识别请求');
-                            const rawText = extractAssistantText(await resp.json());
-                            console.log(
-                                '[BATCH_DEBUG][docx-rendered-page-qwen-raw]',
-                                {
-                                    filename:
-                                        file.filename,
-                                    pageNo:
-                                        page.pageNo,
-                                    model,
-                                    rawText:
-                                        compactDebugText(
-                                            rawText
-                                        )
-                                }
-                            );
-                            const payload =
-                                parseStrictQuestionPayload(
-                                    rawText
-                                );
 
-                            if (!payload.ok) {
-                                const protocolError =
-                                    createStrictVisionProtocolError({
-                                        payload,
-                                        model,
-                                        file,
-                                        pageNo:
-                                            page.pageNo,
-                                        rawText
-                                    });
 
-                                console.warn(
-                                    '[BATCH_DEBUG][docx-rendered-strict-protocol-rejected]',
-                                    {
-                                        filename:
-                                            file.filename,
-                                        pageNo:
-                                            page.pageNo,
-                                        model,
-                                        reason:
-                                            payload.reason,
-                                        message:
-                                            payload.message,
-                                        rawPreview:
-                                            protocolError
-                                                .rawPreview
-                                    }
-                                );
 
-                                lastError =
-                                    protocolError;
 
-                                continue;
-                            }
 
-                            const parsed =
-                                payload.parsed;
 
-                            const rawQuestions =
-                                payload.questions;
 
-                            console.groupCollapsed('[BATCH_DEBUG][strict-qwen-json-count]');
-                            console.log('filename =', file.filename);
-                            console.log('pageNo =', page.pageNo);
-                            console.log('model =', model);
-                            console.log('rawText length =', String(rawText || '').length);
-                            console.log('parsed =', parsed);
-                            console.log('rawQuestions isArray =', Array.isArray(rawQuestions));
-                            console.log('rawQuestions length =', Array.isArray(rawQuestions) ? rawQuestions.length : 'not array');
-                            console.table((Array.isArray(rawQuestions) ? rawQuestions : []).map((q, idx) => ({
-                                idx,
-                                keys: Object.keys(q || {}).join(','),
-                                questionNumber: q?.questionNumber || q?.question || q?.题号 || q?.no || '',
-                                stemHead: String(q?.stem || q?.题干 || q?.questionText || q?.text || '').slice(0, 120),
-                                optionKeys: q?.options ? Object.keys(q.options).join(',') : '',
-                                A: q?.options?.A || q?.options?.[0] || q?.A || q?.选项A || ''
-                            })));
-                            console.groupEnd();
 
-                            const items = postprocessRecognizedItems(
-                                rawQuestions,
-                                {
-                                    id: file.id,
-                                    filename: file.filename,
-                                    fileType: 'docx',
-                                    sourcePage: page.pageNo,
-                                    pageIndex: page.pageNo,
-                                    sourcePageImage: page.url,
-                                    pageText: rawText,
-                                    sourceText: rawText
-                                },
-                                batchDefaultMeta.defaultType || '单选题',
-                                {
-                                    allowTextResplit: false,
-                                    allowSyntheticQuestionNumber: false
-                                }
-                            ).map(item => ({
-                                ...item,
-                                sourceFileId: file.id,
-                                sourceFileName: file.filename || '',
-                                sourcePage: page.pageNo,
-                                sourcePageImage: page.url,
-                                sourceTrace: {
-                                    ...(item.sourceTrace || {}),
-                                    source: 'docx-rendered-page-qwen',
-                                    sourceFileId: file.id,
-                                    sourceFileName: file.filename || '',
-                                    sourcePage: page.pageNo,
-                                    pageIndex: page.pageNo,
-                                    sourcePageImage: page.url
-                                },
-                                warnings: [
-                                    ...(item.warnings || []),
-                                    '本题由 DOCX 页面图视觉识别生成，请核对 LaTeX 公式。'
-                                ]
-                            }));
 
-                            console.groupCollapsed('[BATCH_DEBUG][docx-rendered-page-qwen-parsed]');
-                            console.table(items.map((q, idx) => ({
-                                idx,
-                                questionNumber: q.questionNumber || q.question,
-                                type: q.type,
-                                stemLength: String(q.stem || '').length,
-                                optionCount: Array.isArray(q.options) ? q.options.filter(Boolean).length : 0,
-                                A: q.options?.[0] || '',
-                                B: q.options?.[1] || '',
-                                C: q.options?.[2] || '',
-                                D: q.options?.[3] || ''
-                            })));
-                            console.groupEnd();
 
-                            return items;
-                        } catch (error) {
-                            lastError = error;
-                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                            console.warn('[BATCH_DEBUG][docx-rendered-page-qwen-failed]', {
-                                filename: file.filename,
-                                pageNo: page.pageNo,
-                                model,
-                                message: error?.message || String(error)
-                            }, error);
-                        }
-                    }
 
-                    throw lastError || new Error('DOCX 页面图视觉识别失败');
-                };
 
-                const recognizeDocxRenderedPagesWithQwen = async (file, onProgress = null, options = {}) => {
-                    const pages = Array.isArray(options.pages) && options.pages.length
-                        ? options.pages
-                        : await loadPreconvertedDocxPageImages(file);
-                    if (!pages.length) {
-                        console.warn('[BATCH_DEBUG][docx-rendered-visual-not-executed]', {
-                            filename: file?.filename || '',
-                            reason: '没有可用于 Qwen 视觉识别的 DOCX 页面图。'
-                        });
-                        return [];
-                    }
 
-                    const expectedQuestionCount = Number(options.expectedQuestionCount || 0) || 0;
-                    let items = [];
-                    let repairInfo = '';
-
-                    console.groupCollapsed('[BATCH_DEBUG][docx-rendered-page-qwen-start]');
-                    console.log('filename =', file.filename);
-                    console.log('page count =', pages.length);
-                    console.log('page urls =', pages.map(p => p.resolvedUrl || p.url || ''));
-                    console.log('expectedQuestionCount =', expectedQuestionCount);
-                    console.groupEnd();
-
-                    for (let attempt = 0; attempt < 3; attempt += 1) {
-                        items = [];
-                        for (let idx = 0; idx < pages.length; idx += 1) {
-                            const page = pages[idx];
-                            if (onProgress) await onProgress((attempt + idx / Math.max(1, pages.length)) / 3);
-                            const pageItems = await recognizeDocxRenderedPageQuestionsWithQwen(
-                                file,
-                                page,
-                                expectedQuestionCount,
-                                repairInfo
-                            );
-                            items.push(...pageItems);
-                        }
-
-                        const check = validateDocxVisualItems(items, expectedQuestionCount);
-                        console.groupCollapsed(`[BATCH_DEBUG][docx-rendered-visual-check] ${file.filename} attempt ${attempt + 1}`);
-                        console.table(check.rows);
-                        if (!check.ok) console.table(check.failedQuestions);
-                        console.groupEnd();
-
-                        if (check.ok) {
-                            if (onProgress) await onProgress(1);
-                            return items;
-                        }
-
-                        repairInfo = check.failedQuestions
-                            .map(row => `第 ${row.questionNumber} 题：${row.failures.join('；')}`)
-                            .join('\n');
-                    }
-
-                    return items;
-                };
-
-                const recognizeStrictQuestionPageWithQwen = async ({
-                    file,
-                    imageUrl,
-                    pageNo = 1,
-                    expectedQuestionCount = 0,
-                    repairInfo = ''
-                }) => {
-                    const expected = Math.max(0, Number(expectedQuestionCount || 0)) || 0;
-                    const prompt = `你是高中数学试卷整页 OCR、题目结构识别与 LaTeX 转写器。
-
-请完整识别当前页面中实际出现的所有题目或题目片段。
-试卷可能同时包含：
-
-- 单选题
-- 多选题
-- 填空题
-- 解答题
-- 证明题
-
-必须根据页面中的章节标题判断题型，例如：
-
-“一、单选题”
-“二、多项选择题”
-“三、填空题”
-“四、解答题”
-
-【跨页规则】
-
-1. 页面顶部可能是上一页题目的选项或题干续文。
-2. 页面底部的题目可能在下一页继续。
-3. 不要因为题目跨页而虚构缺失内容。
-4. 能判断题号时必须返回原题号。
-5. 同一题跨页时，可以返回相同题号的片段，系统会在后处理中合并。
-6. 图片下方的“甲”“乙”等标记不是题号。
-
-【题型规则】
-
-1. 单选题和多选题：
-   - type 必须分别返回“单选题”或“多选题”；
-   - options 必须包含 A、B、C、D；
-   - 看不清的选项返回空字符串，不得编造。
-
-2. 填空题：
-   - type 返回“填空题”；
-   - options 返回空数组或 A/B/C/D 全为空；
-   - 不得因为没有选项而改成选择题。
-
-3. 解答题或证明题：
-   - type 返回“解答题”或“证明题”；
-   - options 为空；
-   - 不得编造选项。
-
-4. 数学公式必须转写成可渲染的 LaTeX。
-
-5. 不要识别答案或解析：
-   - answer 留空；
-   - solution 留空。
-
-【题图识别规则】
-
-1. question_bbox 表示整道题区域，包括题干和选项。
-2. image_bbox 只表示题中真正需要保留的照片、几何图、函数图像、统计图、示意图或阴影图形。
-3. 严禁把整道题区域作为 image_bbox。
-4. 严禁把题干文字、A/B/C/D 选项或普通数学公式作为图片。
-5. 没有插图的题，images 必须返回空数组 []。
-6. 出现“如图”“见图”“图甲”“图乙”“图中”“示意图”等文字时，应认真检查是否存在题图。
-7. question_bbox 和 image_bbox 均使用相对于整页的 0-1000 归一化坐标。
-8. 不确定是否为题图时，宁可返回空数组，也不要裁剪整道题。
-
-${expected ? `【人工预期】本文件人工填写的预计题数为 ${expected}，仅作参考；不要为了凑数量虚构页面中不存在的题。` : ''}
-
-【输出格式】
-{
-  "questions": [
-    {
-      "questionNumber": "原题号",
-      "type": "单选题/多选题/填空题/解答题/证明题",
-      "stem": "完整题干，数学公式使用 LaTeX",
-      "options": {
-        "A": "",
-        "B": "",
-        "C": "",
-        "D": ""
-      },
-      "answer": "",
-      "solution": "",
-      "isFragment": false,
-      "question_bbox": [0, 0, 0, 0],
-      "images": [
-        {
-          "image_bbox": [0, 0, 0, 0],
-          "image_description": "题中真正的图形说明",
-          "image_confidence": 0.92
-        }
-      ]
-    }
-  ]
-}
-
-【严禁】
-- 严禁把填空题判定为“选项缺失的选择题”。
-- 严禁为了补齐题号而虚构页面中不存在的题。
-- 严禁把最大题号当成题目总数。
-- 严禁输出 Markdown。
-- 严禁输出 JSON 以外的说明文字。
-- 严禁出现 undefined、null、[object Object]。
-- 严禁出现“公式图片”“待转换”“无法识别”。
-
-${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
-
-                    const configuredModels = getVisionModelsForMode('accurate');
-                    const models = [...new Set(
-                        (configuredModels || []).filter(model => /vl/i.test(String(model || '')))
-                    )];
-
-                    if (!models.length) {
-                        throw new Error('没有配置可用的视觉模型');
-                    }
-
-                    let lastError = null;
-                    let bestItems = [];
-                    let protocolRejectedCount = 0;
-
-                    for (const model of models) {
-                        try {
-                            console.log('[BATCH_DEBUG][strict-model-start]', {
-                                filename: file.filename,
-                                pageNo,
-                                model,
-                                expected
-                            });
-
-                            const resp = await qwenProxyTransport.request('chat', {
-                                method: 'POST',
-                                headers: buildAiRequestHeaders(),
-                                body: JSON.stringify({
-                                    model,
-                                    messages: [{
-                                        role: 'user',
-                                        content: [
-                                            {
-                                                type: 'image_url',
-                                                image_url: {
-                                                    url: imageUrl,
-                                                    ...OCR_IMAGE_LIMITS,
-                                                    enable_rotate: true
-                                                }
-                                            },
-                                            { type: 'text', text: prompt }
-                                        ]
-                                    }],
-                                    temperature: 0,
-                                    top_p: 0.001,
-                                    max_tokens: 8192
-                                })
-                            }, 120000, `Qwen 严格整页题目识别请求：${model}`);
-
-                            await assertQwenResponseOk(resp, `Qwen 严格整页题目识别请求：${model}`);
-
-                            const data = await resp.json();
-                            const rawText = extractAssistantText(data);
-
-                            console.log(
-                                '[BATCH_DEBUG][strict-page-qwen-raw]',
-                                {
-                                    filename:
-                                        file.filename,
-                                    pageNo,
-                                    model,
-                                    rawText:
-                                        compactDebugText(
-                                            rawText
-                                        )
-                                }
-                            );
-
-                            const payload = parseStrictQuestionPayload(rawText);
-
-                            if (!payload.ok) {
-                                logBatchPdfDiag('strict-page-parse', {
-                                    filename: file.filename,
-                                    fileType: file.fileType || '',
-                                    roles: getBatchFileRoles(file),
-                                    pageNo,
-                                    model,
-                                    ok: false,
-                                    reason: payload.reason || '',
-                                    message: payload.message || '',
-                                    questionCount: 0
-                                }, 'warn');
-
-                                protocolRejectedCount += 1;
-                                const protocolError =
-                                    createStrictVisionProtocolError({
-                                        payload,
-                                        model,
-                                        file,
-                                        pageNo,
-                                        rawText
-                                    });
-
-                                console.warn(
-                                    '[BATCH_DEBUG][strict-protocol-rejected]',
-                                    {
-                                        filename:
-                                            file.filename,
-                                        pageNo,
-                                        model,
-                                        reason:
-                                            payload.reason,
-                                        message:
-                                            payload.message,
-                                        rawPreview:
-                                            protocolError
-                                                .rawPreview
-                                    }
-                                );
-
-                                lastError =
-                                    protocolError;
-
-                                continue;
-                            }
-
-                            const rawQuestions = payload.questions;
-
-                            logBatchPdfDiag('strict-page-parse', {
-                                filename: file.filename,
-                                fileType: file.fileType || '',
-                                roles: getBatchFileRoles(file),
-                                pageNo,
-                                model,
-                                ok: true,
-                                parseMethod: payload.method || '',
-                                questionCount: rawQuestions.length
-                            });
-
-                            console.groupCollapsed('[BATCH_DEBUG][strict-qwen-parse-result]');
-                            console.log({
-                                filename: file.filename,
-                                pageNo,
-                                model,
-                                parseMethod: payload.method,
-                                rawQuestionCount: rawQuestions.length
-                            });
-                            console.table(rawQuestions.map((q, idx) => ({
-                                idx,
-                                questionNumber:
-                                    q?.questionNumber ??
-                                    q?.question ??
-                                    q?.题号 ??
-                                    q?.no ??
-                                    '',
-                                stemHead: String(
-                                    q?.stem ??
-                                    q?.questionText ??
-                                    q?.题干 ??
-                                    q?.text ??
-                                    ''
-                                ).slice(0, 100),
-                                hasOptions: Boolean(q?.options || q?.choices || q?.选项)
-                            })));
-                            console.groupEnd();
-
-                            const processed = postprocessRecognizedItems(
-                                rawQuestions,
-                                {
-                                    id: file.id,
-                                    filename: file.filename,
-                                    fileType: file.fileType || 'image',
-                                    sourcePage: pageNo,
-                                    pageIndex: pageNo,
-                                    sourcePageImage: imageUrl,
-                                    pageText: rawText,
-                                    sourceText: rawText
-                                },
-                                batchDefaultMeta.defaultType || '单选题',
-                                {
-                                    allowTextResplit: false,
-                                    allowSyntheticQuestionNumber: false
-                                }
-                            );
-
-                            const items = processed.map((q, itemIndex) => {
-                                const producerSourceId = file.convertedFromDocx
-                                    ? file.sourceDocxFileId
-                                    : file.id;
-                                const strictProtocol = {
-                                    accepted: true,
-                                    decisionId: `${file.convertedFromDocx
-                                        ? 'strict-docx'
-                                        : 'strict-pdf'}:${producerSourceId}:${pageNo}:${model}`,
-                                    fields: [
-                                        'questionNumber',
-                                        'stem',
-                                        'options'
-                                    ],
-                                    method: payload.method || 'strict-json-contract',
-                                    sourceId: producerSourceId,
-                                    engine: model
-                                };
-                                const candidate = {
-                                    ...q,
-                                    type: q.type || '单选题',
-                                    sourceFileId: file.id,
-                                    sourceFileName: file.filename || '',
-                                    sourcePage: pageNo,
-                                    sourcePageImage: imageUrl,
-                                    sourceTrace: {
-                                        ...(q.sourceTrace || {}),
-                                        source: 'strict-visual-page-qwen',
-                                        model,
-                                        strictProtocol,
-                                        sourceFileId: file.id,
-                                        sourceFileName: file.filename || '',
-                                        sourcePage: pageNo,
-                                        pageIndex: pageNo,
-                                        sourcePageImage: imageUrl
-                                    },
-                                    warnings: [
-                                        ...(q.warnings || []),
-                                        '本题由整页视觉识别生成，请核对题型、题干和 LaTeX 公式。'
-                                    ]
-                                };
-                                if (!file.convertedFromDocx) return candidate;
-                                return window.Qisi.DocxProducerIdentityContract
-                                    .projectDocxVisionCandidate({
-                                        candidate,
-                                        source: {
-                                            sourceId: file.sourceDocxFileId,
-                                            format: 'docx',
-                                            filename: file.sourceDocxFileName || '',
-                                            mimeType: file.sourceDocxMimeType ||
-                                                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                                            sourceOrder: Number.isInteger(file.sourceOrder)
-                                                ? file.sourceOrder : 0
-                                        },
-                                        engine: model,
-                                        page: pageNo,
-                                        blockIds: q.sourceTrace?.blockIds || [
-                                            `page:${pageNo}:candidate:${itemIndex + 1}`
-                                        ],
-                                        controlledWriteDecision: strictProtocol
-                                    });
-                            });
-
-                            console.groupCollapsed('[BATCH_DEBUG][strict-postprocess-result]');
-                            console.log({
-                                filename: file.filename,
-                                pageNo,
-                                model,
-                                rawCount: rawQuestions.length,
-                                processedCount: items.length
-                            });
-                            console.table(items.map((q, idx) => ({
-                                idx,
-                                questionNumber: q.questionNumber || q.question,
-                                type: q.type,
-                                stemLength: String(q.stem || '').length,
-                                optionCount: Array.isArray(q.options) ? q.options.filter(Boolean).length : 0,
-                                A: q.options?.[0] || '',
-                                B: q.options?.[1] || '',
-                                C: q.options?.[2] || '',
-                                D: q.options?.[3] || ''
-                            })));
-                            console.groupEnd();
-
-                            if (items.length > bestItems.length) {
-                                bestItems = items;
-                            }
-
-                            if (!items.length) {
-                                logBatchPdfDiag('strict-page-recognition', {
-                                    filename: file.filename,
-                                    fileType: file.fileType || '',
-                                    roles: getBatchFileRoles(file),
-                                    pageNo,
-                                    model,
-                                    ok: false,
-                                    rawQuestionCount: rawQuestions.length,
-                                    processedQuestionCount: 0,
-                                    message: `${model} 请求成功，但没有解析出任何题目`
-                                }, 'warn');
-
-                                lastError = new Error(`${model} 请求成功，但没有解析出任何题目`);
-                                continue;
-                            }
-
-                            Object.defineProperty(
-                                items,
-                                '__strictPageDiagnostics',
-                                {
-                                    configurable: true,
-                                    enumerable: false,
-                                    value: {
-                                        protocolRejectedCount
-                                    }
-                                }
-                            );
-
-                            logBatchPdfDiag('strict-page-recognition', {
-                                filename: file.filename,
-                                fileType: file.fileType || '',
-                                roles: getBatchFileRoles(file),
-                                pageNo,
-                                model,
-                                ok: true,
-                                rawQuestionCount: rawQuestions.length,
-                                processedQuestionCount: items.length,
-                                questionNumbers: items.map(item =>
-                                    item.questionNumber ||
-                                    item.question ||
-                                    item.no ||
-                                    ''
-                                )
-                            });
-
-                            return items;
-                        } catch (error) {
-                            lastError = error;
-
-                            logBatchPdfDiag('strict-page-recognition', {
-                                filename: file.filename,
-                                fileType: file.fileType || '',
-                                roles: getBatchFileRoles(file),
-                                pageNo,
-                                model,
-                                ok: false,
-                                message: error?.message || String(error)
-                            }, 'warn');
-
-                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-
-                            console.warn('[BATCH_DEBUG][strict-model-failed]', {
-                                filename: file.filename,
-                                pageNo,
-                                model,
-                                message: error?.message || String(error)
-                            }, error);
-                        }
-                    }
-
-                    if (bestItems.length) {
-                        Object.defineProperty(
-                            bestItems,
-                            '__strictPageDiagnostics',
-                            {
-                                configurable: true,
-                                enumerable: false,
-                                value: {
-                                    protocolRejectedCount
-                                }
-                            }
-                        );
-
-                        logBatchPdfDiag('strict-page-recognition', {
-                            filename: file.filename,
-                            fileType: file.fileType || '',
-                            roles: getBatchFileRoles(file),
-                            pageNo,
-                            ok: true,
-                            usedBestItemsFallback: true,
-                            processedQuestionCount: bestItems.length,
-                            questionNumbers: bestItems.map(item =>
-                                item.questionNumber ||
-                                item.question ||
-                                item.no ||
-                                ''
-                            )
-                        }, 'warn');
-
-                        return bestItems;
-                    }
-
-                    logBatchPdfDiag('strict-page-recognition', {
-                        filename: file.filename,
-                        fileType: file.fileType || '',
-                        roles: getBatchFileRoles(file),
-                        pageNo,
-                        ok: false,
-                        protocolRejectedCount,
-                        message: lastError?.message || '所有视觉模型均未识别出题目'
-                    }, 'error');
-
-                    throw lastError || new Error('所有视觉模型均未识别出题目');
-                };
-
-                const recognizeDocxPageImagesWithQwen = async (file, onProgress = null) => {
-                    const pages = await docxPageLikeImages(file);
-                    const items = [];
-                    for (let idx = 0; idx < pages.length; idx += 1) {
-                        const page = pages[idx];
-                        if (onProgress) await onProgress(idx / Math.max(1, pages.length));
-                        const pageItems = await recognizeImageQuestionWithQwen({ ...file, fileType: 'image', uploadPath: page.url });
-                        pageItems.forEach(item => {
-                            item.sourceFileId = file.id;
-                            item.sourcePage = page.pageNo;
-                            item.sourcePageImage = page.url;
-                            items.push(item);
-                        });
-                        if (onProgress) await onProgress((idx + 1) / Math.max(1, pages.length));
-                    }
-                    return items;
-                };
-
-                const recognizeAnswerSolutionImageWithQwen = async (file, imageUrl) => {
-                    try {
-                        const ocrText = await recognizePageAsDocumentText(imageUrl);
-                        let parsed = parseAnswerAndSolutionItemsFromText(ocrText, file);
-                        try {
-                            parsed = mergeAnswerSolutionResults(parsed, await recognizeAnswerSolutionWithQwen(ocrText, file));
-                        } catch (error) {
-                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                            console.warn('OCR 文档解析后的答案详解结构化失败，保留本地解析', error);
-                        }
-                        parsed.answers.forEach(item => {
-                            item.rawText = item.rawText || ocrText;
-                            item.sourcePageImage = imageUrl;
-                        });
-                        parsed.solutions.forEach(item => {
-                            item.rawText = item.rawText || ocrText;
-                            item.sourcePageImage = imageUrl;
-                            item.imageRefs = Array.isArray(item.imageRefs) ? item.imageRefs : extractGraphicRefs(item.solution);
-                        });
-                        if (parsed.answers.length || parsed.solutions.length) return parsed;
-                    } catch (error) {
-                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                        console.warn('OCR 文档解析识别答案详解失败，回退视觉 JSON 识别', error);
-                    }
-
-                    const prompt = `你是高中数学答案解析提取助手。请从图片材料中提取每道题的答案和解析，并输出严格 JSON。
-
-【输出格式】
-{
-  "answers": [
-    { "question": "1", "answer": "A" }
-  ],
-  "solutions": [
-    { "question": "1", "solution": "解析内容，保留 LaTeX 公式", "images": [{"image_bbox":[x1,y1,x2,y2],"image_description":"解析图","image_confidence":0.86}] }
-  ]
-}
-
-【要求】
-1. 支持“答案集中列出、解析集中列出”的格式。
-2. 支持“1.【答案】A【解析】……”的格式。
-3. 支持“第1题 答案：A 解析：……”的格式。
-4. 解析内容必须完整保留，直到下一题号前。
-5. 数学公式必须使用 LaTeX。
-6. 没有解析则 solution 为空字符串，不要编造。
-7. 输出必须是纯 JSON。
-8. 忽略标题、页眉页脚、分值说明；解析配图 bbox 只框图形区域，不要框文字。`;
-                    const models = getVisionModelsForMode(activeRecognitionMode);
-                    let lastError = null;
-                    for (const model of models) {
-                        try {
-                            const resp = await qwenProxyTransport.request('chat', {
-                                method: "POST",
-                                headers: buildAiRequestHeaders(),
-                                body: JSON.stringify({
-                                    model,
-                                    messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: imageUrl, ...OCR_IMAGE_LIMITS } }, { type: "text", text: prompt }] }],
-                                    max_tokens: 8192
-                                })
-                            }, 90000, 'Qwen 视觉/文本识别请求');
-                            await assertQwenResponseOk(resp, 'Qwen 答案解析图片识别请求');
-                            const data = await resp.json();
-                            const parsed = parseJsonFromAiText(extractAssistantText(data));
-                            const rawAnswers = extractAnswerArray(parsed);
-                            const rawSolutions = extractSolutionArray(parsed);
-                            const answers = Array.isArray(rawAnswers) ? rawAnswers.map(item => ({
-                                question: window.Qisi.Utils.cleanRecognizedText(item.question ?? item.题号 ?? item.no ?? item.index),
-                                answer: normalizeAnswerForLatex(item.answer ?? item.答案 ?? item.correctAnswer ?? item.correct_answer),
-                                confidence: Number(item.confidence || 0.82),
-                                warnings: [],
-                                sourceFileId: file.id,
-                                sourceFileName: file.filename
-                            })).filter(item => item.question && item.answer) : [];
-                            const solutions = Array.isArray(rawSolutions) ? rawSolutions.map(item => ({
-                                question: window.Qisi.Utils.cleanRecognizedText(item.question ?? item.题号 ?? item.no ?? item.index),
-                                solution:
-                                    normalizeRecognizedSupportLatex(
-                                        item.solution ??
-                                        item.analysis ??
-                                        item.解析 ??
-                                        item.详解 ??
-                                        item.explanation ??
-                                        '',
-                                        'solution'
-                                    ),
-                                images: Array.isArray(item.images) ? item.images : [],
-                                sourcePageImage: imageUrl,
-                                confidence: Number(item.confidence || 0.82),
-                                warnings: [],
-                                sourceFileId: file.id,
-                                sourceFileName: file.filename
-                            })).filter(item => item.question && item.solution) : [];
-                            if (answers.length || solutions.length || model === models.at(-1)) return { answers, solutions };
-                        } catch (error) {
-                            lastError = error;
-                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                            console.warn(`${model} 答案解析图片识别不可用，尝试备用模型`, error);
-                        }
-                    }
-                    throw lastError || new Error('答案解析图片识别失败');
-                };
-
-                const recognizePdfAnswerPagesWithQwen = async (file, onProgress = null) => {
-                    const pages = await renderPdfFilePages(file);
-                    let result = { answers: [], solutions: [] };
-                    for (let idx = 0; idx < pages.length; idx += 1) {
-                        if (onProgress) await onProgress(idx / Math.max(1, pages.length));
-                        const pageResult = await recognizeAnswerSolutionImageWithQwen(file, pages[idx].url);
-                        pageResult.answers.forEach(item => { item.sourcePage = pages[idx].pageNo; });
-                        pageResult.solutions.forEach(item => { item.sourcePage = pages[idx].pageNo; item.sourcePageImage = pages[idx].url; });
-                        result = mergeAnswerSolutionResults(result, pageResult);
-                        if (onProgress) await onProgress((idx + 1) / Math.max(1, pages.length));
-                    }
-                    return result;
-                };
-
-                const recognizeDocxAnswerImagesWithQwen = async (file, onProgress = null) => {
-                    const pages = await docxPageLikeImages(file);
-                    let result = { answers: [], solutions: [] };
-                    for (let idx = 0; idx < pages.length; idx += 1) {
-                        if (onProgress) await onProgress(idx / Math.max(1, pages.length));
-                        const pageResult = await recognizeAnswerSolutionImageWithQwen(file, pages[idx].url);
-                        pageResult.answers.forEach(item => { item.sourcePage = pages[idx].pageNo; });
-                        pageResult.solutions.forEach(item => { item.sourcePage = pages[idx].pageNo; item.sourcePageImage = pages[idx].url; });
-                        result = mergeAnswerSolutionResults(result, pageResult);
-                        if (onProgress) await onProgress((idx + 1) / Math.max(1, pages.length));
-                    }
-                    return result;
-                };
-
-                const recognizedItemsScore = (items) => (items || []).reduce((score, item) => {
-                    const optionScore = (item.options || []).filter(opt => window.Qisi.Utils.cleanRecognizedText(opt)).length * 2;
-                    const formulaScore = /\\frac|\\sqrt|\\sum|\\int|\$/.test(`${item.stem || ''}\n${(item.options || []).join('\n')}`) ? 3 : 0;
-                    const imageScore = (item.images || []).length ? 2 : 0;
-                    return score + 3 + optionScore + formulaScore + imageScore;
-                }, 0);
-
-                const recognizedItemProblems = (item) => {
-                    const problems = [];
-                    const type = normalizeQuestionType(item.type, item.stem, item.options, item.answer, item.type);
-                    const optionIssue = choiceOptionIssue(type, item.options, item.answer);
-                    if (optionIssue) problems.push(optionIssue);
-                    const text = `${item.stem || ''}\n${(item.options || []).join('\n')}`;
-                    if (textHasSuspiciousMath(text) || textHasBrokenMathSlot(text)) problems.push('公式疑似残缺');
-                    return problems;
-                };
-
-                const pageRecognitionNeedsVisualMerge = (items) => {
-                    const rows = items || [];
-                    if (!rows.length) return true;
-                    const choiceRows = rows.filter(item => ['单选题', '多选题'].includes(normalizeQuestionType(item.type, item.stem, item.options, item.answer, item.type)));
-                    if (choiceRows.length && choiceRows.filter(item => choiceOptionCount(item) < 4).length / choiceRows.length >= 0.35) return true;
-                    if (rows.filter(item => recognizedItemProblems(item).length).length / rows.length >= 0.3) return true;
-                    if (rows.filter(item => Array.isArray(item.question_bbox) && item.question_bbox.length === 4).length < Math.min(2, rows.length)) return true;
-                    return false;
-                };
-
-                const mergePageRecognitionItems = (primaryItems, secondaryItems) => {
-                    const byQuestion = new Map();
-                    const scoreItem = (item) => recognizedItemsScore([item]) - recognizedItemProblems(item).length * 6;
-                    [...(primaryItems || []), ...(secondaryItems || [])].forEach((item, idx) => {
-                        if (!item) return;
-                        const key = normalizeQuestionKey(item.question) || `#${idx + 1}`;
-                        const existing = byQuestion.get(key);
-                        if (!existing || scoreItem(item) > scoreItem(existing)) {
-                            byQuestion.set(key, { ...item });
-                        } else {
-                            if ((!Array.isArray(existing.question_bbox) || existing.question_bbox.length !== 4) && Array.isArray(item.question_bbox) && item.question_bbox.length === 4) {
-                                existing.question_bbox = item.question_bbox;
-                            }
-                            if (choiceOptionCount(existing) < 4 && choiceOptionCount(item) >= 4) {
-                                existing.options = item.options;
-                            }
-                            if ((textHasSuspiciousMath(existing.stem) || textHasBrokenMathSlot(existing.stem)) && !(textHasSuspiciousMath(item.stem) || textHasBrokenMathSlot(item.stem)) && window.Qisi.Utils.cleanRecognizedText(item.stem).length >= window.Qisi.Utils.cleanRecognizedText(existing.stem).length * 0.75) {
-                                existing.stem = item.stem;
-                            }
-                        }
-                    });
-                    return [...byQuestion.values()].sort((a, b) => Number(normalizeQuestionKey(a.question) || 9999) - Number(normalizeQuestionKey(b.question) || 9999));
-                };
-
-                const preferVisualRecognition = (visualItems, textItems, rawText) => {
-                    if (!visualItems?.length) return false;
-                    if (!textItems?.length) return true;
-                    const textLooksBroken = /<w:|w:val|autoSpace|adjustRightInd|411543|false|true/.test(String(rawText || ''));
-                    if (textLooksBroken) return true;
-                    if (visualItems.length > textItems.length) return true;
-                    return recognizedItemsScore(visualItems) > recognizedItemsScore(textItems) + 2;
-                };
-
-                const choiceOptionCount = (q) => (q?.options || []).filter(opt => window.Qisi.Utils.cleanRecognizedText(opt)).length;
-
-                const textHasSuspiciousMath = (text) => {
-                    const source = String(text || '');
-                    if (/\b(?:vec|triangle|angle|frac|sqrt|overline|cdot|parallel|perp)\b/.test(source) && !/\\(?:vec|triangle|angle|frac|sqrt|overline|cdot|parallel|perp)/.test(source)) return true;
-                    if (/\$[^$]*$|^[^$]*\$/.test(source)) return true;
-                    if (/\d{10,}/.test(source)) return true;
-                    return false;
-                };
-
-                const textHasBrokenMathSlot = (text) => {
-                    const source = window.Qisi.Utils.cleanRecognizedText(text);
-                    if (!source) return false;
-
-                    return (
-                        /[，,、；;]\s*[，,、；;]/.test(source) ||
-                        /(?:若|已知|设|且|则|为|有)\s*[，,、；;]/.test(source) ||
-                        /[，,、；;]\s*(?:且|则|所以|三点共线|实数|向量|函数|方程)/.test(source) ||
-                        /(?:向量|函数|方程|实数|角|边长|面积|半径)[^。\n]{0,12}[，,、；;][^。\n]{0,12}(?:则|为|等于|的值)/.test(source)
-                    );
-                };
-
-                const draftNeedsQuestionRepair = (q) => {
-                    if (!q?.sourcePageImage) return false;
-                    const fullText = `${q.stem || ''}\n${(q.options || []).join('\n')}`;
-                    if (['单选题', '多选题'].includes(q.type) && choiceOptionCount(q) < 4) return true;
-                    // 缺答案不属于题目识别错误，交给答案/解析文件匹配流程处理。
-                    if (textHasSuspiciousMath(fullText) || textHasBrokenMathSlot(fullText)) return true;
-                    if (recognizedItemProblems(q).length) return true;
-                    return false;
-                };
-
-                const cropQuestionAreaForRepair = async (draft) => {
-                    if (!draft?.sourcePageImage) return '';
-                    const bbox = Array.isArray(draft.sourceBbox) ? draft.sourceBbox : [];
-                    if (bbox.length !== 4) {
-                        draft.warnings = [
-                            ...new Set([
-                                ...(draft.warnings || []),
-                                '本题缺少题目区域坐标，无法进行单题裁剪重识别。'
-                            ])
-                        ];
-                        return '';
-                    }
-                    const image = await loadImageElement(draft.sourcePageImage);
-                    const imageWidth = image.naturalWidth || image.width;
-                    const imageHeight = image.naturalHeight || image.height;
-                    let [x1, y1, x2, y2] = bbox.map(Number);
-                    const maxCoord = Math.max(x1, y1, x2, y2);
-                    if (maxCoord <= 1000 && (imageWidth > 1200 || imageHeight > 1200)) {
-                        x1 = x1 / 1000 * imageWidth;
-                        x2 = x2 / 1000 * imageWidth;
-                        y1 = y1 / 1000 * imageHeight;
-                        y2 = y2 / 1000 * imageHeight;
-                    }
-                    const height = Math.abs(y2 - y1);
-                    const expanded = [
-                        Math.max(0, Math.min(x1, x2) - 48),
-                        Math.max(0, Math.min(y1, y2) - 42),
-                        Math.min(imageWidth, Math.max(x1, x2) + 48),
-                        Math.min(imageHeight, Math.max(y1, y2) + Math.max(160, height * 0.45))
-                    ];
-                    return cropDataUrlByBbox(draft.sourcePageImage, expanded, 0);
-                };
-
-                const recognizeSingleQuestionRepairWithQwen = async (draft) => {
-                    const imageUrl = await cropQuestionAreaForRepair(draft);
-                    if (!imageUrl) return null;
-                    try {
-                        const pageResult = await recognizeExamPageStructuredWithQwen({
-                            id: draft.sourceQuestionFileId || 'repair',
-                            filename: draft.questionNumber ? `第${draft.questionNumber}题裁剪图` : '单题裁剪图',
-                            fileType: 'image'
-                        }, imageUrl, draft.sourcePage || 1);
-                        if (pageResult.questions.length) return pageResult.questions[0];
-                    } catch (error) {
-                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                        console.warn('单题整页结构化重识别失败，回退视觉 JSON 重识别', error);
-                    }
-
-                    const prompt = `请重新识别这张图中的一道高中数学题，严格只返回 JSON，不要解释。
-
-要求：
-1. 只返回这一道题，不要带标题、题型说明、分值说明。
-2. 如果原文有 A/B/C/D 选项，必须完整提取每个选项后面的内容，直到下一个选项标签；严禁只返回 "A"、"B"、"C"、"D" 这种选项标签。
-3. 必须完整识别题干、A/B/C/D 选项、答案和可见解析；如果是选择题，options 必须是 4 项数组。
-4. 数学公式必须使用 LaTeX。常见命令包括 \\triangle、\\angle、\\vec{}、\\frac{}{}、\\sqrt{}、\\overline{}。不要把公式识别成长数字串，也不要返回 false、true、null。
-5. 如果原图中看不到答案或解析，answer/solution 留空，不要编造。
-
-已知当前题号：${draft.questionNumber || draft.order}
-当前题型：${draft.type || ''}
-
-返回格式：
-{"items":[{"question":"${draft.questionNumber || draft.order}","type":"单选题","stem":"题干，不含选项","options":["A选项","B选项","C选项","D选项"],"answer":"","solution":"","rawText":"原始题块","confidence":0.9,"warnings":[]}]}`;
-                    const models = getVisionModelsForMode(activeRecognitionMode);
-                    let lastError = null;
-                    for (const model of models) {
-                        try {
-                            const resp = await qwenProxyTransport.request('chat', {
-                                method: "POST",
-                                headers: buildAiRequestHeaders(),
-                                body: JSON.stringify({
-                                    model,
-                                    messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: imageUrl, ...OCR_IMAGE_LIMITS } }, { type: "text", text: prompt }] }],
-                                    max_tokens: 8192
-                                })
-                            }, 90000, 'Qwen 视觉/文本识别请求');
-                            await assertQwenResponseOk(resp, 'Qwen 单题视觉重识别请求');
-                            const data = await resp.json();
-                            const parsed = parseJsonFromAiText(extractAssistantText(data));
-                            const rawItems = extractQuestionArray(parsed);
-                            batchDebugLog('raw-ai', rawItems.map(toBatchDebugQuestion));
-                            const repaired = postprocessRecognizedItems(rawItems, { id: draft.sourceQuestionFileId || 'repair', filename: draft.sourceFileName || '', fileType: 'image', sourcePageImage: imageUrl, pageText: draftRawOptionSource(draft) }, draft.type);
-                            if (repaired.length || model === models.at(-1)) return repaired[0] || null;
-                        } catch (error) {
-                            lastError = error;
-                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                            console.warn(`${model} 单题重识别不可用，尝试备用模型`, error);
-                        }
-                    }
-                    throw lastError || new Error('单题重识别失败');
-                };
-
-                const applyQuestionRepair = (draft, repaired) => {
-                    if (!draft || !repaired) return false;
-                    let changed = false;
-                    const currentOptionCount = choiceOptionCount(draft);
-                    const repairedOptionCount = choiceOptionCount(repaired);
-                    const repairedStem = normalizeMathTextForLatex(repaired.stem);
-                    const currentStem = window.Qisi.Utils.cleanRecognizedText(draft.stem);
-                    const currentLooksBroken = textHasSuspiciousMath(draft.stem) || textHasBrokenMathSlot(draft.stem);
-                    if (repairedStem && (currentLooksBroken || repairedStem.length > currentStem.length * 0.65)) {
-                        draft.stem = repairedStem;
-                        changed = true;
-                    }
-                    if (repairedOptionCount > currentOptionCount || (currentOptionCount < 4 && repairedOptionCount >= 4)) {
-                        draft.options = sanitizeChoiceOptions(repaired.options);
-                        changed = true;
-                    }
-                    const repairedAnswer = window.Qisi.Utils.cleanRecognizedText(repaired.answer);
-                    if (repairedAnswer && !window.Qisi.Utils.cleanRecognizedText(draft.answer)) {
-                        draft.answer = repairedAnswer;
-                        changed = true;
-                    }
-                    const repairedSolution = normalizeMathTextForLatex(repaired.solution);
-                    const repairedSolutionIssue = solutionQualityIssue(draft.stem, draft.options, repairedSolution);
-                    if (repairedSolution && (!window.Qisi.Utils.cleanRecognizedText(draft.solution) || repairedSolution.length > window.Qisi.Utils.cleanRecognizedText(draft.solution).length * 1.25)) {
-                        draft.solution = repairedSolution;
-                        changed = true;
-                        if (repairedSolutionIssue) {
-                            draft.warnings = [...new Set([...(draft.warnings || []), `${repairedSolutionIssue}，已自动填入解析区，请人工核对。`])];
-                            draft.mergeWarnings = [...new Set([...(draft.mergeWarnings || []), 'solutionNeedsReview'])];
-                        }
-                    }
-                    if (Array.isArray(repaired.images) && repaired.images.length > (draft.recognizedImages || []).length) {
-                        draft.recognizedImages = repaired.images;
-                        changed = true;
-                    }
-                    if (Array.isArray(repaired.question_bbox) && repaired.question_bbox.length === 4 && (!Array.isArray(draft.sourceBbox) || draft.sourceBbox.length !== 4)) {
-                        draft.sourceBbox = repaired.question_bbox;
-                        changed = true;
-                    }
-                    if (changed) {
-                        const normalized = window.Qisi.SupportRepair.repairChoiceOptions(draft.stem, draft.options, draft.type, choiceRepairDeps);
-                        draft.stem = normalized.stem;
-                        draft.options = normalized.options;
-                        draft.type = normalizeQuestionType(repaired.type || draft.type, draft.stem, draft.options, draft.answer, draft.type);
-                        draft.confidence = Math.max(Number(draft.confidence || 0), Number(repaired.confidence || 0.82));
-                        draft.warnings = (draft.warnings || []).filter(w => !String(w).includes('选择题至少') && !String(w).includes('未在答案文件中匹配'));
-                        draft.warnings.push('系统已对本题做二次识别，请快速核对。');
-                    }
-                    return changed;
-                };
-
-                const repairDraftQuestionsByVision = async (drafts, onProgress = null) => {
-                    const targets = drafts.filter(draftNeedsQuestionRepair);
-                    for (let idx = 0; idx < targets.length; idx += 1) {
-                        if (onProgress) await onProgress(idx / Math.max(1, targets.length));
-                        try {
-                            const repaired = await recognizeSingleQuestionRepairWithQwen(targets[idx]);
-                            applyQuestionRepair(targets[idx], repaired);
-                        } catch (error) {
-                            console.warn('单题二次识别失败，保留原草稿', targets[idx]?.questionNumber, error);
-                            targets[idx].warnings = [...new Set([...(targets[idx].warnings || []), '本题自动二次识别未完成，请重点核对选项、答案和公式。'])];
-                        }
-                        if (onProgress) await onProgress((idx + 1) / Math.max(1, targets.length));
-                    }
-                    return drafts;
-                };
-
-                const repairDraftAnswersByOrder = (drafts, answerItems, solutionItems) => {
-                    const canUseAnswerOrder = answerItems.length && Math.abs(answerItems.length - drafts.length) <= 1;
-                    const canUseSolutionOrder = solutionItems.length && Math.abs(solutionItems.length - drafts.length) <= 1;
-                    drafts.forEach((draft, idx) => {
-                        if (canUseAnswerOrder && !window.Qisi.Utils.cleanRecognizedText(draft.answer) && window.Qisi.Utils.cleanRecognizedText(answerItems[idx]?.answer)) {
-                            draft.answer = normalizeAnswerForLatex(answerItems[idx].answer);
-                            draft.sourceAnswerFileId = answerItems[idx].sourceFileId || draft.sourceAnswerFileId;
-                            draft.answerSource = answerItems[idx].sourceFileName || draft.answerSource;
-                            draft.mergeWarnings = (draft.mergeWarnings || []).filter(item => item !== 'missing_answer');
-                            draft.warnings = (draft.warnings || []).filter(w => !String(w).includes('未在答案文件中匹配'));
-                            draft.warnings.push('本题答案已按题目顺序自动匹配，请快速核对。');
-                        }
-                        if (canUseSolutionOrder && window.Qisi.Utils.cleanRecognizedText(solutionItems[idx]?.solution)) {
-                            const solution = cleanDisplayTextForBatchSave(solutionItems[idx].solution);
-                            const preferred = preferFormulaRichSolution(solution, draft.solution, draft.stem);
-
-                            if (preferred !== cleanDisplayTextForBatchSave(draft.solution)) {
-                                const issue = solutionQualityIssue(draft.stem, draft.options, preferred);
-                                draft.solution = preferred;
-                                draft.sourceSolutionFileId = solutionItems[idx].sourceFileId || draft.sourceSolutionFileId;
-                                draft.solutionSource = solutionItems[idx].sourceFileName || draft.solutionSource;
-
-                                if (issue) {
-                                    draft.warnings.push(`${issue}，已按顺序填入解析区，请人工核对。`);
-                                    draft.mergeWarnings = [...new Set([...(draft.mergeWarnings || []), 'solutionNeedsReview'])];
-                                } else {
-                                    draft.warnings.push('本题解析已按题目顺序自动匹配，请快速核对。');
-                                }
-                            }
-                        }
-                    });
-                    return drafts;
-                };
-
-                const repairDraftAnswersWithQwen = async (drafts, answerItems, solutionItems) => {
-                    const needsRepair = drafts.some(draft => {
-                        if (['单选题', '多选题', '填空题'].includes(draft.type) && !window.Qisi.Utils.cleanRecognizedText(draft.answer)) return true;
-                        return false;
-                    });
-
-                    // 关键：这个函数不再负责重写解析，防止 qwen-plus 把公式解析改成普通中文。
-                    if (!needsRepair || !answerItems.length) return drafts;
-
-                    const questions = drafts.map((q, idx) => ({
-                        index: idx + 1,
-                        question: q.questionNumber || String(idx + 1),
-                        type: q.type,
-                        stem: window.Qisi.Utils.cleanRecognizedText(q.stem).slice(0, 260),
-                        options: normalizeRecognizedOptions(q.options),
-                        answer: normalizeAnswerForLatex(q.answer)
-                    }));
-
-                    const answers = answerItems.map((item, idx) => ({
-                        index: idx + 1,
-                        question: window.Qisi.Utils.cleanRecognizedText(item.question),
-                        answer: normalizeAnswerForLatex(item.answer)
-                    })).filter(item => item.answer);
-
-                    const prompt = `你是高中数学题库答案对齐助手。请只把 answers 对齐到 questions，严格只返回 JSON。
-
-规则：
-1. 只补 answer，不要输出 solution。
-2. 优先按 question 题号匹配；题号明显错乱时，允许按 index 顺序匹配。
-3. 不要编造答案。
-4. 返回 patches 数组。index 是 questions 中的 index。
-
-questions=${JSON.stringify(questions)}
-answers=${JSON.stringify(answers)}
-
-返回格式：
-{"patches":[{"index":1,"answer":"A"}]}`;
-
-                    const resp = await qwenProxyTransport.request('chat', {
-                        method: "POST",
-                        headers: buildAiRequestHeaders(),
-                        body: JSON.stringify({
-                            model: "qwen-plus",
-                            messages: [{ role: "user", content: prompt }],
-                            temperature: 0,
-                            top_p: 0.001,
-                            max_tokens: 2048
-                        })
-                    }, 90000, 'Qwen 视觉/文本识别请求');
-
-                    await assertQwenResponseOk(resp, 'Qwen 答案解析对齐请求');
-
-                    const parsed = parseJsonFromAiText(extractAssistantText(await resp.json()));
-                    if (!Array.isArray(parsed?.patches)) return drafts;
-
-                    parsed.patches.forEach(patch => {
-                        const draft = drafts[Number(patch.index) - 1];
-                        if (!draft) return;
-
-                        const answer = normalizeAnswerForLatex(patch.answer);
-                        if (answer && !window.Qisi.Utils.cleanRecognizedText(draft.answer)) {
-                            draft.answer = answer;
-                            draft.mergeWarnings = (draft.mergeWarnings || []).filter(item => item !== 'missing_answer');
-                            draft.warnings = (draft.warnings || []).filter(w => !String(w).includes('未在答案文件中匹配'));
-                            draft.warnings.push('本题答案已由系统二次对齐，请快速核对。');
-                        }
-                    });
-
-                    return drafts;
-                };
-
-                const finalDraftLooksLikeChoice = (draft) => {
-                    if (!draft) return false;
-
-                    const type = window.Qisi.Utils.cleanRecognizedText(draft.type);
-                    if (type === '单选题' || type === '多选题') return true;
-
-                    const answer = window.Qisi.Utils.finalChoiceAnswerText(draft.answer);
-                    if (/^[A-D]{1,4}$/.test(answer)) return true;
-
-                    const stem = window.Qisi.Utils.cleanRecognizedText(draft.stem);
-                    const solution = window.Qisi.Utils.cleanRecognizedText(draft.solution);
-                    const warnings = window.Qisi.Utils.cleanRecognizedText((draft.warnings || []).join('\n'));
-                    const mergeWarnings = window.Qisi.Utils.cleanRecognizedText((draft.mergeWarnings || []).join('\n'));
-
-                    if (/选择题|单选|多选|选项|故选|正确的是|错误的是|下列|选择|missing_options/.test(
-                        stem + '\n' + solution + '\n' + warnings + '\n' + mergeWarnings
-                    )) {
-                        return true;
-                    }
-
-                    return false;
-                };
-
-                const finalDraftNeedsAnswerVisionRepair = (draft) => {
-                    if (!draft) return false;
-
-                    const imageUrl =
-                        draft.answerPageImage ||
-                        draft.solutionPageImage ||
-                        draft.sourcePageImage ||
-                        draft.sourceTrace?.sourcePageImage ||
-                        '';
-
-                    if (!imageUrl) return false;
-
-                    const answer = window.Qisi.Utils.cleanRecognizedText(draft.answer);
-                    if (!answer) return false;
-
-                    // 纯选择题答案 A/B/C/D 不需要公式修复。
-                    if (/^[A-D]{1,4}$/.test(window.Qisi.Utils.finalChoiceAnswerText(answer))) return false;
-
-                    const answerSignal = window.Qisi.Utils.mathSignalCount(answer);
-                    const stemSignal = window.Qisi.Utils.mathSignalCount(draft.stem);
-
-                    // 只要题干有数学，答案却没有公式信号，就送去视觉模型复核。
-                    return stemSignal >= 1 && answerSignal === 0;
-                };
-
-                const finalDraftNeedsSolutionVisionRepair = (draft) => {
-                    if (!draft) return false;
-
-                    const imageUrl =
-                        draft.solutionPageImage ||
-                        draft.answerPageImage ||
-                        draft.sourcePageImage ||
-                        draft.sourceTrace?.sourcePageImage ||
-                        '';
-
-                    if (!imageUrl) return false;
-
-                    const solution = window.Qisi.Utils.cleanRecognizedText(draft.solution);
-                    if (!solution) return false;
-
-                    const solutionSignal = window.Qisi.Utils.mathSignalCount(solution);
-                    const stemSignal = window.Qisi.Utils.mathSignalCount(draft.stem);
-
-                    // 只要题干数学信号明显，而解析只有中文或公式信号很弱，就送去视觉模型复核。
-                    if (stemSignal >= 1 && solutionSignal === 0) return true;
-
-                    return solutionLooksFormulaPoor(draft.stem, draft.solution);
-                };
-
-                const chunkArrayForVisionRepair = (items, size = 5) => {
-                    const chunks = [];
-                    for (let i = 0; i < items.length; i += size) {
-                        chunks.push(items.slice(i, i + size));
-                    }
-                    return chunks;
-                };
-
-                const repairFinalDraftDetailsOnImage = async (imageUrl, targets, mode = 'question') => {
-                    if (!imageUrl || !targets.length) return [];
-
-                    const prompt = `
-你是高中数学题库最终审核前的视觉修复器。你必须只看当前图片，对 targets 中的题目做字段补全。
-
-当前模式：${mode}
-
-任务分两类：
-
-一、mode = "question"
-- 检查图片中这些题目是否存在 A/B/C/D 选项。
-- 如果存在，必须逐项抄出 A、B、C、D 后面的完整内容。
-- 选项中的数学公式必须写成 LaTeX。
-- 如果该题图片中没有选项，options 返回 ["","","",""]。
-- 严禁用答案或解析反推选项。
-
-二、mode = "answer_solution"
-- 检查图片中这些题目的答案和解析。
-- 如果答案是公式，必须写成 LaTeX。
-- 如果解析中有公式，必须保留为 LaTeX。
-- 不要把公式改写成普通中文。
-- 如果看不到答案或解析，对应字段返回空字符串。
-
-严格要求：
-1. 不要编造图片中没有的内容。
-2. 不要输出解释文字。
-3. 必须返回纯 JSON。
-4. patches 数组长度可以小于 targets，但只要看得清就必须返回。
-5. 每个 patch 尽量带上 id；如果不确定 id，就带 index、order、question。
-
-返回格式：
-{
-  "patches": [
-    {
-      "id": "draft id",
-      "index": 1,
-      "order": 1,
-      "question": "题号",
-      "type": "单选题/多选题/填空题/解答题",
-      "options": ["A选项", "B选项", "C选项", "D选项"],
-      "answer": "答案，保留 LaTeX；没有则空",
-      "solution": "解析，保留 LaTeX；没有则空",
-      "rawBlock": "图片中当前题附近原文；没有则空"
-    }
-  ]
-}
-
-targets:
-${JSON.stringify(targets, null, 2)}
-`;
-
-                    let lastError = null;
-
-                    for (const model of getVisionModelsForMode(activeRecognitionMode)) {
-                        try {
-                            const resp = await qwenProxyTransport.request('chat', {
-                                method: "POST",
-                                headers: buildAiRequestHeaders(),
-                                body: JSON.stringify({
-                                    model,
-                                    messages: [{
-                                        role: "user",
-                                        content: [
-                                            {
-                                                type: "image_url",
-                                                image_url: {
-                                                    url: imageUrl,
-                                                    min_pixels: 3136,
-                                                    max_pixels: 30720000,
-                                                    enable_rotate: true
-                                                }
-                                            },
-                                            { type: "text", text: prompt }
-                                        ]
-                                    }],
-                                    temperature: 0,
-                                    top_p: 0.001,
-                                    max_tokens: 8192
-                                })
-                            }, 120000, '最终视觉修复请求');
-
-                            await assertQwenResponseOk(resp, 'Qwen 最终视觉修复请求');
-
-                            const rawText = extractAssistantText(await resp.json());
-                            const parsed = parseJsonFromAiText(rawText);
-                            const patches = Array.isArray(parsed?.patches) ? parsed.patches : [];
-
-                            console.log(
-                                '[BATCH_DEBUG][final-vision-repair-raw]',
-                                {
-                                    mode,
-                                    model,
-                                    targetCount:
-                                        targets.length,
-                                    patchCount:
-                                        patches.length,
-                                    targetQuestions:
-                                        targets.map(
-                                            item =>
-                                                item.question ||
-                                                item.questionNumber ||
-                                                item.order ||
-                                                ''
-                                        ),
-                                    patchQuestions:
-                                        patches.map(
-                                            item =>
-                                                item.question ||
-                                                item.questionNumber ||
-                                                item.order ||
-                                                ''
-                                        ),
-                                    rawText:
-                                        compactDebugText(
-                                            window.Qisi.Utils.cleanRecognizedText(
-                                                rawText
-                                            ),
-                                            {
-                                                head: 600,
-                                                tail: 160
-                                            }
-                                        )
-                                }
-                            );
-
-                            return patches;
-                        } catch (error) {
-                            lastError = error;
-                            if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                            console.warn(`${model} 最终视觉修复失败，尝试下一个模型`, error);
-                        }
-                    }
-
-                    console.warn('最终视觉修复全部失败', lastError);
-                    return [];
-                };
-
-                const normalizeFinalPatchOptions = (patch) => {
-                    const raw =
-                        patch.options ||
-                        patch.选项 ||
-                        patch.choices ||
-                        patch.choiceOptions ||
-                        patch.option ||
-                        [];
-
-                    if (Array.isArray(raw)) {
-                        if (raw.length && typeof raw[0] === 'object') {
-                            const arr = ['', '', '', ''];
-                            raw.forEach(item => {
-                                const label = window.Qisi.Utils.cleanRecognizedText(item.label || item.key || item.name || '').toUpperCase();
-                                const content = window.Qisi.Utils.cleanRecognizedText(item.content || item.text || item.value || item.option || '');
-                                const idx = ['A', 'B', 'C', 'D'].indexOf(label);
-                                if (idx >= 0) arr[idx] = content;
-                            });
-                            return window.Qisi.Utils.cleanDisplayOptionsForBatchSave(arr);
-                        }
-
-                        return window.Qisi.Utils.cleanDisplayOptionsForBatchSave(raw);
-                    }
-
-                    if (raw && typeof raw === 'object') {
-                        return window.Qisi.Utils.cleanDisplayOptionsForBatchSave([
-                            raw.A || raw.a || raw['选项A'] || raw['A选项'] || '',
-                            raw.B || raw.b || raw['选项B'] || raw['B选项'] || '',
-                            raw.C || raw.c || raw['选项C'] || raw['C选项'] || '',
-                            raw.D || raw.d || raw['选项D'] || raw['D选项'] || ''
-                        ]);
-                    }
-
-                    return ['', '', '', ''];
-                };
-
-                const applyFinalVisionPatchesToDrafts = (drafts, patches, mode = 'question') => {
-                    const list = drafts || [];
-
-                    const byId = new Map(list.map(draft => [String(draft.id), draft]));
-                    const byOrder = new Map(list.map(draft => [String(draft.order), draft]));
-                    const byQuestion = new Map(list.map(draft => [normalizeQuestionKey(draft.questionNumber || draft.question || draft.order), draft]));
-
-                    const resolveDraft = (patch, patchIndex) => {
-                        const id = String(patch.id || patch.draftId || patch.draft_id || '').trim();
-                        if (id && byId.has(id)) return byId.get(id);
-
-                        const order = String(patch.order || patch.index || '').trim();
-                        if (order && byOrder.has(order)) return byOrder.get(order);
-
-                        const qkey = normalizeQuestionKey(patch.question || patch.题号 || patch.no || '');
-                        if (qkey && byQuestion.has(qkey)) return byQuestion.get(qkey);
-
-                        if (list[patchIndex]) return list[patchIndex];
-
-                        return null;
-                    };
-
-                    let changedCount = 0;
-
-                    (patches || []).forEach((patch, patchIndex) => {
-                        const draft = resolveDraft(patch, patchIndex);
-                        if (!draft) return;
-
-                        let changed = false;
-
-                        const patchedOptions = normalizeFinalPatchOptions(patch);
-                        const patchedOptionCount = patchedOptions.filter(Boolean).length;
-                        const oldOptions = window.Qisi.Utils.cleanDisplayOptionsForBatchSave(draft.options || []);
-                        const oldOptionCount = oldOptions.filter(Boolean).length;
-
-                        if (mode === 'question' && patchedOptionCount > oldOptionCount && patchedOptionCount >= 2) {
-                            draft.options = patchedOptions;
-
-                            const answer = window.Qisi.Utils.finalChoiceAnswerText(draft.answer);
-                            draft.type = answer.length >= 2 ? '多选题' : '单选题';
-
-                            draft.mergeWarnings = (draft.mergeWarnings || []).filter(item => item !== 'missing_options');
-                            draft.warnings = (draft.warnings || []).filter(w => !String(w).includes('选择题仅识别到'));
-
-                            const patchedStem = window.Qisi.Utils.cleanDisplayTextForBatchSave(patch.stem || patch.题干 || '');
-                            if (patchedStem && patchedStem.length >= 8 && patchedStem.length >= window.Qisi.Utils.cleanRecognizedText(draft.stem).length * 0.35) {
-                                draft.stem = patchedStem;
-                            }
-
-                            addWarningOnce(draft, `已通过最终视觉修复补回 ${patchedOptionCount}/4 个选项，请核对。`);
-                            changed = true;
-                        }
-
-                        const patchedAnswer = cleanDisplayTextForBatchSave(patch.answer || patch.答案 || '');
-                        if (mode === 'answer_solution' && patchedAnswer) {
-                            const oldAnswer = cleanDisplayTextForBatchSave(draft.answer);
-                            const nextSignal = window.Qisi.Utils.mathSignalCount(patchedAnswer);
-                            const oldSignal = window.Qisi.Utils.mathSignalCount(oldAnswer);
-
-                            // 选择题答案 A/B/C/D 不要用长文本覆盖。
-                            const oldChoice = window.Qisi.Utils.finalChoiceAnswerText(oldAnswer);
-                            const newChoice = window.Qisi.Utils.finalChoiceAnswerText(patchedAnswer);
-
-                            if (oldChoice && newChoice && oldChoice === newChoice) {
-                                // 保持原选择题答案。
-                            } else if (!oldAnswer || nextSignal > oldSignal || (oldSignal === 0 && nextSignal > 0)) {
-                                draft.answer = patchedAnswer;
-                                addWarningOnce(draft, '已通过最终视觉修复补回带公式答案，请核对。');
-                                changed = true;
-                            }
-                        }
-
-                        const patchedSolution = cleanDisplayTextForBatchSave(
-                            patch.solution || patch.解析 || patch.analysis || patch.explanation || ''
-                        );
-
-                        if (mode === 'answer_solution' && patchedSolution) {
-                            const preferred = preferFormulaRichSolution(patchedSolution, draft.solution, draft.stem);
-
-                            if (preferred !== cleanDisplayTextForBatchSave(draft.solution)) {
-                                draft.solution = preferred;
-                                addWarningOnce(draft, '已通过最终视觉修复补回带公式解析，请核对。');
-                                changed = true;
-                            }
-                        }
-
-                        const rawBlock = window.Qisi.Utils.cleanRecognizedText(patch.rawBlock || patch.rawText || patch.原文 || '');
-                        if (rawBlock) {
-                            draft.rawBlock = draft.rawBlock || rawBlock;
-                            draft.rawText = draft.rawText || rawBlock;
-                            draft.sourceTrace = {
-                                ...(draft.sourceTrace || {}),
-                                rawBlock: draft.sourceTrace?.rawBlock || rawBlock
-                            };
-                        }
-
-                        if (changed) {
-                            draft.updatedAt = Date.now();
-                            changedCount += 1;
-                        }
-                    });
-
-                    return changedCount;
-                };
-
-                const hydrateDraftImagesForFinalVisionRepair = (
-                    drafts,
-                    files,
-                    pdfPageImageMap,
-                    pdfFirstPageImageByFileId,
-                    pdfAnyPageImage,
-                    pageImageKey
-                ) => {
-                    const getPageImage = (fileId, pageNo) => {
-                        const fid = fileId || '';
-                        const pno = Number(pageNo || 0) || 1;
-
-                        return (
-                            pdfPageImageMap.get(pageImageKey(fid, pno)) ||
-                            pdfFirstPageImageByFileId.get(fid) ||
-                            ''
-                        );
-                    };
-
-                    (drafts || []).forEach(draft => {
-                        const questionFileId =
-                            draft.sourceFileId ||
-                            draft.sourceQuestionFileId ||
-                            draft.sourceTrace?.sourceFileId ||
-                            '';
-
-                        const questionPage =
-                            draft.sourcePage ||
-                            draft.pageIndex ||
-                            draft.sourceTrace?.sourcePage ||
-                            draft.sourceTrace?.pageIndex ||
-                            1;
-
-                        const questionImage =
-                            draft.sourcePageImage ||
-                            draft.sourceTrace?.sourcePageImage ||
-                            getPageImage(questionFileId, questionPage) ||
-                            pdfAnyPageImage ||
-                            '';
-
-                        if (questionImage) {
-                            draft.sourcePageImage = questionImage;
-                            draft.sourceTrace = {
-                                ...(draft.sourceTrace || {}),
-                                sourceFileId: questionFileId || draft.sourceTrace?.sourceFileId || '',
-                                sourcePage: questionPage || draft.sourceTrace?.sourcePage || 1,
-                                pageIndex: questionPage || draft.sourceTrace?.pageIndex || 1,
-                                sourcePageImage: questionImage
-                            };
-                        }
-
-                        const answerFileId = draft.sourceAnswerFileId || '';
-                        const solutionFileId = draft.sourceSolutionFileId || '';
-
-                        const answerPage =
-                            draft.answerSourcePage ||
-                            draft.sourceAnswerPage ||
-                            draft.solutionSourcePage ||
-                            1;
-
-                        const solutionPage =
-                            draft.solutionSourcePage ||
-                            draft.sourceSolutionPage ||
-                            draft.answerSourcePage ||
-                            1;
-
-                        const answerImage =
-                            draft.answerPageImage ||
-                            getPageImage(answerFileId, answerPage) ||
-                            getPageImage(solutionFileId, solutionPage) ||
-                            '';
-
-                        const solutionImage =
-                            draft.solutionPageImage ||
-                            getPageImage(solutionFileId, solutionPage) ||
-                            getPageImage(answerFileId, answerPage) ||
-                            answerImage ||
-                            '';
-
-                        if (answerImage) {
-                            draft.answerPageImage = answerImage;
-                        }
-
-                        if (solutionImage) {
-                            draft.solutionPageImage = solutionImage;
-                        }
-                    });
-
-                    console.groupCollapsed('[BATCH_DEBUG][hydrate-final-vision-images]');
-                    console.table((drafts || []).map(draft => ({
-                        id: draft.id,
-                        q: draft.questionNumber || draft.order,
-                        type: draft.type,
-                        answer: draft.answer,
-                        optionCount: cleanDisplayOptionsForBatchSave(draft.options).filter(Boolean).length,
-                        finalChoiceAnswer: window.Qisi.Utils.finalChoiceAnswerText(draft.answer),
-                        needsOptionRepair: window.Qisi.ReviewDraftState.finalDraftNeedsOptionVisionRepair(draft),
-                        needsAnswerRepair: finalDraftNeedsAnswerVisionRepair(draft),
-                        needsSolutionRepair: finalDraftNeedsSolutionVisionRepair(draft),
-                        hasQuestionImage: Boolean(draft.sourcePageImage || draft.sourceTrace?.sourcePageImage),
-                        hasAnswerImage: Boolean(draft.answerPageImage),
-                        hasSolutionImage: Boolean(draft.solutionPageImage)
-                    })));
-                    console.groupEnd();
-
-                    return drafts;
-                };
-
-                const repairFinalDraftDetailsWithVision = async (
-                    drafts,
-                    onProgress = null,
-                    options = {}
-                ) => {
-                    const items = Array.isArray(drafts) ? drafts : [];
-                    const repairAnswerSolution = options.repairAnswerSolution !== false;
-
-                    const optionTargetsByImage = new Map();
-                    const answerSolutionTargetsByImage = new Map();
-
-                    const pushTarget = (map, imageUrl, target) => {
-                        if (!imageUrl) return;
-                        if (!map.has(imageUrl)) map.set(imageUrl, []);
-                        map.get(imageUrl).push(target);
-                    };
-
-                    items.forEach((draft, idx) => {
-                        const questionImage =
-                            draft.sourcePageImage ||
-                            draft.sourceTrace?.sourcePageImage ||
-                            '';
-
-                        const answerSolutionImage =
-                            draft.solutionPageImage ||
-                            draft.answerPageImage ||
-                            draft.sourcePageImage ||
-                            draft.sourceTrace?.sourcePageImage ||
-                            '';
-
-                        const optionCount = cleanDisplayOptionsForBatchSave(draft.options).filter(Boolean).length;
-                        const answerSignal = window.Qisi.Utils.mathSignalCount(draft.answer);
-                        const solutionSignal = window.Qisi.Utils.mathSignalCount(draft.solution);
-                        const stemSignal = window.Qisi.Utils.mathSignalCount(draft.stem);
-
-                        const target = {
-                            id: draft.id,
-                            index: idx + 1,
-                            order: draft.order,
-                            question: draft.questionNumber || draft.question || draft.order,
-                            type: draft.type,
-                            stem: window.Qisi.Utils.cleanRecognizedText(draft.stem).slice(0, 1200),
-                            answer: window.Qisi.Utils.cleanRecognizedText(draft.answer),
-                            solution: window.Qisi.Utils.cleanRecognizedText(draft.solution).slice(0, 1000),
-                            optionCount,
-                            finalChoiceAnswer: window.Qisi.Utils.finalChoiceAnswerText(draft.answer),
-                            answerMathSignal: answerSignal,
-                            solutionMathSignal: solutionSignal,
-                            stemMathSignal: stemSignal,
-                            hasQuestionImage: Boolean(questionImage),
-                            hasAnswerSolutionImage: Boolean(answerSolutionImage)
-                        };
-
-                        // 关键：选项修复不再依赖 type / answer。
-                        // 只要有题目图且选项少，就送去看图。
-                        if (questionImage && isStrictChoiceType(draft.type) && optionCount < 2) {
-                            pushTarget(optionTargetsByImage, questionImage, target);
-                        }
-
-                        // 关键：答案解析公式修复不再依赖复杂判断。
-                        // 只要有答案/解析图，且题干有数学、答案或解析公式信号弱，就送去看图。
-                        if (
-                            repairAnswerSolution &&
-                            answerSolutionImage &&
-                            stemSignal >= 1 &&
-                            (
-                                (window.Qisi.Utils.cleanRecognizedText(draft.answer) && answerSignal === 0 && !/^[A-D]{1,4}$/.test(window.Qisi.Utils.finalChoiceAnswerText(draft.answer))) ||
-                                (window.Qisi.Utils.cleanRecognizedText(draft.solution) && solutionSignal === 0)
-                            )
-                        ) {
-                            pushTarget(answerSolutionTargetsByImage, answerSolutionImage, target);
-                        }
-                    });
-
-                    const totalJobs =
-                        [...optionTargetsByImage.values()].reduce((sum, arr) => sum + Math.ceil(arr.length / 4), 0) +
-                        [...answerSolutionTargetsByImage.values()].reduce((sum, arr) => sum + Math.ceil(arr.length / 4), 0);
-
-                    let doneJobs = 0;
-                    let changedTotal = 0;
-
-                    const runMap = async (map, mode) => {
-                        for (const [imageUrl, targets] of map.entries()) {
-                            for (const chunk of chunkArrayForVisionRepair(targets, 4)) {
-                                const patches = await repairFinalDraftDetailsOnImage(imageUrl, chunk, mode);
-
-                                console.groupCollapsed(`[BATCH_DEBUG][final-vision-apply-before] ${mode}`);
-                                console.log('targetCount =', chunk.length);
-                                console.log('patchCount =', (patches || []).length);
-                                console.log('targets =', chunk);
-                                console.log('patches =', patches);
-                                console.groupEnd();
-
-                                const changed = applyFinalVisionPatchesToDrafts(items, patches, mode);
-                                changedTotal += changed;
-
-                                console.groupCollapsed(`[BATCH_DEBUG][final-vision-apply-after] ${mode}`);
-                                console.log('changed =', changed);
-                                console.table(items.map(draft => ({
-                                    id: draft.id,
-                                    q: draft.questionNumber || draft.order,
-                                    type: draft.type,
-                                    optionCount: cleanDisplayOptionsForBatchSave(draft.options).filter(Boolean).length,
-                                    answerMathSignal: window.Qisi.Utils.mathSignalCount(draft.answer),
-                                    solutionMathSignal: window.Qisi.Utils.mathSignalCount(draft.solution),
-                                    answerHead: window.Qisi.Utils.cleanRecognizedText(draft.answer).slice(0, 80),
-                                    solutionHead: window.Qisi.Utils.cleanRecognizedText(draft.solution).slice(0, 120)
-                                })));
-                                console.groupEnd();
-
-                                doneJobs += 1;
-                                if (onProgress) {
-                                    await onProgress(doneJobs / Math.max(1, totalJobs));
-                                }
-                            }
-                        }
-                    };
-
-                    await runMap(optionTargetsByImage, 'question');
-                    await runMap(answerSolutionTargetsByImage, 'answer_solution');
-
-                    console.groupCollapsed('[BATCH_DEBUG][draft-final-vision-repair]');
-                    console.log('optionImageGroups =', optionTargetsByImage.size);
-                    console.log('answerSolutionImageGroups =', answerSolutionTargetsByImage.size);
-                    console.log('changedTotal =', changedTotal);
-                    console.table(items.map(draft => ({
-                        id: draft.id,
-                        q: draft.questionNumber || draft.order,
-                        type: draft.type,
-                        answer: draft.answer,
-                        finalChoiceAnswer: window.Qisi.Utils.finalChoiceAnswerText(draft.answer),
-                        optionCount: cleanDisplayOptionsForBatchSave(draft.options).filter(Boolean).length,
-                        stemMathSignal: window.Qisi.Utils.mathSignalCount(draft.stem),
-                        answerMathSignal: window.Qisi.Utils.mathSignalCount(draft.answer),
-                        solutionMathSignal: window.Qisi.Utils.mathSignalCount(draft.solution),
-                        hasQuestionImage: Boolean(draft.sourcePageImage || draft.sourceTrace?.sourcePageImage),
-                        hasAnswerImage: Boolean(draft.answerPageImage),
-                        hasSolutionImage: Boolean(draft.solutionPageImage)
-                    })));
-                    console.groupEnd();
-
-                    return items;
-                };
-
-                const repairChoiceOptionsWithQwen = async (q, rawText) => {
-                    const source = window.Qisi.Utils.cleanRecognizedText(rawText || draftRawOptionSource(q)).slice(0, 12000);
-                    if (!source || source.length < 8) return null;
-
-                    const prompt = `你是高中数学选择题选项提取器。只从原始文本中提取目标题的题干和 A/B/C/D 选项，不要识别答案和解析，不要补充原文没有的内容。
-
-目标题号：${q?.questionNumber || q?.question || q?.order || ''}
-当前题干：${window.Qisi.Utils.cleanRecognizedText(q?.stem || '').slice(0, 500)}
-
-要求：
-1. 如果原文有 A/B/C/D 选项，必须完整提取每个选项后面的内容，直到下一个选项标签。
-2. 严禁只返回 "A"、"B"、"C"、"D" 这种选项标签。
-3. 数学公式必须使用 LaTeX。
-4. 必须只返回目标题，不要返回其他题的选项。
-5. 输出必须是纯 JSON，格式如下：
-{
-  "stem": "...",
-  "options": ["...", "...", "...", "..."]
-}
-
-原始文本：
-${source}`;
-
-                    const resp = await qwenProxyTransport.request('chat', {
-                        method: "POST",
-                        headers: buildAiRequestHeaders(),
-                        body: JSON.stringify({
-                            model: "qwen-plus",
-                            messages: [{ role: "user", content: prompt }],
-                            temperature: 0,
-                            top_p: 0.001,
-                            max_tokens: 2048
-                        })
-                    }, 90000, 'Qwen 视觉/文本识别请求');
-                    await assertQwenResponseOk(resp, 'Qwen 选择题选项二次提取请求');
-
-                    const parsed = parseJsonFromAiText(extractAssistantText(await resp.json()));
-                    if (!parsed || typeof parsed !== 'object') return null;
-
-                    const options = sanitizeChoiceOptions(parsed.options);
-                    if (options.filter(Boolean).length < 2) return null;
-
-                    return {
-                        stem: normalizeMathTextForLatexSafe(stripQuestionSectionNoise(parsed.stem || q?.stem || '')),
-                        options
-                    };
-                };
-
-                const rebuildMissingChoiceOptionsWithQwen = async (q) => {
-                    if (!q || !choiceQuestionMissingOptions(q)) return null;
-                    const prompt = `你是高中数学选择题选项修复助手。当前题目原文没有识别到 A/B/C/D 选项，请根据题干、答案和解析，尽量重建四个选项。
-
-重要规则：
-1. 只返回当前题的 stem 和 options。
-2. 如果无法确定四个选项，返回空数组，不要硬编。
-3. 如果能根据解析里的“故选”和计算过程推断选项，请给出四个简洁选项，并保留数学 LaTeX。
-4. 输出纯 JSON：
-{
-  "stem": "...",
-  "options": ["A选项", "B选项", "C选项", "D选项"]
-}
-
-题号：${q.questionNumber || q.question || q.order || ''}
-题干：${window.Qisi.Utils.cleanRecognizedText(q.stem || '').slice(0, 1000)}
-当前答案：${window.Qisi.Utils.cleanRecognizedText(q.answer || '')}
-解析：${window.Qisi.Utils.cleanRecognizedText(q.solution || '').slice(0, 1800)}
-原始文本：${window.Qisi.Utils.cleanRecognizedText(draftRawOptionSource(q)).slice(0, 1800)}`;
-
-                    const resp = await qwenProxyTransport.request('chat', {
-                        method: "POST",
-                        headers: buildAiRequestHeaders(),
-                        body: JSON.stringify({
-                            model: "qwen-plus",
-                            messages: [{ role: "user", content: prompt }],
-                            temperature: 0,
-                            top_p: 0.001,
-                            max_tokens: 2048
-                        })
-                    }, 90000, 'Qwen 视觉/文本识别请求');
-                    await assertQwenResponseOk(resp, 'Qwen 选择题选项重建请求');
-                    const parsed = parseJsonFromAiText(extractAssistantText(await resp.json()));
-                    const options = sanitizeChoiceOptions(parsed?.options || []);
-                    if (options.filter(Boolean).length < 4) return null;
-                    return {
-                        stem: normalizeMathTextForLatexSafe(stripQuestionSectionNoise(parsed.stem || q.stem || '')),
-                        options
-                    };
-                };
 
                 const explicitQuestionNumberOf = (item = {}) =>
                     normalizeQuestionKey(
@@ -12625,12 +9538,28 @@ ${source}`;
                         .trim();
                 };
 
+                const strictQuestionPageRecognizer =
+                    window.Qisi.QwenVisionSourcePort
+                        .createStrictQuestionPageRecognizer({
+                            requestText: options =>
+                                qwenTaskClient.chatText(options),
+                            parseStrictQuestionPayload,
+                            postprocessRecognizedItems,
+                            getDefaultType: () =>
+                                batchDefaultMeta.defaultType || '单选题',
+                            getRoles: getBatchFileRoles,
+                            logDiagnostic: logBatchPdfDiag,
+                            projectDocxVisionCandidate: input =>
+                                window.Qisi.DocxProducerIdentityContract
+                                    .projectDocxVisionCandidate(input)
+                        });
+
                 const strictVisualPreparedPagesRecognizer =
                     window.QisiBatchEngineV2
                         .createStrictVisualPreparedPagesRecognizer({
                             mapWithConcurrency,
                             recognizePage:
-                                recognizeStrictQuestionPageWithQwen,
+                                strictQuestionPageRecognizer,
                             collectValidFigures:
                                 collectValidRecognizedFigures,
                             hasFigureCue: questionHasFigureCue,
@@ -12738,7 +9667,6 @@ ${source}`;
                     convertDocxRecordToPdfRecord: docxToPdfConverter,
                     extractTextFromDraftFile,
                     recognizePageMarkdownWithQwen,
-                    recognizeTextQuestionsWithQwen,
                     locateQuestionFiguresWithQwen,
                     cropDataUrlByBbox,
                     cleanRecognizedText,
@@ -12789,10 +9717,13 @@ ${source}`;
                         });
                 const runProductionFixtureImport =
                     window.Qisi.ProductionImportBridge.createFixtureImportRunner({
-                        getTransport: () =>
-                            Qisi.Runtime.getRuntimeDependency(
-                                'InjectedImportTransport'
-                            ),
+                        getTransport: () => {
+                            const registry =
+                                Qisi.Runtime.getRuntimeDependency(
+                                    'ImportAdapterRegistry'
+                                );
+                            return registry?.getAdapter?.('fixture') || null;
+                        },
                         normalizeQuestionNumber: normalizeQuestionKey
                     });
 
@@ -12813,7 +9744,8 @@ ${source}`;
                                     batch: input.batch,
                                     expectedQuestionCount:
                                         input.expectedQuestionCount,
-                                    onPageProgress: input.onPageProgress
+                                    onPageProgress: input.onPageProgress,
+                                    signal: input.signal
                                 }),
                             prepareSupportPages: input =>
                                 strictVisualQuestionProducer.preparePages(input.source),
@@ -12825,7 +9757,8 @@ ${source}`;
                                     expectedQuestionNumbers:
                                         input.expectedQuestionNumbers,
                                     requiredKinds: input.requiredKinds,
-                                    onPageProgress: input.onPageProgress
+                                    onPageProgress: input.onPageProgress,
+                                    signal: input.signal
                                 }),
                             buildProjectionContext:
                                 window.Qisi.PdfCandidateProjection
@@ -12958,8 +9891,12 @@ ${source}`;
                         console.warn('[BATCH_DEBUG][duplicate-run-blocked]', { batchId });
                         return normalUiImportController.run(batchId);
                     }
+                    const adapterRegistry =
+                        Qisi.Runtime.getRuntimeDependency(
+                            'ImportAdapterRegistry'
+                        );
                     const testFixture = Boolean(
-                        Qisi.Runtime.getRuntimeDependency('InjectedImportTransport')
+                        adapterRegistry?.getAdapter?.('fixture')
                     );
                     return normalUiImportController.run(batchId, { testFixture });
                 };
@@ -15130,20 +12067,8 @@ ${source}`;
                     const reader = new FileReader(); 
                     reader.onload = async () => {
                         try {
-                            const p = "请精准识别图中数学题。要求：中文文字和标点自然排版，行内短小公式或字母【必须】使用单 $ 包围，只有独立占行的大型公式才使用 $$ 包围。如果包含选项A,B,C,D，请务必独立换行展示。严禁将整道题打包进一个大环境中。";
-                            const requestBody = { model: getAiModelForTask(AI_TASKS.STRUCTURED_OCR), messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: reader.result } }, { type: "text", text: p }] }] };
-                            logOcrRequestDebug(
-                                qwenProxyTransport.getEndpoint('chat'),
-                                requestBody
-                            );
-                            const resp = await qwenProxyTransport.request('chat', {
-                                method: "POST", headers: buildAiRequestHeaders(),
-                                body: JSON.stringify(requestBody)
-                            }, 90000, 'Qwen OCR 请求');
-                            await assertQwenResponseOk(resp, 'Qwen OCR 请求');
-                            const data = await resp.json(); 
-                            const content = extractAssistantText(data);
-                            if (!content) throw new Error('OCR 返回为空');
+                            const content = await qwenDocumentOcrSource
+                                .recognizeManualQuestion(reader.result);
                             const normalizedText = normalizeOcrQuestionOutput(content);
                             ocrDraftStore.rawText = normalizedText;
                         } catch (e) { console.error('识别失败', e); alert("识别失败"); } 

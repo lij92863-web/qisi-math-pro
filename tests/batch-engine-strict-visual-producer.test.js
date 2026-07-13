@@ -126,6 +126,64 @@ test('strict visual producer keeps failures fail-closed and diagnostics retain i
     assert.equal(diagnostics.at(-1)[2], 'error');
 });
 
+test('strict visual producer propagates cancellation and never recognizes after an aborted render', async () => {
+    const engine = loadEngine();
+    const controller = new AbortController();
+    const renderCalls = [];
+    let recognitionCalls = 0;
+    const producer = engine.createStrictVisualQuestionProducer({
+        renderPdfFilePages: async (_file, options) => {
+            renderCalls.push(options);
+            controller.abort();
+            return [{ pageNo: 1, url: 'page-1' }];
+        },
+        recognizePreparedPages: async () => {
+            recognitionCalls += 1;
+            return { questions: [] };
+        },
+        getRoles: () => ['question'],
+        logDiagnostic: () => {},
+        now: () => 1
+    });
+
+    await assert.rejects(
+        producer.processQuestionFile({
+            file: { filename: 'cancelled.pdf', fileType: 'pdf' },
+            batch: { id: 'batch-1' },
+            signal: controller.signal
+        }),
+        error => (
+            error.name === 'AbortError' &&
+            error.code === 'OCR_REQUEST_CANCELLED'
+        )
+    );
+    assert.equal(renderCalls[0].signal, controller.signal);
+    assert.equal(recognitionCalls, 0);
+});
+
+test('strict visual producer forwards the active signal to prepared-page recognition', async () => {
+    const engine = loadEngine();
+    const controller = new AbortController();
+    let receivedSignal = null;
+    const producer = engine.createStrictVisualQuestionProducer({
+        renderPdfFilePages: async () => [{ pageNo: 1, url: 'page-1' }],
+        recognizePreparedPages: async payload => {
+            receivedSignal = payload.signal;
+            return { questions: [], pageImages: [], check: { fatal: false } };
+        },
+        getRoles: () => ['question'],
+        logDiagnostic: () => {},
+        now: () => 1
+    });
+
+    await producer.processQuestionFile({
+        file: { filename: 'active.pdf', fileType: 'pdf' },
+        batch: { id: 'batch-1' },
+        signal: controller.signal
+    });
+    assert.equal(receivedSignal, controller.signal);
+});
+
 test('strict visual producer requires its production ports', () => {
     const engine = loadEngine();
     assert.throws(

@@ -1006,6 +1006,36 @@
 - Wave 16 is the next independent conditional transport/producer inventory and
   is not pre-accepted.
 
+## C2-12 Wave 16 accepted
+
+- Decision: `APP_OCR_TRANSPORT_OWNER_ZERO_ACCEPTED`.
+- The audit was applicable: 18 direct Qwen proxy requests, model/payload/
+  response protocol logic, OCR task selection, and strict page production
+  remained in `app.js`.
+- The Qwen adapter now uniquely owns endpoint, model, payload, response,
+  timeout, cancellation, and health behavior. The Qwen source port owns strict
+  question and document/formula/manual OCR sources; the batch engine owns the
+  strict file and prepared-page lifecycle.
+- App direct proxy requests, AI endpoint fetches, model identities, OCR engine
+  selection, inline strict producers, and production mock identities are all
+  zero. Missing dependencies and malformed responses fail closed, and late
+  cancelled results are rejected before merge or validation.
+- Browser fixtures use only `ImportAdapterRegistry`'s explicit fixture slot.
+  The concrete mock identity exists only in test code and cannot serve as a
+  production fallback.
+- The unreachable legacy OCR/Vision closure was removed. The live
+  display-cleaner proof inventory moved from 26 to 12 residual callsites
+  without restoring dead owners.
+- Focused tests pass 59/59; `verify:safe` passes 1,607/1,607 across 54 suites;
+  all 11 mandatory gates and browser canaries pass with real-API counters at
+  zero. Frozen PDF files are unchanged and no real-run occurred.
+- Post-wave metrics are 13,226 lines, 305 functions, a 164-line largest
+  unrelated function, and a 146-line largest remaining Program C function.
+  Evidence is in
+  `docs/release/PROGRAM_C_C2_12_WAVE16_OCR_TRANSPORT_PRODUCER_REPORT.md`.
+- Wave 17 is the next independent conditional storage/Formal Repository/D
+  inventory and is not pre-accepted.
+
 ## Blockers / limitations
 
 - Upload-to-review, switch p50/p95, draft persist, formal submit, reload, export,
@@ -1017,7 +1047,7 @@
 
 ## Next exact action
 
-After the Wave 15 commit is pushed and all three branch heads agree, begin the
-conditional Wave 16 remaining OCR/Vision transport and producer inventory. Do
-not claim it applicable or N/A without production reachability, runtime
-dependency, transport, producer, cancellation, failure, and browser evidence.
+After the Wave 16 commit is pushed and all three branch heads agree, begin the
+conditional Wave 17 storage, Formal Repository, and remaining D-responsibility
+inventory. Do not claim it applicable or N/A without production reachability,
+transaction, admission, rollback, failure, duplicate, and readback evidence.

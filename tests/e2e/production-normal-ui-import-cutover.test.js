@@ -51,7 +51,7 @@ const installDynamicTransport = page => page.evaluate(() => {
             }
         }
     });
-    window.Qisi.Runtime.setRuntimeDependency('InjectedImportTransport', {
+    const transport = {
         kind: 'qisi.mock-import-transport.v1',
         produceCandidates: async () => {
             window.__c2CutoverTransportCalls += 1;
@@ -68,6 +68,10 @@ const installDynamicTransport = page => page.evaluate(() => {
             }
             return configured?.envelope;
         }
+    };
+    window.Qisi.Runtime.setRuntimeDependency('ImportAdapterRegistry', {
+        kind: 'qisi.import-adapter-registry.v1',
+        getAdapter: name => name === 'fixture' ? transport : null
     });
 });
 

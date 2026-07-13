@@ -416,9 +416,13 @@ const waitForDbSnapshot = async (
 };
 
 const installImportTransport = (page, envelope) => page.evaluate(value => {
-    window.Qisi.Runtime.setRuntimeDependency('InjectedImportTransport', {
+    const transport = {
         kind: 'qisi.mock-import-transport.v1',
         produceCandidates: async () => structuredClone(value)
+    };
+    window.Qisi.Runtime.setRuntimeDependency('ImportAdapterRegistry', {
+        kind: 'qisi.import-adapter-registry.v1',
+        getAdapter: name => name === 'fixture' ? transport : null
     });
 }, envelope);
 

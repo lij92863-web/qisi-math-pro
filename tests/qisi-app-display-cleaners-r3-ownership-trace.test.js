@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
 const { traceCallsite, traceAll } = require('../scripts/bm-a4-r3-ownership-trace');
-// Wave 13 deleted one unreachable DOCX option-repair callsite with its owner.
-const EXPECTED_REMAINING_CALLSITES = 26;
+// Wave 16 retired fourteen unreachable OCR/Vision producer callsites.
+const EXPECTED_REMAINING_CALLSITES = 12;
 
 function traceSnippet(source, line, helper = 'cleanDisplayTextForBatchSave') {
     return traceCallsite({ callsiteId: 'R3-TEST', helper, line, text: '' }, source.split(/\r?\n/));

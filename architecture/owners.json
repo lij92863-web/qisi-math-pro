@@ -18,6 +18,7 @@
   "batchFormalSubmitOwner": "qisi-batch-formal-submit.js",
   "ocrRegistryOwner": "qisi-ocr-engine-registry.js",
   "qwenAdapterOwner": "qisi-ocr-qwen-adapter.js",
+  "qwenVisionSourcePortOwner": "qisi-qwen-vision-source-port.js",
   "localAdapterOwner": "qisi-ocr-local-adapter.js",
   "localOcrServiceOwner": "local-ocr/server.js",
   "shadowModeOwner": "qisi-ocr-shadow-mode.js",

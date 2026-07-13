@@ -159,6 +159,62 @@ test('prepared-page recognizer keeps targeted repair inside the engine owner', a
     assert.equal(result.questions[0].options.length, 4);
 });
 
+test('prepared-page recognizer rejects late results after cancellation', async () => {
+    const engine = loadEngine();
+    const controller = new AbortController();
+    let recognitionCalls = 0;
+    let validationCalls = 0;
+    const recognizer = engine.createStrictVisualPreparedPagesRecognizer(ports({
+        recognizePage: async payload => {
+            recognitionCalls += 1;
+            assert.equal(payload.signal, controller.signal);
+            controller.abort();
+            return [{ questionNumber: '1', stem: 'late-result' }];
+        },
+        validateQuestionItems: () => {
+            validationCalls += 1;
+            return { fatal: false, failedQuestions: [] };
+        }
+    }));
+
+    await assert.rejects(
+        recognizer({
+            file: { id: 'pdf-1', filename: 'cancel.pdf', fileType: 'pdf' },
+            pages: [{ pageNo: 1, url: 'page-1' }],
+            signal: controller.signal
+        }),
+        error => (
+            error.name === 'AbortError' &&
+            error.code === 'OCR_REQUEST_CANCELLED'
+        )
+    );
+    assert.equal(recognitionCalls, 1);
+    assert.equal(validationCalls, 0);
+});
+
+test('prepared-page recognizer stops before transport for a pre-aborted signal', async () => {
+    const engine = loadEngine();
+    const controller = new AbortController();
+    controller.abort();
+    let recognitionCalls = 0;
+    const recognizer = engine.createStrictVisualPreparedPagesRecognizer(ports({
+        recognizePage: async () => {
+            recognitionCalls += 1;
+            return [];
+        }
+    }));
+
+    await assert.rejects(
+        recognizer({
+            file: { id: 'pdf-1', filename: 'cancel.pdf', fileType: 'pdf' },
+            pages: [{ pageNo: 1, url: 'page-1' }],
+            signal: controller.signal
+        }),
+        error => error.code === 'OCR_REQUEST_CANCELLED'
+    );
+    assert.equal(recognitionCalls, 0);
+});
+
 test('prepared-page recognizer requires every policy and producer port', () => {
     const engine = loadEngine();
     assert.throws(

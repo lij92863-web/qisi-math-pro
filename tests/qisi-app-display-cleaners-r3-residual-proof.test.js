@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
 const { decideResidual, buildResidualProofs } = require('../scripts/bm-a4-r3-residual-proof');
-// Wave 13 deleted one unreachable DOCX option-repair callsite with its owner.
-const EXPECTED_REMAINING_CALLSITES = 26;
+// Wave 16 retired fourteen unreachable OCR/Vision producer callsites.
+const EXPECTED_REMAINING_CALLSITES = 12;
 
 function decide(overrides) {
     return decideResidual({

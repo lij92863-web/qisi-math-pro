@@ -447,3 +447,31 @@ Post-wave inventory is 16,301 `app.js` lines and 362 detected functions. The
 largest detected function remains 239 lines. Decision:
 `MANUAL_REVIEW_PROVENANCE_FORMAL_LIFECYCLE_ACCEPTED`. Remaining OCR/Vision
 transport and producer ownership is the independent conditional Wave 16 audit.
+
+## Wave 16 result: OCR/Vision transport and strict producer ownership closed
+
+The conditional audit was applicable. The shell still contained 18 direct
+Qwen proxy requests plus model selection, request/response protocol handling,
+OCR engine selection, and a reachable strict-page source producer. The Qwen
+adapter now owns endpoint/model/payload/response/timeout/cancellation behavior;
+the new Qwen vision source port owns strict question and document/formula/manual
+OCR source behavior; the batch engine remains the strict file/prepared-page
+producer owner.
+
+`app.js` now has zero direct proxy request, AI endpoint fetch, model identity,
+OCR task selection, production mock identity, and inline strict producer
+definitions. Missing ports and malformed responses fail closed. Caller
+cancellation is propagated through render, page recognition, figure/repair
+ports, and support evidence, with late results rejected before merge. Browser
+fixtures use only the explicit test registry slot and cannot become a
+production fallback.
+
+The unreachable legacy OCR/Vision recognition and repair closure was removed,
+reducing the live display-cleaner residual inventory from 26 to 12 callsites.
+Post-wave inventory is 13,226 `app.js` lines and 305 detected functions. The
+largest function is the unrelated 164-line `startExamPointerDrag`; the largest
+remaining Program C function is the 146-line `extractTextFromDraftFile`.
+Focused tests pass 59/59, `verify:safe` passes 1,607/1,607 across 54 suites,
+and all 11 mandatory gates and browser canaries pass with real-API counts at
+zero. Decision: `APP_OCR_TRANSPORT_OWNER_ZERO_ACCEPTED`. Wave 17 remains an
+independent conditional D-boundary audit.

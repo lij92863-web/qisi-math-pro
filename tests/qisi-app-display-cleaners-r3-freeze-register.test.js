@@ -7,8 +7,8 @@ const {
     assertValidFrozenItem,
     buildFreezeRegister
 } = require('../scripts/bm-a4-r3-freeze-register');
-// Wave 13 deleted one unreachable DOCX option-repair callsite with its owner.
-const EXPECTED_REMAINING_CALLSITES = 26;
+// Wave 16 retired fourteen unreachable OCR/Vision producer callsites.
+const EXPECTED_REMAINING_CALLSITES = 12;
 
 const unsafeProof = {
     callsiteId: 'R3-TEST',

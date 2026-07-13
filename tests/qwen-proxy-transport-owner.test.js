@@ -82,7 +82,7 @@ test('Qwen proxy transport aborts timed-out work with the legacy safe message', 
     );
 });
 
-test('app shell delegates all eighteen AI proxy requests and health transport', () => {
+test('app shell assembles owners but contains zero AI proxy requests', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
 
     assert.doesNotMatch(app, /const fetchWithTimeout\s*=/);
@@ -90,7 +90,9 @@ test('app shell delegates all eighteen AI proxy requests and health transport', 
     assert.doesNotMatch(app, /fetch\(\s*['"]\/api\/ai\//);
     assert.equal(
         (app.match(/qwenProxyTransport\.request\(/g) || []).length,
-        18
+        0
     );
-    assert.match(app, /qwenProxyTransport\.checkHealth\(\)/);
+    assert.doesNotMatch(app, /qwenProxyTransport\.getEndpoint\(/);
+    assert.match(app, /createQwenTaskClient\s*\(/);
+    assert.match(app, /qwenTaskClient\.checkHealth\(\)/);
 });

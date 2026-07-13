@@ -1449,6 +1449,13 @@
                     ? performance.now()
                     : Date.now()
             );
+        const throwIfCancelled = signal => {
+            if (!signal?.aborted) return;
+            const cancelled = new Error('Strict visual recognition cancelled.');
+            cancelled.name = 'AbortError';
+            cancelled.code = 'OCR_REQUEST_CANCELLED';
+            throw cancelled;
+        };
 
         return async function recognizeStrictVisualPreparedPages({
             file,
@@ -1456,9 +1463,11 @@
             pages,
             expectedQuestionCount = 0,
             onPageProgress = null,
-            renderDurationMs = 0
+            renderDurationMs = 0,
+            signal
         }) {
             void batch;
+            throwIfCancelled(signal);
             if (!pages.length) {
                 throw new Error(`${file.filename} 没有生成任何页面图`);
             }
@@ -1514,6 +1523,7 @@
                 pages,
                 2,
                 async (page, index) => {
+                    throwIfCancelled(signal);
                     const pageNo = page.pageNo || index + 1;
                     const pageStartedAt = now();
                     if (!page.url) {
@@ -1540,13 +1550,16 @@
                             { stage: 'initial-page-recognition', pageNo }
                         );
                     }
+                    throwIfCancelled(signal);
                     const result = await ports.recognizePage({
                         file,
                         imageUrl: page.url,
                         pageNo,
                         expectedQuestionCount: 0,
-                        repairInfo: ''
+                        repairInfo: '',
+                        signal
                     });
+                    throwIfCancelled(signal);
                     const strictPageDiagnostics =
                         result?.__strictPageDiagnostics || {};
                     const pageItems = (result || []).map(item => ({
@@ -1574,8 +1587,10 @@
                                     pageImage: page.url,
                                     pageNo,
                                     sourceFileName: file.filename,
-                                    questions: figureLocatorTargets
+                                    questions: figureLocatorTargets,
+                                    signal
                                 });
+                            throwIfCancelled(signal);
                             const figuresByQuestion = new Map();
                             for (const rawFigure of locatedFigures || []) {
                                 const questionNumber = ports.cleanRecognizedText(
@@ -1612,6 +1627,12 @@
                                 ];
                             }
                         } catch (error) {
+                            if (
+                                error?.name === 'AbortError' ||
+                                error?.code === 'OCR_REQUEST_CANCELLED'
+                            ) {
+                                throw error;
+                            }
                             if (ports.isFatalServiceError(error)) throw error;
                             console.warn(
                                 '[BATCH_IMAGE][figure-locator-failed]',
@@ -1658,6 +1679,7 @@
                     return pageItems;
                 }
             );
+            throwIfCancelled(signal);
 
             let items = ports.mergeQuestionItems(
                 pageResults.flat().filter(Boolean)
@@ -1712,6 +1734,7 @@
                     );
                 });
                 for (const page of targetPages) {
+                    throwIfCancelled(signal);
                     const pageNo = page.pageNo || 1;
                     const pageQuestions = items.filter(item =>
                         targetNumbers.has(String(item.questionNumber || '')) &&
@@ -1732,8 +1755,10 @@
                             page.url,
                             pageNo,
                             pageQuestions,
-                            ''
+                            '',
+                            signal
                         );
+                    throwIfCancelled(signal);
                     items = ports.mergeQuestionItems([
                         ...items,
                         ...(repaired || []).map(item => ({
@@ -1814,6 +1839,7 @@
                         ).length
                 }))
             });
+            throwIfCancelled(signal);
             if (onPageProgress) {
                 await onPageProgress(1, { stage: 'done', done: true });
             }
@@ -1850,13 +1876,25 @@
                     : Date.now()
             );
 
-        const preparePages = async file => {
+        const throwIfCancelled = signal => {
+            if (!signal?.aborted) return;
+            const cancelled = new Error('Strict visual recognition cancelled.');
+            cancelled.name = 'AbortError';
+            cancelled.code = 'OCR_REQUEST_CANCELLED';
+            throw cancelled;
+        };
+
+        const preparePages = async (file, signal) => {
+            throwIfCancelled(signal);
             if (file.fileType === 'pdf') {
-                return ports.renderPdfFilePages(file, {
+                const pages = await ports.renderPdfFilePages(file, {
                     scale: 2.2,
                     jpegQuality: 0.9,
-                    sequential: true
+                    sequential: true,
+                    ...(signal ? { signal } : {})
                 });
+                throwIfCancelled(signal);
+                return pages;
             }
 
             if (file.fileType === 'image') {
@@ -1875,7 +1913,8 @@
             file,
             batch,
             expectedQuestionCount = 0,
-            onPageProgress = null
+            onPageProgress = null,
+            signal
         }) => {
             const renderStart = now();
             let pages = [];
@@ -1889,7 +1928,9 @@
             });
 
             try {
-                pages = await preparePages(file);
+                throwIfCancelled(signal);
+                pages = await preparePages(file, signal);
+                throwIfCancelled(signal);
                 const renderDurationMs = now() - renderStart;
 
                 console.log('[BATCH_DEBUG][strict-visual-prepared-pages]', {
@@ -1911,7 +1952,8 @@
                     pages,
                     expectedQuestionCount,
                     onPageProgress,
-                    renderDurationMs
+                    renderDurationMs,
+                    ...(signal ? { signal } : {})
                 });
 
                 ports.logDiagnostic('strict-visual-file-result', {

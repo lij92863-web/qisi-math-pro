@@ -9,8 +9,8 @@ const candidateNormalizerLines = fs.readFileSync(
     'qisi-candidate-normalizer.js',
     'utf8'
 ).split('\n');
-// Wave 13 deleted one unreachable DOCX option-repair callsite with its owner.
-const EXPECTED_REMAINING_CALLSITES = 26;
+// Wave 16 retired fourteen unreachable OCR/Vision producer callsites.
+const EXPECTED_REMAINING_CALLSITES = 12;
 
 function findLineContaining(fragment, startLine = 1) {
     const index = appLines.findIndex((line, idx) =>
@@ -54,13 +54,20 @@ describe('bm-a4-r3-ownership-audit', () => {
         assert.equal(fs.existsSync('scripts/bm-a4-r3-ownership-audit.js'), true);
     });
 
-    it('controlled-write context blocked', () => {
-        const site = makeCallsite(
-            'R3-TEST-01',
-            'cleanDisplayTextForBatchSave',
-            'const patchedAnswer = cleanDisplayTextForBatchSave(patch.answer || patch.答案 || \'\');'
+    it('controlled-write context stays blocked after its dead app callsite is retired', () => {
+        assert.doesNotMatch(
+            appLines.join('\n'),
+            /const patchedAnswer = cleanDisplayTextForBatchSave/
         );
-        const result = auditCallsite(site, appLines);
+        const fixtureLines = [
+            'controlledWrite();',
+            'const value = cleanDisplayTextForBatchSave(patch.answer);'
+        ];
+        const result = auditCallsite({
+            callsiteId: 'R3-TEST-01',
+            helper: 'cleanDisplayTextForBatchSave',
+            line: 2
+        }, fixtureLines);
         assert.equal(result.decision.startsWith('BLOCKED'), true);
     });
 
@@ -87,12 +94,18 @@ describe('bm-a4-r3-ownership-audit', () => {
     });
 
     it('answer/solution ownership context blocked', () => {
-        const site = makeCallsite(
-            'R3-TEST-04',
-            'cleanDisplayTextForBatchSave',
-            'const oldAnswer = cleanDisplayTextForBatchSave(draft.answer);'
+        assert.doesNotMatch(
+            appLines.join('\n'),
+            /const oldAnswer = cleanDisplayTextForBatchSave\(draft\.answer\)/
         );
-        const result = auditCallsite(site, appLines);
+        const result = auditCallsite({
+            callsiteId: 'R3-TEST-04',
+            helper: 'cleanDisplayTextForBatchSave',
+            line: 2
+        }, [
+            'const draft = currentDraft;',
+            'const oldAnswer = cleanDisplayTextForBatchSave(draft.answer);'
+        ]);
         assert.equal(result.decision.startsWith('BLOCKED'), true);
     });
 
