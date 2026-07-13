@@ -1,0 +1,23 @@
+{
+  "recognitionContractsOwner": "qisi-recognition-contracts.js",
+  "formalAdmissionOwner": "qisi-formal-admission-policy.js",
+  "storageRepositoryOwner": "qisi-storage-repository.js",
+  "libraryServiceOwner": "qisi-library-service.js",
+  "reviewControllerOwner": "qisi-review-controller.js",
+  "productionReviewValidatorOwner": "qisi-production-review-validator.js",
+  "exportServiceOwner": "qisi-export-service.js",
+  "importCoordinatorScaffoldOwner": "qisi-import-orchestrator.js",
+  "legacyBatchRunOwner": "qisi-legacy-batch-run-coordinator.js",
+  "injectedImportPathOwner": "qisi-injected-import-path.js",
+  "batchFormalSubmitOwner": "qisi-batch-formal-submit.js",
+  "ocrRegistryOwner": "qisi-ocr-engine-registry.js",
+  "qwenAdapterOwner": "qisi-ocr-qwen-adapter.js",
+  "localAdapterOwner": "qisi-ocr-local-adapter.js",
+  "shadowModeOwner": "qisi-ocr-shadow-mode.js",
+  "performanceMonitorOwner": "qisi-performance-monitor.js",
+  "controlledWriteOwner": "qisi-pdf-support-controlled-write.js",
+  "supportAlignerOwner": "qisi-pdf-support-aligner.js",
+  "supportParserOwner": "qisi-pdf-support-block-parser.js",
+  "routeBResearchOwner": "qisi-answer-only-ai-pass.js",
+  "appShellOwner": "app.js"
+}

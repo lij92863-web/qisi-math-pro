@@ -4,7 +4,7 @@
 - Baseline tag: `pre-post-r2-correction-r1-6ab88d0`
 - Current branch: `stage/post-r2-correction-r1`
 - Current phase: Program A / Phase 2
-- Current work package: A2-8 true deterministic import E2E accepted;
+- Current work package: A2-9 architecture ownership manifest accepted;
   preparing atomic commit
 - Status updated: 2026-07-13 Asia/Shanghai
 
@@ -67,11 +67,15 @@
   rewind rejection, click-only rejection, field-level teacher rewrite,
   transactional review persistence, formal v2 admission, reload persistence,
   sanitized export, and localhost-only browser execution.
+- Added complete layer and domain-owner manifests for all required architecture
+  owners plus the corrective release composition modules.
+- Added automated guards for dependency direction/cycles, duplicate ownership,
+  app-shell reimplementation, adapter/OCR authority, permissive controllers,
+  formal-submit bypass, and research-only production loading.
 
 ## Pending
 
-- A2-9 through A2-10 architecture manifest and
-  operational hardening.
+- A2-10 operational hardening.
   boundary, review validation, true E2E, architecture manifest, and operational
   hardening.
 - Phase 3 through Phase 8 attacks, audits, benchmark, CTO review, and sealing.
@@ -87,6 +91,7 @@
 - A2-5 controller fail-closed behavior `dab55b6`.
 - A2-6 truthful import coordinator boundary `f33cf7a`.
 - A2-7 production review validator wiring `173fa19`.
+- A2-8 true deterministic import E2E `36c919b`.
 
 ## Gates
 
@@ -160,6 +165,15 @@
 - A2-8 full mandatory matrix: passed.
 - A2-8 browser preflight/dry-run: passed with `realApiCalled=false`,
   `underlyingApiCallCount=0`, and browser chain healthy.
+- A2-9 failure-first evidence: both required architecture manifest files were
+  missing while source-level checks existed only in partial hand-written tests.
+- A2-9 architecture manifest and existing architecture/quality suite: passed
+  14/14.
+- A2-9 `verify:safe`: passed with 1073/1073 tests, 0 skipped; batch mock smoke
+  passed 20/20.
+- A2-9 full mandatory matrix: passed.
+- A2-9 browser preflight/dry-run: passed with `realApiCalled=false`,
+  `underlyingApiCallCount=0`, and browser chain healthy.
 
 ## Blockers
 
@@ -168,5 +182,5 @@
 
 ## Next exact action
 
-Run exact A2-8 diff-scope verification, commit/push, then begin A2-9 complete
-architecture ownership manifest and automated guards.
+Run exact A2-9 diff-scope verification, commit/push, then begin A2-10 security
+and operations hardening.
