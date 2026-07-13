@@ -251,6 +251,8 @@
   existing ownership guards already enforced the formal submit chain.
 - Phase 3 formal-DB-bypass and architecture regressions passed 6/6; full
   mandatory matrix and browser dry-run passed with no real API call.
+- Phase 3 package-schema-injection failure-first evidence: its matrix row was absent; the policy already rejected invalid package context.
+- Phase 3 package-schema-injection regressions passed 14/14; full mandatory matrix and browser dry-run passed with no real API call.
 
 ## Blockers
 
@@ -259,4 +261,4 @@
 
 ## Next exact action
 
-Commit/push formal DB bypass, then execute package schema injection.
+Commit/push package schema injection, then execute XSS.
