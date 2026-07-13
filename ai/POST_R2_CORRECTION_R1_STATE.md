@@ -215,6 +215,10 @@
   Formal Admission already rejected draft-level flag laundering.
 - Phase 3 fake-manual-flag and policy regressions passed 14/14; full mandatory
   matrix and browser preflight/dry-run passed with no real API call.
+- Phase 3 rejected-AI-confirm failure-first evidence: its matrix row was absent;
+  the real production validator already preserved rejected provenance.
+- Phase 3 rejected-AI-confirm attack and production-validator regressions passed
+  8/8; full mandatory matrix and browser dry-run passed with no real API call.
 
 ## Blockers
 
@@ -223,5 +227,4 @@
 
 ## Next exact action
 
-Commit/push the Phase 3 fake-manual-flag package, then execute the rejected
-AI-field confirm-only attack class.
+Commit/push the rejected-AI-confirm package, then execute duplicate submit.
