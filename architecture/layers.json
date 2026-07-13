@@ -44,6 +44,14 @@
       "status": "scaffold"
     },
     {
+      "id": "ocr-structure-extractor", "file": "qisi-ocr-structure-extractor.js",
+      "layer": 1, "domainOwner": "ocrStructureExtractorOwner",
+      "publicApi": ["extractQuestionStructures"],
+      "allowedDependencies": ["ocr-reading-order"],
+      "forbiddenDependencies": ["app-shell", "storage-repository", "formal-admission"],
+      "status": "scaffold"
+    },
+    {
       "id": "support-parser", "file": "qisi-pdf-support-block-parser.js",
       "layer": 0, "domainOwner": "supportParserOwner",
       "publicApi": ["parsePdfSupportBlocks"],

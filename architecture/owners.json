@@ -4,6 +4,7 @@
   "recognitionContractsOwner": "qisi-recognition-contracts.js",
   "ocrAdapterContractOwner": "qisi-ocr-adapter-contract.js",
   "ocrReadingOrderOwner": "qisi-ocr-reading-order.js",
+  "ocrStructureExtractorOwner": "qisi-ocr-structure-extractor.js",
   "formalAdmissionOwner": "qisi-formal-admission-policy.js",
   "storageRepositoryOwner": "qisi-storage-repository.js",
   "libraryServiceOwner": "qisi-library-service.js",

@@ -3,7 +3,7 @@
 - Start commit: `1361d7e7f81d2f23819a995a0f9d1808adf19982`
 - Baseline tag: `pre-ocr-quality-r1-1361d7e`
 - Current branch: `stage/ocr-quality-r1`
-- Current phase: Program B / Phase 2 / B2-5 complete
+- Current phase: Program B / Phase 2 / B2-6 complete
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -88,10 +88,19 @@
   mandatory gates passed.
 - Reading order is implemented/unit-tested as a scaffold. It is not loaded by the
   production page, benchmark-measured on real documents, or production-promoted.
+- B2-6 implemented a pure evidence-based structure extractor for strict anchors,
+  stem, options, answer, solution, formulas, and images. Raw/bbox/confidence/block
+  evidence is preserved; JSON wrappers and duplicate/invalid options are rejected;
+  missing options require explicit expected labels and contain no invented text.
+- Every extracted question remains ownership-unvalidated and ineligible for
+  controlled-write/FormalAdmission. The module is a unit-tested scaffold and is
+  not loaded by the production page or benchmark-measured on real documents.
+- B2-6 reading-order/extractor tests passed 14/14; behavior, architecture, and
+  code-boundary targeted tests passed 26/26; all 11 mandatory gates passed.
 
 ## Pending
 
-- Phase 2 work packages B2-6 through B2-10, subject to their evidence gates.
+- Phase 2 work packages B2-7 through B2-10, subject to their evidence gates.
 - Phases 3–8 attacks, audits, final benchmark, CTO review, and seal.
 
 ## Blockers / limitations
@@ -103,5 +112,5 @@
 
 ## Next exact action
 
-Commit and push B2-5, then start B2-6 with failing evidence-based structure
-extraction tests for anchors, stem, options, answer, solution, formulas, and images.
+Commit and push B2-6, then audit B2-7 ownership evidence. Do not modify any
+high-risk owner without an authorized real Holdout failing case.
