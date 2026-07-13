@@ -34,7 +34,9 @@ test('Phase 6 formal bypass and app DB callsite counts are explicit', () => {
     const start = app.indexOf('const submitDraftQuestion = async');
     const submit = app.slice(start, app.indexOf('const refreshBatchStats', start));
     assert.equal((submit.match(/db\.questions\.(?:put|add|bulkPut)/g) || []).length, 0);
-    assert.equal((app.match(/db\.questions\.(?:put|add|bulkPut)/g) || []).length, 6);
+    assert.equal((app.match(
+        /db\.questions\.(?:put|add|bulkPut|update|delete|bulkDelete|clear)/g
+    ) || []).length, 0);
 });
 
 test('Phase 6 benchmark report records every required workload and passes 10 percent gate', () => {

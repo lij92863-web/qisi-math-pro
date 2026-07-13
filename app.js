@@ -16396,7 +16396,7 @@ ${source}`;
                             JSON.stringify(next.options) !== JSON.stringify(question.options || []);
 
                         if (!changed) continue;
-                        await db.questions.put(next);
+                        await storageRepository.put('questions', next);
                         changedCount += 1;
                     }
 
@@ -16857,7 +16857,7 @@ ${source}`;
                         { type: 'external-fill', sourceTeacher: extQ.sourceTeacher || '外部教师', batchId: extQ.batchId, externalId: extQ.id, filledAt: now }
                     ];
                     localQ.updatedAt = now;
-                    await db.questions.put(toRaw(localQ));
+                    await storageRepository.put('questions', toRaw(localQ));
                 };
 
                 const confirmAddExternalToPersonal = async () => {
@@ -16915,7 +16915,7 @@ ${source}`;
                                         filled += 1;
                                     } else {
                                         const newQ = copyExternalToPersonalQuestion(extQ, item);
-                                        await db.questions.put(newQ);
+                                        await storageRepository.put('questions', newQ);
                                         mergeBatch.addedQuestionIds.push(newQ.id);
                                         await db.externalQuestions.update(extQ.id, { processStatus: 'added', linkedQuestionId: newQ.id, processedAt: now });
                                         added += 1;
@@ -16925,7 +16925,7 @@ ${source}`;
 
                                 if (item.action === 'add') {
                                     const newQ = copyExternalToPersonalQuestion(extQ, item);
-                                    await db.questions.put(newQ);
+                                    await storageRepository.put('questions', newQ);
                                     mergeBatch.addedQuestionIds.push(newQ.id);
                                     await db.externalQuestions.update(extQ.id, { processStatus: 'added', linkedQuestionId: newQ.id, processedAt: now });
                                     added += 1;
@@ -16961,9 +16961,17 @@ ${source}`;
                         const now = Date.now();
                         await db.transaction('rw', db.questions, db.externalQuestions, db.mergeBatches, async () => {
                             const addedIds = latest.addedQuestionIds || [];
-                            if (addedIds.length) await db.questions.bulkDelete(addedIds);
+                            if (addedIds.length) {
+                                await storageRepository.deleteMany(
+                                    'questions', addedIds
+                                );
+                            }
                             for (const snapshot of latest.filledQuestionSnapshots || []) {
-                                if (snapshot?.id) await db.questions.put(snapshot);
+                                if (snapshot?.id) {
+                                    await storageRepository.put(
+                                        'questions', snapshot
+                                    );
+                                }
                             }
                             for (const snapshot of latest.externalStatusSnapshots || []) {
                                 if (!snapshot?.id) continue;
@@ -17202,7 +17210,7 @@ ${source}`;
                             updatedAt: now
                         };
 
-                        await db.questions.put(newQ);
+                        await storageRepository.put('questions', newQ);
 
                         entryForm.stem = ''; entryForm.options = ['', '', '', '']; entryForm.answer = ''; entryForm.solution = ''; entryForm.images = [];
                         safeStorage.remove('qisi_draft_v2');

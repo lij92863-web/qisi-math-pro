@@ -77,7 +77,7 @@
     {
       "id": "storage-repository", "file": "qisi-storage-repository.js",
       "layer": 1, "domainOwner": "storageRepositoryOwner",
-      "publicApi": ["createRepository", "confirmDraftToQuestion", "persistReviewDraftBatch"],
+      "publicApi": ["createRepository", "deleteMany", "confirmDraftToQuestion", "persistReviewDraftBatch"],
       "allowedDependencies": ["recognition-contracts"],
       "forbiddenDependencies": ["app-shell"], "status": "production-wired"
     },

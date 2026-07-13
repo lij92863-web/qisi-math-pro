@@ -221,3 +221,25 @@ UI, or real-network authority. Post-wave inventory is 18,294 lines and 378
 detected functions; the largest function remains 242 lines. Lower-level
 OCR/vision transport delegation and unrelated formal-repository writes remain
 separate later boundaries.
+
+## Wave 7 result: formal question table mutations delegated
+
+All six direct `db.questions.put` callsites and the related external-merge
+rollback `bulkDelete` now delegate to the existing
+`qisi-storage-repository.js` owner. The repository's generic `put` preserves
+the exact legacy records and ambient transaction semantics; its new
+`deleteMany` operation uses Dexie `bulkDelete` where available and a tested
+per-key fallback for compatible repository implementations.
+
+No Formal Admission, controlled-write, review, or import policy changed. The
+normal import route still reaches formal storage only through
+`BatchFormalSubmit -> FormalAdmissionPolicy -> StorageRepository` after user
+confirmation. These seven migrated callsites belong to unrelated legacy
+library migration, external-bank merge/rollback, and manual-entry features;
+they no longer mutate the formal table directly from the shell. Read-only
+question table access and the unrelated external-bank transaction remain G.
+
+Post-wave inventory is 18,302 lines and 378 detected functions; the eight-line
+increase from Wave 6 is readable repository delegation around the rollback,
+not hidden business logic. The largest function remains 242 lines. Direct
+formal question table mutations in `app.js` are zero.

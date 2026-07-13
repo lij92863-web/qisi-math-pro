@@ -219,6 +219,19 @@
             await table(name).put(clone(value));
             return clone(value);
         });
+        const deleteMany = (name, ids) => run(
+            `delete-many:${name}`,
+            async () => {
+                const normalized = clone(Array.isArray(ids) ? ids : []);
+                const target = table(name);
+                if (normalized.length && typeof target.bulkDelete === 'function') {
+                    await target.bulkDelete(normalized);
+                } else {
+                    for (const id of normalized) await target.delete(id);
+                }
+                return { deletedCount: normalized.length };
+            }
+        );
         const update = (name, id, patch) => run(
             `update:${name}`,
             async () => {
@@ -743,7 +756,7 @@
         };
 
         const repository = Object.freeze({
-            transaction, listTable, get, put, update, findBy, findAny,
+            transaction, listTable, get, put, deleteMany, update, findBy, findAny,
             loadImageRecords,
             loadLibrary, saveQuestion, updateQuestion, softDeleteQuestion,
             restoreQuestion, listRecentTasks, saveDraft, loadDraft,
