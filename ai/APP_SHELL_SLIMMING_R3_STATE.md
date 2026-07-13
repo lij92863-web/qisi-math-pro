@@ -659,9 +659,16 @@
   20/20, PDF known-bad passed 65/65, controlled-write ownership passed 21/21,
   Base Migration passed 15/15, and Route B hold passed 6/6. No real-run was
   performed.
-- Wave C2-10.5 Phases 5 through 6 and the hard acceptance gates. C2-11 through
-  C2-14, attacks, audits, benchmark, CTO review, and seal remain blocked until
-  the production bridge and shadow-equivalence package is accepted.
+- Shared-owner wiring, old inline projection removal, and browser shadow evidence
+  were committed and pushed as
+  `2a2b4043927c4583679d34613524e0538788861a`. Local, tracked remote, and live
+  remote branch hashes were equal, both comparison logs were empty, and the
+  working tree was clean after the push.
+- The bounded corrective decision is
+  `PDF_PROJECTION_OWNER_CORRECTION_ACCEPTED`; the evidence report is
+  `docs/release/PDF_PROJECTION_OWNER_CORRECTION_R3.md`. Phase 5 browser
+  equivalence may resume. C2-11 through C2-14, attacks, audits, benchmark, CTO
+  review, and seal remain blocked until Phase 5 itself is accepted.
 
 ## Blockers / limitations
 
@@ -674,7 +681,5 @@
 
 ## Next exact action
 
-Commit and push the shared-owner wiring/browser evidence, create the corrective
-release report, and seal the final accepted/blocked decision. If accepted,
-resume Phase 5 browser equivalence; do not enter C2-11 until Phase 5 itself is
+Resume Phase 5 browser equivalence. Do not enter C2-11 until Phase 5 itself is
 accepted.
