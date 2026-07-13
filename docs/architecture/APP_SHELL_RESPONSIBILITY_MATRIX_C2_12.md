@@ -382,3 +382,35 @@ largest detected function is 239 lines. Focused tests, two browser suites, all
 11 mandatory gates, DOCX stable, PDF known-bad, and Route B hold are green; all
 safety counters and real API calls remain zero. ReviewDraft command/persistence
 ownership is the next conditional audit and has not been claimed complete.
+
+## Wave 14 result: ReviewDraft command/persistence boundary closed
+
+The conditional audit was applicable. Reachable review UI handlers still
+created the initial batch/file transaction and directly read or wrote
+`draftImportBatches`, `draftImportFiles`, `draftQuestions`, and `draftImages`
+for edits, status transitions, image confirmation/deletion/binding/cropping,
+duplicate marking, statistics, cleanup, and formal-submit preparation.
+
+The existing `qisi-draft-persistence-service.js` owner now exposes bounded
+create, draft-command, and image-command ports. They validate association,
+optimistic version, idempotency, submitted-draft immutability, cancellation,
+and readback before returning. The existing repository remains the only
+transaction owner; its batch replacement now rechecks the expected persistence
+version inside the transaction. The shell builds commands, maps successful
+readback to UI state, and on failure visibly restores the stored editor state.
+It has no catch-and-fallback database route.
+
+Static ReviewDraft table references and draft-table transactions in `app.js`
+are now zero. Formal question writes remain isolated from review persistence.
+Failure-first command tests finish at 6/6, browser UI error recovery passes,
+the 15-case normal-UI canary remains green, and `verify:safe` passes 1,585/1,585
+across 54 suites. All 11 mandatory gates pass with zero failed, cancelled,
+skipped, todo, timeout, or real API call.
+
+Post-wave inventory is 16,286 `app.js` lines and 363 detected functions. The
+largest detected function remains 239 lines. The increase from Wave 13 records
+explicit UI command/error/readback mapping in place of terse direct Dexie
+operations; no new business owner or function above 250 lines was added.
+Decision: `REVIEW_DRAFT_COMMAND_PERSISTENCE_BOUNDARY_ACCEPTED`. Manual edit,
+provenance, validation, duplicate policy, and Formal Admission lifecycle remain
+an independent conditional Wave 15 audit.

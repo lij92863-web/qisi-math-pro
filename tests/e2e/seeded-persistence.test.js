@@ -6,6 +6,7 @@ const {
     callProxy,
     seedReviewBatch,
     getDbSnapshot,
+    waitForDbSnapshot,
     clearE2eData,
     assertNoRuntimeErrors
 } = require('./browser-harness.js');
@@ -27,6 +28,15 @@ test('seeded-persistence: seeded review state survives a browser reload', {
             '1. Persistence stem\nA. One\nB. Two\nC. Three\nD. Four'
         );
         await page.getByRole('button', { name: /保存修改/ }).click();
+
+        // Vue event promises are not awaited by Playwright click(). Wait for
+        // the atomic commit/readback command before exercising browser reload.
+        await waitForDbSnapshot(page, snapshot =>
+            snapshot.drafts.some(item =>
+                item.batchId === 'e2e_persist_batch' &&
+                /Persistence stem/.test(item.stem)
+            )
+        );
 
         await page.reload({ waitUntil: 'domcontentloaded' });
         await page.waitForFunction(() =>

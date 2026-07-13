@@ -77,7 +77,7 @@
     {
       "id": "storage-repository", "file": "qisi-storage-repository.js",
       "layer": 1, "domainOwner": "storageRepositoryOwner",
-      "publicApi": ["createRepository", "deleteMany", "confirmDraftToQuestion", "persistReviewDraftBatch"],
+      "publicApi": ["createRepository", "deleteMany", "confirmDraftToQuestion", "createDraftBatch", "persistReviewDraftBatch"],
       "allowedDependencies": ["recognition-contracts"],
       "forbiddenDependencies": ["app-shell"], "status": "production-wired"
     },
@@ -368,7 +368,7 @@
     {
       "id": "draft-persistence-service", "file": "qisi-draft-persistence-service.js",
       "layer": 2, "domainOwner": "draftPersistenceServiceOwner",
-      "publicApi": ["persistDraftBatch", "persistReviewDraftBatch", "reloadDraftBatch", "deleteDraftBatch"],
+      "publicApi": ["createDraftBatch", "persistDraftBatch", "persistReviewDraftBatch", "persistReviewDraftCommand", "persistReviewImageCommand", "reloadDraftBatch", "deleteDraftBatch"],
       "allowedDependencies": ["storage-repository"],
       "forbiddenDependencies": ["app-shell", "formal-admission", "controlled-write", "route-b-research"],
       "status": "production-wired"

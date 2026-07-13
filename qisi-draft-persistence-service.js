@@ -214,7 +214,8 @@
                     files: command.files,
                     drafts: command.drafts,
                     images: command.images,
-                    signal
+                    signal,
+                    expectedVersion: command.expectedVersion
                 });
                 assertActive(signal);
                 const verified = await repository.get(
@@ -235,6 +236,9 @@
                     version: nextVersion
                 });
             } catch (error) {
+                if (error?.code === 'version-mismatch') {
+                    throw createError('DRAFT_PERSISTENCE_VERSION_CONFLICT');
+                }
                 rethrowOrWrap(error, 'DRAFT_PERSISTENCE_WRITE_FAILED');
             }
         });
@@ -319,6 +323,280 @@
         return cloneValue(loaded);
     };
 
+    const validateAssociatedRows = (rows, batchId) => {
+        if (!Array.isArray(rows)) {
+            throw createError('DRAFT_PERSISTENCE_INPUT_INVALID');
+        }
+        const ids = [];
+        for (const row of rows) {
+            if (!isRecord(row) || !String(row.id || '').trim()) {
+                throw createError('DRAFT_PERSISTENCE_INPUT_INVALID');
+            }
+            if (String(row.batchId || '').trim() !== batchId) {
+                throw createError('DRAFT_PERSISTENCE_ASSOCIATION_INVALID');
+            }
+            ids.push(String(row.id));
+        }
+        if (new Set(ids).size !== ids.length) {
+            throw createError('DRAFT_PERSISTENCE_DUPLICATE_ID');
+        }
+    };
+
+    const createDraftBatch = async (rawCommand, repository) => {
+        requirePorts(repository, ['createDraftBatch', 'loadDraftBatch']);
+        if (
+            !isRecord(rawCommand) || !isRecord(rawCommand.batch) ||
+            !Array.isArray(rawCommand.files)
+        ) {
+            throw createError('DRAFT_PERSISTENCE_INPUT_INVALID');
+        }
+        const signal = rawCommand.signal;
+        assertActive(signal);
+        const command = cloneValue(rawCommand);
+        const batchId = requireId(
+            command.batch.id,
+            'DRAFT_BATCH_ID_REQUIRED'
+        );
+        validateAssociatedRows(command.files, batchId);
+        try {
+            await repository.createDraftBatch({
+                batch: command.batch,
+                files: command.files,
+                signal
+            });
+            const loaded = await repository.loadDraftBatch(batchId);
+            if (
+                !loaded?.batch || loaded.batch.id !== batchId ||
+                !Array.isArray(loaded.files) ||
+                loaded.files.length !== command.files.length
+            ) {
+                throw createError('DRAFT_PERSISTENCE_READBACK_MISMATCH');
+            }
+            validateAssociatedRows(loaded.files, batchId);
+            return immutable({ batch: loaded.batch, files: loaded.files });
+        } catch (error) {
+            rethrowOrWrap(error, 'DRAFT_BATCH_CREATE_FAILED');
+        }
+    };
+
+    const replaceRowsById = (currentRows, updates) => {
+        const replacements = new Map(
+            updates.map(row => [String(row.id), cloneValue(row)])
+        );
+        const next = currentRows.map(row =>
+            replacements.has(String(row.id))
+                ? replacements.get(String(row.id))
+                : row
+        );
+        const existing = new Set(currentRows.map(row => String(row.id)));
+        for (const update of updates) {
+            if (!existing.has(String(update.id))) next.push(cloneValue(update));
+        }
+        return next;
+    };
+
+    const persistReviewDraftCommand = async (rawInput, repository) => {
+        requirePorts(repository, [
+            'get', 'findBy', 'persistReviewDraftBatch', 'loadDraftBatch'
+        ]);
+        if (
+            !isRecord(rawInput) || !isRecord(rawInput.draft) ||
+            (
+                rawInput.images !== undefined &&
+                !Array.isArray(rawInput.images)
+            ) ||
+            (
+                rawInput.batchPatch !== undefined &&
+                !isRecord(rawInput.batchPatch)
+            )
+        ) {
+            throw createError('DRAFT_PERSISTENCE_INPUT_INVALID');
+        }
+        const signal = rawInput.signal;
+        assertActive(signal);
+        const input = cloneValue(rawInput);
+        const batchId = requireId(input.batchId, 'DRAFT_BATCH_ID_REQUIRED');
+        const draftId = requireId(input.draft.id);
+        if (String(input.draft.batchId || '').trim() !== batchId) {
+            throw createError('DRAFT_PERSISTENCE_ASSOCIATION_INVALID');
+        }
+        if (
+            !Number.isInteger(input.expectedDraftVersion) ||
+            input.expectedDraftVersion < 1
+        ) {
+            throw createError('DRAFT_PERSISTENCE_VERSION_CONFLICT');
+        }
+        const imageUpdates = input.images === undefined ? [] : input.images;
+        validateAssociatedRows(imageUpdates, batchId);
+        const idempotencyKey = input.idempotencyKey === undefined
+            ? `review-command:${batchId}:${draftId}:${input.expectedDraftVersion}`
+            : requireId(
+                input.idempotencyKey,
+                'DRAFT_PERSISTENCE_IDEMPOTENCY_KEY_REQUIRED'
+            );
+
+        try {
+            const loaded = await reloadDraftBatch(batchId, repository);
+            const currentDraft = loaded.questions.find(row => row.id === draftId);
+            if (!currentDraft) throw createError('DRAFT_DRAFT_NOT_FOUND');
+            if (imageUpdates.some(image =>
+                String(image.questionId || '').trim() &&
+                String(image.questionId) !== draftId
+            )) {
+                throw createError('DRAFT_PERSISTENCE_ASSOCIATION_INVALID');
+            }
+            if (
+                currentDraft.status === 'submitted' ||
+                input.draft.status === 'submitted'
+            ) {
+                throw createError('DRAFT_PERSISTENCE_SUBMITTED_IMMUTABLE');
+            }
+            const currentDraftVersion = Number(currentDraft.version);
+            const persistenceVersion = currentVersion(loaded.batch);
+            const isReplay =
+                currentDraftVersion === input.expectedDraftVersion + 1 &&
+                loaded.batch?.draftPersistence?.idempotencyKey ===
+                    idempotencyKey;
+            if (
+                currentDraftVersion !== input.expectedDraftVersion &&
+                !isReplay
+            ) {
+                throw createError('DRAFT_PERSISTENCE_VERSION_CONFLICT');
+            }
+            const desiredDraft = {
+                ...input.draft,
+                id: draftId,
+                batchId,
+                version: input.expectedDraftVersion + 1
+            };
+            const nextDrafts = replaceRowsById(
+                loaded.questions,
+                [desiredDraft]
+            );
+            const nextImages = replaceRowsById(loaded.images, imageUpdates);
+            const expectedVersion = isReplay
+                ? Math.max(0, persistenceVersion - 1)
+                : persistenceVersion;
+            const persisted = await persistReviewDraftBatch({
+                batchId,
+                drafts: nextDrafts,
+                images: nextImages,
+                files: loaded.files,
+                batchPatch: input.batchPatch || {},
+                expectedVersion,
+                idempotencyKey,
+                signal
+            }, repository);
+            const readback = await reloadDraftBatch(batchId, repository);
+            const verifiedDraft = readback.questions.find(row => row.id === draftId);
+            const verifiedImages = imageUpdates.map(update =>
+                readback.images.find(row => row.id === update.id)
+            );
+            if (
+                !verifiedDraft ||
+                JSON.stringify(verifiedDraft) !== JSON.stringify(desiredDraft) ||
+                verifiedImages.some((row, index) =>
+                    !row || JSON.stringify(row) !== JSON.stringify(imageUpdates[index])
+                )
+            ) {
+                throw createError('DRAFT_PERSISTENCE_READBACK_MISMATCH');
+            }
+            return immutable({
+                ...persisted,
+                batch: readback.batch,
+                draft: verifiedDraft,
+                images: verifiedImages
+            });
+        } catch (error) {
+            rethrowOrWrap(error, 'DRAFT_PERSISTENCE_WRITE_FAILED');
+        }
+    };
+
+    const persistReviewImageCommand = async (rawInput, repository) => {
+        requirePorts(repository, [
+            'get', 'findBy', 'persistReviewDraftBatch', 'loadDraftBatch'
+        ]);
+        if (!isRecord(rawInput) || !isRecord(rawInput.patch)) {
+            throw createError('DRAFT_PERSISTENCE_INPUT_INVALID');
+        }
+        const signal = rawInput.signal;
+        assertActive(signal);
+        const input = cloneValue(rawInput);
+        const batchId = requireId(input.batchId, 'DRAFT_BATCH_ID_REQUIRED');
+        const imageId = requireId(input.imageId);
+        if (
+            input.expectedUpdatedAt === undefined ||
+            !Number.isFinite(Number(input.expectedUpdatedAt)) ||
+            ['id', 'batchId', 'questionId'].some(key => key in input.patch)
+        ) {
+            throw createError('DRAFT_PERSISTENCE_INPUT_INVALID');
+        }
+        const idempotencyKey = input.idempotencyKey === undefined
+            ? `review-image:${batchId}:${imageId}:${input.expectedUpdatedAt}`
+            : requireId(
+                input.idempotencyKey,
+                'DRAFT_PERSISTENCE_IDEMPOTENCY_KEY_REQUIRED'
+            );
+        try {
+            const loaded = await reloadDraftBatch(batchId, repository);
+            const currentImage = loaded.images.find(row => row.id === imageId);
+            if (!currentImage) throw createError('DRAFT_IMAGE_NOT_FOUND');
+            const currentImageVersion = Number.isFinite(
+                Number(currentImage.updatedAt)
+            )
+                ? Number(currentImage.updatedAt)
+                : 0;
+            const updatedAt = Number.isFinite(Number(input.updatedAt))
+                ? Number(input.updatedAt)
+                : Date.now();
+            const desiredImage = {
+                ...currentImage,
+                ...input.patch,
+                id: imageId,
+                batchId,
+                updatedAt
+            };
+            const persistenceVersion = currentVersion(loaded.batch);
+            const isReplay =
+                currentImageVersion === updatedAt &&
+                loaded.batch?.draftPersistence?.idempotencyKey ===
+                    idempotencyKey &&
+                Object.entries(input.patch).every(
+                    ([key, value]) => currentImage[key] === value
+                );
+            if (
+                currentImageVersion !== Number(input.expectedUpdatedAt) &&
+                !isReplay
+            ) {
+                throw createError('DRAFT_PERSISTENCE_VERSION_CONFLICT');
+            }
+            const persisted = await persistReviewDraftBatch({
+                batchId,
+                drafts: loaded.questions,
+                images: replaceRowsById(loaded.images, [desiredImage]),
+                files: loaded.files,
+                batchPatch: input.batchPatch || {},
+                expectedVersion: isReplay
+                    ? Math.max(0, persistenceVersion - 1)
+                    : persistenceVersion,
+                idempotencyKey,
+                signal
+            }, repository);
+            const readback = await reloadDraftBatch(batchId, repository);
+            const verifiedImage = readback.images.find(row => row.id === imageId);
+            if (JSON.stringify(verifiedImage) !== JSON.stringify(desiredImage)) {
+                throw createError('DRAFT_PERSISTENCE_READBACK_MISMATCH');
+            }
+            return immutable({
+                ...persisted,
+                batch: readback.batch,
+                image: verifiedImage
+            });
+        } catch (error) {
+            rethrowOrWrap(error, 'DRAFT_PERSISTENCE_WRITE_FAILED');
+        }
+    };
+
     const deleteDraftBatch = async (batchIdValue, repository, options = {}) => {
         requirePorts(repository, ['get', 'deleteDraftBatch']);
         const batchId = requireId(batchIdValue, 'DRAFT_BATCH_ID_REQUIRED');
@@ -344,8 +622,11 @@
 
     const api = Object.freeze({
         DraftPersistenceError,
+        createDraftBatch,
         persistDraftBatch,
         persistReviewDraftBatch,
+        persistReviewDraftCommand,
+        persistReviewImageCommand,
         reloadDraftBatch,
         deleteDraftBatch
     });

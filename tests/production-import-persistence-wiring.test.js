@@ -190,7 +190,9 @@ test('all production final review writes delegate to the persistence owner', () 
         /draftPersistenceService\.persistReviewDraftBatch\s*\(/g
     ) || [];
 
-    assert.equal(calls.length, 2);
+    // Bridge finalization, derived-stat refresh, manual dedupe, and display
+    // cleanup are the four reachable whole-batch ReviewDraft write commands.
+    assert.equal(calls.length, 4);
     assert.doesNotMatch(app, /processDraftImportBatchV2/);
     assert.doesNotMatch(
         app,

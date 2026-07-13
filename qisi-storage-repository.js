@@ -393,8 +393,59 @@
             ),
             images: await findBy('draftImages', 'batchId', batchId)
         });
+        const createDraftBatch = async ({ batch, files = [], signal } = {}) => {
+            const batchId = requireId(batch?.id, 'batch.id');
+            if (!Array.isArray(files)) {
+                throw new StorageRepositoryError(
+                    'invalid-record',
+                    'Draft batch files must be an array.',
+                    { batchId }
+                );
+            }
+            const assertActive = () => {
+                if (!signal?.aborted) return;
+                const error = new StorageRepositoryError(
+                    'draft-persistence-cancelled',
+                    'Draft batch creation was cancelled before commit.',
+                    { batchId }
+                );
+                error.name = 'AbortError';
+                throw error;
+            };
+            assertActive();
+            return run('create-draft-batch', () => database.transaction(
+                'rw',
+                table('draftImportBatches'),
+                table('draftImportFiles'),
+                async () => {
+                    assertActive();
+                    if (await table('draftImportBatches').get(batchId)) {
+                        throw new StorageRepositoryError(
+                            'duplicate-id',
+                            `Draft batch ${batchId} already exists.`,
+                            { batchId }
+                        );
+                    }
+                    await table('draftImportBatches').put(clone(batch));
+                    assertActive();
+                    if (files.length) {
+                        await table('draftImportFiles').bulkPut(clone(files));
+                    }
+                    assertActive();
+                    return {
+                        batch: clone(await table('draftImportBatches').get(batchId)),
+                        files: clone(
+                            await table('draftImportFiles')
+                                .where('batchId')
+                                .equals(batchId)
+                                .toArray()
+                        )
+                    };
+                }
+            ));
+        };
         const persistReviewDraftBatch = async ({
-            batch, files = [], drafts = [], images, signal
+            batch, files = [], drafts = [], images, signal, expectedVersion
         }) => {
             requireId(batch?.id, 'batch.id');
             const assertActive = () => {
@@ -415,6 +466,27 @@
                 table('draftImportFiles'),
                 table('draftImportBatches'),
                 async () => {
+                    assertActive();
+                    if (Number.isInteger(expectedVersion)) {
+                        const currentBatch = await table('draftImportBatches')
+                            .get(batch.id);
+                        const actualVersion = Number.isInteger(
+                            currentBatch?.draftPersistence?.version
+                        )
+                            ? currentBatch.draftPersistence.version
+                            : 0;
+                        if (actualVersion !== expectedVersion) {
+                            throw new StorageRepositoryError(
+                                'version-mismatch',
+                                'Draft batch persistence version changed.',
+                                {
+                                    batchId: batch.id,
+                                    expectedVersion,
+                                    actualVersion
+                                }
+                            );
+                        }
+                    }
                     assertActive();
                     await table('draftQuestions').where('batchId')
                         .equals(batch.id).delete();
@@ -760,7 +832,8 @@
             loadImageRecords,
             loadLibrary, saveQuestion, updateQuestion, softDeleteQuestion,
             restoreQuestion, listRecentTasks, saveDraft, loadDraft,
-            loadDraftBatch, persistReviewDraftBatch, deleteDraftBatch,
+            loadDraftBatch, createDraftBatch, persistReviewDraftBatch,
+            deleteDraftBatch,
             confirmDraftToQuestion,
             createBackup, restoreBackup
         });

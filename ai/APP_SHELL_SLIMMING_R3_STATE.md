@@ -951,6 +951,35 @@
 - Decision: `C2_11_LEGACY_BATCH_OWNER_RETIREMENT_ACCEPTED`; C2-12 may begin as
   the next independent stage only.
 
+- C2-12 Waves 12 and 13 completed and were pushed before the Wave 14 audit.
+  The DOCX support producer, converter, and reconciler now have unique owners;
+  the shell was 16,144 lines and 363 inventoried functions at the Wave 13
+  checkpoint.
+- Wave 14 was applicable: reachable review handlers still directly accessed
+  all four ReviewDraft tables for batch creation, edits, status changes,
+  image/crop metadata, duplicate marking, statistics, cleanup, and submit
+  preparation.
+- `DraftPersistenceService` now owns initial create, optimistic single-draft
+  commands, image-only commands, cancellation, idempotency, submitted-draft
+  immutability, and readback verification. `StorageRepository` remains the
+  only transaction owner and rechecks the expected batch persistence version
+  inside the transaction.
+- `app.js` now has zero direct ReviewDraft table or draft-table transaction
+  references. It only maps UI commands/readback and visibly restores persisted
+  editor state on failure. A failed unsaved edit cannot continue to Formal
+  Admission, and review persistence cannot write the formal `questions` table.
+- Failure-first Wave 14 tests moved from 0/6 to 6/6. The real-browser command
+  failure recovery, seeded commit/reload, edit/confirm/formal lifecycle, and
+  15-scenario normal-UI production canary pass. `verify:safe` passes
+  1,585/1,585 across 54 suites; all 11 mandatory gates pass with zero failed,
+  cancelled, skipped, todo, timeout, or real API call. No real-run occurred.
+- Post-Wave-14 inventory is 16,286 lines, 363 functions, and a 239-line largest
+  function. Evidence is in
+  `docs/release/PROGRAM_C_C2_12_WAVE14_REVIEW_DRAFT_COMMAND_PERSISTENCE_REPORT.md`.
+- Decision: `REVIEW_DRAFT_COMMAND_PERSISTENCE_BOUNDARY_ACCEPTED`. Wave 15 is
+  the next independent conditional manual-edit/provenance/formal-lifecycle
+  inventory and is not pre-accepted.
+
 ## Blockers / limitations
 
 - Upload-to-review, switch p50/p95, draft persist, formal submit, reload, export,
@@ -962,7 +991,8 @@
 
 ## Next exact action
 
-After the Wave 13 commit is pushed and all three branch heads agree, begin the
-conditional Wave 14 ReviewDraft command/persistence inventory. Do not claim it
-applicable or N/A without production reachability, transaction, cancellation,
-readback, reload, duplicate, error-recovery, and no-formal-write evidence.
+After the Wave 14 commit is pushed and all three branch heads agree, begin the
+conditional Wave 15 manual-review-edit, provenance, and Formal Admission
+lifecycle inventory. Do not claim it applicable or N/A without production
+reachability, manual-field, rejected-provenance, retry, review-confirmation,
+formal-isolation, and browser evidence.

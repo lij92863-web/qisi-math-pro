@@ -33,12 +33,24 @@
                         reviewValidator: productionReviewValidator
                     });
                 const draftPersistenceService = Object.freeze({
+                    createDraftBatch: command =>
+                        Qisi.DraftPersistenceService.createDraftBatch(
+                            command, storageRepository
+                        ),
                     persistDraftBatch: command =>
                         Qisi.DraftPersistenceService.persistDraftBatch(
                             command, storageRepository
                         ),
                     persistReviewDraftBatch: command =>
                         Qisi.DraftPersistenceService.persistReviewDraftBatch(
+                            command, storageRepository
+                        ),
+                    persistReviewDraftCommand: command =>
+                        Qisi.DraftPersistenceService.persistReviewDraftCommand(
+                            command, storageRepository
+                        ),
+                    persistReviewImageCommand: command =>
+                        Qisi.DraftPersistenceService.persistReviewImageCommand(
                             command, storageRepository
                         ),
                     reloadDraftBatch: batchId =>
@@ -580,6 +592,43 @@
                     }
                 };
 
+                const runReviewDraftPersistenceCommand = async (
+                    command,
+                    { kind = 'draft', failureMessage = '草稿保存失败' } = {}
+                ) => {
+                    try {
+                        return kind === 'image'
+                            ? await draftPersistenceService
+                                .persistReviewImageCommand(command)
+                            : await draftPersistenceService
+                                .persistReviewDraftCommand(command);
+                    } catch (error) {
+                        try {
+                            await loadBatchImportData();
+                            await nextTick();
+                            window.Qisi.ReviewDraftState
+                                .syncActiveDraftEditorFromQuestion({
+                                    activeDraftQuestion,
+                                    activeDraftEditorBuffer,
+                                    activeDraftEditorOriginal,
+                                    activeDraftEditorQuestionId,
+                                    buildDraftEditorSource
+                                });
+                        } catch (reloadError) {
+                            console.error(
+                                '[REVIEW_DRAFT][error-reload-failed]',
+                                reloadError
+                            );
+                        }
+                        showBatchToast(
+                            `${failureMessage}：${
+                                error?.code || error?.message || 'storage-failure'
+                            }`
+                        );
+                        return null;
+                    }
+                };
+
                 const updateBatchProgress = async (batchId, progress, status = 'processing') => {
                     const { patch } = await window.Qisi.ProductionImportStatusPort.reportProgress(
                         { batchId, progress, status }, { repository: storageRepository }
@@ -1011,10 +1060,16 @@
                             : file.uploadPath,
                         updatedAt: now
                     }));
-                    await db.transaction('rw', db.draftImportBatches, db.draftImportFiles, async () => {
-                        await db.draftImportBatches.put(batch);
-                        await db.draftImportFiles.bulkPut(files);
-                    });
+                    try {
+                        await draftPersistenceService.createDraftBatch({
+                            batch,
+                            files
+                        });
+                    } catch (error) {
+                        batchCreateWarning.value =
+                            `创建任务失败：${error?.code || error?.message || 'storage-failure'}`;
+                        return;
+                    }
                     batchCreateFiles.value = [];
                     batchImportMode.value = 'list';
                     await loadBatchImportData();
@@ -12262,8 +12317,13 @@ ${source}`;
                         return result;
                     }
 
-                    const drafts = await db.draftQuestions.where('batchId').equals(targetBatchId).sortBy('order');
-                    return runBatchDocxGoldenCheck(drafts, expectedQuestionCount);
+                    const loaded = await draftPersistenceService.reloadDraftBatch(
+                        targetBatchId
+                    );
+                    return runBatchDocxGoldenCheck(
+                        loaded.questions,
+                        expectedQuestionCount
+                    );
                 };
 
                 window.__qisiTestBatchVisualGolden = async function (batchId = activeBatchId.value, expectedQuestionCount = 6) {
@@ -12965,8 +13025,6 @@ ${source}`;
                     q.fieldProvenance = batchFormalSubmit
                         .buildManualFieldProvenance(q, field);
                 };
-                const bumpDraftVersion = q =>
-                    q.version = batchFormalSubmit.nextDraftVersion(q?.version);
                 const markActiveDraftUserEdited = (field = '') => {
                     const q = activeDraftQuestion.value;
                     if (!q || q.status === 'submitted') return;
@@ -12979,6 +13037,7 @@ ${source}`;
                 const updateDraftQuestionField = async (field, value) => {
                     const q = activeDraftQuestion.value;
                     if (!q || q.status === 'submitted') return;
+                    const expectedDraftVersion = q.version;
 
                     Object.assign(
                         q,
@@ -12987,9 +13046,13 @@ ${source}`;
                     markDraftFieldManual(q, field);
 
                     cleanSingleDraftForSave(q);
-                    bumpDraftVersion(q);
-
-                    await db.draftQuestions.put(toRaw(q));
+                    const persisted = await runReviewDraftPersistenceCommand({
+                        batchId: q.batchId,
+                        draft: toRaw(q),
+                        expectedDraftVersion
+                    });
+                    if (!persisted) return;
+                    Object.assign(q, persisted.draft);
                     showBatchToast('已保存草稿。');
                 };
 
@@ -13051,14 +13114,19 @@ ${source}`;
                 const saveActiveDraftQuestion = async (options = {}) => {
                     const q = activeDraftQuestion.value;
                     if (!q) return false;
+                    const expectedDraftVersion = q.version;
 
                     commitDraftEditorBufferToQuestion(q);
                     q.userEdited = true;
                     cleanSingleDraftForSave(q);
                     normalizeDraftQuestionBeforeSave(q);
-                    bumpDraftVersion(q);
-
-                    await db.draftQuestions.put(toRaw(q));
+                    const persisted = await runReviewDraftPersistenceCommand({
+                        batchId: q.batchId,
+                        draft: toRaw(q),
+                        expectedDraftVersion
+                    });
+                    if (!persisted) return false;
+                    Object.assign(q, persisted.draft);
                     await refreshBatchStats(q.batchId);
 
                     activeDraftEditorOriginal.value = activeDraftEditorBuffer.value;
@@ -13074,15 +13142,21 @@ ${source}`;
                 const confirmDraftImages = async () => {
                     const q = activeDraftQuestion.value;
                     if (!q) return;
+                    const expectedDraftVersion = q.version;
                     q.imageReviewStatus = 'confirmed';
                     q.warnings = (q.warnings || []).filter(w => !String(w).includes('图片需要确认') && !String(w).includes('图片尚未确认'));
                     cleanSingleDraftForSave(q);
                     for (const image of activeDraftRealQuestionImages.value) {
                         image.status = 'bound';
                         image.confidence = Math.max(image.confidence || 0, 0.9);
-                        await db.draftImages.put(toRaw(image));
                     }
-                    await db.draftQuestions.put(toRaw(q));
+                    const persisted = await runReviewDraftPersistenceCommand({
+                        batchId: q.batchId,
+                        draft: toRaw(q),
+                        images: activeDraftRealQuestionImages.value.map(toRaw),
+                        expectedDraftVersion
+                    });
+                    if (!persisted) return;
                     await refreshBatchStats(q.batchId);
                     await loadBatchImportData();
                     showBatchToast('图片已确认。');
@@ -13093,6 +13167,7 @@ ${source}`;
                     const image = batchDraftImages.value.find(img => img.id === imageId);
                     const q = activeDraftQuestion.value;
                     if (!image || !q) return;
+                    const expectedDraftVersion = q.version;
                     image.status = 'deleted';
                     q.images = (q.images || []).filter(img => img.id !== imageId);
                     q.stem = removeImageTokenFromStemForV2(q.stem || '', imageId);
@@ -13116,10 +13191,13 @@ ${source}`;
                     q.hasImage = remainingRealImages.length > 0 || (q.images || []).length > 0;
                     if (!q.hasImage) q.imageReviewStatus = 'none';
                     cleanSingleDraftForSave(q);
-                    await db.transaction('rw', db.draftImages, db.draftQuestions, async () => {
-                        await db.draftImages.put(toRaw(image));
-                        await db.draftQuestions.put(toRaw(q));
+                    const persisted = await runReviewDraftPersistenceCommand({
+                        batchId: q.batchId,
+                        draft: toRaw(q),
+                        images: [toRaw(image)],
+                        expectedDraftVersion
                     });
+                    if (!persisted) return;
                     await loadBatchImportData();
                 };
 
@@ -13215,6 +13293,7 @@ ${source}`;
                         showBatchToast('当前没有可保存的裁剪来源。');
                         return;
                     }
+                    const expectedDraftVersion = q.version;
 
                     const imgEl = cropImageRef.value;
                     if (!imgEl) {
@@ -13304,30 +13383,14 @@ ${source}`;
                     q.imageReviewStatus = 'confirmed';
                     q.updatedAt = now;
 
-                    await db.transaction('rw', db.draftImages, db.draftQuestions, async () => {
-                        await db.draftImages.put(toRaw(croppedImage));
-
-                        await db.draftQuestions.update(q.id, {
-                            stem: nextStem,
-                            hasImage: true,
-                            imageReviewStatus: 'confirmed',
-                            updatedAt: now
-                        });
+                    const persisted = await runReviewDraftPersistenceCommand({
+                        batchId: q.batchId,
+                        draft: toRaw(q),
+                        images: [croppedImage],
+                        expectedDraftVersion
                     });
-
-                    const nextImages = (batchDraftImages.value || []).filter(image => image.id !== imageId);
-                    batchDraftImages.value = [...nextImages, croppedImage];
-
-                    batchDraftQuestions.value = batchDraftQuestions.value.map(item => {
-                        if (item.id !== q.id) return item;
-                        return {
-                            ...item,
-                            stem: nextStem,
-                            hasImage: true,
-                            imageReviewStatus: 'confirmed',
-                            updatedAt: now
-                        };
-                    });
+                    if (!persisted) return;
+                    await loadBatchImportData();
 
                     closeCropModal();
                     showBatchToast('已保存当前题裁剪图。');
@@ -13337,6 +13400,7 @@ ${source}`;
                     const image = batchDraftImages.value.find(img => img.id === imageId);
                     const q = batchDraftQuestions.value.find(item => item.id === questionId);
                     if (!image || !q) return;
+                    const expectedDraftVersion = q.version;
                     image.questionId = q.id;
                     image.status = 'need_confirm';
                     image.confidence = image.confidence || 0.78;
@@ -13346,17 +13410,35 @@ ${source}`;
                     q.imageReviewStatus = 'need_confirm';
                     q.warnings = [...new Set([...(q.warnings || []), '该题图片需要确认后才能入库。'])];
                     cleanSingleDraftForSave(q);
-                    await db.transaction('rw', db.draftImages, db.draftQuestions, async () => {
-                        await db.draftImages.put(toRaw(image));
-                        await db.draftQuestions.put(toRaw(q));
+                    const persisted = await runReviewDraftPersistenceCommand({
+                        batchId: q.batchId,
+                        draft: toRaw(q),
+                        images: [toRaw(image)],
+                        expectedDraftVersion
                     });
+                    if (!persisted) return;
                     await refreshBatchStats(q.batchId);
                     await loadBatchImportData();
                 };
 
                 const deleteUnassignedImage = async (imageId) => {
                     if (!confirm('确定删除这张未分配图片吗？')) return;
-                    await db.draftImages.update(imageId, { status: 'deleted' });
+                    const image = batchDraftImages.value.find(
+                        item => item.id === imageId
+                    );
+                    if (!image) return;
+                    const persisted = await runReviewDraftPersistenceCommand({
+                        batchId: image.batchId,
+                        imageId,
+                        expectedUpdatedAt:
+                            image.updatedAt ?? image.createdAt ?? 0,
+                        updatedAt: Date.now(),
+                        patch: { status: 'deleted' }
+                    }, {
+                        kind: 'image',
+                        failureMessage: '删除图片失败'
+                    });
+                    if (!persisted) return;
                     await refreshBatchStats(activeBatchId.value);
                     await loadBatchImportData();
                 };
@@ -13480,18 +13562,24 @@ ${source}`;
                     if (!q) return;
 
                     if (activeDraftEditorDirty.value) {
-                        await saveActiveDraftQuestion({ silent: true });
+                        const saved = await saveActiveDraftQuestion({ silent: true });
+                        if (!saved) return;
                     }
 
                     normalizeDraftQuestionBeforeSave(q);
+                    const expectedDraftVersion = q.version;
                     const confirmation = reviewController.confirm(q);
                     if (!confirmation.accepted) {
                         alert(confirmation.validation.errors[0]?.message || '题目校验失败。');
                         return;
                     }
                     Object.assign(q, confirmation.draft);
-                    bumpDraftVersion(q);
-                    await db.draftQuestions.put(toRaw(q));
+                    const persisted = await runReviewDraftPersistenceCommand({
+                        batchId: q.batchId,
+                        draft: toRaw(q),
+                        expectedDraftVersion
+                    });
+                    if (!persisted) return;
                     await refreshBatchStats(q.batchId);
                     activeDraftEditorOriginal.value = activeDraftEditorBuffer.value;
                     await loadBatchImportData();
@@ -13522,10 +13610,23 @@ ${source}`;
                         questionId === activeDraftQuestionId.value &&
                         activeDraftEditorDirty.value
                     ) {
-                        await saveActiveDraftQuestion({ silent: true });
+                        const saved = await saveActiveDraftQuestion({
+                            silent: true
+                        });
+                        if (!saved) return false;
                     }
 
-                    const q = await db.draftQuestions.get(questionId);
+                    const localDraft = batchDraftQuestions.value.find(
+                        item => item.id === questionId
+                    );
+                    if (!localDraft?.batchId) return false;
+                    const loadedReviewBatch =
+                        await draftPersistenceService.reloadDraftBatch(
+                            localDraft.batchId
+                        );
+                    const q = loadedReviewBatch.questions.find(
+                        item => item.id === questionId
+                    );
                     if (!q || q.status === 'submitted') return false;
                     normalizeDraftQuestionBeforeSave(q);
                     if (q.status !== 'reviewed') {
@@ -13547,16 +13648,23 @@ ${source}`;
                     await loadData();
                     const duplicateStatus = detectDraftDuplicate(q);
                     if (duplicateStatus !== 'none') {
-                        await db.draftQuestions.update(q.id, { duplicateStatus, updatedAt: Date.now() });
+                        const duplicateDraft = {
+                            ...q,
+                            duplicateStatus,
+                            updatedAt: Date.now()
+                        };
+                        const persisted = await runReviewDraftPersistenceCommand({
+                            batchId: q.batchId,
+                            draft: duplicateDraft,
+                            expectedDraftVersion: q.version
+                        });
+                        if (!persisted) return false;
                         if (!silent) alert(`提交前发现：${duplicateLabel(duplicateStatus)}。第一版默认不允许重复入库。`);
                         await loadBatchImportData();
                         return false;
                     }
 
-                    const relatedDraftImages = await db.draftImages
-                        .where('batchId')
-                        .equals(q.batchId)
-                        .toArray();
+                    const relatedDraftImages = loadedReviewBatch.images;
                     const boundDraftImages = relatedDraftImages
                         .filter(img => img.questionId === q.id && img.status !== 'deleted');
 
@@ -13597,14 +13705,34 @@ ${source}`;
 
                 const refreshBatchStats = async (batchId) => {
                     if (!batchId) return;
-                    const drafts = await db.draftQuestions.where('batchId').equals(batchId).toArray();
-                    const images = await db.draftImages.where('batchId').equals(batchId).toArray();
+                    const loaded = await draftPersistenceService.reloadDraftBatch(
+                        batchId
+                    );
+                    const drafts = loaded.questions;
+                    const images = loaded.images;
                     const reviewedCount = drafts.filter(q => q.status === 'reviewed').length;
                     const submittedCount = drafts.filter(q => q.status === 'submitted').length;
                     const problemCount = drafts.filter(q => draftQuestionProblems(q).length > 0 && q.status !== 'submitted').length;
                     const unassignedImageCount = images.filter(img => img.status === 'unassigned').length;
-                    const status = drafts.length && submittedCount === drafts.length ? 'completed' : ((await db.draftImportBatches.get(batchId))?.status || 'review');
-                    await db.draftImportBatches.update(batchId, { reviewedCount, submittedCount, problemCount, unassignedImageCount, status, updatedAt: Date.now() });
+                    const status = drafts.length && submittedCount === drafts.length
+                        ? 'completed'
+                        : (loaded.batch.status || 'review');
+                    return draftPersistenceService.persistReviewDraftBatch({
+                        batchId,
+                        drafts,
+                        images,
+                        files: loaded.files,
+                        expectedVersion:
+                            loaded.batch?.draftPersistence?.version || 0,
+                        batchPatch: {
+                            reviewedCount,
+                            submittedCount,
+                            problemCount,
+                            unassignedImageCount,
+                            status,
+                            updatedAt: Date.now()
+                        }
+                    });
                 };
 
                 const openBatchSubmitSummary = () => {
@@ -13640,8 +13768,11 @@ ${source}`;
                         return;
                     }
 
-                    const drafts = await db.draftQuestions.where('batchId').equals(batchId).toArray();
-                    const draftImages = await db.draftImages.where('batchId').equals(batchId).toArray();
+                    const loaded = await draftPersistenceService.reloadDraftBatch(
+                        batchId
+                    );
+                    const drafts = loaded.questions;
+                    const draftImages = loaded.images;
 
                     const gateResult = batchFinalGateDedupeDrafts(drafts, {
                         stage: 'manual-active-batch',
@@ -13663,6 +13794,9 @@ ${source}`;
                         batchId,
                         drafts: finalDrafts,
                         images: finalDraftImages,
+                        files: loaded.files,
+                        expectedVersion:
+                            loaded.batch?.draftPersistence?.version || 0,
                         batchPatch: {
                             totalCount: finalDrafts.length,
                             problemCount,
@@ -13691,10 +13825,10 @@ ${source}`;
                         return;
                     }
 
-                    const rows = await db.draftQuestions
-                        .where('batchId')
-                        .equals(activeBatchId.value)
-                        .toArray();
+                    const loaded = await draftPersistenceService.reloadDraftBatch(
+                        activeBatchId.value
+                    );
+                    const rows = loaded.questions;
 
                     let changed = 0;
 
@@ -13723,7 +13857,15 @@ ${source}`;
                     });
 
                     if (changed) {
-                        await db.draftQuestions.bulkPut(rows.map(toRaw));
+                        await draftPersistenceService.persistReviewDraftBatch({
+                            batchId: activeBatchId.value,
+                            drafts: rows.map(toRaw),
+                            images: loaded.images,
+                            files: loaded.files,
+                            expectedVersion:
+                                loaded.batch?.draftPersistence?.version || 0,
+                            batchPatch: { updatedAt: Date.now() }
+                        });
                         await loadBatchImportData();
                     }
 
@@ -14064,7 +14206,7 @@ ${source}`;
                             await storageRepository.listRecentTasks();
                         if (activeBatchId.value) {
                             const activeDraft =
-                                await storageRepository.loadDraftBatch(
+                                await draftPersistenceService.reloadDraftBatch(
                                     activeBatchId.value
                                 );
                             batchImportFiles.value = activeDraft.files;
