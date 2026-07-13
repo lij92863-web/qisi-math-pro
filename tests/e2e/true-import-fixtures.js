@@ -1,3 +1,6 @@
+const { pdfCandidate: productionPdfCandidate } =
+    require('./production-cutover-fixtures.js');
+
 const fields = ['questionNumber', 'stem', 'options', 'answer', 'solution'];
 
 const deterministicProvenance = sourceId => ({
@@ -22,7 +25,7 @@ const controlledProvenance = sourceId => ({
 const docxCandidate = (overrides = {}) => ({
     id: 'true_docx_draft_1',
     questionNumber: '1',
-    type: '单选题',
+    type: 'single',
     stem: 'True DOCX deterministic stem',
     options: ['Alpha', 'Beta', 'Gamma', 'Delta'],
     answer: 'A',
@@ -31,7 +34,8 @@ const docxCandidate = (overrides = {}) => ({
     warnings: [],
     rawText: 'PRIVATE_RAW_EVIDENCE_MUST_NOT_EXPORT',
     source: {
-        mode: 'docx-deterministic', sourceId: 'true-docx-1', fileIds: ['ui-docx']
+        mode: 'docx-deterministic', sourceId: 'true-docx-1',
+        fileIds: ['ui-docx']
     },
     fieldProvenance: deterministicProvenance('true-docx-1'),
     recognition: null,
@@ -39,19 +43,13 @@ const docxCandidate = (overrides = {}) => ({
 });
 
 const pdfCandidate = (overrides = {}) => ({
-    id: 'true_pdf_draft_1',
-    questionNumber: '1',
-    type: '单选题',
-    stem: 'True PDF controlled stem',
-    options: ['One', 'Two', 'Three', 'Four'],
-    answer: 'A',
-    solution: 'True controlled solution',
-    images: [],
-    warnings: [],
-    supportLevel: 'prefix',
-    manualReviewRequired: true,
-    source: { mode: 'pdf-ai', sourceId: 'true-pdf-1', fileIds: ['ui-pdf'] },
-    fieldProvenance: controlledProvenance('true-pdf-1'),
+    ...productionPdfCandidate({
+        id: overrides.id || 'true_pdf_draft_1',
+        questionNumber: overrides.questionNumber || '1',
+        includeAnswer: false,
+        includeSolution: true,
+        alignmentMode: 'prefix'
+    }),
     recognition: null,
     ...overrides
 });

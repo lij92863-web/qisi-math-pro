@@ -165,6 +165,60 @@ test('manualReviewRequired cannot mask a missing controlled-write decision', () 
     }), error => error.code === 'DOCX_CONTROLLED_WRITE_MISSING');
 });
 
+test('DOCX vision support attaches accepted answer provenance at its producer boundary', () => {
+    const draft = Contract.applyDocxVisionSupportField({
+        candidate: vision(),
+        field: 'answer',
+        support: {
+            answer: '42', sourcePage: 3,
+            sourceTrace: { blockIds: ['support-page:3:answer:1'] }
+        },
+        source: {
+            ...source(), sourceId: 'docx-answer-1',
+            filename: 'answers.docx', sourceOrder: 2
+        },
+        controlledWriteDecision: {
+            accepted: true,
+            acceptedFields: ['answer'],
+            decisionId: 'strict-docx-support:answer:1',
+            sourceId: 'docx-answer-1',
+            engine: 'mock-support-engine'
+        }
+    });
+    assert.equal(draft.answer, '42');
+    assert.equal(draft.fieldProvenance.answer.sourceId, 'docx-answer-1');
+    assert.equal(draft.fieldProvenance.answer.producerBoundary,
+        'docx-vision-support-output-to-candidate');
+    assert.equal(draft.fieldProvenance.answer.controlledWriteAccepted, true);
+    assert.deepEqual(draft.fieldProvenance.answer.blockIds,
+        ['support-page:3:answer:1']);
+});
+
+test('DOCX vision support without a field-specific decision fails closed', () => {
+    assert.throws(() => Contract.applyDocxVisionSupportField({
+        candidate: vision(), field: 'answer', support: { answer: '42' },
+        source: { ...source(), sourceId: 'docx-answer-1' },
+        controlledWriteDecision: {
+            accepted: true, acceptedFields: ['solution'],
+            decisionId: 'wrong-field', sourceId: 'docx-answer-1',
+            engine: 'mock-support-engine'
+        }
+    }), error => error.code === 'DOCX_CONTROLLED_WRITE_MISSING');
+});
+
+test('DOCX vision support cannot overwrite a conflicting producer value', () => {
+    assert.throws(() => Contract.applyDocxVisionSupportField({
+        candidate: vision({ answer: 'existing' }),
+        field: 'answer', support: { answer: 'different' },
+        source: { ...source(), sourceId: 'docx-answer-1' },
+        controlledWriteDecision: {
+            accepted: true, acceptedFields: ['answer'],
+            decisionId: 'support-conflict', sourceId: 'docx-answer-1',
+            engine: 'mock-support-engine'
+        }
+    }), error => error.code === 'DOCX_CONTROLLED_WRITE_CONFLICT');
+});
+
 test('post-hoc provenance without producer-boundary evidence is rejected by review', () => {
     const draft = structuredClone(vision());
     delete draft.fieldProvenance.stem.producerBoundary;

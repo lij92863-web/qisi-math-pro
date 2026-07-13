@@ -27,6 +27,20 @@
                     });
                 const importValidationPorts = Object.freeze({
                     validateSequence(drafts, { context }) {
+                        const invalidCanonicalPdf = drafts.some(draft =>
+                            (
+                                draft.source?.format === 'pdf' ||
+                                draft.producer?.routeId ===
+                                    'pdf-vision-controlled-write'
+                            ) && draft.validation?.sequenceValid !== true
+                        );
+                        if (invalidCanonicalPdf) {
+                            return {
+                                valid: false,
+                                errors: [{ code: 'sequence-invalid' }],
+                                warnings: []
+                            };
+                        }
                         const expected = context.expectedQuestionNumbers || [];
                         if (!expected.length) {
                             return { valid: true, errors: [], warnings: [] };
@@ -50,6 +64,19 @@
                         };
                     },
                     validateSchema(draft, { index }) {
+                        if (
+                            (
+                                draft.source?.format === 'pdf' ||
+                                draft.producer?.routeId ===
+                                    'pdf-vision-controlled-write'
+                            ) && draft.validation?.schemaValid !== true
+                        ) {
+                            return {
+                                valid: false,
+                                errors: [{ code: 'schema-invalid' }],
+                                warnings: []
+                            };
+                        }
                         const structured =
                             Qisi.RecognitionContracts.createStructuredQuestionDraft({
                                 sourceId: draft.source?.sourceId || '',
@@ -71,14 +98,25 @@
                             Qisi.RecognitionContracts.validateStructuredQuestionDraft(
                                 structured
                             );
-                        const reviewableRejected =
-                            draft.source?.mode === 'pdf-ai' &&
-                            draft.manualReviewRequired === true;
+                        const reviewablePartial =
+                            (
+                                draft.source?.mode === 'pdf-ai' ||
+                                draft.producer?.routeId ===
+                                    'pdf-vision-controlled-write'
+                            ) &&
+                            ['prefix', 'safe-partial'].includes(
+                                draft.supportLevel
+                            ) &&
+                            draft.manualReviewRequired === true &&
+                            draft.controlledWrite?.evaluated === true &&
+                            draft.validation?.ownershipValid === true;
                         const errors = (result.errors || []).filter(error => {
                             const field = error.field || error.path;
                             return !(
-                                reviewableRejected &&
-                                draft.fieldProvenance?.[field]?.status === 'rejected'
+                                reviewablePartial &&
+                                ['rejected', 'missing'].includes(
+                                    draft.fieldProvenance?.[field]?.status
+                                )
                             );
                         });
                         return {
@@ -112,34 +150,105 @@
                                 warnings: []
                             };
                         }
+                        const canonicalPdf =
+                            draft.source?.format === 'pdf' ||
+                            draft.producer?.routeId ===
+                                'pdf-vision-controlled-write';
+                        if (
+                            canonicalPdf &&
+                            (
+                                draft.validation?.ownershipValid !== true ||
+                                draft.supportLevel === 'rejected'
+                            )
+                        ) {
+                            return {
+                                valid: false,
+                                errors: [{ code: 'wrong-attachment' }],
+                                warnings: []
+                            };
+                        }
                         const result = productionReviewValidator.validate({
                             ...draft,
                             id: draft.id || `validation-draft-${index + 1}`,
                             version: Number.isInteger(draft.version)
                                 ? draft.version : 1
                         });
-                        const reviewableRejected =
-                            draft.source?.mode === 'pdf-ai' &&
+                        const reviewablePartial =
+                            (
+                                draft.source?.mode === 'pdf-ai' ||
+                                draft.producer?.routeId ===
+                                    'pdf-vision-controlled-write'
+                            ) &&
+                            ['prefix', 'safe-partial'].includes(
+                                draft.supportLevel
+                            ) &&
+                            draft.manualReviewRequired === true &&
+                            draft.controlledWrite?.evaluated === true &&
+                            draft.validation?.ownershipValid === true &&
+                            result.errors.length > 0 &&
+                            result.errors.every(error => {
+                                const status =
+                                    draft.fieldProvenance?.[error.field]?.status;
+                                return [
+                                    'admission-field-rejected',
+                                    'admission-required-field-missing'
+                                ].includes(error.code) &&
+                                    ['rejected', 'missing'].includes(status);
+                            });
+                        const supportDecisions = Array.isArray(
+                            draft.controlledWrite?.supportDecisions
+                        ) ? draft.controlledWrite.supportDecisions : [];
+                        const reviewableDocxSupport =
+                            draft.source?.format === 'docx' &&
+                            draft.producer?.routeId ===
+                                'docx-rendered-to-pdf-vision' &&
                             draft.manualReviewRequired === true &&
                             result.errors.length > 0 &&
-                            result.errors.every(error =>
-                                error.code === 'admission-field-rejected'
-                            );
+                            result.errors.every(error => {
+                                if (
+                                    error.code !==
+                                        'admission-producer-provenance-invalid' ||
+                                    !['answer', 'solution'].includes(error.field)
+                                ) return false;
+                                const provenance =
+                                    draft.fieldProvenance?.[error.field];
+                                return supportDecisions.some(decision =>
+                                    decision.field === error.field &&
+                                    decision.sourceId === provenance?.sourceId &&
+                                    decision.decisionId ===
+                                        provenance?.controlledWriteDecisionId
+                                );
+                            });
                         return {
-                            valid: result.valid || reviewableRejected,
-                            errors: reviewableRejected ? [] : result.errors,
+                            valid: result.valid || reviewablePartial ||
+                                reviewableDocxSupport,
+                            errors: reviewablePartial || reviewableDocxSupport
+                                ? [] : result.errors,
                             warnings: result.warnings || []
                         };
                     },
                     validateSafePartial(draft) {
-                        if (draft.source?.mode !== 'pdf-ai') {
+                        const canonicalPdf =
+                            draft.source?.format === 'pdf' ||
+                            draft.producer?.routeId ===
+                                'pdf-vision-controlled-write';
+                        if (draft.source?.mode !== 'pdf-ai' && !canonicalPdf) {
                             return { valid: true, errors: [], warnings: [] };
                         }
-                        const valid = draft.supportLevel === 'prefix' &&
-                            draft.manualReviewRequired === true;
+                        const complete = draft.supportLevel === 'full';
+                        const validPartial =
+                            ['prefix', 'safe-partial'].includes(
+                                draft.supportLevel
+                            ) &&
+                            draft.manualReviewRequired === true &&
+                            draft.validation?.sequenceValid === true &&
+                            draft.validation?.ownershipValid === true;
+                        if (complete) {
+                            return { valid: true, errors: [], warnings: [] };
+                        }
                         try {
                             Qisi.PdfSafePartialPipeline.assertSafePartialInvariants({
-                                isComplete: !valid
+                                isComplete: !validPartial
                             });
                         } catch (_error) {
                             return {
@@ -151,7 +260,23 @@
                         return { valid: true, errors: [], warnings: [] };
                     },
                     validateControlledWriteEvidence(draft, input) {
-                        return importValidationPorts.validateOwnership(draft, input);
+                        const ownership =
+                            importValidationPorts.validateOwnership(draft, input);
+                        const canonicalPdf =
+                            draft.source?.format === 'pdf' ||
+                            draft.producer?.routeId ===
+                                'pdf-vision-controlled-write';
+                        if (
+                            ownership.valid && canonicalPdf &&
+                            draft.controlledWrite?.evaluated !== true
+                        ) {
+                            return {
+                                valid: false,
+                                errors: [{ code: 'controlled-write-missing' }],
+                                warnings: []
+                            };
+                        }
+                        return ownership;
                     }
                 });
                 const draftPersistenceService = Object.freeze({
@@ -181,32 +306,6 @@
                     resolveImages: ids =>
                         storageRepository.loadImageRecords(ids)
                 });
-                const legacyBatchRunCoordinator =
-                    Qisi.LegacyBatchRunCoordinator.createLegacyBatchRunCoordinator({
-                        runLegacyBatch: batchId => Qisi.Runtime.getRuntimeDependency('InjectedImportTransport')
-                            ? Qisi.InjectedImportPath.createInjectedImportPath({
-                                repository: storageRepository,
-                                validateDrafts: (drafts, context) =>
-                                    Qisi.ImportValidationService.validateImportDrafts(
-                                        drafts,
-                                        { ...importValidationPorts, context }
-                                    ),
-                                buildReviewDrafts:
-                                    Qisi.ReviewDraftBuilder.buildReviewDrafts,
-                                persistDraftBatch:
-                                    draftPersistenceService.persistDraftBatch,
-                                diagnostics:
-                                    Qisi.ImportDiagnostics.createImportDiagnostics({
-                                        clock: () =>
-                                            globalThis.performance?.now?.() ?? Date.now(),
-                                        logger: event =>
-                                            console.info('[QISI_IMPORT_DIAGNOSTICS]', event)
-                                    })
-                            })
-                                .run(batchId, Qisi.Runtime.getRuntimeDependency('InjectedImportTransport'))
-                            : processDraftImportBatch(batchId),
-                        loadBatchState: batchId => db.draftImportBatches.get(batchId)
-                    });
                 const view = ref('entry'); 
                 const questions = ref([]);
                 const cart = ref([]);
@@ -596,7 +695,7 @@
                         return;
                     }
 
-                    const supportedTypes = new Set(['docx', 'pdf', 'image', 'text']);
+                    const supportedTypes = new Set(['docx', 'pdf']);
 
                     for (const file of files) {
                         if (/\.doc$/i.test(file.name || '')) {
@@ -607,7 +706,7 @@
                         const fileType = getFileType(file.name);
 
                         if (!supportedTypes.has(fileType)) {
-                            batchCreateWarning.value = `${file.name} 暂不支持。当前支持 DOCX、PDF、JPG、PNG、WEBP、TXT。`;
+                            batchCreateWarning.value = `${file.name} 暂不支持。批量导入当前仅支持 DOCX、PDF；图片请使用图片识别或手工录题入口。`;
                             continue;
                         }
 
@@ -1133,6 +1232,7 @@
                         id: batchId,
                         title,
                         sourceType: fileTypes.size === 1 ? [...fileTypes][0] : 'mixed',
+                        sourceVersion: 1,
                         sourceFileName: batchCreateFiles.value.map(file => file.filename).join(' + '),
                         status: 'pending',
                         progress: 0,
@@ -1152,6 +1252,7 @@
                     const files = batchCreateFiles.value.map(file => ({
                         ...toRaw(file),
                         batchId,
+                        sourceVersion: batch.sourceVersion,
                         uploadPath: file.textDraft !== undefined
                             ? `data:text/plain;charset=utf-8,${encodeURIComponent(file.textDraft || '')}`
                             : file.uploadPath,
@@ -5952,7 +6053,17 @@ ${source}`;
                         confidence: Number(item.confidence || 0.82),
                         warnings: [],
                         sourceFileId: sourceFile.id,
-                        sourceFileName: sourceFile.filename
+                        sourceFileName: sourceFile.filename,
+                        ...(strictProtocol ? {
+                            controlledWriteDecision: {
+                                accepted: true,
+                                decisionId: `strict-docx-support:${sourceFile.id}:${normalizeQuestionKey(item.question)}:answer:qwen-plus`,
+                                acceptedFields: ['answer'],
+                                method: 'strict-json-contract',
+                                sourceId: sourceFile.id,
+                                engine: 'qwen-plus'
+                            }
+                        } : {})
                     })).filter(item => item.question && item.answer) : [];
                     const solutions = Array.isArray(rawSolutions) ? rawSolutions.map(item => ({
                         question: window.Qisi.Utils.cleanRecognizedText(item.question),
@@ -5965,7 +6076,17 @@ ${source}`;
                         confidence: Number(item.confidence || 0.82),
                         warnings: [],
                         sourceFileId: sourceFile.id,
-                        sourceFileName: sourceFile.filename
+                        sourceFileName: sourceFile.filename,
+                        ...(strictProtocol ? {
+                            controlledWriteDecision: {
+                                accepted: true,
+                                decisionId: `strict-docx-support:${sourceFile.id}:${normalizeQuestionKey(item.question)}:solution:qwen-plus`,
+                                acceptedFields: ['solution'],
+                                method: 'strict-json-contract',
+                                sourceId: sourceFile.id,
+                                engine: 'qwen-plus'
+                            }
+                        } : {})
                     })).filter(item => item.question && item.solution) : [];
 
                     if (
@@ -8428,8 +8549,9 @@ ${rawBlock}
                         documentText,
                         file,
                         {
-                            strictProtocol:
-                                strict
+                            strictProtocol: strict,
+                            allowedQuestionNumbers:
+                                expectedQuestionNumbers
                         }
                     );
                 };
@@ -15493,7 +15615,11 @@ ${source}`;
                                                             aligner:
                                                                 window.Qisi.PdfSupportAligner,
                                                             decisionId:
-                                                                `pdf-cw:${batchId}:v2`
+                                                                `pdf-cw:${batchId}:v2`,
+                                                            routeContext: {
+                                                                sourceMode: 'pdf-ai',
+                                                                engine: 'qisi-batch-engine-v2'
+                                                            }
                                                         })
                                             }),
                                         createSafePartial: (draft, evidence) => ({
@@ -15609,2522 +15735,541 @@ ${source}`;
                     }
                 };
 
-                const processDraftImportBatch = async (batchId) => {
-                    const now = Date.now();
-                    const batchStartedAt = performance.now();
-                    try {
-                        console.log('[BATCH_DEBUG][stage]', 'start processDraftImportBatch legacy fallback', { batchId });
-                        const loadedBatch = await window.Qisi.BatchContextService.loadBatchAndFiles({
-                            batchId,
-                            getRoles: getBatchFileRoles
-                        }, {
-                            repository: storageRepository
-                        });
-                        if (!loadedBatch) return;
-                        const { batch, files, batchContext } = loadedBatch;
-                        const batchExpectedCount = batchContext.userSettings.expectedQuestionCount;
-
-                        console.log('[BATCH_DEBUG][batch-expected-count]', {
-                            batchId,
-                            expectedQuestionCount: batchExpectedCount
-                        });
-
-                        const recognitionMode = batchContext.engineConfig.recognitionMode;
-                        activeRecognitionMode = recognitionMode;
-                        activeBatchCostStats = {
-                            visionCalls: 0,
-                            textCalls: 0,
-                            pages: 0,
-                            mode: recognitionMode
-                        };
-                        console.log('[BATCH_COST][mode]', { batchId, recognitionMode });
-                        await db.draftImportBatches.update(batchId, { status: 'processing', progress: 3, updatedAt: now, errorMessage: '' });
-                        await loadBatchImportData();
-
-                        const sourceRoleClassification =
-                            window.Qisi.SourceRoleClassifier.classifySourceRoles(
-                                batchContext.sourceManifest
-                            );
-                        const classifiedRoleById = new Map(
-                            sourceRoleClassification.sources.map(source => [source.id, source])
-                        );
-                        const roleForFile = file => classifiedRoleById.get(String(file?.id || ''));
-                        const supplementalImageFiles = files.filter(file =>
-                            roleForFile(file)?.isSupplementalImage
-                        );
-                        let processFiles = files.filter(file =>
-                            !roleForFile(file)?.isSupplementalImage
-                        );
-
-                        processFiles = [...processFiles].sort(
-                            (left, right) =>
-                                (roleForFile(left)?.recognitionRank ?? 3) -
-                                (roleForFile(right)?.recognitionRank ?? 3) ||
-                                Number(
-                                    left.createdAt || 0
-                                ) -
-                                Number(
-                                    right.createdAt || 0
-                                )
-                        );
-
-                        logBatchPdfDiag('legacy-batch-files', {
-                            batchId,
-                            engine: 'processDraftImportBatch',
-                            recognitionMode,
-                            fileCount: files.length,
-                            processFileCount: processFiles.length,
-                            files: batchContext.sourceManifest,
-                            questionPdfCount: sourceRoleClassification.summary.questionPdfCount,
-                            answerSupportPdfCount: sourceRoleClassification.summary.answerSupportPdfCount
-                        });
-
-                        const consumedVisualFileIds = new Set();
-
-                        const questionItems = [];
-                        const answerItems = [];
-                        const solutionItems = [];
-                        const fullItems = [];
-                        let authoritativeQuestionContract = null;
-
-                        const normalizeQuestionContractNumbers = (
-                            values = []
-                        ) => {
-                            const result = [];
-                            const seen = new Set();
-
-                            for (const value of values || []) {
-                                const questionNumber =
-                                    normalizeQuestionKey(value);
-
-                                if (
-                                    !questionNumber ||
-                                    seen.has(questionNumber)
-                                ) {
-                                    continue;
-                                }
-
-                                seen.add(questionNumber);
-                                result.push(questionNumber);
-                            }
-
-                            return result;
-                        };
-
-                        const sameQuestionNumberContract = (
-                            left = [],
-                            right = []
-                        ) => {
-                            return (
-                                left.length === right.length &&
-                                left.every(
-                                    (value, index) =>
-                                        value === right[index]
-                                )
-                            );
-                        };
-
-                        const extractExpectedQuestionNumbersFromItems = (
-                            items = []
-                        ) => {
-                            const result = [];
-                            const seen = new Set();
-
-                            for (const item of items || []) {
-                                const candidates = [
-                                    item?.question,
-                                    item?.questionNumber,
-                                    item?.questionNo,
-                                    item?.number,
-                                    item?.no,
-                                    item?.sourceTrace?.questionNumber,
-                                    item?.sourceTrace?.questionNo,
-                                    item?.sourceTrace?.question,
-                                    item?.sourceTrace?.number
-                                ];
-
-                                for (const candidate of candidates) {
-                                    const questionNumber =
-                                        normalizeQuestionKey(candidate);
-
-                                    if (
-                                        !questionNumber ||
-                                        seen.has(questionNumber)
-                                    ) {
-                                        continue;
-                                    }
-
-                                    seen.add(questionNumber);
-                                    result.push(questionNumber);
-                                    break;
-                                }
-                            }
-
-                            return result;
-                        };
-
-                        const cleanPdfSupportAnswerTrailingRightBraces = (
-                            value
-                        ) => {
-                            if (typeof value !== 'string') {
-                                return value;
-                            }
-
-                            const trailingWhitespace =
-                                value.match(/\s*$/)?.[0] || '';
-                            let text = trailingWhitespace
-                                ? value.slice(0, -trailingWhitespace.length)
-                                : value;
-
-                            const isEscapedAt = (source, index) => {
-                                let slashCount = 0;
-
-                                for (
-                                    let cursor = index - 1;
-                                    cursor >= 0 && source[cursor] === '\\';
-                                    cursor -= 1
-                                ) {
-                                    slashCount += 1;
-                                }
-
-                                return slashCount % 2 === 1;
-                            };
-
-                            const braceBalance = (source) => {
-                                let balance = 0;
-
-                                for (let index = 0; index < source.length; index += 1) {
-                                    const ch = source[index];
-
-                                    if (
-                                        (ch === '{' || ch === '}') &&
-                                        !isEscapedAt(source, index)
-                                    ) {
-                                        balance += ch === '{' ? 1 : -1;
-                                    }
-                                }
-
-                                return balance;
-                            };
-
-                            while (
-                                text.endsWith('}') &&
-                                !isEscapedAt(text, text.length - 1) &&
-                                braceBalance(text) < 0
-                            ) {
-                                text = text.slice(0, -1);
-                            }
-
-                            return `${text}${trailingWhitespace}`;
-                        };
-
-                        const cleanPdfSupportAnswerArtifacts = (
-                            value,
-                            questionType = ''
-                        ) => {
-                            if (typeof value !== 'string') {
-                                return {
-                                    value,
-                                    changed: false
-                                };
-                            }
-
-                            const original = value;
-                            const typeText = String(questionType || '');
-                            const isChoiceType =
-                                /单选|多选/.test(typeText);
-
-                            if (isChoiceType) {
-                                const normalized =
-                                    value
-                                        .replace(/[Ａ-Ｄ]/g, ch =>
-                                            String.fromCharCode(
-                                                ch.charCodeAt(0) - 0xFEE0
-                                            )
-                                        )
-                                        .toUpperCase();
-                                const withoutPrefix =
-                                    normalized.replace(
-                                        /^\s*(?:答案|答|故选|正确答案)\s*[:：]?\s*/u,
-                                        ''
-                                    );
-                                const validationText =
-                                    withoutPrefix
-                                        .replace(/答案|答|故选|正确答案/gu, '')
-                                        .replace(/[:：,，、\s;；.。()（）{}\[\]\\$]+/g, '');
-
-                                if (/^[A-D]+$/.test(validationText)) {
-                                    const seen = new Set();
-                                    const letters = [];
-
-                                    for (const letter of validationText) {
-                                        if (seen.has(letter)) continue;
-                                        seen.add(letter);
-                                        letters.push(letter);
-                                    }
-
-                                    const cleaned = letters.join('');
-
-                                    return {
-                                        value: cleaned,
-                                        changed: cleaned !== original
-                                    };
-                                }
-                            }
-
-                            const trailingWhitespace =
-                                value.match(/\s*$/)?.[0] || '';
-                            let text = trailingWhitespace
-                                ? value.slice(0, -trailingWhitespace.length)
-                                : value;
-
-                            while (text.endsWith('\\')) {
-                                text = text.slice(0, -1);
-                            }
-
-                            text =
-                                cleanPdfSupportAnswerTrailingRightBraces(text);
-
-                            while (text.endsWith('\\')) {
-                                text = text.slice(0, -1);
-                            }
-
-                            return {
-                                value: `${text}${trailingWhitespace}`,
-                                changed:
-                                    `${text}${trailingWhitespace}` !== original
-                            };
-                        };
-
-                        const applyPdfSupportFailClosedGate = ({
-                            answers = [],
-                            solutions = [],
-                            expectedQuestionNumbers = []
-                        } = {}) => {
-                            const aligner =
-                                window.Qisi?.PdfSupportAligner;
-                            const result =
-                                aligner.alignPdfSupport({
-                                    answerItems:
-                                        answers,
-                                    solutionItems:
-                                        solutions,
-                                    expectedQuestionNumbers
-                                });
-                            const report =
-                                result.report;
-
-                            console.log(
-                                '[BATCH_PDF_SEQUENCE][report]',
-                                report
-                            );
-
-                            if (result.mode === 'fail-closed') {
-                                console.warn(
-                                    '[BATCH_PDF_SEQUENCE][fail-closed]',
-                                    report
-                                );
-
-                                return {
-                                    answers: [],
-                                    solutions: [],
-                                    report,
-                                    failClosed: true
-                                };
-                            }
-
-                            console.log(
-                                '[BATCH_PDF_SEQUENCE][accepted]',
-                                report
-                            );
-
-                            return {
-                                answers:
-                                    result.safeAnswerItems,
-                                solutions:
-                                    result.safeSolutionItems,
-                                report,
-                                mode:
-                                    result.mode,
-                                safeQuestionNumbers:
-                                    result.safeQuestionNumbers || [],
-                                fusedQuestionNumbers:
-                                    result.fusedQuestionNumbers || [],
-                                fusedWarnings:
-                                    result.fusedWarnings || [],
-                                failClosed: false
-                            };
-                        };
-
-                        const pdfSupportQuestionNumbers = items =>
-                            (items || [])
-                                .map(item =>
-                                    normalizeQuestionKey(
-                                        item?.question ||
-                                        item?.questionNumber ||
-                                        item?.number ||
-                                        item?.sourceTrace?.questionNumber ||
-                                        ''
-                                    )
-                                )
-                                .filter(Boolean);
-
-                        const normalizePdfSupportRawTextPagesFromPageResult = pageResult =>
-                            window.Qisi?.PdfSupportControlledWrite
-                                ?.normalizePdfSupportRawTextPagesFromPageResult
-                                ? window.Qisi.PdfSupportControlledWrite
-                                    .normalizePdfSupportRawTextPagesFromPageResult(pageResult)
-                                : [];
-
-                        const repairDraftStemIfJsonPolluted = (
-                            draft,
-                            sourceFile = null
-                        ) => {
-                            if (
-                                !draft ||
-                                sourceFile?.fileType !== 'pdf' ||
-                                !(
-                                    batchHasQuestionRole(sourceFile) ||
-                                    batchIsFullRole(sourceFile)
-                                )
-                            ) {
-                                return draft;
-                            }
-
-                            const looksJsonPollutedStem = (value) => {
-                                const text = String(value || '').trim();
-
-                                if (!text) {
-                                    return false;
-                                }
-
-                                if (
-                                    /^[{\[]/.test(text) &&
-                                    /"questions"|"questionNumber"/.test(text)
-                                ) {
-                                    return true;
-                                }
-
-                                if (
-                                    /^["']?\s*[{\[]/.test(text) &&
-                                    /\\"questions\\"|\\"questionNumber\\"/.test(text)
-                                ) {
-                                    return true;
-                                }
-
-                                return (
-                                    /^["']?\s*[{\[]/.test(text) &&
-                                    /stem|options|answer|solution/.test(text) &&
-                                    /[{}\[\]":,]/.test(text.slice(0, 300))
-                                );
-                            };
-
-                            const looksSafeStemFallback = (value) => {
-                                const text = String(value || '').trim();
-
-                                if (
-                                    !text ||
-                                    text.length < 8 ||
-                                    text.length > 3000 ||
-                                    looksJsonPollutedStem(text)
-                                ) {
-                                    return false;
-                                }
-
-                                return /[\u4e00-\u9fff]|\\frac|\\sqrt|\\angle|\\triangle|\$|（|）|已知|若|则|求|证明|下列|函数|圆|三角|体积|面积/.test(text);
-                            };
-
-                            if (!looksJsonPollutedStem(draft.stem)) {
-                                return draft;
-                            }
-
-                            const fallback =
-                                [draft.rawText, draft.rawBlock]
-                                    .find(looksSafeStemFallback) || '';
-
-                            if (!fallback) {
-                                return draft;
-                            }
-
-                            draft.stem = String(fallback).trim();
-                            window.Qisi.Utils.addWarningOnce(
-                                draft,
-                                'stem-json-pollution-repaired'
-                            );
-
-                            return draft;
-                        };
-
-                        const sanitizeDraftOptionsIfPolluted = (
-                            draft,
-                            sourceFile = null
-                        ) => {
-                            if (
-                                !draft ||
-                                sourceFile?.fileType !== 'pdf' ||
-                                !(
-                                    batchHasQuestionRole(sourceFile) ||
-                                    batchIsFullRole(sourceFile)
-                                )
-                            ) {
-                                return draft;
-                            }
-
-                            const options = draft.options;
-
-                            if (!Array.isArray(options)) {
-                                return draft;
-                            }
-
-                            const optionTexts =
-                                options.map(option =>
-                                    typeof option === 'string'
-                                        ? option
-                                        : JSON.stringify(option || '')
-                                );
-                            const serialized =
-                                JSON.stringify(optionTexts);
-                            const compact =
-                                optionTexts.join('\n').trim();
-
-                            if (!compact) {
-                                return draft;
-                            }
-
-                            const quotedJsonFieldPattern =
-                                /"questions"|"questionNumber"|"answer"|"solution"|"isFragment"|"question_bbox"|\\"questions\\"|\\"questionNumber\\"|\\"answer\\"|\\"solution\\"|\\"isFragment\\"|\\"question_bbox\\"/;
-
-                            const crossQuestionKeywords = [
-                                '已知集合',
-                                '正四棱台',
-                                '扇形',
-                                '三角形',
-                                '面积的最大值',
-                                '圆锥',
-                                '函数',
-                                '下列',
-                                '证明'
-                            ];
-
-                            const crossKeywordCount =
-                                crossQuestionKeywords
-                                    .filter(keyword =>
-                                        serialized.includes(keyword)
-                                    )
-                                    .length;
-
-                            const nonEmptyOptions =
-                                optionTexts
-                                    .map(text => String(text || '').trim())
-                                    .filter(Boolean);
-                            const maxOptionLength =
-                                nonEmptyOptions.reduce(
-                                    (max, text) =>
-                                        Math.max(max, text.length),
-                                    0
-                                );
-                            const longJsonishOption =
-                                nonEmptyOptions.length < 4 &&
-                                maxOptionLength > 180 &&
-                                /[{}\[\]":,]/.test(serialized) &&
-                                /questions|questionNumber|stem|options|answer|solution|题干|选项/.test(serialized);
-                            const overlongCrossQuestionOptions =
-                                serialized.length > 300 &&
-                                crossKeywordCount >= 2;
-
-                            if (
-                                !quotedJsonFieldPattern.test(serialized) &&
-                                !longJsonishOption &&
-                                !overlongCrossQuestionOptions
-                            ) {
-                                return draft;
-                            }
-
-                            draft.options = ['', '', '', ''];
-                            window.Qisi.Utils.addWarningOnce(
-                                draft,
-                                'options-json-pollution-cleared'
-                            );
-
-                            return draft;
-                        };
-
-                        const registerAuthoritativeQuestionContract = ({
-                            file,
-                            skeleton
-                        }) => {
-                            if (!skeleton?.authoritative) {
-                                return;
-                            }
-
-                            const questionNumbers =
-                                normalizeQuestionContractNumbers(
-                                    skeleton.questionNumbers
-                                );
-
-                            if (!questionNumbers.length) {
-                                const error = new Error(
-                                    'DOCX skeleton 标记为 authoritative，但没有提供有效题号。'
-                                );
-
-                                error.code =
-                                    'QUESTION_CONTRACT_EMPTY';
-
-                                throw error;
-                            }
-
-                            if (!authoritativeQuestionContract) {
-                                authoritativeQuestionContract = {
-                                    authoritative: true,
-                                    evidence:
-                                        'docx-explicit-question-skeleton',
-                                    questionNumbers,
-                                    sourceFileId:
-                                        file.id,
-                                    sourceFileName:
-                                        file.filename || ''
-                                };
-
-                                console.log(
-                                    '[BATCH_DEBUG][question-contract-registered]',
-                                    authoritativeQuestionContract
-                                );
-
-                                return;
-                            }
-
-                            if (
-                                !sameQuestionNumberContract(
-                                    authoritativeQuestionContract
-                                        .questionNumbers,
-                                    questionNumbers
-                                )
-                            ) {
-                                const error = new Error(
-                                    '同一批次存在两份互相冲突的权威题号骨架。' +
-                                    '请将不同试卷拆成不同批次处理。'
-                                );
-
-                                error.code =
-                                    'QUESTION_CONTRACT_CONFLICT';
-
-                                error.existingContract =
-                                    authoritativeQuestionContract;
-
-                                error.incomingContract = {
-                                    questionNumbers,
-                                    sourceFileId:
-                                        file.id,
-                                    sourceFileName:
-                                        file.filename || ''
-                                };
-
-                                throw error;
-                            }
-                        };
-                        const draftImages = [];
-                        const pdfPageImageMap = new Map();
-                        const pdfFirstPageImageByFileId = new Map();
-                        let pdfAnyPageImage = '';
-                        let pdfSupportFailClosed = false;
-                        const pdfSupportFailClosedReports = [];
-                        const pdfSupportControlledWriteResults = [];
-                        const pdfSupportAlignmentResults = [];
-
-                        const pageImageKey = (fileId, pageNo) => `${fileId || ''}::${Number(pageNo || 0) || 0}`;
-                        const rememberPageImages = (pageImages = [], fallbackFile = null) => {
-                            (pageImages || []).forEach(pageImage => {
-                                const fid = pageImage.sourceFileId || fallbackFile?.id || '';
-                                const pno = Number(pageImage.pageNo || 0) || 0;
-                                const url = pageImage.imageUrl || pageImage.url || '';
-
-                                if (!url) return;
-
-                                pdfPageImageMap.set(pageImageKey(fid, pno), url);
-
-                                if (fid && !pdfFirstPageImageByFileId.has(fid)) {
-                                    pdfFirstPageImageByFileId.set(fid, url);
-                                }
-
-                                if (!pdfAnyPageImage) {
-                                    pdfAnyPageImage = url;
-                                }
-                            });
-                        };
-
-                        for (let fileIndex = 0; fileIndex < processFiles.length; fileIndex += 1) {
-                            const file = processFiles[fileIndex];
-                            if (consumedVisualFileIds.has(file.id)) {
-                                console.log('[BATCH_DEBUG][skip-consumed-visual-file]', {
-                                    filename: file.filename,
-                                    fileType: file.fileType
-                                });
-
-                                await db.draftImportFiles.update(file.id, {
-                                    parseStatus: 'success',
-                                    errorMessage: '已作为 DOCX 的视觉伴随文件使用',
-                                    updatedAt: Date.now()
-                                });
-
-                                continue;
-                            }
-
-                            console.log('[BATCH_DEBUG][stage]', 'start file', {
-                                filename: file.filename,
-                                fileType: file.fileType,
-                                roles: file.roles || file.role
-                            });
-                            const baseProgress = 8 + (fileIndex / Math.max(1, processFiles.length)) * 58;
-                            const fileProgressSpan = 58 / Math.max(1, processFiles.length);
-                            await updateBatchProgress(batchId, baseProgress, 'processing');
-                            await db.draftImportFiles.update(file.id, { parseStatus: 'processing', updatedAt: Date.now() });
-                            try {
-                                let usedVisualRecognition = false;
-                                const isFullRole = batchIsFullRole(file);
-                                const hasQuestionRole = batchHasQuestionRole(file);
-                                const hasAnswerOrSolutionRole = batchHasAnswerRole(file) || batchHasSolutionRole(file);
-                                let pdfVisualAttempted = false;
-                                let pdfPageImageCount = 0;
-                                let pdfVisualError = null;
-                                let pdfVisualQuestionsCount = 0;
-                                let pdfPageFallbackDrafts = [];
-
-                                if (!usedVisualRecognition && file.fileType === 'docx' && hasQuestionRole) {
-                                    try {
-                                        const expected = batchExpectedCount;
-
-                                        console.warn('[BATCH_DEBUG][docx-local-convert-first]', {
-                                            filename: file.filename,
-                                            expected
-                                        });
-
-                                        const strictResult = await processDocxByLocalConvertAndStrictVision({
-                                            file,
-                                            batch,
-                                            processFiles,
-                                            expectedQuestionCount: expected,
-                                            onPageProgress: async (ratio, info) => {
-                                                await updateBatchProgress(
-                                                    batchId,
-                                                    baseProgress + fileProgressSpan * Math.min(0.95, Math.max(0, ratio || 0)),
-                                                    'processing'
-                                                );
-
-                                                console.log('[BATCH_DEBUG][docx-local-convert-vision-progress]', {
-                                                    filename: file.filename,
-                                                    ratio,
-                                                    info
-                                                });
-                                            }
-                                        });
-
-                                        registerAuthoritativeQuestionContract({
-                                            file,
-                                            skeleton:
-                                                strictResult.questionSkeleton
-                                        });
-
-                                        if (isFullRole) {
-                                            fullItems.push(...strictResult.questions);
-                                        } else {
-                                            questionItems.push(...strictResult.questions);
-                                        }
-
-                                        logBatchPdfDiag('strict-visual-direct-accepted', {
-                                            batchId,
-                                            filename: file.filename,
-                                            fileType: file.fileType,
-                                            roles: getBatchFileRoles(file),
-                                            addedQuestionCount: strictResult.questions?.length || 0,
-                                            questionItemsCount: questionItems.length,
-                                            fullItemsCount: fullItems.length,
-                                            pageImageCount: strictResult.pageImages?.length || 0
-                                        });
-
-                                        rememberPageImages(strictResult.pageImages || [], file);
-                                        usedVisualRecognition = true;
-
-                                        await db.draftImportFiles.update(file.id, {
-                                            parseStatus: 'success',
-                                            errorMessage: `DOCX 已自动转 PDF 并完成整页视觉识别：${strictResult.pdfRecord?.filename || ''}`,
-                                            updatedAt: Date.now()
-                                        });
-
-                                        await updateBatchProgress(batchId, baseProgress + fileProgressSpan, 'processing');
-                                        continue;
-                                    } catch (error) {
-                                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-
-                                        if (error?.failureSnapshot) {
-                                            console.error(
-                                                '[BATCH_DEBUG][docx-question-failure-snapshot]',
-                                                error.failureSnapshot
-                                            );
-
-                                            try {
-                                                await db
-                                                    .draftImportBatches
-                                                    .update(
-                                                        batchId,
-                                                        {
-                                                            recognitionFailureSnapshot:
-                                                                error.failureSnapshot,
-                                                            updatedAt:
-                                                                Date.now()
-                                                        }
-                                                    );
-                                            } catch (snapshotError) {
-                                                console.error(
-                                                    '[BATCH_DEBUG][docx-question-failure-snapshot-save-failed]',
-                                                    {
-                                                        batchId,
-                                                        message:
-                                                            snapshotError
-                                                                ?.message ||
-                                                            String(
-                                                                snapshotError
-                                                            )
-                                                    },
-                                                    snapshotError
-                                                );
-                                            }
-                                        }
-
-                                        console.error('[BATCH_DEBUG][docx-processing-failed]', {
-                                            filename: file.filename,
-                                            stage: error?.stage || 'unknown',
-                                            message: error?.message || String(error),
-                                            stack: error?.stack
-                                        }, error);
-                                        const renderDiagnostics =
-                                            error?.renderDiagnostics ||
-                                            error?.cause?.renderDiagnostics ||
-                                            error?.cause?.cause?.renderDiagnostics;
-
-                                        if (renderDiagnostics) {
-                                            console.error(
-                                                '[BATCH_DEBUG][pdf-render-failure-snapshot]',
-                                                renderDiagnostics
-                                            );
-                                        }
-
-                                        throw error;
-                                    }
-                                }
-
-                                if (
-                                    !usedVisualRecognition &&
-                                    file.fileType === 'docx' &&
-                                    !hasQuestionRole &&
-                                    hasAnswerOrSolutionRole &&
-                                    !isFullRole &&
-                                    recognitionMode !== 'cheap'
-                                ) {
-                                    try {
-                                        const observedQuestionNumbers =
-                                            normalizeQuestionContractNumbers(
-                                                [...questionItems, ...fullItems]
-                                                    .map(item =>
-                                                        item.questionNumber ||
-                                                        item.question ||
-                                                        item.order ||
-                                                        ''
-                                                    )
-                                            );
-
-                                        const hasQuestionDocx =
-                                            processFiles.some(
-                                                item =>
-                                                    item.fileType === 'docx' &&
-                                                    batchHasQuestionRole(item)
-                                            );
-
-                                        if (
-                                            hasQuestionDocx &&
-                                            !authoritativeQuestionContract
-                                        ) {
-                                            const error = new Error(
-                                                '批次包含题目 DOCX，' +
-                                                '但尚未建立权威题号契约。' +
-                                                '已停止答案识别。'
-                                            );
-
-                                            error.code =
-                                                'AUTHORITATIVE_QUESTION_CONTRACT_MISSING';
-
-                                            throw error;
-                                        }
-
-                                        const expectedQuestionNumbers =
-                                            authoritativeQuestionContract
-                                                ? [
-                                                    ...authoritativeQuestionContract
-                                                        .questionNumbers
-                                                ]
-                                                : observedQuestionNumbers;
-
-                                        if (
-                                            expectedQuestionNumbers.length === 0
-                                        ) {
-                                            const error = new Error(
-                                                '处理答案/解析文件前尚未获得题目题号集合。'
-                                            );
-
-                                            error.code =
-                                                'SUPPORT_EXPECTED_QUESTIONS_MISSING';
-
-                                            throw error;
-                                        }
-
-                                        console.log(
-                                            '[BATCH_DEBUG][support-question-contract]',
-                                            {
-                                                filename:
-                                                    file.filename,
-
-                                                evidence:
-                                                    authoritativeQuestionContract
-                                                        ?.evidence ||
-                                                    'recognized-question-items-fallback',
-
-                                                expectedQuestionNumbers,
-
-                                                observedQuestionNumbers
-                                            }
-                                        );
-
-                                        console.log(
-                                            '[BATCH_DEBUG][docx-support-visual-start]',
-                                            {
-                                                filename:
-                                                    file.filename,
-                                                roles:
-                                                    getBatchFileRoles(file),
-                                                recognitionMode,
-                                                expectedQuestionNumbers
-                                            }
-                                        );
-
-                                        const supportResult =
-                                            await processStandaloneDocxSupportByVision({
-                                                file,
-                                                expectedQuestionNumbers,
-                                                requiredKinds: {
-                                                    answers:
-                                                        batchHasAnswerRole(file),
-                                                    solutions:
-                                                        batchHasSolutionRole(file)
-                                                },
-                                                onPageProgress:
-                                                    async (
-                                                        ratio,
-                                                        info
-                                                    ) => {
-                                                        const safeRatio =
-                                                            Math.min(
-                                                                1,
-                                                                Math.max(
-                                                                    0,
-                                                                    Number(
-                                                                        ratio || 0
-                                                                    )
-                                                                )
-                                                            );
-
-                                                        await updateBatchProgress(
-                                                            batchId,
-                                                            baseProgress +
-                                                            fileProgressSpan *
-                                                            (
-                                                                0.20 +
-                                                                safeRatio *
-                                                                0.75
-                                                            ),
-                                                            'processing'
-                                                        );
-
-                                                        console.log(
-                                                            '[BATCH_DEBUG][docx-support-visual-progress]',
-                                                            {
-                                                                filename:
-                                                                    file.filename,
-                                                                ratio:
-                                                                    safeRatio,
-                                                                info
-                                                            }
-                                                        );
-                                                    }
-                                            });
-
-                                        answerItems.push(
-                                            ...(supportResult.answers || [])
-                                        );
-
-                                        solutionItems.push(
-                                            ...(supportResult.solutions || [])
-                                        );
-
-                                        rememberPageImages(
-                                            supportResult.pageImages || [],
-                                            file
-                                        );
-
-                                        usedVisualRecognition = true;
-
-                                        await db.draftImportFiles.update(
-                                            file.id,
-                                            {
-                                                parseStatus:
-                                                    'success',
-                                                errorMessage:
-                                                    '答案/解析 DOCX 已转 PDF 并完成视觉识别：' +
-                                                    `${supportResult.pdfRecord?.filename || ''}`,
-                                                updatedAt:
-                                                    Date.now()
-                                            }
-                                        );
-
-                                        await updateBatchProgress(
-                                            batchId,
-                                            baseProgress +
-                                            fileProgressSpan,
-                                            'processing'
-                                        );
-
-                                        continue;
-                                    } catch (error) {
-                                        const renderDiagnostics =
-                                            error?.renderDiagnostics ||
-                                            error?.cause?.renderDiagnostics ||
-                                            error?.cause?.cause?.renderDiagnostics;
-
-                                        if (renderDiagnostics) {
-                                            console.error(
-                                                '[BATCH_DEBUG][pdf-render-failure-snapshot]',
-                                                renderDiagnostics
-                                            );
-                                        }
-                                        console.error(
-                                            '[BATCH_DEBUG][docx-support-visual-failed]',
-                                            {
-                                                filename:
-                                                    file.filename,
-                                                stage:
-                                                    error?.stage ||
-                                                    'unknown',
-                                                code:
-                                                    error?.code ||
-                                                    '',
-                                                message:
-                                                    error?.message ||
-                                                    String(error)
-                                            },
-                                            error
-                                        );
-
-                                        throw error;
-                                    }
-                                }
-
-                                if (
-                                    hasQuestionRole &&
-                                    ['pdf', 'image'].includes(file.fileType)
-                                ) {
-                                    try {
-                                        console.log('[BATCH_DEBUG][strict-visual-direct-start]', {
-                                            filename: file.filename,
-                                            fileType: file.fileType,
-                                            expected: batchExpectedCount
-                                        });
-
-                                        const strictResult = await processStrictVisualQuestionFile({
-                                            file,
-                                            batch,
-                                            expectedQuestionCount: batchExpectedCount,
-                                            onPageProgress: async (ratio, info) => {
-                                                await updateBatchProgress(
-                                                    batchId,
-                                                    baseProgress + fileProgressSpan * Math.min(0.95, Math.max(0, ratio || 0)),
-                                                    'processing'
-                                                );
-
-                                                console.log('[BATCH_DEBUG][strict-visual-direct-progress]', {
-                                                    filename: file.filename,
-                                                    ratio,
-                                                    info
-                                                });
-                                            }
-                                        });
-
-                                        console.log('[BATCH_DEBUG][strict-visual-direct-result]', {
-                                            filename: file.filename,
-                                            questionCount: strictResult.questions?.length || 0,
-                                            pageImageCount: strictResult.pageImages?.length || 0,
-                                            expected: batchExpectedCount
-                                        });
-
-                                        const check = strictResult.check || validateVisualQuestionItems(strictResult.questions, batchExpectedCount);
-
-                                        if (check.fatal) {
-                                            console.error('[BATCH_DEBUG][strict-visual-direct-check-failed]', {
-                                                filename: file.filename,
-                                                reasons: check.reasons,
-                                                failedQuestions: check.failedQuestions,
-                                                rows: check.rows
-                                            });
-
-                                            throw new Error(
-                                                `严格视觉识别发生致命错误：${(check.fatalReasons || check.reasons || []).join('；') || '未知原因'}`
-                                            );
-                                        }
-
-                                        if (isFullRole) {
-                                            fullItems.push(...strictResult.questions);
-                                        } else {
-                                            questionItems.push(...strictResult.questions);
-                                        }
-
-                                        rememberPageImages(strictResult.pageImages || [], file);
-                                        usedVisualRecognition = true;
-
-                                        await db.draftImportFiles.update(file.id, {
-                                            parseStatus: 'success',
-                                            errorMessage: '',
-                                            updatedAt: Date.now()
-                                        });
-                                        await updateBatchProgress(batchId, baseProgress + fileProgressSpan, 'processing');
-                                        continue;
-                                    } catch (error) {
-                                        console.error('[BATCH_DEBUG][strict-visual-direct-failed]', {
-                                            filename: file.filename,
-                                            fileType: file.fileType,
-                                            message: error?.message || String(error),
-                                            stack: error?.stack
-                                        }, error);
-
-                                        const renderDiagnostics =
-                                            error?.renderDiagnostics ||
-                                            error?.cause?.renderDiagnostics ||
-                                            error?.cause?.cause?.renderDiagnostics;
-
-                                        if (renderDiagnostics) {
-                                            console.error(
-                                                '[BATCH_DEBUG][pdf-render-failure-snapshot]',
-                                                renderDiagnostics
-                                            );
-                                        }
-
-                                        throw new Error(
-                                            `PDF/图片整页视觉识别失败，禁止回退成“PDF 第 1 页识别失败”的占位题。真实错误：${error?.message || String(error)}`
-                                        );
-                                    }
-                                }
-
-                                if (
-                                    file.fileType === 'pdf' &&
-                                    !hasQuestionRole &&
-                                    hasAnswerOrSolutionRole &&
-                                    recognitionMode !== 'cheap'
-                                ) {
-                                    pdfVisualAttempted = true;
-
-                                    try {
-                                        const expectedQuestionNumbers =
-                                            extractExpectedQuestionNumbersFromItems([
-                                                ...questionItems,
-                                                ...fullItems
-                                            ]);
-
-                                        logBatchPdfDiag('pdf-support-expected-question-numbers', {
-                                            batchId,
-                                            filename: file.filename,
-                                            fileType: file.fileType,
-                                            roles: getBatchFileRoles(file),
-                                            questionItemsCount: questionItems.length,
-                                            fullItemsCount: fullItems.length,
-                                            expectedQuestionNumbers
-                                        });
-
-                                        console.log('[BATCH_DEBUG][stage]', 'before processPdfFilePageByPage', {
-                                            filename: file.filename
-                                        });
-                                        const pageResult = await processPdfFilePageByPage({
-                                            file,
-                                            batch,
-                                            recognitionMode,
-                                            expectedQuestionNumbers,
-                                            onPageProgress: async (ratio, info) => {
-                                                await updateBatchProgress(
-                                                    batchId,
-                                                    baseProgress + fileProgressSpan * Math.min(0.95, ratio),
-                                                    'processing'
-                                                );
-
-                                                console.log('[BATCH_DEBUG][pdf-file-progress]', {
-                                                    filename: file.filename,
-                                                    pageNo: info?.pageNo,
-                                                    done: info?.done,
-                                                    total: info?.total,
-                                                    ratio
-                                                });
-                                            }
-                                        });
-                                        console.log('[BATCH_DEBUG][stage]', 'after processPdfFilePageByPage', {
-                                            filename: file.filename,
-                                            questionCount: pageResult?.questions?.length || 0,
-                                            answerCount: pageResult?.answers?.length || 0,
-                                            solutionCount: pageResult?.solutions?.length || 0,
-                                            pageImageCount: pageResult?.pageImages?.length || 0
-                                        });
-
-                                        (pageResult.pageImages || []).forEach(pageImage => {
-                                            const fid = pageImage.sourceFileId || file.id || '';
-                                            const pno = Number(pageImage.pageNo || 0) || 0;
-                                            const url = pageImage.imageUrl || '';
-
-                                            if (!url) return;
-
-                                            pdfPageImageCount += 1;
-
-                                            pdfPageImageMap.set(pageImageKey(fid, pno), url);
-
-                                            if (fid && !pdfFirstPageImageByFileId.has(fid)) {
-                                                pdfFirstPageImageByFileId.set(fid, url);
-                                            }
-
-                                            if (!pdfAnyPageImage) {
-                                                pdfAnyPageImage = url;
-                                            }
-                                        });
-
-                                        pdfVisualQuestionsCount = (pageResult.questions || []).length;
-
-                                        if (hasQuestionRole && pageResult.questions.length) {
-                                            if (isFullRole) {
-                                                fullItems.push(...pageResult.questions);
-                                            } else {
-                                                questionItems.push(...pageResult.questions);
-                                            }
-                                        }
-
-                                        if (hasAnswerOrSolutionRole || isFullRole) {
-                                            const questionTypeByNumber =
-                                                new Map();
-
-                                            [
-                                                ...questionItems,
-                                                ...fullItems
-                                            ].forEach(item => {
-                                                const questionNumber =
-                                                    normalizeQuestionKey(
-                                                        item?.question ||
-                                                        item?.questionNumber ||
-                                                        item?.questionNo ||
-                                                        item?.number ||
-                                                        item?.no ||
-                                                        item?.sourceTrace?.questionNumber ||
-                                                        item?.sourceTrace?.questionNo ||
-                                                        ''
-                                                    );
-
-                                                if (
-                                                    questionNumber &&
-                                                    !questionTypeByNumber
-                                                        .has(questionNumber)
-                                                ) {
-                                                    questionTypeByNumber.set(
-                                                        questionNumber,
-                                                        item?.type || ''
-                                                    );
-                                                }
-                                            });
-
-                                            const cleanedPdfSupportAnswers =
-                                                (pageResult.answers || []).map(item => {
-                                                    const questionNumber =
-                                                        normalizeQuestionKey(
-                                                            item?.question ||
-                                                            item?.questionNumber ||
-                                                            item?.questionNo ||
-                                                            item?.number ||
-                                                            item?.no ||
-                                                            item?.sourceTrace?.questionNumber ||
-                                                            item?.sourceTrace?.questionNo ||
-                                                            ''
-                                                        );
-                                                    const cleaned =
-                                                        cleanPdfSupportAnswerArtifacts(
-                                                            item?.answer,
-                                                            item?.type ||
-                                                            questionTypeByNumber
-                                                                .get(questionNumber) ||
-                                                            ''
-                                                        );
-                                                    const next = {
-                                                        ...item,
-                                                        answer:
-                                                            cleaned.value
-                                                    };
-
-                                                    if (cleaned.changed) {
-                                                        addWarningOnce(
-                                                            next,
-                                                            'pdf-support-answer-artifact-cleaned'
-                                                        );
-                                                    }
-
-                                                    return next;
-                                                });
-
-                                            const normalizedPdfSupportRawTextPages =
-                                                normalizePdfSupportRawTextPagesFromPageResult(pageResult);
-                                            const parserPdfSupportGate =
-                                                window.Qisi?.PdfSupportControlledWrite
-                                                    ?.buildPdfSupportParserGate({
-                                                parsePdfSupportBlocks:
-                                                    window.Qisi?.PdfSupportBlockParser?.parsePdfSupportBlocks,
-                                                alignPdfSupport:
-                                                    window.Qisi?.PdfSupportAligner?.alignPdfSupport,
-                                                file,
-                                                answers:
-                                                    cleanedPdfSupportAnswers,
-                                                solutions:
-                                                    pageResult.solutions || [],
-                                                expectedQuestionNumbers,
-                                                rawTextPages:
-                                                    normalizedPdfSupportRawTextPages
-                                            });
-
-                                            const legacyPdfSupportGate =
-                                                applyPdfSupportFailClosedGate({
-                                                    answers:
-                                                        cleanedPdfSupportAnswers,
-                                                    solutions:
-                                                        pageResult.solutions || [],
-                                                    expectedQuestionNumbers
-                                                });
-                                            const fieldControlledWrite =
-                                                window.Qisi?.PdfSupportControlledWrite
-                                                    ?.buildPdfSupportFieldLevelControlledWrite({
-                                                        drafts: [
-                                                            ...questionItems,
-                                                            ...fullItems
-                                                        ],
-                                                        legacySafeAnswerItems:
-                                                            legacyPdfSupportGate.failClosed
-                                                                ? []
-                                                                : legacyPdfSupportGate.answers || [],
-                                                        legacySafeSolutionItems:
-                                                            legacyPdfSupportGate.failClosed
-                                                                ? []
-                                                                : legacyPdfSupportGate.solutions || [],
-                                                        parserSafeAnswerItems:
-                                                            parserPdfSupportGate?.failClosed
-                                                                ? []
-                                                                : parserPdfSupportGate?.answers || [],
-                                                        parserSafeSolutionItems:
-                                                            parserPdfSupportGate?.failClosed
-                                                                ? []
-                                                                : parserPdfSupportGate?.solutions || [],
-                                                        legacyFusedQuestionNumbers:
-                                                            legacyPdfSupportGate.fusedQuestionNumbers || [],
-                                                        parserFusedQuestionNumbers:
-                                                            parserPdfSupportGate?.fusedQuestionNumbers || []
-                                                    });
-                                            if (!fieldControlledWrite) {
-                                                const error = new Error(
-                                                    'controlled-write-missing'
-                                                );
-                                                error.code =
-                                                    'controlled-write-missing';
-                                                throw error;
-                                            }
-                                            const controlledWriteResult = {
-                                                ...fieldControlledWrite,
-                                                decisionId:
-                                                    `pdf-cw:${batchId}:${file.id}`
-                                            };
-                                            pdfSupportControlledWriteResults.push(
-                                                controlledWriteResult
-                                            );
-                                            const pdfSupportGate = {
-                                                answers:
-                                                    controlledWriteResult.effectiveAnswerItems || [],
-                                                solutions:
-                                                    controlledWriteResult.effectiveSolutionItems || [],
-                                                failClosed:
-                                                    legacyPdfSupportGate.failClosed &&
-                                                    (!parserPdfSupportGate || parserPdfSupportGate.failClosed),
-                                                fusedQuestionNumbers:
-                                                    controlledWriteResult.fusedQuestionNumbers || [],
-                                                fusedWarnings:
-                                                    [
-                                                        ...new Set([
-                                                            ...(legacyPdfSupportGate.fusedWarnings || []),
-                                                            ...(parserPdfSupportGate?.fusedWarnings || [])
-                                                        ])
-                                                    ],
-                                                report:
-                                                    parserPdfSupportGate?.report ||
-                                                    legacyPdfSupportGate.report
-                                            };
-                                            const acceptedAlignments = [
-                                                legacyPdfSupportGate,
-                                                parserPdfSupportGate
-                                            ].filter(result =>
-                                                result && !result.failClosed
-                                            );
-                                            pdfSupportAlignmentResults.push({
-                                                mode: pdfSupportGate.failClosed
-                                                    ? 'fail-closed'
-                                                    : acceptedAlignments.some(
-                                                        result => result.mode === 'prefix'
-                                                    )
-                                                        ? 'prefix'
-                                                        : 'full',
-                                                safeQuestionNumbers: [
-                                                    ...new Set(
-                                                        acceptedAlignments.flatMap(result =>
-                                                            result.safeQuestionNumbers || []
-                                                        )
-                                                    )
-                                                ],
-                                                fusedQuestionNumbers:
-                                                    pdfSupportGate.fusedQuestionNumbers,
-                                                warnings: [
-                                                    ...pdfSupportGate.fusedWarnings,
-                                                    ...(controlledWriteResult.warnings || [])
-                                                ]
-                                            });
-
-                                            console.info(
-                                                '[BATCH_PDF_FIELD_CONTROLLED_WRITE]',
-                                                {
-                                                    filename: file.filename,
-                                                    effectiveAnswerQuestionNumbers:
-                                                        pdfSupportQuestionNumbers(pdfSupportGate.answers),
-                                                    effectiveSolutionQuestionNumbers:
-                                                        pdfSupportQuestionNumbers(pdfSupportGate.solutions),
-                                                    rejectedObjectiveAnswerCount:
-                                                        (controlledWriteResult.warnings || [])
-                                                            .filter(warning => warning.code === 'parser-objective-answer-rejected')
-                                                            .length,
-                                                    fieldDecisionSummary:
-                                                        (controlledWriteResult.fieldDecisions || [])
-                                                            .map(decision => ({
-                                                                field: decision.field,
-                                                                source: decision.source,
-                                                                reason: decision.reason
-                                                            }))
-                                                }
-                                            );
-
-                                            if (pdfSupportGate.failClosed) {
-                                                pdfSupportFailClosed = true;
-                                                pdfSupportFailClosedReports.push({
-                                                    filename:
-                                                        file.filename,
-                                                    report:
-                                                        pdfSupportGate.report
-                                                });
-                                            } else {
-                                                answerItems.push(
-                                                    ...pdfSupportGate.answers
-                                                );
-                                                solutionItems.push(
-                                                    ...pdfSupportGate.solutions
-                                                );
-                                            }
-                                        }
-
-                                        logBatchPdfDiag('pdf-support-page-result', {
-                                            batchId,
-                                            filename: file.filename,
-                                            fileType: file.fileType,
-                                            roles: getBatchFileRoles(file),
-                                            questionCount: pageResult?.questions?.length || 0,
-                                            answerCount: pageResult?.answers?.length || 0,
-                                            solutionCount: pageResult?.solutions?.length || 0,
-                                            pageImageCount: pageResult?.pageImages?.length || 0,
-                                            questionItemsCount: questionItems.length,
-                                            fullItemsCount: fullItems.length,
-                                            answerItemsCount: answerItems.length,
-                                            solutionItemsCount: solutionItems.length
-                                        });
-
-                                        if (pageResult.questions.length || pageResult.answers.length || pageResult.solutions.length) {
-                                            usedVisualRecognition = true;
-                                        }
-
-                                    } catch (error) {
-                                        pdfVisualError = error;
-                                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                                        const renderDiagnostics =
-                                            error?.renderDiagnostics ||
-                                            error?.cause?.renderDiagnostics ||
-                                            error?.cause?.cause?.renderDiagnostics;
-
-                                        if (renderDiagnostics) {
-                                            console.error(
-                                                '[BATCH_DEBUG][pdf-render-failure-snapshot]',
-                                                renderDiagnostics
-                                            );
-                                        }
-                                        console.warn('[BATCH_DEBUG][pdf-file-visual-failed]', {
-                                            filename: file.filename,
-                                            fileId: file.id,
-                                            pdfPageImageCount,
-                                            message: error?.message || String(error)
-                                        }, error);
-                                    }
-                                }
-                                if (file.fileType === 'pdf' && hasQuestionRole && pdfVisualAttempted && pdfPageImageCount <= 0) {
-                                    const message =
-                                        `PDF 视觉链路失败且没有任何页图：${file.filename}。` +
-                                        `已禁止文本层回退，避免生成无原图、无选项、无 LaTeX 的垃圾草稿。`;
-
-                                    console.error('[BATCH_DEBUG][pdf-hard-stop]', {
-                                        filename: file.filename,
-                                        fileId: file.id,
-                                        usedVisualRecognition,
-                                        pdfVisualAttempted,
-                                        pdfPageImageCount,
-                                        pdfVisualQuestionsCount,
-                                        pdfAnyPageImage: Boolean(pdfAnyPageImage),
-                                        error: pdfVisualError?.message || String(pdfVisualError || '')
-                                    });
-
-                                    await db.draftImportFiles.update(file.id, {
-                                        parseStatus: 'failed',
-                                        errorMessage: message,
-                                        updatedAt: Date.now()
-                                    });
-
-                                    throw new Error(message);
-                                }
-                                let text = '';
-
-                                // 非 PDF 文件都尽量提前提取文本，给 DOCX importer 空结果和文本导入留兜底。
-                                const shouldPrepareTextFallback = file.fileType !== 'pdf';
-
-                                if (shouldPrepareTextFallback) {
-                                    try {
-                                        text = await extractTextFromDraftFile(file);
-                                        if (text) draftFileTextCache.set(file.id, text);
-                                    } catch (error) {
-                                        console.warn('[BATCH_DEBUG][text-layer-extract-failed]', {
-                                            filename: file.filename,
-                                            fileType: file.fileType,
-                                            message: error?.message || String(error)
-                                        }, error);
-                                        text = '';
-                                    }
-                                }
-                                if (!usedVisualRecognition && file.fileType === 'docx' && hasQuestionRole) {
-                                    let docxImporterItems = [];
-                                    const expectedDocxQuestionCount = 0;
-                                    const companionVisualFile = window.Qisi.DocxPipeline.findUploadedVisualCompanionForDocx(file, processFiles);
-
-                                    if (companionVisualFile) {
-                                        const expected = batchExpectedCount || expectedDocxQuestionCount || 0;
-
-                                        console.warn('[BATCH_DEBUG][docx-use-uploaded-visual-companion]', {
-                                            docx: file.filename,
-                                            companion: companionVisualFile.filename,
-                                            companionType: companionVisualFile.fileType,
-                                            expected
-                                        });
-
-                                        const strictResult = await processStrictVisualQuestionFile({
-                                            file: companionVisualFile,
-                                            batch,
-                                            expectedQuestionCount: expected,
-                                            onPageProgress: async (ratio, info) => {
-                                                await updateBatchProgress(
-                                                    batchId,
-                                                    baseProgress + fileProgressSpan * Math.min(0.95, Math.max(0, ratio || 0)),
-                                                    'processing'
-                                                );
-
-                                                console.log('[BATCH_DEBUG][docx-companion-visual-progress]', {
-                                                    docx: file.filename,
-                                                    companion: companionVisualFile.filename,
-                                                    ratio,
-                                                    info
-                                                });
-                                            }
-                                        });
-
-                                        const check = strictResult.check || validateVisualQuestionItems(strictResult.questions, expected);
-                                        if (check.fatal) {
-                                            throw new Error(
-                                                `DOCX 伴随视觉文件识别发生致命错误：${(check.fatalReasons || check.reasons || []).join('；') || '未知原因'}`
-                                            );
-                                        }
-
-                                        if (isFullRole) {
-                                            fullItems.push(...strictResult.questions);
-                                        } else {
-                                            questionItems.push(...strictResult.questions);
-                                        }
-
-                                        rememberPageImages(strictResult.pageImages || [], companionVisualFile);
-                                        consumedVisualFileIds.add(companionVisualFile.id);
-                                        usedVisualRecognition = true;
-
-                                        await db.draftImportFiles.update(file.id, {
-                                            parseStatus: 'success',
-                                            errorMessage: `DOCX 含 WMF/OLE 时优先使用伴随视觉文件 ${companionVisualFile.filename} 识别`,
-                                            updatedAt: Date.now()
-                                        });
-
-                                        await db.draftImportFiles.update(companionVisualFile.id, {
-                                            parseStatus: 'success',
-                                            errorMessage: `已作为 ${file.filename} 的视觉识别来源`,
-                                            updatedAt: Date.now()
-                                        });
-
-                                        await updateBatchProgress(batchId, baseProgress + fileProgressSpan, 'processing');
-                                        continue;
-                                    }
-
-                                    console.warn('[BATCH_DEBUG][docx-no-uploaded-visual-companion]', {
-                                        filename: file.filename,
-                                        message: '本轮主流程不再读取 manifest/page-1.png 固定路径；如 DOCX 含 WMF/OLE，必须通过本地转换服务先转 PDF。'
-                                    });
-
-                                    if (!docxImporterItems.length) {
-                                    try {
-                                        if (!window.QisiBatchImporter?.parseDocxFile) {
-                                            throw new Error('批量录题 DOCX 模块未加载，请检查 qisi-batch-importer.js 引入顺序。');
-                                        }
-
-                                        const docxSourceResult = await window.Qisi.ProductionDocxSourcePort.parseDocxSource({
-                                            source: file,
-                                            batch,
-                                            defaultMeta: toRaw(batchDefaultMeta),
-                                            importerHelpers: {
-                                                cleanRecognizedText,
-                                                cleanDisplayTextForBatchSave,
-                                                cleanDisplayOptionsForBatchSave,
-                                                normalizeAnswerForLatex,
-                                                makeBatchId,
-                                                recognizeTextQuestionsWithQwen,
-                                                recognizeAnswerSolutionWithQwen,
-                                                isFatalQwenServiceError,
-                                                updateProgress: (progress) => updateBatchProgress(
-                                                    batchId,
-                                                    baseProgress + fileProgressSpan * Math.min(0.95, Math.max(0, progress || 0)),
-                                                    'processing'
-                                                )
-                                            }
-                                        }, {
-                                            importer: window.QisiBatchImporter,
-                                            convertDraft: window.Qisi.ReviewDraftState
-                                                .convertDocxImporterDraftToRecognitionItem,
-                                            acceptDraft: item => {
-                                                const stem = window.Qisi.Utils.cleanRecognizedText(
-                                                    item?.stem || ''
-                                                );
-                                                const optionCount = Array.isArray(item?.options)
-                                                    ? item.options.filter(option =>
-                                                        window.Qisi.Utils.cleanRecognizedText(option || '')
-                                                    ).length
-                                                    : 0;
-                                                return stem.length > 0 || optionCount > 0;
-                                            }
-                                        });
-
-                                        docxImporterItems = docxSourceResult.drafts || [];
-                                    } catch (error) {
-                                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-
-                                        console.warn('[BATCH_DEBUG][docx-importer-failed-fallback-to-text]', {
-                                            filename: file.filename,
-                                            message: error?.message || String(error)
-                                        }, error);
-
-                                        docxImporterItems = [];
-                                    }
-                                    }
-
-                                    if (docxImporterItems.length > 0 && docxImporterItems.some(window.Qisi.Utils.itemHasUnconvertedImagePlaceholder)) {
-                                        console.error('[BATCH_DEBUG][docx-placeholder-blocked-no-uploaded-visual]', {
-                                            filename: file.filename,
-                                            itemCount: docxImporterItems.length
-                                        });
-
-                                        throw new Error(
-                                            `DOCX ${file.filename} 中存在 WMF/EMF/OLE 公式图片选项，不能直接转成 LaTeX。` +
-                                            '本地转换服务未能成功将 DOCX 转为 PDF，因此不能生成完整 LaTeX。' +
-                                            '请确认已经运行 npm start，并用 http://localhost:3000/main.html 打开软件。'
-                                        );
-                                    }
-
-                                    if (docxImporterItems.length > 0) {
-                                        if (isFullRole) {
-                                            fullItems.push(...docxImporterItems);
-                                        } else {
-                                            questionItems.push(...docxImporterItems);
-                                        }
-
-                                        // 不直接使用 docxImporterResult.draftImages。
-                                        // DOCX importer 的 inline 图片通过 item.images -> mergeDraftRecognition -> draft.images 传递。
-                                        // 直接 push draftImages 会造成 questionId 与最终 draft.id 不一致。
-
-                                        if (isFullRole || hasAnswerOrSolutionRole) {
-                                            let parsed = text
-                                                ? parseAnswerAndSolutionItemsFromText(text, file)
-                                                : { answers: [], solutions: [] };
-
-                                            if (text) {
-                                                try {
-                                                    const qwenParsed = await recognizeAnswerSolutionWithQwen(text, file);
-                                                    parsed = mergeAnswerSolutionResults(parsed, qwenParsed);
-                                                } catch (error) {
-                                                    console.warn('[BATCH_DEBUG][docx-answer-solution-qwen-failed-keep-local]', error);
-                                                }
-                                            }
-
-                                            answerItems.push(...(parsed.answers || []));
-                                            solutionItems.push(...(parsed.solutions || []));
-                                        }
-
-                                        console.groupCollapsed('[BATCH_DEBUG][docx-importer-items]');
-                                        console.table(docxImporterItems.map((item, idx) => ({
-                                            idx,
-                                            q: item.question || item.questionNumber,
-                                            type: item.type,
-                                            optionCount: Array.isArray(item.options) ? item.options.filter(Boolean).length : 0,
-                                            optionA: item.options?.[0] || '',
-                                            optionB: item.options?.[1] || '',
-                                            optionC: item.options?.[2] || '',
-                                            optionD: item.options?.[3] || '',
-                                            stemHead: window.Qisi.Utils.cleanRecognizedText(item.stem).slice(0, 120),
-                                            optionImageCount: Array.isArray(item.images) ? item.images.length : 0
-                                        })));
-                                        console.groupEnd();
-
-                                        // 只有 importer 真正产出题目时，才阻止后续旧文本流程。
-                                        usedVisualRecognition = true;
-                                    } else {
-                                        console.warn('[BATCH_DEBUG][docx-importer-empty-fallback-to-text]', {
-                                            filename: file.filename,
-                                            hasTextFallback: Boolean(text),
-                                            textLength: String(text || '').length
-                                        });
-
-                                        // 关键：这里不能设置 usedVisualRecognition = true，后面的旧文本流程会继续执行。
-                                    }
-                                }
-                                if (usedVisualRecognition && file.fileType === 'pdf' && text) {
-                                    const attachTextLayerEvidence = (item) => {
-                                        if (!item || item.sourceFileId !== file.id) return;
-
-                                        // 关键：PDF 文本层只能作为辅助证据，绝不能覆盖视觉 OCR Markdown。
-                                        const existingPageText = item.pageText || item.sourceTrace?.pageText || '';
-                                        const existingSourceText = item.sourceText || item.sourceTrace?.sourceText || '';
-
-                                        item.pdfTextLayer = item.pdfTextLayer || text;
-                                        item.textLayer = item.textLayer || text;
-
-                                        if (!item.pageText) item.pageText = existingPageText || '';
-                                        if (!item.sourceText) item.sourceText = existingSourceText || '';
-
-                                        item.pageTextOriginal = item.pageTextOriginal || existingPageText || item.pageText || '';
-                                        item.sourceTextOriginal = item.sourceTextOriginal || existingSourceText || item.sourceText || '';
-
-                                        item.sourceTrace = {
-                                            ...(item.sourceTrace || {}),
-                                            pageText: item.sourceTrace?.pageText || existingPageText || item.pageText || '',
-                                            sourceText: item.sourceTrace?.sourceText || existingSourceText || item.sourceText || '',
-                                            pageTextOriginal: item.sourceTrace?.pageTextOriginal || existingPageText || item.pageText || '',
-                                            sourceTextOriginal: item.sourceTrace?.sourceTextOriginal || existingSourceText || item.sourceText || '',
-                                            pdfTextLayer: item.sourceTrace?.pdfTextLayer || text,
-                                            textLayer: item.sourceTrace?.textLayer || text
-                                        };
-                                    };
-
-                                    questionItems.forEach(attachTextLayerEvidence);
-                                    fullItems.forEach(attachTextLayerEvidence);
-                                    answerItems.forEach(attachTextLayerEvidence);
-                                    solutionItems.forEach(attachTextLayerEvidence);
-                                }
-                                let visualAnswerResult = { answers: [], solutions: [] };
-                                if (
-                                    !usedVisualRecognition &&
-                                    hasAnswerOrSolutionRole &&
-                                    !hasQuestionRole &&
-                                    file.fileType === 'docx' &&
-                                    recognitionMode === 'cheap'
-                                ) {
-                                    console.warn('[BATCH_DEBUG][docx-text-only]', {
-                                        filename: file.filename,
-                                        message:
-                                            'cheap 模式仍使用 DOCX 文本层，' +
-                                            'MathType/OLE 公式可能缺失。'
-                                    });
-                                }
-                                if (!usedVisualRecognition && text && file.fileType !== 'pdf' && batchHasQuestionRole(file) && !isFullRole) {
-                                    let structuredItems = [];
-                                    try {
-                                        structuredItems = await recognizeTextQuestionsWithQwen(text, file, false, batchDefaultMeta.defaultType);
-                                    } catch (error) {
-                                        if (window.Qisi.Utils.isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
-                                        console.warn('文本题目结构化失败，回退到本地切题', error);
-                                    }
-                                    questionItems.push(...(structuredItems.length ? structuredItems : parseQuestionItemsFromText(text, file, false)));
-                                }
-                                if (!usedVisualRecognition && text && file.fileType !== 'pdf' && batchHasAnswerRole(file) && !isFullRole) {
-                                    let parsed = mergeAnswerSolutionResults(parseAnswerAndSolutionItemsFromText(text, file), visualAnswerResult);
-                                    try {
-                                        parsed = mergeAnswerSolutionResults(parsed, await recognizeAnswerSolutionWithQwen(text, file));
-                                    } catch (error) {
-                                        if (window.Qisi.Utils.isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
-                                        console.warn('答案解析结构化失败，保留本地结果', error);
-                                    }
-                                    answerItems.push(...parsed.answers);
-                                    solutionItems.push(...parsed.solutions);
-                                }
-                                if (!usedVisualRecognition && text && file.fileType !== 'pdf' && batchHasSolutionRole(file) && !batchHasAnswerRole(file) && !isFullRole) {
-                                    let parsed = mergeAnswerSolutionResults({ answers: [], solutions: parseSolutionItemsFromText(text, file) }, visualAnswerResult);
-                                    try {
-                                        parsed = mergeAnswerSolutionResults(parsed, await recognizeAnswerSolutionWithQwen(text, file));
-                                    } catch (error) {
-                                        if (window.Qisi.Utils.isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
-                                        console.warn('解析文件结构化失败，保留本地结果', error);
-                                    }
-                                    solutionItems.push(...parsed.solutions);
-                                }
-                                if (!usedVisualRecognition && text && file.fileType !== 'pdf' && isFullRole) {
-                                    let structuredItems = [];
-                                    try {
-                                        structuredItems = await recognizeTextQuestionsWithQwen(text, file, true, batchDefaultMeta.defaultType);
-                                    } catch (error) {
-                                        if (window.Qisi.Utils.isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
-                                        console.warn('完整文件结构化失败，回退到本地切题', error);
-                                    }
-                                    fullItems.push(...(structuredItems.length ? structuredItems : parseQuestionItemsFromText(text, file, true)));
-                                    let parsed = parseAnswerAndSolutionItemsFromText(text, file);
-                                    try {
-                                        parsed = mergeAnswerSolutionResults(parsed, await recognizeAnswerSolutionWithQwen(text, file));
-                                    } catch (error) {
-                                        if (window.Qisi.Utils.isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
-                                        console.warn('完整文件答案解析结构化失败，保留本地结果', error);
-                                    }
-                                    answerItems.push(...parsed.answers);
-                                    solutionItems.push(...parsed.solutions);
-                                }
-                                if (file.fileType === 'image' && batchHasQuestionRole(file)) {
-                                    let aiItems = [];
-                                    try {
-                                        aiItems = await recognizeImageQuestionWithQwen(file);
-                                    } catch (error) {
-                                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                                        console.warn('图片 AI 识别不可用，已进入人工草稿', error);
-                                    }
-                                    if (aiItems.length) {
-                                        fullItems.push(...aiItems);
-                                    } else {
-                                        const qNum = String(questionItems.length + fullItems.length + 1);
-                                        fullItems.push({
-                                            question: qNum,
-                                            stem: '图片题识别草稿，请查看右侧图片并补全题干。',
-                                            options: ['', '', '', ''],
-                                            answer: '',
-                                            solution: '',
-                                            type: batch.defaultMeta?.defaultType || '解答题',
-                                            images: [],
-                                            confidence: 0.55,
-                                            warnings: ['图片文件已生成草稿，需人工核对题干、答案和解析。'],
-                                            sourceFileId: file.id
-                                        });
-                                    }
-                                }
-                                await db.draftImportFiles.update(file.id, { parseStatus: 'success', updatedAt: Date.now(), errorMessage: '' });
-                                await updateBatchProgress(batchId, baseProgress + fileProgressSpan, 'processing');
-                            } catch (error) {
-                                const renderDiagnostics =
-                                    error?.renderDiagnostics ||
-                                    error?.cause?.renderDiagnostics ||
-                                    error?.cause?.cause?.renderDiagnostics;
-
-                                if (renderDiagnostics) {
-                                    console.error(
-                                        '[BATCH_DEBUG][pdf-render-failure-snapshot]',
-                                        renderDiagnostics
-                                    );
-                                }
-                                await db.draftImportFiles.update(file.id, {
-                                    parseStatus: 'failed',
-                                    updatedAt: Date.now(),
-                                    errorMessage: error?.message || '这个文件暂时无法识别，请确认文件没有损坏，或重新上传 DOCX / PDF。'
-                                });
-                                console.warn('批量文件解析失败', file.filename, error);
-                                throw error;
-                            }
-                        }
-
-                        await updateBatchProgress(batchId, 72, 'processing');
-                        console.groupCollapsed('[BATCH_DEBUG][pdf-page-map-before-merge]');
-                        console.log('pdfAnyPageImage =', Boolean(pdfAnyPageImage));
-                        console.table([...pdfFirstPageImageByFileId.entries()].map(([fileId, url]) => ({
-                            fileId,
-                            hasUrl: Boolean(url),
-                            urlLength: String(url || '').length
-                        })));
-                        console.table([...pdfPageImageMap.entries()].map(([key, url]) => ({
-                            key,
-                            hasUrl: Boolean(url),
-                            urlLength: String(url || '').length
-                        })));
-                        console.groupEnd();
-
-                        const hasAuthoritativeQuestionContract =
-                            Boolean(
-                                authoritativeQuestionContract
-                                    ?.authoritative
-                            );
-
-                        logBatchPdfDiag('before-merge', {
-                            batchId,
-                            questionItemsCount: questionItems.length,
-                            fullItemsCount: fullItems.length,
-                            answerItemsCount: answerItems.length,
-                            solutionItemsCount: solutionItems.length,
-                            authoritativeQuestionContract: authoritativeQuestionContract
-                                ? {
-                                    authoritative: Boolean(authoritativeQuestionContract.authoritative),
-                                    evidence: authoritativeQuestionContract.evidence || '',
-                                    questionNumbers: authoritativeQuestionContract.questionNumbers || []
-                                }
-                                : null
-                        });
-
-                        const merged = mergeDraftRecognition(
-                            questionItems,
-                            answerItems,
-                            solutionItems,
-                            fullItems,
-                            batch,
-                            files,
-                            {
-                                authoritativeQuestionContract
-                            }
-                        );
-                        let drafts = hasAuthoritativeQuestionContract
-                            ? merged.drafts
-                            : repairDraftAnswersByOrder(
-                                merged.drafts,
-                                answerItems,
-                                solutionItems
-                            );
-
-                        // 第一道闸门：刚生成 drafts 后，先去掉明显重复，避免后续答案对齐、视觉修复浪费在重复题上。
-                        let batchGateResult = batchFinalGateDedupeDrafts(drafts, {
-                            stage: 'after-repairDraftAnswersByOrder',
-                            batchId,
-                            files
-                        });
-                        drafts = batchGateResult.drafts;
-
-                        if (pdfSupportFailClosed) {
-                            console.warn(
-                                '[BATCH_PDF_SEQUENCE][fail-closed]',
-                                {
-                                    batchId,
-                                    reports:
-                                        pdfSupportFailClosedReports
-                                }
-                            );
-                        }
-
-                        if (!hasAuthoritativeQuestionContract && !pdfSupportFailClosed) {
-                            try {
-                                await repairDraftAnswersWithQwen(drafts, answerItems, solutionItems);
-                            } catch (error) {
-                                if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                                console.warn('答案全局对齐失败，保留已有匹配结果', error);
-                            }
-                        }
-
-                        console.groupCollapsed('[BATCH_DEBUG][docx-current-final-before-save]');
-                        console.table((drafts || []).map((d, idx) => ({
-                            idx,
-                            id: d.id,
-                            q: d.questionNumber || d.question || d.order,
-                            type: d.type,
-                            optionCount: Array.isArray(d.options) ? d.options.filter(Boolean).length : 0,
-                            hasAnswer: Boolean(window.Qisi.Utils.cleanRecognizedText(d.answer)),
-                            hasSolution: Boolean(window.Qisi.Utils.cleanRecognizedText(d.solution)),
-                            answerHead: window.Qisi.Utils.cleanRecognizedText(d.answer).slice(0, 80),
-                            solutionHead: window.Qisi.Utils.cleanRecognizedText(d.solution).slice(0, 160),
-                            stemHead: window.Qisi.Utils.cleanRecognizedText(d.stem).slice(0, 120)
-                        })));
-                        console.groupEnd();
-
-                        await updateBatchProgress(batchId, 82, 'processing');
-
-                        // 1. 先做常规安全清洗与 normalize。
-                        // 注意：最终视觉修复必须放到这个循环之后，避免修复结果又被后续处理影响。
-                        for (const draft of drafts) {
-                            attachSourceTraceToDraftQuestion(draft, files);
-                            const sourceFileForDraft = files.find(file =>
-                                file.id === (draft.sourceFileId || draft.sourceQuestionFileId || draft.sourceTrace?.sourceFileId)
-                            );
-                            if (sourceFileForDraft?.fileType === 'docx' && draft.sourceTrace?.source !== 'docx-importer') {
-                                addWarningOnce(draft, DOCX_TEXT_ONLY_WARNING);
-                            }
-                            window.Qisi.Utils.preserveRawEvidence(draft);
-                            cleanDisplayFieldsOnly(draft);
-
-                            // 只允许从当前题 rawBlock/rawText 中提取选项，不跨题、不编造。
-                            if (draft.sourceTrace?.source !== 'docx-importer') {
-                                extractOptionsFromCurrentBlockOnly(draft);
-                            }
-
-                            normalizeDraftQuestionBeforeSave(draft);
-                            repairDraftStemIfJsonPolluted(
-                                draft,
-                                sourceFileForDraft
-                            );
-                            sanitizeDraftOptionsIfPolluted(
-                                draft,
-                                sourceFileForDraft
-                            );
-                        }
-
-                        // 第二道闸门：clean / normalize / 选项抽取后，再按题号唯一化。
-                        batchGateResult = batchFinalGateDedupeDrafts(drafts, {
-                            stage: 'after-normalize',
-                            batchId,
-                            files
-                        });
-                        drafts = batchGateResult.drafts;
-
-                        // 暂时禁用二次视觉修复。
-                        // 当前目标是稳定数据流，避免二次识别覆盖第一次识别结果。
-                        // await repairDraftQuestionsByVision(drafts, async (ratio) => {
-                        //     await updateBatchProgress(batchId, 82 + Math.min(1, ratio) * 8, 'processing');
-                        // });
-                        await updateBatchProgress(batchId, 88, 'processing');
-                        let unmatched = (merged.unmatched || []).filter(answer => !drafts.some(draft => sameTextLoose(draft.answer, answer.answer)));
-                        const answerCoverageLooksComplete = answerItems.length
-                            && Math.abs(answerItems.length - drafts.length) <= 1
-                            && drafts.filter(draft => window.Qisi.Utils.cleanRecognizedText(draft.answer)).length >= Math.min(answerItems.length, drafts.length);
-                        if (answerCoverageLooksComplete) unmatched = [];
-                        await updateBatchProgress(batchId, 86, 'processing');
-                        for (const file of supplementalImageFiles) {
-                            draftImages.push({
-                                id: makeBatchId('dimg'),
-                                batchId,
-                                questionId: null,
-                                filename: file.filename,
-                                url: file.uploadPath,
-                                sourceFileId: file.id,
-                                sourcePage: 0,
-                                bbox: [],
-                                confidence: 0,
-                                description: '补充图片',
-                                status: 'unassigned',
-                                createdAt: Date.now()
-                            });
-                        }
-                        const usedDocxImageIds = new Set();
-                        for (const draft of drafts) {
-                            if (draft.solutionPageImage && Array.isArray(draft.recognizedSolutionImages) && draft.recognizedSolutionImages.length) {
-                                const boundRefs = [];
-                                for (const [idx, recognizedImage] of draft.recognizedSolutionImages.entries()) {
-                                    const bbox = recognizedImage.image_bbox || recognizedImage.bbox || [];
-                                    if (!Array.isArray(bbox) || bbox.length !== 4) continue;
-                                    const imageId = makeBatchId('dimg');
-                                    const imageConfidence = Number(recognizedImage.image_confidence || draft.confidence || 0.78);
-                                    const imageStatus = imageConfidence >= 0.9 ? 'bound' : (imageConfidence >= 0.75 ? 'need_confirm' : 'low_confidence');
-                                    let croppedUrl = draft.solutionPageImage;
-                                    try {
-                                        croppedUrl = await cropDataUrlByBbox(draft.solutionPageImage, bbox);
-                                    } catch (error) {
-                                        console.warn('解析图片裁剪失败，保留页面图', error);
-                                    }
-                                    boundRefs.push({ id: imageId, url: croppedUrl, align: 'center' });
-                                    draftImages.push({
-                                        id: imageId,
-                                        batchId,
-                                        questionId: draft.id,
-                                        filename: `solution_q${draft.questionNumber || draft.order}_${idx + 1}.jpg`,
-                                        url: croppedUrl,
-                                        sourceFileId: draft.sourceSolutionFileId,
-                                        sourcePage: draft.solutionSourcePage || 0,
-                                        bbox,
-                                        confidence: imageConfidence,
-                                        description: window.Qisi.Utils.cleanRecognizedText(recognizedImage.image_description) || '解析图片',
-                                        status: imageStatus,
-                                        createdAt: Date.now()
-                                    });
-                                }
-                                if (boundRefs.length) {
-                                    draft.images = [...(draft.images || []), ...boundRefs];
-                                    draft.hasImage = true;
-                                    const statuses = draftImages.filter(img => img.questionId === draft.id).map(img => img.status);
-                                    draft.imageReviewStatus = statuses.includes('low_confidence') ? 'low_confidence' : (statuses.includes('need_confirm') ? 'need_confirm' : 'confirmed');
-                                    if (draft.imageReviewStatus !== 'confirmed') draft.warnings.push('该题解析图片需要确认后才能入库。');
-                                }
-                            }
-                            await bindRecognizedQuestionFigures(draft, draftImages, files, batchId);
-                        }
-                        for (const file of files.filter(item => item.fileType === 'docx')) {
-                            const docxRefs = docxEmbeddedImageCache.get(file.id) || [];
-                            const refsById = new Map(docxRefs.map(ref => [ref.id, ref]));
-
-                            drafts
-                                .filter(draft =>
-                                    (draft.sourceFileId || draft.sourceQuestionFileId || draft.sourceTrace?.sourceFileId) === file.id
-                                )
-                                .forEach(draft => {
-                                    const tokenIds = extractImageTokenIds([
-                                        draft.stem,
-                                        ...(Array.isArray(draft.options) ? draft.options : []),
-                                        draft.answer,
-                                        draft.solution
-                                    ].map(x => String(x || '')).join('\n'));
-
-                                    const boundRefs = [];
-
-                                    tokenIds.forEach(tokenId => {
-                                        const ref = refsById.get(tokenId);
-                                        if (!ref?.id || ref.displayable === false || usedDocxImageIds.has(ref.id)) return;
-
-                                        usedDocxImageIds.add(ref.id);
-                                        boundRefs.push({
-                                            id: ref.id,
-                                            url: ref.url,
-                                            align: 'center',
-                                            displayable: ref.displayable,
-                                            source: 'docx-inline-figure'
-                                        });
-                                        draftImages.push({
-                                            id: ref.id,
-                                            batchId,
-                                            questionId: draft.id,
-                                            filename: ref.filename,
-                                            url: ref.url,
-                                            sourceFileId: ref.sourceFileId,
-                                            sourcePage: 0,
-                                            bbox: [],
-                                            confidence: 0.82,
-                                            description: '题中图形：Word 内嵌选项图片',
-                                            source: 'docx-inline-figure',
-                                            status: 'bound',
-                                            createdAt: Date.now()
-                                        });
-                                    });
-
-                                    if (boundRefs.length) {
-                                        draft.images = [...(draft.images || []), ...boundRefs];
-                                        draft.hasImage = true;
-                                        draft.imageReviewStatus = draft.imageReviewStatus === 'none' ? 'confirmed' : draft.imageReviewStatus;
-                                    }
-                                });
-
-                            docxRefs
-                                .filter(ref => ref?.id && ref.displayable !== false && !usedDocxImageIds.has(ref.id) && !isFormulaImageRef(ref))
-                                .forEach(ref => {
-                                    usedDocxImageIds.add(ref.id);
-                                    draftImages.push({
-                                        id: ref.id,
-                                        batchId,
-                                        questionId: null,
-                                        filename: ref.filename,
-                                        url: ref.url,
-                                        sourceFileId: ref.sourceFileId,
-                                        sourcePage: 0,
-                                        bbox: [],
-                                        confidence: 0.72,
-                                        description: 'Word 内嵌未绑定图片',
-                                        status: 'unassigned',
-                                        createdAt: Date.now()
-                                    });
-                                });
-                        }
-                        await updateBatchProgress(batchId, 94, 'processing');
-                        for (const draft of drafts) {
-                            attachSourceTraceToDraftQuestion(draft, files);
-
-                            const fileId = draft.sourceFileId || draft.sourceQuestionFileId || draft.sourceTrace?.sourceFileId || '';
-                            const sourceFileForPage = files.find(file => file.id === fileId);
-                            const pageNo = draft.sourcePage || draft.pageIndex || draft.sourceTrace?.sourcePage || draft.sourceTrace?.pageIndex || 1;
-                            const exactPageImage = pdfPageImageMap.get(pageImageKey(fileId, pageNo));
-                            const sameFileFirstPageImage =
-                                fileId ? pdfFirstPageImageByFileId.get(fileId) : '';
-
-                            const pageImage =
-                                draft.sourcePageImage ||
-                                draft.sourceTrace?.sourcePageImage ||
-                                exactPageImage ||
-                                sameFileFirstPageImage ||
-                                pdfAnyPageImage ||
-                                '';
-
-                            if (pageImage) {
-                                draft.sourcePageImage = pageImage;
-                                draft.sourceTrace = {
-                                    ...(draft.sourceTrace || {}),
-                                    sourcePageImage: pageImage,
-                                    sourceFileId: fileId || draft.sourceTrace?.sourceFileId || '',
-                                    sourcePage: pageNo || draft.sourceTrace?.sourcePage || 1,
-                                    pageIndex: pageNo || draft.sourceTrace?.pageIndex || 1
-                                };
-                            } else if (sourceFileForPage?.fileType === 'pdf') {
-                                addWarningOnce(draft, 'PDF 页面图渲染失败，请检查 renderPdfFilePages 是否返回空数组。');
-                            }
-
-                            draft.sourceTrace = {
-                                ...(draft.sourceTrace || {}),
-                                sourceFileId: fileId,
-                                sourceFileName: draft.sourceFileName || draft.sourceTrace?.sourceFileName || '',
-                                sourcePage: pageNo,
-                                pageIndex: pageNo,
-                                sourcePageImage: draft.sourcePageImage || pageImage || draft.sourceTrace?.sourcePageImage || '',
-                                rawBlock: draft.sourceTrace?.rawBlock || draft.rawBlock || draft.rawText || '',
-                                pageText: draft.sourceTrace?.pageText || draft.pageText || draft.sourceText || '',
-                                sourceText: draft.sourceTrace?.sourceText || draft.sourceText || draft.pageText || ''
-                            };
-
-                        }
-                        console.groupCollapsed('[BATCH_DEBUG][page-images-final]');
-                        console.table(drafts.map(d => ({
-                            id: d.id,
-                            q: d.questionNumber || d.question || d.order,
-                            type: d.type,
-                            optionCount: (d.options || []).filter(Boolean).length,
-                            sourceFileId: d.sourceFileId || d.sourceQuestionFileId || d.sourceTrace?.sourceFileId,
-                            page: d.sourcePage || d.pageIndex || d.sourceTrace?.sourcePage || d.sourceTrace?.pageIndex,
-                            hasSourcePageImage: Boolean(d.sourcePageImage || d.sourceTrace?.sourcePageImage),
-                            hasDraftImageRow: draftImages.some(img => img.questionId === d.id),
-                            draftImageRows: draftImages.filter(img => img.questionId === d.id).length
-                        })));
-                        console.groupEnd();
-
-                        // 2. 页图行绑定完成后，再强制补齐每个 draft 的题目图、答案图、解析图。
-                        hydrateDraftImagesForFinalVisionRepair(
-                            drafts,
-                            files,
-                            pdfPageImageMap,
-                            pdfFirstPageImageByFileId,
-                            pdfAnyPageImage,
-                            pageImageKey
-                        );
-
-                        console.groupCollapsed('[BATCH_DEBUG][final-repair-before-normalize]');
-                        console.table(drafts.map(d => ({
-                            id: d.id,
-                            q: d.questionNumber || d.question || d.order,
-                            type: d.type,
-                            optionCount: cleanDisplayOptionsForBatchSave(d.options).filter(Boolean).length,
-                            answerHead: window.Qisi.Utils.cleanRecognizedText(d.answer).slice(0, 80),
-                            solutionHead: window.Qisi.Utils.cleanRecognizedText(d.solution).slice(0, 120),
-                            stemMathSignal: window.Qisi.Utils.mathSignalCount(d.stem),
-                            answerMathSignal: window.Qisi.Utils.mathSignalCount(d.answer),
-                            solutionMathSignal: window.Qisi.Utils.mathSignalCount(d.solution),
-                            hasQuestionImage: Boolean(d.sourcePageImage || d.sourceTrace?.sourcePageImage),
-                            hasAnswerImage: Boolean(d.answerPageImage),
-                            hasSolutionImage: Boolean(d.solutionPageImage)
-                        })));
-                        console.groupEnd();
-
-                        // 3. 最终视觉修复必须是写库前最后一次改题内容。
-                        try {
-                            if (recognitionMode === 'cheap') {
-                                console.log('[BATCH_COST][skip-final-repair] cheap 模式跳过最终视觉修复');
-                            } else if (recognitionMode === 'standard') {
-                                const needOptionRepair = drafts.some(d => {
-                                    const options = window.Qisi.Utils.cleanDisplayOptionsForBatchSave(d.options);
-                                    const optionCount = options.filter(Boolean).length;
-
-                                    return Boolean(d.sourcePageImage || d.sourceTrace?.sourcePageImage) &&
-                                        (
-                                            (isStrictChoiceType(d.type) && optionCount < 4) ||
-                                            window.Qisi.Utils.hasUnconvertedOptionPlaceholder(d)
-                                        );
-                                });
-
-                                if (needOptionRepair) {
-                                    console.log('[BATCH_DEBUG][stage]', 'before repairFinalDraftDetailsWithVision', {
-                                        draftCount: drafts.length
-                                    });
-                                    await repairFinalDraftDetailsWithVision(drafts, async (ratio) => {
-                                        await updateBatchProgress(batchId, 94 + Math.min(1, ratio) * 4, 'processing');
-                                    }, { repairAnswerSolution: false });
-                                    console.log('[BATCH_DEBUG][stage]', 'after repairFinalDraftDetailsWithVision', {
-                                        draftCount: drafts.length
-                                    });
-                                } else {
-                                    console.log('[BATCH_COST][skip-final-repair] standard 模式下选项已足够，跳过最终视觉修复');
-                                }
-                            } else {
-                                console.log('[BATCH_DEBUG][stage]', 'before repairFinalDraftDetailsWithVision', {
-                                    draftCount: drafts.length
-                                });
-                                await repairFinalDraftDetailsWithVision(drafts, async (ratio) => {
-                                    await updateBatchProgress(batchId, 94 + Math.min(1, ratio) * 4, 'processing');
-                                }, { repairAnswerSolution: true });
-                                console.log('[BATCH_DEBUG][stage]', 'after repairFinalDraftDetailsWithVision', {
-                                    draftCount: drafts.length
-                                });
-                            }
-                        } catch (error) {
-                            console.warn('最终 draft 级视觉修复失败，保留已有草稿', error);
-                            throw error;
-                        }
-
-                        const finalPlaceholderDrafts = (drafts || []).filter(window.Qisi.Utils.hasUnconvertedOptionPlaceholder);
-
-                        if (finalPlaceholderDrafts.length) {
-                            console.error('[BATCH_DEBUG][final-placeholder-blocked]', finalPlaceholderDrafts.map(q => ({
-                                questionNumber: q.questionNumber || q.order,
-                                stem: q.stem,
-                                options: q.options
-                            })));
-
-                            throw new Error(
-                                '最终结果仍存在 WMF/EMF/OLE 占位符，已禁止进入审核页。' +
-                                '请确认本地 DOCX 转 PDF 服务可用后重新识别。问题题号：' +
-                                finalPlaceholderDrafts.map(q => q.questionNumber || q.order).join('、')
-                            );
-                        }
-
-                        console.groupCollapsed('[BATCH_DEBUG][final-repair-after-apply]');
-                        console.table(drafts.map(d => ({
-                            id: d.id,
-                            q: d.questionNumber || d.question || d.order,
-                            type: d.type,
-                            optionCount: cleanDisplayOptionsForBatchSave(d.options).filter(Boolean).length,
-                            answerHead: window.Qisi.Utils.cleanRecognizedText(d.answer).slice(0, 80),
-                            solutionHead: window.Qisi.Utils.cleanRecognizedText(d.solution).slice(0, 120),
-                            stemMathSignal: window.Qisi.Utils.mathSignalCount(d.stem),
-                            answerMathSignal: window.Qisi.Utils.mathSignalCount(d.answer),
-                            solutionMathSignal: window.Qisi.Utils.mathSignalCount(d.solution),
-                            hasQuestionImage: Boolean(d.sourcePageImage || d.sourceTrace?.sourcePageImage),
-                            hasAnswerImage: Boolean(d.answerPageImage),
-                            hasSolutionImage: Boolean(d.solutionPageImage)
-                        })));
-                        console.groupEnd();
-
-                        // 4. 最终视觉修复后，只允许补 warning，不允许再 normalize、不允许再 cleanDisplayFieldsOnly。
-                        // repairFinalDraftDetailsWithVision 之后，不能再调用 normalizeDraftQuestionBeforeSave。
-                        for (const draft of drafts) {
-                            if (choiceQuestionMissingOptions(draft)) {
-                                window.Qisi.Utils.addWarningOnce(
-                                    draft,
-                                    `选择题仅识别到 ${countValidOptions(draft.options)}/4 个选项，请对照原图或原文人工补全。系统未自动编造选项。`
-                                );
-                            }
-
-                            if (typeof solutionQualityIssue === 'function') {
-                                const solutionIssue = solutionQualityIssue(draft.stem, draft.options, draft.solution);
-                                if (solutionIssue && draft.status !== 'reviewed' && draft.status !== 'submitted') {
-                                    draft.mergeWarnings = [...new Set([...(draft.mergeWarnings || []), 'solutionNeedsReview'])];
-                                    addWarningOnce(draft, `${solutionIssue}，请人工核对。`);
-                                }
-                            }
-
-                            draft.warnings = [...new Set(draft.warnings || [])];
-                            draft.mergeWarnings = [...new Set(draft.mergeWarnings || [])];
-                            draft.updatedAt = Date.now();
-                        }
-
-                        // 第三道闸门：写库前最后一次唯一化。
-                        // 这是最关键的一道，保证 bulkPut 之前同一来源文件 + 同一题号只剩一条。
-                        batchGateResult = batchFinalGateDedupeDrafts(drafts, {
-                            stage: 'final-before-bulkPut',
-                            batchId,
-                            files,
-                            draftImages
-                        });
-                        drafts = batchGateResult.drafts;
-
-                        const finalDraftImages = batchGateResult.draftImages;
-                        drafts = window.Qisi.ReviewDraftState.attachDraftImageTokensIntoStemsForV2(drafts, finalDraftImages);
-                        if (files.some(file =>
-                            file.fileType === 'pdf' &&
-                            (
-                                batchHasQuestionRole(file) ||
-                                batchIsFullRole(file)
-                            )
-                        )) {
-                            drafts = window.Qisi.PdfCandidateProjection
-                                .projectPdfCandidates({
-                                    drafts,
-                                    sources: files.map((file, index) => ({
-                                        id: file.id,
-                                        fileType: file.fileType,
-                                        sourceOrder: Number.isInteger(file.sourceOrder)
-                                            ? file.sourceOrder
-                                            : index + 1,
-                                        roles: getBatchFileRoles(file)
-                                    })),
-                                    controlledWriteDecisions:
-                                        pdfSupportControlledWriteResults,
-                                    controlledWriteDecisionId:
-                                        `pdf-cw:${batchId}:combined`,
-                                    alignmentResults:
-                                        pdfSupportAlignmentResults,
-                                    routeContext: {
-                                        sourceMode: 'pdf-ai',
-                                        engine: 'strict-visual-page-qwen'
-                                    }
-                                });
-                        }
-
-                        console.groupCollapsed('[BATCH_IMAGE][figure-binding]');
-                        console.table(drafts.map(draft => ({
-                            questionNumber: draft.questionNumber || draft.order,
-                            figureCue: questionHasFigureCue(draft),
-                            questionBbox: JSON.stringify(draft.sourceBbox || []),
-                            recognizedFigureCount: collectValidRecognizedFigures(draft).length,
-                            boundImageCount: finalDraftImages.filter(image =>
-                                image.questionId === draft.id &&
-                                image.source === 'auto-figure-crop'
-                            ).length,
-                            hasImage: draft.hasImage,
-                            stemHasImageToken: /\[\[IMAGE:[^\]]+\]\]/.test(String(draft.stem || ''))
-                        })));
-                        console.groupEnd();
-
-                        batchDebugLog('final', drafts.map(toBatchDebugQuestion));
-                        if (activeBatchCostStats) {
-                            console.groupCollapsed('[BATCH_COST][summary]');
-                            console.table([activeBatchCostStats]);
-                            console.groupEnd();
-                        }
-                        const problemCount = drafts.filter(q => draftQuestionProblems(q).length > 0).length;
-                        console.groupCollapsed('[BATCH_DEBUG][final-drafts-before-save]');
-                        console.log({
-                            questionItems: questionItems.length,
-                            fullItems: fullItems.length,
-                            answerItems: answerItems.length,
-                            solutionItems: solutionItems.length,
-                            draftCount: drafts.length,
-                            totalDurationMs: Math.round(performance.now() - batchStartedAt)
-                        });
-                        console.table(drafts.map((q, idx) => ({
-                            idx,
-                            questionNumber: q.questionNumber || q.question || q.order,
-                            stemLength: String(q.stem || '').length,
-                            optionCount: Array.isArray(q.options) ? q.options.filter(Boolean).length : 0,
-                            status: q.status,
-                            source: q.sourceTrace?.source || '',
-                            A: q.options?.[0] || '',
-                            B: q.options?.[1] || '',
-                            C: q.options?.[2] || '',
-                            D: q.options?.[3] || ''
-                        })));
-                        console.groupEnd();
-
-                        if (!drafts.length) {
-                            console.error('[BATCH_DEBUG][no-drafts-before-save]', {
-                                batchId,
-                                questionItems: questionItems.length,
-                                fullItems: fullItems.length,
-                                answerItems: answerItems.length,
-                                solutionItems: solutionItems.length,
-                                draftImages: draftImages.length,
-                                files: files.map(file => ({
-                                    filename: file.filename,
-                                    fileType: file.fileType,
-                                    roles: file.roles || file.role,
-                                    parseStatus: file.parseStatus,
-                                    errorMessage: file.errorMessage
-                                }))
-                            });
-
-                            throw new Error(
-                                '识别流程最终没有生成题目。请查看控制台中的 ' +
-                                '[strict-page-qwen-raw]、[strict-qwen-parse-result]、' +
-                                '[strict-postprocess-result]。'
-                            );
-                        }
-
-                        logBatchPdfDiag('before-bulk-put', {
-                            batchId,
-                            draftCount: drafts.length,
-                            draftImageCount: finalDraftImages.length,
-                            questionItemsCount: questionItems.length,
-                            fullItemsCount: fullItems.length,
-                            answerItemsCount: answerItems.length,
-                            solutionItemsCount: solutionItems.length,
-                            problemCount,
-                            unmatchedCount: unmatched.length
-                        });
-
-                        console.log('[BATCH_DEBUG][stage]', 'before bulkPut drafts', {
-                            draftCount: drafts.length,
-                            draftImageCount: finalDraftImages.length
-                        });
-                        await draftPersistenceService.persistReviewDraftBatch({
-                            batchId,
-                            drafts,
-                            images: finalDraftImages,
-                            batchPatch: {
-                                status: 'review',
-                                progress: 100,
-                                totalCount: drafts.length,
-                                reviewedCount: 0,
-                                submittedCount: 0,
-                                problemCount,
-                                unassignedImageCount: finalDraftImages.filter(img => img.status === 'unassigned').length,
-                                unmatchedAnswers: unmatched,
-                                updatedAt: Date.now(),
-                                errorMessage: drafts.length ? '' : '没有识别到题目，请确认文件内容清晰，或重新上传 DOCX / PDF。'
-                            }
-                        });
-                        console.log('[BATCH_DEBUG][stage]', 'after bulkPut drafts');
-                        await loadBatchImportData();
-                        if (files.some(file => /^1\.docx$/i.test(file.filename || '') || isGoldenSixVisualFile(file))) {
-                            runBatchDocxGoldenCheck(drafts, 6);
-                        }
-                        activeBatchCostStats = null;
-                    } catch (error) {
-                        if (activeBatchCostStats) {
-                            console.groupCollapsed('[BATCH_COST][summary]');
-                            console.table([activeBatchCostStats]);
-                            console.groupEnd();
-                        }
-                        console.error('[BATCH_DEBUG][batch-failed]', {
-                            batchId,
-                            message: error?.message || String(error)
-                        }, error);
-                        await window.Qisi.ProductionImportStatusPort.reportImportFailure(
-                            { batchId, error, failFiles: false },
-                            { repository: storageRepository }
-                        );
-                        showBatchToast(`批量识别失败：${error?.message || String(error)}`);
-                        await loadBatchImportData();
-                        activeBatchCostStats = null;
-                    }
+                const productionImportEngineHelpers = () => ({
+                    makeBatchId,
+                    getBatchFileRoles,
+                    batchHasQuestionRole,
+                    batchHasAnswerRole,
+                    batchHasSolutionRole,
+                    renderPdfFilePages,
+                    extractPdfTextWithPdfJs,
+                    extractPdfLayoutWithPdfJs,
+                    convertDocxRecordToPdfRecord,
+                    extractTextFromDraftFile,
+                    recognizePageMarkdownWithQwen,
+                    recognizeTextQuestionsWithQwen,
+                    locateQuestionFiguresWithQwen,
+                    cropDataUrlByBbox,
+                    cleanRecognizedText,
+                    cleanDisplayTextForBatchSave,
+                    cleanDisplayOptionsForBatchSave,
+                    normalizeQuestionType,
+                    normalizeQuestionKey,
+                    isFatalQwenServiceError
+                });
+
+                const docxVisionDecisionFromCandidate = candidate => {
+                    const strict = candidate.sourceTrace?.strictProtocol || {};
+                    const provenFields = Object.entries(
+                        candidate.fieldProvenance || {}
+                    ).filter(([, evidence]) =>
+                        evidence?.status === 'controlled-write' &&
+                        evidence?.controlledWriteAccepted === true
+                    ).map(([field]) => field);
+                    return {
+                        ...strict,
+                        accepted: strict.accepted === true ||
+                            candidate.controlledWrite?.evaluated === true,
+                        decisionId: strict.decisionId ||
+                            candidate.controlledWrite?.decisionId || '',
+                        sourceId: strict.sourceId ||
+                            candidate.source?.sourceId ||
+                            candidate.sourceDocxFileId || '',
+                        fields: [...new Set([
+                            ...(strict.fields || []),
+                            ...(candidate.controlledWrite?.acceptedFields || []),
+                            ...provenFields
+                        ])],
+                        engine: strict.engine || strict.model ||
+                            candidate.producer?.engine || ''
+                    };
                 };
+
+                const runProductionDocxVisionImport = async (context, signal) => {
+                    const sources = context.sources || [];
+                    const questionSources = sources.filter(source =>
+                        batchHasQuestionRole(source) || batchIsFullRole(source)
+                    );
+                    const supportSources = sources.filter(source =>
+                        !batchHasQuestionRole(source) &&
+                        !batchIsFullRole(source) &&
+                        (batchHasAnswerRole(source) || batchHasSolutionRole(source))
+                    );
+                    if (!questionSources.length) {
+                        const error = new Error('docx-question-source-required');
+                        error.code = 'PRODUCTION_IMPORT_SOURCE_UNSUPPORTED';
+                        throw error;
+                    }
+                    const base = await window.Qisi.ProductionDocxVisionSourcePort
+                        .runDocxVisionProduction({
+                            ...context,
+                            sources,
+                            signal
+                        }, {
+                            runVisionProducer: async () => {
+                                const candidates = [];
+                                const warnings = [];
+                                for (const source of questionSources) {
+                                    const result =
+                                        await processDocxByLocalConvertAndStrictVision({
+                                            file: source,
+                                            batch: context.batch,
+                                            processFiles: sources,
+                                            expectedQuestionCount:
+                                                context.batch.expectedQuestionCount || 0
+                                        });
+                                    candidates.push(...(result.questions || []));
+                                    warnings.push(...(result.check?.warningReasons || []));
+                                }
+                                return {
+                                    engine: candidates[0]?.producer?.engine || '',
+                                    candidates,
+                                    controlledWriteDecisions:
+                                        candidates.map(docxVisionDecisionFromCandidate),
+                                    draftImages: [],
+                                    warnings,
+                                    realApiCalled: true
+                                };
+                            }
+                        });
+                    let drafts = [...base.drafts];
+                    const warnings = [...base.warnings];
+                    for (const source of supportSources) {
+                        const expectedQuestionNumbers = drafts
+                            .map(draft => normalizeQuestionKey(draft.questionNumber))
+                            .filter(Boolean);
+                        const support = await processStandaloneDocxSupportByVision({
+                            file: source,
+                            expectedQuestionNumbers,
+                            requiredKinds: {
+                                answers: batchHasAnswerRole(source),
+                                solutions: batchHasSolutionRole(source)
+                            }
+                        });
+                        for (const [field, items] of [
+                            ['answer', support.answers || []],
+                            ['solution', support.solutions || []]
+                        ]) {
+                            for (const item of items) {
+                                const questionNumber = normalizeQuestionKey(item.question);
+                                const matches = drafts.map((draft, index) => ({
+                                    draft,
+                                    index
+                                })).filter(entry =>
+                                    normalizeQuestionKey(entry.draft.questionNumber) ===
+                                    questionNumber
+                                );
+                                if (matches.length !== 1) {
+                                    const error = new Error(
+                                        'docx-support-question-ownership-invalid'
+                                    );
+                                    error.code = 'DOCX_SUPPORT_OWNERSHIP_INVALID';
+                                    throw error;
+                                }
+                                const index = matches[0].index;
+                                drafts[index] = window.Qisi.DocxProducerIdentityContract
+                                    .applyDocxVisionSupportField({
+                                        candidate: drafts[index],
+                                        field,
+                                        support: item,
+                                        source: {
+                                            sourceId: source.id,
+                                            format: 'docx',
+                                            filename: source.filename || '',
+                                            mimeType: source.mimeType || source.type || '',
+                                            sourceOrder: Number.isInteger(source.sourceOrder)
+                                                ? source.sourceOrder : 0
+                                        },
+                                        controlledWriteDecision:
+                                            item.controlledWriteDecision
+                                    });
+                            }
+                        }
+                    }
+                    return Object.freeze({
+                        ...base,
+                        drafts: Object.freeze(drafts),
+                        warnings: Object.freeze(warnings)
+                    });
+                };
+
+                const runProductionFixtureImport = async context => {
+                    const transport = Qisi.Runtime.getRuntimeDependency(
+                        'InjectedImportTransport'
+                    );
+                    if (
+                        transport?.kind !== 'qisi.mock-import-transport.v1' ||
+                        typeof transport.produceCandidates !== 'function'
+                    ) {
+                        const error = new Error('fixture-transport-invalid');
+                        error.code = 'PRODUCTION_IMPORT_FIXTURE_INVALID';
+                        throw error;
+                    }
+                    const envelope = await transport.produceCandidates({
+                        batch: structuredClone(context.batch),
+                        files: structuredClone(context.files)
+                    });
+                    if (!envelope || !Array.isArray(envelope.candidates)) {
+                        const error = new Error('fixture-result-malformed');
+                        error.code = 'PRODUCTION_IMPORT_FIXTURE_MALFORMED';
+                        throw error;
+                    }
+                    const expected = (envelope.expectedQuestionNumbers || [])
+                        .map(value => normalizeQuestionKey(value)).filter(Boolean);
+                    const byNumber = new Map(envelope.candidates.map(candidate => [
+                        normalizeQuestionKey(candidate?.questionNumber), candidate
+                    ]));
+                    const drafts = [];
+                    if (expected.length) {
+                        for (const number of expected) {
+                            if (!byNumber.has(number)) break;
+                            drafts.push(byNumber.get(number));
+                        }
+                    } else {
+                        drafts.push(...envelope.candidates);
+                    }
+                    return {
+                        drafts,
+                        safePartialCandidates: context.route === 'pdf'
+                            ? drafts.map(draft => ({
+                                draft,
+                                isSafePartial: true,
+                                isComplete: false,
+                                requiresManualReview: true
+                            }))
+                            : undefined,
+                        draftImages: envelope.draftImages || [],
+                        unmatched: [],
+                        warnings: envelope.warnings || [],
+                        expectedQuestionNumbers: expected,
+                        prefixTruncated: expected.length > drafts.length
+                    };
+                };
+
+                const productionImportBridge =
+                    window.Qisi.ProductionImportBridge.createProductionImportBridge({
+                        createStateMachine: options =>
+                            window.Qisi.ImportStateMachine.createImportStateMachine(options),
+                        loadBatchAndFiles: input =>
+                            window.Qisi.BatchContextService.loadBatchAndFiles({
+                                ...input,
+                                getRoles: getBatchFileRoles
+                            }, { repository: storageRepository }),
+                        classifySourceRoles: manifest =>
+                            window.Qisi.SourceRoleClassifier.classifySourceRoles(manifest),
+                        runDocxImport: (context, signal) =>
+                            window.Qisi.DocxImportCoordinator.runDocxImport(
+                                { batchId: context.batchId, sources: context.sources },
+                                {
+                                    parseSource: ({ source, candidateOffset }) =>
+                                        parseDocxQuestionFilesWithImporterForV2(
+                                            source,
+                                            context.batch,
+                                            {
+                                                ...productionImportEngineHelpers(),
+                                                baseOrder: candidateOffset,
+                                                signal
+                                            }
+                                        )
+                                },
+                                signal
+                            ),
+                        runDocxVisionImport: runProductionDocxVisionImport,
+                        runFixtureImport: runProductionFixtureImport,
+                        runPdfImport: (context, signal) =>
+                            window.Qisi.PdfImportCoordinator.runPdfImport(
+                                {
+                                    batchId: context.batchId,
+                                    batch: context.batch,
+                                    sources: context.sources
+                                },
+                                {
+                                    processSources: ({ sources, onPageProgress }) =>
+                                        window.Qisi.ProductionPdfSourcesPort.processPdfSources({
+                                            batch: context.batch,
+                                            sources,
+                                            helpers: productionImportEngineHelpers(),
+                                            signal,
+                                            onPageProgress
+                                        }, {
+                                            produceEngineResult: async ({
+                                                batch,
+                                                sources: orderedSources,
+                                                signal: pdfSignal,
+                                                onPageProgress: reportPage
+                                            }) => {
+                                                const questionSources = orderedSources
+                                                    .filter(source =>
+                                                        batchHasQuestionRole(source) ||
+                                                        batchIsFullRole(source)
+                                                    );
+                                                const supportSources = orderedSources
+                                                    .filter(source =>
+                                                        batchHasAnswerRole(source) ||
+                                                        batchHasSolutionRole(source) ||
+                                                        batchIsFullRole(source)
+                                                    );
+                                                if (!questionSources.length) {
+                                                    const error = new Error(
+                                                        'pdf-question-source-required'
+                                                    );
+                                                    error.code =
+                                                        'PDF_QUESTION_SOURCE_REQUIRED';
+                                                    throw error;
+                                                }
+                                                const drafts = [];
+                                                const evidences = [];
+                                                const warnings = [];
+                                                for (const source of questionSources) {
+                                                    if (pdfSignal?.aborted) {
+                                                        const error = new Error(
+                                                            'PDF_COORDINATOR_ABORTED'
+                                                        );
+                                                        error.code =
+                                                            'PDF_COORDINATOR_ABORTED';
+                                                        throw error;
+                                                    }
+                                                    const result =
+                                                        await processStrictVisualQuestionFile({
+                                                            file: source,
+                                                            batch,
+                                                            expectedQuestionCount:
+                                                                batch.expectedQuestionCount || 0,
+                                                            onPageProgress:
+                                                                async (_ratio, info = {}) =>
+                                                                    reportPage?.({
+                                                                        sourceId: source.id,
+                                                                        pageNo:
+                                                                            info.done ||
+                                                                            info.pageNo || 1,
+                                                                        totalPages:
+                                                                            info.total || 1
+                                                                    })
+                                                        });
+                                                    if (result.check?.fatal) {
+                                                        const error = new Error(
+                                                            'pdf-strict-question-fatal'
+                                                        );
+                                                        error.code =
+                                                            'PDF_STRICT_QUESTION_FATAL';
+                                                        throw error;
+                                                    }
+                                                    drafts.push(...(result.questions || []));
+                                                    warnings.push(...(
+                                                        result.check?.warningReasons || []
+                                                    ));
+                                                }
+                                                const expectedQuestionNumbers = drafts
+                                                    .map(draft => normalizeQuestionKey(
+                                                        draft.questionNumber ||
+                                                        draft.question
+                                                    ))
+                                                    .filter(Boolean);
+                                                for (const source of supportSources) {
+                                                    const pages =
+                                                        await prepareStrictVisualPages(source);
+                                                    const support =
+                                                        await recognizeVisualSupportFromPreparedPages({
+                                                            file: source,
+                                                            pages,
+                                                            strict: true,
+                                                            expectedQuestionNumbers,
+                                                            requiredKinds: {
+                                                                answers:
+                                                                    batchHasAnswerRole(source) ||
+                                                                    batchIsFullRole(source),
+                                                                solutions:
+                                                                    batchHasSolutionRole(source) ||
+                                                                    batchIsFullRole(source)
+                                                            },
+                                                            onPageProgress:
+                                                                async (_ratio, info = {}) =>
+                                                                    reportPage?.({
+                                                                        sourceId: source.id,
+                                                                        pageNo:
+                                                                            info.done ||
+                                                                            info.pageNo || 1,
+                                                                        totalPages:
+                                                                            info.total ||
+                                                                            pages.length || 1
+                                                                    })
+                                                        });
+                                                    (support.rawTextPages || [])
+                                                        .forEach((text, index) => {
+                                                            evidences.push({
+                                                                id:
+                                                                    `pdf-support:${source.id}:${index + 1}`,
+                                                                sourceFileId: source.id,
+                                                                sourceFileName:
+                                                                    source.filename || '',
+                                                                pageNo: index + 1,
+                                                                roles: getBatchFileRoles(source),
+                                                                selectedSourceKind:
+                                                                    'ocrMarkdown',
+                                                                ocrMarkdown: text
+                                                            });
+                                                        });
+                                                }
+                                                return {
+                                                    drafts,
+                                                    evidences,
+                                                    draftImages: [],
+                                                    unmatched: [],
+                                                    warnings,
+                                                    errors: [],
+                                                    realApiCalled: true
+                                                };
+                                            },
+                                            buildProjectionContext: projectionInput =>
+                                                window.Qisi.PdfCandidateProjection
+                                                    .createPdfEngineProjectionContext({
+                                                        ...projectionInput,
+                                                        controlledWriteOwner:
+                                                            window.Qisi.PdfSupportControlledWrite,
+                                                        blockParser:
+                                                            window.Qisi.PdfSupportBlockParser,
+                                                        aligner:
+                                                            window.Qisi.PdfSupportAligner,
+                                                        decisionId:
+                                                            `pdf-cw:${context.batchId}:bridge`,
+                                                        routeContext: {
+                                                            sourceMode: 'pdf-ai',
+                                                            engine: 'qisi-batch-engine-v2'
+                                                        }
+                                                    })
+                                        }),
+                                    createSafePartial: (draft, evidence) => ({
+                                        ...window.Qisi.PdfSafePartialPipeline
+                                            .normalizePdfPipelineResult({
+                                                answerQuestionNumbers: [],
+                                                warnings: evidence.warnings
+                                            }),
+                                        draft
+                                    })
+                                },
+                                signal
+                            ),
+                        projectPdfCandidates: context =>
+                            window.Qisi.PdfCandidateProjection.projectPdfCandidates(context),
+                        normalizeCandidates: drafts =>
+                            window.Qisi.CandidateNormalizer.normalizeCandidates(
+                                [{ questions: drafts }],
+                                window.Qisi.SupportRepair
+                            ),
+                        projectImportOutput: input =>
+                            window.Qisi.ProductionImportOutputPort.projectImportOutput(
+                                input,
+                                {
+                                    cleanText: cleanDisplayTextForBatchSave,
+                                    normalizeQuestionKey,
+                                    cleanOptions: cleanDisplayOptionsForBatchSave,
+                                    mergeImages: mergeImageListsById,
+                                    clock: Date.now
+                                }
+                            ),
+                        validateCandidates: (drafts, context) =>
+                            window.Qisi.ImportValidationService.validateImportDrafts(
+                                drafts,
+                                { ...importValidationPorts, context }
+                            ),
+                        buildReviewDrafts: (drafts, context) =>
+                            window.Qisi.ReviewDraftBuilder.buildReviewDrafts(
+                                drafts,
+                                context
+                            ),
+                        persistReviewDraftBatch: command =>
+                            draftPersistenceService.persistReviewDraftBatch({
+                                batchId: command.batchId,
+                                drafts: command.drafts,
+                                images: command.images,
+                                files: command.sourceFiles.map(file => ({
+                                    ...file,
+                                    parseStatus: 'success',
+                                    errorMessage: '',
+                                    updatedAt: command.batchPatch.updatedAt
+                                })),
+                                batchPatch: command.batchPatch,
+                                idempotencyKey: command.idempotencyKey,
+                                expectedVersion: command.expectedVersion,
+                                signal: command.signal
+                            }),
+                        reloadDraftBatch: batchId =>
+                            draftPersistenceService.reloadDraftBatch(batchId),
+                        createDiagnostics: () =>
+                            window.Qisi.ImportDiagnostics.createImportDiagnostics({
+                                clock: () => performance.now(),
+                                logger: event =>
+                                    console.info('[QISI_IMPORT_DIAGNOSTICS]', event)
+                            }),
+                        reportProgress: input =>
+                            window.Qisi.ProductionImportStatusPort.reportProgress(
+                                input,
+                                { repository: storageRepository }
+                            ),
+                        reportImportFailure: input =>
+                            window.Qisi.ProductionImportStatusPort.reportImportFailure(
+                                input,
+                                { repository: storageRepository }
+                            ),
+                        clock: Date.now
+                    });
+
+                const normalUiImportController =
+                    window.Qisi.NormalUiImportController
+                        .createNormalUiImportController({
+                            bridge: productionImportBridge,
+                            loadBatch: batchId =>
+                                storageRepository.get('draftImportBatches', batchId),
+                            resolveProducerRoute: async ({ batchId }) => {
+                                const files = await storageRepository.findBy(
+                                    'draftImportFiles',
+                                    'batchId',
+                                    batchId
+                                );
+                                const types = new Set((files || []).map(file =>
+                                    String(file?.fileType || '').toLowerCase()
+                                ));
+                                if (types.size !== 1) return 'unsupported';
+                                const sourceType = [...types][0];
+                                return sourceType === 'docx' ? 'docx-vision'
+                                    : sourceType === 'pdf' ? 'pdf'
+                                        : 'unsupported';
+                            },
+                            applyReviewModel: async result => {
+                                await loadBatchImportData();
+                                activeBatchId.value = result.batchId;
+                                batchImportMode.value = 'review';
+                                activeDraftQuestionId.value =
+                                    result.readback.questions[0]?.id || '';
+                                await nextTick();
+                            },
+                            notifySuccess: ({ draftCount }) =>
+                                showBatchToast(`批量识别完成：生成 ${draftCount} 道草稿。`),
+                            notifyFailure: ({ code }) =>
+                                showBatchToast(`批量识别失败：${code}`)
+                        });
 
                 const runBatchRecognition = async (batchId) => {
                     if (!batchId) {
                         throw new Error('缺少批量录题任务 ID');
                     }
 
-                    if (legacyBatchRunCoordinator.isRunning(batchId)) {
+                    if (normalUiImportController.isRunning(batchId)) {
                         console.warn('[BATCH_DEBUG][duplicate-run-blocked]', { batchId });
-                        return;
+                        return normalUiImportController.run(batchId);
                     }
-                    console.log('[BATCH_DEBUG][single-engine-start]', {
-                        batchId,
-                        engine: 'processDraftImportBatch'
-                    });
-                    logBatchPdfDiag('run-start', {
-                        batchId,
-                        engine: 'legacy',
-                        actualFunction: 'processDraftImportBatch',
-                        v2EnabledForThisRun: false
-                    });
+                    const testFixture = Boolean(
+                        Qisi.Runtime.getRuntimeDependency('InjectedImportTransport')
+                    );
+                    return normalUiImportController.run(batchId, { testFixture });
+                };
 
-                    return legacyBatchRunCoordinator.run(batchId);
+                const cancelBatchRecognition = batchId => {
+                    const cancelled = normalUiImportController.cancel(batchId);
+                    if (!cancelled) {
+                        showBatchToast('当前任务没有可取消的识别请求。');
+                    }
+                    return cancelled;
                 };
 
                 const openBatchReview = async (batchId) => {
@@ -21231,7 +19376,7 @@ Promise.all([imageReady, fontReady]).then(() => {
                     importBankInput, openImportBankPicker, handleImportBankFileChange, pendingImportPreview, cancelImportPreview, confirmImportBankPreview, exportQuestionBankPackage,
                     undoLatestExternalMerge, deleteExternalBatch, recalculateExternalBatchStatus,
                     batchImportMode, batchImportBatches, recentBatchImportBatches, batchImportFiles, batchDraftQuestions, filteredDraftQuestions, batchDraftImages, batchImportFilter, activeBatchId, activeBatch, activeDraftQuestionId, activeDraftQuestion, batchRecognitionSummary, activeDraftEditorBuffer, activeDraftEditorOriginal, activeDraftEditorDirty, activeDraftEditorPreview, activeDraftEditorTextarea, activeDraftImages, activeDraftRealQuestionImages, activeDraftSourcePageImages, activeDraftPreviewImages, unassignedDraftImages, activeDraftTab, batchUploadInput, isDraggingBatchFiles, batchToast, unassignedImageModal, imagePositionMenuId, cropModalOpen, cropImageRef, cropState, cropSelectionStyle, pendingPurposeFile, pendingPurposeRoles, batchCreateFiles, batchCreateTypeHint, batchCreateWarning, batchExpectedQuestionCount, batchDefaultMeta, unmatchedAnswers, submitSummary,
-                    openBatchCreate, openBatchList, clearBatchDraftWorkspace, openBatchFilePicker, handleBatchFileChange, handleBatchDrop, handleBatchHomeDrop, togglePurposeRole, confirmBatchFilePurpose, cancelBatchFilePurpose, editBatchFilePurpose, removeBatchCreateFile, createDraftImportBatch, processDraftImportBatch, runBatchRecognition, rerunActiveBatchRecognition, dedupeActiveBatchDraftsNow, openBatchReview, selectDraftQuestion, updateDraftQuestionField, saveActiveDraftQuestion, markDraftReviewed, submitDraftQuestion, openBatchSubmitSummary, confirmBatchSubmit, deleteBatchImport, validatePageRange, batchStatusText, draftQuestionStatusText, roleLabel, rolesLabel, fileTypeText, formatFileSize, draftQuestionProblems, duplicateLabel, confirmDraftImages, deleteDraftImage, toggleImagePositionMenu, copyDraftImagePlacementLatex, openSourcePageCrop, closeCropModal, resetCropState, startManualCrop, moveManualCrop, endManualCrop, saveManualCropToDraft, bindUnassignedImage, deleteUnassignedImage, showUnmatchedAnswerList, showActiveRawText, showCropNotice, cleanupActiveBatchDisplayPollution, markActiveDraftUserEdited, insertDraftEditorText, discardActiveDraftEditorChanges,
+                    openBatchCreate, openBatchList, clearBatchDraftWorkspace, openBatchFilePicker, handleBatchFileChange, handleBatchDrop, handleBatchHomeDrop, togglePurposeRole, confirmBatchFilePurpose, cancelBatchFilePurpose, editBatchFilePurpose, removeBatchCreateFile, createDraftImportBatch, runBatchRecognition, cancelBatchRecognition, rerunActiveBatchRecognition, dedupeActiveBatchDraftsNow, openBatchReview, selectDraftQuestion, updateDraftQuestionField, saveActiveDraftQuestion, markDraftReviewed, submitDraftQuestion, openBatchSubmitSummary, confirmBatchSubmit, deleteBatchImport, validatePageRange, batchStatusText, draftQuestionStatusText, roleLabel, rolesLabel, fileTypeText, formatFileSize, draftQuestionProblems, duplicateLabel, confirmDraftImages, deleteDraftImage, toggleImagePositionMenu, copyDraftImagePlacementLatex, openSourcePageCrop, closeCropModal, resetCropState, startManualCrop, moveManualCrop, endManualCrop, saveManualCropToDraft, bindUnassignedImage, deleteUnassignedImage, showUnmatchedAnswerList, showActiveRawText, showCropNotice, cleanupActiveBatchDisplayPollution, markActiveDraftUserEdited, insertDraftEditorText, discardActiveDraftEditorChanges,
                     syncActiveDraftEditorFromQuestion: () => window.Qisi.ReviewDraftState.syncActiveDraftEditorFromQuestion({
                         activeDraftQuestion,
                         activeDraftEditorBuffer,

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { buildProof, buildAll } = require('../scripts/bm-a4-r3-proof-builder');
 const appLines = fs.readFileSync('app.js', 'utf8').split('\n');
-const EXPECTED_REMAINING_CALLSITES = 34;
+const EXPECTED_REMAINING_CALLSITES = 27;
 
 const sampleSafe = { callsiteId: 'R3-TEST', helper: 'addWarningOnce', line: 3739, text: 'x', score: 90, decision: 'AUTO_FIXTURE_CANDIDATE', risks: { controlledWrite: false, pdfOwnership: false, supportAttachment: false, answerSolution: false, unknown: false } };
 const sampleBlocked = { callsiteId: 'R3-TEST-B', helper: 'cleanDisplayTextForBatchSave', line: 13559, text: 'x', score: 40, decision: 'ALWAYS_BLOCK', risks: { controlledWrite: true, pdfOwnership: false, supportAttachment: false, answerSolution: false, unknown: false } };

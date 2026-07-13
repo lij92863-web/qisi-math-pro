@@ -36,7 +36,7 @@ const parseScriptSources = html => {
 
 const collectNamespaceOwners = source => {
     const owners = new Set();
-    const pattern = /(?:root|window|globalThis)\.Qisi\.([A-Za-z_$][\w$]*)\s*=/g;
+    const pattern = /(?:root|window|globalThis|globalScope)\.Qisi\.([A-Za-z_$][\w$]*)\s*=/g;
     let match;
 
     while ((match = pattern.exec(String(source || ''))) !== null) {

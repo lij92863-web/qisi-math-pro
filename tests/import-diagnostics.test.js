@@ -215,11 +215,11 @@ test('production path loads and uses the diagnostics owner without forbidden aut
     }
     assert.match(
         app,
-        /diagnostics:\s*Qisi\.ImportDiagnostics\.createImportDiagnostics/
+        /createDiagnostics:\s*\(\)\s*=>[\s\S]{0,100}ImportDiagnostics\.createImportDiagnostics/
     );
     assert.ok(
         main.indexOf('qisi-import-diagnostics.js') <
-        main.indexOf('qisi-injected-import-path.js')
+        main.indexOf('qisi-production-import-bridge.js')
     );
     const module = layers.modules.find(item => item.id === 'import-diagnostics');
     assert.deepEqual(module.allowedDependencies, ['secure-logger']);

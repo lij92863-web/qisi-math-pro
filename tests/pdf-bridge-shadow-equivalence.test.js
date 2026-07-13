@@ -191,7 +191,10 @@ test('DOCX deterministic bypasses the PDF projection owner unchanged', async () 
         source: { mode: 'docx-deterministic', sourceId: 'docx-question' }
     };
     const harness = bridgeHarness({ route: 'docx', docxDraft: draft });
-    const result = await harness.bridge.run({ batchId: 'shadow-batch' });
+    const result = await harness.bridge.run({
+        mode: 'shadow', batchId: 'shadow-batch', requestId: 'shadow-docx',
+        producerRoute: 'docx-deterministic'
+    });
     assert.equal(result.drafts[0].stem, draft.stem);
     assert.equal(harness.projectionCalls(), 0);
 });
@@ -204,13 +207,16 @@ test('Bridge and legacy projection are canonically equal for full, prefix, and m
     ]) {
         const legacy = Projection.projectPdfCandidates(context)[0];
         const harness = bridgeHarness({ route: 'pdf', context });
-        const result = await harness.bridge.run({ batchId: 'shadow-batch' });
+        const result = await harness.bridge.run({
+            mode: 'shadow', batchId: 'shadow-batch', requestId: 'shadow-pdf',
+            producerRoute: 'pdf'
+        });
         assert.deepEqual(
             Projection.compareCanonicalPdfCandidates(legacy, result.drafts[0]),
             []
         );
         assert.equal(harness.projectionCalls(), 1);
-        assert.equal(harness.persisted.length, 1);
+        assert.equal(harness.persisted.length, 0);
     }
 });
 
@@ -222,7 +228,10 @@ test('known-bad wrong ownership is rejected by both projections before shadow pe
 
     const harness = bridgeHarness({ route: 'pdf', context });
     await assert.rejects(
-        harness.bridge.run({ batchId: 'shadow-batch' }),
+        harness.bridge.run({
+            mode: 'shadow', batchId: 'shadow-batch', requestId: 'shadow-known-bad',
+            producerRoute: 'pdf'
+        }),
         error => error.code === 'IMPORT_VALIDATION_FAILED'
     );
     assert.equal(harness.persisted.length, 0);

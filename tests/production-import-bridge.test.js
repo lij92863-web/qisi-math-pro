@@ -121,6 +121,11 @@ const outputHelpers = {
     },
     clock: () => 50
 };
+const productionInput = extra => ({
+    mode: 'production', batchId: 'batch-1', requestId: 'request-1',
+    producerRoute: 'docx-deterministic',
+    ...extra
+});
 
 function createHarness(overrides = {}) {
     const batch = {
@@ -254,6 +259,12 @@ function createHarness(overrides = {}) {
             persisted.push(clone(command));
             return { version: 1, idempotent: false };
         },
+        reloadDraftBatch: async () => ({
+            batch: { id: 'batch-1', status: 'review' },
+            files: [],
+            questions: clone(persisted.at(-1)?.drafts || []),
+            images: clone(persisted.at(-1)?.images || [])
+        }),
         createDiagnostics: () => Diagnostics.createImportDiagnostics({
             clock: (() => { let value = 0; return () => ++value; })(),
             logger: event => diagnosticEvents.push(event)
@@ -268,7 +279,7 @@ function createHarness(overrides = {}) {
 test('DOCX complete follows the deterministic review-only state path', async () => {
     const harness = createHarness();
     const bridge = Bridge.createProductionImportBridge(harness.ports);
-    const result = await bridge.run({ batchId: 'batch-1' });
+    const result = await bridge.run(productionInput());
 
     assert.equal(result.route, 'docx');
     assert.equal(result.state.state, 'WAITING_CONFIRMATION');
@@ -284,7 +295,7 @@ test('DOCX complete follows the deterministic review-only state path', async () 
 test('PDF safe partial uses the recognition path and preserves rejected ownership', async () => {
     const harness = createHarness({ files: pdfFiles() });
     const result = await Bridge.createProductionImportBridge(harness.ports)
-        .run({ batchId: 'batch-1' });
+        .run(productionInput({ producerRoute: 'pdf' }));
 
     assert.equal(result.route, 'pdf');
     assert.equal(result.state.state, 'WAITING_CONFIRMATION');
@@ -299,7 +310,9 @@ test('PDF safe partial uses the recognition path and preserves rejected ownershi
 test('mixed DOCX/PDF input fails before either source coordinator', async () => {
     const harness = createHarness({ files: [docxFiles()[0], pdfFiles()[1]] });
     await assert.rejects(
-        Bridge.createProductionImportBridge(harness.ports).run({ batchId: 'batch-1' }),
+        Bridge.createProductionImportBridge(harness.ports).run(
+            productionInput({ producerRoute: 'pdf' })
+        ),
         error => error.code === 'PRODUCTION_IMPORT_SOURCE_UNSUPPORTED'
     );
     assert.equal(harness.calls.includes('docx'), false);
@@ -314,7 +327,7 @@ test('missing role and duplicate source fail before parsing or persistence', asy
     ]) {
         const harness = createHarness({ files });
         await assert.rejects(
-            Bridge.createProductionImportBridge(harness.ports).run({ batchId: 'batch-1' }),
+            Bridge.createProductionImportBridge(harness.ports).run(productionInput()),
             error => error.code === expectedCode
         );
         assert.equal(harness.calls.includes('docx'), false);
@@ -322,10 +335,31 @@ test('missing role and duplicate source fail before parsing or persistence', asy
     }
 });
 
+test('multiple PDF support sources fail before fixture or PDF producer execution', async () => {
+    const sourceFiles = [
+        { id: 'question-pdf', fileType: 'pdf', roles: ['question'], sourceOrder: 1 },
+        { id: 'answer-pdf', fileType: 'pdf', roles: ['answer'], sourceOrder: 2 },
+        { id: 'solution-pdf', fileType: 'pdf', roles: ['solution'], sourceOrder: 3 }
+    ];
+    const harness = createHarness({ files: sourceFiles });
+    const bridge = Bridge.createProductionImportBridge(harness.ports);
+    await assert.rejects(
+        bridge.run({
+            mode: 'production', batchId: 'batch-1', requestId: 'request-ambiguity',
+            producerRoute: 'fixture', testFixture: true
+        }),
+        error => error.code === 'PRODUCTION_IMPORT_SOURCE_UNSUPPORTED' &&
+            error.causeCode === 'pdf-support-source-ambiguous'
+    );
+    assert.equal(harness.calls.includes('docx'), false);
+    assert.equal(harness.calls.includes('pdf'), false);
+    assert.equal(harness.persisted.length, 0);
+});
+
 test('raw JSON draft output is rejected before normalization and persistence', async () => {
     const harness = createHarness({ sourceDrafts: ['{"questions":[{"stem":"raw"}]}'] });
     await assert.rejects(
-        Bridge.createProductionImportBridge(harness.ports).run({ batchId: 'batch-1' }),
+        Bridge.createProductionImportBridge(harness.ports).run(productionInput()),
         error => error.code === 'PRODUCTION_IMPORT_RESULT_MALFORMED'
     );
     assert.equal(harness.calls.includes('normalize'), false);
@@ -339,7 +373,7 @@ test('sequence gap and ownership mismatch cannot reach review persistence', asyn
     ]) {
         const harness = createHarness(override);
         await assert.rejects(
-            Bridge.createProductionImportBridge(harness.ports).run({ batchId: 'batch-1' }),
+            Bridge.createProductionImportBridge(harness.ports).run(productionInput()),
             error => error.code === 'IMPORT_VALIDATION_FAILED'
         );
         assert.equal(harness.calls.includes('build'), false);
@@ -364,7 +398,7 @@ test('persistence failure is reported only after the atomic owner rejects', asyn
     error.code = 'DRAFT_PERSISTENCE_WRITE_FAILED';
     const harness = createHarness({ persistenceError: error });
     await assert.rejects(
-        Bridge.createProductionImportBridge(harness.ports).run({ batchId: 'batch-1' }),
+        Bridge.createProductionImportBridge(harness.ports).run(productionInput()),
         failure => failure.code === 'IMPORT_DRAFT_PERSIST_FAILED' &&
             failure.causeCode === 'DRAFT_PERSISTENCE_WRITE_FAILED'
     );
@@ -382,9 +416,9 @@ test('cancellation aborts the source owner, discards late output, and never pers
             return new Promise(resolve => { release = resolve; });
         }
     });
-    const pending = Bridge.createProductionImportBridge(harness.ports).run({
-        batchId: 'batch-1', signal: controller.signal
-    });
+    const pending = Bridge.createProductionImportBridge(harness.ports).run(
+        productionInput({ signal: controller.signal })
+    );
     await new Promise(resolve => setImmediate(resolve));
     controller.abort();
     release({ drafts: [docxDraft()], draftImages: [], warnings: [] });
@@ -403,7 +437,7 @@ test('diagnostics and reported failure never expose private error text', async (
         }
     });
     await assert.rejects(
-        Bridge.createProductionImportBridge(harness.ports).run({ batchId: 'batch-1' }),
+        Bridge.createProductionImportBridge(harness.ports).run(productionInput()),
         error => {
             assert.doesNotMatch(error.message, /private teacher/i);
             return true;
@@ -430,7 +464,7 @@ test('bridge owner has no DB, UI, FormalAdmission, Route B, or OCR authority', (
     );
 });
 
-test('bridge is browser-loaded as a layer-3 scaffold before the app shell', () => {
+test('bridge is browser-loaded as the production-wired layer-3 owner before the app shell', () => {
     const main = fs.readFileSync(path.join(ROOT, 'main.html'), 'utf8');
     const owners = JSON.parse(fs.readFileSync(
         path.join(ROOT, 'architecture/owners.json'), 'utf8'
@@ -443,7 +477,7 @@ test('bridge is browser-loaded as a layer-3 scaffold before the app shell', () =
     assert.equal(owners.productionImportBridgeOwner, 'qisi-production-import-bridge.js');
     assert.equal(entry.file, 'qisi-production-import-bridge.js');
     assert.equal(entry.layer, 3);
-    assert.equal(entry.status, 'scaffold');
+    assert.equal(entry.status, 'production-wired');
     assert.deepEqual(entry.publicApi, [
         'REQUIRED_PORTS',
         'ProductionImportBridgeError',

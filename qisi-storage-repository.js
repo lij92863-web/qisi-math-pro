@@ -381,9 +381,20 @@
             images: await findBy('draftImages', 'batchId', batchId)
         });
         const persistReviewDraftBatch = async ({
-            batch, files = [], drafts = [], images
+            batch, files = [], drafts = [], images, signal
         }) => {
             requireId(batch?.id, 'batch.id');
+            const assertActive = () => {
+                if (!signal?.aborted) return;
+                const error = new StorageRepositoryError(
+                    'draft-persistence-cancelled',
+                    'Draft persistence was cancelled before commit.',
+                    { batchId: batch.id }
+                );
+                error.name = 'AbortError';
+                throw error;
+            };
+            assertActive();
             return run('persist-review-draft-batch', () => database.transaction(
                 'rw',
                 table('draftQuestions'),
@@ -391,18 +402,25 @@
                 table('draftImportFiles'),
                 table('draftImportBatches'),
                 async () => {
+                    assertActive();
                     await table('draftQuestions').where('batchId')
                         .equals(batch.id).delete();
+                    assertActive();
                     if (drafts.length) await table('draftQuestions').bulkPut(clone(drafts));
+                    assertActive();
                     if (Array.isArray(images)) {
                         await table('draftImages').where('batchId')
                             .equals(batch.id).delete();
+                        assertActive();
                         if (images.length) {
                             await table('draftImages').bulkPut(clone(images));
+                            assertActive();
                         }
                     }
                     if (files.length) await table('draftImportFiles').bulkPut(clone(files));
+                    assertActive();
                     await table('draftImportBatches').put(clone(batch));
+                    assertActive();
                     return {
                         batch: clone(batch),
                         draftCount: drafts.length,

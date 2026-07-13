@@ -592,7 +592,8 @@ test('true browser shadow keeps legacy and Bridge PDF projections canonically eq
                 filesOverride: normalUiFiles
             });
             const normalUiBridgeResult = await normalUiShadow.bridge.run({
-                batchId: 'browser-shadow-batch'
+                mode: 'shadow', requestId: 'phase5-normal-ui-pdf-shadow',
+                batchId: 'browser-shadow-batch', producerRoute: 'pdf'
             });
             const normalUiLegacyCandidate = normalUiCapture.result[0];
             const normalUiBridgeCandidate = normalUiBridgeResult.drafts[0];
@@ -648,7 +649,8 @@ test('true browser shadow keeps legacy and Bridge PDF projections canonically eq
                 let result;
                 try {
                     result = await shadow.bridge.run({
-                        batchId: 'browser-shadow-batch'
+                        mode: 'shadow', requestId: `phase5-${name}`,
+                        batchId: 'browser-shadow-batch', producerRoute: 'pdf'
                     });
                 } catch (error) {
                     throw new Error(
@@ -692,7 +694,8 @@ test('true browser shadow keeps legacy and Bridge PDF projections canonically eq
             let badError = '';
             try {
                 await badShadow.bridge.run({
-                    batchId: 'browser-shadow-batch'
+                    mode: 'shadow', requestId: 'phase5-known-bad',
+                    batchId: 'browser-shadow-batch', producerRoute: 'pdf'
                 });
             } catch (error) {
                 badError = error?.code || error?.message || String(error);
@@ -703,7 +706,8 @@ test('true browser shadow keeps legacy and Bridge PDF projections canonically eq
                 let causeCode = '';
                 try {
                     await shadow.bridge.run({
-                        batchId: 'browser-shadow-batch'
+                        mode: 'shadow', requestId: `phase5-rejected-${name}`,
+                        batchId: 'browser-shadow-batch', producerRoute: 'pdf'
                     });
                 } catch (error) {
                     errorCode = error?.code || error?.message || String(error);
@@ -816,7 +820,9 @@ test('true browser shadow keeps legacy and Bridge PDF projections canonically eq
             let cancellationError = '';
             try {
                 await cancellationShadow.bridge.run({
+                    mode: 'shadow', requestId: 'phase5-cancellation',
                     batchId: 'browser-shadow-batch',
+                    producerRoute: 'pdf',
                     signal: cancellationController.signal
                 });
             } catch (error) {
@@ -934,7 +940,7 @@ test('true browser shadow keeps legacy and Bridge PDF projections canonically eq
             'pdf-vision-controlled-write'
         );
         assert.equal(metrics.normalUiResult.controlledWriteEvaluated, true);
-        assert.equal(metrics.normalUiResult.shadowIsolatedReviewWrites, 1);
+        assert.equal(metrics.normalUiResult.shadowIsolatedReviewWrites, 0);
         assert.equal(metrics.normalUiResult.shadowFormalWrites, 0);
         assert.equal(metrics.normalUiResult.projectionCalls, 1);
         assert.equal(metrics.canonicalDifferences, 0);
@@ -969,7 +975,7 @@ test('true browser shadow keeps legacy and Bridge PDF projections canonically eq
             projectionCalls: 0
         }, {
             name: 'pdf-multiple-support-source-ambiguity',
-            errorCode: 'IMPORT_RECOGNITION_FAILED',
+            errorCode: 'PRODUCTION_IMPORT_SOURCE_UNSUPPORTED',
             causeCode: 'pdf-support-source-ambiguous',
             persisted: 0,
             projectionCalls: 0

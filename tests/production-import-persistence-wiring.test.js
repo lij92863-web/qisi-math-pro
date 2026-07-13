@@ -187,7 +187,7 @@ test('all production final review writes delegate to the persistence owner', () 
         path.join(ROOT, 'qisi-draft-persistence-service.js'), 'utf8'
     );
     const calls = app.match(
-        /await draftPersistenceService\.persistReviewDraftBatch\s*\(/g
+        /draftPersistenceService\.persistReviewDraftBatch\s*\(/g
     ) || [];
 
     assert.equal(calls.length, 3);

@@ -59,6 +59,13 @@
         }
     };
 
+    const assertActive = signal => {
+        if (!signal?.aborted) return;
+        const error = createError('DRAFT_PERSISTENCE_CANCELLED');
+        error.name = 'AbortError';
+        throw error;
+    };
+
     const withRepositoryLock = (repository, work) => {
         const previous = repositoryLocks.get(repository) || Promise.resolve();
         const current = previous.catch(() => undefined).then(work);
@@ -163,12 +170,16 @@
         requirePorts(repository, [
             'get', 'persistReviewDraftBatch', 'loadDraftBatch'
         ]);
+        const signal = rawCommand?.signal;
+        assertActive(signal);
         const command = normalizeCommand(rawCommand);
         return withRepositoryLock(repository, async () => {
             try {
+                assertActive(signal);
                 const existing = await repository.get(
                     'draftImportBatches', command.batchId
                 );
+                assertActive(signal);
                 if (!existing) throw createError('DRAFT_BATCH_NOT_FOUND');
                 const persistence = existing.draftPersistence || {};
                 if (persistence.idempotencyKey === command.idempotencyKey) {
@@ -202,11 +213,14 @@
                     batch,
                     files: command.files,
                     drafts: command.drafts,
-                    images: command.images
+                    images: command.images,
+                    signal
                 });
+                assertActive(signal);
                 const verified = await repository.get(
                     'draftImportBatches', command.batchId
                 );
+                assertActive(signal);
                 if (
                     currentVersion(verified) !== nextVersion ||
                     verified?.draftPersistence?.idempotencyKey !==
@@ -241,6 +255,8 @@
         ) {
             throw createError('DRAFT_PERSISTENCE_INPUT_INVALID');
         }
+        const signal = rawInput?.signal;
+        assertActive(signal);
         const input = cloneValue(rawInput);
         const batchId = requireId(input.batchId);
         try {
@@ -251,7 +267,19 @@
             const files = input.files === undefined
                 ? await repository.findBy('draftImportFiles', 'batchId', batchId)
                 : input.files;
-            const expectedVersion = currentVersion(currentBatch);
+            const current = currentVersion(currentBatch);
+            const expectedVersion = input.expectedVersion === undefined
+                ? current
+                : input.expectedVersion;
+            if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
+                throw createError('DRAFT_PERSISTENCE_VERSION_REQUIRED');
+            }
+            const idempotencyKey = input.idempotencyKey === undefined
+                ? `review:${batchId}:${expectedVersion + 1}`
+                : requireId(
+                    input.idempotencyKey,
+                    'DRAFT_PERSISTENCE_IDEMPOTENCY_KEY_REQUIRED'
+                );
             return await persistDraftBatch({
                 batch: {
                     ...currentBatch,
@@ -262,7 +290,8 @@
                 drafts: input.drafts,
                 images: input.images,
                 expectedVersion,
-                idempotencyKey: `review:${batchId}:${expectedVersion + 1}`
+                idempotencyKey,
+                signal
             }, repository);
         } catch (error) {
             rethrowOrWrap(error, 'DRAFT_PERSISTENCE_WRITE_FAILED');

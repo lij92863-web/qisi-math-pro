@@ -132,11 +132,12 @@ test('the load port has no write, UI, FormalAdmission, or external transport aut
     assert.doesNotMatch(source, /InjectedImportTransport|\/api\/ai|OCR|vision/i);
 });
 
-test('legacy production entry calls the shared port and no longer reads tables inline', () => {
+test('Bridge production entry calls the shared port and never reads tables inline', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
-    const start = app.indexOf('const processDraftImportBatch = async');
-    const end = app.indexOf('const batchExpectedCount', start);
+    const start = app.indexOf('loadBatchAndFiles: input =>');
+    const end = app.indexOf('classifySourceRoles:', start);
     const loading = app.slice(start, end);
+    assert.ok(start >= 0 && end > start);
     assert.match(loading, /BatchContextService\.loadBatchAndFiles\s*\(/);
     assert.match(loading, /repository:\s*storageRepository/);
     assert.doesNotMatch(loading, /db\.draftImportBatches\.get/);

@@ -13,6 +13,7 @@
         ['PREPARING', 'prepared', 'LOADING_SOURCE', 'IMPORT_CONTEXT_INVALID'],
         ['LOADING_SOURCE', 'recognition-source-loaded', 'RECOGNIZING', 'IMPORT_RECOGNITION_FAILED'],
         ['LOADING_SOURCE', 'deterministic-source-loaded', 'NORMALIZING', 'IMPORT_SOURCE_LOAD_FAILED'],
+        ['LOADING_SOURCE', 'draft-already-committed', 'WAITING_CONFIRMATION', 'IMPORT_DRAFT_PERSIST_FAILED'],
         ['RECOGNIZING', 'recognition-complete', 'NORMALIZING', 'IMPORT_RECOGNITION_FAILED'],
         ['NORMALIZING', 'normalized', 'STRUCTURING', 'IMPORT_NORMALIZATION_FAILED'],
         ['STRUCTURING', 'structured', 'VALIDATING', 'IMPORT_STRUCTURE_FAILED'],

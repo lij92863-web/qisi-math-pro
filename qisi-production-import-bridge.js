@@ -73,6 +73,22 @@
         throw error;
     }
 
+    function executionMode(input) {
+        const mode = String(input?.mode || '').trim();
+        if (!['shadow', 'production'].includes(mode)) {
+            throw createError('PRODUCTION_IMPORT_MODE_REQUIRED');
+        }
+        return mode;
+    }
+
+    function requestIdentity(input, mode) {
+        const requestId = String(input?.requestId || '').trim();
+        if (mode === 'production' && !/^[a-zA-Z0-9_.:-]{1,160}$/.test(requestId)) {
+            throw createError('PRODUCTION_IMPORT_REQUEST_ID_REQUIRED');
+        }
+        return requestId || `shadow:${String(input?.batchId || '')}`;
+    }
+
     function isRecord(value) {
         return Boolean(value && typeof value === 'object' && !Array.isArray(value));
     }
@@ -107,6 +123,14 @@
                 causeCode: 'mixed-or-unsupported-source'
             });
         }
+        if (
+            [...types][0] === 'pdf' &&
+            active.filter(source => source?.isAnswer || source?.isSolution).length > 1
+        ) {
+            throw createError('PRODUCTION_IMPORT_SOURCE_UNSUPPORTED', {
+                causeCode: 'pdf-support-source-ambiguous'
+            });
+        }
         const sources = active.map(source => {
             const file = fileById.get(String(source.id));
             if (!file) {
@@ -130,6 +154,22 @@
             sources,
             supplementalSources
         };
+    }
+
+    function producerRouteFor(route, input) {
+        const producerRoute = String(input?.producerRoute || '').trim();
+        if (producerRoute === 'fixture' && input?.testFixture === true) {
+            return producerRoute;
+        }
+        const allowed = route === 'docx'
+            ? ['docx-vision', 'docx-deterministic']
+            : route === 'pdf' ? ['pdf'] : [];
+        if (!allowed.includes(producerRoute)) {
+            throw createError('PRODUCTION_IMPORT_SOURCE_UNSUPPORTED', {
+                causeCode: 'producer-route-mismatch'
+            });
+        }
+        return producerRoute;
     }
 
     function sourceDrafts(route, result) {
@@ -212,6 +252,48 @@
         return value;
     }
 
+    function verifiedReadback(value, expectedDrafts, batchId) {
+        if (
+            !isRecord(value) || !isRecord(value.batch) ||
+            String(value.batch.id || '') !== batchId ||
+            value.batch.status !== 'review' ||
+            !Array.isArray(value.questions) ||
+            !Array.isArray(value.files) ||
+            !Array.isArray(value.images)
+        ) {
+            throw createError('PRODUCTION_IMPORT_READBACK_MISMATCH');
+        }
+        const expectedIds = expectedDrafts.map(draft => String(draft?.id || ''));
+        const actualIds = value.questions.map(draft => String(draft?.id || ''));
+        if (
+            expectedIds.some(id => !id) ||
+            actualIds.length !== expectedIds.length ||
+            actualIds.some((id, index) => id !== expectedIds[index]) ||
+            value.questions.some(draft => String(draft?.batchId || '') !== batchId)
+        ) {
+            throw createError('PRODUCTION_IMPORT_READBACK_MISMATCH');
+        }
+        return value;
+    }
+
+    function verifiedCommittedReadback(value, loadedBatch, batchId, requestId) {
+        if (
+            !isRecord(loadedBatch) || loadedBatch.status !== 'review' ||
+            loadedBatch.draftPersistence?.idempotencyKey !== requestId ||
+            !isRecord(value) || !isRecord(value.batch) ||
+            String(value.batch.id || '') !== batchId ||
+            value.batch.status !== 'review' ||
+            value.batch.draftPersistence?.idempotencyKey !== requestId ||
+            !Array.isArray(value.questions) || value.questions.length === 0 ||
+            !Array.isArray(value.files) || !Array.isArray(value.images) ||
+            value.questions.some(question =>
+                String(question?.id || '') === '' ||
+                String(question?.batchId || '') !== batchId
+            )
+        ) throw createError('PRODUCTION_IMPORT_READBACK_MISMATCH');
+        return value;
+    }
+
     function normalizedFailure(error, activeCause, machine, externalSignal) {
         if (
             externalSignal?.aborted ||
@@ -222,12 +304,13 @@
         ) {
             return createError('IMPORT_CANCELLED');
         }
+        const primaryCause = activeCause || error;
         if (
-            activeCause instanceof ProductionImportBridgeError &&
-            activeCause.code.startsWith('PRODUCTION_IMPORT_')
+            primaryCause instanceof ProductionImportBridgeError &&
+            primaryCause.code.startsWith('PRODUCTION_IMPORT_')
         ) {
-            return createError(activeCause.code, {
-                causeCode: activeCause.causeCode
+            return createError(primaryCause.code, {
+                causeCode: primaryCause.causeCode
             });
         }
         const code = String(error?.code || '').startsWith('IMPORT_')
@@ -266,13 +349,20 @@
         }
 
         async function run(input = {}) {
+            const mode = executionMode(input);
             const batchId = String(input.batchId || '').trim();
             if (!batchId) throw createError('PRODUCTION_IMPORT_INPUT_INVALID');
+            const requestId = requestIdentity(input, mode);
+            if (mode === 'production' && typeof ports.reloadDraftBatch !== 'function') {
+                throw createError('PRODUCTION_IMPORT_PORT_REQUIRED', {
+                    port: 'reloadDraftBatch'
+                });
+            }
             const externalSignal = input.signal;
             const diagnostics = ports.createDiagnostics();
             assertDiagnostics(diagnostics);
             diagnostics.start({
-                requestId: `production-import:${batchId}:${clock()}`,
+                requestId,
                 batchId,
                 stage: 'started'
             });
@@ -281,6 +371,7 @@
                 loaded: null,
                 classification: null,
                 route: '',
+                producerRoute: '',
                 sources: [],
                 supplementalSources: [],
                 sourceResult: null,
@@ -288,7 +379,9 @@
                 projected: null,
                 validated: null,
                 reviewDrafts: null,
-                persistence: null
+                persistence: null,
+                readback: null,
+                persistenceActive: false
             };
             let activeCause = null;
             let machine = null;
@@ -328,6 +421,7 @@
                     );
                     const selected = sourceRoute(data.loaded, data.classification);
                     data.route = selected.route;
+                    data.producerRoute = producerRouteFor(data.route, input);
                     data.sources = selected.sources;
                     data.supplementalSources = selected.supplementalSources;
                     diagnostics.record({
@@ -351,6 +445,52 @@
                     });
                 }),
                 'recognition-source-loaded': command(async ({ signal }) => {
+                    if (data.producerRoute === 'fixture') {
+                        if (typeof ports.runFixtureImport !== 'function') {
+                            throw createError('PRODUCTION_IMPORT_PORT_REQUIRED', {
+                                port: 'runFixtureImport'
+                            });
+                        }
+                        data.sourceResult = await ports.runFixtureImport({
+                            batchId,
+                            batch: data.loaded.batch,
+                            batchContext: data.loaded.batchContext,
+                            files: data.loaded.files,
+                            sources: data.sources,
+                            route: data.route,
+                            signal
+                        });
+                        const drafts = sourceDrafts(data.route, data.sourceResult);
+                        diagnostics.record({
+                            stage: 'candidates-produced',
+                            engine: 'deterministic-fixture',
+                            counts: { candidates: drafts.length }
+                        });
+                        return;
+                    }
+                    if (data.producerRoute === 'docx-vision') {
+                        if (typeof ports.runDocxVisionImport !== 'function') {
+                            throw createError('PRODUCTION_IMPORT_PORT_REQUIRED', {
+                                port: 'runDocxVisionImport'
+                            });
+                        }
+                        data.sourceResult = await ports.runDocxVisionImport({
+                            batchId,
+                            batch: data.loaded.batch,
+                            batchContext: data.loaded.batchContext,
+                            sources: data.sources,
+                            supplementalSources: data.supplementalSources,
+                            mode,
+                            signal
+                        }, signal);
+                        const drafts = sourceDrafts('docx', data.sourceResult);
+                        diagnostics.record({
+                            stage: 'candidates-produced',
+                            engine: 'docx-vision',
+                            counts: { candidates: drafts.length }
+                        });
+                        return;
+                    }
                     data.sourceResult = await ports.runPdfImport({
                         batchId,
                         batch: data.loaded.batch,
@@ -470,33 +610,44 @@
                 }),
                 'draft-transaction-committed': command(async ({ signal }) => {
                     assertActive(signal);
-                    data.persistence = await ports.persistReviewDraftBatch({
-                        batchId,
-                        batch: data.loaded.batch,
-                        sourceFiles: data.loaded.files,
-                        drafts: data.reviewDrafts,
-                        images: data.projected.draftImages,
-                        route: data.route,
-                        unmatched: Array.isArray(data.sourceResult?.unmatched)
-                            ? data.sourceResult.unmatched
-                            : [],
-                        warnings: Array.isArray(data.sourceResult?.warnings)
-                            ? data.sourceResult.warnings
-                            : [],
-                        batchPatch: {
-                            status: 'review',
-                            progress: 100,
-                            totalCount: data.reviewDrafts.length,
-                            reviewedCount: 0,
-                            submittedCount: 0,
-                            ...(typeof data.sourceResult?.prefixTruncated === 'boolean'
-                                ? { prefixTruncated: data.sourceResult.prefixTruncated }
-                                : {}),
-                            updatedAt: clock(),
-                            errorMessage: ''
-                        },
-                        signal
-                    });
+                    if (mode === 'shadow') return;
+                    data.persistenceActive = true;
+                    try {
+                        data.persistence = await ports.persistReviewDraftBatch({
+                            batchId,
+                            requestId,
+                            idempotencyKey: requestId,
+                            expectedVersion: Number.isInteger(
+                                data.loaded.batch?.draftPersistence?.version
+                            ) ? data.loaded.batch.draftPersistence.version : 0,
+                            batch: data.loaded.batch,
+                            sourceFiles: data.loaded.files,
+                            drafts: data.reviewDrafts,
+                            images: data.projected.draftImages,
+                            route: data.route,
+                            unmatched: Array.isArray(data.sourceResult?.unmatched)
+                                ? data.sourceResult.unmatched
+                                : [],
+                            warnings: Array.isArray(data.sourceResult?.warnings)
+                                ? data.sourceResult.warnings
+                                : [],
+                            batchPatch: {
+                                status: 'review',
+                                progress: 100,
+                                totalCount: data.reviewDrafts.length,
+                                reviewedCount: 0,
+                                submittedCount: 0,
+                                ...(typeof data.sourceResult?.prefixTruncated === 'boolean'
+                                    ? { prefixTruncated: data.sourceResult.prefixTruncated }
+                                    : {}),
+                                updatedAt: clock(),
+                                errorMessage: ''
+                            },
+                            signal
+                        });
+                    } finally {
+                        data.persistenceActive = false;
+                    }
                     if (!isRecord(data.persistence)) {
                         throw createError('PRODUCTION_IMPORT_RESULT_MALFORMED', {
                             causeCode: 'persistence-result-malformed'
@@ -505,6 +656,15 @@
                     diagnostics.record({
                         stage: 'review-drafts-persisted',
                         counts: { drafts: data.reviewDrafts.length }
+                    });
+                    data.readback = verifiedReadback(
+                        await ports.reloadDraftBatch(batchId),
+                        data.reviewDrafts,
+                        batchId
+                    );
+                    diagnostics.record({
+                        stage: 'review-drafts-readback-verified',
+                        counts: { drafts: data.readback.questions.length }
                     });
                 })
             };
@@ -523,6 +683,7 @@
                     });
                 }
                 abortListener = () => {
+                    if (data.persistenceActive) return;
                     try {
                         machine.cancel();
                     } catch (_error) {
@@ -538,7 +699,7 @@
                         throw createError('IMPORT_CANCELLED');
                     }
                     if (snapshot.state !== 'WAITING_CONFIRMATION') {
-                        await ports.reportProgress({
+                        if (mode === 'production') await ports.reportProgress({
                             batchId,
                             progress: snapshot.progress,
                             status: 'processing',
@@ -550,7 +711,46 @@
 
                 await step('start');
                 await step('prepared');
-                if (data.route === 'docx') {
+                if (
+                    mode === 'production' &&
+                    data.loaded.batch.status === 'review' &&
+                    data.loaded.batch.draftPersistence?.idempotencyKey ===
+                        requestId
+                ) {
+                    data.readback = verifiedCommittedReadback(
+                        await ports.reloadDraftBatch(batchId),
+                        data.loaded.batch,
+                        batchId,
+                        requestId
+                    );
+                    data.reviewDrafts = data.readback.questions;
+                    data.projected = { draftImages: data.readback.images };
+                    data.persistence = Object.freeze({
+                        idempotent: true,
+                        version: data.loaded.batch.draftPersistence.version
+                    });
+                    diagnostics.record({
+                        stage: 'review-drafts-readback-verified',
+                        counts: { drafts: data.readback.questions.length }
+                    });
+                    const state = await step('draft-already-committed');
+                    return Object.freeze({
+                        schemaVersion: 'qisi.production-import-bridge.r3',
+                        mode,
+                        requestId,
+                        batchId,
+                        route: data.route,
+                        producerRoute: data.producerRoute,
+                        state,
+                        drafts: Object.freeze([...data.reviewDrafts]),
+                        draftImages: Object.freeze([...data.readback.images]),
+                        warnings: Object.freeze([]),
+                        persistence: data.persistence,
+                        readback: data.readback,
+                        diagnostics: diagnostics.snapshot()
+                    });
+                }
+                if (data.producerRoute === 'docx-deterministic') {
                     await step('deterministic-source-loaded');
                 } else {
                     await step('recognition-source-loaded');
@@ -564,8 +764,11 @@
 
                 return Object.freeze({
                     schemaVersion: 'qisi.production-import-bridge.r3',
+                    mode,
+                    requestId,
                     batchId,
                     route: data.route,
+                    producerRoute: data.producerRoute,
                     state,
                     drafts: Object.freeze([...data.reviewDrafts]),
                     draftImages: Object.freeze([...data.projected.draftImages]),
@@ -575,6 +778,7 @@
                             : [])
                     ]),
                     persistence: data.persistence,
+                    readback: data.readback,
                     diagnostics: diagnostics.snapshot()
                 });
             } catch (error) {
@@ -593,12 +797,12 @@
                 } catch (_error) {
                     // The primary import result cannot be changed by diagnostics.
                 }
-                if (failure.code !== 'IMPORT_CANCELLED') {
+                if (mode === 'production') {
                     try {
                         await ports.reportImportFailure({
                             batchId,
                             error: failure,
-                            failFiles: true,
+                            failFiles: failure.code !== 'IMPORT_CANCELLED',
                             route: data.route || 'unknown'
                         });
                     } catch (_error) {

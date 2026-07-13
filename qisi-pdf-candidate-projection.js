@@ -748,7 +748,8 @@
         controlledWriteOwner,
         blockParser,
         aligner,
-        decisionId = ''
+        decisionId = '',
+        routeContext = {}
     } = {}) {
         if (
             !Array.isArray(sources) || !sources.length ||
@@ -842,7 +843,13 @@
             controlledWriteDecisions: [controlledWriteDecision],
             controlledWriteDecisionId: controlledWriteDecision.decisionId,
             alignmentResults: [alignmentResult],
-            routeContext: { engine: 'qisi-batch-engine-v2' }
+            routeContext: {
+                engine: cleanString(routeContext.engine) ||
+                    'qisi-batch-engine-v2',
+                ...(cleanString(routeContext.sourceMode)
+                    ? { sourceMode: cleanString(routeContext.sourceMode) }
+                    : {})
+            }
         });
     }
 

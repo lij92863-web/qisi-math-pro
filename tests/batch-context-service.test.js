@@ -54,9 +54,9 @@ test('production app uses the context owner and loads it before app', () => {
     const html = fs.readFileSync(path.join(ROOT, 'main.html'), 'utf8');
     assert.match(app, /Qisi\.BatchContextService\.loadBatchAndFiles\s*\(/);
     assert.match(app, /repository:\s*storageRepository/);
-    assert.match(app, /batchContext\.userSettings\.expectedQuestionCount/);
-    assert.match(app, /batchContext\.engineConfig\.recognitionMode/);
-    assert.match(app, /files:\s*batchContext\.sourceManifest/);
+    assert.match(app, /loadBatchAndFiles:\s*input\s*=>/);
+    assert.match(app, /ProductionImportBridge\.createProductionImportBridge/);
+    assert.doesNotMatch(app, /const\s+processDraftImportBatch\s*=/);
     assert.doesNotMatch(app, /const batchExpectedCount\s*=\s*\n\s*Math\.max/);
     assert.doesNotMatch(app, /const recognitionMode\s*=\s*batch\.recognitionMode/);
     assert.ok(html.indexOf('qisi-batch-context-service.js') < html.indexOf('app.js'));

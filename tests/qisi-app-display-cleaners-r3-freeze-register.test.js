@@ -7,7 +7,7 @@ const {
     assertValidFrozenItem,
     buildFreezeRegister
 } = require('../scripts/bm-a4-r3-freeze-register');
-const EXPECTED_REMAINING_CALLSITES = 34;
+const EXPECTED_REMAINING_CALLSITES = 27;
 
 const unsafeProof = {
     callsiteId: 'R3-TEST',

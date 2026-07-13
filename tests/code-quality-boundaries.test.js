@@ -13,11 +13,11 @@ test('app shell does not grow a new oversized business function', () => {
     const oversized = inventory.functions
         .filter(item => item.lineCount > 250)
         .map(item => item.name);
-    assert.deepEqual(oversized, ['processDraftImportBatch']);
-    const knownDebt = inventory.functions.find(
-        item => item.name === 'processDraftImportBatch'
+    assert.deepEqual(oversized, []);
+    assert.equal(
+        inventory.functions.some(item => item.name === 'processDraftImportBatch'),
+        false
     );
-    assert.ok(knownDebt.lineCount <= 5134);
 });
 
 test('OCR adapters cannot own answer alignment or formal persistence', () => {

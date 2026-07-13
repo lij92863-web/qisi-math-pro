@@ -166,9 +166,10 @@ test('source port has no DB, UI, FormalAdmission, transport, OCR, or fallback ow
     assert.doesNotMatch(implementation, /recognize|vision|ocr/i);
 });
 
-test('legacy and coordinator adapters share the owner with no direct importer call in app', () => {
+test('the remaining deterministic precursor uses the owner with no direct importer call in app', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
     const calls = app.match(/ProductionDocxSourcePort\.parseDocxSource\s*\(/g) || [];
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, 1);
+    assert.doesNotMatch(app, /const\s+processDraftImportBatch\s*=/);
     assert.doesNotMatch(app, /QisiBatchImporter\.parseDocxFile\s*\(/);
 });

@@ -56,9 +56,8 @@ test('PDF canonical comparator protects source, producer, route, provenance, and
     for (const token of required) assert.match(source, new RegExp(token.replace('.', '\\.')));
 });
 
-test('Phase 5 leaves app owner wiring and all six frozen PDF files unchanged', () => {
+test('Phase 5 frozen PDF files remain unchanged after the later C2-11 cutover', () => {
     const frozen = [
-        'app.js',
         'qisi-pdf-support-controlled-write.js',
         'qisi-pdf-support-aligner.js',
         'qisi-pdf-support-block-parser.js',

@@ -34,6 +34,8 @@
   "productionImportStatusPortOwner": "qisi-production-import-status-port.js",
   "productionImportOutputPortOwner": "qisi-production-import-output-port.js",
   "productionDocxSourcePortOwner": "qisi-production-docx-source-port.js",
+  "productionDocxVisionSourcePortOwner": "qisi-production-docx-vision-source-port.js",
+  "batchEngineV2Owner": "qisi-batch-engine-v2.js",
   "docxImportCoordinatorOwner": "qisi-docx-import-coordinator.js",
   "productionPdfSourcesPortOwner": "qisi-production-pdf-sources-port.js",
   "pdfImportCoordinatorOwner": "qisi-pdf-import-coordinator.js",
@@ -43,5 +45,6 @@
   "draftPersistenceServiceOwner": "qisi-draft-persistence-service.js",
   "importDiagnosticsOwner": "qisi-import-diagnostics.js",
   "productionImportBridgeOwner": "qisi-production-import-bridge.js",
+  "normalUiImportControllerOwner": "qisi-normal-ui-import-controller.js",
   "appShellOwner": "app.js"
 }

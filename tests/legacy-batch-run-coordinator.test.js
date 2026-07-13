@@ -56,10 +56,14 @@ test('legacy coordinator blocks duplicate runs and releases its lock', async () 
     assert.equal(coordinator.isRunning('batch-1'), false);
 });
 
-test('production app names the legacy owner and contains no no-op validator', () => {
+test('production app retires the legacy coordinator and contains no no-op validator', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
-    assert.match(app, /LegacyBatchRunCoordinator\.createLegacyBatchRunCoordinator/);
-    assert.match(app, /legacyBatchRunCoordinator\.run\s*\(/);
+    const main = fs.readFileSync(path.join(ROOT, 'main.html'), 'utf8');
+    assert.doesNotMatch(app, /LegacyBatchRunCoordinator\.createLegacyBatchRunCoordinator/);
+    assert.doesNotMatch(app, /legacyBatchRunCoordinator\.run\s*\(/);
+    assert.doesNotMatch(main, /qisi-legacy-batch-run-coordinator\.js/);
+    assert.match(app, /ProductionImportBridge\.createProductionImportBridge/);
+    assert.match(app, /normalUiImportController\.run\s*\(/);
     assert.doesNotMatch(app, /ImportOrchestrator\.createImportOrchestrator/);
     assert.doesNotMatch(
         app,

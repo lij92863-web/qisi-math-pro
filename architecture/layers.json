@@ -219,7 +219,7 @@
       "publicApi": ["STATES", "TRANSITIONS", "createImportStateMachine"],
       "allowedDependencies": [],
       "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository"],
-      "status": "scaffold"
+      "status": "production-wired"
     },
     {
       "id": "batch-context-service", "file": "qisi-batch-context-service.js",
@@ -257,6 +257,22 @@
       "id": "production-docx-source-port", "file": "qisi-production-docx-source-port.js",
       "layer": 2, "domainOwner": "productionDocxSourcePortOwner",
       "publicApi": ["parseDocxSource"],
+      "allowedDependencies": [],
+      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
+      "status": "production-wired"
+    },
+    {
+      "id": "production-docx-vision-source-port", "file": "qisi-production-docx-vision-source-port.js",
+      "layer": 2, "domainOwner": "productionDocxVisionSourcePortOwner",
+      "publicApi": ["runDocxVision", "runDocxVisionShadow", "runDocxVisionProduction"],
+      "allowedDependencies": [],
+      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
+      "status": "production-wired"
+    },
+    {
+      "id": "batch-engine-v2", "file": "qisi-batch-engine-v2.js",
+      "layer": 2, "domainOwner": "batchEngineV2Owner",
+      "publicApi": ["processBatchV2", "splitQuestionBlocksV2", "parseOptionsV2", "buildQuestionBlocksFromEvidenceV2"],
       "allowedDependencies": [],
       "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
       "status": "production-wired"
@@ -340,14 +356,22 @@
       "allowedDependencies": [
         "import-state-machine", "batch-context-service", "source-role-classifier",
         "production-import-status-port", "production-import-output-port",
-        "production-docx-source-port", "docx-import-coordinator",
+        "production-docx-source-port", "production-docx-vision-source-port", "batch-engine-v2", "docx-import-coordinator",
         "production-pdf-sources-port", "pdf-import-coordinator",
         "pdf-candidate-projection",
         "candidate-normalizer", "import-validation-service", "review-draft-builder",
         "draft-persistence-service", "import-diagnostics"
       ],
       "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "controlled-write", "route-b-research"],
-      "status": "scaffold"
+      "status": "production-wired"
+    },
+    {
+      "id": "normal-ui-import-controller", "file": "qisi-normal-ui-import-controller.js",
+      "layer": 4, "domainOwner": "normalUiImportControllerOwner",
+      "publicApi": ["NormalUiImportControllerError", "createNormalUiImportController"],
+      "allowedDependencies": ["production-import-bridge"],
+      "forbiddenDependencies": ["formal-admission", "storage-repository", "controlled-write", "route-b-research"],
+      "status": "production-wired"
     },
     {
       "id": "app-shell", "file": "app.js", "layer": 4,
@@ -355,13 +379,14 @@
       "allowedDependencies": [
         "recognition-contracts", "formal-admission", "storage-repository",
         "library-service", "review-controller", "production-review-validator",
-        "export-service", "legacy-batch-run", "injected-import-path",
+        "export-service", "production-import-bridge", "normal-ui-import-controller",
+        "import-state-machine",
         "batch-formal-submit", "ocr-registry", "ocr-qwen-adapter",
         "ocr-local-adapter", "ocr-shadow-mode", "performance-monitor",
         "controlled-write", "support-aligner", "support-parser", "archive-security",
         "secure-logger", "batch-context-service", "source-role-classifier",
         "production-import-status-port", "production-import-output-port",
-        "production-docx-source-port", "docx-import-coordinator",
+        "production-docx-source-port", "production-docx-vision-source-port", "docx-import-coordinator",
         "production-pdf-sources-port", "pdf-import-coordinator", "candidate-normalizer",
         "pdf-candidate-projection",
         "import-validation-service", "review-draft-builder",

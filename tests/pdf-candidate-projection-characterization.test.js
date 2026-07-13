@@ -29,12 +29,20 @@ const runProductionDecision = fixture => {
     return { parserGate, controlledWrite };
 };
 
-test('legacy production callsite uses the real parser, aligner, and controlled-write owners', () => {
+test('production Bridge projection uses the real parser, aligner, and controlled-write owners', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
-    assert.match(app, /PdfSupportControlledWrite\s*\?\s*\.buildPdfSupportParserGate|PdfSupportControlledWrite\s*\.buildPdfSupportParserGate/);
-    assert.match(app, /PdfSupportBlockParser\?\.parsePdfSupportBlocks/);
-    assert.match(app, /PdfSupportAligner\?\.alignPdfSupport/);
-    assert.match(app, /buildPdfSupportFieldLevelControlledWrite\s*\(/);
+    const projection = fs.readFileSync(
+        path.join(ROOT, 'qisi-pdf-candidate-projection.js'), 'utf8'
+    );
+    assert.match(app, /PdfCandidateProjection[\s\S]*createPdfEngineProjectionContext/);
+    assert.match(app, /controlledWriteOwner:[\s\S]{0,100}PdfSupportControlledWrite/);
+    assert.match(app, /blockParser:[\s\S]{0,100}PdfSupportBlockParser/);
+    assert.match(app, /aligner:[\s\S]{0,100}PdfSupportAligner/);
+    assert.match(projection, /controlledWriteOwner\.buildPdfSupportParserGate/);
+    assert.match(
+        projection,
+        /controlledWriteOwner[\s\S]{0,80}\.buildPdfSupportFieldLevelControlledWrite/
+    );
 });
 
 test('legacy full support characterization preserves every accepted field decision', () => {

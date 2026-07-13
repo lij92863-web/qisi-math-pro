@@ -470,6 +470,104 @@
         return immutable(output);
     }
 
+    function applyDocxVisionSupportField(input = {}) {
+        const candidate = input.candidate;
+        const field = String(input.field || '').trim();
+        if (!isRecord(candidate) || !['answer', 'solution'].includes(field)) {
+            throw fail('DOCX_VISION_SUPPORT_INPUT_INVALID');
+        }
+        const identity = validateCanonicalIdentity(candidate);
+        if (
+            !identity.valid || candidate.source?.format !== 'docx' ||
+            candidate.producer?.routeId !== ROUTES.DOCX_VISION
+        ) throw fail('DOCX_PRODUCER_IDENTITY_INVALID', identity);
+        const value = fieldValue(input.support, field);
+        if (!hasValue(value)) throw fail('DOCX_VISION_SUPPORT_VALUE_MISSING');
+        if (hasValue(candidate[field]) && candidate[field] !== value) {
+            throw fail('DOCX_CONTROLLED_WRITE_CONFLICT', { field });
+        }
+        const source = canonicalSource(input.source, 'docx');
+        const decision = input.controlledWriteDecision;
+        const acceptedFields = stableStrings(
+            decision?.acceptedFields || decision?.fields
+        );
+        if (
+            !isRecord(decision) || decision.accepted !== true ||
+            !String(decision.decisionId || '').trim() ||
+            acceptedFields.length !== 1 || acceptedFields[0] !== field
+        ) throw fail('DOCX_CONTROLLED_WRITE_MISSING', { field });
+        if (decision.sourceId && String(decision.sourceId) !== source.sourceId) {
+            throw fail('DOCX_CONTROLLED_WRITE_SOURCE_MISMATCH', { field });
+        }
+        const engine = String(decision.engine || input.engine || '').trim();
+        if (!engine) throw fail('DOCX_VISION_ENGINE_IDENTITY_MISSING');
+        const supportProducer = producerFor(
+            'vision-ai', ROUTES.DOCX_VISION,
+            'normal-ui-docx-vision-support-owner', engine, false
+        );
+        const output = clone(candidate);
+        output[field] = clone(value);
+        output.fieldProvenance = {
+            ...(output.fieldProvenance || {}),
+            [field]: provenanceEntry({
+                field,
+                kind: 'controlled-write',
+                source,
+                producer: supportProducer,
+                page: input.support?.sourcePage || input.page,
+                blockIds: input.support?.blockIds ||
+                    input.support?.sourceTrace?.blockIds || [],
+                decisionId: decision.decisionId,
+                accepted: true,
+                reasonCode: 'strict-json-contract-accepted',
+                producerBoundary: 'docx-vision-support-output-to-candidate'
+            })
+        };
+        const previousDecisionIds = stableStrings([
+            ...(output.controlledWrite?.decisionIds || []),
+            output.controlledWrite?.decisionId
+        ]);
+        output.controlledWrite = {
+            ...(output.controlledWrite || {}),
+            evaluated: true,
+            acceptedFields: stableStrings([
+                ...(output.controlledWrite?.acceptedFields || []),
+                field
+            ]),
+            decisionIds: stableStrings([
+                ...previousDecisionIds,
+                decision.decisionId
+            ]),
+            supportDecisions: [
+                ...(output.controlledWrite?.supportDecisions || []),
+                {
+                    field,
+                    decisionId: String(decision.decisionId),
+                    sourceId: source.sourceId,
+                    engine,
+                    method: String(decision.method || 'strict-json-contract')
+                }
+            ]
+        };
+        const rejectedFields = FORMAL_FIELDS.filter(name =>
+            output.fieldProvenance?.[name]?.status === 'rejected'
+        );
+        const missingFields = FORMAL_FIELDS.filter(name =>
+            output.fieldProvenance?.[name]?.status === 'missing'
+        );
+        output.controlledWrite.rejectedFields = rejectedFields;
+        output.supportLevel = rejectedFields.length
+            ? 'rejected'
+            : missingFields.length ? 'safe-partial' : 'full';
+        output.manualReviewRequired = output.supportLevel !== 'full';
+        output.canonicalReviewHandoff = rejectedFields.length === 0;
+        const updatedIdentity = validateCanonicalIdentity(output);
+        if (!updatedIdentity.valid) {
+            throw fail('DOCX_PRODUCER_IDENTITY_INVALID', updatedIdentity);
+        }
+        return immutable(output);
+    }
+
     function canonicalComparable(value) {
         if (Array.isArray(value)) return value.map(canonicalComparable);
         if (!isRecord(value)) return value;
@@ -521,6 +619,7 @@
         resolveIdentity,
         validateCanonicalIdentity,
         projectDocxVisionCandidate,
+        applyDocxVisionSupportField,
         projectDeterministicDocxCandidate,
         compareCanonicalDocxCandidates
     });

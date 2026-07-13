@@ -21,7 +21,10 @@ test('raw JSON transport candidate is rejected before review persistence', {
         });
         assert.equal(snapshot.batches[0].status, 'failed');
         assert.equal(snapshot.drafts.length, 0);
-        assert.match(snapshot.batches[0].errorMessage, /Raw JSON candidates/);
+        assert.equal(
+            snapshot.batches[0].errorMessage,
+            'PRODUCTION_IMPORT_RESULT_MALFORMED'
+        );
         assert.equal(harness.forbiddenRequests.length, 0);
         await clearE2eData(harness.page);
     } finally {
@@ -43,7 +46,7 @@ test('candidate from the wrong attachment type is rejected before review persist
         });
         assert.equal(snapshot.batches[0].status, 'failed');
         assert.equal(snapshot.drafts.length, 0);
-        assert.equal(snapshot.batches[0].errorMessage, 'IMPORT_VALIDATION_REJECTED');
+        assert.equal(snapshot.batches[0].errorMessage, 'IMPORT_VALIDATION_FAILED');
         assert.equal(harness.forbiddenRequests.length, 0);
         await clearE2eData(harness.page);
     } finally {

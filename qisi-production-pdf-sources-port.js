@@ -24,7 +24,10 @@
                 (source.batchId && String(source.batchId) !== String(batch.id))
             )
         ) throw createError('PDF_SOURCES_INVALID');
-        if (typeof ports.engine?.processBatchV2 !== 'function') {
+        if (
+            typeof ports.produceEngineResult !== 'function' &&
+            typeof ports.engine?.processBatchV2 !== 'function'
+        ) {
             throw createError('PDF_SOURCES_PORT_REQUIRED');
         }
         if (typeof ports.buildProjectionContext !== 'function') {
@@ -32,16 +35,24 @@
         }
 
         assertActive(input.signal);
-        const result = await ports.engine.processBatchV2({
-            batch,
-            files: sources,
-            helpers: {
-                ...(input.helpers || {}),
-                deferPdfCandidateProjection: true,
-                pdfSignal: input.signal,
-                onPdfPageProgress: input.onPageProgress
-            }
-        });
+        const result = typeof ports.produceEngineResult === 'function'
+            ? await ports.produceEngineResult({
+                batch,
+                sources,
+                helpers: input.helpers || {},
+                signal: input.signal,
+                onPageProgress: input.onPageProgress
+            })
+            : await ports.engine.processBatchV2({
+                batch,
+                files: sources,
+                helpers: {
+                    ...(input.helpers || {}),
+                    deferPdfCandidateProjection: true,
+                    pdfSignal: input.signal,
+                    onPdfPageProgress: input.onPageProgress
+                }
+            });
         assertActive(input.signal);
         if (!result || typeof result !== 'object' || !Array.isArray(result.drafts)) {
             return result;
