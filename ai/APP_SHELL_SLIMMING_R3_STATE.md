@@ -53,11 +53,19 @@
   extraction or deletion.
 - C2.1 failure-first gate began at 0/3; final map/inventory gates passed 3/3 and
   all 11 mandatory gates passed with browser modes making zero real calls.
+- C2.2 defined all 15 lifecycle states and 28 explicit transitions. Every edge
+  records trigger, precondition, injected action, output, recoverability, stable
+  error code, and cancellation behavior; unspecified transitions fail closed.
+- The state object has no hidden side effects. Retry budget, idempotency,
+  compare-and-swap versioning, AbortSignal behavior, rollback receipts, manual
+  review, and the non-cancellable repository commit boundary are explicit.
+- C2.2 preserves controlled-write, FormalAdmission, Repository, PDF manual review,
+  and privacy owners. Failure-first gate began at 0/3; final design passed 3/3 and
+  all 11 mandatory gates passed with zero real calls.
 
 ## Pending
 
-- Phase 1 Import State Machine design, target modules, and wave-by-wave migration
-  protocol.
+- Phase 1 target modules and wave-by-wave migration protocol.
 - Phases 2–8 implementation, attacks, audits, benchmark, CTO review, and Git seal.
 
 ## Blockers / limitations
@@ -71,5 +79,6 @@
 
 ## Next exact action
 
-Commit and push C2.1, then define C2.2 Import State Machine transitions with
-preconditions, actions, outputs, recovery, error codes, and cancellation behavior.
+Commit and push C2.2, then define C2.3 target-module public APIs, dependency
+direction, ownership, DOM/Vue/external-call prohibitions, and production-linked
+test obligations.
