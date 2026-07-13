@@ -3,7 +3,7 @@
 - Start commit: `b15e6fbe24c525c95a573b51a0c7ab68e77f4790`
 - Baseline tag: `pre-app-shell-slimming-r3-b15e6fb`
 - Current branch: `stage/app-shell-slimming-r3`
-- Current phase: Program C / Phase 1 complete
+- Current phase: Program C / Phase 2 implementation in progress
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -72,10 +72,20 @@
 - C2.4 failure-first gate began at 0/3; final protocol passed 3/3 and all 11
   mandatory gates passed. Phase 1 architecture is complete without production
   behavior changes.
+- Wave C2-1 implemented the side-effect-free Import State Machine with 15 frozen
+  states, 28 frozen transitions, injected commands, monotonic progress, invalid
+  transition rejection, AbortSignal cancellation, late-result isolation, stable
+  sanitized errors, bounded retry, and data-only frozen snapshots.
+- The state-machine owner is registered in both architecture manifests as a
+  scaffold. It is implemented/unit-tested but not browser-loaded, app-called, or
+  production-wired; no production switch or old-owner removal was attempted.
+- C2-1 failure-first began with module-not-found. Final implementation/design/
+  architecture targets passed 17/17 and all 11 mandatory gates passed with
+  preflight/dry-run making zero real calls.
 
 ## Pending
 
-- Phases 2–8 implementation, attacks, audits, benchmark, CTO review, and Git seal.
+- Phase 2 Waves C2-2–C2-14, then attacks, audits, benchmark, CTO review, and seal.
 
 ## Blockers / limitations
 
@@ -88,6 +98,6 @@
 
 ## Next exact action
 
-Commit and push C2.4, then start Phase 2 Wave C2-1 with failure-first tests for the
-side-effect-free Import State Machine transition table, cancellation, retry,
-progress, and stable error mapping.
+Commit and push C2-1, then begin Wave C2-2 Batch Context with failure-first tests
+for missing batch/file, stale source, duplicate file, unsupported type, immutable
+settings/engine snapshots, and read-only repository abstraction.

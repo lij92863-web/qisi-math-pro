@@ -206,6 +206,14 @@
       "status": "research-only"
     },
     {
+      "id": "import-state-machine", "file": "qisi-import-state-machine.js",
+      "layer": 2, "domainOwner": "importStateMachineOwner",
+      "publicApi": ["STATES", "TRANSITIONS", "createImportStateMachine"],
+      "allowedDependencies": [],
+      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository"],
+      "status": "scaffold"
+    },
+    {
       "id": "app-shell", "file": "app.js", "layer": 4,
       "domainOwner": "appShellOwner", "publicApi": ["App.setup"],
       "allowedDependencies": [

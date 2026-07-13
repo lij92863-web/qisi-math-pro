@@ -26,5 +26,6 @@
   "supportAlignerOwner": "qisi-pdf-support-aligner.js",
   "supportParserOwner": "qisi-pdf-support-block-parser.js",
   "routeBResearchOwner": "qisi-answer-only-ai-pass.js",
+  "importStateMachineOwner": "qisi-import-state-machine.js",
   "appShellOwner": "app.js"
 }
