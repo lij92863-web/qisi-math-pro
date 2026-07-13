@@ -4,6 +4,7 @@
 - Baseline tag: `pre-app-shell-slimming-r3-b15e6fb`
 - Current branch: `stage/app-shell-slimming-r3`
 - Current phase: Program C / Phase 2 implementation in progress
+- Current work package: Wave C2-10.5 — Real Production Import Bridge and Shadow Equivalence
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -336,10 +337,39 @@
   layers, 38 modules, and 58 declared dependency edges with no missing target,
   cycle, upward dependency, or owner mismatch.
 
+- Wave C2-10.5 Phase 1 started from clean local/upstream/live commit
+  `e8c2d9f29a201575638bedec9148c811c8940e1d` on
+  `stage/app-shell-slimming-r3` and completed the required read-only production
+  import audit without changing production code.
+- The executable legacy `processDraftImportBatch` body is mapped from
+  `app.js:15920` through `app.js:18444`; the frozen lexical scanner continues to
+  report its conservative 5,108-line range through line 21027. Both measures are
+  retained so the bridge work does not weaken the existing baseline gate.
+- The decomposition identifies 20 ordered responsibilities and their inputs,
+  outputs, side effects, error/cancellation behavior, current owner, target port,
+  and category. The minimum shared port map covers batch/file loading, progress,
+  DOCX parsing, PDF source processing, normalization, validation, review-draft
+  building, persistence, and diagnostics, with output projection and failure
+  reporting recorded as supplemental ports. No Category D responsibility was
+  found during this audit.
+- The production state map proves the current executable path ends at
+  `WAITING_CONFIRMATION`; it does not invoke FormalAdmission, commit formal
+  questions, or claim a completed formal-import state. The normal UI currently
+  uses the injected transport only when explicitly configured and otherwise
+  enters the legacy owner, which is the exact C2-10.5 bridge blocker being
+  resolved in later phases.
+- Phase 1 failure-first started with 0/3 because all three required architecture
+  records were absent. The completed design target passed 3/3; combined design
+  and migration architecture targets passed 8/8, the full suite passed
+  1,322/1,322, and all 11 mandatory gates passed. Browser preflight/dry-run
+  recorded `realApiCalled=false` and `underlyingApiCallCount=0`; no PDF real-run
+  or real AI/OCR call occurred.
+
 ## Pending
 
-- Phase 2 Waves C2-11 through C2-14, then attacks, audits, benchmark, CTO review,
-  and seal.
+- Wave C2-10.5 Phases 2 through 6 and its hard acceptance gates. C2-11 through
+  C2-14, attacks, audits, benchmark, CTO review, and seal remain blocked until
+  the production bridge and shadow-equivalence package is accepted.
 
 ## Blockers / limitations
 
@@ -352,6 +382,6 @@
 
 ## Next exact action
 
-Commit and push C2-10, then begin Wave C2-11 retirement of the giant legacy owner
-only after verifying every migrated path is production-wired and shadow-equivalent;
-retain at most a thin wrapper and no unreachable or duplicate legacy branch.
+Commit and push Wave C2-10.5 Phase 1, then implement the failure-first production
+import equivalence normalizer and DOCX/PDF/known-bad browser harness required by
+Phase 2. Do not enter C2-11 until all C2-10.5 hard acceptance gates pass.
