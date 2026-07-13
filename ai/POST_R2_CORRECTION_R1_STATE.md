@@ -231,6 +231,10 @@
   the repository transaction already rolled back all isolated mutations.
 - Phase 3 transaction-abort and transaction regressions passed 8/8; full
   mandatory matrix and browser dry-run passed with no real API call.
+- Phase 3 stale-draft failure-first evidence: its matrix row was absent; version
+  conflict handling already blocked all formal writes.
+- Phase 3 stale-draft and concurrency regressions passed 5/5; full mandatory
+  matrix and browser dry-run passed with no real API call.
 
 ## Blockers
 
@@ -239,4 +243,4 @@
 
 ## Next exact action
 
-Commit/push transaction abort, then execute the stale-draft attack.
+Commit/push stale draft, then execute the raw-JSON attack.
