@@ -21,6 +21,7 @@ test('PDF candidate projection has one production owner and one browser-loaded A
         'PdfCandidateProjectionError',
         'mergeControlledWriteDecisions',
         'createPdfEngineProjectionContext',
+        'createProductionProjectionContextBuilder',
         'projectPdfCandidate',
         'projectPdfCandidates',
         'compareCanonicalPdfCandidates'

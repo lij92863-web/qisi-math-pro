@@ -134,8 +134,66 @@ test('port owns no parser, aligner, controlled-write, DB, UI, or FormalAdmission
 
 test('PDF-only production coordinator adapter uses the shared source port', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
-    assert.match(app, /ProductionPdfSourcesPort\.processPdfSources\s*\(/);
-    assert.match(app, /Qisi\.PdfImportCoordinator\.runPdfImport\s*\(/);
-    assert.match(app, /createPdfEngineProjectionContext\s*\(/);
+    assert.match(
+        app,
+        /ProductionPdfSourcesPort\s*\.createProductionImportRunner\s*\(/
+    );
+    assert.doesNotMatch(app, /ProductionPdfSourcesPort\.processPdfSources\s*\(/);
+    assert.doesNotMatch(app, /Qisi\.PdfImportCoordinator\.runPdfImport\s*\(/);
+    assert.doesNotMatch(app, /createPdfEngineProjectionContext\s*\(/);
     assert.match(app, /PdfCandidateProjection\s*\.projectPdfCandidates\s*\(/);
+});
+
+test('production runner owns PDF source roles, evidence, projection context, and safe partial', async () => {
+    const runner = Port.createProductionImportRunner({
+        coordinator: {
+            runPdfImport: async (context, runnerPorts, signal) => {
+                const result = await runnerPorts.processSources({
+                    sources: context.sources,
+                    onPageProgress: () => {}
+                });
+                return {
+                    ...result,
+                    safePartialCandidates: result.drafts.map(draft =>
+                        runnerPorts.createSafePartial(draft, { warnings: [] })
+                    ),
+                    signal
+                };
+            }
+        },
+        hasQuestionRole: source => source.roles.includes('question'),
+        isFullRole: source => source.roles.includes('full'),
+        hasAnswerRole: source => source.roles.includes('answer'),
+        hasSolutionRole: source => source.roles.includes('solution'),
+        getRoles: source => source.roles,
+        normalizeQuestionNumber: value => String(value || '').trim(),
+        getEngineHelpers: () => ({ marker: true }),
+        processQuestionSource: async () => ({
+            questions: [{ id: 'draft-1', questionNumber: '1' }],
+            check: { fatal: false, warningReasons: [] }
+        }),
+        prepareSupportPages: async () => [{ pageNo: 1 }],
+        processSupportPages: async () => ({ rawTextPages: ['1. A'] }),
+        buildProjectionContext: input => ({
+            marker: input.batchId,
+            drafts: input.engineResult.drafts
+        }),
+        safePartialPipeline: {
+            normalizePdfPipelineResult: () => ({
+                isSafePartial: true, isComplete: false
+            })
+        }
+    });
+    const result = await runner({
+        batchId: 'batch-1',
+        batch: { id: 'batch-1', expectedQuestionCount: 1 },
+        sources: [
+            { ...input().sources[0], roles: ['question'] },
+            { ...input().sources[1], roles: ['answer', 'solution'] }
+        ]
+    });
+    assert.equal(result.drafts.length, 1);
+    assert.equal(result.evidences[0].sourceFileId, 'support');
+    assert.equal(result.projectionContext.marker, 'batch-1');
+    assert.equal(result.safePartialCandidates[0].isSafePartial, true);
 });

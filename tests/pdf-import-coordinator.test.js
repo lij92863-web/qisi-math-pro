@@ -112,10 +112,18 @@ test('production PDF route uses the coordinator without a retired V2 precursor',
     const html = fs.readFileSync(path.join(ROOT, 'main.html'), 'utf8');
     const engine = fs.readFileSync(path.join(ROOT, 'qisi-batch-engine-v2.js'), 'utf8');
     const implementation = fs.readFileSync(path.join(ROOT, 'qisi-pdf-import-coordinator.js'), 'utf8');
-    assert.match(app, /Qisi\.PdfImportCoordinator\.runPdfImport\s*\(/);
-    assert.match(app, /Qisi\.ProductionPdfSourcesPort\.processPdfSources\s*\(/);
-    assert.match(app, /const\s+questionSources\s*=\s*orderedSources/);
-    assert.match(app, /const\s+supportSources\s*=\s*orderedSources/);
+    const sourcePort = fs.readFileSync(
+        path.join(ROOT, 'qisi-production-pdf-sources-port.js'), 'utf8'
+    );
+    assert.match(
+        app,
+        /ProductionPdfSourcesPort\s*\.createProductionImportRunner\s*\(/
+    );
+    assert.doesNotMatch(app, /PdfImportCoordinator\.runPdfImport\s*\(/);
+    assert.doesNotMatch(app, /ProductionPdfSourcesPort\.processPdfSources\s*\(/);
+    assert.match(sourcePort, /ports\.coordinator\.runPdfImport\s*\(/);
+    assert.match(sourcePort, /const\s+questionSources\s*=\s*orderedSources/);
+    assert.match(sourcePort, /const\s+supportSources\s*=\s*orderedSources/);
     assert.doesNotMatch(app, /pdfOnlyEngineFiles|processDraftImportBatchV2/);
     assert.ok(html.indexOf('qisi-pdf-import-coordinator.js') < html.indexOf('app.js'));
     assert.match(engine, /onPdfPageProgress/);

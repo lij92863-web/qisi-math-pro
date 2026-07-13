@@ -6,6 +6,21 @@
             ? require('./qisi-docx-producer-identity-contract.js')
             : null
     );
+    const productionControlledWrite = root?.Qisi?.PdfSupportControlledWrite || (
+        typeof module !== 'undefined' && module.exports
+            ? require('./qisi-pdf-support-controlled-write.js')
+            : null
+    );
+    const productionBlockParser = root?.Qisi?.PdfSupportBlockParser || (
+        typeof module !== 'undefined' && module.exports
+            ? require('./qisi-pdf-support-block-parser.js')
+            : null
+    );
+    const productionAligner = root?.Qisi?.PdfSupportAligner || (
+        typeof module !== 'undefined' && module.exports
+            ? require('./qisi-pdf-support-aligner.js')
+            : null
+    );
 
     const FIELDS = Object.freeze([
         'questionNumber', 'stem', 'options', 'answer', 'solution', 'images'
@@ -853,6 +868,35 @@
         });
     }
 
+    function createProductionProjectionContextBuilder() {
+        if (
+            typeof productionControlledWrite
+                ?.buildPdfSupportParserGate !== 'function' ||
+            typeof productionControlledWrite
+                ?.buildPdfSupportFieldLevelControlledWrite !== 'function' ||
+            typeof productionBlockParser?.parsePdfSupportBlocks !== 'function' ||
+            typeof productionAligner?.alignPdfSupport !== 'function'
+        ) throw createError('pdf-production-projection-dependency-missing');
+        return input => {
+            const batchId = cleanString(input?.batchId);
+            if (!batchId) {
+                throw createError('pdf-production-projection-batch-missing');
+            }
+            return createPdfEngineProjectionContext({
+                sources: input.sources,
+                engineResult: input.engineResult,
+                controlledWriteOwner: productionControlledWrite,
+                blockParser: productionBlockParser,
+                aligner: productionAligner,
+                decisionId: `pdf-cw:${batchId}:bridge`,
+                routeContext: {
+                    sourceMode: 'pdf-ai',
+                    engine: 'qisi-batch-engine-v2'
+                }
+            });
+        };
+    }
+
     function sourceRoles(source) {
         const roles = Array.isArray(source?.roles)
             ? source.roles
@@ -1273,6 +1317,7 @@
         PdfCandidateProjectionError,
         mergeControlledWriteDecisions,
         createPdfEngineProjectionContext,
+        createProductionProjectionContextBuilder,
         projectPdfCandidate,
         projectPdfCandidates,
         compareCanonicalPdfCandidates

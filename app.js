@@ -30,10 +30,7 @@
                     });
                 const importValidationPorts =
                     Qisi.ImportValidationService.createProductionValidationPorts({
-                        supportAligner: Qisi.PdfSupportAligner,
-                        contracts: Qisi.RecognitionContracts,
-                        reviewValidator: productionReviewValidator,
-                        safePartialPipeline: Qisi.PdfSafePartialPipeline
+                        reviewValidator: productionReviewValidator
                     });
                 const draftPersistenceService = Object.freeze({
                     persistDraftBatch: command =>
@@ -14943,6 +14940,44 @@ ${source}`;
                     };
                 };
 
+                const runProductionPdfImport =
+                    window.Qisi.ProductionPdfSourcesPort
+                        .createProductionImportRunner({
+                            coordinator: window.Qisi.PdfImportCoordinator,
+                            hasQuestionRole: batchHasQuestionRole,
+                            isFullRole: batchIsFullRole,
+                            hasAnswerRole: batchHasAnswerRole,
+                            hasSolutionRole: batchHasSolutionRole,
+                            getRoles: getBatchFileRoles,
+                            normalizeQuestionNumber: normalizeQuestionKey,
+                            getEngineHelpers: productionImportEngineHelpers,
+                            processQuestionSource: input =>
+                                processStrictVisualQuestionFile({
+                                    file: input.source,
+                                    batch: input.batch,
+                                    expectedQuestionCount:
+                                        input.expectedQuestionCount,
+                                    onPageProgress: input.onPageProgress
+                                }),
+                            prepareSupportPages: input =>
+                                prepareStrictVisualPages(input.source),
+                            processSupportPages: input =>
+                                recognizeVisualSupportFromPreparedPages({
+                                    file: input.source,
+                                    pages: input.pages,
+                                    strict: input.strict,
+                                    expectedQuestionNumbers:
+                                        input.expectedQuestionNumbers,
+                                    requiredKinds: input.requiredKinds,
+                                    onPageProgress: input.onPageProgress
+                                }),
+                            buildProjectionContext:
+                                window.Qisi.PdfCandidateProjection
+                                    .createProductionProjectionContextBuilder(),
+                            safePartialPipeline:
+                                window.Qisi.PdfSafePartialPipeline
+                        });
+
                 const productionImportBridge =
                     window.Qisi.ProductionImportBridge.createProductionImportBridge({
                         createStateMachine: options =>
@@ -14957,179 +14992,7 @@ ${source}`;
                         runDocxImport: runProductionDocxDeterministicImport,
                         runDocxVisionImport: runProductionDocxVisionImport,
                         runFixtureImport: runProductionFixtureImport,
-                        runPdfImport: (context, signal) =>
-                            window.Qisi.PdfImportCoordinator.runPdfImport(
-                                {
-                                    batchId: context.batchId,
-                                    batch: context.batch,
-                                    sources: context.sources
-                                },
-                                {
-                                    processSources: ({ sources, onPageProgress }) =>
-                                        window.Qisi.ProductionPdfSourcesPort.processPdfSources({
-                                            batch: context.batch,
-                                            sources,
-                                            helpers: productionImportEngineHelpers(),
-                                            signal,
-                                            onPageProgress
-                                        }, {
-                                            produceEngineResult: async ({
-                                                batch,
-                                                sources: orderedSources,
-                                                signal: pdfSignal,
-                                                onPageProgress: reportPage
-                                            }) => {
-                                                const questionSources = orderedSources
-                                                    .filter(source =>
-                                                        batchHasQuestionRole(source) ||
-                                                        batchIsFullRole(source)
-                                                    );
-                                                const supportSources = orderedSources
-                                                    .filter(source =>
-                                                        batchHasAnswerRole(source) ||
-                                                        batchHasSolutionRole(source) ||
-                                                        batchIsFullRole(source)
-                                                    );
-                                                if (!questionSources.length) {
-                                                    const error = new Error(
-                                                        'pdf-question-source-required'
-                                                    );
-                                                    error.code =
-                                                        'PDF_QUESTION_SOURCE_REQUIRED';
-                                                    throw error;
-                                                }
-                                                const drafts = [];
-                                                const evidences = [];
-                                                const warnings = [];
-                                                for (const source of questionSources) {
-                                                    if (pdfSignal?.aborted) {
-                                                        const error = new Error(
-                                                            'PDF_COORDINATOR_ABORTED'
-                                                        );
-                                                        error.code =
-                                                            'PDF_COORDINATOR_ABORTED';
-                                                        throw error;
-                                                    }
-                                                    const result =
-                                                        await processStrictVisualQuestionFile({
-                                                            file: source,
-                                                            batch,
-                                                            expectedQuestionCount:
-                                                                batch.expectedQuestionCount || 0,
-                                                            onPageProgress:
-                                                                async (_ratio, info = {}) =>
-                                                                    reportPage?.({
-                                                                        sourceId: source.id,
-                                                                        pageNo:
-                                                                            info.done ||
-                                                                            info.pageNo || 1,
-                                                                        totalPages:
-                                                                            info.total || 1
-                                                                    })
-                                                        });
-                                                    if (result.check?.fatal) {
-                                                        const error = new Error(
-                                                            'pdf-strict-question-fatal'
-                                                        );
-                                                        error.code =
-                                                            'PDF_STRICT_QUESTION_FATAL';
-                                                        throw error;
-                                                    }
-                                                    drafts.push(...(result.questions || []));
-                                                    warnings.push(...(
-                                                        result.check?.warningReasons || []
-                                                    ));
-                                                }
-                                                const expectedQuestionNumbers = drafts
-                                                    .map(draft => normalizeQuestionKey(
-                                                        draft.questionNumber ||
-                                                        draft.question
-                                                    ))
-                                                    .filter(Boolean);
-                                                for (const source of supportSources) {
-                                                    const pages =
-                                                        await prepareStrictVisualPages(source);
-                                                    const support =
-                                                        await recognizeVisualSupportFromPreparedPages({
-                                                            file: source,
-                                                            pages,
-                                                            strict: true,
-                                                            expectedQuestionNumbers,
-                                                            requiredKinds: {
-                                                                answers:
-                                                                    batchHasAnswerRole(source) ||
-                                                                    batchIsFullRole(source),
-                                                                solutions:
-                                                                    batchHasSolutionRole(source) ||
-                                                                    batchIsFullRole(source)
-                                                            },
-                                                            onPageProgress:
-                                                                async (_ratio, info = {}) =>
-                                                                    reportPage?.({
-                                                                        sourceId: source.id,
-                                                                        pageNo:
-                                                                            info.done ||
-                                                                            info.pageNo || 1,
-                                                                        totalPages:
-                                                                            info.total ||
-                                                                            pages.length || 1
-                                                                    })
-                                                        });
-                                                    (support.rawTextPages || [])
-                                                        .forEach((text, index) => {
-                                                            evidences.push({
-                                                                id:
-                                                                    `pdf-support:${source.id}:${index + 1}`,
-                                                                sourceFileId: source.id,
-                                                                sourceFileName:
-                                                                    source.filename || '',
-                                                                pageNo: index + 1,
-                                                                roles: getBatchFileRoles(source),
-                                                                selectedSourceKind:
-                                                                    'ocrMarkdown',
-                                                                ocrMarkdown: text
-                                                            });
-                                                        });
-                                                }
-                                                return {
-                                                    drafts,
-                                                    evidences,
-                                                    draftImages: [],
-                                                    unmatched: [],
-                                                    warnings,
-                                                    errors: [],
-                                                    realApiCalled: true
-                                                };
-                                            },
-                                            buildProjectionContext: projectionInput =>
-                                                window.Qisi.PdfCandidateProjection
-                                                    .createPdfEngineProjectionContext({
-                                                        ...projectionInput,
-                                                        controlledWriteOwner:
-                                                            window.Qisi.PdfSupportControlledWrite,
-                                                        blockParser:
-                                                            window.Qisi.PdfSupportBlockParser,
-                                                        aligner:
-                                                            window.Qisi.PdfSupportAligner,
-                                                        decisionId:
-                                                            `pdf-cw:${context.batchId}:bridge`,
-                                                        routeContext: {
-                                                            sourceMode: 'pdf-ai',
-                                                            engine: 'qisi-batch-engine-v2'
-                                                        }
-                                                    })
-                                        }),
-                                    createSafePartial: (draft, evidence) => ({
-                                        ...window.Qisi.PdfSafePartialPipeline
-                                            .normalizePdfPipelineResult({
-                                                answerQuestionNumbers: [],
-                                                warnings: evidence.warnings
-                                            }),
-                                        draft
-                                    })
-                                },
-                                signal
-                            ),
+                        runPdfImport: runProductionPdfImport,
                         projectPdfCandidates: context =>
                             window.Qisi.PdfCandidateProjection.projectPdfCandidates(context),
                         normalizeCandidates: drafts =>

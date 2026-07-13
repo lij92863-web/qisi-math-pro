@@ -8,6 +8,20 @@
         ['validateSafePartial', 'safe-partial', true],
         ['validateControlledWriteEvidence', 'controlled-write-evidence', true]
     ]);
+    const productionDependencies = Object.freeze({
+        supportAligner: root?.Qisi?.PdfSupportAligner || (
+            typeof module !== 'undefined' && module.exports
+                ? require('./qisi-pdf-support-aligner.js') : null
+        ),
+        contracts: root?.Qisi?.RecognitionContracts || (
+            typeof module !== 'undefined' && module.exports
+                ? require('./qisi-recognition-contracts.js') : null
+        ),
+        safePartialPipeline: root?.Qisi?.PdfSafePartialPipeline || (
+            typeof module !== 'undefined' && module.exports
+                ? require('./qisi-pdf-safe-partial-pipeline.js') : null
+        )
+    });
 
     const cloneValue = value => {
         if (Array.isArray(value)) return value.map(cloneValue);
@@ -105,10 +119,13 @@
     };
 
     const createProductionValidationPorts = (dependencies = {}) => {
-        const supportAligner = dependencies.supportAligner;
-        const contracts = dependencies.contracts;
+        const supportAligner = dependencies.supportAligner ||
+            productionDependencies.supportAligner;
+        const contracts = dependencies.contracts ||
+            productionDependencies.contracts;
         const reviewValidator = dependencies.reviewValidator;
-        const safePartialPipeline = dependencies.safePartialPipeline;
+        const safePartialPipeline = dependencies.safePartialPipeline ||
+            productionDependencies.safePartialPipeline;
         if (
             typeof supportAligner?.validatePdfSupportSequence !== 'function' ||
             typeof contracts?.createStructuredQuestionDraft !== 'function' ||

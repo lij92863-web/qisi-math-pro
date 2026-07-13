@@ -34,10 +34,9 @@ test('production Bridge projection uses the real parser, aligner, and controlled
     const projection = fs.readFileSync(
         path.join(ROOT, 'qisi-pdf-candidate-projection.js'), 'utf8'
     );
-    assert.match(app, /PdfCandidateProjection[\s\S]*createPdfEngineProjectionContext/);
-    assert.match(app, /controlledWriteOwner:[\s\S]{0,100}PdfSupportControlledWrite/);
-    assert.match(app, /blockParser:[\s\S]{0,100}PdfSupportBlockParser/);
-    assert.match(app, /aligner:[\s\S]{0,100}PdfSupportAligner/);
+    assert.match(app, /PdfCandidateProjection[\s\S]*createProductionProjectionContextBuilder/);
+    assert.doesNotMatch(app, /PdfSupportControlledWrite|PdfSupportBlockParser|PdfSupportAligner/);
+    assert.match(projection, /createProductionProjectionContextBuilder/);
     assert.match(projection, /controlledWriteOwner\.buildPdfSupportParserGate/);
     assert.match(
         projection,

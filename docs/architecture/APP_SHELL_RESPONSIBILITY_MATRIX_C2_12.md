@@ -186,3 +186,22 @@ role predicates. The old decision builder and support projection loop are
 deleted. Post-wave inventory is 18,475 lines and 378 detected functions; the
 largest function remains 242 lines. PDF adapter and fixture-port extraction are
 not included in this wave.
+
+## Wave 5 result: active PDF source adapter extracted
+
+The active PDF role split, question/support source loops, progress mapping,
+support evidence construction, projection-context assembly, and safe-partial
+adapter were removed from `app.js`. `qisi-production-pdf-sources-port.js` now
+owns the production runner and still has no parser, aligner, controlled-write,
+UI, DB, or Formal Admission authority.
+
+The existing `qisi-pdf-candidate-projection.js` owner now exposes a fail-closed
+production context builder and privately resolves the already frozen
+controlled-write, parser, and aligner owners. Consequently `app.js` contains
+zero references or calls to those three high-risk PDF owners. The safe-partial
+pipeline is now explicit in the architecture manifests, and import validation
+resolves its lower-layer production dependencies without app-local policy.
+
+Post-wave inventory is 18,338 lines and 378 detected functions; the largest
+function remains 242 lines. The test-only fixture adapter and lower-level
+OCR/vision transports remain separate later boundaries.

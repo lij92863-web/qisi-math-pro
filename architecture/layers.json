@@ -230,6 +230,14 @@
       "status": "production-wired"
     },
     {
+      "id": "pdf-safe-partial-pipeline", "file": "qisi-pdf-safe-partial-pipeline.js",
+      "layer": 1, "domainOwner": "pdfSafePartialPipelineOwner",
+      "publicApi": ["normalizePdfPipelineResult", "assertSafePartialInvariants", "attachPdfPageTrace", "attachSinglePdfPageTrace"],
+      "allowedDependencies": [],
+      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
+      "status": "production-wired"
+    },
+    {
       "id": "batch-context-service", "file": "qisi-batch-context-service.js",
       "layer": 2, "domainOwner": "batchContextServiceOwner",
       "publicApi": ["createBatchContext", "loadBatchAndFiles"],
@@ -296,7 +304,7 @@
     {
       "id": "production-pdf-sources-port", "file": "qisi-production-pdf-sources-port.js",
       "layer": 2, "domainOwner": "productionPdfSourcesPortOwner",
-      "publicApi": ["processPdfSources"],
+      "publicApi": ["processPdfSources", "createProductionImportRunner"],
       "allowedDependencies": [],
       "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "controlled-write", "support-aligner", "support-parser", "route-b-research"],
       "status": "production-wired"
@@ -312,7 +320,7 @@
     {
       "id": "pdf-candidate-projection", "file": "qisi-pdf-candidate-projection.js",
       "layer": 2, "domainOwner": "pdfCandidateProjectionOwner",
-      "publicApi": ["FIELDS", "PdfCandidateProjectionError", "mergeControlledWriteDecisions", "createPdfEngineProjectionContext", "projectPdfCandidate", "projectPdfCandidates", "compareCanonicalPdfCandidates"],
+      "publicApi": ["FIELDS", "PdfCandidateProjectionError", "mergeControlledWriteDecisions", "createPdfEngineProjectionContext", "createProductionProjectionContextBuilder", "projectPdfCandidate", "projectPdfCandidates", "compareCanonicalPdfCandidates"],
       "allowedDependencies": ["controlled-write", "support-aligner", "support-parser"],
       "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
       "status": "production-wired"
@@ -321,7 +329,7 @@
       "id": "candidate-normalizer", "file": "qisi-candidate-normalizer.js",
       "layer": 2, "domainOwner": "candidateNormalizerOwner",
       "publicApi": ["normalizeCandidates"],
-      "allowedDependencies": [],
+      "allowedDependencies": ["recognition-contracts", "support-aligner", "pdf-safe-partial-pipeline", "production-review-validator"],
       "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "controlled-write", "route-b-research"],
       "status": "production-wired"
     },
@@ -391,7 +399,7 @@
         "import-state-machine",
         "batch-formal-submit", "ocr-registry", "ocr-qwen-adapter",
         "ocr-local-adapter", "ocr-shadow-mode", "performance-monitor",
-        "controlled-write", "support-aligner", "support-parser", "archive-security",
+        "controlled-write", "support-aligner", "support-parser", "pdf-safe-partial-pipeline", "archive-security",
         "secure-logger", "batch-context-service", "source-role-classifier",
         "production-import-status-port", "production-import-output-port",
         "production-docx-source-port", "production-docx-vision-source-port", "docx-import-coordinator",

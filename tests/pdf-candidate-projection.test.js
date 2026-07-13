@@ -287,7 +287,7 @@ test('production batch adapter projects PDF drafts while preserving non-PDF draf
     assert.deepEqual(results[1], docx);
 });
 
-test('V2 engine context is built by the owner from real parser, aligner, and controlled-write results', () => {
+test('production engine context builder owns real parser, aligner, and controlled-write dependencies', () => {
     const draft = question({
         sourceQuestionFileId: 'pdf-question',
         sourceFileId: 'pdf-question',
@@ -307,7 +307,9 @@ test('V2 engine context is built by the owner from real parser, aligner, and con
             roles: ['answer', 'solution']
         }
     ];
-    const context = Projection.createPdfEngineProjectionContext({
+    const buildContext = Projection.createProductionProjectionContextBuilder();
+    const context = buildContext({
+        batchId: 'batch-1',
         sources,
         engineResult: {
             drafts: [draft],
@@ -317,18 +319,17 @@ test('V2 engine context is built by the owner from real parser, aligner, and con
                 roles: ['answer', 'solution'], selectedSourceKind: 'textLayer',
                 textLayer: '第1题\n答案：A\n解析：because'
             }]
-        },
-        controlledWriteOwner: ControlledWrite,
-        blockParser: BlockParser,
-        aligner: Aligner,
-        decisionId: 'cw:v2:1'
+        }
     });
     const [result] = Projection.projectPdfCandidates(context);
 
     assert.equal(context.controlledWriteDecisions.length, 1);
-    assert.equal(context.controlledWriteDecisions[0].decisionId, 'cw:v2:1');
+    assert.equal(
+        context.controlledWriteDecisions[0].decisionId,
+        'pdf-cw:batch-1:bridge'
+    );
     assert.equal(result.source.format, 'pdf');
-    assert.equal(result.producer.mode, 'deterministic-pdf');
+    assert.equal(result.producer.mode, 'vision-ai');
     assert.equal(result.answer, 'A');
     assert.equal(result.solution, 'because');
     assert.equal(result.fieldProvenance.answer.kind, 'controlled-write');
