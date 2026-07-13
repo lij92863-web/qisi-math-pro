@@ -29,5 +29,6 @@
   "importStateMachineOwner": "qisi-import-state-machine.js",
   "batchContextServiceOwner": "qisi-batch-context-service.js",
   "sourceRoleClassifierOwner": "qisi-source-role-classifier.js",
+  "docxImportCoordinatorOwner": "qisi-docx-import-coordinator.js",
   "appShellOwner": "app.js"
 }

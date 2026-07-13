@@ -133,10 +133,29 @@
   browser preflight/dry-run making zero real calls.
 - `app.js` is now 21,754 lines, 24 lines below the Program C baseline, with the
   same 318 inventoried function names and complete baseline-name coverage.
+- Wave C2-4 implemented and production-wired `qisi-docx-import-coordinator.js`
+  as the owner for deterministic multi-source DOCX ordering, injected single-file
+  parsing, candidate aggregation, monotonic progress, cancellation, and stable
+  sanitized error mapping.
+- The coordinator rejects non-DOCX inputs and has no DOM, Vue, PDF, OCR, visual,
+  controlled-write, FormalAdmission, Repository, or formal-write authority.
+  Existing importer/visual helpers remain injected single-file adapters rather
+  than copied implementations.
+- The V2 production path now routes DOCX question sources through
+  `Qisi.DocxImportCoordinator.runDocxImport`. Candidate offsets preserve the old
+  cross-file draft order, progress remains an app-owned injected command, and the
+  old adapter rejects multi-file calls with `DOCX_COORDINATOR_REQUIRED` so the
+  coordinator cannot be bypassed.
+- C2-4 failure-first began with module-not-found. Final DOCX/architecture/attack
+  targets passed 51/51, true DOCX/PDF import characterization passed 4/4, DOCX
+  stable passed 20/20, the full suite passed 1,284/1,284, and all 11 mandatory
+  gates passed with browser preflight/dry-run making zero real calls.
+- `app.js` is now 21,768 lines, 10 lines below the Program C baseline, with the
+  same 318 inventoried function names and complete baseline-name coverage.
 
 ## Pending
 
-- Phase 2 Waves C2-4–C2-14, then attacks, audits, benchmark, CTO review, and seal.
+- Phase 2 Waves C2-5–C2-14, then attacks, audits, benchmark, CTO review, and seal.
 
 ## Blockers / limitations
 
@@ -149,6 +168,7 @@
 
 ## Next exact action
 
-Commit and push C2-3, then begin Wave C2-4 DOCX Coordinator with failure-first
-tests for deterministic ordering, candidate creation, progress, error mapping,
-cancellation, no formal write/UI/PDF/OCR ownership, and DOCX stable preservation.
+Commit and push C2-4, then begin Wave C2-5 PDF Coordinator with failure-first
+tests for PDF intake, page/OCR adapter orchestration, safe-partial candidates,
+progress/cancel, adapter failure, and preservation of parser/aligner/
+controlled-write ownership.

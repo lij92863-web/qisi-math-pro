@@ -15687,6 +15687,11 @@ ${source}`;
                     const draftImages = [];
                     const warnings = [];
 
+                    if (docxFiles.length > 1) {
+                        const error = new Error('DOCX 多文件导入必须由 DocxImportCoordinator 排序和编排。');
+                        error.code = 'DOCX_COORDINATOR_REQUIRED';
+                        throw error;
+                    }
                     if (!docxFiles.length) {
                         return { drafts, draftImages, warnings };
                     }
@@ -15711,7 +15716,7 @@ ${source}`;
                                 }
                             });
 
-                            const baseOrder = drafts.length;
+                            const baseOrder = Math.max(0, Number(engineHelpers.baseOrder || 0)) + drafts.length;
 
                             let normalizedDrafts = (result.drafts || [])
                                 .map((draft, idx) => normalizeDocxImporterDraftForV2(draft, file, batch, baseOrder + idx + 1))
@@ -15858,11 +15863,20 @@ ${source}`;
                             !(file.fileType === 'docx' && (batchHasQuestionRole(file) || batchIsFullRole(file)))
                         );
 
-                        const docxResult = await parseDocxQuestionFilesWithImporterForV2(
-                            docxQuestionFiles,
-                            batch,
-                            helpers
-                        );
+                        const docxResult = docxQuestionFiles.length
+                            ? await window.Qisi.DocxImportCoordinator.runDocxImport(
+                                { batchId, sources: docxQuestionFiles },
+                                {
+                                    parseSource: ({ source, candidateOffset }) =>
+                                        parseDocxQuestionFilesWithImporterForV2(
+                                            [source], batch,
+                                            { ...helpers, baseOrder: candidateOffset }
+                                        ),
+                                    reportProgress: ({ progress }) =>
+                                        updateBatchProgress(batchId, 5 + Math.round(progress * 0.2), 'processing')
+                                }
+                            )
+                            : { drafts: [], draftImages: [], warnings: [], errors: [] };
 
                         const engineResult = engineFiles.length
                             ? await window.QisiBatchEngineV2.processBatchV2({ batch, files: engineFiles, helpers })
