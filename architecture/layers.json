@@ -37,6 +37,13 @@
       "status": "production-wired"
     },
     {
+      "id": "ocr-reading-order", "file": "qisi-ocr-reading-order.js",
+      "layer": 0, "domainOwner": "ocrReadingOrderOwner",
+      "publicApi": ["validateBlock", "orderBlocks"],
+      "allowedDependencies": [], "forbiddenDependencies": ["app-shell", "storage-repository"],
+      "status": "scaffold"
+    },
+    {
       "id": "support-parser", "file": "qisi-pdf-support-block-parser.js",
       "layer": 0, "domainOwner": "supportParserOwner",
       "publicApi": ["parsePdfSupportBlocks"],
