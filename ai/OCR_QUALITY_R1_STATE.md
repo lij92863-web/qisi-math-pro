@@ -3,7 +3,7 @@
 - Start commit: `1361d7e7f81d2f23819a995a0f9d1808adf19982`
 - Baseline tag: `pre-ocr-quality-r1-1361d7e`
 - Current branch: `stage/ocr-quality-r1`
-- Current phase: Program B / Phase 6 complete
+- Current phase: Program B / Phase 7 complete
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -171,10 +171,24 @@
 - Final benchmark decision: `NO_ENGINE_ELIGIBLE_FOR_PROMOTION`. Production engine
   additions/replacements remain none, canary and preprocessing remain disabled,
   and current production behavior is unchanged.
+- Phase 7 CTO review accepted the implemented/unit-tested evaluation, adapter,
+  local-service, reading-order, structure, Shadow, and selection boundaries with
+  material limitations. CTO decision:
+  `OCR_QUALITY_R1_ACCEPTED_WITH_LIMITATIONS`.
+- Production-promoted engines and private-corpus-measured Shadow engines remain
+  none. PaddleOCR, PaddleOCR-VL, olmOCR, and mock remain research-only; the
+  existing qwen-vl-plus configuration remains legacy-unpinned and was neither
+  called nor changed by Program B.
+- Real human-efficiency improvement remains not measured; PDF manual review is
+  still required. No model/runtime burden was installed, while any future local
+  deployment still requires packaging, device validation, updates, diagnostics,
+  storage, and target-machine performance proof.
+- Phase 7 CTO/audit/benchmark/attack targets passed 44/44 and all 11 mandatory
+  gates passed with browser preflight/dry-run `realApiCalled=false`.
 
 ## Pending
 
-- Phases 7–8: CTO review and seal.
+- Phase 8: final report and Git seal.
 
 ## Blockers / limitations
 
@@ -185,6 +199,6 @@
 
 ## Next exact action
 
-Commit and push Phase 6, then perform the Phase 7 CTO review from the complete
-code, architecture, attack, and benchmark evidence set. Do not infer real quality
-or production eligibility from synthetic evidence.
+Commit and push Phase 7, then create the Phase 8 final report and failure-first
+report gate. Re-run mandatory gates, verify live remote main is still the Program A
+seal, and only then perform the authorized ff-only merge/tag sequence.
