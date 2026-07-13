@@ -4,7 +4,7 @@
 - Baseline tag: `pre-app-shell-slimming-r3-b15e6fb`
 - Current branch: `stage/app-shell-slimming-r3`
 - Current phase: Program C / Phase 5 blocked
-- Current work package: DOCX normal-UI route identity correction R1 blocked
+- Current work package: DOCX producer identity and route contract correction R1 accepted
 - Status updated: 2026-07-13 Asia/Shanghai
 
 ## Entry conditions
@@ -739,6 +739,50 @@
   blocker:
   `DOCX_VISION_ROUTE_HAS_NO_LEGAL_SOURCE_MODE_OR_PRODUCER_TIME_CONTROLLED_PROVENANCE`;
   production code unchanged; `C2_11_PROHIBITED`; full Phase 5 not resumed.
+- The independent DOCX producer identity contract correction started from clean
+  pushed commit `9ab2f21282af4f5eb394658f31d5ba357cd46ca5` and selected the split
+  `source.format` + `producer.mode` + route identity/reason contract. Exact old
+  `source.mode` mappings remain read-only; unknown legacy identity is
+  `legacy-unknown` and cannot pass Formal Admission.
+- `qisi-docx-producer-identity-contract.js` is the unique production owner for
+  canonical identity validation, deterministic DOCX provenance projection,
+  DOCX vision controlled-write provenance projection, legacy mapping, and
+  structured comparison. The actual normal-UI strict vision producer now calls
+  it at the engine-result-to-candidate boundary; review and persistence only
+  preserve its evidence.
+- The normal UI still uses the legacy DOCX-to-rendered-PDF vision route and now
+  truthfully records `source.format=docx`, `producer.mode=vision-ai`, route
+  `docx-rendered-to-pdf-vision`, all seven stable transitions, and per-field
+  controlled-write/rejected/missing evidence. Bridge remains shadow-only and
+  delegates its new DOCX vision port to the same owner. The independent real
+  deterministic DOCX port records `deterministic-docx` provenance from the XML
+  producer and is not compared as the same semantic route.
+- The true-browser normal UI test imported the actual `1.docx`, exercised the
+  ordinary `AppProxy.runBatchRecognition` entry and real local DOCX conversion,
+  persisted six vision drafts, and compared one canonical vision candidate to
+  Bridge shadow with zero differences. The isolated deterministic entry produced
+  six real importer drafts. Wrong attachments, raw JSON, placeholders, shadow
+  review/formal writes, normal UI formal writes, forbidden requests, and real
+  API calls all remained zero.
+- A real deterministic producer run exposed a pre-existing corrupted DOCX
+  option-label regular expression that could create a zero-length global match.
+  Its single delimiter character class was restored and covered by a regression;
+  no PDF route or DOCX business result was broadened.
+- Broad targeted tests passed 120/120; runtime/architecture/Formal/storage gates
+  passed 43/43; `verify:safe` passed 1,473/1,473 across 54 suites; Base Migration
+  passed 15/15; Route B hold 6/6; PDF known-bad 65/65; controlled-write ownership
+  21/21; DOCX stable 20/20. All 11 mandatory gates, preflight, dry-run, and
+  no-real-AI passed with no failed, skipped, todo, timeout, or real API call.
+- All six frozen PDF high-risk files remain byte-unchanged. No real-run, AI
+  proxy, normal UI owner switch, legacy deletion, broad app slimming, Phase 5
+  resumption, C2-11, or later phase occurred. Evidence is sealed in
+  `docs/architecture/DOCX_PRODUCER_IDENTITY_CONTRACT_DECISION_R1.md` and
+  `docs/release/DOCX_PRODUCER_IDENTITY_CONTRACT_CORRECTION_R1.md`.
+- Decision: `DOCX_PRODUCER_IDENTITY_CONTRACT_ACCEPTED`;
+  `PHASE_5_NOT_RESUMED`; `C2_11_PROHIBITED`; stop after this package.
+- Architecture decision commit: `4cb1ed44fca0860254de35588532851921181dac`;
+  production contract, wiring, and regression commit:
+  `456f9ce83e0639614476a62c308c2007dd16ba5f`.
 
 ## Blockers / limitations
 
@@ -751,7 +795,7 @@
 
 ## Next exact action
 
-Program C remains blocked at Phase 5. Before resuming this correction or Phase
-5, define and separately authorize a schema-and-provenance design for the real
-DOCX vision route and producer-time DOCX provenance. Do not enter C2-11 under
-the current gate.
+Program C remains blocked at Phase 5, but the DOCX producer identity corrective
+package is accepted. In the next independent task only, resume the complete
+Phase 5 browser equivalence using separate deterministic and vision scenarios.
+Do not enter C2-11 until Phase 5 itself is accepted.
