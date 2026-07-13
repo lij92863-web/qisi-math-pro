@@ -1417,6 +1417,127 @@
         };
     };
 
+    const createStrictVisualQuestionProducer = (ports = {}) => {
+        if (
+            typeof ports.renderPdfFilePages !== 'function' ||
+            typeof ports.recognizePreparedPages !== 'function' ||
+            typeof ports.getRoles !== 'function' ||
+            typeof ports.logDiagnostic !== 'function'
+        ) {
+            const error = new Error('STRICT_VISUAL_PRODUCER_PORT_REQUIRED');
+            error.code = 'STRICT_VISUAL_PRODUCER_PORT_REQUIRED';
+            throw error;
+        }
+
+        const now = typeof ports.now === 'function'
+            ? ports.now
+            : () => (
+                typeof performance !== 'undefined' &&
+                typeof performance.now === 'function'
+                    ? performance.now()
+                    : Date.now()
+            );
+
+        const preparePages = async file => {
+            if (file.fileType === 'pdf') {
+                return ports.renderPdfFilePages(file, {
+                    scale: 2.2,
+                    jpegQuality: 0.9,
+                    sequential: true
+                });
+            }
+
+            if (file.fileType === 'image') {
+                return [{
+                    pageNo: 1,
+                    url: file.uploadPath,
+                    width: 0,
+                    height: 0
+                }];
+            }
+
+            throw new Error(`整页视觉识别不支持文件类型：${file.fileType}`);
+        };
+
+        const processQuestionFile = async ({
+            file,
+            batch,
+            expectedQuestionCount = 0,
+            onPageProgress = null
+        }) => {
+            const renderStart = now();
+            let pages = [];
+
+            ports.logDiagnostic('strict-visual-file-start', {
+                batchId: batch?.id || '',
+                filename: file?.filename || '',
+                fileType: file?.fileType || '',
+                roles: ports.getRoles(file),
+                expectedQuestionCount
+            });
+
+            try {
+                pages = await preparePages(file);
+                const renderDurationMs = now() - renderStart;
+
+                console.log('[BATCH_DEBUG][strict-visual-prepared-pages]', {
+                    filename: file?.filename || '',
+                    fileType: file?.fileType || '',
+                    convertedFromDocx: Boolean(file?.convertedFromDocx),
+                    sourceDocxFileName: file?.sourceDocxFileName || '',
+                    pageRange: file?.pageRange || '',
+                    pageCount: pages.length,
+                    pageNos: pages.map(page => page.pageNo || 1),
+                    pageUrlLengths: pages.map(page =>
+                        String(page?.url || '').length
+                    )
+                });
+
+                const result = await ports.recognizePreparedPages({
+                    file,
+                    batch,
+                    pages,
+                    expectedQuestionCount,
+                    onPageProgress,
+                    renderDurationMs
+                });
+
+                ports.logDiagnostic('strict-visual-file-result', {
+                    batchId: batch?.id || '',
+                    filename: file?.filename || '',
+                    fileType: file?.fileType || '',
+                    roles: ports.getRoles(file),
+                    pageCount: pages.length,
+                    pageNos: pages.map(page => page.pageNo || 1),
+                    questionCount: result?.questions?.length || 0,
+                    pageImageCount: result?.pageImages?.length || 0,
+                    fatal: Boolean(result?.check?.fatal),
+                    reasons:
+                        result?.check?.reasons ||
+                        result?.check?.fatalReasons || []
+                });
+
+                return result;
+            } catch (error) {
+                ports.logDiagnostic('strict-visual-file-result', {
+                    batchId: batch?.id || '',
+                    filename: file?.filename || '',
+                    fileType: file?.fileType || '',
+                    roles: ports.getRoles(file),
+                    pageCount: pages.length,
+                    pageNos: pages.map(page => page.pageNo || 1),
+                    ok: false,
+                    message: error?.message || String(error),
+                    code: error?.code || '',
+                    stage: error?.stage || ''
+                }, 'error');
+                throw error;
+            }
+        };
+
+        return Object.freeze({ preparePages, processQuestionFile });
+    };
+
     const selfTest = async () => {
         const helpers = {
             makeBatchId: (prefix) => `${prefix}_test_${Math.random().toString(36).slice(2, 6)}`,
@@ -1466,7 +1587,8 @@
         processBatchV2,
         splitQuestionBlocksV2,
         parseOptionsV2,
-        buildQuestionBlocksFromEvidenceV2
+        buildQuestionBlocksFromEvidenceV2,
+        createStrictVisualQuestionProducer
     };
     window.__qisiBatchV2SelfTest = selfTest;
 })();

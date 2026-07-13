@@ -10408,22 +10408,6 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                     throw lastError || new Error('所有视觉模型均未识别出题目');
                 };
 
-                const prepareStrictVisualPages = async (file) => {
-                    if (file.fileType === 'pdf') {
-                        return await renderPdfFilePages(file, {
-                            scale: 2.2,
-                            jpegQuality: 0.9,
-                            sequential: true
-                        });
-                    }
-
-                    if (file.fileType === 'image') {
-                        return [{ pageNo: 1, url: file.uploadPath, width: 0, height: 0 }];
-                    }
-
-                    throw new Error(`整页视觉识别不支持文件类型：${file.fileType}`);
-                };
-
                 const recognizeStrictQuestionsFromPreparedPages = async ({
                     file,
                     batch,
@@ -10830,82 +10814,6 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                     };
                 };
 
-                const processStrictVisualQuestionFile = async ({
-                    file,
-                    batch,
-                    expectedQuestionCount = 0,
-                    onPageProgress = null
-                }) => {
-                    const renderStart = performance.now();
-                    let pages = [];
-
-                    logBatchPdfDiag('strict-visual-file-start', {
-                        batchId: batch?.id || '',
-                        filename: file?.filename || '',
-                        fileType: file?.fileType || '',
-                        roles: getBatchFileRoles(file),
-                        expectedQuestionCount
-                    });
-
-                    try {
-                        pages = await prepareStrictVisualPages(file);
-
-                        const renderDurationMs = performance.now() - renderStart;
-
-                        console.log('[BATCH_DEBUG][strict-visual-prepared-pages]', {
-                            filename: file?.filename || '',
-                            fileType: file?.fileType || '',
-                            convertedFromDocx: Boolean(file?.convertedFromDocx),
-                            sourceDocxFileName: file?.sourceDocxFileName || '',
-                            pageRange: file?.pageRange || '',
-                            pageCount: pages.length,
-                            pageNos: pages.map(page => page.pageNo || 1),
-                            pageUrlLengths: pages.map(page =>
-                                String(page?.url || '').length
-                            )
-                        });
-
-                        const result = await recognizeStrictQuestionsFromPreparedPages({
-                            file,
-                            batch,
-                            pages,
-                            expectedQuestionCount,
-                            onPageProgress,
-                            renderDurationMs
-                        });
-
-                        logBatchPdfDiag('strict-visual-file-result', {
-                            batchId: batch?.id || '',
-                            filename: file?.filename || '',
-                            fileType: file?.fileType || '',
-                            roles: getBatchFileRoles(file),
-                            pageCount: pages.length,
-                            pageNos: pages.map(page => page.pageNo || 1),
-                            questionCount: result?.questions?.length || 0,
-                            pageImageCount: result?.pageImages?.length || 0,
-                            fatal: Boolean(result?.check?.fatal),
-                            reasons: result?.check?.reasons || result?.check?.fatalReasons || []
-                        });
-
-                        return result;
-                    } catch (error) {
-                        logBatchPdfDiag('strict-visual-file-result', {
-                            batchId: batch?.id || '',
-                            filename: file?.filename || '',
-                            fileType: file?.fileType || '',
-                            roles: getBatchFileRoles(file),
-                            pageCount: pages.length,
-                            pageNos: pages.map(page => page.pageNo || 1),
-                            ok: false,
-                            message: error?.message || String(error),
-                            code: error?.code || '',
-                            stage: error?.stage || ''
-                        }, 'error');
-
-                        throw error;
-                    }
-                };
-
                 const buildDocxQuestionFailureSnapshot = ({
                     file,
                     questionSkeleton,
@@ -11243,7 +11151,8 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                     let strictResult;
 
                     try {
-                        strictResult = await processStrictVisualQuestionFile({
+                        strictResult = await strictVisualQuestionProducer
+                            .processQuestionFile({
                             file: pdfRecord,
                             batch,
                             expectedQuestionCount:
@@ -14792,6 +14701,16 @@ ${source}`;
                         .trim();
                 };
 
+                const strictVisualQuestionProducer =
+                    window.QisiBatchEngineV2.createStrictVisualQuestionProducer({
+                        renderPdfFilePages,
+                        recognizePreparedPages:
+                            recognizeStrictQuestionsFromPreparedPages,
+                        getRoles: getBatchFileRoles,
+                        logDiagnostic: logBatchPdfDiag,
+                        now: () => performance.now()
+                    });
+
                 const productionImportEngineHelpers = () => ({
                     makeBatchId,
                     getBatchFileRoles,
@@ -14872,7 +14791,7 @@ ${source}`;
                             normalizeQuestionNumber: normalizeQuestionKey,
                             getEngineHelpers: productionImportEngineHelpers,
                             processQuestionSource: input =>
-                                processStrictVisualQuestionFile({
+                                strictVisualQuestionProducer.processQuestionFile({
                                     file: input.source,
                                     batch: input.batch,
                                     expectedQuestionCount:
@@ -14880,7 +14799,7 @@ ${source}`;
                                     onPageProgress: input.onPageProgress
                                 }),
                             prepareSupportPages: input =>
-                                prepareStrictVisualPages(input.source),
+                                strictVisualQuestionProducer.preparePages(input.source),
                             processSupportPages: input =>
                                 recognizeVisualSupportFromPreparedPages({
                                     file: input.source,

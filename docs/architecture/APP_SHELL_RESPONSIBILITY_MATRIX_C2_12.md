@@ -264,3 +264,26 @@ function remains 242 lines. Direct OCR/AI HTTP transport in `app.js` is zero.
 The remaining request/prompt producer functions are active legacy source
 producers, not a second HTTP transport owner; their reachability and final
 disposition remain subject to C2-12/C2-13 owner proof.
+
+## Wave 9 result: strict visual source producer shell extracted
+
+The strict visual source preparation and file-level producer orchestration now
+belong to the existing `qisi-batch-engine-v2.js` owner through
+`createStrictVisualQuestionProducer`. PDF sources and DOCX virtual-PDF sources
+share that one producer instance. Its page render contract, image-source
+handling, render timing, prepared-page recognition payload, diagnostics, and
+fail-closed error identity are characterized without changing recognition,
+repair, validation, prompt, or model-selection policy.
+
+The app shell now assembles this engine owner with the existing render,
+prepared-page recognition, role, diagnostic, and clock ports. The former inline
+`prepareStrictVisualPages` and `processStrictVisualQuestionFile` implementations
+are deleted, and no independent source preparation fallback remains. The
+lower-level prepared-page recognition algorithm is still active app-local B
+behavior and remains explicitly pending; this wave does not claim C2-12
+acceptance.
+
+Post-wave inventory is 18,188 `app.js` lines and 376 detected functions; the
+largest function remains 242 lines. Both former inline owner definitions are
+absent, and the six frozen PDF high-risk files remain byte-unchanged from the
+C2-12 baseline.
