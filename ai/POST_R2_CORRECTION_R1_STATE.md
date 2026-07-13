@@ -223,6 +223,10 @@
   repository idempotency already prevented the second formal write.
 - Phase 3 duplicate-submit and concurrency regressions passed 5/5; full
   mandatory matrix and browser dry-run passed with no real API call.
+- Phase 3 two-tab-race failure-first evidence: its matrix row was absent; the
+  repository already rejected the losing tab after the first atomic commit.
+- Phase 3 two-tab-race and concurrency regressions passed 5/5; full mandatory
+  matrix and browser dry-run passed with no real API call.
 
 ## Blockers
 
@@ -231,4 +235,4 @@
 
 ## Next exact action
 
-Commit/push duplicate submit, then execute the two-tab race attack.
+Commit/push the two-tab race package, then execute transaction abort.
