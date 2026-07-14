@@ -6,7 +6,7 @@
   "main": "qisi-local-server.js",
   "scripts": {
     "start": "node qisi-local-server.js",
-    "check": "node --check qisi-config.js && node --check qisi-runtime.js && node --check qisi-backup.js && node --check qisi-utils.js && node --check qisi-db.js && node --check qisi-components.js && node --check qisi-batch-importer.js && node --check qisi-support-parser.js && node --check qisi-batch-engine-v2.js && node --check qisi-docx-converter.js && node --check qisi-docx-vision-reconciler.js && node --check qisi-pdf-support-controlled-write.js && node --check qisi-temp-job-manager.js && node --check qisi-secure-logger.js && node --check app.js && node --check qisi-local-server.js",
+    "check": "node --check qisi-config.js && node --check qisi-runtime.js && node --check qisi-backup.js && node --check qisi-utils.js && node --check qisi-db.js && node --check qisi-components.js && node --check qisi-batch-importer.js && node --check qisi-support-parser.js && node --check qisi-batch-engine-v2.js && node --check qisi-docx-converter.js && node --check qisi-docx-vision-reconciler.js && node --check qisi-pdf-support-controlled-write.js && node --check qisi-temp-job-manager.js && node --check qisi-secure-logger.js && node --check qisi-production-import-route-policy.js && node --check qisi-question-duplicate-policy.js && node --check qisi-review-workflow-service.js && node --check qisi-draft-maintenance-service.js && node --check app.js && node --check qisi-local-server.js && node --check scripts/verify-app-shell-architecture.js && node --check scripts/benchmark/measure-program-c-closure.js && node --check scripts/verify-personal-stable.js",
     "test": "node --test",
     "smoke:batch:mock": "node --test tests/batch-smoke-mock.test.js",
     "verify:docx-stable": "node scripts/verify-docx-stable.js",
@@ -16,6 +16,7 @@
     "verify:diff-scope": "node scripts/verify-diff-scope.js",
     "verify:safe": "npm run check && npm test && npm run smoke:batch:mock && npm run verify:no-real-ai",
     "verify": "npm run check && npm test",
+    "verify:personal-stable": "node scripts/verify-personal-stable.js",
     "test:ai-proxy": "node scripts/smoke-ai-proxy.js",
     "test:ai-vision-proxy": "node scripts/smoke-ai-vision-proxy.js",
     "backup:stage0": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-stage0-snapshot.ps1"
