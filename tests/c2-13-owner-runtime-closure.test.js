@@ -48,7 +48,7 @@ test('C2-13 owner manifest is complete, layered, and responsibility-unique', () 
         assert.ok(Array.isArray(owner.allowedDependencies));
         assert.ok(Array.isArray(owner.forbiddenDependencies));
         assert.ok([
-            'production', 'shadow', 'research-only', 'deprecated', 'removed'
+            'production', 'shadow', 'research-only', 'test-only', 'deprecated', 'removed'
         ].includes(owner.status), `${owner.ownerId}:status`);
         assert.equal(
             owner.productionEntry,

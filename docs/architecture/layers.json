@@ -10,7 +10,8 @@
         "import-state-machine", "support-block-parser", "pdf-safe-partial",
         "source-role-classifier", "question-image-policy", "solution-quality-policy",
         "support-latex-policy", "support-document-parser", "support-repair",
-        "docx-producer-identity", "import-equivalence-normalizer"
+        "docx-producer-identity", "import-equivalence-normalizer",
+        "question-duplicate-policy"
       ]
     },
     {
@@ -45,7 +46,8 @@
       "id": 3,
       "name": "workflow-composition-and-retired-routes",
       "ownerIds": [
-        "production-import-bridge", "batch-formal-submit", "route-b",
+        "production-import-bridge", "batch-formal-submit", "draft-maintenance",
+        "review-workflow", "route-b",
         "legacy-batch-run", "injected-import-path", "import-orchestrator-scaffold"
       ]
     },
@@ -55,6 +57,13 @@
       "ownerIds": [
         "normal-ui-controller", "ui-shell", "legacy-process-draft-import-batch",
         "legacy-process-draft-import-batch-v2"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "test-only-evidence-harness",
+      "ownerIds": [
+        "test-outer-engine-adapter", "test-import-stage-trace"
       ]
     }
   ]

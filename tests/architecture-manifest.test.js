@@ -89,10 +89,13 @@ test('automated ownership guards match production source', () => {
 
     const appSubmit = app.slice(
         app.indexOf('const submitDraftQuestion = async'),
-        app.indexOf('const refreshBatchStats', app.indexOf('const submitDraftQuestion = async'))
+        app.indexOf('const openBatchSubmitSummary', app.indexOf('const submitDraftQuestion = async'))
     );
     assert.doesNotMatch(appSubmit, /db\.questions\.(?:put|add|bulkPut)/);
-    assert.match(appSubmit, /batchFormalSubmit\.submit/);
+    assert.match(appSubmit, /reviewWorkflowService\.submitDraft/);
+    assert.doesNotMatch(appSubmit, /batchFormalSubmit\.submit|persistReviewDraftBatch/);
+    const reviewWorkflow = read('qisi-review-workflow-service.js');
+    assert.match(reviewWorkflow, /formalSubmit\.submit/);
     const formalSubmit = read('qisi-batch-formal-submit.js');
     assert.match(formalSubmit, /policy\.evaluateDraftAdmission/);
     assert.match(formalSubmit, /repository\.confirmDraftToQuestion/);

@@ -1,0 +1,162 @@
+{
+  "schemaVersion": "qisi.app-shell-responsibility-matrix.corrective-r1",
+  "decision": "APP_SHELL_CORRECTIVE_CLOSURE_ACCEPTED",
+  "scope": "Program C normal-UI import, review, maintenance, and formal-submit commands",
+  "maxWrapperLines": 60,
+  "functions": [
+    {
+      "name": "runBatchRecognition",
+      "file": "app.js",
+      "range": [2035, 2045],
+      "class": "A",
+      "allowedCalls": [
+        "normalUiImportController.isRunning",
+        "console.warn",
+        "normalUiImportController.run"
+      ],
+      "forbiddenCalls": [
+        "productionImportBridge.run",
+        "ProductionImportRoutePolicy.resolveProductionImportRoute",
+        "draftPersistenceService.persistReviewDraftBatch",
+        "batchFormalSubmit.submit"
+      ],
+      "owner": "UI Shell"
+    },
+    {
+      "name": "refreshBatchStats",
+      "file": "app.js",
+      "range": [2606, 2611],
+      "class": "A",
+      "allowedCalls": ["draftMaintenanceService.refreshBatchStats"],
+      "forbiddenCalls": [
+        "draftPersistenceService.reloadDraftBatch",
+        "draftPersistenceService.persistReviewDraftBatch"
+      ],
+      "owner": "UI Shell"
+    },
+    {
+      "name": "markDraftReviewed",
+      "file": "app.js",
+      "range": [2623, 2645],
+      "class": "A",
+      "allowedCalls": [
+        "saveActiveDraftQuestion",
+        "reviewWorkflowService.confirmDraft",
+        "alert",
+        "loadBatchImportData",
+        "showBatchToast"
+      ],
+      "forbiddenCalls": [
+        "draftPersistenceService.reloadDraftBatch",
+        "draftPersistenceService.persistReviewDraftBatch",
+        "batchFormalSubmit.submit"
+      ],
+      "owner": "UI Shell"
+    },
+    {
+      "name": "submitDraftQuestion",
+      "file": "app.js",
+      "range": [2647, 2684],
+      "class": "A",
+      "allowedCalls": [
+        "saveActiveDraftQuestion",
+        "batchDraftQuestions.value.find",
+        "reviewWorkflowService.submitDraft",
+        "alert",
+        "formalSubmitErrorMessage",
+        "loadData",
+        "loadBatchImportData",
+        "showBatchToast"
+      ],
+      "forbiddenCalls": [
+        "QuestionDuplicatePolicy.evaluate",
+        "draftPersistenceService.reloadDraftBatch",
+        "draftPersistenceService.persistReviewDraftBatch",
+        "batchFormalSubmit.submit"
+      ],
+      "owner": "UI Shell"
+    },
+    {
+      "name": "openBatchSubmitSummary",
+      "file": "app.js",
+      "range": [2686, 2692],
+      "class": "A",
+      "allowedCalls": ["reviewWorkflowService.prepareReviewedBatch"],
+      "forbiddenCalls": [
+        "draftPersistenceService.reloadDraftBatch",
+        "batchFormalSubmit.submit"
+      ],
+      "owner": "UI Shell"
+    },
+    {
+      "name": "dedupeActiveBatchDraftsNow",
+      "file": "app.js",
+      "range": [2705, 2721],
+      "class": "A",
+      "allowedCalls": [
+        "showBatchToast",
+        "draftMaintenanceService.dedupeBatchDrafts",
+        "loadBatchImportData"
+      ],
+      "forbiddenCalls": [
+        "batchFinalGateDedupeDrafts",
+        "draftPersistenceService.reloadDraftBatch",
+        "draftPersistenceService.persistReviewDraftBatch"
+      ],
+      "owner": "UI Shell"
+    },
+    {
+      "name": "cleanupActiveBatchDisplayPollution",
+      "file": "app.js",
+      "range": [2732, 2744],
+      "class": "A",
+      "allowedCalls": [
+        "alert",
+        "draftMaintenanceService.cleanupDisplayFields",
+        "loadBatchImportData",
+        "showBatchToast"
+      ],
+      "forbiddenCalls": [
+        "cleanDisplayFieldsOnly",
+        "draftPersistenceService.reloadDraftBatch",
+        "draftPersistenceService.persistReviewDraftBatch"
+      ],
+      "owner": "UI Shell"
+    },
+    {
+      "name": "confirmBatchSubmit",
+      "file": "app.js",
+      "range": [2751, 2765],
+      "class": "A",
+      "allowedCalls": [
+        "reviewWorkflowService.submitReviewedBatch",
+        "loadData",
+        "loadBatchImportData",
+        "showBatchToast"
+      ],
+      "forbiddenCalls": [
+        "submitDraftQuestion",
+        "batchFormalSubmit.submit",
+        "draftPersistenceService.persistReviewDraftBatch"
+      ],
+      "owner": "UI Shell"
+    },
+    {
+      "name": "deleteBatchImport",
+      "file": "app.js",
+      "range": [2767, 2771],
+      "class": "A",
+      "allowedCalls": [
+        "confirm",
+        "draftMaintenanceService.deleteDraftBatch",
+        "openBatchList"
+      ],
+      "forbiddenCalls": [
+        "draftPersistenceService.deleteDraftBatch",
+        "storageRepository.delete",
+        "db.transaction"
+      ],
+      "owner": "UI Shell"
+    }
+  ]
+}

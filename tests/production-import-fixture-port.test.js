@@ -1,10 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 
 const Bridge = require('../qisi-production-import-bridge.js');
-const ROOT = path.resolve(__dirname, '..');
+const Controller = require('../qisi-normal-ui-import-controller.js');
 
 const forbiddenInputs = [
     'producerRoute',
@@ -36,12 +34,29 @@ test('every former fixture-selection input fails closed', async () => {
     }
 });
 
-test('production app and page load no fixture selection or test harness', () => {
-    const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
-    const html = fs.readFileSync(path.join(ROOT, 'main.html'), 'utf8');
-    assert.doesNotMatch(
-        app,
-        /createFixtureImportRunner|ImportAdapterRegistry|runFixtureImport|testFixture/
-    );
-    assert.doesNotMatch(html, /tests[\\/]harness|mock-ocr-engine-adapter/);
+test('normal UI controller emits only a production source command', async () => {
+    let received = null;
+    const controller = Controller.createNormalUiImportController({
+        bridge: {
+            async run(command) {
+                received = command;
+                return {
+                    mode: 'production',
+                    state: { state: 'WAITING_CONFIRMATION' },
+                    readback: { batch: { id: 'batch-1' }, questions: [] }
+                };
+            }
+        },
+        loadBatch: async () => ({
+            id: 'batch-1',
+            status: 'pending',
+            sourceVersion: 1,
+            draftPersistence: { version: 0 }
+        }),
+        applyReviewModel: async () => undefined
+    });
+    await controller.run('batch-1');
+    assert.equal(received.mode, 'production');
+    assert.equal(received.batchId, 'batch-1');
+    forbiddenInputs.forEach(field => assert.equal(field in received, false));
 });

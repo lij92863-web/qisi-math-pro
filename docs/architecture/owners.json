@@ -1,6 +1,24 @@
 {
   "schemaVersion": "qisi.program-c-owners.r3",
   "authority": "Program C production and retirement ownership",
+  "productionGraphExclusions": [
+    {
+      "ownerId": "final-candidate-fixture-harness",
+      "status": "absent",
+      "reason": "Production accepts only source files and outer-engine evidence; no final-candidate fixture port exists."
+    },
+    {
+      "ownerId": "test-outer-engine-adapter",
+      "status": "test-only",
+      "reason": "Browser engine injection is reachable only from tests/harness."
+    }
+  ],
+  "singleOwnerAssertions": {
+    "routePolicy": "production-import-route-policy",
+    "duplicatePolicy": "question-duplicate-policy",
+    "reviewWorkflow": "review-workflow",
+    "draftMaintenance": "draft-maintenance"
+  },
   "owners": [
     {
       "ownerId": "utils", "module": "qisi-utils.js", "layer": 0,
@@ -115,6 +133,13 @@
       "productionEntry": false, "writeAuthority": "none", "status": "deprecated"
     },
     {
+      "ownerId": "question-duplicate-policy", "module": "qisi-question-duplicate-policy.js", "layer": 0,
+      "responsibilities": ["formal-question-duplicate-admission-policy"],
+      "allowedCallers": ["question-repository"], "allowedDependencies": [],
+      "forbiddenDependencies": ["ui-shell", "production-import-bridge", "formal-admission"],
+      "productionEntry": true, "writeAuthority": "duplicate-decision-only", "status": "production"
+    },
+    {
       "ownerId": "formal-admission", "module": "qisi-formal-admission-policy.js", "layer": 1,
       "responsibilities": ["formal-question-admission-decision"],
       "allowedCallers": ["batch-formal-submit", "production-review-validator", "ui-shell"],
@@ -126,7 +151,7 @@
       "ownerId": "question-repository", "module": "qisi-storage-repository.js", "layer": 1,
       "responsibilities": ["draft-and-formal-question-transactions"],
       "allowedCallers": ["batch-formal-submit", "draft-persistence", "library-service", "export-service", "batch-context", "production-status-port", "ui-shell"],
-      "allowedDependencies": ["recognition-contracts"],
+      "allowedDependencies": ["recognition-contracts", "question-duplicate-policy"],
       "forbiddenDependencies": ["ui-shell"],
       "productionEntry": true, "writeAuthority": "repository-transaction-only", "status": "production"
     },
@@ -442,10 +467,26 @@
     {
       "ownerId": "batch-formal-submit", "module": "qisi-batch-formal-submit.js", "layer": 3,
       "responsibilities": ["teacher-confirmed-formal-submit-command"],
-      "allowedCallers": ["ui-shell"],
+      "allowedCallers": ["review-workflow"],
       "allowedDependencies": ["formal-admission", "question-repository", "import-state-machine"],
       "forbiddenDependencies": ["production-import-bridge"],
       "productionEntry": true, "writeAuthority": "formal-question-confirmation-only", "status": "production"
+    },
+    {
+      "ownerId": "draft-maintenance", "module": "qisi-draft-maintenance-service.js", "layer": 3,
+      "responsibilities": ["review-draft-maintenance-and-transaction-lifecycle"],
+      "allowedCallers": ["review-workflow", "ui-shell"],
+      "allowedDependencies": ["draft-persistence"],
+      "forbiddenDependencies": ["production-import-bridge", "formal-admission", "controlled-write"],
+      "productionEntry": true, "writeAuthority": "review-draft-maintenance-only", "status": "production"
+    },
+    {
+      "ownerId": "review-workflow", "module": "qisi-review-workflow-service.js", "layer": 3,
+      "responsibilities": ["review-confirmation-and-formal-submit-workflow"],
+      "allowedCallers": ["ui-shell"],
+      "allowedDependencies": ["draft-persistence", "review-controller", "batch-formal-submit", "draft-maintenance"],
+      "forbiddenDependencies": ["production-import-bridge", "controlled-write"],
+      "productionEntry": true, "writeAuthority": "workflow-command-only", "status": "production"
     },
     {
       "ownerId": "route-b", "module": "tests/pdf-answer-only-ai-pass.test.js", "layer": 3,
@@ -486,7 +527,7 @@
       "ownerId": "ui-shell", "module": "app.js", "layer": 4,
       "responsibilities": ["vue-ui-shell-and-production-composition-root"],
       "allowedCallers": [],
-      "allowedDependencies": ["normal-ui-controller", "production-import-route-policy", "batch-formal-submit", "question-repository", "formal-admission", "review-controller", "library-service", "export-service", "draft-persistence", "production-review-validator", "qwen-vision-source-port", "visual-question-source", "visual-support-source", "browser-document-source", "browser-pdf-renderer", "page-question-parser", "question-content-policy", "question-image-policy", "recognition-structure-policy", "review-draft-state", "review-draft-normalization", "solution-quality-policy", "strict-question-policy", "support-latex-policy", "support-text-parser", "support-document-parser", "support-repair", "pdf-safe-partial", "archive-security", "utils"],
+      "allowedDependencies": ["normal-ui-controller", "production-import-route-policy", "question-duplicate-policy", "batch-formal-submit", "review-workflow", "draft-maintenance", "question-repository", "formal-admission", "review-controller", "library-service", "export-service", "draft-persistence", "production-review-validator", "qwen-vision-source-port", "visual-question-source", "visual-support-source", "browser-document-source", "browser-pdf-renderer", "page-question-parser", "question-content-policy", "question-image-policy", "recognition-structure-policy", "review-draft-state", "review-draft-normalization", "solution-quality-policy", "strict-question-policy", "support-latex-policy", "support-text-parser", "support-document-parser", "support-repair", "pdf-safe-partial", "archive-security", "utils"],
       "forbiddenDependencies": ["ocr-qwen-adapter", "support-block-parser", "support-aligner", "controlled-write", "route-b", "legacy-batch-run", "injected-import-path", "import-orchestrator-scaffold"],
       "productionEntry": true, "writeAuthority": "none", "status": "production"
     },
@@ -503,6 +544,20 @@
       "allowedCallers": [], "allowedDependencies": [],
       "forbiddenDependencies": ["ui-shell", "normal-ui-controller"],
       "productionEntry": false, "writeAuthority": "none", "status": "removed"
+    },
+    {
+      "ownerId": "test-outer-engine-adapter", "module": "tests/harness/browser-engine-injection.js", "layer": 5,
+      "responsibilities": ["test-only-outer-engine-response-injection"],
+      "allowedCallers": [], "allowedDependencies": [],
+      "forbiddenDependencies": ["ui-shell", "production-import-bridge", "normal-ui-controller"],
+      "productionEntry": false, "writeAuthority": "none", "status": "test-only"
+    },
+    {
+      "ownerId": "test-import-stage-trace", "module": "tests/harness/import-stage-trace.js", "layer": 5,
+      "responsibilities": ["test-only-production-stage-observation"],
+      "allowedCallers": [], "allowedDependencies": [],
+      "forbiddenDependencies": ["ui-shell", "production-import-bridge", "normal-ui-controller"],
+      "productionEntry": false, "writeAuthority": "none", "status": "test-only"
     }
   ]
 }

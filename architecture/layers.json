@@ -67,6 +67,14 @@
       "status": "production-wired"
     },
     {
+      "id": "question-duplicate-policy", "file": "qisi-question-duplicate-policy.js",
+      "layer": 0, "domainOwner": "questionDuplicatePolicyOwner",
+      "publicApi": ["DECISIONS", "canonicalCoreFingerprint", "canonicalStemFingerprint", "evaluate"],
+      "allowedDependencies": [],
+      "forbiddenDependencies": ["app-shell", "formal-admission", "production-import-bridge"],
+      "status": "production-wired"
+    },
+    {
       "id": "formal-admission", "file": "qisi-formal-admission-policy.js",
       "layer": 1, "domainOwner": "formalAdmissionOwner",
       "publicApi": ["createAdmissionContext", "evaluateDraftAdmission", "buildQuestionV2"],
@@ -78,7 +86,7 @@
       "id": "storage-repository", "file": "qisi-storage-repository.js",
       "layer": 1, "domainOwner": "storageRepositoryOwner",
       "publicApi": ["createRepository", "deleteMany", "confirmDraftToQuestion", "createDraftBatch", "persistReviewDraftBatch"],
-      "allowedDependencies": ["recognition-contracts"],
+      "allowedDependencies": ["recognition-contracts", "question-duplicate-policy"],
       "forbiddenDependencies": ["app-shell"], "status": "production-wired"
     },
     {
@@ -196,6 +204,22 @@
       "publicApi": ["createBatchFormalSubmit"],
       "allowedDependencies": ["formal-admission", "storage-repository", "import-state-machine"],
       "forbiddenDependencies": ["app-shell"], "status": "production-wired"
+    },
+    {
+      "id": "draft-maintenance", "file": "qisi-draft-maintenance-service.js",
+      "layer": 3, "domainOwner": "draftMaintenanceOwner",
+      "publicApi": ["createDraftMaintenanceService"],
+      "allowedDependencies": ["draft-persistence-service"],
+      "forbiddenDependencies": ["production-import-bridge", "formal-admission", "controlled-write"],
+      "status": "production-wired"
+    },
+    {
+      "id": "review-workflow", "file": "qisi-review-workflow-service.js",
+      "layer": 3, "domainOwner": "reviewWorkflowOwner",
+      "publicApi": ["createReviewWorkflowService"],
+      "allowedDependencies": ["draft-persistence-service", "review-controller", "batch-formal-submit", "draft-maintenance"],
+      "forbiddenDependencies": ["production-import-bridge", "controlled-write"],
+      "status": "production-wired"
     },
     {
       "id": "route-b-research", "file": "tests/pdf-answer-only-ai-pass.test.js",
@@ -565,7 +589,8 @@
         "library-service", "review-controller", "production-review-validator",
         "export-service", "production-import-bridge", "normal-ui-import-controller",
         "import-state-machine",
-        "batch-formal-submit", "ocr-registry",
+        "batch-formal-submit", "question-duplicate-policy", "review-workflow",
+        "draft-maintenance", "ocr-registry",
         "ocr-local-adapter", "ocr-shadow-mode", "performance-monitor",
         "pdf-safe-partial-pipeline", "archive-security",
         "secure-logger", "batch-context-service", "source-role-classifier", "production-import-route-policy",
