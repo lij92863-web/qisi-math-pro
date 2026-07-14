@@ -16,7 +16,6 @@ test('a lost UI response retries the committed request without rerunning produce
             }
         },
         loadBatch: async () => harness.getBatch(),
-        resolveProducerRoute: async () => 'docx-deterministic',
         applyReviewModel: async () => {
             applyCalls += 1;
             if (applyCalls === 1) throw new Error('simulated-response-loss');
@@ -47,14 +46,14 @@ test('an idempotent request fails closed if committed readback identity is incon
         })
     });
     harness.setBatch({
-        id: 'batch-1', sourceType: 'docx', sourceVersion: 1,
+        id: 'batch-1', sourceType: 'docx', producerMode: 'docx-deterministic',
+        sourceVersion: 1,
         status: 'review', progress: 100,
         draftPersistence: { version: 1, idempotencyKey: 'request-1' }
     });
     await assert.rejects(
         harness.bridge.run({
-            mode: 'production', batchId: 'batch-1', requestId: 'request-1',
-            producerRoute: 'docx-deterministic'
+            mode: 'production', batchId: 'batch-1', requestId: 'request-1'
         }),
         error => error.code === 'PRODUCTION_IMPORT_READBACK_MISMATCH'
     );

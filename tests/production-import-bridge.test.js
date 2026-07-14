@@ -16,6 +16,7 @@ const OutputPort = require('../qisi-production-import-output-port.js');
 const Diagnostics = require('../qisi-import-diagnostics.js');
 const Projection = require('../qisi-pdf-candidate-projection.js');
 const ControlledWrite = require('../qisi-pdf-support-controlled-write.js');
+const RoutePolicy = require('../qisi-production-import-route-policy.js');
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -123,14 +124,16 @@ const outputHelpers = {
 };
 const productionInput = extra => ({
     mode: 'production', batchId: 'batch-1', requestId: 'request-1',
-    producerRoute: 'docx-deterministic',
     ...extra
 });
 
 function createHarness(overrides = {}) {
     const batch = {
         id: 'batch-1', status: 'pending', progress: 0,
-        sourceVersion: 1, recognitionMode: 'standard', createdAt: 1, updatedAt: 1
+        sourceVersion: 1, recognitionMode: 'standard', createdAt: 1, updatedAt: 1,
+        producerMode: overrides.producerMode ||
+            (overrides.files?.[0]?.fileType === 'pdf'
+                ? 'pdf' : 'docx-deterministic')
     };
     const files = clone(overrides.files || docxFiles());
     const calls = [];
@@ -187,6 +190,8 @@ function createHarness(overrides = {}) {
             calls.push('classify');
             return Roles.classifySourceRoles(manifest);
         },
+        resolveProductionRoute: input =>
+            RoutePolicy.resolveProductionImportRoute(input),
         runDocxImport: async (context, signal) => {
             calls.push('docx');
             return DocxCoordinator.runDocxImport(
@@ -295,7 +300,7 @@ test('DOCX complete follows the deterministic review-only state path', async () 
 test('PDF safe partial uses the recognition path and preserves rejected ownership', async () => {
     const harness = createHarness({ files: pdfFiles() });
     const result = await Bridge.createProductionImportBridge(harness.ports)
-        .run(productionInput({ producerRoute: 'pdf' }));
+        .run(productionInput());
 
     assert.equal(result.route, 'pdf');
     assert.equal(result.state.state, 'WAITING_CONFIRMATION');
@@ -311,7 +316,7 @@ test('mixed DOCX/PDF input fails before either source coordinator', async () => 
     const harness = createHarness({ files: [docxFiles()[0], pdfFiles()[1]] });
     await assert.rejects(
         Bridge.createProductionImportBridge(harness.ports).run(
-            productionInput({ producerRoute: 'pdf' })
+            productionInput()
         ),
         error => error.code === 'PRODUCTION_IMPORT_SOURCE_UNSUPPORTED'
     );
@@ -335,7 +340,7 @@ test('missing role and duplicate source fail before parsing or persistence', asy
     }
 });
 
-test('multiple PDF support sources fail before fixture or PDF producer execution', async () => {
+test('multiple PDF support sources fail before PDF producer execution', async () => {
     const sourceFiles = [
         { id: 'question-pdf', fileType: 'pdf', roles: ['question'], sourceOrder: 1 },
         { id: 'answer-pdf', fileType: 'pdf', roles: ['answer'], sourceOrder: 2 },
@@ -345,8 +350,7 @@ test('multiple PDF support sources fail before fixture or PDF producer execution
     const bridge = Bridge.createProductionImportBridge(harness.ports);
     await assert.rejects(
         bridge.run({
-            mode: 'production', batchId: 'batch-1', requestId: 'request-ambiguity',
-            producerRoute: 'fixture', testFixture: true
+            mode: 'production', batchId: 'batch-1', requestId: 'request-ambiguity'
         }),
         error => error.code === 'PRODUCTION_IMPORT_SOURCE_UNSUPPORTED' &&
             error.causeCode === 'pdf-support-source-ambiguous'
@@ -481,13 +485,13 @@ test('bridge is browser-loaded as the production-wired layer-3 owner before the 
     assert.deepEqual(entry.publicApi, [
         'REQUIRED_PORTS',
         'ProductionImportBridgeError',
-        'createFixtureImportRunner',
         'createProductionImportBridge'
     ]);
     for (const dependency of [
         'import-state-machine',
         'batch-context-service',
         'source-role-classifier',
+        'production-import-route-policy',
         'docx-import-coordinator',
         'pdf-import-coordinator',
         'candidate-normalizer',

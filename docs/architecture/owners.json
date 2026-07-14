@@ -424,10 +424,18 @@
       "productionEntry": true, "writeAuthority": "none", "status": "production"
     },
     {
+      "ownerId": "production-import-route-policy", "module": "qisi-production-import-route-policy.js", "layer": 1,
+      "responsibilities": ["production-import-route-selection"],
+      "allowedCallers": ["production-import-bridge"],
+      "allowedDependencies": [],
+      "forbiddenDependencies": ["ui-shell", "normal-ui-controller", "question-repository", "formal-admission", "route-b"],
+      "productionEntry": true, "writeAuthority": "none", "status": "production"
+    },
+    {
       "ownerId": "production-import-bridge", "module": "qisi-production-import-bridge.js", "layer": 3,
       "responsibilities": ["normal-ui-production-import-workflow"],
       "allowedCallers": ["normal-ui-controller"],
-      "allowedDependencies": ["import-state-machine", "batch-context", "source-role-classifier", "production-status-port", "production-output-port", "production-docx-source-port", "production-docx-vision-source-port", "batch-engine-v2", "docx-import-coordinator", "production-pdf-source-port", "pdf-import-coordinator", "pdf-candidate-projection", "candidate-normalizer", "import-validation", "review-draft-builder", "draft-persistence", "import-diagnostics"],
+      "allowedDependencies": ["import-state-machine", "batch-context", "source-role-classifier", "production-import-route-policy", "production-status-port", "production-output-port", "production-docx-source-port", "production-docx-vision-source-port", "batch-engine-v2", "docx-import-coordinator", "production-pdf-source-port", "pdf-import-coordinator", "pdf-candidate-projection", "candidate-normalizer", "import-validation", "review-draft-builder", "draft-persistence", "import-diagnostics"],
       "forbiddenDependencies": ["ui-shell", "formal-admission", "question-repository", "controlled-write", "route-b"],
       "productionEntry": true, "writeAuthority": "none", "status": "production"
     },
@@ -478,7 +486,7 @@
       "ownerId": "ui-shell", "module": "app.js", "layer": 4,
       "responsibilities": ["vue-ui-shell-and-production-composition-root"],
       "allowedCallers": [],
-      "allowedDependencies": ["normal-ui-controller", "batch-formal-submit", "question-repository", "formal-admission", "review-controller", "library-service", "export-service", "draft-persistence", "production-review-validator", "qwen-vision-source-port", "visual-question-source", "visual-support-source", "browser-document-source", "browser-pdf-renderer", "page-question-parser", "question-content-policy", "question-image-policy", "recognition-structure-policy", "review-draft-state", "review-draft-normalization", "solution-quality-policy", "strict-question-policy", "support-latex-policy", "support-text-parser", "support-document-parser", "support-repair", "pdf-safe-partial", "archive-security", "utils"],
+      "allowedDependencies": ["normal-ui-controller", "production-import-route-policy", "batch-formal-submit", "question-repository", "formal-admission", "review-controller", "library-service", "export-service", "draft-persistence", "production-review-validator", "qwen-vision-source-port", "visual-question-source", "visual-support-source", "browser-document-source", "browser-pdf-renderer", "page-question-parser", "question-content-policy", "question-image-policy", "recognition-structure-policy", "review-draft-state", "review-draft-normalization", "solution-quality-policy", "strict-question-policy", "support-latex-policy", "support-text-parser", "support-document-parser", "support-repair", "pdf-safe-partial", "archive-security", "utils"],
       "forbiddenDependencies": ["ocr-qwen-adapter", "support-block-parser", "support-aligner", "controlled-write", "route-b", "legacy-batch-run", "injected-import-path", "import-orchestrator-scaffold"],
       "productionEntry": true, "writeAuthority": "none", "status": "production"
     },

@@ -163,6 +163,7 @@
                 const batchCreateFiles = ref([]);
                 const batchCreateTypeHint = ref('mixed');
                 const batchCreateWarning = ref('');
+                const batchCreateProducerMode = ref('');
                 const batchExpectedQuestionCount = ref(0);
                 const unmatchedAnswers = ref([]);
                 const submitSummary = ref(null);
@@ -349,6 +350,7 @@
                     batchImportMode.value = 'create';
                     batchCreateTypeHint.value = type;
                     batchCreateWarning.value = '';
+                    batchCreateProducerMode.value = '';
                     activeBatchId.value = '';
                     activeDraftQuestionId.value = '';
                     if (!batchCreateFiles.value.length && type === 'text') {
@@ -1000,6 +1002,10 @@
                         batchCreateWarning.value = '请至少上传一个题目文件，系统需要先识别题目内容。';
                         return;
                     }
+                    if (!batchCreateProducerMode.value) {
+                        batchCreateWarning.value = '请选择本任务的明确识别方式。';
+                        return;
+                    }
                     const invalidPdf = batchCreateFiles.value.find(file => file.fileType === 'pdf' && !window.Qisi.Utils.validatePageRange(file.pageRange));
                     if (invalidPdf) {
                         batchCreateWarning.value = '页码范围格式不正确，请参考：1-5，8，10-12。';
@@ -1016,6 +1022,7 @@
                         id: batchId,
                         title,
                         sourceType: fileTypes.size === 1 ? [...fileTypes][0] : 'mixed',
+                        producerMode: batchCreateProducerMode.value,
                         sourceVersion: 1,
                         sourceFileName: batchCreateFiles.value.map(file => file.filename).join(' + '),
                         status: 'pending',
@@ -1876,18 +1883,6 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                                     signal: input.signal
                                 })
                         });
-                const runProductionFixtureImport =
-                    window.Qisi.ProductionImportBridge.createFixtureImportRunner({
-                        getTransport: () => {
-                            const registry =
-                                Qisi.Runtime.getRuntimeDependency(
-                                    'ImportAdapterRegistry'
-                                );
-                            return registry?.getAdapter?.('fixture') || null;
-                        },
-                        normalizeQuestionNumber: normalizeQuestionKey
-                    });
-
                 const runProductionPdfImport =
                     window.Qisi.ProductionPdfSourcesPort
                         .createProductionImportRunner({
@@ -1939,9 +1934,11 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                             }, { repository: storageRepository }),
                         classifySourceRoles: manifest =>
                             window.Qisi.SourceRoleClassifier.classifySourceRoles(manifest),
+                        resolveProductionRoute: input =>
+                            window.Qisi.ProductionImportRoutePolicy
+                                .resolveProductionImportRoute(input),
                         runDocxImport: runProductionDocxDeterministicImport,
                         runDocxVisionImport: runProductionDocxVisionImport,
-                        runFixtureImport: runProductionFixtureImport,
                         runPdfImport: runProductionPdfImport,
                         projectPdfCandidates: context =>
                             window.Qisi.PdfCandidateProjection.projectPdfCandidates(context),
@@ -2014,21 +2011,6 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                             bridge: productionImportBridge,
                             loadBatch: batchId =>
                                 storageRepository.get('draftImportBatches', batchId),
-                            resolveProducerRoute: async ({ batchId }) => {
-                                const files = await storageRepository.findBy(
-                                    'draftImportFiles',
-                                    'batchId',
-                                    batchId
-                                );
-                                const types = new Set((files || []).map(file =>
-                                    String(file?.fileType || '').toLowerCase()
-                                ));
-                                if (types.size !== 1) return 'unsupported';
-                                const sourceType = [...types][0];
-                                return sourceType === 'docx' ? 'docx-vision'
-                                    : sourceType === 'pdf' ? 'pdf'
-                                        : 'unsupported';
-                            },
                             applyReviewModel: async result => {
                                 await loadBatchImportData();
                                 activeBatchId.value = result.batchId;
@@ -2052,14 +2034,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         console.warn('[BATCH_DEBUG][duplicate-run-blocked]', { batchId });
                         return normalUiImportController.run(batchId);
                     }
-                    const adapterRegistry =
-                        Qisi.Runtime.getRuntimeDependency(
-                            'ImportAdapterRegistry'
-                        );
-                    const testFixture = Boolean(
-                        adapterRegistry?.getAdapter?.('fixture')
-                    );
-                    return normalUiImportController.run(batchId, { testFixture });
+                    return normalUiImportController.run(batchId);
                 };
 
                 const cancelBatchRecognition = batchId => {
@@ -5128,7 +5103,7 @@ Promise.all([imageReady, fontReady]).then(() => {
                     confirmItems, filteredConfirmItems, confirmStatusFilter, confirmStatusOptions, confirmStatusCount, batchPersonalKnowledge, batchSystemKnowledge, flatSystemKnowledge, flatPersonalKnowledge, flatKnowledge, applyBatchKnowledge, confirmAddExternalToPersonal,
                     importBankInput, openImportBankPicker, handleImportBankFileChange, pendingImportPreview, cancelImportPreview, confirmImportBankPreview, exportQuestionBankPackage,
                     undoLatestExternalMerge, deleteExternalBatch, recalculateExternalBatchStatus,
-                    batchImportMode, batchImportBatches, recentBatchImportBatches, batchImportFiles, batchDraftQuestions, filteredDraftQuestions, batchDraftImages, batchImportFilter, activeBatchId, activeBatch, activeDraftQuestionId, activeDraftQuestion, batchRecognitionSummary, activeDraftEditorBuffer, activeDraftEditorOriginal, activeDraftEditorDirty, activeDraftEditorPreview, activeDraftEditorTextarea, activeDraftImages, activeDraftRealQuestionImages, activeDraftSourcePageImages, activeDraftPreviewImages, unassignedDraftImages, activeDraftTab, batchUploadInput, isDraggingBatchFiles, batchToast, unassignedImageModal, imagePositionMenuId, cropModalOpen, cropImageRef, cropState, cropSelectionStyle, pendingPurposeFile, pendingPurposeRoles, batchCreateFiles, batchCreateTypeHint, batchCreateWarning, batchExpectedQuestionCount, batchDefaultMeta, unmatchedAnswers, submitSummary,
+                    batchImportMode, batchImportBatches, recentBatchImportBatches, batchImportFiles, batchDraftQuestions, filteredDraftQuestions, batchDraftImages, batchImportFilter, activeBatchId, activeBatch, activeDraftQuestionId, activeDraftQuestion, batchRecognitionSummary, activeDraftEditorBuffer, activeDraftEditorOriginal, activeDraftEditorDirty, activeDraftEditorPreview, activeDraftEditorTextarea, activeDraftImages, activeDraftRealQuestionImages, activeDraftSourcePageImages, activeDraftPreviewImages, unassignedDraftImages, activeDraftTab, batchUploadInput, isDraggingBatchFiles, batchToast, unassignedImageModal, imagePositionMenuId, cropModalOpen, cropImageRef, cropState, cropSelectionStyle, pendingPurposeFile, pendingPurposeRoles, batchCreateFiles, batchCreateTypeHint, batchCreateWarning, batchCreateProducerMode, batchExpectedQuestionCount, batchDefaultMeta, unmatchedAnswers, submitSummary,
                     openBatchCreate, openBatchList, clearBatchDraftWorkspace, openBatchFilePicker, handleBatchFileChange, handleBatchDrop, handleBatchHomeDrop, togglePurposeRole, confirmBatchFilePurpose, cancelBatchFilePurpose, editBatchFilePurpose, removeBatchCreateFile, createDraftImportBatch, runBatchRecognition, cancelBatchRecognition, rerunActiveBatchRecognition, dedupeActiveBatchDraftsNow, openBatchReview, selectDraftQuestion, updateDraftQuestionField, saveActiveDraftQuestion, markDraftReviewed, submitDraftQuestion, openBatchSubmitSummary, confirmBatchSubmit, deleteBatchImport, validatePageRange, batchStatusText, draftQuestionStatusText, roleLabel, rolesLabel, fileTypeText, formatFileSize, draftQuestionProblems, duplicateLabel, confirmDraftImages, deleteDraftImage, toggleImagePositionMenu, copyDraftImagePlacementLatex, openSourcePageCrop, closeCropModal, resetCropState, startManualCrop, moveManualCrop, endManualCrop, saveManualCropToDraft, bindUnassignedImage, deleteUnassignedImage, showUnmatchedAnswerList, showActiveRawText, showCropNotice, cleanupActiveBatchDisplayPollution, markActiveDraftUserEdited, insertDraftEditorText, discardActiveDraftEditorChanges,
                     syncActiveDraftEditorFromQuestion: () => window.Qisi.ReviewDraftState.syncActiveDraftEditorFromQuestion({
                         activeDraftQuestion,

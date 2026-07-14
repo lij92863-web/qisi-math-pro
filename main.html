@@ -524,6 +524,7 @@
                                     <div class="batch-meta-group">
                                         <strong>基础属性</strong>
                                         <div class="batch-form-grid five">
+                                            <label>识别方式<select v-model="batchCreateProducerMode"><option value="">请选择明确识别方式</option><option value="docx-vision">DOCX 视觉识别</option><option value="docx-deterministic">DOCX 稳定解析</option><option value="pdf">PDF 视觉识别</option></select></label>
                                             <label>学科<select v-model="batchDefaultMeta.subject"><option>数学</option></select></label>
                                             <label>题型<select v-model="batchDefaultMeta.defaultType"><option value="">请选择题型</option><option>单选题</option><option>多选题</option><option>填空题</option><option>解答题</option><option>证明题</option></select></label>
                                             <label>年级<select v-model="batchDefaultMeta.grade"><option value="">请选择年级</option><option>高一</option><option>高二</option><option>高三</option><option>初一</option><option>初二</option><option>初三</option></select></label>
@@ -1531,6 +1532,7 @@
     <script src="./qisi-export-service.js?v=closure-r2-export-01"></script>
     <script src="./qisi-batch-context-service.js?v=app-shell-r3-batch-context-01"></script>
     <script src="./qisi-source-role-classifier.js?v=app-shell-r3-source-role-01"></script>
+    <script src="./qisi-production-import-route-policy.js?v=program-c-corrective-r1-route-policy-01"></script>
     <script src="./qisi-production-import-status-port.js?v=app-shell-r3-import-status-port-01"></script>
     <script src="./qisi-production-import-output-port.js?v=app-shell-r3-import-output-port-01"></script>
     <script src="./qisi-docx-converter.js?v=app-shell-r3-docx-converter-01"></script>

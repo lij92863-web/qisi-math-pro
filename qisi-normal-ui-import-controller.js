@@ -43,18 +43,6 @@
                 ? batch.draftPersistence.version : 0;
             const sourceVersion = Number.isInteger(batch.sourceVersion)
                 ? batch.sourceVersion : null;
-            const testFixture = options.testFixture === true;
-            const resolvedRoute = typeof ports.resolveProducerRoute === 'function'
-                ? await ports.resolveProducerRoute({
-                    batchId,
-                    batch,
-                    testFixture
-                })
-                : batch.sourceType === 'docx' ? 'docx-vision'
-                    : batch.sourceType === 'pdf' ? 'pdf' : 'unsupported';
-            const producerRoute = testFixture
-                ? 'fixture'
-                : options.producerRoute || resolvedRoute;
             const previousRequestId = String(
                 batch.draftPersistence?.idempotencyKey || ''
             );
@@ -73,8 +61,6 @@
                 ...(sourceVersion === null
                     ? {}
                     : { expectedSourceVersion: sourceVersion }),
-                producerRoute,
-                testFixture,
                 signal: controller.signal
             });
             activity.cancelable = false;

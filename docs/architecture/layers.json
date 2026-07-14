@@ -22,7 +22,8 @@
         "browser-document-source", "browser-pdf-renderer", "page-question-parser",
         "question-content-policy", "support-text-parser", "recognition-structure-policy",
         "review-draft-state", "review-draft-normalization", "strict-question-policy",
-        "production-review-validator", "docx-converter", "docx-vision-reconciler"
+        "production-review-validator", "docx-converter", "docx-vision-reconciler",
+        "production-import-route-policy"
       ]
     },
     {

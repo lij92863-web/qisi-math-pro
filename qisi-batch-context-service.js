@@ -87,12 +87,14 @@
                 createdAt: Number(file.createdAt || 0),
                 pageRange: String(file.pageRange || ''),
                 size: Number(file.size || 0),
+                producerMode: String(file.producerMode || ''),
                 sourceVersion: Number(file.sourceVersion || batch.sourceVersion || 0)
             });
         });
 
         const expectedQuestionCount = Math.max(0, Number(batch.expectedQuestionCount || 0)) || 0;
         const recognitionMode = String(batch.recognitionMode || 'standard');
+        const producerMode = String(batch.producerMode || '');
         return freeze({
             schemaVersion: 'qisi.batch-context.r3',
             batchId,
@@ -102,6 +104,7 @@
                 sourceVersion: Number(batch.sourceVersion || 0),
                 expectedQuestionCount,
                 recognitionMode,
+                producerMode,
                 createdAt: Number(batch.createdAt || 0),
                 updatedAt: Number(batch.updatedAt || 0)
             },

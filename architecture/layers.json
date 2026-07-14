@@ -390,11 +390,19 @@
       "status": "production-wired"
     },
     {
+      "id": "production-import-route-policy", "file": "qisi-production-import-route-policy.js",
+      "layer": 1, "domainOwner": "productionImportRoutePolicyOwner",
+      "publicApi": ["PRODUCER_IDENTITIES", "ProductionImportRoutePolicyError", "resolveProductionImportRoute"],
+      "allowedDependencies": [],
+      "forbiddenDependencies": ["app-shell", "storage-repository", "formal-admission", "controlled-write", "route-b-research"],
+      "status": "production-wired"
+    },
+    {
       "id": "production-import-bridge", "file": "qisi-production-import-bridge.js",
       "layer": 3, "domainOwner": "productionImportBridgeOwner",
-      "publicApi": ["REQUIRED_PORTS", "ProductionImportBridgeError", "createFixtureImportRunner", "createProductionImportBridge"],
+      "publicApi": ["REQUIRED_PORTS", "ProductionImportBridgeError", "createProductionImportBridge"],
       "allowedDependencies": [
-        "import-state-machine", "batch-context-service", "source-role-classifier",
+        "import-state-machine", "batch-context-service", "source-role-classifier", "production-import-route-policy",
         "production-import-status-port", "production-import-output-port",
         "production-docx-source-port", "production-docx-vision-source-port", "batch-engine-v2", "docx-import-coordinator",
         "production-pdf-sources-port", "pdf-import-coordinator",
@@ -560,7 +568,7 @@
         "batch-formal-submit", "ocr-registry",
         "ocr-local-adapter", "ocr-shadow-mode", "performance-monitor",
         "pdf-safe-partial-pipeline", "archive-security",
-        "secure-logger", "batch-context-service", "source-role-classifier",
+        "secure-logger", "batch-context-service", "source-role-classifier", "production-import-route-policy",
         "production-import-status-port", "production-import-output-port",
         "docx-converter", "docx-vision-reconciler",
         "production-docx-source-port", "production-docx-vision-source-port", "docx-import-coordinator",

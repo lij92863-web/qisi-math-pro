@@ -1,5 +1,6 @@
 const Bridge = require('../../qisi-production-import-bridge.js');
 const StateMachine = require('../../qisi-import-state-machine.js');
+const RoutePolicy = require('../../qisi-production-import-route-policy.js');
 
 const clone = value => structuredClone(value);
 
@@ -32,7 +33,8 @@ function createHarness(overrides = {}) {
     };
     const review = makeDraft();
     let batch = {
-        id: 'batch-1', sourceType: 'docx', sourceVersion: 1,
+        id: 'batch-1', sourceType: 'docx', producerMode: 'docx-deterministic',
+        sourceVersion: 1,
         status: 'pending', progress: 0, draftPersistence: { version: 0 }
     };
     const files = [{
@@ -47,6 +49,7 @@ function createHarness(overrides = {}) {
             batch: clone(batch),
             files: clone(files),
             batchContext: {
+                batchMetadata: { producerMode: batch.producerMode },
                 sourceManifest: clone(files),
                 userSettings: {}, engineConfig: {}
             }
@@ -58,6 +61,8 @@ function createHarness(overrides = {}) {
                 isSupplementalImage: false
             }]
         }),
+        resolveProductionRoute: input =>
+            RoutePolicy.resolveProductionImportRoute(input),
         runDocxImport: async () => {
             metrics.producerCalls += 1;
             return { drafts: [makeDraft()], draftImages: [], warnings: [] };

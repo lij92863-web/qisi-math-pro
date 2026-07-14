@@ -6,44 +6,42 @@ const path = require('node:path');
 const Bridge = require('../qisi-production-import-bridge.js');
 const ROOT = path.resolve(__dirname, '..');
 
-test('fixture runner is explicit, deterministic, prefix-safe, and review-only', async () => {
-    const runner = Bridge.createFixtureImportRunner({
-        getTransport: () => ({
-            kind: 'qisi.mock-import-transport.v1',
-            produceCandidates: async () => ({
-                candidates: [
-                    { questionNumber: '1', stem: 'one' },
-                    { questionNumber: '3', stem: 'three' }
-                ],
-                expectedQuestionNumbers: ['1', '2', '3'],
-                draftImages: [], warnings: ['fixture-warning']
-            })
-        }),
-        normalizeQuestionNumber: value => String(value || '').trim()
-    });
-    const result = await runner({
-        route: 'pdf', batch: { id: 'batch-1' }, files: []
-    });
-    assert.deepEqual(result.drafts.map(item => item.questionNumber), ['1']);
-    assert.equal(result.prefixTruncated, true);
-    assert.equal(result.safePartialCandidates[0].isSafePartial, true);
-    assert.deepEqual(result.warnings, ['fixture-warning']);
-});
+const forbiddenInputs = [
+    'producerRoute',
+    'testFixture',
+    'fixtureTransport',
+    'prebuiltCandidates'
+];
 
-test('fixture runner fails closed without the exact injected mock contract', async () => {
-    const runner = Bridge.createFixtureImportRunner({
-        getTransport: () => ({ kind: 'other' }),
-        normalizeQuestionNumber: String
-    });
-    await assert.rejects(
-        runner({ batch: {}, files: [] }),
-        error => error.code === 'PRODUCTION_IMPORT_FIXTURE_INVALID'
+function inertBridge() {
+    const ports = Object.fromEntries(
+        Bridge.REQUIRED_PORTS.map(name => [name, async () => undefined])
     );
+    return Bridge.createProductionImportBridge(ports);
+}
+
+test('production Bridge exports no final-candidate fixture runner', () => {
+    assert.equal(Bridge.createFixtureImportRunner, undefined);
+    assert.equal(Bridge.REQUIRED_PORTS.includes('runFixtureImport'), false);
 });
 
-test('app only assembles the fixture runner and has no fixture projection algorithm', () => {
+test('every former fixture-selection input fails closed', async () => {
+    const bridge = inertBridge();
+    for (const field of forbiddenInputs) {
+        await assert.rejects(
+            bridge.run({ [field]: field === 'testFixture' ? true : 'fixture' }),
+            error => error.code === 'PRODUCTION_IMPORT_INPUT_FORBIDDEN' &&
+                error.causeCode === field
+        );
+    }
+});
+
+test('production app and page load no fixture selection or test harness', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
-    assert.match(app, /ProductionImportBridge\.createFixtureImportRunner\s*\(/);
-    assert.doesNotMatch(app, /transport\?\.kind\s*!==\s*'qisi\.mock-import-transport\.v1'/);
-    assert.doesNotMatch(app, /const\s+byNumber\s*=\s*new Map\(envelope\.candidates/);
+    const html = fs.readFileSync(path.join(ROOT, 'main.html'), 'utf8');
+    assert.doesNotMatch(
+        app,
+        /createFixtureImportRunner|ImportAdapterRegistry|runFixtureImport|testFixture/
+    );
+    assert.doesNotMatch(html, /tests[\\/]harness|mock-ocr-engine-adapter/);
 });

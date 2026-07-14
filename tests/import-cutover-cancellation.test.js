@@ -70,7 +70,7 @@ test('review model is applied only after verified Bridge readback', async () => 
     const calls = [];
     const controller = Controller.createNormalUiImportController({
         bridge: { run: async input => {
-            calls.push(['bridge', input.mode, input.producerRoute]);
+            calls.push(['bridge', input.mode]);
             return reviewResult();
         } },
         loadBatch: async () => ({
@@ -82,7 +82,7 @@ test('review model is applied only after verified Bridge readback', async () => 
     });
     await controller.run('batch-1');
     assert.deepEqual(calls, [
-        ['bridge', 'production', 'docx-vision'],
+        ['bridge', 'production'],
         ['review', 1]
     ]);
 });
@@ -97,7 +97,6 @@ test('a request cancelled before source execution produces no draft write', asyn
             mode: 'production',
             batchId: 'batch-1',
             requestId: 'cancel-before-source',
-            producerRoute: 'docx-deterministic',
             expectedSourceVersion: 1,
             signal: abortController.signal
         }),
@@ -137,7 +136,6 @@ for (const stage of [
                 mode: 'production',
                 batchId: 'batch-1',
                 requestId: `cancel-${stage.port}`,
-                producerRoute: 'docx-deterministic',
                 expectedSourceVersion: 1,
                 signal: abortController.signal
             }),

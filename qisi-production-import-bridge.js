@@ -5,6 +5,7 @@
         'createStateMachine',
         'loadBatchAndFiles',
         'classifySourceRoles',
+        'resolveProductionRoute',
         'runDocxImport',
         'runPdfImport',
         'projectPdfCandidates',
@@ -93,49 +94,42 @@
         return Boolean(value && typeof value === 'object' && !Array.isArray(value));
     }
 
-    function sourceRoute(loaded, classification) {
-        if (
-            !isRecord(classification) ||
-            !Array.isArray(classification.sources) ||
-            !Array.isArray(loaded.files)
-        ) {
+    const FORBIDDEN_INPUTS = Object.freeze([
+        'producerRoute',
+        'testFixture',
+        'fixtureTransport',
+        'prebuiltCandidates'
+    ]);
+
+    function assertAllowedInput(input) {
+        const forbidden = FORBIDDEN_INPUTS.find(name =>
+            Object.prototype.hasOwnProperty.call(input || {}, name)
+        );
+        if (forbidden) {
+            throw createError('PRODUCTION_IMPORT_INPUT_FORBIDDEN', {
+                causeCode: forbidden
+            });
+        }
+    }
+
+    function selectedSources(loaded, classification, selection) {
+        if (!Array.isArray(loaded?.files)) {
             throw createError('PRODUCTION_IMPORT_RESULT_MALFORMED', {
-                causeCode: 'source-classification-malformed'
+                causeCode: 'source-files-malformed'
             });
         }
-        const fileById = new Map(
-            loaded.files.map(file => [String(file?.id || ''), file])
-        );
-        const active = classification.sources.filter(
-            source => source?.isSupplementalImage !== true
-        );
-        if (!active.length || !active.some(source => source?.isQuestion === true)) {
-            throw createError('PRODUCTION_IMPORT_SOURCE_UNSUPPORTED', {
-                causeCode: 'question-source-required'
-            });
-        }
-        const types = new Set(active.map(source => String(source?.fileType || '')));
-        if (
-            types.size !== 1 ||
-            !['docx', 'pdf'].includes([...types][0])
-        ) {
-            throw createError('PRODUCTION_IMPORT_SOURCE_UNSUPPORTED', {
-                causeCode: 'mixed-or-unsupported-source'
-            });
-        }
-        if (
-            [...types][0] === 'pdf' &&
-            active.filter(source => source?.isAnswer || source?.isSolution).length > 1
-        ) {
-            throw createError('PRODUCTION_IMPORT_SOURCE_UNSUPPORTED', {
-                causeCode: 'pdf-support-source-ambiguous'
-            });
-        }
-        const sources = active.map(source => {
-            const file = fileById.get(String(source.id));
-            if (!file) {
+        const fileById = new Map(loaded.files.map(file => [
+            String(file?.id || ''), file
+        ]));
+        const classifiedById = new Map(classification.sources.map(source => [
+            String(source?.id || ''), source
+        ]));
+        const hydrate = id => {
+            const file = fileById.get(String(id));
+            const source = classifiedById.get(String(id));
+            if (!file || !source) {
                 throw createError('PRODUCTION_IMPORT_RESULT_MALFORMED', {
-                    causeCode: 'classified-source-missing'
+                    causeCode: 'selected-source-missing'
                 });
             }
             return {
@@ -144,32 +138,11 @@
                 roles: [...source.roles],
                 sourceOrder: source.sourceOrder
             };
-        });
-        const supplementalSources = classification.sources
-            .filter(source => source?.isSupplementalImage === true)
-            .map(source => fileById.get(String(source.id)))
-            .filter(Boolean);
-        return {
-            route: [...types][0],
-            sources,
-            supplementalSources
         };
-    }
-
-    function producerRouteFor(route, input) {
-        const producerRoute = String(input?.producerRoute || '').trim();
-        if (producerRoute === 'fixture' && input?.testFixture === true) {
-            return producerRoute;
-        }
-        const allowed = route === 'docx'
-            ? ['docx-vision', 'docx-deterministic']
-            : route === 'pdf' ? ['pdf'] : [];
-        if (!allowed.includes(producerRoute)) {
-            throw createError('PRODUCTION_IMPORT_SOURCE_UNSUPPORTED', {
-                causeCode: 'producer-route-mismatch'
-            });
-        }
-        return producerRoute;
+        return {
+            sources: selection.sourceIds.map(hydrate),
+            supplementalSources: selection.supplementalSourceIds.map(hydrate)
+        };
     }
 
     function sourceDrafts(route, result) {
@@ -305,10 +278,7 @@
             return createError('IMPORT_CANCELLED');
         }
         const primaryCause = activeCause || error;
-        if (
-            primaryCause instanceof ProductionImportBridgeError &&
-            primaryCause.code.startsWith('PRODUCTION_IMPORT_')
-        ) {
+        if (String(primaryCause?.code || '').startsWith('PRODUCTION_IMPORT_')) {
             return createError(primaryCause.code, {
                 causeCode: primaryCause.causeCode
             });
@@ -319,63 +289,6 @@
         return createError(code, {
             causeCode: activeCause?.code || error?.code || error?.name
         });
-    }
-
-    function createFixtureImportRunner(ports = {}) {
-        if (
-            typeof ports.getTransport !== 'function' ||
-            typeof ports.normalizeQuestionNumber !== 'function'
-        ) {
-            throw createError('PRODUCTION_IMPORT_PORT_REQUIRED', {
-                port: 'fixture-import-runner'
-            });
-        }
-        return async function runProductionFixtureImport(context = {}) {
-            const transport = ports.getTransport();
-            if (
-                transport?.kind !== 'qisi.mock-import-transport.v1' ||
-                typeof transport.produceCandidates !== 'function'
-            ) throw createError('PRODUCTION_IMPORT_FIXTURE_INVALID');
-            const envelope = await transport.produceCandidates({
-                batch: structuredClone(context.batch),
-                files: structuredClone(context.files)
-            });
-            if (!isRecord(envelope) || !Array.isArray(envelope.candidates)) {
-                throw createError('PRODUCTION_IMPORT_FIXTURE_MALFORMED');
-            }
-            const expected = (envelope.expectedQuestionNumbers || [])
-                .map(value => ports.normalizeQuestionNumber(value))
-                .filter(Boolean);
-            const byNumber = new Map(envelope.candidates.map(candidate => [
-                ports.normalizeQuestionNumber(candidate?.questionNumber),
-                candidate
-            ]));
-            const drafts = [];
-            if (expected.length) {
-                for (const number of expected) {
-                    if (!byNumber.has(number)) break;
-                    drafts.push(byNumber.get(number));
-                }
-            } else {
-                drafts.push(...envelope.candidates);
-            }
-            return {
-                drafts,
-                safePartialCandidates: context.route === 'pdf'
-                    ? drafts.map(draft => ({
-                        draft,
-                        isSafePartial: true,
-                        isComplete: false,
-                        requiresManualReview: true
-                    }))
-                    : undefined,
-                draftImages: envelope.draftImages || [],
-                unmatched: [],
-                warnings: envelope.warnings || [],
-                expectedQuestionNumbers: expected,
-                prefixTruncated: expected.length > drafts.length
-            };
-        };
     }
 
     function createProductionImportBridge(ports = {}) {
@@ -406,6 +319,7 @@
         }
 
         async function run(input = {}) {
+            assertAllowedInput(input);
             const mode = executionMode(input);
             const batchId = String(input.batchId || '').trim();
             if (!batchId) throw createError('PRODUCTION_IMPORT_INPUT_INVALID');
@@ -428,7 +342,7 @@
                 loaded: null,
                 classification: null,
                 route: '',
-                producerRoute: '',
+                producerIdentity: '',
                 sources: [],
                 supplementalSources: [],
                 sourceResult: null,
@@ -471,22 +385,69 @@
                             causeCode: 'batch-context-malformed'
                         });
                     }
+                    diagnostics.record({
+                        stage: 'batch-loaded',
+                        counts: { files: data.loaded.files.length }
+                    });
                 }),
                 prepared: command(async () => {
                     data.classification = await ports.classifySourceRoles(
                         data.loaded.batchContext.sourceManifest
                     );
-                    const selected = sourceRoute(data.loaded, data.classification);
+                    diagnostics.record({
+                        stage: 'source-classified',
+                        counts: { sources: data.classification.sources.length }
+                    });
+                    const selected = await ports.resolveProductionRoute({
+                        batch: data.loaded.batch,
+                        batchContext: data.loaded.batchContext,
+                        sourceManifest: data.loaded.batchContext.sourceManifest,
+                        classification: data.classification,
+                        availableCapabilities: {
+                            docxDeterministic:
+                                typeof ports.runDocxImport === 'function',
+                            docxVision:
+                                typeof ports.runDocxVisionImport === 'function',
+                            pdf: typeof ports.runPdfImport === 'function'
+                        }
+                    });
+                    if (
+                        !isRecord(selected) ||
+                        !['docx', 'pdf'].includes(selected.route) ||
+                        !Array.isArray(selected.sourceIds) ||
+                        !Array.isArray(selected.supplementalSourceIds)
+                    ) {
+                        throw createError('PRODUCTION_IMPORT_RESULT_MALFORMED', {
+                            causeCode: 'route-policy-result-malformed'
+                        });
+                    }
+                    const hydrated = selectedSources(
+                        data.loaded,
+                        data.classification,
+                        selected
+                    );
                     data.route = selected.route;
-                    data.producerRoute = producerRouteFor(data.route, input);
-                    data.sources = selected.sources;
-                    data.supplementalSources = selected.supplementalSources;
+                    data.producerIdentity = selected.producerIdentity;
+                    data.sources = hydrated.sources;
+                    data.supplementalSources = hydrated.supplementalSources;
+                    diagnostics.record({
+                        stage: 'producer-selected',
+                        engine: data.producerIdentity
+                    });
                     diagnostics.record({
                         stage: 'context-loaded',
                         counts: { files: data.loaded.files.length }
                     });
                 }),
                 'deterministic-source-loaded': command(async ({ signal }) => {
+                    diagnostics.record({
+                        stage: 'source-producer-entered',
+                        engine: data.producerIdentity
+                    });
+                    diagnostics.record({
+                        stage: 'parser-entered',
+                        engine: data.producerIdentity
+                    });
                     data.sourceResult = await ports.runDocxImport({
                         batchId,
                         batch: data.loaded.batch,
@@ -502,30 +463,11 @@
                     });
                 }),
                 'recognition-source-loaded': command(async ({ signal }) => {
-                    if (data.producerRoute === 'fixture') {
-                        if (typeof ports.runFixtureImport !== 'function') {
-                            throw createError('PRODUCTION_IMPORT_PORT_REQUIRED', {
-                                port: 'runFixtureImport'
-                            });
-                        }
-                        data.sourceResult = await ports.runFixtureImport({
-                            batchId,
-                            batch: data.loaded.batch,
-                            batchContext: data.loaded.batchContext,
-                            files: data.loaded.files,
-                            sources: data.sources,
-                            route: data.route,
-                            signal
-                        });
-                        const drafts = sourceDrafts(data.route, data.sourceResult);
-                        diagnostics.record({
-                            stage: 'candidates-produced',
-                            engine: 'deterministic-fixture',
-                            counts: { candidates: drafts.length }
-                        });
-                        return;
-                    }
-                    if (data.producerRoute === 'docx-vision') {
+                    diagnostics.record({
+                        stage: 'source-producer-entered',
+                        engine: data.producerIdentity
+                    });
+                    if (data.producerIdentity === 'docx-vision') {
                         if (typeof ports.runDocxVisionImport !== 'function') {
                             throw createError('PRODUCTION_IMPORT_PORT_REQUIRED', {
                                 port: 'runDocxVisionImport'
@@ -542,6 +484,10 @@
                         }, signal);
                         const drafts = sourceDrafts('docx', data.sourceResult);
                         diagnostics.record({
+                            stage: 'parser-entered',
+                            engine: data.producerIdentity
+                        });
+                        diagnostics.record({
                             stage: 'candidates-produced',
                             engine: 'docx-vision',
                             counts: { candidates: drafts.length }
@@ -556,12 +502,20 @@
                         supplementalSources: data.supplementalSources
                     }, signal);
                     sourceDrafts('pdf', data.sourceResult);
+                    diagnostics.record({
+                        stage: 'parser-entered',
+                        engine: data.producerIdentity
+                    });
                     const projectionContext = data.sourceResult?.projectionContext;
                     if (!isRecord(projectionContext)) {
                         throw createError('PRODUCTION_IMPORT_RESULT_MALFORMED', {
                             causeCode: 'pdf-projection-input-missing'
                         });
                     }
+                    diagnostics.record({
+                        stage: 'pdf-projection-entered',
+                        engine: data.producerIdentity
+                    });
                     const projectedDrafts = sameLengthDrafts(
                         await ports.projectPdfCandidates(projectionContext, {
                             batchId,
@@ -582,6 +536,10 @@
                                 draft: projectedDrafts[index]
                             }))
                     };
+                    diagnostics.record({
+                        stage: 'controlled-write-evaluated',
+                        counts: { candidates: projectedDrafts.length }
+                    });
                     const drafts = sourceDrafts('pdf', data.sourceResult);
                     diagnostics.record({
                         stage: 'candidates-produced',
@@ -603,6 +561,10 @@
                         signal
                     });
                     data.normalized = normalizedDrafts(value, rawDrafts.length);
+                    diagnostics.record({
+                        stage: 'candidate-normalized',
+                        counts: { candidates: data.normalized.length }
+                    });
                 }),
                 structured: command(async ({ signal }) => {
                     assertActive(signal);
@@ -620,6 +582,10 @@
                             signal
                         })
                     );
+                    diagnostics.record({
+                        stage: 'structure-built',
+                        counts: { drafts: data.projected.drafts.length }
+                    });
                 }),
                 'validation-complete': command(async ({ signal }) => {
                     assertActive(signal);
@@ -648,6 +614,10 @@
                         stage: 'drafts-validated',
                         counts: { validated: data.validated.length }
                     });
+                    diagnostics.record({
+                        stage: 'validation-complete',
+                        counts: { validated: data.validated.length }
+                    });
                 }),
                 'review-built': command(async ({ signal }) => {
                     assertActive(signal);
@@ -662,6 +632,10 @@
                     );
                     diagnostics.record({
                         stage: 'review-drafts-built',
+                        counts: { drafts: data.reviewDrafts.length }
+                    });
+                    diagnostics.record({
+                        stage: 'review-built',
                         counts: { drafts: data.reviewDrafts.length }
                     });
                 }),
@@ -714,6 +688,10 @@
                         stage: 'review-drafts-persisted',
                         counts: { drafts: data.reviewDrafts.length }
                     });
+                    diagnostics.record({
+                        stage: 'draft-persisted',
+                        counts: { drafts: data.reviewDrafts.length }
+                    });
                     data.readback = verifiedReadback(
                         await ports.reloadDraftBatch(batchId),
                         data.reviewDrafts,
@@ -721,6 +699,10 @@
                     );
                     diagnostics.record({
                         stage: 'review-drafts-readback-verified',
+                        counts: { drafts: data.readback.questions.length }
+                    });
+                    diagnostics.record({
+                        stage: 'readback-verified',
                         counts: { drafts: data.readback.questions.length }
                     });
                 })
@@ -797,7 +779,7 @@
                         requestId,
                         batchId,
                         route: data.route,
-                        producerRoute: data.producerRoute,
+                        producerIdentity: data.producerIdentity,
                         state,
                         drafts: Object.freeze([...data.reviewDrafts]),
                         draftImages: Object.freeze([...data.readback.images]),
@@ -807,7 +789,7 @@
                         diagnostics: diagnostics.snapshot()
                     });
                 }
-                if (data.producerRoute === 'docx-deterministic') {
+                if (data.producerIdentity === 'docx-deterministic') {
                     await step('deterministic-source-loaded');
                 } else {
                     await step('recognition-source-loaded');
@@ -825,7 +807,7 @@
                     requestId,
                     batchId,
                     route: data.route,
-                    producerRoute: data.producerRoute,
+                    producerIdentity: data.producerIdentity,
                     state,
                     drafts: Object.freeze([...data.reviewDrafts]),
                     draftImages: Object.freeze([...data.projected.draftImages]),
@@ -880,7 +862,6 @@
     const api = Object.freeze({
         REQUIRED_PORTS,
         ProductionImportBridgeError,
-        createFixtureImportRunner,
         createProductionImportBridge
     });
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

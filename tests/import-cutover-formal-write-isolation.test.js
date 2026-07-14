@@ -10,8 +10,7 @@ const read = file => fs.readFileSync(path.join(ROOT, file), 'utf8');
 test('Bridge production reaches review persistence with zero formal writes', async () => {
     const harness = createHarness();
     const result = await harness.bridge.run({
-        mode: 'production', batchId: 'batch-1', requestId: 'formal-isolation-1',
-        producerRoute: 'docx-deterministic'
+        mode: 'production', batchId: 'batch-1', requestId: 'formal-isolation-1'
     });
     assert.equal(result.readback.questions.length, 1);
     assert.equal(harness.metrics.persistenceCalls, 1);

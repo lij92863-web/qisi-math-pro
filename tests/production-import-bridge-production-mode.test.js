@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const Bridge = require('../qisi-production-import-bridge.js');
 const StateMachine = require('../qisi-import-state-machine.js');
+const RoutePolicy = require('../qisi-production-import-route-policy.js');
 
 const draft = () => ({
     id: 'draft-1', batchId: 'batch-1', version: 1, order: 1,
@@ -27,6 +28,7 @@ function ports(overrides = {}) {
         loadBatchAndFiles: async () => ({
             batch: {
                 id: 'batch-1', sourceVersion: 1, status: 'pending',
+                producerMode: 'docx-deterministic',
                 progress: 0, draftPersistence: { version: 0 }
             },
             files: [{
@@ -34,6 +36,7 @@ function ports(overrides = {}) {
                 roles: ['full'], sourceOrder: 1
             }],
             batchContext: {
+                batchMetadata: { producerMode: 'docx-deterministic' },
                 sourceManifest: [{
                     id: 'source-1', fileType: 'docx', roles: ['full'],
                     sourceOrder: 1
@@ -47,6 +50,8 @@ function ports(overrides = {}) {
                 sourceOrder: 1, isQuestion: true, isSupplementalImage: false
             }]
         }),
+        resolveProductionRoute: input =>
+            RoutePolicy.resolveProductionImportRoute(input),
         runDocxImport: async () => ({ drafts: [draft()], draftImages: [] }),
         runPdfImport: async () => { throw new Error('unexpected-pdf'); },
         projectPdfCandidates: async () => { throw new Error('unexpected-pdf'); },
@@ -93,7 +98,7 @@ test('production succeeds only after transaction readback matches the review res
     const harness = ports();
     const result = await Bridge.createProductionImportBridge(harness.value).run({
         mode: 'production', batchId: 'batch-1', requestId: 'request-1',
-        producerRoute: 'docx-deterministic', expectedSourceVersion: 1
+        expectedSourceVersion: 1
     });
     assert.equal(result.mode, 'production');
     assert.equal(result.state.state, 'WAITING_CONFIRMATION');
@@ -106,8 +111,7 @@ test('production succeeds only after transaction readback matches the review res
 test('shadow mode performs no persistence, status, failure, or readback write path', async () => {
     const harness = ports();
     const result = await Bridge.createProductionImportBridge(harness.value).run({
-        mode: 'shadow', batchId: 'batch-1', requestId: 'shadow-request-1',
-        producerRoute: 'docx-deterministic'
+        mode: 'shadow', batchId: 'batch-1', requestId: 'shadow-request-1'
     });
     assert.equal(result.mode, 'shadow');
     assert.equal(result.persistence, null);
@@ -125,7 +129,7 @@ test('readback mismatch fails closed after the transaction and never reports suc
     await assert.rejects(
         Bridge.createProductionImportBridge(harness.value).run({
             mode: 'production', batchId: 'batch-1', requestId: 'request-1',
-            producerRoute: 'docx-deterministic', expectedSourceVersion: 1
+            expectedSourceVersion: 1
         }),
         error => error.code === 'PRODUCTION_IMPORT_READBACK_MISMATCH'
     );

@@ -12,6 +12,7 @@ const OutputPort = require('../qisi-production-import-output-port.js');
 const Validation = require('../qisi-import-validation-service.js');
 const ReviewBuilder = require('../qisi-review-draft-builder.js');
 const Diagnostics = require('../qisi-import-diagnostics.js');
+const RoutePolicy = require('../qisi-production-import-route-policy.js');
 
 const clone = value => structuredClone(value);
 const batch = () => ({
@@ -102,6 +103,8 @@ const outputHelpers = {
 function bridgeHarness({ route = 'pdf', context, docxDraft } = {}) {
     const files = route === 'pdf' ? pdfFiles() : docxFiles();
     const currentBatch = batch();
+    currentBatch.producerMode = route === 'pdf'
+        ? 'pdf' : 'docx-deterministic';
     const persisted = [];
     let projectionCalls = 0;
     const repository = {
@@ -125,6 +128,8 @@ function bridgeHarness({ route = 'pdf', context, docxDraft } = {}) {
             { ...input, getRoles: file => file.roles }, { repository }
         ),
         classifySourceRoles: Roles.classifySourceRoles,
+        resolveProductionRoute: input =>
+            RoutePolicy.resolveProductionImportRoute(input),
         runDocxImport: async () => ({
             drafts: [clone(docxDraft)], draftImages: [], warnings: [], errors: []
         }),
@@ -192,8 +197,7 @@ test('DOCX deterministic bypasses the PDF projection owner unchanged', async () 
     };
     const harness = bridgeHarness({ route: 'docx', docxDraft: draft });
     const result = await harness.bridge.run({
-        mode: 'shadow', batchId: 'shadow-batch', requestId: 'shadow-docx',
-        producerRoute: 'docx-deterministic'
+        mode: 'shadow', batchId: 'shadow-batch', requestId: 'shadow-docx'
     });
     assert.equal(result.drafts[0].stem, draft.stem);
     assert.equal(harness.projectionCalls(), 0);
@@ -208,8 +212,7 @@ test('Bridge and legacy projection are canonically equal for full, prefix, and m
         const legacy = Projection.projectPdfCandidates(context)[0];
         const harness = bridgeHarness({ route: 'pdf', context });
         const result = await harness.bridge.run({
-            mode: 'shadow', batchId: 'shadow-batch', requestId: 'shadow-pdf',
-            producerRoute: 'pdf'
+            mode: 'shadow', batchId: 'shadow-batch', requestId: 'shadow-pdf'
         });
         assert.deepEqual(
             Projection.compareCanonicalPdfCandidates(legacy, result.drafts[0]),
@@ -229,8 +232,7 @@ test('known-bad wrong ownership is rejected by both projections before shadow pe
     const harness = bridgeHarness({ route: 'pdf', context });
     await assert.rejects(
         harness.bridge.run({
-            mode: 'shadow', batchId: 'shadow-batch', requestId: 'shadow-known-bad',
-            producerRoute: 'pdf'
+            mode: 'shadow', batchId: 'shadow-batch', requestId: 'shadow-known-bad'
         }),
         error => error.code === 'IMPORT_VALIDATION_FAILED'
     );

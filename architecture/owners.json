@@ -49,6 +49,7 @@
   "reviewDraftBuilderOwner": "qisi-review-draft-builder.js",
   "draftPersistenceServiceOwner": "qisi-draft-persistence-service.js",
   "importDiagnosticsOwner": "qisi-import-diagnostics.js",
+  "productionImportRoutePolicyOwner": "qisi-production-import-route-policy.js",
   "productionImportBridgeOwner": "qisi-production-import-bridge.js",
   "normalUiImportControllerOwner": "qisi-normal-ui-import-controller.js",
   "appShellOwner": "app.js",
