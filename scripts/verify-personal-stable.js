@@ -5,19 +5,29 @@ const { spawnSync } = require('node:child_process');
 const { performance } = require('node:perf_hooks');
 
 const ROOT = path.resolve(__dirname, '..');
-const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const node = process.execPath;
+const npmCli = process.env.npm_execpath || path.join(
+    path.dirname(node),
+    'node_modules',
+    'npm',
+    'bin',
+    'npm-cli.js'
+);
+const npmCommand = process.platform === 'win32' ? node : 'npm';
+const npmArgs = args => process.platform === 'win32'
+    ? [npmCli, ...args]
+    : args;
 
 const suites = Object.freeze([
     {
         name: 'syntax/check',
-        command: npm,
-        args: ['run', 'check']
+        command: npmCommand,
+        args: npmArgs(['run', 'check'])
     },
     {
         name: 'all Node tests',
-        command: npm,
-        args: ['test'],
+        command: npmCommand,
+        args: npmArgs(['test']),
         timeoutMs: 15 * 60 * 1000
     },
     {
@@ -28,18 +38,18 @@ const suites = Object.freeze([
     },
     {
         name: 'smoke:batch:mock',
-        command: npm,
-        args: ['run', 'smoke:batch:mock']
+        command: npmCommand,
+        args: npmArgs(['run', 'smoke:batch:mock'])
     },
     {
         name: 'DOCX stable',
-        command: npm,
-        args: ['run', 'verify:docx-stable']
+        command: npmCommand,
+        args: npmArgs(['run', 'verify:docx-stable'])
     },
     {
         name: 'PDF known-bad',
-        command: npm,
-        args: ['run', 'verify:pdf-known-bad']
+        command: npmCommand,
+        args: npmArgs(['run', 'verify:pdf-known-bad'])
     },
     {
         name: 'Route B hold',
@@ -66,8 +76,8 @@ const suites = Object.freeze([
     },
     {
         name: 'no-real-ai',
-        command: npm,
-        args: ['run', 'verify:no-real-ai']
+        command: npmCommand,
+        args: npmArgs(['run', 'verify:no-real-ai'])
     },
     {
         name: 'app-shell AST gate',
@@ -159,11 +169,14 @@ function runSuite(suite) {
             QISI_PDF_MASTER_REAL_RUN_ALLOWED: '0'
         }
     });
-    if (result.stdout) process.stdout.write(result.stdout);
-    if (result.stderr) process.stderr.write(result.stderr);
     const timedOut = result.error?.code === 'ETIMEDOUT';
     const output = `${result.stdout || ''}\n${result.stderr || ''}`;
     const passed = result.status === 0 && !result.error;
+    const verbose = process.env.QISI_STABLE_VERBOSE === '1';
+    if (verbose || !passed) {
+        if (result.stdout) process.stdout.write(result.stdout);
+        if (result.stderr) process.stderr.write(result.stderr);
+    }
     process.stdout.write(
         `[verify:personal-stable] ${passed ? 'PASS' : 'FAIL'} ` +
         `${suite.name} (${(performance.now() - started).toFixed(1)} ms)\n`

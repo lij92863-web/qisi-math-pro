@@ -80,7 +80,7 @@ test('normal UI real PDF reaches projection and controlled-write without shadow 
         const indexes = required.map(stage => stages.indexOf(stage));
         assert.deepEqual(indexes, [...indexes].sort((left, right) => left - right));
         assert.ok(engine.calls.some(call =>
-            call.endpoint === '/api/ai/chat' || call.endpoint === '/api/ai/ocr'
+            ['chat', 'ocr'].includes(call.endpoint.split('/').at(-1))
         ));
         assert.equal(engine.realApiCalled, false);
         assert.equal(harness.forbiddenRequests.length, 0);

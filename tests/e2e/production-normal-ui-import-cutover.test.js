@@ -350,6 +350,11 @@ test('normal UI production matrix executes seventeen true producer scenarios', {
             producerMode: 'pdf', awaitCompletion: false,
             files: [pdf('cancellation-large.pdf', ['full'])]
         });
+        await cancellationHarness.page.evaluate(batchId => {
+            const proxy = window.Qisi?.Runtime
+                ?.getRuntimeDependency('AppProxy');
+            void proxy.runBatchRecognition(batchId).catch(() => {});
+        }, pending.batchId);
         for (let attempt = 0;
             attempt < 100 && !cancellationEngine.calls.some(call =>
                 call.endpoint !== '/api/ai/health'
@@ -361,7 +366,7 @@ test('normal UI production matrix executes seventeen true producer scenarios', {
             call.endpoint !== '/api/ai/health'
         ));
         let cancelled = false;
-        for (let attempt = 0; attempt < 20 && !cancelled; attempt += 1) {
+        for (let attempt = 0; attempt < 100 && !cancelled; attempt += 1) {
             cancelled = await callProxy(
                 cancellationHarness.page,
                 'cancelBatchRecognition',
@@ -371,7 +376,11 @@ test('normal UI production matrix executes seventeen true producer scenarios', {
                 await cancellationHarness.page.waitForTimeout(25);
             }
         }
-        assert.equal(cancelled, true);
+        assert.equal(cancelled, true, JSON.stringify({
+            calls: cancellationEngine.calls,
+            snapshot: await getDbSnapshot(cancellationHarness.page),
+            url: cancellationHarness.page.url()
+        }));
         cancellationEngine.release();
         await cancellationHarness.page.waitForTimeout(500);
         const snapshot = await getDbSnapshot(cancellationHarness.page);

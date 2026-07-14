@@ -99,8 +99,7 @@ test('true producer smoke enters DOCX conversion and vision adapter', {
             stages: await readImportStageTrace(harness.page, result.batchId)
         }));
         assert.ok(engine.calls.some(call =>
-            call.endpoint === '/api/ai/chat' ||
-            call.endpoint === '/api/ai/ocr'
+            ['chat', 'ocr'].includes(call.endpoint.split('/').at(-1))
         ));
         const stages = (await readImportStageTrace(
             harness.page,

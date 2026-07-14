@@ -45,8 +45,9 @@ async function installBrowserEngineInjection(page, configuration = {}) {
         const engineCallIndex = calls.filter(item =>
             !item.endpoint.endsWith('/health')
         ).length;
+        const holdAtCall = Number(configuration.holdAtCall || 0);
         if (
-            Number(configuration.holdAtCall || 0) === engineCallIndex &&
+            holdAtCall > 0 && engineCallIndex >= holdAtCall &&
             !released
         ) await hold;
         const response = responses.length
