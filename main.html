@@ -524,7 +524,7 @@
                                     <div class="batch-meta-group">
                                         <strong>基础属性</strong>
                                         <div class="batch-form-grid five">
-                                            <label>识别方式<select v-model="batchCreateProducerMode"><option value="">请选择明确识别方式</option><option value="docx-vision">DOCX 视觉识别</option><option value="docx-deterministic">DOCX 稳定解析</option><option value="pdf">PDF 视觉识别</option></select></label>
+                                            <label>识别方式<select id="batch-producer-mode" v-model="batchCreateProducerMode"><option value="">请选择明确识别方式</option><option value="docx-vision">DOCX 视觉识别</option><option value="docx-deterministic">DOCX 稳定解析</option><option value="pdf">PDF 视觉识别</option></select></label>
                                             <label>学科<select v-model="batchDefaultMeta.subject"><option>数学</option></select></label>
                                             <label>题型<select v-model="batchDefaultMeta.defaultType"><option value="">请选择题型</option><option>单选题</option><option>多选题</option><option>填空题</option><option>解答题</option><option>证明题</option></select></label>
                                             <label>年级<select v-model="batchDefaultMeta.grade"><option value="">请选择年级</option><option>高一</option><option>高二</option><option>高三</option><option>初一</option><option>初二</option><option>初三</option></select></label>
@@ -1523,6 +1523,7 @@
     <script src="./qisi-docx-producer-identity-contract.js?v=docx-producer-identity-r1-01"></script>
     <script src="./qisi-recognition-contracts.js?v=closure-r2-contracts-01"></script>
     <script src="./qisi-formal-admission-policy.js?v=post-r2-correction-r1-admission-01"></script>
+    <script src="./qisi-question-duplicate-policy.js?v=program-c-corrective-r1-duplicate-01"></script>
     <script src="./qisi-storage-repository.js?v=closure-r2-storage-01"></script>
     <script src="./qisi-batch-formal-submit.js?v=post-r2-correction-r1-submit-01"></script>
     <script src="./qisi-utils.js?v=foundation-01"></script>
@@ -1567,6 +1568,8 @@
     <script src="./qisi-import-validation-service.js?v=app-shell-r3-import-validation-01"></script>
     <script src="./qisi-review-draft-builder.js?v=app-shell-r3-review-draft-builder-01"></script>
     <script src="./qisi-draft-persistence-service.js?v=app-shell-r3-draft-persistence-01"></script>
+    <script src="./qisi-draft-maintenance-service.js?v=program-c-corrective-r1-maintenance-01"></script>
+    <script src="./qisi-review-workflow-service.js?v=program-c-corrective-r1-workflow-01"></script>
     <script src="./qisi-import-state-machine.js?v=app-shell-r3-c2-11-01"></script>
     <script src="./qisi-production-import-bridge.js?v=app-shell-r3-production-import-bridge-01"></script>
     <script src="./qisi-normal-ui-import-controller.js?v=app-shell-r3-c2-11-01"></script>

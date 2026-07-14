@@ -1,9 +1,16 @@
 (function (root, factory) {
-    const api = factory();
+    const duplicatePolicy = root?.Qisi?.QuestionDuplicatePolicy || (
+        typeof module !== 'undefined' && module.exports
+            ? require('./qisi-question-duplicate-policy.js')
+            : null
+    );
+    const api = factory(duplicatePolicy);
     root.Qisi = root.Qisi || {};
     root.Qisi.StorageRepository = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (
+    defaultDuplicatePolicy
+) {
     'use strict';
 
     const BACKUP_SCHEMA_VERSION = 'qisi.storage.v1';
@@ -173,7 +180,8 @@
         database,
         {
             clock = () => Date.now(),
-            admission = {}
+            admission = {},
+            duplicatePolicy = defaultDuplicatePolicy
         } = {}
     ) => {
         if (!database || typeof database.table !== 'function') {
@@ -536,6 +544,13 @@
             }
         );
 
+        let formalConfirmationTail = Promise.resolve();
+        const serializeFormalConfirmation = work => {
+            const current = formalConfirmationTail.then(work, work);
+            formalConfirmationTail = current.catch(() => undefined);
+            return current;
+        };
+
         const confirmDraftToQuestion = async (
             draftId,
             admissionDecision,
@@ -590,7 +605,15 @@
                 );
             }
 
-            return transaction(
+            if (typeof duplicatePolicy?.evaluate !== 'function') {
+                throw new StorageRepositoryError(
+                    'duplicate-policy-unavailable',
+                    'Formal confirmation duplicate policy is unavailable.',
+                    { draftId: id }
+                );
+            }
+
+            return serializeFormalConfirmation(() => transaction(
                 [
                     'draftQuestions',
                     'questions',
@@ -646,6 +669,13 @@
                             { draftId: id }
                         );
                     }
+                    if (fresh.status !== 'reviewed') {
+                        throw new StorageRepositoryError(
+                            'draft-not-reviewed',
+                            `Draft ${id} must be reviewed before formal confirmation.`,
+                            { draftId: id, status: fresh.status || '' }
+                        );
+                    }
 
                     const actualVersion = fresh.version;
                     if (actualVersion !== expectedDraftVersion) {
@@ -656,6 +686,48 @@
                                 draftId: id,
                                 expectedDraftVersion,
                                 actualDraftVersion: actualVersion
+                            }
+                        );
+                    }
+
+                    const existingQuestions = clone(
+                        await questionTable.toArray()
+                    );
+                    const conflictingRequest = existingQuestions.find(question =>
+                        !question?.deletedAt &&
+                        question?.admission?.requestId === requestId &&
+                        question?.admission?.draftId !== id
+                    );
+                    if (conflictingRequest) {
+                        throw new StorageRepositoryError(
+                            'idempotency-conflict',
+                            'Formal request ID was already used by another draft.',
+                            {
+                                draftId: id,
+                                matchedQuestionId: conflictingRequest.id
+                            }
+                        );
+                    }
+                    let duplicateDecision;
+                    try {
+                        duplicateDecision = duplicatePolicy.evaluate({
+                            candidate: fresh,
+                            existingQuestions
+                        });
+                    } catch (cause) {
+                        throw new StorageRepositoryError(
+                            'duplicate-policy-failed',
+                            'Formal duplicate policy failed.',
+                            { draftId: id, causeCode: cause?.code || '' }
+                        );
+                    }
+                    if (duplicateDecision?.accepted !== true) {
+                        throw new StorageRepositoryError(
+                            duplicateDecision?.code || 'DUPLICATE_POLICY_REJECTED',
+                            'Formal question was rejected as a duplicate.',
+                            {
+                                draftId: id,
+                                duplicateDecision: clone(duplicateDecision)
                             }
                         );
                     }
@@ -799,7 +871,7 @@
                         requestId
                     };
                 }
-            );
+            ));
         };
 
         const createBackup = async () => {

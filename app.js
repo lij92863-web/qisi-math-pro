@@ -3,6 +3,7 @@
             setup() {
                 console.log('当前运行版本：batch-refactor-01-DOCX批量录题模块拆分');
                 const storageRepository = Qisi.StorageRepository.createRepository(db, {
+                    duplicatePolicy: Qisi.QuestionDuplicatePolicy,
                     admission: {
                         evaluateDraftAdmission: Qisi.FormalAdmissionPolicy.evaluateDraftAdmission,
                         validateAdmissionDecision: Qisi.FormalAdmissionPolicy.validateAdmissionDecision,
@@ -57,9 +58,9 @@
                         Qisi.DraftPersistenceService.reloadDraftBatch(
                             batchId, storageRepository
                         ),
-                    deleteDraftBatch: batchId =>
+                    deleteDraftBatch: (batchId, options) =>
                         Qisi.DraftPersistenceService.deleteDraftBatch(
-                            batchId, storageRepository
+                            batchId, storageRepository, options
                         )
                 });
                 const reviewController = Qisi.ReviewController.createReviewController({
@@ -390,9 +391,9 @@
 
                     try {
                         const batches = await storageRepository.listRecentTasks();
-                        for (const batch of batches) {
-                            await draftPersistenceService.deleteDraftBatch(batch.id);
-                        }
+                        await draftMaintenanceService.deleteDraftBatches({
+                            batchIds: batches.map(batch => batch.id)
+                        });
 
                         activeBatchId.value = '';
                         activeDraftQuestionId.value = '';
@@ -1872,6 +1873,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                                     processFiles: input.sources,
                                     expectedQuestionCount:
                                     input.expectedQuestionCount,
+                                    reportStage: input.reportStage,
                                     signal: input.signal
                                 }),
                             processSupportSource: input =>
@@ -1901,6 +1903,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                                     expectedQuestionCount:
                                         input.expectedQuestionCount,
                                     onPageProgress: input.onPageProgress,
+                                    reportStage: input.reportStage,
                                     signal: input.signal
                                 }),
                             prepareSupportPages: input =>
@@ -2564,6 +2567,55 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     });
                 };
 
+                const draftMaintenanceService =
+                    Qisi.DraftMaintenanceService
+                        .createDraftMaintenanceService({
+                            persistence: draftPersistenceService,
+                            dedupeDrafts: batchFinalGateDedupeDrafts,
+                            countOptions: batchFinalGateOptionCount,
+                            problemsForDraft: draftQuestionProblems,
+                            preserveRawEvidence:
+                                window.Qisi.Utils.preserveRawEvidence,
+                            cleanDisplayFields:
+                                window.Qisi.Utils.cleanDisplayFieldsOnly,
+                            clock: Date.now
+                        });
+                const reviewWorkflowService =
+                    Qisi.ReviewWorkflowService
+                        .createReviewWorkflowService({
+                            persistence: draftPersistenceService,
+                            reviewController,
+                            validateDraft: validateDraftForReview,
+                            normalizeDraft: draft => {
+                                normalizeDraftQuestionBeforeSave(draft);
+                                return draft;
+                            },
+                            formalSubmit: batchFormalSubmit,
+                            refreshBatchStats: command =>
+                                draftMaintenanceService
+                                    .refreshBatchStats(command),
+                            mergeImages: mergeImageListsById,
+                            dataUrlToBlob,
+                            clock: Date.now
+                        });
+
+                const refreshBatchStats = async batchId => {
+                    if (!batchId) return null;
+                    return draftMaintenanceService.refreshBatchStats({
+                        batchId
+                    });
+                };
+
+                const formalSubmitErrorMessage = error => ({
+                    DUPLICATE_EXACT: '题库已存在相同题目。',
+                    DUPLICATE_SIMILAR: '题库存在疑似重复题目。',
+                    DUPLICATE_ANSWER_CONFLICT: '题库存在题干相同但答案冲突的题目。',
+                    REVIEW_WORKFLOW_NOT_REVIEWED: '请先标记已确认，再提交入库。',
+                    REVIEW_WORKFLOW_STALE_DRAFT: '草稿已被其他操作更新，请刷新后重试。',
+                    REVIEW_WORKFLOW_SUBMITTED_IMMUTABLE: '该草稿已经提交入库。'
+                }[error?.code] || error?.details?.policyErrors?.[0]?.message ||
+                    error?.message || '正式入库失败。');
+
                 const markDraftReviewed = async () => {
                     const q = activeDraftQuestion.value;
                     if (!q) return;
@@ -2572,45 +2624,21 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         const saved = await saveActiveDraftQuestion({ silent: true });
                         if (!saved) return;
                     }
-
-                    normalizeDraftQuestionBeforeSave(q);
-                    const expectedDraftVersion = q.version;
-                    const confirmation = reviewController.confirm(q);
-                    if (!confirmation.accepted) {
-                        alert(confirmation.validation.errors[0]?.message || '题目校验失败。');
+                    const result = await reviewWorkflowService.confirmDraft({
+                        batchId: q.batchId,
+                        draftId: q.id,
+                        expectedDraftVersion: q.version,
+                        actorId: 'local-teacher'
+                    });
+                    if (!result.accepted) {
+                        alert(result.validation?.errors?.[0]?.message ||
+                            '题目校验失败。');
                         return;
                     }
-                    Object.assign(q, confirmation.draft);
-                    const persisted = await runReviewDraftPersistenceCommand({
-                        batchId: q.batchId,
-                        draft: toRaw(q),
-                        expectedDraftVersion
-                    });
-                    if (!persisted) return;
-                    await refreshBatchStats(q.batchId);
                     activeDraftEditorOriginal.value = activeDraftEditorBuffer.value;
                     await loadBatchImportData();
                     showBatchToast('已标记为确认。');
                 };
-
-                const detectDraftDuplicate = (q) => {
-                    const core = questionCoreFingerprint(q);
-                    const stem = questionStemFingerprint(q);
-                    const exact = coreFingerprintMap.value.get(core);
-                    if (exact) {
-                        if (hasText(exact.answer) && hasText(q.answer) && !sameTextLoose(exact.answer, q.answer)) return 'answerConflict';
-                        return 'existing';
-                    }
-                    const similar = stem ? stemFingerprintMap.value.get(stem) : null;
-                    return similar ? 'similar' : 'none';
-                };
-
-                const duplicateLabel = (status) => ({
-                    none: '无重复',
-                    existing: '题库已存在',
-                    similar: '疑似重复',
-                    answerConflict: '答案冲突'
-                }[status] || '无重复');
 
                 const submitDraftQuestion = async (questionId = activeDraftQuestionId.value, silent = false) => {
                     if (
@@ -2622,139 +2650,41 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         });
                         if (!saved) return false;
                     }
-
-                    const localDraft = batchDraftQuestions.value.find(
+                    const draft = batchDraftQuestions.value.find(
                         item => item.id === questionId
                     );
-                    if (!localDraft?.batchId) return false;
-                    const loadedReviewBatch =
-                        await draftPersistenceService.reloadDraftBatch(
-                            localDraft.batchId
-                        );
-                    const q = loadedReviewBatch.questions.find(
-                        item => item.id === questionId
-                    );
-                    if (!q || q.status === 'submitted') return false;
-                    normalizeDraftQuestionBeforeSave(q);
-                    if (q.status !== 'reviewed') {
-                        if (!silent) alert('请先标记已确认，再提交入库。');
-                        return false;
-                    }
-                    const reviewValidation = validateDraftForReview(q);
-                    if (!reviewValidation.valid) {
-                        if (!silent) alert(
-                            reviewValidation.errors[0]?.message || '题目校验失败。'
-                        );
-                        return false;
-                    }
-                    // 安全审核版：图片未确认只 warning，不阻塞入库。
-                    // if (q.imageReviewStatus === 'need_confirm' || q.imageReviewStatus === 'low_confidence') {
-                    //     if (!silent) alert('该题图片尚未确认，请先确认图片是否正确。');
-                    //     return false;
-                    // }
-                    await loadData();
-                    const duplicateStatus = detectDraftDuplicate(q);
-                    if (duplicateStatus !== 'none') {
-                        const duplicateDraft = {
-                            ...q,
-                            duplicateStatus,
-                            updatedAt: Date.now()
-                        };
-                        const persisted = await runReviewDraftPersistenceCommand({
-                            batchId: q.batchId,
-                            draft: duplicateDraft,
-                            expectedDraftVersion: q.version
-                        });
-                        if (!persisted) return false;
-                        if (!silent) alert(`提交前发现：${duplicateLabel(duplicateStatus)}。第一版默认不允许重复入库。`);
-                        await loadBatchImportData();
-                        return false;
-                    }
-
-                    const relatedDraftImages = loadedReviewBatch.images;
-                    const boundDraftImages = relatedDraftImages
-                        .filter(img => img.questionId === q.id && img.status !== 'deleted');
-
-                    const allImagesForSubmit = mergeImageListsById(q.images || [], boundDraftImages || []);
-                    const imagePayloads = [];
-                    for (const img of allImagesForSubmit) {
-                        if (img?.url?.startsWith('data:')) {
-                            imagePayloads.push({
-                                id: img.id,
-                                blob: await dataUrlToBlob(img.url),
-                                createdAt: Date.now()
-                            });
-                        }
-                    }
-                    let formalResult;
+                    if (!draft?.batchId) return false;
                     try {
-                        formalResult = await batchFormalSubmit.submit({
-                            draft: q, imageRecords: imagePayloads
+                        const result = await reviewWorkflowService.submitDraft({
+                            batchId: draft.batchId,
+                            draftId: draft.id,
+                            expectedDraftVersion: draft.version,
+                            actorId: 'local-teacher'
                         });
-                    } catch (error) {
-                        if (!silent) {
-                            alert(error?.details?.policyErrors?.[0]?.message ||
-                                error?.message || '正式入库失败。');
+                        if (!result.accepted) {
+                            if (!silent) alert(
+                                result.validation?.errors?.[0]?.message ||
+                                result.decision?.errors?.[0]?.message ||
+                                '正式入库准入校验失败。'
+                            );
+                            return false;
                         }
-                        return false;
-                    }
-                    if (!formalResult.accepted) {
-                        if (!silent) alert(formalResult.decision.errors?.[0]?.message ||
-                            '正式入库准入校验失败。');
+                    } catch (error) {
+                        if (!silent) alert(formalSubmitErrorMessage(error));
                         return false;
                     }
                     await loadData();
-                    await refreshBatchStats(q.batchId);
                     await loadBatchImportData();
                     if (!silent) showBatchToast('已提交入库。');
                     return true;
                 };
 
-                const refreshBatchStats = async (batchId) => {
-                    if (!batchId) return;
-                    const loaded = await draftPersistenceService.reloadDraftBatch(
-                        batchId
-                    );
-                    const drafts = loaded.questions;
-                    const images = loaded.images;
-                    const reviewedCount = drafts.filter(q => q.status === 'reviewed').length;
-                    const submittedCount = drafts.filter(q => q.status === 'submitted').length;
-                    const problemCount = drafts.filter(q => draftQuestionProblems(q).length > 0 && q.status !== 'submitted').length;
-                    const unassignedImageCount = images.filter(img => img.status === 'unassigned').length;
-                    const status = drafts.length && submittedCount === drafts.length
-                        ? 'completed'
-                        : (loaded.batch.status || 'review');
-                    return draftPersistenceService.persistReviewDraftBatch({
-                        batchId,
-                        drafts,
-                        images,
-                        files: loaded.files,
-                        expectedVersion:
-                            loaded.batch?.draftPersistence?.version || 0,
-                        batchPatch: {
-                            reviewedCount,
-                            submittedCount,
-                            problemCount,
-                            unassignedImageCount,
-                            status,
-                            updatedAt: Date.now()
-                        }
-                    });
-                };
-
-                const openBatchSubmitSummary = () => {
-                    const candidates = batchDraftQuestions.value.filter(q =>
-                        q.status === 'reviewed' &&
-                        q.duplicateStatus === 'none'
-                    );
-                    submitSummary.value = {
-                        count: candidates.length,
-                        ids: candidates.map(q => q.id),
-                        pending: batchDraftQuestions.value.filter(q => q.status === 'pending').length,
-                        missingAnswer: batchDraftQuestions.value.filter(q => (q.mergeWarnings || []).includes('missing_answer') || !String(q.answer || '').trim()).length,
-                        duplicate: batchDraftQuestions.value.filter(q => q.duplicateStatus && q.duplicateStatus !== 'none').length,
-                        image: batchDraftQuestions.value.filter(q => ['need_confirm', 'low_confidence'].includes(q.imageReviewStatus)).length
-                    };
+                const openBatchSubmitSummary = async () => {
+                    if (!activeBatchId.value) return;
+                    submitSummary.value = await reviewWorkflowService
+                        .prepareReviewedBatch({
+                            batchId: activeBatchId.value
+                        });
                 };
 
                 const rerunActiveBatchRecognition = async () => {
@@ -2774,47 +2704,16 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         showBatchToast('当前没有打开批量任务。');
                         return;
                     }
-
-                    const loaded = await draftPersistenceService.reloadDraftBatch(
-                        batchId
-                    );
-                    const drafts = loaded.questions;
-                    const draftImages = loaded.images;
-
-                    const gateResult = batchFinalGateDedupeDrafts(drafts, {
-                        stage: 'manual-active-batch',
+                    const result = await draftMaintenanceService
+                        .dedupeBatchDrafts({
                         batchId,
-                        files: batchImportFiles.value || [],
-                        draftImages
+                        files: batchImportFiles.value || []
                     });
-
-                    const finalDraftImages = gateResult.draftImages;
-                    const finalDrafts = gateResult.drafts;
-
-                    const problemCount = finalDrafts.filter(q => {
-                        const isChoice = q.type === '单选题' || q.type === '多选题';
-                        const optionCount = batchFinalGateOptionCount(q.options);
-                        return isChoice && optionCount < 4;
-                    }).length;
-
-                    await draftPersistenceService.persistReviewDraftBatch({
-                        batchId,
-                        drafts: finalDrafts,
-                        images: finalDraftImages,
-                        files: loaded.files,
-                        expectedVersion:
-                            loaded.batch?.draftPersistence?.version || 0,
-                        batchPatch: {
-                            totalCount: finalDrafts.length,
-                            problemCount,
-                            unassignedImageCount: finalDraftImages.filter(img => img.status === 'unassigned').length,
-                            updatedAt: Date.now()
-                        }
-                    });
-
                     await loadBatchImportData();
                     activeDraftQuestionId.value = batchDraftQuestions.value[0]?.id || '';
-                    showBatchToast(`已清理重复题：${drafts.length} 条 → ${finalDrafts.length} 条。`);
+                    showBatchToast(
+                        `已清理重复题：${result.beforeCount} 条 → ${result.afterCount} 条。`
+                    );
                 };
 
                 const showUnmatchedAnswerList = () => {
@@ -2827,56 +2726,17 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                 };
 
                 const cleanupActiveBatchDisplayPollution = async () => {
-                    if (!activeBatchId.value) {
+                    const batchId = activeBatchId.value;
+                    if (!batchId) {
                         alert('当前没有打开批量任务。');
                         return;
                     }
-
-                    const loaded = await draftPersistenceService.reloadDraftBatch(
-                        activeBatchId.value
+                    const result = await draftMaintenanceService
+                        .cleanupDisplayFields({ batchId });
+                    if (result.changedCount) await loadBatchImportData();
+                    showBatchToast(
+                        `已清理 ${result.changedCount} 道题的显示字段污染。`
                     );
-                    const rows = loaded.questions;
-
-                    let changed = 0;
-
-                    rows.forEach(q => {
-                        const before = JSON.stringify({
-                            stem: q.stem,
-                            options: q.options,
-                            answer: q.answer,
-                            solution: q.solution
-                        });
-
-                        window.Qisi.Utils.preserveRawEvidence(q);
-                        window.Qisi.Utils.cleanDisplayFieldsOnly(q);
-
-                        const after = JSON.stringify({
-                            stem: q.stem,
-                            options: q.options,
-                            answer: q.answer,
-                            solution: q.solution
-                        });
-
-                        if (before !== after) {
-                            q.updatedAt = Date.now();
-                            changed += 1;
-                        }
-                    });
-
-                    if (changed) {
-                        await draftPersistenceService.persistReviewDraftBatch({
-                            batchId: activeBatchId.value,
-                            drafts: rows.map(toRaw),
-                            images: loaded.images,
-                            files: loaded.files,
-                            expectedVersion:
-                                loaded.batch?.draftPersistence?.version || 0,
-                            batchPatch: { updatedAt: Date.now() }
-                        });
-                        await loadBatchImportData();
-                    }
-
-                    showBatchToast(`已清理 ${changed} 道题的显示字段污染。`);
                 };
 
                 const showCropNotice = (sourceImage = null) => {
@@ -2886,17 +2746,23 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
 
                 const confirmBatchSubmit = async () => {
                     if (!submitSummary.value) return;
-                    let okCount = 0;
-                    for (const id of submitSummary.value.ids) {
-                        if (await submitDraftQuestion(id, true)) okCount += 1;
-                    }
+                    const result = await reviewWorkflowService
+                        .submitReviewedBatch({
+                            batchId: activeBatchId.value,
+                            draftIds: submitSummary.value.ids,
+                            actorId: 'local-teacher'
+                        });
                     submitSummary.value = null;
-                    showBatchToast(`已提交 ${okCount} 道题。`);
+                    await loadData();
+                    await loadBatchImportData();
+                    showBatchToast(
+                        `已提交 ${result.okCount} 道题，失败 ${result.failedCount} 道。`
+                    );
                 };
 
                 const deleteBatchImport = async (batchId) => {
                     if (!confirm('确定删除这个批量录题任务吗？已入库的正式题目不会受影响。')) return;
-                    await draftPersistenceService.deleteDraftBatch(batchId);
+                    await draftMaintenanceService.deleteDraftBatch({ batchId });
                     await openBatchList();
                 };
 
@@ -5104,7 +4970,7 @@ Promise.all([imageReady, fontReady]).then(() => {
                     importBankInput, openImportBankPicker, handleImportBankFileChange, pendingImportPreview, cancelImportPreview, confirmImportBankPreview, exportQuestionBankPackage,
                     undoLatestExternalMerge, deleteExternalBatch, recalculateExternalBatchStatus,
                     batchImportMode, batchImportBatches, recentBatchImportBatches, batchImportFiles, batchDraftQuestions, filteredDraftQuestions, batchDraftImages, batchImportFilter, activeBatchId, activeBatch, activeDraftQuestionId, activeDraftQuestion, batchRecognitionSummary, activeDraftEditorBuffer, activeDraftEditorOriginal, activeDraftEditorDirty, activeDraftEditorPreview, activeDraftEditorTextarea, activeDraftImages, activeDraftRealQuestionImages, activeDraftSourcePageImages, activeDraftPreviewImages, unassignedDraftImages, activeDraftTab, batchUploadInput, isDraggingBatchFiles, batchToast, unassignedImageModal, imagePositionMenuId, cropModalOpen, cropImageRef, cropState, cropSelectionStyle, pendingPurposeFile, pendingPurposeRoles, batchCreateFiles, batchCreateTypeHint, batchCreateWarning, batchCreateProducerMode, batchExpectedQuestionCount, batchDefaultMeta, unmatchedAnswers, submitSummary,
-                    openBatchCreate, openBatchList, clearBatchDraftWorkspace, openBatchFilePicker, handleBatchFileChange, handleBatchDrop, handleBatchHomeDrop, togglePurposeRole, confirmBatchFilePurpose, cancelBatchFilePurpose, editBatchFilePurpose, removeBatchCreateFile, createDraftImportBatch, runBatchRecognition, cancelBatchRecognition, rerunActiveBatchRecognition, dedupeActiveBatchDraftsNow, openBatchReview, selectDraftQuestion, updateDraftQuestionField, saveActiveDraftQuestion, markDraftReviewed, submitDraftQuestion, openBatchSubmitSummary, confirmBatchSubmit, deleteBatchImport, validatePageRange, batchStatusText, draftQuestionStatusText, roleLabel, rolesLabel, fileTypeText, formatFileSize, draftQuestionProblems, duplicateLabel, confirmDraftImages, deleteDraftImage, toggleImagePositionMenu, copyDraftImagePlacementLatex, openSourcePageCrop, closeCropModal, resetCropState, startManualCrop, moveManualCrop, endManualCrop, saveManualCropToDraft, bindUnassignedImage, deleteUnassignedImage, showUnmatchedAnswerList, showActiveRawText, showCropNotice, cleanupActiveBatchDisplayPollution, markActiveDraftUserEdited, insertDraftEditorText, discardActiveDraftEditorChanges,
+                    openBatchCreate, openBatchList, clearBatchDraftWorkspace, openBatchFilePicker, handleBatchFileChange, handleBatchDrop, handleBatchHomeDrop, togglePurposeRole, confirmBatchFilePurpose, cancelBatchFilePurpose, editBatchFilePurpose, removeBatchCreateFile, createDraftImportBatch, runBatchRecognition, cancelBatchRecognition, rerunActiveBatchRecognition, dedupeActiveBatchDraftsNow, openBatchReview, selectDraftQuestion, updateDraftQuestionField, saveActiveDraftQuestion, markDraftReviewed, submitDraftQuestion, openBatchSubmitSummary, confirmBatchSubmit, deleteBatchImport, validatePageRange, batchStatusText, draftQuestionStatusText, roleLabel, rolesLabel, fileTypeText, formatFileSize, draftQuestionProblems, confirmDraftImages, deleteDraftImage, toggleImagePositionMenu, copyDraftImagePlacementLatex, openSourcePageCrop, closeCropModal, resetCropState, startManualCrop, moveManualCrop, endManualCrop, saveManualCropToDraft, bindUnassignedImage, deleteUnassignedImage, showUnmatchedAnswerList, showActiveRawText, showCropNotice, cleanupActiveBatchDisplayPollution, markActiveDraftUserEdited, insertDraftEditorText, discardActiveDraftEditorChanges,
                     syncActiveDraftEditorFromQuestion: () => window.Qisi.ReviewDraftState.syncActiveDraftEditorFromQuestion({
                         activeDraftQuestion,
                         activeDraftEditorBuffer,

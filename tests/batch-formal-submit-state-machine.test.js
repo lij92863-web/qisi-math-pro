@@ -6,6 +6,7 @@ const Machine = require('../qisi-import-state-machine.js');
 
 const draft = () => ({
     id: 'draft-1', version: 3,
+    status: 'reviewed',
     source: { sourceId: 'source-1', format: 'docx' },
     producer: { mode: 'deterministic-docx' },
     route: { identity: 'docx-deterministic-import' }
@@ -24,6 +25,7 @@ function harness({ accepted = true, repositoryError = null } = {}) {
             })
         },
         repository: {
+            loadDraft: async () => draft(),
             confirmDraftToQuestion: async () => {
                 writes += 1;
                 if (repositoryError) throw repositoryError;

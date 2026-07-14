@@ -137,6 +137,7 @@ test('formal cancellation after policy evaluation stops before repository commit
             }
         },
         repository: {
+            loadDraft: async () => ({ ...draft(), status: 'reviewed' }),
             confirmDraftToQuestion: async () => {
                 writes += 1;
                 return { question: { id: 'formal-1' } };
