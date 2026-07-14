@@ -22,9 +22,14 @@ test('Phase 5 report proves every required architecture invariant', () => {
 test('Phase 5 source-level owner chain remains intact', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
     const start = app.indexOf('const submitDraftQuestion = async');
-    const submit = app.slice(start, app.indexOf('const refreshBatchStats', start));
+    const submit = app.slice(start, app.indexOf('const openBatchSubmitSummary', start));
     assert.doesNotMatch(submit, /db\.questions\.(?:put|add|bulkPut)/);
-    assert.match(submit, /batchFormalSubmit\.submit/);
+    assert.doesNotMatch(submit, /batchFormalSubmit\.submit/);
+    assert.match(submit, /reviewWorkflowService\.submitDraft/);
+    const workflow = fs.readFileSync(
+        path.join(ROOT, 'qisi-review-workflow-service.js'), 'utf8'
+    );
+    assert.match(workflow, /formalSubmit\.submit/);
     const formal = fs.readFileSync(path.join(ROOT, 'qisi-batch-formal-submit.js'), 'utf8');
     assert.match(formal, /policy\.evaluateDraftAdmission/);
     assert.match(formal, /repository\.confirmDraftToQuestion/);

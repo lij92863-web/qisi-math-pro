@@ -63,6 +63,7 @@ test('seeded-review-ui-lifecycle: seeded drafts reach edit, confirm, and formal 
         await page.getByRole('button', { name: '解析内容' }).click();
         await page.locator('.batch-editor-card.content textarea')
             .fill('E2E updated solution');
+        await page.getByRole('button', { name: /保存修改/ }).click();
 
         await page.getByRole('button', { name: /标记已确认/ }).click();
         await waitForDbSnapshot(page, snapshot =>

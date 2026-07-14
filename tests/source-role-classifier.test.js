@@ -61,9 +61,12 @@ test('production routing uses the classifier and never performs content inferenc
     const html = fs.readFileSync(path.join(ROOT, 'main.html'), 'utf8');
     const implementation = fs.readFileSync(path.join(ROOT, 'qisi-source-role-classifier.js'), 'utf8');
     const bridge = fs.readFileSync(path.join(ROOT, 'qisi-production-import-bridge.js'), 'utf8');
+    const routePolicy = fs.readFileSync(path.join(ROOT, 'qisi-production-import-route-policy.js'), 'utf8');
     assert.match(app, /Qisi\.SourceRoleClassifier\.classifySourceRoles\s*\(/);
     assert.match(bridge, /classification\.sources/);
-    assert.match(bridge, /sourceRoute\(data\.loaded, data\.classification\)/);
+    assert.match(bridge, /ports\.resolveProductionRoute\s*\(\{/);
+    assert.match(app, /ProductionImportRoutePolicy[\s\S]*\.resolveProductionImportRoute\(input\)/);
+    assert.doesNotMatch(routePolicy, /rawText|textContent|keyword|document\.|window\.|\bfetch\s*\(/i);
     assert.doesNotMatch(app, /const recognitionFileRank\s*=\s*file\s*=>/);
     assert.ok(html.indexOf('qisi-source-role-classifier.js') < html.indexOf('app.js'));
     assert.doesNotMatch(implementation, /rawText|textContent|keyword|document\.|window\.|\bfetch\s*\(/i);

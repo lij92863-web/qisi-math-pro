@@ -18,16 +18,19 @@ const read = file => fs.readFileSync(path.join(ROOT, file), 'utf8');
 const productionSubmitSource = () => {
     const source = read('app.js');
     const start = source.indexOf('const submitDraftQuestion = async');
-    const end = source.indexOf('\n                const refreshBatchStats', start);
+    const end = source.indexOf('\n                const openBatchSubmitSummary', start);
     assert.ok(start >= 0 && end > start, 'production submit function is present');
     return source.slice(start, end);
 };
 
 test('batch production submit delegates admission and persistence to owners', () => {
     const submit = productionSubmitSource();
+    const workflow = read('qisi-review-workflow-service.js');
     const owner = read('qisi-batch-formal-submit.js');
     assert.doesNotMatch(submit, /db\.questions\.(?:put|add|bulkPut|bulkAdd)\s*\(/);
-    assert.match(submit, /batchFormalSubmit\.submit\s*\(/);
+    assert.doesNotMatch(submit, /batchFormalSubmit\.submit\s*\(/);
+    assert.match(submit, /reviewWorkflowService\.submitDraft\s*\(/);
+    assert.match(workflow, /formalSubmit\.submit\s*\(/);
     assert.match(owner, /policy\.evaluateDraftAdmission\s*\(/);
     assert.match(owner, /repository\.confirmDraftToQuestion\s*\(/);
     assert.match(read('main.html'), /qisi-formal-admission-policy\.js/);

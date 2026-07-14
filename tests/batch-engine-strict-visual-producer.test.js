@@ -89,7 +89,8 @@ test('strict visual producer preserves file-level payload, timing, and diagnosti
         pages: [{ pageNo: 1, url: 'page-1' }],
         expectedQuestionCount: 1,
         onPageProgress: progress,
-        renderDurationMs: 45
+        renderDurationMs: 45,
+        reportStage: null
     }]);
     assert.equal(diagnostics.length, 2);
     assert.equal(diagnostics[0][0], 'strict-visual-file-start');

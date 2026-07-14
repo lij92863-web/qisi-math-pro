@@ -186,13 +186,27 @@ test('all production final review writes delegate to the persistence owner', () 
     const implementation = fs.readFileSync(
         path.join(ROOT, 'qisi-draft-persistence-service.js'), 'utf8'
     );
+    const workflow = fs.readFileSync(
+        path.join(ROOT, 'qisi-review-workflow-service.js'), 'utf8'
+    );
+    const maintenance = fs.readFileSync(
+        path.join(ROOT, 'qisi-draft-maintenance-service.js'), 'utf8'
+    );
     const calls = app.match(
         /draftPersistenceService\.persistReviewDraftBatch\s*\(/g
     ) || [];
 
-    // Bridge finalization, derived-stat refresh, manual dedupe, and display
-    // cleanup are the four reachable whole-batch ReviewDraft write commands.
-    assert.equal(calls.length, 4);
+    // The app contains only the Bridge finalization port. Review lifecycle
+    // commands belong to focused owners.
+    assert.equal(calls.length, 1);
+    const lifecycle = app.slice(
+        app.indexOf('const refreshBatchStats = async'),
+        app.indexOf('const externalTeacherGroups = computed')
+    );
+    assert.doesNotMatch(lifecycle, /draftPersistenceService\./);
+    assert.match(workflow, /persistence\.persistReviewDraftCommand\s*\(/);
+    assert.match(workflow, /formalSubmit\.submit\s*\(/);
+    assert.match(maintenance, /persistence\.persistReviewDraftBatch\s*\(/);
     assert.doesNotMatch(app, /processDraftImportBatchV2/);
     assert.doesNotMatch(
         app,

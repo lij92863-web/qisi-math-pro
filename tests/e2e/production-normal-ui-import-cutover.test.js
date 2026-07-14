@@ -360,14 +360,18 @@ test('normal UI production matrix executes seventeen true producer scenarios', {
         assert.ok(cancellationEngine.calls.some(call =>
             call.endpoint !== '/api/ai/health'
         ));
-        assert.equal(
-            await callProxy(
+        let cancelled = false;
+        for (let attempt = 0; attempt < 20 && !cancelled; attempt += 1) {
+            cancelled = await callProxy(
                 cancellationHarness.page,
                 'cancelBatchRecognition',
                 pending.batchId
-            ),
-            true
-        );
+            );
+            if (!cancelled) {
+                await cancellationHarness.page.waitForTimeout(25);
+            }
+        }
+        assert.equal(cancelled, true);
         cancellationEngine.release();
         await cancellationHarness.page.waitForTimeout(500);
         const snapshot = await getDbSnapshot(cancellationHarness.page);

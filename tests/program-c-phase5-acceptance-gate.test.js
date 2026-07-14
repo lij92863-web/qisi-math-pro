@@ -28,17 +28,21 @@ test('Phase 5 release, benchmark, and internal CTO reports record an unqualified
     assert.doesNotMatch(release + cto, /ACCEPTED_WITH_LIMITATIONS/);
 });
 
-test('browser evidence uses normal UI entries and classifies deterministic DOCX honestly', () => {
+test('current browser evidence uses real files and the normal UI production entry', () => {
     const docx = read('tests/e2e/docx-producer-identity-browser.test.js');
     const pdf = read('tests/e2e/pdf-projection-browser-shadow.test.js');
 
-    assert.match(docx, /callProxy[\s\S]*'runBatchRecognition'/);
+    assert.match(docx, /createImportThroughUi/);
+    assert.match(docx, /docx-vision\.docx/);
+    assert.match(docx, /docx-question\.docx/);
+    assert.match(docx, /installBrowserEngineInjection/);
     assert.match(docx, /non-applicable-different-producers/);
-    assert.match(pdf, /callProxy[\s\S]*'runBatchRecognition'/);
-    assert.match(pdf, /pdf-normal-ui-full/);
-    assert.match(pdf, /__phase5NormalUiPdfProjection/);
-    assert.match(pdf, /non-applicable-no-normal-ui-deterministic-route/);
-    assert.match(pdf, /Projection\.compareCanonicalPdfCandidates/);
+    assert.match(pdf, /createImportThroughUi/);
+    assert.match(pdf, /pdf-question\.pdf/);
+    assert.match(pdf, /installBrowserEngineInjection/);
+    assert.match(pdf, /pdf-projection-entered/);
+    assert.match(pdf, /controlled-write-evaluated/);
+    assert.doesNotMatch(docx + pdf, /prebuiltCandidates|finalCandidates/);
 });
 
 test('PDF canonical comparator protects source, producer, route, provenance, and decisions', () => {

@@ -47,8 +47,15 @@ test('production owns adapter and strict source while browser mocks stay isolate
     assert.doesNotMatch(adapter, /console\.(?:log|error)\s*\(/);
 
     const browserHarness = read('tests/e2e/browser-harness.js');
-    assert.match(browserHarness, /qisi\.mock-import-transport\.v1/);
-    assert.doesNotMatch(app, /qisi\.mock-import-transport\.v1/);
+    const engineHarness = read('tests/harness/browser-engine-injection.js');
+    assert.match(browserHarness, /installBrowserEngineInjection/);
+    assert.match(engineHarness, /const AI_URL =/);
+    assert.match(engineHarness, /chat\|ocr\|health/);
+    assert.doesNotMatch(
+        browserHarness + engineHarness,
+        /prebuiltCandidates|finalCandidates|produceCandidates/
+    );
+    assert.doesNotMatch(app, /browser-engine-injection|mock-import-transport/);
 });
 
 test('retired OCR producer functions have no production definitions or references', () => {

@@ -106,7 +106,7 @@ test('production DOCX runner owns coordinator composition and has no forbidden a
     assert.match(sourcePort, /parseSource:\s*\(\{ source, candidateOffset \}\)\s*=>\s*parseDocxSource\s*\(/);
     assert.ok(html.indexOf('qisi-docx-import-coordinator.js') < html.indexOf('app.js'));
     for (const implementation of [coordinator, sourcePort]) {
-        assert.doesNotMatch(implementation, /document\.|window\.|Vue|\.put\s*\(|\.add\s*\(|\.delete\s*\(|\.transaction\s*\(/);
+        assert.doesNotMatch(implementation, /document\.|window\.|Vue|\bdb\.|\brepository\.|\.put\s*\(|\.delete\s*\(|\.transaction\s*\(/);
         assert.doesNotMatch(implementation, /pdf|ocr|vision|FormalAdmission|controlledWrite|saveQuestion/i);
     }
 });
