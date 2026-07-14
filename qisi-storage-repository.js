@@ -695,7 +695,10 @@
                     );
                     const conflictingRequest = existingQuestions.find(question =>
                         !question?.deletedAt &&
-                        question?.admission?.requestId === requestId &&
+                        (
+                            question?.admission?.requestId === requestId ||
+                            question?.admission?.idempotencyKey === idempotencyKey
+                        ) &&
                         question?.admission?.draftId !== id
                     );
                     if (conflictingRequest) {

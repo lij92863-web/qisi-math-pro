@@ -575,6 +575,7 @@
                 draftVersion: decision.draftVersion,
                 confirmedBy: context.actorId,
                 confirmedAt: now,
+                requestId: context.requestId,
                 idempotencyKey: context.idempotencyKey
             },
             provenance: fieldProvenance,

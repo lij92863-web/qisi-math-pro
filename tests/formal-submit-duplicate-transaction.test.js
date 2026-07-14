@@ -115,3 +115,32 @@ test('idempotent retry wins before duplicate evaluation', async () => {
     assert.equal(retry.question.id, 'question-one');
     assert.equal((await repository.listTable('questions')).length, 1);
 });
+
+test('one requestId cannot confirm two different drafts', async () => {
+    const first = makeDraft({ id: 'draft-request-first' });
+    const second = makeDraft({
+        id: 'draft-request-second',
+        questionNumber: '2',
+        stem: 'different request collision stem'
+    });
+    const repository = createRepository(new FakeDatabase({
+        draftQuestions: [first, second]
+    }));
+
+    const committed = await commit(
+        repository,
+        first,
+        'shared-request',
+        'question-first'
+    );
+    assert.equal(committed.question.admission.requestId, 'shared-request');
+    await assert.rejects(
+        commit(repository, second, 'shared-request', 'question-second'),
+        error => error.code === 'idempotency-conflict'
+    );
+    assert.equal((await repository.listTable('questions')).length, 1);
+    assert.equal(
+        (await repository.loadDraft('draft-request-second')).status,
+        'reviewed'
+    );
+});
