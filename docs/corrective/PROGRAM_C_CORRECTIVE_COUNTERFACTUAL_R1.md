@@ -1,7 +1,7 @@
 # Program C Corrective Counterfactual Evidence R1
 
-Date: 2026-07-14  
-Branch: `stage/program-c-corrective-r1`  
+Date: 2026-07-14
+Branch: `stage/program-c-corrective-r1`
 Base: `79fea1e1cad0c682c42539dd575370f3919f1d05`
 
 ## Decision

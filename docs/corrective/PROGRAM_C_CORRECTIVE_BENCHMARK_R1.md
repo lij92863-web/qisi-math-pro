@@ -1,7 +1,7 @@
 # Program C Corrective Benchmark R1
 
-Date: 2026-07-14  
-Baseline: `79fea1e1cad0c682c42539dd575370f3919f1d05`  
+Date: 2026-07-14
+Baseline: `79fea1e1cad0c682c42539dd575370f3919f1d05`
 Candidate: `stage/program-c-corrective-r1` working tree at measurement
 
 ## Decision
