@@ -238,6 +238,7 @@
             processFiles = [],
             expectedQuestionCount = 0,
             onPageProgress = null,
+            reportStage = null,
             signal = null
         }) {
             void processFiles;
@@ -321,6 +322,7 @@
             try {
                 const convertStartedAt = now();
                 pdfRecord = await ports.convertDocxToPdf(file, { signal });
+                reportStage?.({ stage: 'document-converted', engine: 'docx-vision' });
                 console.log('[BATCH_TIME][docx-convert]', {
                     filename: file.filename,
                     durationMs: Math.round(now() - convertStartedAt),
@@ -359,6 +361,7 @@
                     batch,
                     expectedQuestionCount: effectiveExpected,
                     onPageProgress,
+                    reportStage,
                     signal
                 });
             } catch (error) {
@@ -747,6 +750,7 @@
                             sources,
                             expectedQuestionCount:
                                 context.batch?.expectedQuestionCount || 0,
+                            reportStage: context.reportStage,
                             signal
                         });
                         candidates.push(...(result?.questions || []));

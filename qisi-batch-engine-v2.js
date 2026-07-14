@@ -1914,6 +1914,7 @@
             batch,
             expectedQuestionCount = 0,
             onPageProgress = null,
+            reportStage = null,
             signal
         }) => {
             const renderStart = now();
@@ -1931,6 +1932,7 @@
                 throwIfCancelled(signal);
                 pages = await preparePages(file, signal);
                 throwIfCancelled(signal);
+                reportStage?.({ stage: 'page-rendered', engine: 'browser-pdf' });
                 const renderDurationMs = now() - renderStart;
 
                 console.log('[BATCH_DEBUG][strict-visual-prepared-pages]', {
@@ -1946,6 +1948,7 @@
                     )
                 });
 
+                reportStage?.({ stage: 'ocr-adapter-called', engine: 'qwen' });
                 const result = await ports.recognizePreparedPages({
                     file,
                     batch,
@@ -1953,6 +1956,7 @@
                     expectedQuestionCount,
                     onPageProgress,
                     renderDurationMs,
+                    reportStage,
                     ...(signal ? { signal } : {})
                 });
 

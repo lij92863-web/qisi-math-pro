@@ -453,7 +453,8 @@
                         batch: data.loaded.batch,
                         batchContext: data.loaded.batchContext,
                         sources: data.sources,
-                        supplementalSources: data.supplementalSources
+                        supplementalSources: data.supplementalSources,
+                        reportStage: event => diagnostics.record(event)
                     }, signal);
                     const drafts = sourceDrafts('docx', data.sourceResult);
                     diagnostics.record({
@@ -479,6 +480,7 @@
                             batchContext: data.loaded.batchContext,
                             sources: data.sources,
                             supplementalSources: data.supplementalSources,
+                            reportStage: event => diagnostics.record(event),
                             mode,
                             signal
                         }, signal);
@@ -499,7 +501,8 @@
                         batch: data.loaded.batch,
                         batchContext: data.loaded.batchContext,
                         sources: data.sources,
-                        supplementalSources: data.supplementalSources
+                        supplementalSources: data.supplementalSources,
+                        reportStage: event => diagnostics.record(event)
                     }, signal);
                     sourceDrafts('pdf', data.sourceResult);
                     diagnostics.record({

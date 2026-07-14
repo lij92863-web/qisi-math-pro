@@ -262,6 +262,42 @@
             errors.push(errorOf('producer-mode-contaminated', 'producer.deterministic',
                 'Vision output cannot be deterministic.'));
         }
+        if (value?.supportSources !== undefined) {
+            const supportSources = value.supportSources;
+            if (
+                !Array.isArray(supportSources) ||
+                producer?.mode !== 'deterministic-docx' ||
+                source?.format !== 'docx'
+            ) {
+                errors.push(errorOf(
+                    'support-source-manifest-invalid',
+                    'supportSources',
+                    'Support sources require deterministic DOCX identity.'
+                ));
+            } else {
+                const ids = new Set();
+                supportSources.forEach((support, index) => {
+                    const roles = stableStrings(support?.roles);
+                    if (
+                        !String(support?.sourceId || '').trim() ||
+                        support.sourceId === source?.sourceId ||
+                        support.format !== 'docx' ||
+                        ids.has(support.sourceId) ||
+                        !roles.length ||
+                        roles.some(role =>
+                            !['answer', 'solution'].includes(role)
+                        )
+                    ) {
+                        errors.push(errorOf(
+                            'support-source-manifest-invalid',
+                            `supportSources[${index}]`,
+                            'DOCX support source identity or role is invalid.'
+                        ));
+                    }
+                    ids.add(support?.sourceId);
+                });
+            }
+        }
         return immutable({ valid: errors.length === 0, errors });
     }
 
@@ -598,6 +634,75 @@
         return immutable(output);
     }
 
+    function applyDeterministicDocxSupportField(input = {}) {
+        const candidate = input.candidate;
+        const field = String(input.field || '').trim();
+        if (!isRecord(candidate) || !['answer', 'solution'].includes(field)) {
+            throw fail('DOCX_DETERMINISTIC_SUPPORT_INPUT_INVALID');
+        }
+        const identity = validateCanonicalIdentity(candidate);
+        if (
+            !identity.valid ||
+            candidate.source?.format !== 'docx' ||
+            candidate.producer?.routeId !== ROUTES.DOCX_DETERMINISTIC
+        ) throw fail('DOCX_PRODUCER_IDENTITY_INVALID', identity);
+        const value = fieldValue(input.support, field);
+        if (!hasValue(value)) {
+            throw fail('DOCX_DETERMINISTIC_SUPPORT_VALUE_MISSING', { field });
+        }
+        const candidateQuestion = String(
+            candidate.questionNumber || candidate.question || ''
+        ).trim();
+        const supportQuestion = String(
+            input.support?.questionNumber || input.support?.question || ''
+        ).trim();
+        if (!candidateQuestion || supportQuestion !== candidateQuestion) {
+            throw fail('DOCX_DETERMINISTIC_SUPPORT_QUESTION_MISMATCH', {
+                field, candidateQuestion, supportQuestion
+            });
+        }
+        if (hasValue(candidate[field]) && candidate[field] !== value) {
+            throw fail('DOCX_DETERMINISTIC_SUPPORT_CONFLICT', { field });
+        }
+        const source = canonicalSource(input.source, 'docx');
+        const roles = stableStrings(input.roles).filter(role => role !== 'full');
+        if (!roles.includes(field) ||
+            roles.some(role => !['answer', 'solution'].includes(role))) {
+            throw fail('DOCX_DETERMINISTIC_SUPPORT_ROLE_INVALID', { field });
+        }
+        const producer = clone(candidate.producer);
+        const output = clone(candidate);
+        output[field] = clone(value);
+        output.supportSources = [
+            ...(output.supportSources || []).filter(item =>
+                item.sourceId !== source.sourceId
+            ),
+            { ...source, roles }
+        ];
+        output.fieldProvenance = {
+            ...(output.fieldProvenance || {}),
+            [field]: provenanceEntry({
+                field,
+                kind: 'deterministic-source',
+                source,
+                producer,
+                page: input.support?.sourcePage || 1,
+                blockIds: input.support?.blockIds || [],
+                accepted: false,
+                reasonCode: 'docx-support-exact-question-match',
+                evidenceRef:
+                    `docx:${source.sourceId}:question:${candidateQuestion}:field:${field}`,
+                producerBoundary:
+                    'docx-deterministic-support-to-candidate'
+            })
+        };
+        const updatedIdentity = validateCanonicalIdentity(output);
+        if (!updatedIdentity.valid) {
+            throw fail('DOCX_PRODUCER_IDENTITY_INVALID', updatedIdentity);
+        }
+        return immutable(output);
+    }
+
     function canonicalComparable(value) {
         if (Array.isArray(value)) return value.map(canonicalComparable);
         if (!isRecord(value)) return value;
@@ -652,6 +757,7 @@
         projectDocxVisionCandidate,
         applyDocxVisionSupportField,
         projectDeterministicDocxCandidate,
+        applyDeterministicDocxSupportField,
         compareCanonicalDocxCandidates
     });
 });

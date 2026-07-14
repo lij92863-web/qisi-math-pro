@@ -1,9 +1,18 @@
 const path = require('node:path');
 const http = require('node:http');
+const https = require('node:https');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 const { chromium } = require('playwright');
+const {
+    installBrowserEngineInjection
+} = require('../harness/browser-engine-injection.js');
+const {
+    installImportStageTrace,
+    activateImportStageTrace,
+    readImportStageTrace
+} = require('../harness/import-stage-trace.js');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const CDN_CACHE = path.join(
@@ -11,6 +20,13 @@ const CDN_CACHE = path.join(
     'local-run-artifacts',
     'r2-e2e-cdn-cache'
 );
+const EXACT_EXTERNAL_ASSETS = new Map([[
+    'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js',
+    {
+        bytes: 1087212,
+        sha256: 'feabdf309770ed24bba31a5467836cdc8cf639c705af27d52b585b041bb8527b'
+    }
+]]);
 
 const contentTypeFor = url => {
     const pathname = new URL(url).pathname.toLowerCase();
@@ -21,6 +37,36 @@ const contentTypeFor = url => {
     return 'application/javascript; charset=utf-8';
 };
 
+const fetchExactExternalAsset = url => new Promise((resolve, reject) => {
+    const expected = EXACT_EXTERNAL_ASSETS.get(url);
+    if (!expected) {
+        reject(new Error(`uncached external browser asset blocked: ${url}`));
+        return;
+    }
+    const request = https.get(url, response => {
+        if (response.statusCode !== 200) {
+            response.resume();
+            reject(new Error(`static asset HTTP ${response.statusCode}`));
+            return;
+        }
+        const chunks = [];
+        response.on('data', chunk => chunks.push(chunk));
+        response.on('end', () => {
+            const body = Buffer.concat(chunks);
+            const digest = crypto.createHash('sha256').update(body).digest('hex');
+            if (body.length !== expected.bytes || digest !== expected.sha256) {
+                reject(new Error('static asset integrity mismatch'));
+                return;
+            }
+            resolve(body);
+        });
+    });
+    request.on('error', reject);
+    request.setTimeout(15000, () =>
+        request.destroy(new Error('static asset request timed out'))
+    );
+});
+
 const cachedExternalAsset = async url => {
     fs.mkdirSync(CDN_CACHE, { recursive: true });
     const key = crypto.createHash('sha256').update(url).digest('hex');
@@ -29,7 +75,9 @@ const cachedExternalAsset = async url => {
     if (fs.existsSync(bodyPath)) {
         return fs.readFileSync(bodyPath);
     }
-    throw new Error(`uncached external browser asset blocked: ${url}`);
+    const body = await fetchExactExternalAsset(url);
+    fs.writeFileSync(bodyPath, body);
+    return body;
 };
 
 const requestOk = url => new Promise(resolve => {
@@ -55,7 +103,7 @@ const waitForHealth = async (url, child) => {
     throw new Error(`local server did not become healthy: ${url}`);
 };
 
-const startBrowserApp = async (port) => {
+const startBrowserApp = async (port, { fault = '' } = {}) => {
     const output = [];
     const child = spawn(
         process.execPath,
@@ -122,6 +170,61 @@ const startBrowserApp = async (port) => {
     });
 
     const page = await context.newPage();
+    await installImportStageTrace(page);
+    if (fault) {
+        await page.addInitScript(selectedFault => {
+            window.Qisi = window.Qisi || {};
+            const trap = (owner, key, transform) => {
+                Object.defineProperty(owner, key, {
+                    configurable: true,
+                    enumerable: true,
+                    set(value) {
+                        Object.defineProperty(owner, key, {
+                            configurable: true,
+                            enumerable: true,
+                            writable: false,
+                            value: transform(value)
+                        });
+                    }
+                });
+            };
+            if (selectedFault === 'parser-failure') {
+                trap(window, 'QisiBatchImporter', owner => Object.freeze({
+                    ...owner,
+                    async parseDocxFile() {
+                        const error = new Error('counterfactual parser failure');
+                        error.code = 'COUNTERFACTUAL_PARSER_FAILURE';
+                        throw error;
+                    }
+                }));
+            }
+            if (selectedFault === 'persistence-failure') {
+                trap(window.Qisi, 'DraftPersistenceService', owner =>
+                    Object.freeze({
+                        ...owner,
+                        async persistReviewDraftBatch() {
+                            const error = new Error(
+                                'counterfactual persistence failure'
+                            );
+                            error.code =
+                                'COUNTERFACTUAL_PERSISTENCE_FAILURE';
+                            throw error;
+                        }
+                    })
+                );
+            }
+            if (selectedFault === 'controlled-write-missing') {
+                trap(window.Qisi, 'PdfSupportControlledWrite', owner =>
+                    Object.freeze({
+                        ...owner,
+                        buildPdfSupportFieldLevelControlledWrite() {
+                            return null;
+                        }
+                    })
+                );
+            }
+        }, fault);
+    }
     page.on('pageerror', error => pageErrors.push(String(error?.stack || error)));
     page.on('console', message => {
         if (message.type() === 'error') {
@@ -142,6 +245,7 @@ const startBrowserApp = async (port) => {
             null,
             { timeout: 30000 }
         );
+        await activateImportStageTrace(page);
     } catch (error) {
         await context.close();
         await browser.close();
@@ -389,7 +493,9 @@ const getDbSnapshot = page =>
         async db => ({
             questions: await db.table('questions').toArray(),
             batches: await db.table('draftImportBatches').toArray(),
-            drafts: await db.table('draftQuestions').toArray()
+            files: await db.table('draftImportFiles').toArray(),
+            drafts: await db.table('draftQuestions').toArray(),
+            images: await db.table('draftImages').toArray()
         }),
         null
     );
@@ -415,32 +521,52 @@ const waitForDbSnapshot = async (
     throw new Error('timed out waiting for IndexedDB state');
 };
 
-const installImportTransport = (page, envelope) => page.evaluate(value => {
-    const transport = {
-        kind: 'qisi.mock-import-transport.v1',
-        produceCandidates: async () => structuredClone(value)
-    };
-    window.Qisi.Runtime.setRuntimeDependency('ImportAdapterRegistry', {
-        kind: 'qisi.import-adapter-registry.v1',
-        getAdapter: name => name === 'fixture' ? transport : null
-    });
-}, envelope);
-
-const createImportThroughUi = async (page, file) => {
-    await page.getByRole('button', { name: '批量录题' }).click();
+const createImportThroughUi = async (page, input) => {
+    const files = Array.isArray(input?.files)
+        ? input.files
+        : [{ file: input, roles: ['full'] }];
+    const producerMode = String(input?.producerMode || '');
+    const awaitCompletion = input?.awaitCompletion !== false;
+    const before = await getDbSnapshot(page);
+    const existingIds = new Set(before.batches.map(batch => batch.id));
+    await page.locator('nav .nav-item').nth(1).click();
     await page.locator('.batch-home-upload').click();
     await page.locator('input[type="file"][accept*=".docx"]')
-        .setInputFiles(file);
-    const modal = page.locator('.batch-purpose-modal')
-        .filter({ has: page.locator('.batch-purpose-options') });
-    await modal.waitFor({ state: 'visible' });
-    await modal.locator('.batch-purpose-options input').nth(3).check();
-    await modal.getByRole('button', { name: '确认添加' }).click();
-    await page.getByRole('button', { name: '创建识别任务' }).click();
+        .setInputFiles(files.map(entry => entry.file));
+    const roleNames = [
+        'question', 'answer', 'solution', 'full', 'supplemental_image'
+    ];
+    for (const entry of files) {
+        const modal = page.locator('.batch-purpose-modal')
+            .filter({ has: page.locator('.batch-purpose-options') });
+        await modal.waitFor({ state: 'visible' });
+        for (let index = 0; index < roleNames.length; index += 1) {
+            await modal.locator('.batch-purpose-options input').nth(index)
+                .setChecked((entry.roles || []).includes(roleNames[index]));
+        }
+        await modal.locator('.flex.justify-end .material-primary-btn').click();
+    }
+    await page.locator('#batch-producer-mode')
+        .selectOption(producerMode);
+    if (Number.isInteger(input?.expectedQuestionCount)) {
+        await page.locator('input[type="number"][placeholder*="0"]')
+            .first()
+            .fill(String(input.expectedQuestionCount));
+    }
+    if (!files.some(entry =>
+        (entry.roles || []).some(role => ['answer', 'full'].includes(role))
+    )) {
+        page.once('dialog', dialog => dialog.accept());
+    }
+    await page.locator('.batch-create-actions .material-primary-btn').click();
     const snapshot = await waitForDbSnapshot(page, value =>
-        value.batches.some(batch => ['review', 'failed'].includes(batch.status))
+        value.batches.some(batch =>
+            !existingIds.has(batch.id) && (
+                !awaitCompletion || ['review', 'failed'].includes(batch.status)
+            )
+        )
     );
-    const batch = snapshot.batches.sort((a, b) => b.createdAt - a.createdAt)[0];
+    const batch = snapshot.batches.find(row => !existingIds.has(row.id));
     return { batchId: batch.id, snapshot };
 };
 
@@ -486,7 +612,8 @@ module.exports = {
     startBrowserApp,
     callProxy,
     seedReviewBatch,
-    installImportTransport,
+    installBrowserEngineInjection,
+    readImportStageTrace,
     createImportThroughUi,
     getDbSnapshot,
     waitForDbSnapshot,

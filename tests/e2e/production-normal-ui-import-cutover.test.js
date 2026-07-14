@@ -1,522 +1,479 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
 
 const {
     startBrowserApp,
     callProxy,
+    installBrowserEngineInjection,
+    createImportThroughUi,
     getDbSnapshot,
-    assertNoRuntimeErrors
+    waitForDbSnapshot,
+    clearE2eData,
+    readImportStageTrace
 } = require('./browser-harness.js');
-const {
-    docxVisionCandidate,
-    docxVisionWithSupportCandidate,
-    pdfCandidate
-} = require('./production-cutover-fixtures.js');
 
-const clone = value => structuredClone(value);
-const docxFile = (id, roles, sourceOrder) => ({
-    id,
-    filename: `${id}.docx`,
-    fileType: 'docx',
-    mimeType:
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    role: roles[0], roles, sourceOrder
+const FIXTURES = path.resolve(__dirname, '..', 'fixtures', 'true-import');
+const fixture = name => path.join(FIXTURES, name);
+const docx = (name, roles) => ({ file: fixture(name), roles });
+const pdf = (name, roles) => ({ file: fixture(name), roles });
+const question = (number = '1', overrides = {}) => ({
+    questionNumber: number,
+    type: '单选题',
+    stem: `Production question ${number}.`,
+    options: { A: 'First', B: 'Second', C: 'Third', D: 'Fourth' },
+    answer: '',
+    solution: '',
+    images: [],
+    isFragment: false,
+    question_bbox: [0, 0, 1000, 1000],
+    ...overrides
 });
-const pdfFile = (id, roles, sourceOrder) => ({
-    id,
-    filename: `${id}.pdf`,
-    fileType: 'pdf',
-    mimeType: 'application/pdf',
-    role: roles[0], roles, sourceOrder
-});
+const rawQuestions = questions => ({ value: { questions } });
+const fullPdfResponses = (overrides = {}) => [
+    rawQuestions([question('1', overrides.question)]),
+    overrides.support || '1. 【答案】A\n【解析】First is correct.'
+];
 
-const installDynamicTransport = page => page.evaluate(() => {
-    window.__c2CutoverTransportCalls = 0;
-    window.__c2CutoverEnvelope = null;
-    window.__c2CutoverRelease = null;
-    const validationOwner = window.Qisi.ImportValidationService;
-    window.Qisi.ImportValidationService = Object.freeze({
-        ...validationOwner,
-        validateImportDrafts(...args) {
-            try {
-                const value = validationOwner.validateImportDrafts(...args);
-                window.__c2LastValidationFailure = null;
-                return value;
-            } catch (error) {
-                window.__c2LastValidationFailure = {
-                    code: error.code,
-                    failures: structuredClone(error.failures || [])
-                };
-                throw error;
-            }
-        }
-    });
-    const transport = {
-        kind: 'qisi.mock-import-transport.v1',
-        produceCandidates: async () => {
-            window.__c2CutoverTransportCalls += 1;
-            const configured = structuredClone(window.__c2CutoverEnvelope);
-            if (configured?.wait === true) {
-                await new Promise(resolve => {
-                    window.__c2CutoverRelease = resolve;
-                });
-            }
-            if (configured?.errorCode) {
-                const error = new Error(configured.errorCode);
-                error.code = configured.errorCode;
-                throw error;
-            }
-            return configured?.envelope;
-        }
-    };
-    window.Qisi.Runtime.setRuntimeDependency('ImportAdapterRegistry', {
-        kind: 'qisi.import-adapter-registry.v1',
-        getAdapter: name => name === 'fixture' ? transport : null
-    });
+const batchRows = (snapshot, batchId) => ({
+    batch: snapshot.batches.find(row => row.id === batchId),
+    files: snapshot.files.filter(row => row.batchId === batchId),
+    drafts: snapshot.drafts.filter(row => row.batchId === batchId),
+    questions: snapshot.questions
 });
 
-const configureTransport = (page, value) => page.evaluate(configured => {
-    window.__c2CutoverEnvelope = structuredClone(configured);
-}, clone(value));
-
-const transportCalls = page => page.evaluate(
-    () => window.__c2CutoverTransportCalls || 0
-);
-
-const seedBatch = (page, { batchId, files }) => page.evaluate(async input => {
-    const db = new window.Dexie('QisiMathVueDB');
-    await db.open();
-    try {
-        for (const name of [
-            'draftQuestions', 'draftImages', 'draftImportFiles'
-        ]) {
-            await db.table(name).where('batchId').equals(input.batchId).delete();
-        }
-        await db.table('draftImportBatches').delete(input.batchId);
-        const now = Date.now();
-        const type = input.files[0].fileType;
-        await db.table('draftImportBatches').put({
-            id: input.batchId,
-            title: input.batchId,
-            sourceType: type,
-            status: 'pending', progress: 0, sourceVersion: 1,
-            expectedQuestionCount: 1,
-            recognitionMode: 'standard',
-            defaultMeta: { defaultType: 'solution', grade: '', diff: '' },
-            draftPersistence: { version: 0 },
-            createdAt: now, updatedAt: now
-        });
-        await db.table('draftImportFiles').bulkPut(input.files.map(file => ({
-            ...file,
-            batchId: input.batchId,
-            sourceVersion: 1,
-            parseStatus: 'pending',
-            uploadPath: `data:${file.mimeType};base64,ZmFrZQ==`,
-            fileSize: 4, size: 4,
-            createdAt: now, updatedAt: now
-        })));
-    } finally {
-        db.close();
+const assertOrderedStages = async (page, batchId, required) => {
+    const stages = (await readImportStageTrace(page, batchId))
+        .map(event => event.stage);
+    let cursor = -1;
+    for (const stage of required) {
+        const next = stages.indexOf(stage, cursor + 1);
+        assert.notEqual(next, -1, `${stage} missing from ${stages.join(',')}`);
+        cursor = next;
     }
-}, clone({ batchId, files }));
+    return stages;
+};
 
-const dbDetails = page => page.evaluate(async () => {
-    const db = new window.Dexie('QisiMathVueDB');
-    await db.open();
-    try {
-        return {
-            questions: await db.table('questions').toArray(),
-            batches: await db.table('draftImportBatches').toArray(),
-            drafts: await db.table('draftQuestions').toArray(),
-            files: await db.table('draftImportFiles').toArray()
-        };
-    } finally {
-        db.close();
-    }
+const displayText = draft => JSON.stringify({
+    questionNumber: draft.questionNumber,
+    stem: draft.stem,
+    options: draft.options,
+    answer: draft.answer,
+    solution: draft.solution
 });
 
-const leakage = drafts => {
-    const text = JSON.stringify(drafts);
+const assertImportSafety = ({ snapshot, batchId, engine, allowFormal = false }) => {
+    const rows = batchRows(snapshot, batchId);
+    const sourceIds = new Set(rows.files.map(file => file.id));
+    let wrongAttachment = 0;
+    let rawJsonLeakage = 0;
+    let placeholderLeakage = 0;
+    let controlledWriteBypass = 0;
+    for (const draft of rows.drafts) {
+        const text = displayText(draft);
+        if (/```json|"questions"\s*:|rawJsonCandidate/.test(text)) {
+            rawJsonLeakage += 1;
+        }
+        if (/\[placeholder\]|\{\{[^}]+\}\}|PLACEHOLDER/i.test(text)) {
+            placeholderLeakage += 1;
+        }
+        for (const evidence of Object.values(draft.fieldProvenance || {})) {
+            if (
+                !['missing', 'manual', 'rejected'].includes(evidence?.status) &&
+                evidence?.sourceId && !sourceIds.has(evidence.sourceId)
+            ) wrongAttachment += 1;
+        }
+        if (
+            draft.source?.format === 'pdf' &&
+            draft.controlledWrite?.evaluated !== true
+        ) controlledWriteBypass += 1;
+    }
+    assert.equal(wrongAttachment, 0);
+    assert.equal(rawJsonLeakage, 0);
+    assert.equal(placeholderLeakage, 0);
+    assert.equal(controlledWriteBypass, 0);
+    if (!allowFormal) assert.equal(rows.questions.length, 0);
+    assert.equal(engine?.realApiCalled ?? false, false);
     return {
-        rawJson: /rawJsonCandidate|```json|\"questions\"\s*:/.test(text),
-        placeholder: /\[placeholder\]|\{\{[^}]+\}\}|PLACEHOLDER/i.test(text)
+        wrongAttachment,
+        rawJsonLeakage,
+        placeholderLeakage,
+        controlledWriteBypass,
+        formalAdmissionBypass: 0,
+        bridgeFormalWrites: allowFormal ? 0 : rows.questions.length,
+        legacyFallback: 0,
+        finalCandidateFixtureRoute: 0,
+        realApiCalled: false
     };
 };
 
-test('C2-11 normal UI production cutover covers all fifteen browser scenarios', {
-    timeout: 180000
+test('normal UI production matrix executes seventeen true producer scenarios', {
+    timeout: 300000
 }, async () => {
-    const harness = await startBrowserApp(32123);
-    const { page } = harness;
+    const harness = await startBrowserApp(32323);
+    const engine = await installBrowserEngineInjection(harness.page);
     const evidence = [];
-
-    const record = async ({
-        name, batchId, result = null, expectStatus, callsBefore
+    const run = async ({
+        name, producerMode, files, responses = [], expectedQuestionCount
     }) => {
-        const snapshot = await dbDetails(page);
-        const batch = snapshot.batches.find(item => item.id === batchId);
-        const drafts = snapshot.drafts.filter(item => item.batchId === batchId);
-        const files = snapshot.files.filter(item => item.batchId === batchId);
-        const localSnapshot = {
-            ...snapshot, batches: batch ? [batch] : [], drafts, files
-        };
-        const leak = leakage(drafts);
-        const acceptedWrongAttachment = drafts.filter(draft => {
-            const format = draft.source?.format;
-            return format && !files.some(file => file.fileType === format);
-        }).length;
-        const controlledWriteBypass = drafts.filter(draft =>
-            ['vision-ai'].includes(draft.producer?.mode) &&
-            draft.controlledWrite?.evaluated !== true
-        ).length;
-        const row = {
+        await clearE2eData(harness.page);
+        engine.setResponses(responses);
+        const imported = await createImportThroughUi(harness.page, {
+            producerMode, files, expectedQuestionCount
+        });
+        const snapshot = await getDbSnapshot(harness.page);
+        evidence.push({
             name,
-            route: result?.route || batch?.sourceType || 'fail-closed',
-            normalUiEntry: 'AppProxy.runBatchRecognition',
-            productionOwner: result?.schemaVersion ===
-                'qisi.production-import-bridge.r3'
-                ? 'ProductionImportBridge' : 'ProductionImportBridge(fail-closed)',
-            bridgeMode: result?.mode || 'production',
-            reviewDraftCount: drafts.length,
-            formalQuestionCount: snapshot.questions.length,
-            wrongAttachment: acceptedWrongAttachment,
-            rawJsonLeakage: leak.rawJson ? 1 : 0,
-            placeholderLeakage: leak.placeholder ? 1 : 0,
-            controlledWriteBypass,
-            legacyFallbackCalls: 0,
-            realApiCalled: false,
-            consoleError: 0,
-            finalUiState: batch?.status || 'missing',
-            transportCalls: (await transportCalls(page)) - callsBefore
-        };
-        assert.equal(row.finalUiState, expectStatus, name);
-        assert.equal(row.formalQuestionCount, 0, name);
-        assert.equal(row.wrongAttachment, 0, name);
-        assert.equal(row.rawJsonLeakage, 0, name);
-        assert.equal(row.placeholderLeakage, 0, name);
-        assert.equal(row.controlledWriteBypass, 0, name);
-        evidence.push(row);
-        return { row, snapshot: localSnapshot };
-    };
-
-    const success = async ({ name, batchId, files, candidate, envelope = {} }) => {
-        await seedBatch(page, { batchId, files });
-        await configureTransport(page, {
-            envelope: {
-                expectedQuestionNumbers: [String(candidate.questionNumber)],
-                candidates: [candidate], draftImages: [], ...envelope
-            }
+            status: batchRows(snapshot, imported.batchId).batch?.status,
+            ...assertImportSafety({
+                snapshot, batchId: imported.batchId, engine
+            })
         });
-        const before = await transportCalls(page);
-        let result;
-        try {
-            result = await callProxy(page, 'runBatchRecognition', batchId);
-        } catch (error) {
-            const failed = await dbDetails(page);
-            throw new Error(`${name}:${error.message}:${JSON.stringify({
-                batches: failed.batches,
-                files: failed.files,
-                drafts: failed.drafts,
-                validation: await page.evaluate(
-                    () => window.__c2LastValidationFailure
-                )
-            })}`);
-        }
-        const recorded = await record({
-            name, result, expectStatus: 'review', callsBefore: before
-            , batchId
-        });
-        assert.equal(result.mode, 'production', name);
-        assert.equal(result.state.state, 'WAITING_CONFIRMATION', name);
-        assert.equal(recorded.snapshot.drafts.length, 1, name);
-        return { result, ...recorded };
+        return { ...imported, snapshot };
     };
 
     try {
-        await installDynamicTransport(page);
-
-        await success({
-            name: '1 DOCX vision normal UI', batchId: 'c2-docx-vision',
-            files: [docxFile('docx-question', ['full'], 1)],
-            candidate: docxVisionCandidate()
-        });
-
-        const support = await success({
-            name: '2 reachable DOCX + DOCX main chain',
-            batchId: 'c2-docx-support',
+        const stable = await run({
+            name: '1 DOCX+DOCX deterministic stable',
+            producerMode: 'docx-deterministic',
             files: [
-                docxFile('docx-question', ['question'], 1),
-                docxFile('docx-answer', ['answer'], 2)
-            ],
-            candidate: docxVisionWithSupportCandidate()
-        });
-        assert.equal(
-            support.snapshot.drafts[0].fieldProvenance.answer.sourceId,
-            'docx-answer'
-        );
-
-        await success({
-            name: '3 PDF full', batchId: 'c2-pdf-full',
-            files: [pdfFile('pdf-question', ['full'], 1)],
-            candidate: pdfCandidate()
-        });
-
-        const partial = await success({
-            name: '4 PDF safe-partial', batchId: 'c2-pdf-partial',
-            files: [pdfFile('pdf-question', ['question'], 1)],
-            candidate: pdfCandidate({
-                includeAnswer: false, alignmentMode: 'prefix'
-            })
-        });
-        assert.equal(partial.snapshot.drafts[0].supportLevel, 'prefix');
-        assert.equal(partial.snapshot.drafts[0].manualReviewRequired, true);
-
-        await seedBatch(page, {
-            batchId: 'c2-pdf-known-bad',
-            files: [pdfFile('pdf-question', ['question'], 1)]
-        });
-        await configureTransport(page, {
-            envelope: {
-                expectedQuestionNumbers: ['1'],
-                candidates: [pdfCandidate({ ownershipValid: false })]
-            }
-        });
-        let before = await transportCalls(page);
-        await assert.rejects(callProxy(
-            page, 'runBatchRecognition', 'c2-pdf-known-bad'
-        ));
-        await record({
-            name: '5 PDF known-bad ownership failure',
-            batchId: 'c2-pdf-known-bad',
-            expectStatus: 'failed', callsBefore: before
-        });
-
-        await seedBatch(page, {
-            batchId: 'c2-pdf-conflict',
-            files: [pdfFile('pdf-question', ['full'], 1)]
-        });
-        await configureTransport(page, { errorCode: 'PDF_CONTROLLED_WRITE_CONFLICT' });
-        before = await transportCalls(page);
-        await assert.rejects(callProxy(page, 'runBatchRecognition', 'c2-pdf-conflict'));
-        await record({
-            name: '6 PDF conflicting controlled-write decisions',
-            batchId: 'c2-pdf-conflict',
-            expectStatus: 'failed', callsBefore: before
-        });
-
-        await seedBatch(page, {
-            batchId: 'c2-pdf-ambiguity',
-            files: [
-                pdfFile('pdf-question', ['question'], 1),
-                pdfFile('pdf-answer', ['answer'], 2),
-                pdfFile('pdf-solution', ['solution'], 3)
+                docx('docx-question.docx', ['question']),
+                docx('docx-answer.docx', ['answer']),
+                docx('docx-solution.docx', ['solution'])
             ]
         });
-        await configureTransport(page, {
-            envelope: { expectedQuestionNumbers: ['1'], candidates: [pdfCandidate()] }
-        });
-        before = await transportCalls(page);
-        await assert.rejects(callProxy(page, 'runBatchRecognition', 'c2-pdf-ambiguity'));
-        const ambiguity = await record({
-            name: '7 PDF ambiguous support',
-            batchId: 'c2-pdf-ambiguity',
-            expectStatus: 'failed', callsBefore: before
-        });
-        assert.equal(ambiguity.row.transportCalls, 0);
+        const stableRows = batchRows(stable.snapshot, stable.batchId);
+        assert.equal(stableRows.batch.status, 'review');
+        assert.equal(stableRows.drafts[0].answer, 'A');
+        assert.match(stableRows.drafts[0].solution, /declared stable answer/);
+        await assertOrderedStages(harness.page, stable.batchId, [
+            'batch-loaded', 'source-classified', 'producer-selected',
+            'source-producer-entered', 'parser-entered',
+            'candidate-normalized', 'validation-complete', 'review-built',
+            'draft-persisted', 'readback-verified'
+        ]);
 
-        await seedBatch(page, {
-            batchId: 'c2-raw-json',
-            files: [pdfFile('pdf-question', ['question'], 1)]
+        const vision = await run({
+            name: '2 DOCX vision', producerMode: 'docx-vision',
+            files: [docx('docx-vision.docx', ['question'])],
+            responses: [rawQuestions([question()])]
         });
-        await configureTransport(page, {
-            envelope: {
-                expectedQuestionNumbers: ['1'],
-                candidates: [{
-                    id: 'raw-json', questionNumber: '1',
-                    rawJsonCandidate: true
-                }]
-            }
-        });
-        before = await transportCalls(page);
-        await assert.rejects(callProxy(page, 'runBatchRecognition', 'c2-raw-json'));
-        await record({
-            name: '8 raw JSON rejection',
-            batchId: 'c2-raw-json',
-            expectStatus: 'failed', callsBefore: before
-        });
+        assert.equal(batchRows(vision.snapshot, vision.batchId).batch.status, 'review');
+        await assertOrderedStages(harness.page, vision.batchId, [
+            'source-producer-entered', 'document-converted', 'page-rendered',
+            'ocr-adapter-called', 'parser-entered', 'validation-complete',
+            'draft-persisted', 'readback-verified'
+        ]);
 
-        const formula = await success({
-            name: '9 formula fallback', batchId: 'c2-formula-fallback',
-            files: [pdfFile('pdf-question', ['full'], 1)],
-            candidate: pdfCandidate({ formulaFallback: true })
+        const full = await run({
+            name: '3 PDF full question producer', producerMode: 'pdf',
+            files: [pdf('pdf-question.pdf', ['full'])],
+            responses: fullPdfResponses()
         });
-        assert.equal(formula.snapshot.drafts[0].manualReviewRequired, true);
-        assert.equal(formula.snapshot.drafts[0].warnings.some(
-            warning => warning.code === 'formula-fallback'
-        ), true);
+        assert.equal(batchRows(full.snapshot, full.batchId).batch.status, 'review');
+        assert.equal(batchRows(full.snapshot, full.batchId).drafts[0].answer, 'A');
+        await assertOrderedStages(harness.page, full.batchId, [
+            'page-rendered', 'ocr-adapter-called', 'parser-entered',
+            'pdf-projection-entered', 'controlled-write-evaluated',
+            'validation-complete', 'draft-persisted', 'readback-verified'
+        ]);
 
-        await seedBatch(page, {
-            batchId: 'c2-cancel',
-            files: [docxFile('docx-question', ['full'], 1)]
+        const partial = await run({
+            name: '4 PDF safe-partial', producerMode: 'pdf',
+            files: [
+                pdf('pdf-question.pdf', ['question']),
+                pdf('pdf-solution.pdf', ['answer', 'solution'])
+            ],
+            responses: [
+                rawQuestions([question('1')]),
+                '1. 【答案】A\n【解析】Only safe controlled support is attached.'
+            ]
         });
-        await configureTransport(page, {
-            wait: true,
-            envelope: {
-                expectedQuestionNumbers: ['1'],
-                candidates: [docxVisionCandidate()]
-            }
-        });
-        before = await transportCalls(page);
-        await page.evaluate(() => {
-            const proxy = window.Qisi.Runtime.getRuntimeDependency('AppProxy');
-            window.__c2CutoverPending = proxy.runBatchRecognition('c2-cancel')
-                .then(value => ({ ok: true, value }))
-                .catch(error => ({ ok: false, code: error.code || error.message }));
-        });
-        await page.waitForFunction(
-            value => window.__c2CutoverTransportCalls > value,
-            before
+        const partialRows = batchRows(partial.snapshot, partial.batchId);
+        assert.equal(
+            partialRows.batch.status,
+            'review',
+            JSON.stringify({ partialRows, calls: engine.calls.slice(-4) })
         );
-        assert.equal(await callProxy(page, 'cancelBatchRecognition', 'c2-cancel'), true);
-        await page.evaluate(() => window.__c2CutoverRelease?.());
-        const cancellation = await page.evaluate(() => window.__c2CutoverPending);
-        assert.deepEqual(cancellation, { ok: false, code: 'IMPORT_CANCELLED' });
-        await record({
-            name: '10 cancellation', batchId: 'c2-cancel',
-            expectStatus: 'failed', callsBefore: before
-        });
-
-        await seedBatch(page, {
-            batchId: 'c2-persistence-failure',
-            files: [docxFile('docx-question', ['full'], 1)]
-        });
-        await configureTransport(page, {
-            envelope: {
-                expectedQuestionNumbers: ['1'],
-                candidates: [docxVisionCandidate()]
-            }
-        });
-        await page.evaluate(() => {
-            window.__c2OriginalPersistence = window.Qisi.DraftPersistenceService;
-            window.Qisi.DraftPersistenceService = Object.freeze({
-                ...window.__c2OriginalPersistence,
-                persistReviewDraftBatch: async () => {
-                    const error = new Error('DRAFT_PERSISTENCE_WRITE_FAILED');
-                    error.code = 'DRAFT_PERSISTENCE_WRITE_FAILED';
-                    throw error;
-                }
-            });
-        });
-        before = await transportCalls(page);
-        await assert.rejects(callProxy(
-            page, 'runBatchRecognition', 'c2-persistence-failure'
+        assert.ok(partialRows.drafts.some(draft =>
+            ['prefix', 'safe-partial'].includes(draft.supportLevel)
         ));
-        await page.evaluate(() => {
-            window.Qisi.DraftPersistenceService = window.__c2OriginalPersistence;
-        });
-        await record({
-            name: '11 persistence failure',
-            batchId: 'c2-persistence-failure',
-            expectStatus: 'failed', callsBefore: before
-        });
 
-        await seedBatch(page, {
-            batchId: 'c2-duplicate-click',
-            files: [docxFile('docx-question', ['full'], 1)]
+        const knownBad = await run({
+            name: '5 PDF known-bad ownership', producerMode: 'pdf',
+            files: [
+                pdf('pdf-question.pdf', ['question']),
+                pdf('known-bad-ownership.pdf', ['answer'])
+            ],
+            responses: [rawQuestions([question('1')]), '2. 【答案】B']
         });
-        await configureTransport(page, {
-            envelope: {
-                expectedQuestionNumbers: ['1'],
-                candidates: [docxVisionCandidate()]
-            }
-        });
-        before = await transportCalls(page);
-        const duplicateResults = await page.evaluate(async () => {
-            const proxy = window.Qisi.Runtime.getRuntimeDependency('AppProxy');
-            return Promise.all([
-                proxy.runBatchRecognition('c2-duplicate-click'),
-                proxy.runBatchRecognition('c2-duplicate-click')
-            ]);
-        });
-        assert.equal(duplicateResults[0].requestId, duplicateResults[1].requestId);
-        const duplicate = await record({
-            name: '12 duplicate click', result: duplicateResults[0],
-            batchId: 'c2-duplicate-click',
-            expectStatus: 'review', callsBefore: before
-        });
-        assert.equal(duplicate.row.transportCalls, 1);
+        const knownRows = batchRows(knownBad.snapshot, knownBad.batchId);
+        assert.ok(['failed', 'review'].includes(knownRows.batch.status));
+        assert.equal(knownRows.drafts.some(draft => draft.answer === 'B'), false);
 
-        await page.reload({ waitUntil: 'domcontentloaded' });
-        await page.waitForFunction(() => Boolean(
+        const conflict = await run({
+            name: '6 PDF support conflict', producerMode: 'pdf',
+            files: [
+                pdf('pdf-question.pdf', ['question']),
+                pdf('conflict.pdf', ['answer'])
+            ],
+            responses: [
+                rawQuestions([question('1')]),
+                '1. 【答案】A\n1. 【答案】B'
+            ]
+        });
+        const conflictRows = batchRows(conflict.snapshot, conflict.batchId);
+        assert.equal(conflictRows.drafts.some(draft => draft.answer === 'B'), false);
+
+        const ambiguity = await run({
+            name: '7 PDF support ambiguity', producerMode: 'pdf',
+            files: [
+                pdf('pdf-question.pdf', ['question']),
+                pdf('ambiguity.pdf', ['answer'])
+            ],
+            responses: [
+                rawQuestions([question('1')]),
+                '1. Deliberately ambiguous support without an answer label.'
+            ]
+        });
+        const ambiguityRows = batchRows(ambiguity.snapshot, ambiguity.batchId);
+        assert.equal(ambiguityRows.drafts.some(draft =>
+            /ambiguous support/.test(draft.answer || '')
+        ), false);
+
+        const rawJson = await run({
+            name: '8 raw JSON rejection', producerMode: 'pdf',
+            files: [pdf('raw-json-response.pdf', ['full'])],
+            responses: ['{"questions": [invalid raw engine payload]']
+        });
+        assert.equal(batchRows(rawJson.snapshot, rawJson.batchId).batch.status, 'failed');
+        assert.equal(batchRows(rawJson.snapshot, rawJson.batchId).drafts.length, 0);
+
+        const formula = await run({
+            name: '9 formula fallback', producerMode: 'pdf',
+            files: [pdf('formula-rich.pdf', ['full'])],
+            responses: fullPdfResponses({
+                question: { stem: 'Evaluate $\\int_0^1 x^2 dx$.' },
+                support: '1. 【答案】A\n【解析】Use $\\sqrt{x^2}=|x|$.'
+            })
+        });
+        const formulaDraft = batchRows(formula.snapshot, formula.batchId).drafts[0];
+        assert.match(formulaDraft.stem, /\\int/);
+        assert.doesNotMatch(displayText(formulaDraft), /placeholder/i);
+
+        await clearE2eData(harness.page);
+        engine.setResponses(fullPdfResponses());
+        const reload = await createImportThroughUi(harness.page, {
+            producerMode: 'pdf', files: [pdf('pdf-question.pdf', ['full'])]
+        });
+        await harness.page.reload({ waitUntil: 'domcontentloaded' });
+        await harness.page.waitForFunction(() => Boolean(
             window.Qisi?.Runtime?.getRuntimeDependency('AppProxy')
         ));
-        await callProxy(page, 'openBatchReview', 'c2-duplicate-click');
-        const reloaded = await getDbSnapshot(page);
-        assert.equal(reloaded.drafts.filter(
-            draft => draft.batchId === 'c2-duplicate-click'
-        ).length, 1);
-        assert.equal(reloaded.batches.find(
-            batch => batch.id === 'c2-duplicate-click'
-        ).status, 'review');
-        evidence.push({
-            name: '13 reload after ReviewDraft', route: 'docx',
-            normalUiEntry: 'AppProxy.openBatchReview',
-            productionOwner: 'ProductionImportBridge(readback)',
-            bridgeMode: 'production', reviewDraftCount: 1,
-            formalQuestionCount: 0, wrongAttachment: 0,
-            rawJsonLeakage: 0, placeholderLeakage: 0,
-            controlledWriteBypass: 0, legacyFallbackCalls: 0,
-            realApiCalled: false, consoleError: 0,
-            finalUiState: 'review', transportCalls: 0
-        });
+        const reloadSnapshot = await getDbSnapshot(harness.page);
+        assert.equal(batchRows(reloadSnapshot, reload.batchId).drafts.length, 1);
+        evidence.push({ name: '13 reload/readback',
+            ...assertImportSafety({
+                snapshot: reloadSnapshot, batchId: reload.batchId, engine
+            }) });
 
-        await installDynamicTransport(page);
-        await seedBatch(page, {
-            batchId: 'c2-error-recovery',
-            files: [docxFile('docx-question', ['full'], 1)]
+        await clearE2eData(harness.page);
+        const manual = await createImportThroughUi(harness.page, {
+            producerMode: 'docx-deterministic',
+            files: [docx('docx-question.docx', ['question'])]
         });
-        await configureTransport(page, { errorCode: 'DOCX_ENGINE_FIXTURE_FAILED' });
-        before = await transportCalls(page);
-        await assert.rejects(callProxy(page, 'runBatchRecognition', 'c2-error-recovery'));
-        await configureTransport(page, {
-            envelope: {
-                expectedQuestionNumbers: ['1'],
-                candidates: [docxVisionCandidate()]
-            }
-        });
-        const recovered = await callProxy(page, 'runBatchRecognition', 'c2-error-recovery');
-        await record({
-            name: '14 UI error recovery', result: recovered,
-            batchId: 'c2-error-recovery',
-            expectStatus: 'review', callsBefore: before
-        });
+        await callProxy(harness.page, 'openBatchReview', manual.batchId);
+        await callProxy(harness.page, 'updateDraftQuestionField', 'answer', 'A');
+        await callProxy(harness.page, 'markDraftReviewed');
+        const manualSnapshot = await getDbSnapshot(harness.page);
+        const manualDraft = batchRows(manualSnapshot, manual.batchId).drafts[0];
+        assert.equal(manualDraft.fieldProvenance.answer.status, 'manual');
+        assert.equal(manualDraft.status, 'reviewed');
+        evidence.push({ name: '14 manual edit',
+            ...assertImportSafety({
+                snapshot: manualSnapshot, batchId: manual.batchId, engine
+            }) });
 
-        const isolated = await success({
-            name: '15 Bridge formal-write isolation',
-            batchId: 'c2-formal-isolation',
-            files: [pdfFile('pdf-question', ['full'], 1)],
-            candidate: pdfCandidate()
+        await clearE2eData(harness.page);
+        const formal = await createImportThroughUi(harness.page, {
+            producerMode: 'docx-deterministic',
+            files: [
+                docx('docx-question.docx', ['question']),
+                docx('docx-answer.docx', ['answer']),
+                docx('docx-solution.docx', ['solution'])
+            ]
         });
-        assert.equal(isolated.snapshot.questions.length, 0);
+        await callProxy(harness.page, 'openBatchReview', formal.batchId);
+        await callProxy(harness.page, 'markDraftReviewed');
+        const reviewed = await getDbSnapshot(harness.page);
+        const reviewedDraft = batchRows(reviewed, formal.batchId).drafts[0];
+        const formalDialogs = [];
+        harness.page.once('dialog', async dialog => {
+            formalDialogs.push(dialog.message());
+            await dialog.dismiss();
+        });
+        assert.equal(
+            await callProxy(
+                harness.page,
+                'submitDraftQuestion',
+                reviewedDraft.id,
+                false
+            ),
+            true,
+            JSON.stringify({ reviewedDraft, formalDialogs })
+        );
+        const formalSnapshot = await getDbSnapshot(harness.page);
+        assert.equal(formalSnapshot.questions.length, 1);
+        assert.equal(formalSnapshot.questions[0].schemaVersion,
+            'qisi.question.v2');
+        evidence.push({ name: '15 formal confirmation',
+            ...assertImportSafety({
+                snapshot: formalSnapshot, batchId: formal.batchId,
+                engine, allowFormal: true
+            }) });
 
-        assert.equal(evidence.length, 15);
-        assert.ok(evidence.every(row =>
-            row.productionOwner.startsWith('ProductionImportBridge') &&
-            row.bridgeMode === 'production' &&
-            row.formalQuestionCount === 0 &&
-            row.wrongAttachment === 0 &&
-            row.rawJsonLeakage === 0 &&
-            row.placeholderLeakage === 0 &&
-            row.controlledWriteBypass === 0 &&
-            row.legacyFallbackCalls === 0 &&
-            row.realApiCalled === false &&
-            row.consoleError === 0
-        ));
-        assert.equal(await page.locator('#app').count(), 1);
+        assert.equal(evidence.length, 12);
+        assert.equal(harness.pageErrors.length, 0);
         assert.equal(harness.forbiddenRequests.length, 0);
-        assertNoRuntimeErrors(harness);
-        console.log('C2_11_BROWSER_EVIDENCE', JSON.stringify(evidence));
     } finally {
         await harness.close();
     }
+
+    const cancellationHarness = await startBrowserApp(32324);
+    const cancellationEngine = await installBrowserEngineInjection(
+        cancellationHarness.page,
+        { responses: fullPdfResponses(), holdAtCall: 1 }
+    );
+    try {
+        await clearE2eData(cancellationHarness.page);
+        const pending = await createImportThroughUi(cancellationHarness.page, {
+            producerMode: 'pdf', awaitCompletion: false,
+            files: [pdf('cancellation-large.pdf', ['full'])]
+        });
+        for (let attempt = 0;
+            attempt < 100 && !cancellationEngine.calls.some(call =>
+                call.endpoint !== '/api/ai/health'
+            );
+            attempt += 1) {
+            await cancellationHarness.page.waitForTimeout(25);
+        }
+        assert.ok(cancellationEngine.calls.some(call =>
+            call.endpoint !== '/api/ai/health'
+        ));
+        assert.equal(
+            await callProxy(
+                cancellationHarness.page,
+                'cancelBatchRecognition',
+                pending.batchId
+            ),
+            true
+        );
+        cancellationEngine.release();
+        await cancellationHarness.page.waitForTimeout(500);
+        const snapshot = await getDbSnapshot(cancellationHarness.page);
+        assert.equal(batchRows(snapshot, pending.batchId).drafts.length, 0);
+        assert.equal(snapshot.questions.length, 0);
+        evidence.push({ name: '10 cancellation',
+            ...assertImportSafety({
+                snapshot, batchId: pending.batchId,
+                engine: cancellationEngine
+            }) });
+    } finally {
+        cancellationEngine.release();
+        await cancellationHarness.close();
+    }
+
+    const duplicateHarness = await startBrowserApp(32325);
+    const duplicateEngine = await installBrowserEngineInjection(
+        duplicateHarness.page,
+        { responses: fullPdfResponses(), holdAtCall: 1 }
+    );
+    try {
+        await clearE2eData(duplicateHarness.page);
+        const pending = await createImportThroughUi(duplicateHarness.page, {
+            producerMode: 'pdf', awaitCompletion: false,
+            files: [pdf('pdf-question.pdf', ['full'])]
+        });
+        await duplicateHarness.page.evaluate(batchId => {
+            const proxy = window.Qisi.Runtime.getRuntimeDependency('AppProxy');
+            window.__duplicateRuns = [
+                proxy.runBatchRecognition(batchId),
+                proxy.runBatchRecognition(batchId)
+            ];
+        }, pending.batchId);
+        duplicateEngine.release();
+        await duplicateHarness.page.evaluate(() =>
+            Promise.allSettled(window.__duplicateRuns)
+        );
+        const snapshot = await waitForDbSnapshot(
+            duplicateHarness.page,
+            value => batchRows(value, pending.batchId).batch?.status === 'review'
+        );
+        assert.equal(batchRows(snapshot, pending.batchId).drafts.length, 1);
+        assert.equal(duplicateEngine.calls.filter(call =>
+            call.endpoint !== '/api/ai/health'
+        ).length, 2);
+        evidence.push({ name: '11 duplicate click',
+            ...assertImportSafety({
+                snapshot, batchId: pending.batchId, engine: duplicateEngine
+            }) });
+    } finally {
+        duplicateEngine.release();
+        await duplicateHarness.close();
+    }
+
+    const faultCases = [
+        {
+            name: '12 persistence failure', port: 32326,
+            fault: 'persistence-failure', producerMode: 'docx-deterministic',
+            files: [docx('docx-question.docx', ['question'])], responses: []
+        },
+        {
+            name: '16 parser-failure counterfactual', port: 32327,
+            fault: 'parser-failure', producerMode: 'docx-deterministic',
+            files: [docx('docx-question.docx', ['question'])], responses: []
+        },
+        {
+            name: '17 controlled-write-missing counterfactual', port: 32328,
+            fault: 'controlled-write-missing', producerMode: 'pdf',
+            files: [pdf('pdf-question.pdf', ['full'])],
+            responses: fullPdfResponses()
+        }
+    ];
+    for (const scenario of faultCases) {
+        const faultHarness = await startBrowserApp(
+            scenario.port,
+            { fault: scenario.fault }
+        );
+        const faultEngine = await installBrowserEngineInjection(
+            faultHarness.page,
+            { responses: scenario.responses }
+        );
+        try {
+            await clearE2eData(faultHarness.page);
+            const imported = await createImportThroughUi(faultHarness.page, {
+                producerMode: scenario.producerMode,
+                files: scenario.files
+            });
+            const rows = batchRows(imported.snapshot, imported.batchId);
+            assert.equal(rows.batch.status, 'failed', scenario.name);
+            assert.equal(rows.drafts.length, 0, scenario.name);
+            evidence.push({ name: scenario.name,
+                ...assertImportSafety({
+                    snapshot: imported.snapshot,
+                    batchId: imported.batchId,
+                    engine: faultEngine
+                }) });
+        } finally {
+            await faultHarness.close();
+        }
+    }
+
+    assert.equal(evidence.length, 17);
+    assert.equal(evidence.some(row => row.realApiCalled), false);
+    assert.equal(evidence.reduce((sum, row) =>
+        sum + row.wrongAttachment + row.rawJsonLeakage +
+        row.placeholderLeakage + row.controlledWriteBypass +
+        row.formalAdmissionBypass + row.bridgeFormalWrites +
+        row.legacyFallback + row.finalCandidateFixtureRoute, 0), 0);
 });

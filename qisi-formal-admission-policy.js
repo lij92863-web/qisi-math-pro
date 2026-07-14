@@ -179,17 +179,36 @@
     };
 
     const validateCanonicalProvenance = (
-        field, provenance, identity, errors
+        field, provenance, identity, draft, errors
     ) => {
         if (identity?.status !== 'canonical' ||
             ['manual', 'missing', 'rejected'].includes(provenance.status)) return;
-        const expectedBoundary = identity.source?.format === 'pdf'
+        let expectedSource = identity.source;
+        let expectedBoundary = identity.source?.format === 'pdf'
             ? identity.producer?.mode === 'vision-ai'
                 ? 'pdf-vision-engine-output-to-candidate'
                 : 'pdf-deterministic-source-to-candidate'
             : identity.producer?.mode === 'vision-ai'
                 ? 'docx-vision-engine-output-to-candidate'
                 : 'docx-deterministic-source-to-candidate';
+        if (
+            provenance.sourceId !== identity.source?.sourceId &&
+            identity.source?.format === 'docx' &&
+            identity.producer?.mode === 'deterministic-docx' &&
+            ['answer', 'solution'].includes(field)
+        ) {
+            const support = (draft?.supportSources || []).find(item =>
+                item?.sourceId === provenance.sourceId &&
+                item?.format === 'docx' &&
+                Array.isArray(item?.roles) &&
+                item.roles.includes(field)
+            );
+            if (support) {
+                expectedSource = support;
+                expectedBoundary =
+                    'docx-deterministic-support-to-candidate';
+            }
+        }
         if (
             (identity.producer?.mode === 'vision-ai' &&
                 provenance.status !== 'controlled-write') ||
@@ -204,8 +223,8 @@
         }
         if (
             provenance.kind !== provenance.status ||
-            provenance.sourceId !== identity.source?.sourceId ||
-            provenance.sourceFormat !== identity.source?.format ||
+            provenance.sourceId !== expectedSource?.sourceId ||
+            provenance.sourceFormat !== expectedSource?.format ||
             provenance.producerMode !== identity.producer?.mode ||
             provenance.routeId !== identity.route?.identity ||
             !provenance.engine ||
@@ -289,7 +308,9 @@
             }
             return;
         }
-        validateCanonicalProvenance(field, provenance, identity, errors);
+        validateCanonicalProvenance(
+            field, provenance, identity, draft, errors
+        );
         const family = modeFamily(mode);
         if (family === 'manual') {
             errors.push(errorOf(
@@ -540,7 +561,10 @@
             source: formalSource,
             ...(identity.status === 'canonical' ? {
                 producer: clone(draft.producer),
-                route: clone(draft.route)
+                route: clone(draft.route),
+                ...(Array.isArray(draft.supportSources)
+                    ? { supportSources: clone(draft.supportSources) }
+                    : {})
             } : {}),
             admission: {
                 schemaVersion: ADMISSION_SCHEMA_VERSION,

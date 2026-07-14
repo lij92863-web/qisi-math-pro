@@ -198,6 +198,113 @@ test('production runner composes the coordinator and deterministic source owner'
     assert.equal(result.drafts[0].fieldProvenance.stem.kind, 'deterministic-source');
 });
 
+test('production runner attaches DOCX answer and solution by exact question number', async () => {
+    const questionSource = source();
+    const answerSource = {
+        ...source(), id: 'docx-answer', filename: 'answers.docx',
+        roles: ['answer'], sourceOrder: 2
+    };
+    const solutionSource = {
+        ...source(), id: 'docx-solution', filename: 'solutions.docx',
+        roles: ['solution'], sourceOrder: 3
+    };
+    const runner = Port.createProductionImportRunner({
+        coordinator: {
+            runDocxImport: async (input, ports) => ({
+                drafts: (await ports.parseSource({
+                    source: input.sources[0], candidateOffset: 0
+                })).drafts,
+                draftImages: [], warnings: [], unmatchedAnswers: []
+            })
+        },
+        importer: {
+            parseDocxFile: async file => ({
+                drafts: file.id === questionSource.id
+                    ? [{
+                        id: 'draft-1', questionNumber: '1', type: '单选题',
+                        stem: 'Question', options: ['A', 'B', 'C', 'D'],
+                        answer: '', solution: '', images: []
+                    }]
+                    : [{
+                        id: `raw-${file.id}`, questionNumber: '1',
+                        rawBlock: file.id === answerSource.id
+                            ? '1. 【答案】A'
+                            : '1. 【解析】Exact solution'
+                    }]
+            })
+        },
+        parseSupportText: (_text, file) => file.id === answerSource.id
+            ? {
+                answers: [{ question: '1', answer: 'A' }],
+                solutions: []
+            }
+            : {
+                answers: [],
+                solutions: [{ question: '1', solution: 'Exact solution' }]
+            },
+        getRoles: file => file.roles,
+        normalizeQuestionNumber: String,
+        cleanText: value => String(value || '').trim(),
+        cleanOptions: values => values || [],
+        makeId: prefix => `${prefix}-1`
+    });
+    const result = await runner({
+        batchId: 'batch-1', batch: { id: 'batch-1' },
+        sources: [questionSource, answerSource, solutionSource]
+    });
+    assert.equal(result.drafts.length, 1);
+    assert.equal(result.drafts[0].answer, 'A');
+    assert.equal(result.drafts[0].solution, 'Exact solution');
+    assert.equal(
+        result.drafts[0].fieldProvenance.answer.sourceId,
+        'docx-answer'
+    );
+    assert.equal(
+        result.drafts[0].fieldProvenance.solution.sourceId,
+        'docx-solution'
+    );
+});
+
+test('production runner fails closed on duplicate deterministic support', async () => {
+    const questionSource = source();
+    const supports = ['answer-1', 'answer-2'].map((id, index) => ({
+        ...source(), id, roles: ['answer'], sourceOrder: index + 2
+    }));
+    const runner = Port.createProductionImportRunner({
+        coordinator: {
+            runDocxImport: async (input, ports) => ({
+                drafts: (await ports.parseSource({
+                    source: input.sources[0], candidateOffset: 0
+                })).drafts,
+                draftImages: [], warnings: []
+            })
+        },
+        importer: {
+            parseDocxFile: async file => ({ drafts: file.id === 'docx-1'
+                ? [{
+                    id: 'draft-1', questionNumber: '1', type: '解答题',
+                    stem: 'Question', options: [], answer: '', solution: '',
+                    images: []
+                }]
+                : [{ rawBlock: '1. 【答案】A' }]
+            })
+        },
+        parseSupportText: () => ({
+            answers: [{ question: '1', answer: 'A' }], solutions: []
+        }),
+        getRoles: file => file.roles,
+        cleanText: value => String(value || '').trim(),
+        cleanOptions: values => values || []
+    });
+    await assert.rejects(
+        runner({
+            batchId: 'batch-1', batch: { id: 'batch-1' },
+            sources: [questionSource, ...supports]
+        }),
+        error => error.code === 'DOCX_SUPPORT_DUPLICATE'
+    );
+});
+
 test('the app composes the deterministic owner without a local parser precursor', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
     const calls = app.match(

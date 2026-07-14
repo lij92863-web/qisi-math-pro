@@ -4,6 +4,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const Validation = require('../qisi-import-validation-service.js');
+const FormalAdmissionPolicy = require('../qisi-formal-admission-policy.js');
+const ProductionReviewValidator = require('../qisi-production-review-validator.js');
+const DocxIdentity = require('../qisi-docx-producer-identity-contract.js');
 const ROOT = path.resolve(__dirname, '..');
 
 const draft = (overrides = {}) => ({
@@ -161,6 +164,86 @@ test('production policy owner preserves deterministic acceptance and PDF fail-cl
         error => error.code === 'IMPORT_VALIDATION_REJECTED' &&
             error.failures.some(failure =>
                 failure.code === 'controlled-write-missing'
+            )
+    );
+});
+
+test('missing deterministic answer can enter review but cannot pass Formal Admission', () => {
+    const reviewValidator = ProductionReviewValidator
+        .createProductionReviewValidator({
+            policy: FormalAdmissionPolicy,
+            clock: () => Date.parse('2026-07-14T00:00:00.000Z')
+        });
+    const ports = Validation.createProductionValidationPorts(
+        productionDependencies({ reviewValidator })
+    );
+    const candidate = DocxIdentity.projectDeterministicDocxCandidate({
+        candidate: {
+            id: 'draft-missing-answer', version: 1,
+            questionNumber: '1', type: '\u5355\u9009\u9898', stem: 'Stem',
+            options: ['Alpha', 'Beta', 'Gamma', 'Delta'],
+            answer: '', solution: '', images: []
+        },
+        source: {
+            sourceId: 'source-1', format: 'docx',
+            filename: 'questions.docx', sourceOrder: 0
+        },
+        engine: 'docx-xml-importer', page: 1, index: 0
+    });
+
+    const reviewed = Validation.validateImportDrafts([candidate], {
+        ...ports,
+        context: { files: [{ fileType: 'docx' }] }
+    });
+    assert.equal(reviewed.length, 1);
+    assert.equal(reviewed[0].fieldProvenance.answer.status, 'missing');
+
+    const context = FormalAdmissionPolicy.createAdmissionContext({
+        mode: candidate.producer.mode,
+        actorId: 'teacher-1', explicitConfirmation: true,
+        requestId: 'formal-request-1', idempotencyKey: 'formal-request-1',
+        source: candidate.source,
+        producer: candidate.producer,
+        route: candidate.route
+    });
+    const decision = FormalAdmissionPolicy.evaluateDraftAdmission(
+        candidate,
+        context
+    );
+    assert.equal(decision.accepted, false);
+    assert.ok(decision.errors.some(error =>
+        error.code === 'admission-required-field-missing' &&
+        error.field === 'answer'
+    ));
+});
+
+test('present content with missing ownership cannot enter review', () => {
+    const ports = Validation.createProductionValidationPorts(
+        productionDependencies({
+            reviewValidator: {
+                validate: () => ({
+                    valid: false,
+                    errors: [{
+                        code: 'admission-required-field-missing',
+                        field: 'answer'
+                    }],
+                    warnings: []
+                })
+            }
+        })
+    );
+    const unowned = draft({
+        answer: 'A',
+        fieldProvenance: { answer: { status: 'missing' } }
+    });
+    assert.throws(
+        () => Validation.validateImportDrafts([unowned], {
+            ...ports,
+            context: { files: [{ fileType: 'docx' }] }
+        }),
+        error => error.code === 'IMPORT_VALIDATION_REJECTED' &&
+            error.failures.some(failure =>
+                failure.code === 'admission-required-field-missing'
             )
     );
 });

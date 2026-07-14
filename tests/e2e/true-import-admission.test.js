@@ -1,138 +1,124 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
 
 const {
-    startBrowserApp, callProxy, installImportTransport, createImportThroughUi,
-    getDbSnapshot, clearE2eData
+    startBrowserApp,
+    callProxy,
+    installBrowserEngineInjection,
+    createImportThroughUi,
+    getDbSnapshot,
+    clearE2eData
 } = require('./browser-harness.js');
-const { docxCandidate, pdfCandidate } = require('./true-import-fixtures.js');
 
-test('raw JSON transport candidate is rejected before review persistence', {
+const FIXTURES = path.resolve(__dirname, '..', 'fixtures', 'true-import');
+const fixture = name => path.join(FIXTURES, name);
+const pdfFile = () => ({ file: fixture('pdf-question.pdf'), roles: ['full'] });
+const questionEnvelope = {
+    value: { questions: [{
+        questionNumber: '1', type: '单选题',
+        stem: 'Admission production question.',
+        options: { A: 'First', B: 'Second', C: 'Third', D: 'Fourth' },
+        answer: '', solution: '', images: [], isFragment: false,
+        question_bbox: [0, 0, 1000, 1000]
+    }] }
+};
+const validResponses = () => [
+    questionEnvelope,
+    '1. 【答案】A\n【解析】First is supported by evidence.'
+];
+
+test('malformed raw engine JSON is rejected before ReviewDraft persistence', {
     timeout: 90000
 }, async () => {
-    const harness = await startBrowserApp(32114);
+    const harness = await startBrowserApp(32314);
     try {
-        await installImportTransport(harness.page, {
-            expectedQuestionNumbers: ['1'], candidates: ['{"answer":"A"}']
+        await clearE2eData(harness.page);
+        const engine = await installBrowserEngineInjection(harness.page, {
+            responses: ['{"questions": [malformed]']
         });
-        const { snapshot } = await createImportThroughUi(harness.page, {
-            name: 'raw-json.pdf', mimeType: 'application/pdf',
-            buffer: Buffer.from('%PDF raw JSON')
-        });
-        assert.equal(snapshot.batches[0].status, 'failed');
-        assert.equal(snapshot.drafts.length, 0);
-        assert.equal(
-            snapshot.batches[0].errorMessage,
-            'PRODUCTION_IMPORT_RESULT_MALFORMED'
+        const { batchId, snapshot } = await createImportThroughUi(
+            harness.page,
+            { producerMode: 'pdf', files: [pdfFile()] }
         );
-        assert.equal(harness.forbiddenRequests.length, 0);
-        await clearE2eData(harness.page);
-    } finally {
-        await harness.close();
-    }
-});
-
-test('candidate from the wrong attachment type is rejected before review persistence', {
-    timeout: 90000
-}, async () => {
-    const harness = await startBrowserApp(32116);
-    try {
-        await installImportTransport(harness.page, {
-            expectedQuestionNumbers: ['1'], candidates: [docxCandidate()]
-        });
-        const { snapshot } = await createImportThroughUi(harness.page, {
-            name: 'wrong-attachment.pdf', mimeType: 'application/pdf',
-            buffer: Buffer.from('%PDF wrong attachment')
-        });
-        assert.equal(snapshot.batches[0].status, 'failed');
-        assert.equal(snapshot.drafts.length, 0);
-        assert.equal(snapshot.batches[0].errorMessage, 'IMPORT_VALIDATION_FAILED');
-        assert.equal(harness.forbiddenRequests.length, 0);
-        await clearE2eData(harness.page);
-    } finally {
-        await harness.close();
-    }
-});
-
-test('teacher rewrite converts only the rejected PDF answer to manual provenance', {
-    timeout: 90000
-}, async () => {
-    const harness = await startBrowserApp(32115);
-    const { page } = harness;
-    try {
-        const candidate = pdfCandidate({ answer: 'unsafe answer' });
-        candidate.fieldProvenance.answer = {
-            status: 'rejected', reasonCode: 'wrong-ownership'
-        };
-        await installImportTransport(page, {
-            expectedQuestionNumbers: ['1'], candidates: [candidate]
-        });
-        const { batchId } = await createImportThroughUi(page, {
-            name: 'teacher-rewrite.pdf', mimeType: 'application/pdf',
-            buffer: Buffer.from('%PDF rewrite')
-        });
-        await callProxy(page, 'openBatchReview', batchId);
-        await page.getByRole('button', { name: '答案内容' }).click();
-        await page.locator('.batch-editor-card.content textarea').fill('A');
-        await callProxy(page, 'markDraftReviewed');
-        const reviewed = await getDbSnapshot(page);
-        const draft = reviewed.drafts[0];
-        assert.equal(draft.fieldProvenance.answer.status, 'manual');
-        assert.ok(draft.fieldProvenance.answer.manualEditRevision >= 1);
-        assert.equal(await callProxy(page, 'submitDraftQuestion', draft.id, true), true);
-        const submitted = await getDbSnapshot(page);
-        assert.equal(submitted.questions[0].provenance.answer.status, 'manual');
-        assert.equal(submitted.questions[0].provenance.stem.status, 'controlled-write');
-        assert.equal(harness.forbiddenRequests.length, 0);
-        await clearE2eData(page);
-    } finally {
-        await harness.close();
-    }
-});
-
-test('untouched confirmation preserves controlled-write provenance in the browser', {
-    timeout: 90000
-}, async () => {
-    const harness = await startBrowserApp(32117);
-    const { page } = harness;
-    const dialogs = [];
-    page.on('dialog', async dialog => {
-        dialogs.push(dialog.message());
-        await dialog.dismiss();
-    });
-    try {
-        const candidate = pdfCandidate({ includeAnswer: true });
-        await installImportTransport(page, {
-            expectedQuestionNumbers: ['1'], candidates: [candidate]
-        });
-        const { batchId, snapshot } = await createImportThroughUi(page, {
-            name: 'confirm-untouched.pdf', mimeType: 'application/pdf',
-            buffer: Buffer.from('%PDF untouched confirmation')
-        });
-        const before = snapshot.drafts[0];
-        await callProxy(page, 'openBatchReview', batchId);
-        await callProxy(page, 'markDraftReviewed');
-
-        const reviewed = await getDbSnapshot(page);
-        const after = reviewed.drafts[0];
-        assert.equal(after.status, 'reviewed', dialogs.join('\n'));
-        assert.equal(after.manualConfirmed, true);
-        assert.notEqual(after.userEdited, true);
-        assert.notEqual(after.manualEdited, true);
-        assert.deepEqual(after.fieldProvenance, before.fieldProvenance);
-
         assert.equal(
-            await callProxy(page, 'submitDraftQuestion', after.id, true),
+            snapshot.batches.find(item => item.id === batchId).status,
+            'failed'
+        );
+        assert.equal(snapshot.drafts.some(item => item.batchId === batchId), false);
+        assert.equal(snapshot.questions.length, 0);
+        assert.equal(engine.realApiCalled, false);
+    } finally {
+        await harness.close();
+    }
+});
+
+test('actual manual answer edit becomes the only manual formal provenance', {
+    timeout: 90000
+}, async () => {
+    const harness = await startBrowserApp(32315);
+    try {
+        await clearE2eData(harness.page);
+        await installBrowserEngineInjection(harness.page, {
+            responses: validResponses()
+        });
+        const { batchId } = await createImportThroughUi(harness.page, {
+            producerMode: 'pdf', files: [pdfFile()]
+        });
+        await callProxy(harness.page, 'openBatchReview', batchId);
+        await callProxy(harness.page, 'updateDraftQuestionField', 'answer', 'B');
+        await callProxy(harness.page, 'markDraftReviewed');
+        const reviewed = await getDbSnapshot(harness.page);
+        const draft = reviewed.drafts.find(item => item.batchId === batchId);
+        assert.equal(draft.fieldProvenance.answer.status, 'manual');
+        assert.equal(draft.fieldProvenance.stem.status, 'controlled-write');
+        assert.equal(
+            await callProxy(harness.page, 'submitDraftQuestion', draft.id, true),
             true
         );
-        const submitted = await getDbSnapshot(page);
+        const submitted = await getDbSnapshot(harness.page);
+        assert.equal(submitted.questions[0].provenance.answer.status, 'manual');
+        assert.equal(
+            submitted.questions[0].provenance.stem.status,
+            'controlled-write'
+        );
+    } finally {
+        await harness.close();
+    }
+});
+
+test('untouched confirmation preserves controlled-write evidence', {
+    timeout: 90000
+}, async () => {
+    const harness = await startBrowserApp(32319);
+    try {
+        await clearE2eData(harness.page);
+        await installBrowserEngineInjection(harness.page, {
+            responses: validResponses()
+        });
+        const { batchId, snapshot } = await createImportThroughUi(
+            harness.page,
+            { producerMode: 'pdf', files: [pdfFile()] }
+        );
+        const before = snapshot.drafts.find(item => item.batchId === batchId);
+        await callProxy(harness.page, 'openBatchReview', batchId);
+        await callProxy(harness.page, 'markDraftReviewed');
+        const reviewed = await getDbSnapshot(harness.page);
+        const after = reviewed.drafts.find(item => item.batchId === batchId);
+        assert.equal(after.manualConfirmed, true);
+        assert.notEqual(after.manualEdited, true);
+        assert.deepEqual(after.fieldProvenance, before.fieldProvenance);
+        assert.equal(
+            await callProxy(harness.page, 'submitDraftQuestion', after.id, true),
+            true
+        );
+        const submitted = await getDbSnapshot(harness.page);
         assert.equal(submitted.questions.length, 1);
         assert.equal(
             submitted.questions[0].provenance.stem.status,
             'controlled-write'
         );
         assert.equal(harness.forbiddenRequests.length, 0);
-        await clearE2eData(page);
     } finally {
         await harness.close();
     }

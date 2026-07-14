@@ -138,6 +138,7 @@
                                             pageNo: info.done || info.pageNo || 1,
                                             totalPages: info.total || 1
                                         }),
+                                    reportStage: context.reportStage,
                                     signal: pdfSignal
                                 });
                                 if (result?.check?.fatal) {
@@ -156,6 +157,7 @@
                             for (const source of supportSources) {
                                 const pages = await ports.prepareSupportPages({
                                     source,
+                                    reportStage: context.reportStage,
                                     signal: pdfSignal
                                 });
                                 const support = await ports.processSupportPages({
@@ -169,6 +171,7 @@
                                         solutions: ports.hasSolutionRole(source) ||
                                             ports.isFullRole(source)
                                     },
+                                    reportStage: context.reportStage,
                                     onPageProgress: async (_ratio, info = {}) =>
                                         reportPage?.({
                                             sourceId: source.id,

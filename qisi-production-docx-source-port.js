@@ -95,12 +95,71 @@
             ? ports.makeId : prefix => `${prefix}_${Date.now()}`;
         const defaultMeta = typeof ports.getDefaultMeta === 'function'
             ? ports.getDefaultMeta : () => ({});
+        const getRoles = typeof ports.getRoles === 'function'
+            ? ports.getRoles
+            : source => Array.isArray(source?.roles)
+                ? source.roles
+                : [source?.role].filter(Boolean);
+        const normalizeQuestionNumber =
+            typeof ports.normalizeQuestionNumber === 'function'
+                ? ports.normalizeQuestionNumber
+                : value => String(value || '').trim();
+
+        const roleSet = source => new Set(
+            getRoles(source).map(role => String(role || '').trim())
+        );
+        const isQuestionSource = source => {
+            const roles = roleSet(source);
+            return roles.has('question') || roles.has('full');
+        };
+        const supportRoles = source => {
+            const roles = roleSet(source);
+            return ['answer', 'solution'].filter(role => roles.has(role));
+        };
+
+        const parseSupportSource = async (source, batch, signal) => {
+            if (typeof ports.parseSupportText !== 'function') {
+                throw createError('DOCX_SUPPORT_PARSER_REQUIRED');
+            }
+            assertActive(signal);
+            const parsed = await ports.importer.parseDocxFile(source, {
+                batch,
+                defaultMeta: batch.defaultMeta || defaultMeta(),
+                helpers: {
+                    cleanDisplayTextForBatchSave: cleanText,
+                    makeBatchId: makeId
+                }
+            });
+            assertActive(signal);
+            if (!parsed || !Array.isArray(parsed.drafts)) {
+                throw createError('DOCX_SUPPORT_RESULT_MALFORMED');
+            }
+            const text = parsed.drafts.map(draft =>
+                draft.rawBlock || draft.renderableText || draft.stem || ''
+            ).filter(Boolean).join('\n');
+            const result = ports.parseSupportText(text, source);
+            if (!result || !Array.isArray(result.answers) ||
+                !Array.isArray(result.solutions)) {
+                throw createError('DOCX_SUPPORT_RESULT_MALFORMED');
+            }
+            return result;
+        };
 
         return async function runProductionDocxImport(context = {}, signal) {
             const batch = context.batch || {};
-            return ports.coordinator.runDocxImport({
+            const sources = Array.isArray(context.sources)
+                ? context.sources
+                : [];
+            const questionSources = sources.filter(isQuestionSource);
+            const supportSources = sources.filter(source =>
+                !isQuestionSource(source) && supportRoles(source).length
+            );
+            if (!questionSources.length) {
+                throw createError('DOCX_QUESTION_SOURCE_REQUIRED');
+            }
+            const base = await ports.coordinator.runDocxImport({
                 batchId: context.batchId,
-                sources: context.sources
+                sources: questionSources
             }, {
                 parseSource: ({ source, candidateOffset }) => parseDocxSource({
                     source,
@@ -134,6 +193,82 @@
                     )
                 })
             }, signal);
+            if (!supportSources.length) return base;
+
+            const byQuestion = new Map();
+            base.drafts.forEach((draft, index) => {
+                const question = normalizeQuestionNumber(
+                    draft.questionNumber || draft.question
+                );
+                if (!question || byQuestion.has(question)) {
+                    throw createError('DOCX_SUPPORT_QUESTION_AMBIGUOUS');
+                }
+                byQuestion.set(question, index);
+            });
+            const drafts = [...base.drafts];
+            const applied = new Set();
+            const unmatchedAnswers = [];
+            for (const source of supportSources) {
+                const roles = supportRoles(source);
+                const parsed = await parseSupportSource(source, batch, signal);
+                const groups = [
+                    ['answer', parsed.answers],
+                    ['solution', parsed.solutions]
+                ];
+                for (const [field, items] of groups) {
+                    if (!roles.includes(field)) continue;
+                    for (const item of items) {
+                        const question = normalizeQuestionNumber(
+                            item.questionNumber || item.question
+                        );
+                        const index = byQuestion.get(question);
+                        if (index === undefined) {
+                            unmatchedAnswers.push({
+                                ...item,
+                                field,
+                                sourceFileId: source.id,
+                                sourceFileName: source.filename || ''
+                            });
+                            continue;
+                        }
+                        const key = `${question}:${field}`;
+                        if (applied.has(key)) {
+                            throw createError('DOCX_SUPPORT_DUPLICATE');
+                        }
+                        applied.add(key);
+                        drafts[index] =
+                            contract.applyDeterministicDocxSupportField({
+                                candidate: drafts[index],
+                                field,
+                                support: {
+                                    ...item,
+                                    questionNumber: question
+                                },
+                                source: {
+                                    sourceId: source.id,
+                                    format: 'docx',
+                                    filename: source.filename || '',
+                                    mimeType:
+                                        source.mimeType || source.type || '',
+                                    sourceOrder:
+                                        Number.isInteger(source.sourceOrder)
+                                            ? source.sourceOrder
+                                            : 0
+                                },
+                                roles
+                            });
+                    }
+                }
+            }
+            assertActive(signal);
+            return Object.freeze({
+                ...base,
+                orderedSourceIds: Object.freeze(sources.map(source =>
+                    String(source.id)
+                )),
+                drafts: Object.freeze(drafts),
+                unmatchedAnswers: Object.freeze(unmatchedAnswers)
+            });
         };
     }
 

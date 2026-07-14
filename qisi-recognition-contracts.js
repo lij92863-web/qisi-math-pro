@@ -792,7 +792,8 @@
                         identity.status === 'canonical' &&
                         !['manual', 'missing', 'rejected'].includes(item.status)
                     ) {
-                        const expectedBoundary = question.source?.format === 'pdf'
+                        let expectedSource = question.source;
+                        let expectedBoundary = question.source?.format === 'pdf'
                             ? mode === 'vision-ai'
                                 ? 'pdf-vision-engine-output-to-candidate'
                                 : 'pdf-deterministic-source-to-candidate'
@@ -800,9 +801,28 @@
                                 ? 'docx-vision-engine-output-to-candidate'
                                 : 'docx-deterministic-source-to-candidate';
                         if (
+                            item.sourceId !== question.source?.sourceId &&
+                            question.source?.format === 'docx' &&
+                            mode === 'deterministic-docx' &&
+                            ['answer', 'solution'].includes(field)
+                        ) {
+                            const support = (question.supportSources || [])
+                                .find(source =>
+                                    source?.sourceId === item.sourceId &&
+                                    source?.format === 'docx' &&
+                                    Array.isArray(source?.roles) &&
+                                    source.roles.includes(field)
+                                );
+                            if (support) {
+                                expectedSource = support;
+                                expectedBoundary =
+                                    'docx-deterministic-support-to-candidate';
+                            }
+                        }
+                        if (
                             item.kind !== item.status ||
-                            item.sourceId !== question.source.sourceId ||
-                            item.sourceFormat !== question.source.format ||
+                            item.sourceId !== expectedSource?.sourceId ||
+                            item.sourceFormat !== expectedSource?.format ||
                             item.producerMode !== mode ||
                             item.routeId !== question.route?.identity ||
                             !item.engine ||

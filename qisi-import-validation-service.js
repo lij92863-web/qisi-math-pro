@@ -146,6 +146,18 @@
             draft.manualReviewRequired === true &&
             draft.controlledWrite?.evaluated === true &&
             draft.validation?.ownershipValid === true;
+        const hasValue = value => Array.isArray(value)
+            ? value.length > 0
+            : typeof value === 'string'
+                ? Boolean(value.trim())
+                : value !== null && value !== undefined;
+        const reviewableMissingFields = (draft, result) =>
+            result.errors.length > 0 &&
+            result.errors.every(error =>
+                error.code === 'admission-required-field-missing' &&
+                draft.fieldProvenance?.[error.field]?.status === 'missing' &&
+                !hasValue(draft[error.field])
+            );
 
         const validateOwnership = (draft, { context, index }) => {
             const canonicalFormat = String(draft.source?.format || '');
@@ -184,6 +196,7 @@
                 id: draft.id || `validation-draft-${index + 1}`,
                 version: Number.isInteger(draft.version) ? draft.version : 1
             });
+            const acceptedMissing = reviewableMissingFields(draft, result);
             const acceptedPartial =
                 reviewablePartial(draft) &&
                 result.errors.length > 0 &&
@@ -217,8 +230,9 @@
                     );
                 });
             return {
-                valid: result.valid || acceptedPartial || reviewableDocxSupport,
-                errors: acceptedPartial || reviewableDocxSupport
+                valid: result.valid || acceptedMissing || acceptedPartial ||
+                    reviewableDocxSupport,
+                errors: acceptedMissing || acceptedPartial || reviewableDocxSupport
                     ? [] : result.errors,
                 warnings: result.warnings || []
             };

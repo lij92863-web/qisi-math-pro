@@ -299,6 +299,61 @@ test('canonical deterministic draft passes Formal Admission without AI evidence'
     ), false);
 });
 
+test('deterministic DOCX support admits only exact role-bound source evidence', () => {
+    const draft = Contract.applyDeterministicDocxSupportField({
+        candidate: deterministic(),
+        field: 'answer',
+        support: { questionNumber: '1', answer: 'A', sourcePage: 1 },
+        source: {
+            ...source(), sourceId: 'docx-answer-1',
+            filename: 'answers.docx', sourceOrder: 2
+        },
+        roles: ['answer']
+    });
+    const result = Policy.evaluateDraftAdmission(
+        draft,
+        admissionContext(draft)
+    );
+    assert.equal(result.accepted, true, JSON.stringify(result.errors));
+    assert.equal(draft.answer, 'A');
+    assert.equal(
+        draft.fieldProvenance.answer.producerBoundary,
+        'docx-deterministic-support-to-candidate'
+    );
+    assert.deepEqual(draft.supportSources[0].roles, ['answer']);
+    const formal = Policy.buildQuestionV2(draft, result, {
+        id: 'question-support-1', context: admissionContext(draft)
+    });
+    assert.equal(
+        Contracts.validateQuestionV2(formal).valid,
+        true,
+        JSON.stringify(Contracts.validateQuestionV2(formal).errors)
+    );
+    assert.equal(formal.supportSources[0].sourceId, 'docx-answer-1');
+});
+
+test('deterministic DOCX support rejects wrong question and wrong role', () => {
+    const input = {
+        candidate: deterministic(), field: 'answer',
+        support: { questionNumber: '2', answer: 'A' },
+        source: { ...source(), sourceId: 'docx-answer-1' },
+        roles: ['answer']
+    };
+    assert.throws(
+        () => Contract.applyDeterministicDocxSupportField(input),
+        error => error.code ===
+            'DOCX_DETERMINISTIC_SUPPORT_QUESTION_MISMATCH'
+    );
+    assert.throws(
+        () => Contract.applyDeterministicDocxSupportField({
+            ...input,
+            support: { questionNumber: '1', answer: 'A' },
+            roles: ['solution']
+        }),
+        error => error.code === 'DOCX_DETERMINISTIC_SUPPORT_ROLE_INVALID'
+    );
+});
+
 test('formal Question v2 preserves and validates split producer identity', () => {
     const draft = vision();
     const context = admissionContext(draft);

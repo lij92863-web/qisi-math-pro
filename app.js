@@ -1854,6 +1854,10 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                             getDefaultMeta: () => toRaw(batchDefaultMeta || {}),
                             cleanText: cleanDisplayTextForBatchSave,
                             cleanOptions: cleanDisplayOptionsForBatchSave,
+                            getRoles: getBatchFileRoles,
+                            normalizeQuestionNumber: normalizeQuestionKey,
+                            parseSupportText:
+                                parseAnswerAndSolutionItemsFromText,
                             makeId: makeBatchId,
                             clock: Date.now
                         });
