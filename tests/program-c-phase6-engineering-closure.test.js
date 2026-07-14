@@ -69,36 +69,41 @@ test('Phase 6D closure benchmark smoke covers every non-browser scenario', () =>
         process.execPath,
         [
             'scripts/benchmark/measure-program-c-closure.js',
-            '--runs=1',
-            '--warmup=0'
+            '--smoke'
         ],
         { cwd: ROOT, encoding: 'utf8', timeout: 30000 }
     );
     const result = JSON.parse(output);
     assert.equal(result.realApiCalled, false);
-    assert.equal(result.scenarios.length, 12);
+    assert.equal(
+        result.baselineCommit,
+        '79fea1e1cad0c682c42539dd575370f3919f1d05'
+    );
+    assert.equal(result.fixtureCandidateTransport, false);
+    assert.equal(result.comparisons.length, 11);
     assert.deepEqual(
-        new Set(result.scenarios.map(item => item.name)),
+        new Set(result.comparisons.map(item => item.name)),
         new Set([
-            'docx-stable-import-owner-chain',
-            'docx-vision-fixture-owner-chain',
-            'pdf-full-owner-chain',
-            'pdf-safe-partial-owner-chain',
-            'pdf-known-bad-reject-owner-chain',
-            'review-draft-build-50',
+            'docx-deterministic',
+            'docx-vision',
+            'pdf-safe-partial',
             'review-draft-build-100',
             'review-draft-build-300',
-            'persistence-commit-readback',
-            'review-draft-reload',
-            'cancellation-pre-transport',
-            'duplicate-idempotent-retry'
+            'confirm',
+            'single-formal-submit',
+            'batch-submit',
+            'dedupe',
+            'cleanup',
+            'reload'
         ])
     );
-    result.scenarios.forEach(item => {
+    result.comparisons.forEach(item => {
         assert.equal(item.failureCount, 0, item.name);
         assert.equal(item.timeoutCount, 0, item.name);
-        assert.ok(Number.isFinite(item.p50Ms), item.name);
-        assert.ok(Number.isFinite(item.p95Ms), item.name);
+        assert.ok(Number.isFinite(item.baseline.p50Ms), item.name);
+        assert.ok(Number.isFinite(item.baseline.p95Ms), item.name);
+        assert.ok(Number.isFinite(item.candidate.p50Ms), item.name);
+        assert.ok(Number.isFinite(item.candidate.p95Ms), item.name);
     });
 });
 

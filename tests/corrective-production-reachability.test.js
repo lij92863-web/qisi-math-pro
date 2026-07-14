@@ -76,6 +76,11 @@ test('the reachable route owner fails closed without fallback or caller injectio
     };
     assert.equal(RoutePolicy.resolveProductionImportRoute(base).producerIdentity,
         'docx-deterministic');
+    assert.equal(RoutePolicy.resolveProductionImportRoute({
+        ...base,
+        requestedRoute: 'fixture',
+        callerSelectedProducer: 'pdf'
+    }).producerIdentity, 'docx-deterministic');
     assert.throws(
         () => RoutePolicy.resolveProductionImportRoute({
             ...base,
