@@ -13590,6 +13590,7 @@ ${source}`;
                         missingQuestions: [],
                         missingAnswerNumbers: [],
                         missingSolutionNumbers: [],
+                        reviewOnlyMissingAnswerNumbers: [],
                         unknownQuestionNumbers: [],
                         duplicateQuestionNumbers: [],
                         unknownSupportNumbers: [],
@@ -13838,6 +13839,26 @@ ${source}`;
                             );
                     }
 
+                    if (
+                        authoritativeQuestionContract?.evidence ===
+                            'docx-explicit-question-skeleton' &&
+                        diagnostics.missingAnswerNumbers.length
+                    ) {
+                        const missingAnswerPartition =
+                            window.Qisi.DocxPipeline.partitionDocxMissingAnswersForReview({
+                                missingAnswerNumbers:
+                                    diagnostics.missingAnswerNumbers,
+                                questionItems:
+                                    [...questionMap.values()],
+                                solutionNumbers:
+                                    [...solutionMap.keys()]
+                            });
+                        diagnostics.missingAnswerNumbers =
+                            missingAnswerPartition.fatal;
+                        diagnostics.reviewOnlyMissingAnswerNumbers =
+                            missingAnswerPartition.reviewOnly;
+                    }
+
                     diagnostics.questionNumbers =
                         [...new Set(
                             diagnostics.questionNumbers
@@ -13962,14 +13983,14 @@ ${source}`;
                         if (!explicitMergePlan.ok) {
                             console.warn(
                                 '[BATCH_DEBUG][explicit-question-merge-failed]',
-                                {
+                                JSON.stringify({
                                     reason:
                                         explicitMergePlan
                                             .reason,
                                     diagnostics:
                                         explicitMergePlan
                                             .diagnostics
-                                }
+                                }, null, 2)
                             );
 
                             const error = new Error(
@@ -14038,12 +14059,22 @@ ${source}`;
                         if (answer) usedAnswers.add(mergeKey);
                         const warnings = [...(item.warnings || [])];
                         const mergeWarnings = [];
+                        const reviewOnlyMissingAnswer = Boolean(
+                            explicitQuestionNumber &&
+                            explicitMergePlan?.diagnostics
+                                ?.reviewOnlyMissingAnswerNumbers
+                                ?.includes(explicitQuestionNumber)
+                        );
                         let duplicateStatus = 'none';
                         if (Array.isArray(answer?.warnings)) warnings.push(...answer.warnings);
                         if (Array.isArray(solution?.warnings)) warnings.push(...solution.warnings);
                         if (!answer?.answer && ['单选题', '多选题', '填空题'].includes(item.type || meta.defaultType)) {
                             warnings.push('未在答案文件中匹配到本题答案，请手动补充。');
                             mergeWarnings.push('missing_answer');
+                        }
+                        if (reviewOnlyMissingAnswer) {
+                            warnings.push('本解答题有对应解析但没有独立答案字段，请在草稿中人工核对。');
+                            mergeWarnings.push('missing_answer_review');
                         }
                         if (answerConflicts.has(mergeKey)) {
                             warnings.push('多个答案文件中识别到不同答案，请确认。');
@@ -14171,7 +14202,10 @@ ${source}`;
                             pageTextOriginal: itemPageTextOriginal,
                             sourceTextOriginal: itemSourceTextOriginal,
                             recognitionRaw: item.recognitionRaw || item,
-                            manualReviewRequired: Boolean(item.manualReviewRequired),
+                            manualReviewRequired: Boolean(
+                                item.manualReviewRequired ||
+                                reviewOnlyMissingAnswer
+                            ),
                             warnings,
                             confidence: item.confidence || 0.75,
                             duplicateStatus,
@@ -19048,12 +19082,14 @@ ${source}`;
                         }
                         console.error('[BATCH_DEBUG][batch-failed]', {
                             batchId,
-                            message: error?.message || String(error)
+                            message: error?.message || String(error),
+                            diagnostics: error?.diagnostics || null
                         }, error);
                         await db.draftImportBatches.update(batchId, {
                             status: 'failed',
                             progress: 100,
                             errorMessage: error?.message || String(error),
+                            errorDiagnostics: error?.diagnostics || null,
                             updatedAt: Date.now()
                         });
                         showBatchToast(`批量识别失败：${error?.message || String(error)}`);

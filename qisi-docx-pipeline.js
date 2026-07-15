@@ -880,6 +880,45 @@
             return { items: output, unresolved };
         };
 
+        const partitionDocxMissingAnswersForReview = ({
+            missingAnswerNumbers = [],
+            questionItems = [],
+            solutionNumbers = []
+        } = {}) => {
+            const questions = new Map(
+                (questionItems || []).map(item => [
+                    normalizeQuestionKey(
+                        item?.questionNumber ?? item?.question ?? item?.order
+                    ),
+                    item
+                ])
+            );
+            const solutions = new Set(
+                (solutionNumbers || []).map(normalizeQuestionKey).filter(Boolean)
+            );
+            const subjectiveTypes = new Set(['解答题', '证明题', '计算题', '简答题']);
+            const reviewOnly = [];
+            const fatal = [];
+
+            for (const value of missingAnswerNumbers || []) {
+                const questionNumber = normalizeQuestionKey(value);
+                const item = questions.get(questionNumber);
+                const type = cleanRecognizedText(item?.type || '');
+
+                if (
+                    questionNumber &&
+                    subjectiveTypes.has(type) &&
+                    solutions.has(questionNumber)
+                ) {
+                    reviewOnly.push(questionNumber);
+                } else if (questionNumber) {
+                    fatal.push(questionNumber);
+                }
+            }
+
+            return { fatal, reviewOnly };
+        };
+
         return {
             normalizeDocxPipelineResult,
             extractDocxQuestionBlockByNumber,
@@ -898,7 +937,8 @@
             docxVisualTextIsBetterForV2,
             mergeDocxVisualOptionsForV2,
             mergeDocxVisualSupplementByQuestionContract,
-            finalizeDocxVisualSupplementForReview
+            finalizeDocxVisualSupplementForReview,
+            partitionDocxMissingAnswersForReview
         };
     }
 );

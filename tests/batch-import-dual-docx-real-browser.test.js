@@ -12,7 +12,10 @@ const baseUrl = process.env.QISI_BASE_URL || 'http://localhost:3000/main.html';
 const fixtureRoot = process.env.QISI_BATCH_FIXTURE_ROOT || 'C:\\Users\\Administrator\\Desktop\\题目与答案';
 
 const rawStrictVisionPayload = JSON.stringify({
-    questions: [1, 2, 3, 4, 5, 6].map(number => ({
+    questions: Array.from(
+        { length: expectedQuestionCount },
+        (_, index) => index + 1
+    ).map(number => ({
         questionNumber: String(number),
         type: '单选题',
         stem: `第 ${number} 题视觉公式 $x_${number}^2+1$`,
@@ -168,7 +171,17 @@ test('real simplified dual-format import reaches review without unsafe writes', 
             assert.equal(questionFile.producerIdentity, 'docx-xml-importer');
             assert.equal(questionFile.routePolicyDecision, 'deterministic-docx-primary');
             assert.equal(questionFile.selectedSourcePort, 'docx-importer');
-            assert.equal(questionFile.visualSupplementStatus, 'success');
+            assert.ok(
+                ['success', 'partial-manual-review'].includes(
+                    questionFile.visualSupplementStatus
+                )
+            );
+            if (questionFile.visualSupplementStatus === 'partial-manual-review') {
+                assert.ok(
+                    Array.isArray(questionFile.visualSupplementUnresolved) &&
+                    questionFile.visualSupplementUnresolved.length > 0
+                );
+            }
         }
         assert.ok(aiCalls > 0);
 

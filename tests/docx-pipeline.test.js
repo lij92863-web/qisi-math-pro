@@ -19,7 +19,8 @@ const {
     partitionDocxSupportByQuestionContract,
     repairDocxSupportQuestionMarkerArtifacts,
     mergeDocxVisualSupplementByQuestionContract,
-    finalizeDocxVisualSupplementForReview
+    finalizeDocxVisualSupplementForReview,
+    partitionDocxMissingAnswersForReview
 } = require('../qisi-docx-pipeline.js');
 
 test('BM11: full mode', () => {
@@ -318,6 +319,24 @@ test('partial DOCX visual supplement removes unresolved display placeholders but
         ...result.items[1].options
     ].join('\n')), false);
     assert.equal(items[1].stem, '求[公式图片待转换:wmf]的值');
+});
+
+test('DOCX support contract allows only subjective missing answers with an owned solution into review', () => {
+    const result = partitionDocxMissingAnswersForReview({
+        missingAnswerNumbers: ['2', '10', '11', '12'],
+        questionItems: [
+            { question: '2', type: '单选题' },
+            { question: '10', type: '解答题' },
+            { question: '11', type: '证明题' },
+            { question: '12', type: '解答题' }
+        ],
+        solutionNumbers: ['10', '11']
+    });
+
+    assert.deepEqual(result, {
+        fatal: ['2', '12'],
+        reviewOnly: ['10', '11']
+    });
 });
 
 test('BMR2: debug DOCX XML structure is side-effect limited and tolerant', () => {

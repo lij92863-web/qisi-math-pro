@@ -32,12 +32,16 @@
       "reloadPassed": true
     },
     "fullDocx": {
-      "status": "failed-closed",
-      "expectedQuestionCount": 12,
-      "errorCode": "DOCX_VISUAL_SUPPLEMENT_INCOMPLETE",
-      "error": "DOCX 视觉补充后仍有 1 题包含未转换公式图片，已停止自动写入。",
+      "status": "pass-safe-partial",
+      "questionCount": 12,
+      "questionNumbers": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"],
+      "answers": ["B", "C", "B", "C", "D", "C", "ABD", "AC", "ABD", "", "6", "A"],
+      "solutionPresent": [true, true, true, true, true, true, true, true, true, true, true, true],
+      "reviewOnlyMissingAnswerNumbers": ["10"],
+      "visualSupplementStatus": "partial-manual-review",
       "formalQuestionWrites": 0,
-      "rerunPerformed": false
+      "realAiCalls": 4,
+      "reloadPassed": true
     },
     "fullPdf": {
       "status": "blocked-wrong-attachment",
@@ -65,7 +69,6 @@
   "frozenPdfFilesModified": false,
   "releaseAccepted": false,
   "blockers": [
-    "Full DOCX retains one unresolved formula-image placeholder after visual supplement.",
     "Full PDF attaches answer B to question 6; source answer is C.",
     "verify:personal-stable script is absent."
   ]
