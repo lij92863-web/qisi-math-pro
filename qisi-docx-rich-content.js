@@ -418,13 +418,242 @@
             };
         };
 
+        const mapValue = (map, key) => map instanceof Map ? map.get(key) : map?.[key];
+
+        const stableHash = (value = '') => {
+            let hash = 2166136261;
+            const source = String(value || '');
+            for (let index = 0; index < source.length; index += 1) {
+                hash ^= source.charCodeAt(index);
+                hash = Math.imul(hash, 16777619);
+            }
+            return (hash >>> 0).toString(16).padStart(8, '0');
+        };
+
+        const extractRid = (xml = '') => String(xml || '').match(/(?:r:embed|r:id|o:relid)=["']([^"']+)["']/)?.[1] || '';
+
+        const extractDimensions = (xml = '') => {
+            const extent = String(xml || '').match(/<(?:wp:)?extent\b[^>]*\bcx=["'](\d+)["'][^>]*\bcy=["'](\d+)["']/i);
+            return extent ? { cx: Number(extent[1]), cy: Number(extent[2]) } : null;
+        };
+
+        const createImageRun = (xml, context, paragraphIndex, runIndex) => {
+            const rid = extractRid(xml);
+            const media = mapValue(context.mediaMap, rid) || {};
+            const anchorType = /<(?:wp:)?anchor\b/i.test(xml) ? 'anchor' : 'inline';
+            const assetId = `${context.fileId || 'docx'}:p${paragraphIndex}:r${runIndex}:${rid || 'missing'}`;
+            const asset = {
+                assetId,
+                rid,
+                target: media.target || media.mediaPath || '',
+                mediaPath: media.mediaPath || media.target || '',
+                relationshipType: media.type || media.relationshipType || 'image',
+                ext: media.ext || '',
+                mime: media.mime || '',
+                url: media.url || '',
+                anchorType,
+                dimensions: extractDimensions(xml),
+                paragraphIndex,
+                runIndex,
+                contentHash: stableHash(media.url || media.target || `${rid}:${paragraphIndex}:${runIndex}`)
+            };
+            return { kind: 'image', assetId, token: `[[IMAGE:${assetId}]]`, paragraphIndex, asset };
+        };
+
+        const tokenPattern = () => /<m:oMathPara\b[\s\S]*?<\/m:oMathPara>|<m:oMath\b[\s\S]*?<\/m:oMath>|<w:object\b[\s\S]*?<\/w:object>|<w:drawing\b[\s\S]*?<\/w:drawing>|<w:pict\b[\s\S]*?<\/w:pict>|<w:t\b[^>]*>[\s\S]*?<\/w:t>|<w:tab\b[^>]*\/?\s*>|<w:br\b[^>]*\/?\s*>/gi;
+
+        const tokenToRun = (token, context, paragraphIndex, runIndex, diagnostics) => {
+            if (/^<w:t\b/i.test(token)) {
+                const text = token.replace(/^<w:t\b[^>]*>/i, '').replace(/<\/w:t>$/i, '');
+                return { kind: 'text', text: decodeXmlEntities(text), paragraphIndex };
+            }
+            if (/^<w:tab\b/i.test(token)) return { kind: 'tab', paragraphIndex };
+            if (/^<w:br\b/i.test(token)) return { kind: 'break', breakType: /w:type=["']page["']/i.test(token) ? 'page' : 'line', paragraphIndex };
+            if (/^<m:oMath/i.test(token)) {
+                const latex = ommlToLatexBody(token);
+                if (!latex) diagnostics.push({ kind: 'formula-error', code: 'OMML_TRANSLATION_FAILED', paragraphIndex, runIndex });
+                return { kind: 'math', latex, rawSource: token, sourceType: 'omml', paragraphIndex };
+            }
+            if (/^<w:object/i.test(token)) {
+                const previewRid = token.match(/<v:imagedata\b[^>]*(?:r:id|o:relid)=["']([^"']+)["']/i)?.[1] || extractRid(token);
+                const latex = mapValue(context.mathByRid, previewRid) || '';
+                if (!latex) diagnostics.push({ kind: 'formula-error', code: 'MATHTYPE_TRANSLATION_MISSING', rid: previewRid, paragraphIndex, runIndex });
+                return { kind: 'math', latex, rawSource: token, sourceType: 'mathtype', previewRid, paragraphIndex };
+            }
+            return createImageRun(token, context, paragraphIndex, runIndex);
+        };
+
+        const extractParagraphRuns = (xml, context, paragraphIndex) => {
+            const runs = [];
+            const assets = [];
+            const diagnostics = [];
+            let match;
+            const pattern = tokenPattern();
+            while ((match = pattern.exec(xml)) !== null) {
+                const run = tokenToRun(match[0], context, paragraphIndex, runs.length, diagnostics);
+                runs.push(run);
+                if (run.asset) {
+                    assets.push(run.asset);
+                    delete run.asset;
+                }
+            }
+            return { runs, assets, diagnostics };
+        };
+
+        const extractParagraphMetadata = (xml = '') => ({
+            style: String(xml).match(/<w:pStyle\b[^>]*w:val=["']([^"']+)["']/i)?.[1] || '',
+            numbering: {
+                numId: String(xml).match(/<w:numId\b[^>]*w:val=["']([^"']+)["']/i)?.[1] || '',
+                level: String(xml).match(/<w:ilvl\b[^>]*w:val=["']([^"']+)["']/i)?.[1] || ''
+            },
+            pageBreak: /<w:br\b[^>]*w:type=["']page["']/i.test(xml),
+            sectionBreak: /<w:sectPr\b/i.test(xml)
+        });
+
+        const extractDocxRichBlocks = (documentXml = '', options = {}) => {
+            const context = {
+                fileId: options.fileId || 'docx',
+                mediaMap: options.mediaMap || new Map(),
+                mathByRid: options.mathByRid || new Map()
+            };
+            const paragraphs = String(documentXml || '').match(/<w:p\b[\s\S]*?<\/w:p>/gi) || [];
+            return paragraphs.map((xml, paragraphIndex) => {
+                const extracted = extractParagraphRuns(xml, context, paragraphIndex);
+                const diagnostics = [...extracted.diagnostics];
+                return {
+                    kind: 'paragraph',
+                    paragraphIndex,
+                    ...extractParagraphMetadata(xml),
+                    runs: extracted.runs,
+                    assets: extracted.assets,
+                    diagnostics,
+                    serialized: serializeRichRuns(extracted.runs, diagnostics),
+                    sourceXmlHash: stableHash(xml)
+                };
+            });
+        };
+
+        const sectionHeading = (value = '') => {
+            const source = String(value || '').replace(/\s+/g, ' ').trim();
+            const match = source.match(/^(?:[一二三四五六七八九十百]+|\d+)\s*[、.．]\s*([^：:]*?(?:单项选择题|单选题|多项选择题|多选题|填空题|解答题|简答题|判断题))(?=\s*(?:[（(：:]|$))/);
+            if (!match) return null;
+            const label = match[1];
+            let type = '未知题型';
+            if (/单项选择题|单选题/.test(label)) type = '单选题';
+            else if (/多项选择题|多选题/.test(label)) type = '多选题';
+            else if (/填空题/.test(label)) type = '填空题';
+            else if (/解答题|简答题/.test(label)) type = '解答题';
+            else if (/判断题/.test(label)) type = '判断题';
+            return { label, type };
+        };
+
+        const splitOptions = (value = '') => {
+            const source = String(value || '');
+            const regex = /(^|[\s　])([A-D])\s*[.．、:：]\s*/g;
+            const markers = [];
+            let match;
+            while ((match = regex.exec(source)) !== null) {
+                markers.push({ label: match[2], start: match.index + match[1].length, contentStart: regex.lastIndex });
+            }
+            if (!markers.length) return null;
+            return {
+                before: source.slice(0, markers[0].start).trim(),
+                options: markers.map((marker, index) => ({
+                    label: marker.label,
+                    value: source.slice(marker.contentStart, markers[index + 1]?.start ?? source.length).trim()
+                }))
+            };
+        };
+
+        const appendText = (current, value) => [current, String(value || '').trim()].filter(Boolean).join('\n');
+
+        const consumeQuestionContent = (question, value) => {
+            const split = splitOptions(value);
+            if (split) {
+                if (split.before) question.stem = appendText(question.stem, split.before);
+                for (const option of split.options) {
+                    question.optionMap[option.label] = appendText(question.optionMap[option.label], option.value);
+                    question.currentOption = option.label;
+                }
+                return;
+            }
+            if (question.currentOption) question.optionMap[question.currentOption] = appendText(question.optionMap[question.currentOption], value);
+            else question.stem = appendText(question.stem, value);
+        };
+
+        const finishQuestion = (question, questions) => {
+            if (!question) return;
+            const options = ['A', 'B', 'C', 'D'].map(label => question.optionMap[label] || '');
+            while (options.length && !options[options.length - 1]) options.pop();
+            questions.push({
+                questionKey: `section-${question.sectionIndex}/q-${question.number}`,
+                sectionIndex: question.sectionIndex,
+                number: question.number,
+                type: question.type,
+                stem: question.stem.trim(),
+                options,
+                optionMap: { ...question.optionMap },
+                richBlocks: question.richBlocks,
+                assets: question.richBlocks.flatMap(block => block.assets || []),
+                diagnostics: question.richBlocks.flatMap(block => block.diagnostics || []),
+                sourceParagraphRange: [question.startParagraph, question.endParagraph]
+            });
+        };
+
+        const parseQuestionRichBlocks = (blocks = []) => {
+            const questions = [];
+            const diagnostics = [];
+            let sectionIndex = 0;
+            let type = '未知题型';
+            let current = null;
+            for (const block of blocks || []) {
+                const value = String(block?.serialized || '').trim();
+                const heading = sectionHeading(value);
+                if (heading) {
+                    finishQuestion(current, questions);
+                    current = null;
+                    sectionIndex += 1;
+                    type = heading.type;
+                    continue;
+                }
+                const marker = value.match(/^\s*(\d+)\s*[.．、]\s*([\s\S]*)$/);
+                if (marker) {
+                    finishQuestion(current, questions);
+                    if (!sectionIndex) sectionIndex = 1;
+                    current = {
+                        sectionIndex,
+                        type,
+                        number: Number(marker[1]),
+                        stem: '',
+                        optionMap: {},
+                        currentOption: '',
+                        richBlocks: [block],
+                        startParagraph: block.paragraphIndex,
+                        endParagraph: block.paragraphIndex
+                    };
+                    consumeQuestionContent(current, marker[2]);
+                    continue;
+                }
+                if (!current || !value) continue;
+                current.richBlocks.push(block);
+                current.endParagraph = block.paragraphIndex;
+                consumeQuestionContent(current, value);
+            }
+            finishQuestion(current, questions);
+            const duplicate = questions.find((question, index) => questions.findIndex(row => row.questionKey === question.questionKey) !== index);
+            if (duplicate) diagnostics.push({ code: 'DUPLICATE_QUESTION_KEY', questionKey: duplicate.questionKey });
+            return { questions, diagnostics, ok: diagnostics.length === 0 };
+        };
+
         return {
             canonicalizeMathCommands,
             collectMathTypeMtef,
             decodeXmlEntities,
+            extractDocxRichBlocks,
             extractMtefFromWmf,
             normalizeLatexFragment,
             ommlToLatexBody,
+            parseQuestionRichBlocks,
             serializeRichRuns,
             stripOnlyOuterMathDelimiters,
             translateMathTypeMedia,
