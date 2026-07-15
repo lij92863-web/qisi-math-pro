@@ -18,7 +18,8 @@ const {
     selectDocxSourceRoute,
     partitionDocxSupportByQuestionContract,
     repairDocxSupportQuestionMarkerArtifacts,
-    mergeDocxVisualSupplementByQuestionContract
+    mergeDocxVisualSupplementByQuestionContract,
+    finalizeDocxVisualSupplementForReview
 } = require('../qisi-docx-pipeline.js');
 
 test('BM11: full mode', () => {
@@ -277,6 +278,46 @@ test('dual DOCX visual supplement failure input preserves deterministic items fo
     assert.deepEqual(result.items, deterministic);
     assert.deepEqual(result.mergedQuestionNumbers, []);
     assert.deepEqual(result.unmatchedVisual, []);
+});
+
+test('partial DOCX visual supplement removes unresolved display placeholders but preserves raw evidence for review', () => {
+    const items = [
+        {
+            question: '11',
+            stem: '完整题干',
+            options: [],
+            rawText: 'raw-11'
+        },
+        {
+            question: '12',
+            stem: '求[公式图片待转换:wmf]的值',
+            options: ['[公式图片选项待转换:wmf]', '文本 B', '', ''],
+            rawText: '原始题块含 WMF 证据',
+            sourceTrace: { source: 'docx-importer', rawBlock: 'keep-raw-block' },
+            warnings: ['原警告']
+        }
+    ];
+
+    const result = finalizeDocxVisualSupplementForReview(items);
+
+    assert.equal(result.items[0], items[0]);
+    assert.equal(result.items[1].stem, '求的值');
+    assert.deepEqual(result.items[1].options, ['', '文本 B', '', '']);
+    assert.equal(result.items[1].rawText, '原始题块含 WMF 证据');
+    assert.equal(result.items[1].sourceTrace.rawBlock, 'keep-raw-block');
+    assert.equal(result.items[1].sourceTrace.visualSupplement, 'partial-manual-review');
+    assert.equal(result.items[1].manualReviewRequired, true);
+    assert.match(result.items[1].warnings.join('\n'), /公式图片证据未能自动补全/);
+    assert.deepEqual(result.unresolved, [{
+        questionNumber: '12',
+        fields: ['stem', 'options.0'],
+        placeholderCount: 2
+    }]);
+    assert.equal(/待转换|闂傚/.test([
+        result.items[1].stem,
+        ...result.items[1].options
+    ].join('\n')), false);
+    assert.equal(items[1].stem, '求[公式图片待转换:wmf]的值');
 });
 
 test('BMR2: debug DOCX XML structure is side-effect limited and tolerant', () => {

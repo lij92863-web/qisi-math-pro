@@ -14171,6 +14171,7 @@ ${source}`;
                             pageTextOriginal: itemPageTextOriginal,
                             sourceTextOriginal: itemSourceTextOriginal,
                             recognitionRaw: item.recognitionRaw || item,
+                            manualReviewRequired: Boolean(item.manualReviewRequired),
                             warnings,
                             confidence: item.confidence || 0.75,
                             duplicateStatus,
@@ -18060,23 +18061,21 @@ ${source}`;
                                                 strictResult.questions || [],
                                                 authoritativeQuestionContract?.questionNumbers || []
                                             );
-                                            docxImporterItems = supplemented.items;
-
-                                            const unresolved = docxImporterItems.filter(
-                                                window.Qisi.Utils.itemHasUnconvertedImagePlaceholder
-                                            );
-                                            if (unresolved.length) {
-                                                const error = new Error(
-                                                    `DOCX 视觉补充后仍有 ${unresolved.length} 题包含未转换公式图片，已停止自动写入。`
+                                            const finalizedSupplement =
+                                                window.Qisi.DocxPipeline.finalizeDocxVisualSupplementForReview(
+                                                    supplemented.items
                                                 );
-                                                error.code = 'DOCX_VISUAL_SUPPLEMENT_INCOMPLETE';
-                                                throw error;
-                                            }
+                                            docxImporterItems = finalizedSupplement.items;
+                                            const hasUnresolvedFormulaEvidence =
+                                                finalizedSupplement.unresolved.length > 0;
 
                                             await db.draftImportFiles.update(file.id, {
-                                                visualSupplementStatus: 'success',
+                                                visualSupplementStatus: hasUnresolvedFormulaEvidence
+                                                    ? 'partial-manual-review'
+                                                    : 'success',
                                                 visualSupplementQuestionNumbers: supplemented.mergedQuestionNumbers,
                                                 visualSupplementProducer: 'docx-pdf-strict-vision',
+                                                visualSupplementUnresolved: finalizedSupplement.unresolved,
                                                 updatedAt: Date.now()
                                             });
                                         } catch (error) {

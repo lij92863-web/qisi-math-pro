@@ -812,6 +812,74 @@
             return { items, unmatchedVisual, mergedQuestionNumbers };
         };
 
+        const finalizeDocxVisualSupplementForReview = (items = []) => {
+            const unresolved = [];
+            const placeholderPattern = () => new RegExp(DOCX_FORMULA_PLACEHOLDER_RE.source, 'g');
+            const countPlaceholders = value => {
+                const matches = String(value || '').match(placeholderPattern());
+                return matches ? matches.length : 0;
+            };
+            const removePlaceholders = value => String(value || '')
+                .replace(placeholderPattern(), '')
+                .replace(/[ \t]{2,}/g, ' ')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+
+            const output = (items || []).map(item => {
+                if (!item) return item;
+
+                const fields = [];
+                let placeholderCount = 0;
+                const record = (field, value) => {
+                    const count = countPlaceholders(value);
+                    if (count) {
+                        fields.push(field);
+                        placeholderCount += count;
+                    }
+                    return count;
+                };
+
+                record('stem', item.stem);
+                (Array.isArray(item.options) ? item.options : []).forEach((option, index) => {
+                    record(`options.${index}`, option);
+                });
+                record('answer', item.answer);
+                record('solution', item.solution);
+
+                if (!placeholderCount) return item;
+
+                const questionNumber = String(
+                    item.questionNumber ?? item.question ?? item.order ?? ''
+                ).trim();
+                unresolved.push({ questionNumber, fields, placeholderCount });
+
+                return {
+                    ...item,
+                    stem: removePlaceholders(item.stem),
+                    options: Array.isArray(item.options)
+                        ? item.options.map(removePlaceholders)
+                        : item.options,
+                    answer: removePlaceholders(item.answer),
+                    solution: removePlaceholders(item.solution),
+                    manualReviewRequired: true,
+                    warnings: [
+                        ...new Set([
+                            ...(Array.isArray(item.warnings) ? item.warnings : []),
+                            '本题仍有公式图片证据未能自动补全，已移除占位文本；请对照原始 Word 页面人工补充后再确认。'
+                        ])
+                    ],
+                    sourceTrace: {
+                        ...(item.sourceTrace || {}),
+                        visualSupplement: 'partial-manual-review',
+                        unresolvedFormulaFields: fields,
+                        unresolvedFormulaPlaceholderCount: placeholderCount
+                    }
+                };
+            });
+
+            return { items: output, unresolved };
+        };
+
         return {
             normalizeDocxPipelineResult,
             extractDocxQuestionBlockByNumber,
@@ -829,7 +897,8 @@
             repairDocxSupportQuestionMarkerArtifacts,
             docxVisualTextIsBetterForV2,
             mergeDocxVisualOptionsForV2,
-            mergeDocxVisualSupplementByQuestionContract
+            mergeDocxVisualSupplementByQuestionContract,
+            finalizeDocxVisualSupplementForReview
         };
     }
 );
