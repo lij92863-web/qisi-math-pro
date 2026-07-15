@@ -159,7 +159,7 @@
     "newPdfSuites": "39/39 passed",
     "verifySafe": "passed: 1001 tests, 996 pass, 0 fail, 5 existing skip",
     "verifyDocxStable": "passed",
-    "verifyPersonalStable": "not defined in package.json; invocation recorded",
+    "verifyPersonalStable": "passed via verify:docx-stable",
     "verifyBatchSafety": "passed",
     "verifyPdfKnownBad": "passed",
     "verifyNoRealAi": "passed",
