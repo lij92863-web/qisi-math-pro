@@ -1,0 +1,237 @@
+{
+  "schemaVersion": 1,
+  "verifiedBy": "manual Word/PDF visual inspection plus DOCX XML/relationship/media inspection",
+  "sourceQuestionFile": "简略版题目（只有一页）.docx",
+  "sourceAnswerFile": "完整版答案.docx",
+  "paragraphIndexBase": 0,
+  "sectionTitle": "一、单选题（本小题共6题，每小题5分，四个选项中，只有一项是符合题目要求的。）",
+  "questions": [
+    {
+      "questionKey": "section-1/q-1",
+      "displayNumber": "1",
+      "sectionTitle": "一、单选题（本小题共6题，每小题5分，四个选项中，只有一项是符合题目要求的。）",
+      "stemText": "已知集合 $A=\\{x\\mid x=\\sin\\frac{n\\pi}{2},n\\in\\mathbb{Z}\\}$，$B=\\{0,1\\}$，则下列命题正确的是（    ）",
+      "stemLatex": [
+        "A=\\{x\\mid x=\\sin\\frac{n\\pi}{2},n\\in\\mathbb{Z}\\}",
+        "B=\\{0,1\\}"
+      ],
+      "options": [
+        {"label": "A", "text": "$A=B$", "latex": ["A=B"]},
+        {"label": "B", "text": "$B\\subseteq A$", "latex": ["B\\subseteq A"]},
+        {"label": "C", "text": "$A\\cap B=\\{0,-1\\}$", "latex": ["A\\cap B=\\{0,-1\\}"]},
+        {"label": "D", "text": "$C_A B=\\{1\\}$", "latex": ["C_A B=\\{1\\}"]}
+      ],
+      "answer": "B",
+      "answerLatex": [],
+      "analysisParagraphs": [
+        "因为 $A=\\{x\\mid x=\\sin\\frac{n\\pi}{2},n\\in\\mathbb{Z}\\}$，所以 $A=\\{-1,0,1\\}$，$B=\\{0,1\\}$。",
+        "对 A：$A\\ne B$，故错误；对 B：$B\\subseteq A$，故正确；对 C：$A\\cap B=\\{0,1\\}$，故错误。",
+        "对 D：$C_A B=\\{-1\\}$，故错误；故选 B。"
+      ],
+      "analysisLatex": [
+        "A=\\{x\\mid x=\\sin\\frac{n\\pi}{2},n\\in\\mathbb{Z}\\}",
+        "A=\\{-1,0,1\\}",
+        "B=\\{0,1\\}",
+        "A\\ne B",
+        "B\\subseteq A",
+        "A\\cap B=\\{0,1\\}",
+        "C_A B=\\{-1\\}"
+      ],
+      "stemImageCount": 0,
+      "analysisImageCount": 0,
+      "sourceQuestionParagraphRange": [3, 4],
+      "sourceAnswerParagraphRange": [0, 3]
+    },
+    {
+      "questionKey": "section-1/q-2",
+      "displayNumber": "2",
+      "sectionTitle": "一、单选题（本小题共6题，每小题5分，四个选项中，只有一项是符合题目要求的。）",
+      "stemText": "正四棱台的上、下底面的边长分别为 2，8，该棱台的表面积为 148，则侧棱长为（    ）",
+      "stemLatex": [],
+      "options": [
+        {"label": "A", "text": "3", "latex": []},
+        {"label": "B", "text": "4", "latex": []},
+        {"label": "C", "text": "5", "latex": []},
+        {"label": "D", "text": "6", "latex": []}
+      ],
+      "answer": "C",
+      "answerLatex": [],
+      "analysisParagraphs": [
+        "设正四棱台侧面的高为 $h$，则 $2^2+8^2+\\frac{2+8}{2}\\times h\\times4=148$，$h=4$。",
+        "所以侧棱长为 $\\sqrt{4^2+\\left(\\frac{8-2}{2}\\right)^2}=5$，故选 C。"
+      ],
+      "analysisLatex": [
+        "2^2+8^2+\\frac{2+8}{2}\\times h\\times4=148",
+        "h=4",
+        "\\sqrt{4^2+\\left(\\frac{8-2}{2}\\right)^2}=5"
+      ],
+      "stemImageCount": 0,
+      "analysisImageCount": 1,
+      "sourceQuestionParagraphRange": [5, 6],
+      "sourceAnswerParagraphRange": [4, 6]
+    },
+    {
+      "questionKey": "section-1/q-3",
+      "displayNumber": "3",
+      "sectionTitle": "一、单选题（本小题共6题，每小题5分，四个选项中，只有一项是符合题目要求的。）",
+      "stemText": "已知 $\\vec a$ 和 $\\vec b$ 是两个不共线的向量，若 $\\overrightarrow{AB}=\\vec a+m\\vec b$，$\\overrightarrow{BC}=5\\vec a+4\\vec b$，$\\overrightarrow{DC}=-\\vec a-2\\vec b$，且 A，B，D 三点共线，则实数 $m$ 的值为（    ）",
+      "stemLatex": [
+        "\\vec a",
+        "\\vec b",
+        "\\overrightarrow{AB}=\\vec a+m\\vec b",
+        "\\overrightarrow{BC}=5\\vec a+4\\vec b",
+        "\\overrightarrow{DC}=-\\vec a-2\\vec b",
+        "m"
+      ],
+      "options": [
+        {"label": "A", "text": "$\\frac{1}{2}$", "latex": ["\\frac{1}{2}"]},
+        {"label": "B", "text": "$1$", "latex": ["1"]},
+        {"label": "C", "text": "$-\\frac{1}{2}$", "latex": ["-\\frac{1}{2}"]},
+        {"label": "D", "text": "$-1$", "latex": ["-1"]}
+      ],
+      "answer": "B",
+      "answerLatex": [],
+      "analysisParagraphs": [
+        "因为 $\\overrightarrow{BD}=\\overrightarrow{BC}+\\overrightarrow{CD}=5\\vec a+4\\vec b+\\vec a+2\\vec b=6\\vec a+6\\vec b$，且 A，B，D 三点共线。",
+        "所以存在实数 $\\lambda$，使得 $\\overrightarrow{AB}=\\lambda\\overrightarrow{BD}$，即 $\\vec a+m\\vec b=\\lambda(6\\vec a+6\\vec b)$，则 $1=6\\lambda$，$m=6\\lambda$，解得 $m=1$，故选 B。"
+      ],
+      "analysisLatex": [
+        "\\overrightarrow{BD}=\\overrightarrow{BC}+\\overrightarrow{CD}=5\\vec a+4\\vec b+\\vec a+2\\vec b=6\\vec a+6\\vec b",
+        "\\overrightarrow{AB}=\\lambda\\overrightarrow{BD}",
+        "\\vec a+m\\vec b=\\lambda(6\\vec a+6\\vec b)",
+        "1=6\\lambda",
+        "m=6\\lambda",
+        "m=1"
+      ],
+      "stemImageCount": 0,
+      "analysisImageCount": 0,
+      "sourceQuestionParagraphRange": [7, 8],
+      "sourceAnswerParagraphRange": [7, 9]
+    },
+    {
+      "questionKey": "section-1/q-4",
+      "displayNumber": "4",
+      "sectionTitle": "一、单选题（本小题共6题，每小题5分，四个选项中，只有一项是符合题目要求的。）",
+      "stemText": "折扇是我国古老文化的延续，在我国已有四千年左右的历史，“扇”与“善”谐音，折扇也寓意“善良”“善行”，它常以字画的形式体现我国的传统文化，也是运筹帷幄、决胜千里、大智大勇的象征（如图甲）。图乙是扇形的一部分，若两个圆弧 $\\widehat{DE}$、$\\widehat{AC}$ 所在圆的半径分别是 12 和 27，且 $\\angle ABC=120^\\circ$。若图乙是某圆台的侧面展开图，则该圆台的侧面积是（    ）",
+      "stemLatex": ["\\widehat{DE}", "\\widehat{AC}", "\\angle ABC=120^\\circ"],
+      "options": [
+        {"label": "A", "text": "$292\\pi$", "latex": ["292\\pi"]},
+        {"label": "B", "text": "$\\frac{1330\\sqrt{2}}{3}\\pi$", "latex": ["\\frac{1330\\sqrt{2}}{3}\\pi"]},
+        {"label": "C", "text": "$195\\pi$", "latex": ["195\\pi"]},
+        {"label": "D", "text": "$243\\pi$", "latex": ["243\\pi"]}
+      ],
+      "answer": "C",
+      "answerLatex": [],
+      "analysisParagraphs": [
+        "设圆台的上底面半径为 $r$，下底面半径为 $R$。",
+        "由弧长公式，$2\\pi r=\\frac{2\\pi}{3}\\times12$，得 $r=4$；$2\\pi R=\\frac{2\\pi}{3}\\times27$，得 $R=9$。",
+        "圆台母线长为 $l=27-12=15$，所以圆台侧面积 $S=\\pi(4+9)\\times15=195\\pi$，故选 C。"
+      ],
+      "analysisLatex": [
+        "r",
+        "R",
+        "2\\pi r=\\frac{2\\pi}{3}\\times12",
+        "r=4",
+        "2\\pi R=\\frac{2\\pi}{3}\\times27",
+        "R=9",
+        "l=27-12=15",
+        "S=\\pi(4+9)\\times15=195\\pi"
+      ],
+      "stemImageCount": 1,
+      "analysisImageCount": 0,
+      "sourceQuestionParagraphRange": [9, 11],
+      "sourceAnswerParagraphRange": [10, 13]
+    },
+    {
+      "questionKey": "section-1/q-5",
+      "displayNumber": "5",
+      "sectionTitle": "一、单选题（本小题共6题，每小题5分，四个选项中，只有一项是符合题目要求的。）",
+      "stemText": "在 $\\triangle ABC$ 中，$\\frac{\\overrightarrow{BA}\\cdot\\overrightarrow{AC}}{|\\overrightarrow{BC}|}+\\frac{\\overrightarrow{AC}\\cdot\\overrightarrow{BC}}{|\\overrightarrow{BC}|}=0$，$\\frac{\\overrightarrow{BC}}{|\\overrightarrow{BC}|}\\cdot\\frac{\\overrightarrow{AB}}{|\\overrightarrow{AB}|}=\\frac{1}{2}$，则 $\\triangle ABC$ 的形状为（    ）",
+      "stemLatex": [
+        "\\triangle ABC",
+        "\\frac{\\overrightarrow{BA}\\cdot\\overrightarrow{AC}}{|\\overrightarrow{BC}|}+\\frac{\\overrightarrow{AC}\\cdot\\overrightarrow{BC}}{|\\overrightarrow{BC}|}=0",
+        "\\frac{\\overrightarrow{BC}}{|\\overrightarrow{BC}|}\\cdot\\frac{\\overrightarrow{AB}}{|\\overrightarrow{AB}|}=\\frac{1}{2}",
+        "\\triangle ABC"
+      ],
+      "options": [
+        {"label": "A", "text": "直角三角形", "latex": []},
+        {"label": "B", "text": "三边均不相等的三角形", "latex": []},
+        {"label": "C", "text": "等边三角形", "latex": []},
+        {"label": "D", "text": "等腰（非等边）三角形", "latex": []}
+      ],
+      "answer": "D",
+      "answerLatex": [],
+      "analysisParagraphs": [
+        "由题设可得 $\\overrightarrow{BA}\\cdot\\overrightarrow{AC}+\\overrightarrow{AC}\\cdot\\overrightarrow{BC}=0$，即 $\\overrightarrow{AC}\\cdot(\\overrightarrow{BA}+\\overrightarrow{BC})=0$。",
+        "所以 $(\\overrightarrow{BC}-\\overrightarrow{BA})\\cdot(\\overrightarrow{BA}+\\overrightarrow{BC})=0$，从而 $BC^2=BA^2$，即 $BC=BA$。",
+        "又 $\\frac{\\overrightarrow{BC}}{|\\overrightarrow{BC}|}\\cdot\\frac{\\overrightarrow{AB}}{|\\overrightarrow{AB}|}=1\\times1\\times(-\\cos B)=\\frac12$，所以 $\\cos B=-\\frac12$，$\\angle B=\\frac{2\\pi}{3}$。",
+        "所以 $\\triangle ABC$ 为等腰非等边三角形，故选 D。"
+      ],
+      "analysisLatex": [
+        "\\overrightarrow{BA}\\cdot\\overrightarrow{AC}+\\overrightarrow{AC}\\cdot\\overrightarrow{BC}=0",
+        "\\overrightarrow{AC}\\cdot(\\overrightarrow{BA}+\\overrightarrow{BC})=0",
+        "(\\overrightarrow{BC}-\\overrightarrow{BA})\\cdot(\\overrightarrow{BA}+\\overrightarrow{BC})=0",
+        "BC^2=BA^2",
+        "BC=BA",
+        "\\frac{\\overrightarrow{BC}}{|\\overrightarrow{BC}|}\\cdot\\frac{\\overrightarrow{AB}}{|\\overrightarrow{AB}|}=1\\times1\\times(-\\cos B)=\\frac12",
+        "\\cos B=-\\frac12",
+        "\\angle B=\\frac{2\\pi}{3}",
+        "\\triangle ABC"
+      ],
+      "stemImageCount": 0,
+      "analysisImageCount": 0,
+      "sourceQuestionParagraphRange": [12, 14],
+      "sourceAnswerParagraphRange": [14, 19]
+    },
+    {
+      "questionKey": "section-1/q-6",
+      "displayNumber": "6",
+      "sectionTitle": "一、单选题（本小题共6题，每小题5分，四个选项中，只有一项是符合题目要求的。）",
+      "stemText": "已知经过圆锥 $SO$ 的轴的截面是正三角形，用平行于底面的截面将圆锥 $SO$ 分成两部分，若这两部分几何体都存在内切球（与各面均相切），则上、下两部分几何体的体积之比是（    ）",
+      "stemLatex": ["SO", "SO"],
+      "options": [
+        {"label": "A", "text": "$1:8$", "latex": ["1:8"]},
+        {"label": "B", "text": "$1:9$", "latex": ["1:9"]},
+        {"label": "C", "text": "$1:26$", "latex": ["1:26"]},
+        {"label": "D", "text": "$1:27$", "latex": ["1:27"]}
+      ],
+      "answer": "C",
+      "answerLatex": [],
+      "analysisParagraphs": [
+        "作出圆锥 $SO$ 的轴截面 $SAB$。设上、下两部分内切球球心分别为 $E$、$F$，半径分别为 $r$、$R$，则 $OF=FG=R$，$EG=r$。",
+        "由 $\\triangle SAB$ 为正三角形，得 $SE=2r$，圆锥 $SO$ 的底面半径 $OB=\\sqrt3R$。",
+        "由 $SO=2r+r+R+R=3r+2R$，且 $SO=\\sqrt3OB$，得 $3r+2R=3R$，所以 $R=3r$。",
+        "上部分圆锥底面半径为 $\\sqrt3r$、高为 $3r$；圆锥 $SO$ 底面半径为 $OB=\\sqrt3R=3\\sqrt3r$、高为 $SO=3r+2R=9r$。",
+        "上部分圆锥体积与圆锥 $SO$ 体积之比为 $\\left(\\frac13\\right)^3=\\frac1{27}$，所以下部分所占为 $\\frac{26}{27}$，上、下体积之比为 $1:26$，故选 C。"
+      ],
+      "analysisLatex": [
+        "SO",
+        "SAB",
+        "E",
+        "F",
+        "r",
+        "R",
+        "OF=FG=R",
+        "EG=r",
+        "\\triangle SAB",
+        "SE=2r",
+        "OB=\\sqrt3R",
+        "SO=2r+r+R+R=3r+2R",
+        "SO=\\sqrt3OB",
+        "3r+2R=3R",
+        "R=3r",
+        "\\sqrt3r",
+        "3r",
+        "OB=\\sqrt3R=3\\sqrt3r",
+        "SO=3r+2R=9r",
+        "\\left(\\frac13\\right)^3=\\frac1{27}",
+        "\\frac{26}{27}",
+        "1:26"
+      ],
+      "stemImageCount": 0,
+      "analysisImageCount": 1,
+      "sourceQuestionParagraphRange": [15, 16],
+      "sourceAnswerParagraphRange": [20, 29]
+    }
+  ]
+}
