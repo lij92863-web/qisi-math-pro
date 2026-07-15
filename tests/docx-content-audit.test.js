@@ -52,6 +52,7 @@ test('DOCX content audit fails closed on structural, formula, image, and leakage
             questionNumber: '1',
             renderErrorCount: 1,
             renderErrorDetails: [{ title: 'bad latex' }],
+            unrenderedLatexFragments: ['\\frac'],
             renderedImageIds: []
         }]
     });
@@ -60,4 +61,22 @@ test('DOCX content audit fails closed on structural, formula, image, and leakage
     assert.deepEqual(result.duplicateQuestionNumbers, ['1']);
     assert.deepEqual(result.missingQuestionNumbers, ['2']);
     assert.equal(result.keyboardMathFragments[0].fragment, '3cosA');
+    assert.deepEqual(result.unrenderedLatexFragments, [{ questionNumber: '1', fragment: '\\frac' }]);
+});
+
+test('DOCX content audit reports LaTeX commands that escaped math delimiters', () => {
+    const result = auditDocxImportContent([{
+        questionNumber: '12',
+        stem: '题干',
+        options: [],
+        answer: '$\\frac{\\sqrt{2}+1}{2}$',
+        solution: '故\\triangle ABC的面积S=\\frac{1}{2}bc\\sin A。'
+    }]);
+
+    assert.deepEqual(result.unwrappedLatexFragments, [
+        { questionNumber: '12', field: 'solution', fragment: '\\triangle' },
+        { questionNumber: '12', field: 'solution', fragment: '\\frac' },
+        { questionNumber: '12', field: 'solution', fragment: '\\sin' }
+    ]);
+    assert.equal(auditIssueCount(result), 3);
 });

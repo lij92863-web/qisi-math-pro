@@ -44,20 +44,28 @@ const collectPreviewChecks = async (page, questionCount) => {
     for (let index = 0; index < questionCount; index += 1) {
         await questionNavItems.nth(index).click();
         await page.waitForTimeout(50);
-        visualChecks.push(await page.locator('.batch-preview-panel').evaluate((panel, questionNumber) => ({
-            questionNumber: String(questionNumber),
-            renderedMathCount: panel.querySelectorAll('.katex').length,
-            renderedImageCount: panel.querySelectorAll('.qisi-preview-image img').length,
-            renderErrorCount: panel.querySelectorAll('.latex-render-error').length,
-            renderErrorDetails: [...panel.querySelectorAll('.latex-render-error')].map(node => ({
-                title: node.getAttribute('title') || '',
-                text: node.textContent || ''
-            })),
-            renderedImageIds: [...panel.querySelectorAll('.qisi-preview-image')]
-                .map(node => node.getAttribute('data-image-id') || ''),
-            imagePlaceholderCount: panel.querySelectorAll('.latex-image-placeholder').length,
-            hasRawFailureText: /公式语法错误|图片暂不可预览/.test(panel.textContent || '')
-        }), index + 1));
+        visualChecks.push(await page.locator('.batch-preview-panel').evaluate((panel, questionNumber) => {
+            const plainClone = panel.cloneNode(true);
+            plainClone.querySelectorAll('.katex').forEach(node => node.remove());
+            const unrenderedLatexFragments = (plainClone.textContent || '').match(
+                /\\(?:frac|sqrt|sin|cos|tan|angle|triangle|vec|overrightarrow|overline|cdot|times|in|pi)\b/g
+            ) || [];
+            return {
+                questionNumber: String(questionNumber),
+                renderedMathCount: panel.querySelectorAll('.katex').length,
+                renderedImageCount: panel.querySelectorAll('.qisi-preview-image img').length,
+                renderErrorCount: panel.querySelectorAll('.latex-render-error').length,
+                renderErrorDetails: [...panel.querySelectorAll('.latex-render-error')].map(node => ({
+                    title: node.getAttribute('title') || '',
+                    text: node.textContent || ''
+                })),
+                renderedImageIds: [...panel.querySelectorAll('.qisi-preview-image')]
+                    .map(node => node.getAttribute('data-image-id') || ''),
+                imagePlaceholderCount: panel.querySelectorAll('.latex-image-placeholder').length,
+                unrenderedLatexFragments,
+                hasRawFailureText: /公式语法错误|图片暂不可预览/.test(panel.textContent || '')
+            };
+        }, index + 1));
     }
     return visualChecks;
 };
@@ -244,7 +252,12 @@ test('real dual-format import reaches review with rendered content and without u
                 `存在未渲染公式的题目：${JSON.stringify(visualChecks)}`
             );
             assert.equal(
-                visualChecks.every(row => row.renderErrorCount === 0 && row.imagePlaceholderCount === 0 && !row.hasRawFailureText),
+                visualChecks.every(row => (
+                    row.renderErrorCount === 0 &&
+                    row.imagePlaceholderCount === 0 &&
+                    row.unrenderedLatexFragments.length === 0 &&
+                    !row.hasRawFailureText
+                )),
                 true,
                 `预览存在公式或图片渲染错误：${JSON.stringify(visualChecks)}`
             );

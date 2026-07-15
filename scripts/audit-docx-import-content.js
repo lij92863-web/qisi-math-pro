@@ -2,6 +2,7 @@ const fs = require('node:fs');
 
 const SECTION_HEADING_RE = /^(?:第[一二三四五六七八九十ⅠⅡⅢIVX]+卷|[一二三四五六七八九十]+[、.．]\s*)?(?:单项选择题|多项选择题|选择题|填空题|解答题|计算题|证明题|综合题)(?::|：|$)|^(?:本题|本大题)共\s*\d+\s*(?:小题|题)/u;
 const KEYBOARD_MATH_RE = /(?:\d+)?(?:sin|cos|tan)[A-Z]|sqrt\d|triangle[A-Z]{3}|[A-Z](?:[A-Z0-9()+\-*/^]*[=+\-*/^])[A-Z0-9()+\-*/^=]{2,}/g;
+const UNWRAPPED_LATEX_RE = /\\(?:frac|sqrt|sin|cos|tan|angle|triangle|vec|overrightarrow|overline|cdot|times|in|pi)\b/g;
 const RAW_JSON_RE = /\[object Object\]|```json|"(?:question|stem|answer|solution)"\s*:/i;
 const PLACEHOLDER_RE = /公式需要人工复核|图片暂不可预览|MATHPROTECT|@@QISI_MATH_|\b(?:undefined|null)\b/i;
 const PUNCTUATION_ONLY_RE = /^[∵∴，,。；;：:\s]+$/u;
@@ -60,6 +61,7 @@ const auditDocxImportContent = (questions = [], options = {}) => {
     }
 
     const keyboardMathFragments = [];
+    const unwrappedLatexFragments = [];
     const rawJsonLeakage = [];
     const placeholderLeakage = [];
     const sectionHeadingInOptions = [];
@@ -76,6 +78,8 @@ const auditDocxImportContent = (questions = [], options = {}) => {
                 : fieldIndex === (question.options || []).length + 1 ? 'answer' : 'solution';
             const keyboardMatches = mathFreeText(value).match(KEYBOARD_MATH_RE) || [];
             keyboardMatches.forEach(fragment => keyboardMathFragments.push({ questionNumber: number, field, fragment }));
+            const unwrappedLatexMatches = mathFreeText(value).match(UNWRAPPED_LATEX_RE) || [];
+            unwrappedLatexMatches.forEach(fragment => unwrappedLatexFragments.push({ questionNumber: number, field, fragment }));
             if (RAW_JSON_RE.test(value)) rawJsonLeakage.push({ questionNumber: number, field });
             if (PLACEHOLDER_RE.test(value)) placeholderLeakage.push({ questionNumber: number, field });
         }
@@ -95,7 +99,12 @@ const auditDocxImportContent = (questions = [], options = {}) => {
             ...error
         }))),
         unrenderableLatex: visualChecks.filter(row => Number(row.renderErrorCount || 0) > 0).map(row => String(row.questionNumber)),
+        unrenderedLatexFragments: visualChecks.flatMap(row => (row.unrenderedLatexFragments || []).map(fragment => ({
+            questionNumber: String(row.questionNumber),
+            fragment
+        }))),
         keyboardMathFragments,
+        unwrappedLatexFragments,
         rawJsonLeakage,
         placeholderLeakage,
         punctuationOnlyAnalyses: rows.filter(row => PUNCTUATION_ONLY_RE.test(String(row.solution || '').trim())).map(row => String(row.questionNumber || '')),

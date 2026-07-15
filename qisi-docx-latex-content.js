@@ -216,6 +216,37 @@
             .replace(/\r\n?/g, '\n')
             .replace(/\u00a0/g, ' ');
 
+        const serializeMixedMathText = (value = '') => {
+            const source = String(value || '');
+            if (!/[\u3400-\u9fff]/.test(source)) return `$${source}$`;
+
+            const protectedTextCommands = [];
+            const protectedSource = source.replace(
+                /\\(?:text|textrm|textnormal|mbox)\s*\{[^{}]*[\u3400-\u9fff][^{}]*\}/g,
+                command => {
+                    const token = `@@QISI_LATEX_TEXT_${protectedTextCommands.length}@@`;
+                    protectedTextCommands.push(command);
+                    return token;
+                }
+            );
+            const restoreTextCommands = segment => String(segment || '').replace(
+                /@@QISI_LATEX_TEXT_(\d+)@@/g,
+                (_, index) => protectedTextCommands[Number(index)] || ''
+            );
+            const hasMathPayload = segment => (
+                /\\[A-Za-z]+|[A-Za-z0-9_^=+\-*/<>()[\]{}]|[∵∴π≤≥≠∈∩∪√△]/.test(segment)
+            );
+
+            return protectedSource
+                .split(/([\u3400-\u9fff，。；：、！？（）【】“”‘’]+)/g)
+                .filter(Boolean)
+                .map(segment => {
+                    const restored = restoreTextCommands(segment);
+                    return hasMathPayload(restored) ? `$${restored}$` : restored;
+                })
+                .join('');
+        };
+
         const serializeRichRuns = (runs = [], diagnostics = []) => {
             const sourceRuns = runs || [];
             const segments = sourceRuns.map((run, index) => {
@@ -226,7 +257,7 @@
                 if (run?.kind !== 'math') return '';
 
                 const normalized = normalizeLatexFragment(run.latex);
-                if (normalized.ok) return `$${normalized.latex}$`;
+                if (normalized.ok) return serializeMixedMathText(normalized.latex);
                 diagnostics.push({
                     kind: 'formula-error',
                     source: String(run.rawSource || run.latex || ''),

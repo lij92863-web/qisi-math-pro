@@ -46,6 +46,17 @@ test('adjacent canonical math runs cannot collapse into a display delimiter', ()
     assert.doesNotMatch(serialized, /\$\$/);
 });
 
+test('mixed Chinese MathType output keeps prose outside math delimiters', () => {
+    const serialized = rich.serializeRichRuns([{
+        kind: 'math',
+        latex: '故\\triangle ABC的面积S=\\frac{1}{2}bc\\sin A'
+    }]);
+
+    assert.equal(serialized, '故$\\triangle ABC$的面积$S=\\frac{1}{2}bc\\sin A$');
+    const mathSegments = [...serialized.matchAll(/\$([^$]*)\$/g)].map(match => match[1]);
+    assert.equal(mathSegments.some(segment => /[\u3400-\u9fff]/.test(segment)), false);
+});
+
 test('structured OMML conversion keeps fraction, radical, and trig structure', () => {
     const xml = [
         '<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">',
