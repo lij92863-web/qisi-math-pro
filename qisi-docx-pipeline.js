@@ -441,6 +441,104 @@
             return null;
         };
 
+        const selectDocxSourceRoute = (file, allFiles = []) => {
+            if (!file || file.fileType !== 'docx') {
+                return {
+                    producerIdentity: '',
+                    routePolicyDecision: 'not-docx',
+                    selectedSourcePort: '',
+                    visualCompanionFileId: '',
+                    allowAutomaticVision: false
+                };
+            }
+
+            const roles = getBatchFileRoles(file);
+            const hasQuestion = roles.includes('question') || roles.includes('full');
+            const visualCompanion = hasQuestion
+                ? findUploadedVisualCompanionForDocx(file, allFiles)
+                : null;
+
+            if (visualCompanion) {
+                return {
+                    producerIdentity: 'docx-xml-importer',
+                    routePolicyDecision: 'explicit-visual-companion',
+                    selectedSourcePort: 'uploaded-visual-companion',
+                    visualCompanionFileId: visualCompanion.id || '',
+                    allowAutomaticVision: true
+                };
+            }
+
+            if (hasQuestion) {
+                return {
+                    producerIdentity: 'docx-xml-importer',
+                    routePolicyDecision: 'deterministic-docx-primary',
+                    selectedSourcePort: 'docx-importer',
+                    visualCompanionFileId: '',
+                    allowAutomaticVision: false
+                };
+            }
+
+            return {
+                producerIdentity: 'docx-text-support-parser',
+                routePolicyDecision: 'deterministic-docx-support',
+                selectedSourcePort: 'docx-support-text',
+                visualCompanionFileId: '',
+                allowAutomaticVision: false
+            };
+        };
+
+        const partitionDocxSupportByQuestionContract = (items = [], allowedQuestionNumbers = []) => {
+            const allowed = new Set(
+                (allowedQuestionNumbers || [])
+                    .map(normalizeQuestionKey)
+                    .filter(Boolean)
+            );
+            const accepted = [];
+            const unmatched = [];
+            const unknownNumberItems = [];
+
+            for (const item of items || []) {
+                const questionNumber = normalizeQuestionKey(
+                    item?.questionNumber || item?.question || item?.order || ''
+                );
+
+                if (!questionNumber) {
+                    unknownNumberItems.push(item);
+                } else if (allowed.has(questionNumber)) {
+                    accepted.push(item);
+                } else {
+                    unmatched.push(item);
+                }
+            }
+
+            return { accepted, unmatched, unknownNumberItems };
+        };
+
+        const repairDocxSupportQuestionMarkerArtifacts = (text = '', allowedQuestionNumbers = []) => {
+            const allowed = [...new Set(
+                (allowedQuestionNumbers || [])
+                    .map(normalizeQuestionKey)
+                    .filter(Boolean)
+            )].sort((left, right) => right.length - left.length);
+            const repairs = [];
+
+            const repairedText = String(text || '').replace(
+                /(^|\n)(\d{4,})(?=\s*【(?:答案|答)】)/g,
+                (match, lineStart, rawMarker) => {
+                    const questionNumber = allowed.find(number =>
+                        rawMarker.endsWith(number) &&
+                        rawMarker.length - number.length >= 3
+                    );
+                    if (!questionNumber) return match;
+
+                    repairs.push({ rawMarker, questionNumber });
+                    return `${lineStart}${questionNumber}`;
+                }
+            );
+
+            return { text: repairedText, repairs };
+        };
+
         const isEscapedLatexDelimiterAt = (source = '', index = 0) => {
             const text = String(source || '');
             let slashCount = 0;
@@ -642,6 +740,78 @@
             });
         };
 
+        const mergeDocxVisualSupplementByQuestionContract = (
+            deterministicItems = [],
+            visualItems = [],
+            allowedQuestionNumbers = []
+        ) => {
+            const normalizeQuestionNumber = value => {
+                const text = String(value ?? '')
+                    .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248));
+                const match = text.match(/\d{1,3}/);
+                return match ? String(Number(match[0])) : '';
+            };
+            const allowed = new Set(
+                (allowedQuestionNumbers || [])
+                    .map(normalizeQuestionNumber)
+                    .filter(Boolean)
+            );
+            const visualMap = new Map();
+            const unmatchedVisual = [];
+
+            for (const item of visualItems || []) {
+                const questionNumber = normalizeQuestionNumber(
+                    item?.questionNumber ?? item?.question ?? item?.order
+                );
+                if (!questionNumber || (allowed.size && !allowed.has(questionNumber))) {
+                    unmatchedVisual.push(item);
+                    continue;
+                }
+                if (!visualMap.has(questionNumber)) visualMap.set(questionNumber, item);
+            }
+
+            const mergedQuestionNumbers = [];
+            const items = (deterministicItems || []).map(item => {
+                const questionNumber = normalizeQuestionNumber(
+                    item?.questionNumber ?? item?.question ?? item?.order
+                );
+                const visual = questionNumber ? visualMap.get(questionNumber) : null;
+                if (!visual) return item;
+
+                const next = { ...item };
+                let changed = false;
+                if (docxVisualTextIsBetterForV2(next.stem || '', visual.stem || '')) {
+                    next.stem = appendMissingImageTokensForV2(visual.stem || '', next.stem || '');
+                    changed = true;
+                }
+
+                const beforeOptions = Array.isArray(next.options) ? next.options : ['', '', '', ''];
+                const afterOptions = mergeDocxVisualOptionsForV2(beforeOptions, visual.options || []);
+                if (afterOptions.some((option, index) => String(option || '') !== String(beforeOptions[index] || ''))) {
+                    next.options = afterOptions;
+                    changed = true;
+                }
+
+                if (!changed) return item;
+
+                mergedQuestionNumbers.push(questionNumber);
+                next.sourceTrace = {
+                    ...(item.sourceTrace || {}),
+                    visualSupplement: 'docx-pdf-strict-vision',
+                    visualQuestionNumber: questionNumber
+                };
+                next.warnings = [
+                    ...new Set([
+                        ...(Array.isArray(item.warnings) ? item.warnings : []),
+                        'DOCX 确定性主链已使用视觉结果补充无法直接解析的公式图片证据。'
+                    ])
+                ];
+                return next;
+            });
+
+            return { items, unmatchedVisual, mergedQuestionNumbers };
+        };
+
         return {
             normalizeDocxPipelineResult,
             extractDocxQuestionBlockByNumber,
@@ -654,8 +824,12 @@
             extractPlainTextFromDocxOptionXmlFragment,
             splitDocxParagraphsForOptionMap,
             findUploadedVisualCompanionForDocx,
+            selectDocxSourceRoute,
+            partitionDocxSupportByQuestionContract,
+            repairDocxSupportQuestionMarkerArtifacts,
             docxVisualTextIsBetterForV2,
-            mergeDocxVisualOptionsForV2
+            mergeDocxVisualOptionsForV2,
+            mergeDocxVisualSupplementByQuestionContract
         };
     }
 );

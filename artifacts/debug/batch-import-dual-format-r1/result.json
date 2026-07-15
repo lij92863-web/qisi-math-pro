@@ -1,0 +1,72 @@
+{
+  "result": "BATCH_IMPORT_DUAL_FORMAT_STABLE_BLOCKED",
+  "branch": "codex/debug-batch-import-dual-format-r1",
+  "baseline": "da699b53abbe8a6715bb8a8ffae5a954f6b514af",
+  "mainModified": false,
+  "realRuns": {
+    "simplifiedDocx": {
+      "status": "pass",
+      "questionCount": 6,
+      "questionNumbers": ["1", "2", "3", "4", "5", "6"],
+      "answers": ["B", "C", "B", "C", "D", "C"],
+      "mojibakeCount": 0,
+      "placeholderCount": 0,
+      "wrongAttachmentCount": 0,
+      "formalQuestionWrites": 0,
+      "reloadPassed": true,
+      "route": {
+        "producerIdentity": "docx-xml-importer",
+        "routePolicyDecision": "deterministic-docx-primary",
+        "selectedSourcePort": "docx-importer",
+        "visualSupplementStatus": "success"
+      }
+    },
+    "simplifiedPdf": {
+      "status": "pass-safe-partial",
+      "questionCount": 6,
+      "questionNumbers": ["1", "2", "3", "4", "5", "6"],
+      "wrongAttachmentCount": 0,
+      "mojibakeCount": 0,
+      "placeholderCount": 0,
+      "formalQuestionWrites": 0,
+      "reloadPassed": true
+    },
+    "fullDocx": {
+      "status": "failed-closed",
+      "expectedQuestionCount": 12,
+      "errorCode": "DOCX_VISUAL_SUPPLEMENT_INCOMPLETE",
+      "error": "DOCX 视觉补充后仍有 1 题包含未转换公式图片，已停止自动写入。",
+      "formalQuestionWrites": 0,
+      "rerunPerformed": false
+    },
+    "fullPdf": {
+      "status": "blocked-wrong-attachment",
+      "expectedQuestionCount": 12,
+      "questionNumber": "6",
+      "observedAnswer": "B",
+      "expectedAnswer": "C",
+      "wrongAttachmentCount": 1,
+      "formalQuestionWrites": 0,
+      "rerunPerformed": false
+    }
+  },
+  "verification": {
+    "verifySafe": "pass",
+    "verifyDocxStable": "pass",
+    "verifyBatchSafety": "pass",
+    "verifyPdfKnownBad": "pass",
+    "verifyNoRealAi": "pass",
+    "pdfRouteBHold": "pass",
+    "pdfControlledWriteOwnership": "pass",
+    "pdfMasterPreflight": "pass",
+    "pdfMasterDryRun": "pass",
+    "verifyPersonalStable": "missing-script"
+  },
+  "frozenPdfFilesModified": false,
+  "releaseAccepted": false,
+  "blockers": [
+    "Full DOCX retains one unresolved formula-image placeholder after visual supplement.",
+    "Full PDF attaches answer B to question 6; source answer is C.",
+    "verify:personal-stable script is absent."
+  ]
+}

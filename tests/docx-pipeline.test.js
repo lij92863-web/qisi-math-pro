@@ -14,7 +14,11 @@ const {
     splitDocxParagraphsForOptionMap,
     findUploadedVisualCompanionForDocx,
     docxVisualTextIsBetterForV2,
-    mergeDocxVisualOptionsForV2
+    mergeDocxVisualOptionsForV2,
+    selectDocxSourceRoute,
+    partitionDocxSupportByQuestionContract,
+    repairDocxSupportQuestionMarkerArtifacts,
+    mergeDocxVisualSupplementByQuestionContract
 } = require('../qisi-docx-pipeline.js');
 
 test('BM11: full mode', () => {
@@ -148,6 +152,131 @@ test('BMR2: merges visual DOCX options without dropping image tokens', () => {
         '$x$',
         ''
     ]);
+});
+
+test('dual DOCX route keeps deterministic importer primary without an explicit visual companion', () => {
+    const question = {
+        id: 'question-docx',
+        filename: 'questions.docx',
+        fileType: 'docx',
+        roles: ['question']
+    };
+    const support = {
+        id: 'support-docx',
+        filename: 'answers.docx',
+        fileType: 'docx',
+        roles: ['answer', 'solution']
+    };
+
+    assert.deepEqual(
+        selectDocxSourceRoute(question, [question, support]),
+        {
+            producerIdentity: 'docx-xml-importer',
+            routePolicyDecision: 'deterministic-docx-primary',
+            selectedSourcePort: 'docx-importer',
+            visualCompanionFileId: '',
+            allowAutomaticVision: false
+        }
+    );
+
+    assert.deepEqual(
+        selectDocxSourceRoute(support, [question, support]),
+        {
+            producerIdentity: 'docx-text-support-parser',
+            routePolicyDecision: 'deterministic-docx-support',
+            selectedSourcePort: 'docx-support-text',
+            visualCompanionFileId: '',
+            allowAutomaticVision: false
+        }
+    );
+});
+
+test('dual DOCX support keeps only contract questions and preserves the remainder as unmatched', () => {
+    const result = partitionDocxSupportByQuestionContract(
+        [
+            { question: '1', answer: 'A' },
+            { question: '6', answer: 'C' },
+            { question: '7', answer: 'ABD' },
+            { question: '8', answer: 'AC' }
+        ],
+        ['1', '2', '3', '4', '5', '6']
+    );
+
+    assert.deepEqual(result.accepted.map(item => item.question), ['1', '6']);
+    assert.deepEqual(result.unmatched.map(item => item.question), ['7', '8']);
+    assert.equal(result.unknownNumberItems.length, 0);
+});
+
+test('dual DOCX support repairs a long numeric artifact only when its suffix is an expected marker', () => {
+    const source = [
+        '1【答案】B',
+        '【详解】故选：B',
+        '3941445800102【答案】',
+        '【详解】计算可得，故选：C',
+        '3【答案】B'
+    ].join('\n');
+
+    const result = repairDocxSupportQuestionMarkerArtifacts(
+        source,
+        ['1', '2', '3', '4', '5', '6']
+    );
+
+    assert.match(result.text, /\n2【答案】/);
+    assert.equal(result.repairs.length, 1);
+    assert.equal(result.repairs[0].questionNumber, '2');
+    assert.equal(result.repairs[0].rawMarker, '3941445800102');
+});
+
+test('dual DOCX visual supplement replaces only placeholder evidence under the authoritative contract', () => {
+    const deterministic = [
+        {
+            question: '1',
+            stem: '已知[公式图片待转换:wmf]，求值',
+            options: ['[公式图片选项待转换:wmf]', '文本 B', '文本 C', '文本 D'],
+            sourceTrace: { source: 'docx-importer', raw: 'keep-me' }
+        },
+        {
+            question: '2',
+            stem: '确定性题干',
+            options: ['A2', 'B2', 'C2', 'D2'],
+            sourceTrace: { source: 'docx-importer' }
+        }
+    ];
+    const visual = [
+        { question: '1', stem: '已知 $x^2=1$，求值', options: ['$x=1$', '视觉 B', '视觉 C', '视觉 D'] },
+        { question: '2', stem: '不应覆盖', options: ['X', 'X', 'X', 'X'] },
+        { question: '7', stem: '越界题', options: ['X', 'X', 'X', 'X'] }
+    ];
+
+    const result = mergeDocxVisualSupplementByQuestionContract(
+        deterministic,
+        visual,
+        ['1', '2']
+    );
+
+    assert.deepEqual(result.items.map(item => item.question), ['1', '2']);
+    assert.equal(result.items[0].stem, '已知 $x^2=1$，求值');
+    assert.deepEqual(result.items[0].options, ['$x=1$', '文本 B', '文本 C', '文本 D']);
+    assert.deepEqual(result.items[0].sourceTrace.raw, 'keep-me');
+    assert.equal(result.items[0].sourceTrace.source, 'docx-importer');
+    assert.equal(result.items[0].sourceTrace.visualSupplement, 'docx-pdf-strict-vision');
+    assert.equal(result.items[1].stem, '确定性题干');
+    assert.deepEqual(result.unmatchedVisual.map(item => item.question), ['7']);
+    assert.deepEqual(result.mergedQuestionNumbers, ['1']);
+});
+
+test('dual DOCX visual supplement failure input preserves deterministic items for manual review', () => {
+    const deterministic = [{
+        question: '1',
+        stem: '题干[公式图片待转换:wmf]',
+        options: ['A', 'B', 'C', 'D']
+    }];
+
+    const result = mergeDocxVisualSupplementByQuestionContract(deterministic, [], ['1']);
+
+    assert.deepEqual(result.items, deterministic);
+    assert.deepEqual(result.mergedQuestionNumbers, []);
+    assert.deepEqual(result.unmatchedVisual, []);
 });
 
 test('BMR2: debug DOCX XML structure is side-effect limited and tolerant', () => {

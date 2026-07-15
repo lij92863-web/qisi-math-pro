@@ -1310,10 +1310,10 @@
                     return model;
                 };
                 const VISION_MODELS = [
+                    'qwen-vl-plus',
                     'qwen3.5-plus',
                     'qwen3-vl-plus',
-                    'qwen-vl-max-latest',
-                    'qwen-vl-plus'
+                    'qwen-vl-max-latest'
                 ];
                 const PDF_PROCESS_CONFIG = {
                     maxPagesWithoutConfirm: 20,
@@ -16385,7 +16385,37 @@ ${source}`;
                         const answerItems = [];
                         const solutionItems = [];
                         const fullItems = [];
+                        const contractUnmatchedSupport = [];
                         let authoritativeQuestionContract = null;
+
+                        const appendDocxSupportWithinContract = ({
+                            target,
+                            items,
+                            file,
+                            valueKey,
+                            enforceContract
+                        }) => {
+                            if (!enforceContract) {
+                                target.push(...(items || []));
+                                return;
+                            }
+
+                            const partition = window.Qisi.DocxPipeline.partitionDocxSupportByQuestionContract(
+                                items || [],
+                                authoritativeQuestionContract?.questionNumbers || []
+                            );
+                            target.push(...partition.accepted);
+
+                            for (const item of [...partition.unmatched, ...partition.unknownNumberItems]) {
+                                contractUnmatchedSupport.push({
+                                    question: normalizeQuestionKey(item?.questionNumber || item?.question || item?.order || ''),
+                                    answer: valueKey === 'answer' ? (item?.answer || '') : '',
+                                    solution: valueKey === 'solution' ? (item?.solution || '') : '',
+                                    supportKind: valueKey,
+                                    sourceFile: file?.filename || item?.sourceFileName || ''
+                                });
+                            }
+                        };
 
                         const normalizeQuestionContractNumbers = (
                             values = []
@@ -16984,13 +17014,51 @@ ${source}`;
                                 const isFullRole = batchIsFullRole(file);
                                 const hasQuestionRole = batchHasQuestionRole(file);
                                 const hasAnswerOrSolutionRole = batchHasAnswerRole(file) || batchHasSolutionRole(file);
+                                const docxSourceRoute = file.fileType === 'docx'
+                                    ? window.Qisi.DocxPipeline.selectDocxSourceRoute(file, processFiles)
+                                    : null;
+                                const allowDocxTextAi = file.fileType !== 'docx' || docxSourceRoute?.allowAutomaticVision === true;
                                 let pdfVisualAttempted = false;
                                 let pdfPageImageCount = 0;
                                 let pdfVisualError = null;
                                 let pdfVisualQuestionsCount = 0;
                                 let pdfPageFallbackDrafts = [];
 
-                                if (!usedVisualRecognition && file.fileType === 'docx' && hasQuestionRole) {
+                                if (
+                                    file.fileType === 'docx' &&
+                                    (!docxSourceRoute?.producerIdentity || !docxSourceRoute?.selectedSourcePort)
+                                ) {
+                                    const error = new Error('DOCX 路由缺少 producer identity 或 source port，已停止识别。');
+                                    error.code = 'DOCX_ROUTE_IDENTITY_MISSING';
+                                    throw error;
+                                }
+
+                                if (docxSourceRoute) {
+                                    const sourceManifest = {
+                                        fileId: file.id,
+                                        filename: file.filename || '',
+                                        fileType: file.fileType,
+                                        roles: getBatchFileRoles(file)
+                                    };
+                                    await db.draftImportFiles.update(file.id, {
+                                        sourceManifest,
+                                        producerIdentity: docxSourceRoute.producerIdentity,
+                                        routePolicyDecision: docxSourceRoute.routePolicyDecision,
+                                        selectedSourcePort: docxSourceRoute.selectedSourcePort,
+                                        updatedAt: Date.now()
+                                    });
+                                    console.log('[BATCH_ROUTE][docx]', {
+                                        sourceManifest,
+                                        ...docxSourceRoute
+                                    });
+                                }
+
+                                if (
+                                    !usedVisualRecognition &&
+                                    file.fileType === 'docx' &&
+                                    hasQuestionRole &&
+                                    docxSourceRoute?.selectedSourcePort === 'docx-convert-strict-vision'
+                                ) {
                                     try {
                                         const expected = batchExpectedCount;
 
@@ -17119,7 +17187,8 @@ ${source}`;
                                     !hasQuestionRole &&
                                     hasAnswerOrSolutionRole &&
                                     !isFullRole &&
-                                    recognitionMode !== 'cheap'
+                                    recognitionMode !== 'cheap' &&
+                                    docxSourceRoute?.selectedSourcePort === 'docx-convert-strict-vision'
                                 ) {
                                     try {
                                         const observedQuestionNumbers =
@@ -17898,6 +17967,14 @@ ${source}`;
                                             throw new Error('批量录题 DOCX 模块未加载，请检查 qisi-batch-importer.js 引入顺序。');
                                         }
 
+                                        const questionSkeleton = await window.QisiBatchImporter.extractDocxQuestionSkeleton(file);
+                                        if (!questionSkeleton?.authoritative) {
+                                            const error = new Error('DOCX 显式题号骨架不连续或不可靠，已停止自动识别。');
+                                            error.code = 'DOCX_QUESTION_SKELETON_UNRELIABLE';
+                                            throw error;
+                                        }
+                                        registerAuthoritativeQuestionContract({ file, skeleton: questionSkeleton });
+
                                         docxImporterResult = await window.QisiBatchImporter.parseDocxFile(file, {
                                             defaultMeta: toRaw(batchDefaultMeta),
                                             helpers: {
@@ -17929,6 +18006,10 @@ ${source}`;
                                     } catch (error) {
                                         if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
 
+                                        if (docxSourceRoute?.routePolicyDecision === 'deterministic-docx-primary') {
+                                            throw error;
+                                        }
+
                                         console.warn('[BATCH_DEBUG][docx-importer-failed-fallback-to-text]', {
                                             filename: file.filename,
                                             message: error?.message || String(error)
@@ -17940,16 +18021,85 @@ ${source}`;
                                     }
 
                                     if (docxImporterItems.length > 0 && docxImporterItems.some(window.Qisi.Utils.itemHasUnconvertedImagePlaceholder)) {
-                                        console.error('[BATCH_DEBUG][docx-placeholder-blocked-no-uploaded-visual]', {
+                                        console.warn('[BATCH_DEBUG][docx-deterministic-visual-supplement-start]', {
                                             filename: file.filename,
-                                            itemCount: docxImporterItems.length
+                                            itemCount: docxImporterItems.length,
+                                            producerIdentity: docxSourceRoute?.producerIdentity,
+                                            selectedSourcePort: docxSourceRoute?.selectedSourcePort
                                         });
 
-                                        throw new Error(
-                                            `DOCX ${file.filename} 中存在 WMF/EMF/OLE 公式图片选项，不能直接转成 LaTeX。` +
-                                            '本地转换服务未能成功将 DOCX 转为 PDF，因此不能生成完整 LaTeX。' +
-                                            '请确认已经运行 npm start，并用 http://localhost:3000/main.html 打开软件。'
-                                        );
+                                        try {
+                                            const strictResult = await processDocxByLocalConvertAndStrictVision({
+                                                file,
+                                                batch,
+                                                processFiles,
+                                                expectedQuestionCount:
+                                                    authoritativeQuestionContract?.questionNumbers?.length ||
+                                                    batchExpectedCount,
+                                                onPageProgress: async (ratio, info) => {
+                                                    await updateBatchProgress(
+                                                        batchId,
+                                                        baseProgress + fileProgressSpan * Math.min(0.95, Math.max(0, ratio || 0)),
+                                                        'processing'
+                                                    );
+                                                    console.log('[BATCH_DEBUG][docx-visual-supplement-progress]', {
+                                                        filename: file.filename,
+                                                        ratio,
+                                                        info
+                                                    });
+                                                }
+                                            });
+
+                                            registerAuthoritativeQuestionContract({
+                                                file,
+                                                skeleton: strictResult.questionSkeleton
+                                            });
+
+                                            const supplemented = window.Qisi.DocxPipeline.mergeDocxVisualSupplementByQuestionContract(
+                                                docxImporterItems,
+                                                strictResult.questions || [],
+                                                authoritativeQuestionContract?.questionNumbers || []
+                                            );
+                                            docxImporterItems = supplemented.items;
+
+                                            const unresolved = docxImporterItems.filter(
+                                                window.Qisi.Utils.itemHasUnconvertedImagePlaceholder
+                                            );
+                                            if (unresolved.length) {
+                                                const error = new Error(
+                                                    `DOCX 视觉补充后仍有 ${unresolved.length} 题包含未转换公式图片，已停止自动写入。`
+                                                );
+                                                error.code = 'DOCX_VISUAL_SUPPLEMENT_INCOMPLETE';
+                                                throw error;
+                                            }
+
+                                            await db.draftImportFiles.update(file.id, {
+                                                visualSupplementStatus: 'success',
+                                                visualSupplementQuestionNumbers: supplemented.mergedQuestionNumbers,
+                                                visualSupplementProducer: 'docx-pdf-strict-vision',
+                                                updatedAt: Date.now()
+                                            });
+                                        } catch (error) {
+                                            docxImporterItems.forEach(item => {
+                                                item.manualReviewRequired = true;
+                                                item.warnings = [
+                                                    ...new Set([
+                                                        ...(Array.isArray(item.warnings) ? item.warnings : []),
+                                                        `DOCX 公式图片视觉补充失败，已保留确定性提取结果并要求人工复核：${error?.message || String(error)}`
+                                                    ])
+                                                ];
+                                                item.sourceTrace = {
+                                                    ...(item.sourceTrace || {}),
+                                                    visualSupplement: 'failed-manual-review'
+                                                };
+                                            });
+                                            await db.draftImportFiles.update(file.id, {
+                                                visualSupplementStatus: 'failed-manual-review',
+                                                visualSupplementError: error?.message || String(error),
+                                                updatedAt: Date.now()
+                                            });
+                                            throw error;
+                                        }
                                     }
 
                                     if (docxImporterItems.length > 0) {
@@ -17968,7 +18118,7 @@ ${source}`;
                                                 ? parseAnswerAndSolutionItemsFromText(text, file)
                                                 : { answers: [], solutions: [] };
 
-                                            if (text) {
+                                            if (text && allowDocxTextAi) {
                                                 try {
                                                     const qwenParsed = await recognizeAnswerSolutionWithQwen(text, file);
                                                     parsed = mergeAnswerSolutionResults(parsed, qwenParsed);
@@ -18067,25 +18217,99 @@ ${source}`;
                                     questionItems.push(...(structuredItems.length ? structuredItems : parseQuestionItemsFromText(text, file, false)));
                                 }
                                 if (!usedVisualRecognition && text && file.fileType !== 'pdf' && batchHasAnswerRole(file) && !isFullRole) {
-                                    let parsed = mergeAnswerSolutionResults(parseAnswerAndSolutionItemsFromText(text, file), visualAnswerResult);
-                                    try {
-                                        parsed = mergeAnswerSolutionResults(parsed, await recognizeAnswerSolutionWithQwen(text, file));
-                                    } catch (error) {
-                                        if (window.Qisi.Utils.isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
-                                        console.warn('答案解析结构化失败，保留本地结果', error);
+                                    let supportTextForParsing = text;
+                                    if (
+                                        file.fileType === 'docx' &&
+                                        docxSourceRoute?.routePolicyDecision === 'deterministic-docx-support' &&
+                                        authoritativeQuestionContract?.authoritative
+                                    ) {
+                                        const markerRepair = window.Qisi.DocxPipeline.repairDocxSupportQuestionMarkerArtifacts(
+                                            text,
+                                            authoritativeQuestionContract.questionNumbers
+                                        );
+                                        supportTextForParsing = markerRepair.text;
+                                        if (markerRepair.repairs.length) {
+                                            await db.draftImportFiles.update(file.id, {
+                                                supportMarkerRepairs: markerRepair.repairs,
+                                                updatedAt: Date.now()
+                                            });
+                                            console.log('[BATCH_ROUTE][docx-support-marker-repair]', {
+                                                filename: file.filename,
+                                                repairs: markerRepair.repairs
+                                            });
+                                        }
                                     }
-                                    answerItems.push(...parsed.answers);
-                                    solutionItems.push(...parsed.solutions);
+                                    let parsed = mergeAnswerSolutionResults(parseAnswerAndSolutionItemsFromText(supportTextForParsing, file), visualAnswerResult);
+                                    if (allowDocxTextAi) {
+                                        try {
+                                            parsed = mergeAnswerSolutionResults(parsed, await recognizeAnswerSolutionWithQwen(text, file));
+                                        } catch (error) {
+                                            if (window.Qisi.Utils.isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
+                                            console.warn('答案解析结构化失败，保留本地结果', error);
+                                        }
+                                    }
+                                    if (
+                                        file.fileType === 'docx' &&
+                                        docxSourceRoute?.routePolicyDecision === 'deterministic-docx-support'
+                                    ) {
+                                        for (const solutionItem of parsed.solutions || []) {
+                                            const question = normalizeQuestionKey(solutionItem?.question);
+                                            const alreadyHasAnswer = (parsed.answers || []).some(
+                                                item => normalizeQuestionKey(item?.question) === question
+                                            );
+                                            const explicitAnswer = alreadyHasAnswer
+                                                ? ''
+                                                : window.Qisi.Utils.finalChoiceAnswerText(solutionItem?.solution || '');
+                                            if (!question || !explicitAnswer) continue;
+                                            parsed.answers.push({
+                                                question,
+                                                answer: explicitAnswer,
+                                                confidence: 0.9,
+                                                warnings: ['answer-derived-from-explicit-solution-label'],
+                                                sourceFileId: solutionItem.sourceFileId || file.id,
+                                                sourceFileName: solutionItem.sourceFileName || file.filename
+                                            });
+                                        }
+                                    }
+                                    const enforceDocxContract =
+                                        file.fileType === 'docx' &&
+                                        docxSourceRoute?.routePolicyDecision === 'deterministic-docx-support' &&
+                                        Boolean(authoritativeQuestionContract?.authoritative);
+                                    appendDocxSupportWithinContract({
+                                        target: answerItems,
+                                        items: parsed.answers,
+                                        file,
+                                        valueKey: 'answer',
+                                        enforceContract: enforceDocxContract
+                                    });
+                                    appendDocxSupportWithinContract({
+                                        target: solutionItems,
+                                        items: parsed.solutions,
+                                        file,
+                                        valueKey: 'solution',
+                                        enforceContract: enforceDocxContract
+                                    });
                                 }
                                 if (!usedVisualRecognition && text && file.fileType !== 'pdf' && batchHasSolutionRole(file) && !batchHasAnswerRole(file) && !isFullRole) {
                                     let parsed = mergeAnswerSolutionResults({ answers: [], solutions: parseSolutionItemsFromText(text, file) }, visualAnswerResult);
-                                    try {
-                                        parsed = mergeAnswerSolutionResults(parsed, await recognizeAnswerSolutionWithQwen(text, file));
-                                    } catch (error) {
-                                        if (window.Qisi.Utils.isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
-                                        console.warn('解析文件结构化失败，保留本地结果', error);
+                                    if (allowDocxTextAi) {
+                                        try {
+                                            parsed = mergeAnswerSolutionResults(parsed, await recognizeAnswerSolutionWithQwen(text, file));
+                                        } catch (error) {
+                                            if (window.Qisi.Utils.isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
+                                            console.warn('解析文件结构化失败，保留本地结果', error);
+                                        }
                                     }
-                                    solutionItems.push(...parsed.solutions);
+                                    appendDocxSupportWithinContract({
+                                        target: solutionItems,
+                                        items: parsed.solutions,
+                                        file,
+                                        valueKey: 'solution',
+                                        enforceContract:
+                                            file.fileType === 'docx' &&
+                                            docxSourceRoute?.routePolicyDecision === 'deterministic-docx-support' &&
+                                            Boolean(authoritativeQuestionContract?.authoritative)
+                                    });
                                 }
                                 if (!usedVisualRecognition && text && file.fileType !== 'pdf' && isFullRole) {
                                     let structuredItems = [];
@@ -18097,11 +18321,13 @@ ${source}`;
                                     }
                                     fullItems.push(...(structuredItems.length ? structuredItems : parseQuestionItemsFromText(text, file, true)));
                                     let parsed = parseAnswerAndSolutionItemsFromText(text, file);
-                                    try {
-                                        parsed = mergeAnswerSolutionResults(parsed, await recognizeAnswerSolutionWithQwen(text, file));
-                                    } catch (error) {
-                                        if (window.Qisi.Utils.isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
-                                        console.warn('完整文件答案解析结构化失败，保留本地结果', error);
+                                    if (allowDocxTextAi) {
+                                        try {
+                                            parsed = mergeAnswerSolutionResults(parsed, await recognizeAnswerSolutionWithQwen(text, file));
+                                        } catch (error) {
+                                            if (window.Qisi.Utils.isFatalQwenServiceError(error) && file.fileType !== 'docx') throw error;
+                                            console.warn('完整文件答案解析结构化失败，保留本地结果', error);
+                                        }
                                     }
                                     answerItems.push(...parsed.answers);
                                     solutionItems.push(...parsed.solutions);
@@ -18366,7 +18592,10 @@ ${source}`;
                         //     await updateBatchProgress(batchId, 82 + Math.min(1, ratio) * 8, 'processing');
                         // });
                         await updateBatchProgress(batchId, 88, 'processing');
-                        let unmatched = (merged.unmatched || []).filter(answer => !drafts.some(draft => sameTextLoose(draft.answer, answer.answer)));
+                        let unmatched = [
+                            ...contractUnmatchedSupport,
+                            ...(merged.unmatched || [])
+                        ].filter(answer => !drafts.some(draft => sameTextLoose(draft.answer, answer.answer)));
                         const answerCoverageLooksComplete = answerItems.length
                             && Math.abs(answerItems.length - drafts.length) <= 1
                             && drafts.filter(draft => window.Qisi.Utils.cleanRecognizedText(draft.answer)).length >= Math.min(answerItems.length, drafts.length);
