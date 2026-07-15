@@ -1,0 +1,104 @@
+{
+  "decision": "DOCX_MATH_CONTENT_INTEGRITY_ACCEPTED",
+  "baselineCommit": "d6b820f4696fa86ec6ddab1cf84891767666e858",
+  "finalImplementationCommit": "33f2facffb4ca687287ef4becd43edf271ad8d01",
+  "branch": "codex/debug-docx-math-content-integrity-r1",
+  "fixtures": {
+    "briefQuestion": "简略版题目（只有一页）.docx",
+    "fullQuestion": "完整版题目.docx",
+    "fullSupport": "完整版答案.docx"
+  },
+  "brief": {
+    "passed": true,
+    "sourceQuestionCount": 6,
+    "importedQuestionCount": 6,
+    "answerCoverage": "6/6",
+    "analysisCoverage": "6/6",
+    "formulaFragmentsRendered": "97/97",
+    "sourceImages": 3,
+    "renderedImages": 3,
+    "persistenceRoundtrip": true
+  },
+  "full": {
+    "passed": true,
+    "sourceQuestionCount": 12,
+    "importedQuestionCount": 12,
+    "sectionCounts": {
+      "singleChoice": 6,
+      "multipleChoice": 3,
+      "fillBlank": 3,
+      "solution": 0
+    },
+    "answerCoverage": "12/12",
+    "analysisCoverage": "12/12",
+    "formulaFragmentsRendered": "220/220",
+    "mathTypeAssets": {
+      "question": "61/61",
+      "support": "134/134"
+    },
+    "sourceImages": 6,
+    "renderedImages": 6,
+    "analysisImageQuestionNumbers": ["2", "6", "8"],
+    "questionImageQuestionNumbers": ["4", "8", "11"],
+    "persistenceRoundtrip": true
+  },
+  "audit": {
+    "missingQuestionNumbers": [],
+    "duplicateQuestionNumbers": [],
+    "sectionHeadingInOptions": [],
+    "missingAnswers": [],
+    "missingAnalyses": [],
+    "missingAnalysisImages": [],
+    "latexSyntaxErrors": [],
+    "unrenderableLatex": [],
+    "keyboardMathFragments": [],
+    "rawJsonLeakage": [],
+    "placeholderLeakage": [],
+    "punctuationOnlyAnalyses": [],
+    "wrongAttachmentCandidates": []
+  },
+  "browser": {
+    "passed": true,
+    "consoleErrorCount": 0,
+    "sameOriginFailedRequestCount": 0,
+    "mathTypeResponses": [200, 200],
+    "realAiCalls": 0,
+    "reloadRechecked": true,
+    "concurrentBriefAndFullPassed": true
+  },
+  "tests": {
+    "verifySafe": {
+      "passed": true,
+      "tests": 959,
+      "passedCount": 955,
+      "expectedSkipped": 4,
+      "failed": 0,
+      "todo": 0
+    },
+    "batchSmoke": "20/20",
+    "docxStable": "20/20",
+    "pdfKnownBad": "65/65",
+    "pdfRouteBHold": "6/6",
+    "pdfControlledWriteOwnership": "21/21",
+    "pdfPreflight": true,
+    "pdfDryRun": true,
+    "noRealAi": true,
+    "personalStable": {
+      "status": "unavailable",
+      "reason": "npm script is not configured in the repository"
+    }
+  },
+  "safety": {
+    "wrongAttachment": 0,
+    "fabricatedContent": 0,
+    "rawJsonLeakage": 0,
+    "placeholderLeakage": 0,
+    "controlledWriteBypass": 0,
+    "formalAdmissionBypass": 0,
+    "bridgeFormalWrites": 0,
+    "legacyFallback": 0,
+    "realApiCalled": false
+  },
+  "frozenPdfFilesChanged": false,
+  "sourceFixturesCommitted": false
+}
