@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const fsp = require('fs/promises');
 const { spawn } = require('child_process');
+const { createSerialTaskQueue } = require('./qisi-serial-task-queue.js');
 
 const ROOT = __dirname;
 const TMP_DIR = path.join(ROOT, 'tmp');
@@ -32,6 +33,7 @@ for (const dir of [TMP_DIR, UPLOAD_DIR, CONVERTED_DIR, TOOLS_DIR]) {
 
 const app = express();
 const aiJsonParser = express.json({ limit: AI_BODY_LIMIT, type: 'application/json' });
+const enqueueMathTypeTranslation = createSerialTaskQueue();
 
 app.use(cors({ origin: true, credentials: false }));
 
@@ -680,7 +682,9 @@ app.post('/api/convert/mathtype-mtef', async (req, res) => {
   }
 
   try {
-    const result = await translateMtefBatch(validation.equations);
+    const result = await enqueueMathTypeTranslation(
+      () => translateMtefBatch(validation.equations)
+    );
     console.log('[MATHTYPE_TRANSLATE][complete]', {
       requested: validation.equations.length,
       translated: result.equations.filter(row => row.ok).length
