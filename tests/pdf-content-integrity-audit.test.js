@@ -40,4 +40,3 @@ test('PDF content audit reports duplicated labels, raw latex, missing fields and
     assert.equal(audit.missingStemFigures.length, 1);
     assert.equal(audit.contaminatedFigureCrops.length, 1);
 });
-
