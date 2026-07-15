@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "pdf-engine-replay-r1",
+  "capturedAt": "2026-07-15T15:48:20.689Z",
+  "metadata": {
+    "cacheKey": "ed4d4b5562b3d34a15188c71f48b4a4119ff662b4fd8286566a0d7a6453bdede",
+    "sourceFileSha256": "48549EADEEE80340D3F58062762B724F56471C903F5EE0C3BDF2DBEC25762C7F",
+    "page": 1,
+    "renderDpi": 144,
+    "model": "qwen-vl-ocr-latest",
+    "promptVersion": "pdf-math-region-r1",
+    "promptSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "imageSha256": [
+      "d8e2011285a4c82c5d716a50569e9231bc3b77e672afae52e6669f44c303a974"
+    ],
+    "requestSchemaVersion": "qisi-ai-proxy-r1",
+    "endpoint": "/api/ai/ocr",
+    "request": {
+      "model": "qwen-vl-ocr-latest",
+      "input": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "image": "[redacted-image sha256=d8e2011285a4c82c5d716a50569e9231bc3b77e672afae52e6669f44c303a974 bytes=223647]",
+                "min_pixels": 3072,
+                "max_pixels": 30720000,
+                "enable_rotate": false
+              }
+            ]
+          }
+        ]
+      },
+      "parameters": {
+        "max_tokens": 8192,
+        "ocr_options": {
+          "task": "document_parsing"
+        }
+      }
+    }
+  },
+  "responseSha256": "b02812c8345715c8c12d6bf470f348895ff025511638b411e741396411d8cb8d",
+  "response": {
+    "output": {
+      "choices": [
+        {
+          "finish_reason": "stop",
+          "message": {
+            "content": [
+              {
+                "ocr_result": {
+                  "processed_text": "```latex\n\\begin{enumerate}\n    \\item 【答案】B\n    \\begin{description}\n        \\item【详解】因为 $A=\\left\\{x \\mid x=\\sin \\frac{n \\pi}{2}, n \\in \\mathbf{Z}\\right\\}$，所以 $A=\\{-1,0,1\\}$，$B=\\{0,1\\}$ 对A: $A \\neq B$，故错误；对B: $B \\subsetneq A$，故正确；对C: $A \\cap B=\\{0,1\\}$，故错误；对D: $C_{A}B=\\{-1\\}$，故错误；故选：B\n    \\end{description}\n    \\item 【答案】\n    \\begin{description}\n        \\item【详解】设正四棱台侧面的高为 $h$，则 $2^{2}+8^{2}+\\frac{2+8}{2}\\times h\\times 4=148$，$h=4$，所以侧棱长为 $\\sqrt{4^{2}+\\left(\\frac{8-2}{2}\\right)^{2}}=5$。故选：C\n    \\end{description}\n    \\item 【答案】B\n    \\begin{description}\n        \\item【解析】因为 $\\overline{BD}=\\overline{BC}+\\overline{CD}$，$5\\overline{a}+4\\overline{b}+\\overline{a}$，$2\\overline{b}=6\\overline{a}$，$6\\overline{b}$，且A，B，D三点共线，所以存在实数 $\\lambda$，使得 $\\overline{AB}=\\lambda\\overline{BD}$，即 $\\overline{a}+m\\overline{b}=\\lambda\\left(6\\overline{a}+6\\overline{b}\\right)$，则 $\\begin{cases} 1=6\\lambda \\\\ m=6\\lambda \\end{cases}$，解得 $m=1$。故选：B\n    \\end{description}\n    \\item 【答案】C\n    \\begin{description}\n        \\item【详解】设圆台的上底面半径为 $r$，下底面半径为 $R$，则利用弧长公式可得 $2\\pi r=\\frac{2\\pi}{3}\\times 12$，即 $r=4$；$2\\pi R=\\frac{2\\pi}{3}\\times 27$，即 $R=9$；又圆台的母线长为 $l=27-12=15$，所以圆台的侧面积 $S=\\pi(4+9)\\times 15=195\\pi$，故选：C。\n    \\end{description}\n    \\item 【答案】D\n    \\begin{description}\n        \\item【详解】因为 $\\frac{\\overline{BA}\\cdot\\overline{AC}}{\\overline{BC}}+\\frac{\\overline{AC}\\cdot\\overline{BC}}{\\overline{BC}}=0$，所以 $\\overline{BA}\\cdot\\overline{AC}+\\overline{AC}\\cdot\\overline{BC}=0$，所以 $\\overline{AC}\\cdot\\left(\\overline{BA}+\\overline{BC}\\right)=0$，所以 $\\left(\\overline{BC}-\\overline{BA}\\right)\\cdot\\left(\\overline{BA}+\\overline{BC}\\right)=0$，所以 $\\overline{BC}^{2}=\\overline{BA}^{2}$，即 $BC=BA$，又 $\\frac{\\overline{BC}}{\\overline{BC}}\\cdot\\frac{\\overline{AB}}{\\overline{AB}}=1\\times 1\\times\\left(-\\cos B\\right)=\\frac{1}{2}$，所以 $\\cos B=-\\frac{1}{2}$，所以 $\\angle B=\\frac{2\\pi}{3}$，所以 $\\triangle ABC$ 为等腰非等边三角形。\n    \\end{description}\n    \\begin{description}\n        \\item故选：D\n    \\end{description}\n    \\item 【答案】C\n    \\begin{description}\n        \\item【详解】如图，作出圆锥 $SO$ 的轴截面 $SAB$，\n    \\end{description}\n\\end{enumerate}\n```"
+                },
+                "text": "```latex\n\\begin{enumerate}\n    \\item 【答案】B\n    \\begin{description}\n        \\item【详解】因为 $A=\\left\\{x \\mid x=\\sin \\frac{n \\pi}{2}, n \\in \\mathbf{Z}\\right\\}$，所以 $A=\\{-1,0,1\\}$，$B=\\{0,1\\}$ 对A: $A \\neq B$，故错误；对B: $B \\subsetneq A$，故正确；对C: $A \\cap B=\\{0,1\\}$，故错误；对D: $C_{A}B=\\{-1\\}$，故错误；故选：B\n    \\end{description}\n    \\item 【答案】\n    \\begin{description}\n        \\item【详解】设正四棱台侧面的高为 $h$，则 $2^{2}+8^{2}+\\frac{2+8}{2}\\times h\\times 4=148$，$h=4$，所以侧棱长为 $\\sqrt{4^{2}+\\left(\\frac{8-2}{2}\\right)^{2}}=5$。故选：C\n    \\end{description}\n    \\item 【答案】B\n    \\begin{description}\n        \\item【解析】因为 $\\overline{BD}=\\overline{BC}+\\overline{CD}$，$5\\overline{a}+4\\overline{b}+\\overline{a}$，$2\\overline{b}=6\\overline{a}$，$6\\overline{b}$，且A，B，D三点共线，所以存在实数 $\\lambda$，使得 $\\overline{AB}=\\lambda\\overline{BD}$，即 $\\overline{a}+m\\overline{b}=\\lambda\\left(6\\overline{a}+6\\overline{b}\\right)$，则 $\\begin{cases} 1=6\\lambda \\\\ m=6\\lambda \\end{cases}$，解得 $m=1$。故选：B\n    \\end{description}\n    \\item 【答案】C\n    \\begin{description}\n        \\item【详解】设圆台的上底面半径为 $r$，下底面半径为 $R$，则利用弧长公式可得 $2\\pi r=\\frac{2\\pi}{3}\\times 12$，即 $r=4$；$2\\pi R=\\frac{2\\pi}{3}\\times 27$，即 $R=9$；又圆台的母线长为 $l=27-12=15$，所以圆台的侧面积 $S=\\pi(4+9)\\times 15=195\\pi$，故选：C。\n    \\end{description}\n    \\item 【答案】D\n    \\begin{description}\n        \\item【详解】因为 $\\frac{\\overline{BA}\\cdot\\overline{AC}}{\\overline{BC}}+\\frac{\\overline{AC}\\cdot\\overline{BC}}{\\overline{BC}}=0$，所以 $\\overline{BA}\\cdot\\overline{AC}+\\overline{AC}\\cdot\\overline{BC}=0$，所以 $\\overline{AC}\\cdot\\left(\\overline{BA}+\\overline{BC}\\right)=0$，所以 $\\left(\\overline{BC}-\\overline{BA}\\right)\\cdot\\left(\\overline{BA}+\\overline{BC}\\right)=0$，所以 $\\overline{BC}^{2}=\\overline{BA}^{2}$，即 $BC=BA$，又 $\\frac{\\overline{BC}}{\\overline{BC}}\\cdot\\frac{\\overline{AB}}{\\overline{AB}}=1\\times 1\\times\\left(-\\cos B\\right)=\\frac{1}{2}$，所以 $\\cos B=-\\frac{1}{2}$，所以 $\\angle B=\\frac{2\\pi}{3}$，所以 $\\triangle ABC$ 为等腰非等边三角形。\n    \\end{description}\n    \\begin{description}\n        \\item故选：D\n    \\end{description}\n    \\item 【答案】C\n    \\begin{description}\n        \\item【详解】如图，作出圆锥 $SO$ 的轴截面 $SAB$，\n    \\end{description}\n\\end{enumerate}\n```"
+              }
+            ],
+            "reasoning_content": "",
+            "role": "assistant"
+          }
+        }
+      ]
+    },
+    "usage": {
+      "image_tokens": 1963,
+      "input_tokens": 2018,
+      "input_tokens_details": {
+        "image_tokens": 1963,
+        "text_tokens": 55
+      },
+      "output_tokens": 1004,
+      "output_tokens_details": {
+        "text_tokens": 1004
+      },
+      "total_tokens": 3022
+    },
+    "request_id": "7e611dac-02a3-94cf-b11b-e75e8951e807"
+  }
+}

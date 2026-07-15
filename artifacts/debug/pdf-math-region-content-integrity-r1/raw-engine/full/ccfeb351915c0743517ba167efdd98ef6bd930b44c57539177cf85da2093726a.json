@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "pdf-engine-replay-r1",
+  "capturedAt": "2026-07-15T15:48:56.371Z",
+  "metadata": {
+    "cacheKey": "ccfeb351915c0743517ba167efdd98ef6bd930b44c57539177cf85da2093726a",
+    "sourceFileSha256": "50DC9A7E98299807F45521A50048240010BE78212A21C840C30B2149739DD75D",
+    "page": 1,
+    "renderDpi": 144,
+    "model": "qwen-vl-plus",
+    "promptVersion": "pdf-math-region-r1",
+    "promptSha256": "511d3bee652b4be53f4549655a61a5e7ff191a3de9637434fb706fd68c926a68",
+    "imageSha256": [
+      "e1deb7fe008d6e7c9129f57d33def64537c7f8fb38bb2830f710cd50165ff32d"
+    ],
+    "requestSchemaVersion": "qisi-ai-proxy-r1",
+    "endpoint": "/api/ai/chat",
+    "request": {
+      "model": "qwen-vl-plus",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "[redacted-image sha256=e1deb7fe008d6e7c9129f57d33def64537c7f8fb38bb2830f710cd50165ff32d bytes=373155]",
+                "min_pixels": 3136,
+                "max_pixels": 30720000,
+                "enable_rotate": true
+              }
+            },
+            {
+              "type": "text",
+              "text": "\n你是高中数学题库最终审核前的视觉修复器。你必须只看当前图片，对 targets 中的题目做字段补全。\n\n当前模式：question\n\n任务分两类：\n\n一、mode = \"question\"\n- 检查图片中这些题目是否存在 A/B/C/D 选项。\n- 如果存在，必须逐项抄出 A、B、C、D 后面的完整内容。\n- 选项中的数学公式必须写成 LaTeX。\n- 如果该题图片中没有选项，options 返回 [\"\",\"\",\"\",\"\"]。\n- 严禁用答案或解析反推选项。\n\n二、mode = \"answer_solution\"\n- 检查图片中这些题目的答案和解析。\n- 如果答案是公式，必须写成 LaTeX。\n- 如果解析中有公式，必须保留为 LaTeX。\n- 不要把公式改写成普通中文。\n- 如果看不到答案或解析，对应字段返回空字符串。\n\n严格要求：\n1. 不要编造图片中没有的内容。\n2. 不要输出解释文字。\n3. 必须返回纯 JSON。\n4. patches 数组长度可以小于 targets，但只要看得清就必须返回。\n5. 每个 patch 尽量带上 id；如果不确定 id，就带 index、order、question。\n\n返回格式：\n{\n  \"patches\": [\n    {\n      \"id\": \"draft id\",\n      \"index\": 1,\n      \"order\": 1,\n      \"question\": \"题号\",\n      \"type\": \"单选题/多选题/填空题/解答题\",\n      \"options\": [\"A选项\", \"B选项\", \"C选项\", \"D选项\"],\n      \"answer\": \"答案，保留 LaTeX；没有则空\",\n      \"solution\": \"解析，保留 LaTeX；没有则空\",\n      \"rawBlock\": \"图片中当前题附近原文；没有则空\"\n    }\n  ]\n}\n\ntargets:\n[\n  {\n    \"id\": \"dq_1784130526775_jjqg6e\",\n    \"index\": 6,\n    \"order\": 6,\n    \"question\": \"6\",\n    \"type\": \"单选题\",\n    \"stem\": \"已知经过圆锥 SO 的轴截面是正三角形，用平行于底面的截面将圆锥 SO 分成两部分，若这两部分几何体都存在内切球（与各面均相切），则上、下两部分几何体的体积之比是（）\",\n    \"answer\": \"C\",\n    \"solution\": \"如图，作出圆锥 $SO$ 的轴截面 $SAB$，\\n\\n设上、下两部分几何体的两部分的内切球的球心分别为$E$, $F$, 半径分别为$r$, $R$, 即$OF=FG=R$, $EG=r$,\\n根据题意可知$\\\\triangle SAB$为正三角形, 易知$SE=2r$,\\n圆锥$SO$的底面半径$OB=\\\\sqrt{3}r$,\\n$\\\\therefore SO=2r+r+R+R=3r+2R$, 又$SO=\\\\sqrt{3}OB$,\\n$\\\\therefore 3r+2R=3R$, $\\\\therefore R=3r$,\\n$\\\\therefore$上部分圆锥的底面半径为$\\\\sqrt{3}r$, 高为$3r$,\\n又圆锥$SO$的底面半径为$OB=\\\\sqrt{3}R=3\\\\sqrt{3}r$, 高为$SO=3r+2R=9r$,\\n$\\\\therefore$上部分圆锥的体积与圆锥$SO$的体积之比为$\\\\left(\\\\frac{1}{3}\\\\right)^3=\\\\frac{1}{27}$,\",\n    \"optionCount\": 0,\n    \"finalChoiceAnswer\": \"C\",\n    \"answerMathSignal\": 0,\n    \"solutionMathSignal\": 74,\n    \"stemMathSignal\": 0,\n    \"hasQuestionImage\": true,\n    \"hasAnswerSolutionImage\": true\n  }\n]\n"
+            }
+          ]
+        }
+      ],
+      "temperature": 0,
+      "top_p": 0.001,
+      "max_tokens": 8192
+    }
+  },
+  "responseSha256": "3bae54b4c07874d101bd2ec72040821944927fa97e71a1b140f8ffc60c0d19ec",
+  "response": {
+    "choices": [
+      {
+        "message": {
+          "content": "```json\n{\n  \"patches\": [\n    {\n      \"id\": \"dq_1784130526775_jjqg6e\",\n      \"index\": 6,\n      \"order\": 6,\n      \"question\": \"6\",\n      \"type\": \"单选题\",\n      \"stem\": \"已知经过圆锥 $SO$ 的轴截面是正三角形，用平行于底面的截面将圆锥 $SO$ 分成两部分，若这两部分几何体都存在内切球（与各面均相切），则上、下两部分几何体的体积之比是（）\",\n      \"options\": [\n        \"A. $\\\\frac{1}{8}$\",\n        \"B. $\\\\frac{1}{9}$\",\n        \"C. $\\\\frac{1}{27}$\",\n        \"D. $\\\\frac{1}{64}$\"\n      ],\n      \"answer\": \"C\",\n      \"solution\": \"如图，作出圆锥 $SO$ 的轴截面 $SAB$，\\n\\n设上、下两部分几何体的两部分的内切球的球心分别为$E$, $F$, 半径分别为$r$, $R$, 即$OF=FG=R$, $EG=r$,\\n根据题意可知$\\\\triangle SAB$为正三角形, 易知$SE=2r$,\\n圆锥$SO$的底面半径$OB=\\\\sqrt{3}r$,\\n$\\\\therefore SO=2r+r+R+R=3r+2R$, 又$SO=\\\\sqrt{3}OB$,\\n$\\\\therefore 3r+2R=3R$, $\\\\therefore R=3r$,\\n$\\\\therefore$上部分圆锥的底面半径为$\\\\sqrt{3}r$, 高为$3r$,\\n又圆锥$SO$的底面半径为$OB=\\\\sqrt{3}R=3\\\\sqrt{3}r$, 高为$SO=3r+2R=9r$,\\n$\\\\therefore$上部分圆锥的体积与圆锥$SO$的体积之比为$\\\\left(\\\\frac{1}{3}\\\\right)^3=\\\\frac{1}{27}$,\",\n      \"optionCount\": 4,\n      \"finalChoiceAnswer\": \"C\",\n      \"answerMathSignal\": 0,\n      \"solutionMathSignal\": 74,\n      \"stemMathSignal\": 0,\n      \"hasQuestionImage\": true,\n      \"hasAnswerSolutionImage\": true\n    }\n  ]\n}\n```",
+          "reasoning_content": "",
+          "role": "assistant"
+        },
+        "finish_reason": "stop",
+        "index": 0,
+        "logprobs": null
+      }
+    ],
+    "object": "chat.completion",
+    "usage": {
+      "prompt_tokens": 2177,
+      "completion_tokens": 586,
+      "total_tokens": 2763,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "completion_tokens_details": {
+        "text_tokens": 586
+      }
+    },
+    "created": 1784130537,
+    "system_fingerprint": null,
+    "model": "qwen-vl-plus",
+    "id": "chatcmpl-534d931a-0a1e-9d4f-bd97-9e43a82d3245"
+  }
+}

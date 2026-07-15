@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "pdf-engine-replay-r1",
+  "capturedAt": "2026-07-15T15:48:12.095Z",
+  "metadata": {
+    "cacheKey": "3dc23c5a7bcd32ffd4f574ae9d71c1eede2ac48d49f5356b9ef054cd6b605444",
+    "sourceFileSha256": "50DC9A7E98299807F45521A50048240010BE78212A21C840C30B2149739DD75D",
+    "page": 1,
+    "renderDpi": 144,
+    "model": "qwen-vl-plus",
+    "promptVersion": "pdf-math-region-r1",
+    "promptSha256": "1d1f09f5aab07a5ad831fc8bf67c6e79037624047b0d97c5ddf31aa795c52e51",
+    "imageSha256": [
+      "e1deb7fe008d6e7c9129f57d33def64537c7f8fb38bb2830f710cd50165ff32d"
+    ],
+    "requestSchemaVersion": "qisi-ai-proxy-r1",
+    "endpoint": "/api/ai/chat",
+    "request": {
+      "model": "qwen-vl-plus",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "[redacted-image sha256=e1deb7fe008d6e7c9129f57d33def64537c7f8fb38bb2830f710cd50165ff32d bytes=373155]",
+                "min_pixels": 3136,
+                "max_pixels": 30720000,
+                "enable_rotate": true
+              }
+            },
+            {
+              "type": "text",
+              "text": "\n你是高中数学试卷的页级修复器。请只根据页面图片和 OCR Markdown，对指定题目补充两类信息：\n\n1. 选择题 A/B/C/D 选项；\n2. 解析中的数学公式。\n\n严禁事项：\n- 不要编造原图没有的选项。\n- 不要用解析反推四个选项。\n- 不要把公式改写成普通中文。\n- 不要改题号。\n- 不要输出解释文字。\n\n输出严格 JSON：\n{\n  \"patches\": [\n    {\n      \"question\": \"1\",\n      \"options\": [\"A选项\", \"B选项\", \"C选项\", \"D选项\"],\n      \"solution\": \"带 LaTeX 公式的解析；如果原解析没有公式，则返回原解析\",\n      \"rawBlock\": \"当前题在 OCR/图片中的原文块\"\n    }\n  ]\n}\n\n待修复题目：\n[\n  {\n    \"index\": 0,\n    \"question\": \"6\",\n    \"type\": \"单选题\",\n    \"stem\": \"已知经过圆锥 SO 的轴截面是正三角形，用平行于底面的截面将圆锥 SO 分成两部分，若这两部分几何体都存在内切球（与各面均相切），则上、下两部分几何体的体积之比是（）\",\n    \"answer\": \"\",\n    \"optionCount\": 0,\n    \"needOptions\": true,\n    \"needSolution\": \"\"\n  }\n]\n\nOCR Markdown：\n空\n"
+            }
+          ]
+        }
+      ],
+      "temperature": 0,
+      "top_p": 0.001,
+      "max_tokens": 8192
+    }
+  },
+  "responseSha256": "7c679b64426c8879e812ef364b97c7b8c0f485fa21c67d72d7241797955a3d54",
+  "response": {
+    "ok": false,
+    "code": "AI_PROXY_FETCH_FAILED",
+    "error": "DashScope upstream request failed."
+  }
+}

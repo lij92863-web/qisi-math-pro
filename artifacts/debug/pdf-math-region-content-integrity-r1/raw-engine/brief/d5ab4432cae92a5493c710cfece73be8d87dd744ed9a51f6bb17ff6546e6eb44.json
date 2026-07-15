@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "pdf-engine-replay-r1",
+  "capturedAt": "2026-07-15T15:37:39.416Z",
+  "metadata": {
+    "cacheKey": "d5ab4432cae92a5493c710cfece73be8d87dd744ed9a51f6bb17ff6546e6eb44",
+    "sourceFileSha256": "48549EADEEE80340D3F58062762B724F56471C903F5EE0C3BDF2DBEC25762C7F",
+    "page": 0,
+    "renderDpi": 144,
+    "model": "qwen-plus",
+    "promptVersion": "pdf-math-region-r1",
+    "promptSha256": "916dc234d75cc788974479bcaf8291373f27a323d04b3828b531fbfab5442b61",
+    "imageSha256": [],
+    "requestSchemaVersion": "qisi-ai-proxy-r1",
+    "endpoint": "/api/ai/chat",
+    "request": {
+      "model": "qwen-plus",
+      "messages": [
+        {
+          "role": "user",
+          "content": "你是高中数学答案文档的缺失字段恢复器。\n\n题号和题目边界已经由程序确定。不要重新切题，不要修改题号。\n\n【固定题号】\n2\n\n【只允许恢复的字段】\nanswer\n\n【已有答案】\n空\n\n【已有解析】\n设正四棱台侧面的高为 $h$，则 $2^{2}+8^{2}+\\frac{2+8}{2}\\times h\\times 4=148$，$h=4$，所以侧棱长为 $\\sqrt{4^{2}+\\left(\\frac{8-2}{2}\\right)^{2}}=5$。故选：C\n\n【原始答案文档 block】\n【答案】\n \\begin{description}\n \\item【详解】设正四棱台侧面的高为 $h$，则 $2^{2}+8^{2}+\\frac{2+8}{2}\\times h\\times 4=148$，$h=4$，所以侧棱长为 $\\sqrt{4^{2}+\\left(\\frac{8-2}{2}\\right)^{2}}=5$。故选：C\n \\end{description}\n\n【任务规则】\n1. 只能依据当前 block 中已经存在的明确文字、公式或结论恢复缺失字段。\n2. 不得重新解题，不得补充材料中没有的推导，不得猜测。\n3. 如果缺少 answer，可以从解析末尾的明确结论中恢复，例如“故选：C”恢复为 \"C\"，或“最大值为 ...”恢复为该值。\n4. 没有被列为缺失的字段必须返回空字符串。\n5. 如果无法可靠恢复某个缺失字段，也返回空字符串。\n6. 输出必须是纯 JSON，不要添加解释文字。\n\n【输出格式】\n{\n  \"question\": \"2\",\n  \"answer\": \"\",\n  \"solution\": \"\",\n  \"evidence\": \"用于恢复的原文短摘录\"\n}"
+        }
+      ],
+      "temperature": 0,
+      "top_p": 0.001,
+      "max_tokens": 2048
+    }
+  },
+  "responseSha256": "2b62d9f4ad9e67a4758218f7ef04d35a94403465fe0ee3139b1b2e412b812962",
+  "response": {
+    "model": "qwen-plus",
+    "id": "chatcmpl-2284cfdf-686e-9a79-8fcd-43a5eb0fd34b",
+    "choices": [
+      {
+        "message": {
+          "content": "{\n  \"question\": \"2\",\n  \"answer\": \"C\",\n  \"solution\": \"\",\n  \"evidence\": \"故选：C\"\n}",
+          "role": "assistant"
+        },
+        "index": 0,
+        "finish_reason": "stop"
+      }
+    ],
+    "created": 1784129859,
+    "object": "chat.completion",
+    "usage": {
+      "total_tokens": 472,
+      "completion_tokens": 32,
+      "prompt_tokens": 440,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  }
+}

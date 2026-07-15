@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "pdf-engine-replay-r1",
+  "capturedAt": "2026-07-15T15:37:21.163Z",
+  "metadata": {
+    "cacheKey": "8cbd8b78b18fffc96c2098b92676c1f9db8632949a08b8e384aaead90e2cab6f",
+    "sourceFileSha256": "1E1B402221FA5BCB802B878FC06D2F3915C95E58BCBB89B1D295A07F9E65C890",
+    "page": 1,
+    "renderDpi": 144,
+    "model": "qwen-vl-plus",
+    "promptVersion": "pdf-math-region-r1",
+    "promptSha256": "fb0e65d479fcdbff82633058434a1a20fdda74158b86a86421c6e2d3435e05d8",
+    "imageSha256": [
+      "27d0c3e2125785e6104ed336e25166dd7ee8dc2ca1e57e58ac1fc5a71724eb50"
+    ],
+    "requestSchemaVersion": "qisi-ai-proxy-r1",
+    "endpoint": "/api/ai/chat",
+    "request": {
+      "model": "qwen-vl-plus",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "[redacted-image sha256=27d0c3e2125785e6104ed336e25166dd7ee8dc2ca1e57e58ac1fc5a71724eb50 bytes=351475]",
+                "min_pixels": 3072,
+                "max_pixels": 30720000,
+                "enable_rotate": true
+              }
+            },
+            {
+              "type": "text",
+              "text": "你是高中数学试卷整页 OCR、题目结构识别与 LaTeX 转写器。\n\n请完整识别当前页面中实际出现的所有题目或题目片段。\n试卷可能同时包含：\n\n- 单选题\n- 多选题\n- 填空题\n- 解答题\n- 证明题\n\n必须根据页面中的章节标题判断题型，例如：\n\n“一、单选题”\n“二、多项选择题”\n“三、填空题”\n“四、解答题”\n\n【跨页规则】\n\n1. 页面顶部可能是上一页题目的选项或题干续文。\n2. 页面底部的题目可能在下一页继续。\n3. 不要因为题目跨页而虚构缺失内容。\n4. 能判断题号时必须返回原题号。\n5. 同一题跨页时，可以返回相同题号的片段，系统会在后处理中合并。\n6. 图片下方的“甲”“乙”等标记不是题号。\n\n【题型规则】\n\n1. 单选题和多选题：\n   - type 必须分别返回“单选题”或“多选题”；\n   - options 必须包含 A、B、C、D；\n   - 看不清的选项返回空字符串，不得编造。\n\n2. 填空题：\n   - type 返回“填空题”；\n   - options 返回空数组或 A/B/C/D 全为空；\n   - 不得因为没有选项而改成选择题。\n\n3. 解答题或证明题：\n   - type 返回“解答题”或“证明题”；\n   - options 为空；\n   - 不得编造选项。\n\n4. 数学公式必须转写成可渲染的 LaTeX。\n\n5. 不要识别答案或解析：\n   - answer 留空；\n   - solution 留空。\n\n【题图识别规则】\n\n1. question_bbox 表示整道题区域，包括题干和选项。\n2. image_bbox 只表示题中真正需要保留的照片、几何图、函数图像、统计图、示意图或阴影图形。\n3. 严禁把整道题区域作为 image_bbox。\n4. 严禁把题干文字、A/B/C/D 选项或普通数学公式作为图片。\n5. 没有插图的题，images 必须返回空数组 []。\n6. 出现“如图”“见图”“图甲”“图乙”“图中”“示意图”等文字时，应认真检查是否存在题图。\n7. question_bbox 和 image_bbox 均使用相对于整页的 0-1000 归一化坐标。\n8. 不确定是否为题图时，宁可返回空数组，也不要裁剪整道题。\n\n\n\n【输出格式】\n{\n  \"questions\": [\n    {\n      \"questionNumber\": \"原题号\",\n      \"type\": \"单选题/多选题/填空题/解答题/证明题\",\n      \"stem\": \"完整题干，数学公式使用 LaTeX\",\n      \"options\": {\n        \"A\": \"\",\n        \"B\": \"\",\n        \"C\": \"\",\n        \"D\": \"\"\n      },\n      \"answer\": \"\",\n      \"solution\": \"\",\n      \"isFragment\": false,\n      \"question_bbox\": [0, 0, 0, 0],\n      \"images\": [\n        {\n          \"image_bbox\": [0, 0, 0, 0],\n          \"image_description\": \"题中真正的图形说明\",\n          \"image_confidence\": 0.92\n        }\n      ]\n    }\n  ]\n}\n\n【严禁】\n- 严禁把填空题判定为“选项缺失的选择题”。\n- 严禁为了补齐题号而虚构页面中不存在的题。\n- 严禁把最大题号当成题目总数。\n- 严禁输出 Markdown。\n- 严禁输出 JSON 以外的说明文字。\n- 严禁出现 undefined、null、[object Object]。\n- 严禁出现“公式图片”“待转换”“无法识别”。\n\n"
+            }
+          ]
+        }
+      ],
+      "temperature": 0,
+      "top_p": 0.001,
+      "max_tokens": 8192
+    }
+  },
+  "responseSha256": "e38e219ca79df16ae45d2e8f2ffb5b03856bfcadc693154ba191dacb5aa66df2",
+  "response": {
+    "choices": [
+      {
+        "message": {
+          "content": "```json\n{\n  \"questions\": [\n    {\n      \"questionNumber\": \"1\",\n      \"type\": \"单选题\",\n      \"stem\": \"已知集合 $A = \\left\\{x \\mid x = \\sin \\frac{n\\pi}{2}, n \\in \\mathbb{Z}\\right\\}$, $B = \\{0, 1\\}$ 则下列命题正确的是（ ）\",\n      \"options\": {\n        \"A\": \"A = B\",\n        \"B\": \"B \\\\subseteq A\",\n        \"C\": \"A \\\\cap B = \\\\{0, -1\\\\}\",\n        \"D\": \"C_A B = \\\\{1\\\\}\"\n      },\n      \"answer\": \"\",\n      \"solution\": \"\",\n      \"isFragment\": false,\n      \"question_bbox\": [138, 79, 846, 135],\n      \"images\": []\n    },\n    {\n      \"questionNumber\": \"2\",\n      \"type\": \"单选题\",\n      \"stem\": \"正四棱台的上、下底面的边长分别为 2，8，该棱台的表面积为 148，则侧棱长为（ ）\",\n      \"options\": {\n        \"A\": \"3\",\n        \"B\": \"4\",\n        \"C\": \"5\",\n        \"D\": \"6\"\n      },\n      \"answer\": \"\",\n      \"solution\": \"\",\n      \"isFragment\": false,\n      \"question_bbox\": [138, 197, 774, 233],\n      \"images\": []\n    },\n    {\n      \"questionNumber\": \"3\",\n      \"type\": \"单选题\",\n      \"stem\": \"已知 $\\\\vec{a}$ 和 $\\\\vec{b}$ 是两个不共线的向量，若 $\\\\overrightarrow{AB} = \\\\vec{a} + m\\\\vec{b}$，$\\\\overrightarrow{BC} = 5\\\\vec{a} + 4\\\\vec{b}$，$\\\\overrightarrow{DC} = -\\\\vec{a} - 2\\\\vec{b}$，且 A，B，D 三点共线，则实数 $m$ 的值为（ ）\",\n      \"options\": {\n        \"A\": \"$\\\\frac{1}{2}$\",\n        \"B\": \"1\",\n        \"C\": \"$-\\\\frac{1}{2}$\",\n        \"D\": \"-1\"\n      },\n      \"answer\": \"\",\n      \"solution\": \"\",\n      \"isFragment\": false,\n      \"question_bbox\": [138, 295, 774, 341],\n      \"images\": []\n    },\n    {\n      \"questionNumber\": \"4\",\n      \"type\": \"单选题\",\n      \"stem\": \"折扇是我国古老文化的延续，在我国已有四千年左右的历史，“扇”与“善”谐音，折扇也寓意“善良”“善行”，它常以字画的形式体现我国的传统文化，也是运筹帷幄、决胜千里、大智大勇的象征（如图甲）. 图乙是扇形的一部分，若两个圆弧 $\\\\overset{\\\\frown}{DE}$，$\\\\overset{\\\\frown}{AC}$ 所在圆的半径分别是 12 和 27，且 $\\\\angle ABC = 120^\\\\circ$．若图乙是某圆台的侧面展开图，则该圆台的侧面积是（ ）\",\n      \"options\": {\n        \"A\": \"292π\",\n        \"B\": \"$\\\\frac{1330\\\\sqrt{2}}{3}\\\\pi$\",\n        \"C\": \"195π\",\n        \"D\": \"243π\"\n      },\n      \"answer\": \"\",\n      \"solution\": \"\",\n      \"isFragment\": false,\n      \"question_bbox\": [138, 429, 840, 505],\n      \"images\": [\n        {\n          \"image_bbox\": [178, 614, 350, 720],\n          \"image_description\": \"图甲：一把展开的折扇，扇面有山水画图案。\",\n          \"image_confidence\": 0.95\n        },\n        {\n          \"image_bbox\": [382, 605, 600, 735],\n          \"image_description\": \"图乙：一个圆台的侧面展开图，显示了两个同心扇形弧 DE 和 AC，以及连接它们的直线段 AD 和 CE，构成一个梯形形状。\",\n          \"image_confidence\": 0.95\n        }\n      ]\n    },\n    {\n      \"questionNumber\": \"5\",\n      \"type\": \"单选题\",\n      \"stem\": \"在 $\\\\triangle ABC$ 中，$\\\\frac{\\\\overrightarrow{BA} \\\\cdot \\\\overrightarrow{AC}}{|\\\\overrightarrow{BC}|} + \\\\frac{\\\\overrightarrow{AC} \\\\cdot \\\\overrightarrow{BC}}{|\\\\overrightarrow{BC}|} = 0$, $\\\\frac{|\\\\overrightarrow{BC}|}{|\\\\overrightarrow{AC}|} \\\\cdot \\\\frac{|\\\\overrightarrow{AB}|}{|\\\\overrightarrow{AB}|} = \\\\frac{1}{2}$，则 $\\\\triangle ABC$ 的形状为（ ）\",\n      \"options\": {\n        \"A\": \"直角三角形\",\n        \"B\": \"三边均不相等的三角形\",\n        \"C\": \"等边三角形\",\n        \"D\": \"等腰（非等边）三角形\"\n      },\n      \"answer\": \"\",\n      \"solution\": \"\",\n      \"isFragment\": false,\n      \"question_bbox\": [138, 809, 838, 865],\n      \"images\": []\n    },\n    {\n      \"questionNumber\": \"6\",\n      \"type\": \"单选题\",\n      \"stem\": \"已知经过圆锥 $SO$ 的轴的截面是正三角形，用平行于底面的截面将圆锥 $SO$ 分成两部分，若这两部分几何体都存在内切球（与各面均相切），则上、下两部分几何体的体积之比是（ ）\",\n      \"options\": {\n        \"A\": \"1:8\",\n        \"B\": \"1:9\",\n        \"C\": \"1:26\",\n        \"D\": \"1:27\"\n      },\n      \"answer\": \"\",\n      \"solution\": \"\",\n      \"isFragment\": false,\n      \"question_bbox\": [138, 927, 798, 973],\n      \"images\": []\n    }\n  ]\n}\n```",
+          "reasoning_content": "",
+          "role": "assistant"
+        },
+        "finish_reason": "stop",
+        "index": 0,
+        "logprobs": null
+      }
+    ],
+    "object": "chat.completion",
+    "usage": {
+      "prompt_tokens": 2134,
+      "completion_tokens": 1469,
+      "total_tokens": 3603,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "completion_tokens_details": {
+        "text_tokens": 1469
+      }
+    },
+    "created": 1784129842,
+    "system_fingerprint": null,
+    "model": "qwen-vl-plus",
+    "id": "chatcmpl-d9735702-c62f-9594-b544-0b2ac0ae0c8b"
+  }
+}

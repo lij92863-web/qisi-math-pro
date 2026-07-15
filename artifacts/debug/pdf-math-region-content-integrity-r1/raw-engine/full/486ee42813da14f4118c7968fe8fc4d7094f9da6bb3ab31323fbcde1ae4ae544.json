@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "pdf-engine-replay-r1",
+  "capturedAt": "2026-07-15T15:48:37.546Z",
+  "metadata": {
+    "cacheKey": "486ee42813da14f4118c7968fe8fc4d7094f9da6bb3ab31323fbcde1ae4ae544",
+    "sourceFileSha256": "48549EADEEE80340D3F58062762B724F56471C903F5EE0C3BDF2DBEC25762C7F",
+    "page": 3,
+    "renderDpi": 144,
+    "model": "qwen-vl-ocr-latest",
+    "promptVersion": "pdf-math-region-r1",
+    "promptSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "imageSha256": [
+      "ad4d0146b7d4f93a1c4dc9c7a5bb9270ff26a0c008a8b85a0c94b3df86a7c825"
+    ],
+    "requestSchemaVersion": "qisi-ai-proxy-r1",
+    "endpoint": "/api/ai/ocr",
+    "request": {
+      "model": "qwen-vl-ocr-latest",
+      "input": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "image": "[redacted-image sha256=ad4d0146b7d4f93a1c4dc9c7a5bb9270ff26a0c008a8b85a0c94b3df86a7c825 bytes=246275]",
+                "min_pixels": 3072,
+                "max_pixels": 30720000,
+                "enable_rotate": false
+              }
+            ]
+          }
+        ]
+      },
+      "parameters": {
+        "max_tokens": 8192,
+        "ocr_options": {
+          "task": "document_parsing"
+        }
+      }
+    }
+  },
+  "responseSha256": "c812769103be08eb81c44b0bdf235fc2a41e1af46f6a8ee4c03322a686d23386",
+  "response": {
+    "output": {
+      "choices": [
+        {
+          "finish_reason": "stop",
+          "message": {
+            "content": [
+              {
+                "ocr_result": {
+                  "processed_text": "```latex\n\\begin{enumerate}\n    \\item \\textbf{【答案】}AC\n    \\begin{itemize}\n        \\item \\textbf{【详解】}在$\\triangle ABC$中, 由正弦定理得, $AB = 2R\\sin 60^\\circ = 2 \\times 4 \\times \\frac{\\sqrt{3}}{2} = 4\\sqrt{3}$, 该正三棱锥表面积即$\\triangle ABC$的面积, 为$\\frac{1}{2} \\times (4\\sqrt{3})^2 \\times \\frac{\\sqrt{3}}{2} = 12\\sqrt{3}$, 故A正确, B错误。\n        \\item 如下图所示, 记$AB, BC, AC$中点分别为$E, F, G$, $A, B, C$重合于S点, 则正三棱锥的棱长为$2\\sqrt{3}$, $S_{\\triangle EFG} = \\frac{S_{\\triangle ABC}}{4} = 3\\sqrt{3}$, 过S点作$SO \\perp$平面$EFG$, 连接$OF$,\n        \\begin{itemize}\n            \\item 则在$\\triangle EFG$中, 由正弦定理得$EF = 2 \\cdot OF \\cdot \\sin 60^\\circ$, 则$OF = \\frac{2\\sqrt{3}}{\\sqrt{3}} = 2$, $E$\n            \\item 所以$SO = \\sqrt{SF^2 - OF^2} = \\sqrt{12 - 4} = 2\\sqrt{2}$,\n            \\item 所以该正三棱锥体积为$\\frac{1}{3} \\cdot S_{\\triangle EFG} \\cdot SO = \\frac{1}{3} \\times 3\\sqrt{3} \\times 2\\sqrt{2} = 2\\sqrt{6}$, 故C正确, D错误。\n        \\end{itemize}\n    \\end{itemize}\n    \\item \\textbf{【答案】}ABD\n    \\begin{itemize}\n        \\item \\textbf{【详解】}设$\\triangle ABC$外接圆的半径为$R$, 由正弦定理$\\frac{a}{\\sin A} = \\frac{b}{\\sin B} = \\frac{c}{\\sin C} = 2R$, 得$\\frac{abc}{\\sin A \\sin B \\sin C} = (2R)^3 = 128\\sqrt{2}$, 解得$R = 2\\sqrt{2}$, B正确;\n        \\item $\\triangle ABC$的面积$S = \\frac{1}{2} ab \\sin C = \\frac{1}{2} ab \\cdot \\frac{c}{2R} = \\frac{1}{2} \\cdot \\frac{16\\sqrt{2}}{4\\sqrt{2}} = 2$, A正确;\n        \\item 由$S = \\frac{1}{2} ab \\sin C = 2$, 得$ab = \\frac{4}{\\sin C} \\geq 4$, C错误;\n        \\item 由$\\sin A > 0, \\sin B > 0$, 得$(\\sin A + \\sin B)^2 \\geq 4 \\sin A \\sin B$即$\\frac{(\\sin A + \\sin B)^2}{(\\sin A \\sin B)^2} \\geq \\frac{4}{\\sin A \\sin B}$,\n        \\item 由$\\sin A \\sin B \\sin C = \\frac{1}{8}$, 得$\\frac{4}{\\sin A \\sin B} = 32 \\sin C$, 因此$\\frac{(\\sin A + \\sin B)^2}{(\\sin A \\sin B)^2} \\geq 32 \\sin C$,\n        \\item 所以$(\\frac{1}{\\sin A} + \\frac{1}{\\sin B})^2 \\geq 32 \\sin C$, D正确。\n    \\end{itemize}\n    \\item \\textbf{【答案】} $-\\frac{19}{13}$\n    \\begin{itemize}\n        \\item \\textbf{【详解】} $\\because$点$P(2,5)$在角$\\alpha$终边上, $\\therefore \\sin \\alpha = \\frac{5\\sqrt{29}}{29}$, $\\cos \\alpha = \\frac{2\\sqrt{29}}{29}$, $\\therefore \\frac{2\\cos(\\pi + \\alpha) - 3\\sin(\\pi - \\alpha)}{4\\cos(-\\alpha) + \\sin(2\\pi + \\alpha)} = \\frac{-2\\cos \\alpha - 3\\sin \\alpha}{4\\cos \\alpha + \\sin \\alpha} = -\\frac{19}{13}$。\n    \\end{itemize}\n\\end{enumerate}\n```"
+                },
+                "text": "```latex\n\\begin{enumerate}\n    \\item \\textbf{【答案】}AC\n    \\begin{itemize}\n        \\item \\textbf{【详解】}在$\\triangle ABC$中, 由正弦定理得, $AB = 2R\\sin 60^\\circ = 2 \\times 4 \\times \\frac{\\sqrt{3}}{2} = 4\\sqrt{3}$, 该正三棱锥表面积即$\\triangle ABC$的面积, 为$\\frac{1}{2} \\times (4\\sqrt{3})^2 \\times \\frac{\\sqrt{3}}{2} = 12\\sqrt{3}$, 故A正确, B错误。\n        \\item 如下图所示, 记$AB, BC, AC$中点分别为$E, F, G$, $A, B, C$重合于S点, 则正三棱锥的棱长为$2\\sqrt{3}$, $S_{\\triangle EFG} = \\frac{S_{\\triangle ABC}}{4} = 3\\sqrt{3}$, 过S点作$SO \\perp$平面$EFG$, 连接$OF$,\n        \\begin{itemize}\n            \\item 则在$\\triangle EFG$中, 由正弦定理得$EF = 2 \\cdot OF \\cdot \\sin 60^\\circ$, 则$OF = \\frac{2\\sqrt{3}}{\\sqrt{3}} = 2$, $E$\n            \\item 所以$SO = \\sqrt{SF^2 - OF^2} = \\sqrt{12 - 4} = 2\\sqrt{2}$,\n            \\item 所以该正三棱锥体积为$\\frac{1}{3} \\cdot S_{\\triangle EFG} \\cdot SO = \\frac{1}{3} \\times 3\\sqrt{3} \\times 2\\sqrt{2} = 2\\sqrt{6}$, 故C正确, D错误。\n        \\end{itemize}\n    \\end{itemize}\n    \\item \\textbf{【答案】}ABD\n    \\begin{itemize}\n        \\item \\textbf{【详解】}设$\\triangle ABC$外接圆的半径为$R$, 由正弦定理$\\frac{a}{\\sin A} = \\frac{b}{\\sin B} = \\frac{c}{\\sin C} = 2R$, 得$\\frac{abc}{\\sin A \\sin B \\sin C} = (2R)^3 = 128\\sqrt{2}$, 解得$R = 2\\sqrt{2}$, B正确;\n        \\item $\\triangle ABC$的面积$S = \\frac{1}{2} ab \\sin C = \\frac{1}{2} ab \\cdot \\frac{c}{2R} = \\frac{1}{2} \\cdot \\frac{16\\sqrt{2}}{4\\sqrt{2}} = 2$, A正确;\n        \\item 由$S = \\frac{1}{2} ab \\sin C = 2$, 得$ab = \\frac{4}{\\sin C} \\geq 4$, C错误;\n        \\item 由$\\sin A > 0, \\sin B > 0$, 得$(\\sin A + \\sin B)^2 \\geq 4 \\sin A \\sin B$即$\\frac{(\\sin A + \\sin B)^2}{(\\sin A \\sin B)^2} \\geq \\frac{4}{\\sin A \\sin B}$,\n        \\item 由$\\sin A \\sin B \\sin C = \\frac{1}{8}$, 得$\\frac{4}{\\sin A \\sin B} = 32 \\sin C$, 因此$\\frac{(\\sin A + \\sin B)^2}{(\\sin A \\sin B)^2} \\geq 32 \\sin C$,\n        \\item 所以$(\\frac{1}{\\sin A} + \\frac{1}{\\sin B})^2 \\geq 32 \\sin C$, D正确。\n    \\end{itemize}\n    \\item \\textbf{【答案】} $-\\frac{19}{13}$\n    \\begin{itemize}\n        \\item \\textbf{【详解】} $\\because$点$P(2,5)$在角$\\alpha$终边上, $\\therefore \\sin \\alpha = \\frac{5\\sqrt{29}}{29}$, $\\cos \\alpha = \\frac{2\\sqrt{29}}{29}$, $\\therefore \\frac{2\\cos(\\pi + \\alpha) - 3\\sin(\\pi - \\alpha)}{4\\cos(-\\alpha) + \\sin(2\\pi + \\alpha)} = \\frac{-2\\cos \\alpha - 3\\sin \\alpha}{4\\cos \\alpha + \\sin \\alpha} = -\\frac{19}{13}$。\n    \\end{itemize}\n\\end{enumerate}\n```"
+              }
+            ],
+            "reasoning_content": "",
+            "role": "assistant"
+          }
+        }
+      ]
+    },
+    "usage": {
+      "image_tokens": 1963,
+      "input_tokens": 2018,
+      "input_tokens_details": {
+        "image_tokens": 1963,
+        "text_tokens": 55
+      },
+      "output_tokens": 1142,
+      "output_tokens_details": {
+        "text_tokens": 1142
+      },
+      "total_tokens": 3160
+    },
+    "request_id": "121617db-1074-9ee2-bc90-097bf5c2472e"
+  }
+}

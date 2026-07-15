@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "pdf-source-evidence-r1",
+  "capturedAt": "2026-07-15T23:00:00+08:00",
+  "method": "independent-pdfinfo-pdftotext-pdftoppm",
+  "files": [
+    {
+      "name": "简略版题目（只有一页）.pdf",
+      "sha256": "1E1B402221FA5BCB802B878FC06D2F3915C95E58BCBB89B1D295A07F9E65C890",
+      "bytes": 192050,
+      "pages": 1,
+      "pageSizePoints": [595.3, 841.9],
+      "rotation": 0,
+      "questionNumbers": ["1", "2", "3", "4", "5", "6"]
+    },
+    {
+      "name": "完整版题目.pdf",
+      "sha256": "50DC9A7E98299807F45521A50048240010BE78212A21C840C30B2149739DD75D",
+      "bytes": 326073,
+      "pages": 2,
+      "pageSizePoints": [595.3, 841.9],
+      "rotation": 0,
+      "questionNumbers": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]
+    },
+    {
+      "name": "完整版答案.pdf",
+      "sha256": "48549EADEEE80340D3F58062762B724F56471C903F5EE0C3BDF2DBEC25762C7F",
+      "bytes": 243387,
+      "pages": 4,
+      "pageSizePoints": [595.3, 841.9],
+      "rotation": 0,
+      "questionNumbers": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"],
+      "explicitAnswers": {
+        "1": "B",
+        "2": "C",
+        "3": "B",
+        "4": "C",
+        "5": "D",
+        "6": "C",
+        "7": "ABD",
+        "8": "AC",
+        "9": "ABD",
+        "10": "-19/13",
+        "11": "6",
+        "12": "(1+sqrt(2))/2"
+      }
+    }
+  ],
+  "briefAlignment": {
+    "verified": true,
+    "questionPageRange": "1",
+    "answerPageRange": "1-2",
+    "questionNumbers": ["1", "2", "3", "4", "5", "6"],
+    "reason": "Answers 1-5 occur on answer page 1 and answer 6 begins on answer page 2; question 6 answer is explicitly C."
+  }
+}

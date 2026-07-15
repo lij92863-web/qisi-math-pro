@@ -737,6 +737,7 @@
         legacySafeSolutionItems = [],
         parserSafeAnswerItems = [],
         parserSafeSolutionItems = [],
+        explicitAnswerEvidence = [],
         legacyFusedQuestionNumbers = [],
         parserFusedQuestionNumbers = []
     } = {}) => {
@@ -755,6 +756,14 @@
             buildSafeItemMap(parserSafeAnswerItems, parserFusedQuestionNumbers);
         const parserSolutionMap =
             buildSafeItemMap(parserSafeSolutionItems, parserFusedQuestionNumbers);
+        const explicitAnswerMap =
+            buildSafeItemMap(
+                (explicitAnswerEvidence || []).map(evidence => ({
+                    ...evidence,
+                    question: evidence.question || evidence.questionNumber || '',
+                    answer: evidence.answer || ''
+                }))
+            );
         const fusedQuestionNumbers =
             Array.from(new Set([
                 ...(legacyFusedQuestionNumbers || []),
@@ -765,7 +774,8 @@
                 ...legacyAnswerMap.keys(),
                 ...legacySolutionMap.keys(),
                 ...parserAnswerMap.keys(),
-                ...parserSolutionMap.keys()
+                ...parserSolutionMap.keys(),
+                ...explicitAnswerMap.keys()
             ])).sort((a, b) => Number(a) - Number(b));
         const effectiveAnswerItems = [];
         const effectiveSolutionItems = [];
@@ -779,6 +789,8 @@
                 legacyAnswerMap.get(questionNumber);
             const parserAnswerItem =
                 parserAnswerMap.get(questionNumber);
+            const explicitAnswerItem =
+                explicitAnswerMap.get(questionNumber);
             const legacySolutionItem =
                 legacySolutionMap.get(questionNumber);
             const parserSolutionItem =
@@ -787,7 +799,43 @@
                 isObjectiveDraft(draft);
 
             if (objective) {
-                if (legacyAnswerItem && getItemAnswer(legacyAnswerItem)) {
+                if (explicitAnswerItem && getItemAnswer(explicitAnswerItem)) {
+                    const normalized =
+                        normalizeObjectiveAnswerToLabels(
+                            getItemAnswer(explicitAnswerItem),
+                            draft
+                        );
+                    if (normalized.ok) {
+                        const baseItem =
+                            legacyAnswerItem || parserAnswerItem || explicitAnswerItem;
+                        effectiveAnswerItems.push(cloneWithAnswer(baseItem, normalized.answer, {
+                            answerEvidence: explicitAnswerItem,
+                            sourceTrace: {
+                                ...(baseItem?.sourceTrace || {}),
+                                answerEvidence: explicitAnswerItem
+                            },
+                            explicitPdfTextLayerAnswer: true
+                        }));
+                        fieldDecisions.push({
+                            questionNumber,
+                            field: 'answer',
+                            source: 'pdf-text-layer-explicit',
+                            reason: 'explicit-question-number-and-answer-label'
+                        });
+                    } else {
+                        warnings.push({
+                            questionNumber,
+                            code: 'explicit-pdf-answer-rejected',
+                            reason: normalized.reason
+                        });
+                        fieldDecisions.push({
+                            questionNumber,
+                            field: 'answer',
+                            source: 'none',
+                            reason: `explicit-pdf-answer-${normalized.reason}`
+                        });
+                    }
+                } else if (legacyAnswerItem && getItemAnswer(legacyAnswerItem)) {
                     effectiveAnswerItems.push(legacyAnswerItem);
                     fieldDecisions.push({ questionNumber, field: 'answer', source: 'legacy', reason: 'objective-legacy-preserved' });
                 } else if (parserAnswerItem) {

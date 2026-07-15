@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "pdf-math-region-truth-r1",
+  "sourceQuestionFile": "完整版题目.pdf",
+  "sourceAnswerFile": "完整版答案.pdf",
+  "questionPageRange": "1-2",
+  "answerPageRange": "1-4",
+  "questionNumbers": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"],
+  "answers": {
+    "1": "B",
+    "2": "C",
+    "3": "B",
+    "4": "C",
+    "5": "D",
+    "6": "C",
+    "7": "ABD",
+    "8": "AC",
+    "9": "ABD",
+    "10": "$-\\frac{19}{13}$",
+    "11": "6",
+    "12": "$\\frac{\\sqrt{2}+1}{2}$"
+  },
+  "requiredQuestionFigures": ["4", "8", "11"],
+  "requiredAnalysisFigures": ["6", "8"],
+  "cases": {
+    "P1": {
+      "question": "1",
+      "mustContain": ["\\sin", "\\frac", "\\in", "\\{", "\\}"],
+      "answer": "B",
+      "analysisRequired": true
+    },
+    "P2": {
+      "question": "4",
+      "figureRequired": true,
+      "optionB": "$\\frac{1330\\sqrt{2}}{3}\\pi$",
+      "answer": "C",
+      "analysisRequired": true
+    },
+    "P3": {
+      "question": "6",
+      "duplicateOptionLabels": false,
+      "answer": "C",
+      "analysisFigureRequired": true
+    },
+    "P4": {
+      "question": "7",
+      "mustContain": ["\\left", "\\right"],
+      "brokenOptionFormulaCount": 0
+    },
+    "P5": {
+      "question": "8",
+      "figureRequired": true,
+      "foreignQuestionTextInCrop": false
+    },
+    "P6": {
+      "question": "11",
+      "answer": "6",
+      "mustRender": ["\\overrightarrow", "\\cdot", "\\sqrt", "\\therefore"],
+      "rawLatexOutsideMathBlocks": 0
+    }
+  },
+  "sourceEvidence": {
+    "questionPdfSha256": "50DC9A7E98299807F45521A50048240010BE78212A21C840C30B2149739DD75D",
+    "answerPdfSha256": "48549EADEEE80340D3F58062762B724F56471C903F5EE0C3BDF2DBEC25762C7F",
+    "verifiedBy": "independent-pdf-text-and-page-render",
+    "verifiedAt": "2026-07-15T15:00:00+08:00"
+  }
+}

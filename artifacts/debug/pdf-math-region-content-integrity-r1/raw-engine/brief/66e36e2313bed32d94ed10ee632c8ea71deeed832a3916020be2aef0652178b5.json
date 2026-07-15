@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "pdf-engine-replay-r1",
+  "capturedAt": "2026-07-15T15:37:42.116Z",
+  "metadata": {
+    "cacheKey": "66e36e2313bed32d94ed10ee632c8ea71deeed832a3916020be2aef0652178b5",
+    "sourceFileSha256": "48549EADEEE80340D3F58062762B724F56471C903F5EE0C3BDF2DBEC25762C7F",
+    "page": 0,
+    "renderDpi": 144,
+    "model": "qwen-plus",
+    "promptVersion": "pdf-math-region-r1",
+    "promptSha256": "9469f1f6fc82a7c6dc9116ad5dfa8ab9ddf2ac777e6c890c30e4677210879743",
+    "imageSha256": [],
+    "requestSchemaVersion": "qisi-ai-proxy-r1",
+    "endpoint": "/api/ai/chat",
+    "request": {
+      "model": "qwen-plus",
+      "messages": [
+        {
+          "role": "user",
+          "content": "你是高中数学题库答案对齐助手。请只把 answers 对齐到 questions，严格只返回 JSON。\n\n规则：\n1. 只补 answer，不要输出 solution。\n2. 优先按 question 题号匹配；题号明显错乱时，允许按 index 顺序匹配。\n3. 不要编造答案。\n4. 返回 patches 数组。index 是 questions 中的 index。\n\nquestions=[{\"index\":1,\"question\":\"1\",\"type\":\"单选题\",\"stem\":\"已知集合 $A = \\\\left\\\\{x \\\\mid x = \\\\sin \\\\frac{n\\\\pi}{2}, n \\\\in \\\\mathbb{Z}\\\\right\\\\}$, $B = \\\\{0, 1\\\\}$ 则下列命题正确的是（ ）\",\"options\":[\"$A = B$\",\"$\\\\subseteq$ A\",\"A $\\\\cap$ $B = \\\\{0$, -1\\\\}\",\"$C_A$ $B = \\\\{1\\\\}$\"],\"answer\":\"B\"},{\"index\":2,\"question\":\"2\",\"type\":\"单选题\",\"stem\":\"正四棱台的上、下底面的边长分别为 2，8，该棱台的表面积为 148，则侧棱长为（ ）\",\"options\":[\"3\",\"4\",\"5\",\"6\"],\"answer\":\"C\"},{\"index\":3,\"question\":\"3\",\"type\":\"单选题\",\"stem\":\"已知 $\\\\vec{a}$ 和 $\\\\vec{b}$ 是两个不共线的向量，若 $\\\\overrightarrow{AB} = \\\\vec{a} + m\\\\vec{b}$，$\\\\overrightarrow{BC} = 5\\\\vec{a} + 4\\\\vec{b}$，$\\\\overrightarrow{DC} = -\\\\vec{a} - 2\\\\vec{b}$，且 A，B，D 三点共线，则实数 $m$ 的值为（ ）\",\"options\":[\"$\\\\frac{1}{2}$\",\"1\",\"$-\\\\frac{1}{2}$\",\"-1\"],\"answer\":\"B\"},{\"index\":4,\"question\":\"4\",\"type\":\"单选题\",\"stem\":\"折扇是我国古老文化的延续，在我国已有四千年左右的历史，“扇”与“善”谐音，折扇也寓意“善良”“善行”，它常以字画的形式体现我国的传统文化，也是运筹帷幄、决胜千里、大智大勇的象征（如图甲）. 图乙是扇形的一部分，若两个圆弧 $\\\\overset{\\\\frown}{DE}$，$\\\\overset{\\\\frown}{AC}$ 所在圆的半径分别是 12 和 27，且 $\\\\angle ABC = 120^\\\\circ$．若图乙是某圆台的侧面展开图，则该圆台的侧面积是（ ）\",\"options\":[\"292$\\\\pi$\",\"$\\\\frac{1330\\\\sqrt{2}}{3}\\\\pi$\",\"195$\\\\pi$\",\"243$\\\\pi$\"],\"answer\":\"C\"},{\"index\":5,\"question\":\"5\",\"type\":\"单选题\",\"stem\":\"在 $\\\\triangle ABC$ 中，$\\\\frac{\\\\overrightarrow{BA} \\\\cdot \\\\overrightarrow{AC}}{|\\\\overrightarrow{BC}|} + \\\\frac{\\\\overrightarrow{AC} \\\\cdot \\\\overrightarrow{BC}}{|\\\\overrightarrow{BC}|} = 0, \\\\frac{|\\\\overrightarrow{BC}|}{|\\\\overrightarrow{AC}|} \\\\cdot \\\\frac{|\\\\overrightarrow\",\"options\":[\"直角三角形\",\"三边均不相等的三角形\",\"等边三角形\",\"等腰（非等边）三角形\"],\"answer\":\"D\"},{\"index\":6,\"question\":\"6\",\"type\":\"单选题\",\"stem\":\"已知经过圆锥 $SO$ 的轴的截面是正三角形，用平行于底面的截面将圆锥 $SO$ 分成两部分，若这两部分几何体都存在内切球（与各面均相切），则上、下两部分几何体的体积之比是（ ）\",\"options\":[\"1:8\",\"1:9\",\"1:26\",\"1:27\"],\"answer\":\"\"}]\nanswers=[{\"index\":1,\"question\":\"1\",\"answer\":\"B\"}]\n\n返回格式：\n{\"patches\":[{\"index\":1,\"answer\":\"A\"}]}"
+        }
+      ],
+      "temperature": 0,
+      "top_p": 0.001,
+      "max_tokens": 2048
+    }
+  },
+  "responseSha256": "0f3aae00ea56fe03fbe0a0ec3c435da1a44da48af8331823aa5bdd8ee471e3bb",
+  "response": {
+    "model": "qwen-plus",
+    "id": "chatcmpl-8132b2a9-78d4-9d88-92ea-4cc842df3187",
+    "choices": [
+      {
+        "message": {
+          "content": "{\"patches\":[{\"index\":2,\"answer\":\"C\"},{\"index\":3,\"answer\":\"B\"},{\"index\":4,\"answer\":\"C\"},{\"index\":5,\"answer\":\"D\"},{\"index\":6,\"answer\":\"C\"}]}",
+          "role": "assistant"
+        },
+        "index": 0,
+        "finish_reason": "stop"
+      }
+    ],
+    "created": 1784129861,
+    "object": "chat.completion",
+    "usage": {
+      "total_tokens": 998,
+      "completion_tokens": 44,
+      "prompt_tokens": 954,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "pdf-replay-reindex-map-r1",
+  "sourceByImageSha256": {
+    "e1deb7fe008d6e7c9129f57d33def64537c7f8fb38bb2830f710cd50165ff32d": {
+      "sourceFileSha256": "50DC9A7E98299807F45521A50048240010BE78212A21C840C30B2149739DD75D",
+      "page": 1,
+      "evidence": "完整版题目 PDF 第 1 页渲染图；响应题号为 1-6"
+    },
+    "6d8836516532bbbbff38785d0e1e232a591af18f513e4e269e8e8ba5cc230c4c": {
+      "sourceFileSha256": "50DC9A7E98299807F45521A50048240010BE78212A21C840C30B2149739DD75D",
+      "page": 2,
+      "evidence": "完整版题目 PDF 第 2 页渲染图；响应题号为 7-12"
+    }
+  }
+}

@@ -597,6 +597,7 @@
                             return (
                                 source === 'auto-figure-crop' ||
                                 source === 'pdf-layout-figure-crop' ||
+                                source === 'pdf-analysis-figure-crop' ||
                                 source === 'manual-crop' ||
                                 source === 'uploaded-question-image' ||
                                 source === 'docx-inline-figure'
@@ -4038,6 +4039,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         const page = await pdf.getPage(pageNo);
                         const viewport = page.getViewport({ scale: PDF_PROCESS_CONFIG.renderScale || 2 });
                         const content = await page.getTextContent();
+                        const operatorList = await page.getOperatorList();
 
                         const items = (content.items || [])
                             .map(item => {
@@ -4103,12 +4105,22 @@ ${JSON.stringify(questionSummaries, null, 2)}
                                 ny2: Math.round(y2 / viewport.height * 1000)
                             };
                         }).filter(line => line.text);
+                        const placedImages = window.Qisi.PdfContentIntegrity.extractPlacedImageBboxes(
+                            operatorList,
+                            {
+                                opCodes: window.pdfjsLib.OPS || {},
+                                viewportTransform: viewport.transform,
+                                pageWidth: viewport.width,
+                                pageHeight: viewport.height
+                            }
+                        );
 
                         layouts.push({
                             pageNo,
                             width: viewport.width,
                             height: viewport.height,
-                            lines: normalizedLines
+                            lines: normalizedLines,
+                            placedImages
                         });
                     }
 
@@ -4118,6 +4130,11 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         y: `${line.ny1}-${line.ny2}`,
                         x: `${line.nx1}-${line.nx2}`,
                         text: line.text.slice(0, 120)
+                    }))));
+                    console.table(layouts.flatMap(page => (page.placedImages || []).map(image => ({
+                        pageNo: page.pageNo,
+                        bbox: image.bbox.join(','),
+                        source: image.source
                     }))));
                     console.groupEnd();
 
@@ -4446,6 +4463,11 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             url: img.url,
                             align: img.align || 'center',
                             source: img.source || '',
+                            sourcePage: Number(img.sourcePage || img.pageIndex || 0) || 0,
+                            bbox: Array.isArray(img.bbox) ? [...img.bbox] : [],
+                            confidence: Number(img.confidence || 0) || 0,
+                            status: img.status || '',
+                            description: img.description || '',
                             displayable: img.displayable !== false,
                             ext: img.ext || '',
                             mime: img.mime || '',
@@ -6171,6 +6193,18 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                             pageText: window.Qisi.Utils.cleanRecognizedText(sourceFile.pageText || sourceFile.sourceText || ''),
                             sourceText: window.Qisi.Utils.cleanRecognizedText(sourceFile.sourceText || sourceFile.pageText || ''),
                             recognitionRaw: item,
+                            contentIntegrity: sourceFile.fileType === 'pdf'
+                                ? {
+                                    version: 'pdf-math-region-r1',
+                                    issues: [],
+                                    sourceEvidence: {
+                                        stem: String(rawStem || ''),
+                                        options: rawOptions.map(option => String(option || '')),
+                                        answer: String(rawAnswer || ''),
+                                        solution: String(rawSolution || '')
+                                    }
+                                }
+                                : (item.contentIntegrity || null),
                             sourceTrace: {
                                 sourceFileId: sourceFile.id || '',
                                 sourceFileName: sourceFile.filename || '',
@@ -6854,7 +6888,10 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                                 rawText: pageMarkdown || rawText,
                                 pageText: pageMarkdown || rawText,
                                 rawModelText: rawText
-                            })).filter(item => item.question && item.solution) : [];
+                            })).filter(item => item.question && item.solution).map(item => ({
+                                ...item,
+                                solution: window.Qisi.PdfContentIntegrity.normalizeMathContent(item.solution).value
+                            })) : [];
 
                             let mergedQuestions = mergeAiQuestionsWithLocalMarkdown(questions, localMarkdownQuestions);
 
@@ -6869,6 +6906,10 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                             } else {
                                 console.log('[BATCH_COST][skip-page-repair]', `${activeRecognitionMode} 模式跳过页级视觉细节修复`);
                             }
+
+                            mergedQuestions = mergedQuestions.map(item =>
+                                window.Qisi.PdfContentIntegrity.normalizeQuestionItem(item)
+                            );
 
                             console.groupCollapsed(`[BATCH_DEBUG][page-merged] ${file.filename} 第${pageNo}页`);
                             console.table(mergedQuestions.map(q => ({
@@ -6923,33 +6964,47 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                 });
 
                 const cropDataUrlByBbox = async (dataUrl, bbox, padding = 8) => {
-                    if (!Array.isArray(bbox) || bbox.length !== 4 || bbox.some(v => !Number.isFinite(Number(v)))) return dataUrl;
+                    if (!dataUrl) {
+                        throw new Error('图片裁剪缺少来源页面图');
+                    }
                     const image = await loadImageElement(dataUrl);
                     const imageWidth = image.naturalWidth || image.width;
                     const imageHeight = image.naturalHeight || image.height;
-                    let [x1, y1, x2, y2] = bbox.map(Number);
-                    const maxCoord = Math.max(x1, y1, x2, y2);
-                    if (maxCoord <= 1000 && (imageWidth > 1200 || imageHeight > 1200)) {
-                        x1 = x1 / 1000 * imageWidth;
-                        x2 = x2 / 1000 * imageWidth;
-                        y1 = y1 / 1000 * imageHeight;
-                        y2 = y2 / 1000 * imageHeight;
+                    const crop = window.Qisi.PdfContentIntegrity?.toPixelCrop(
+                        bbox,
+                        {
+                            width: imageWidth,
+                            height: imageHeight,
+                            space: 'auto',
+                            padding
+                        }
+                    );
+
+                    if (!crop) {
+                        const error = new Error('图片区域坐标无效，已拒绝整页回退');
+                        error.code = 'PDF_FIGURE_CROP_INVALID';
+                        throw error;
                     }
-                    const left = Math.max(0, Math.min(x1, x2) - padding);
-                    const top = Math.max(0, Math.min(y1, y2) - padding);
-                    const right = Math.min(imageWidth, Math.max(x1, x2) + padding);
-                    const bottom = Math.min(imageHeight, Math.max(y1, y2) + padding);
-                    const width = Math.max(1, right - left);
-                    const height = Math.max(1, bottom - top);
+
                     const canvas = document.createElement('canvas');
-                    canvas.width = width;
-                    canvas.height = height;
+                    canvas.width = crop.width;
+                    canvas.height = crop.height;
                     const ctx = canvas.getContext('2d');
-                    ctx.drawImage(image, left, top, width, height, 0, 0, width, height);
+                    ctx.drawImage(
+                        image,
+                        crop.left,
+                        crop.top,
+                        crop.width,
+                        crop.height,
+                        0,
+                        0,
+                        crop.width,
+                        crop.height
+                    );
                     return canvas.toDataURL('image/jpeg', 0.92);
                 };
 
-                const bindRecognizedQuestionFigures = async (draft, draftImages, files, batchId) => {
+                const bindRecognizedQuestionFigures = async (draft, draftImages, files, batchId, allDrafts = []) => {
                     const figures = collectValidRecognizedFigures(draft);
 
                     if (!figures.length) {
@@ -6993,6 +7048,35 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                         ) || 1;
 
                     const boundRefs = [];
+                    const candidateSeeds = (allDrafts || []).map(candidate => ({
+                        id: candidate.id,
+                        question: candidate.questionNumber || candidate.question || candidate.order || '',
+                        sourceFileId:
+                            candidate.sourceQuestionFileId ||
+                            candidate.sourceFileId ||
+                            candidate.sourceTrace?.sourceFileId ||
+                            '',
+                        page: Number(
+                            candidate.sourcePage ||
+                            candidate.pageIndex ||
+                            candidate.sourceTrace?.sourcePage ||
+                            candidate.sourceTrace?.pageIndex ||
+                            0
+                        ) || 0,
+                        normalizedBbox:
+                            candidate.normalizedQuestionBbox ||
+                            window.Qisi.PdfContentIntegrity?.normalizeBbox(
+                                candidate.sourceBbox || candidate.question_bbox || [],
+                                { space: 'auto' }
+                            ) || []
+                    })).filter(candidate =>
+                        candidate.normalizedBbox.length === 4 &&
+                        String(candidate.sourceFileId || '') === String(sourceFileId || '')
+                    );
+                    const candidateRegions =
+                        window.Qisi.PdfContentIntegrity?.deriveQuestionOwnershipRegions(
+                            candidateSeeds
+                        ) || candidateSeeds;
 
                     for (let index = 0; index < figures.length; index += 1) {
                         const figure = figures[index];
@@ -7001,10 +7085,45 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                             continue;
                         }
 
+                        const normalizedFigureBbox = window.Qisi.PdfContentIntegrity?.normalizeBbox(
+                            figure.image_bbox,
+                            { space: 'auto' }
+                        ) || [];
+                        const ownerDecision = window.Qisi.PdfContentIntegrity?.assignFigureOwner({
+                            figure: {
+                                page: sourcePage,
+                                normalizedBbox: normalizedFigureBbox
+                            },
+                            candidates: candidateRegions,
+                            minOverlap: 0.9
+                        });
+                        const contamination = window.Qisi.PdfContentIntegrity?.detectCropContamination({
+                            cropBbox: normalizedFigureBbox,
+                            ownerId: draft.id,
+                            page: sourcePage,
+                            regions: candidateRegions
+                        });
+
+                        if (
+                            !ownerDecision ||
+                            ownerDecision.status !== 'assigned' ||
+                            String(ownerDecision.owner?.id || '') !== String(draft.id || '') ||
+                            contamination?.contaminated
+                        ) {
+                            draft.manualReviewRequired = true;
+                            window.Qisi.Utils.addWarningOnce(
+                                draft,
+                                contamination?.contaminated
+                                    ? '题图裁剪与其他题目区域重叠，已拒绝自动绑定。'
+                                    : '题图归属无法唯一证明，已拒绝按最近题号自动绑定。'
+                            );
+                            continue;
+                        }
+
                         let croppedUrl = '';
 
                         try {
-                            croppedUrl = await cropDataUrlByBbox(sourceUrl, figure.image_bbox, 12);
+                            croppedUrl = await cropDataUrlByBbox(sourceUrl, normalizedFigureBbox, 12);
                         } catch (error) {
                             console.warn('[BATCH_IMAGE][figure-crop-failed]', {
                                 questionNumber: draft.questionNumber || draft.order,
@@ -7034,7 +7153,7 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                             url: croppedUrl,
                             sourceFileId,
                             sourcePage,
-                            bbox: figure.image_bbox,
+                            bbox: normalizedFigureBbox,
                             confidence: imageConfidence,
                             description: `自动裁剪题图：${description}`,
                             source: 'auto-figure-crop',
@@ -7612,6 +7731,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                 const collectVisualSupportPageEvidence = async ({
                     file,
                     pages = [],
+                    textLayerPages = [],
                     onPageProgress = null
                 }) => {
                     const evidence = {
@@ -7641,7 +7761,14 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                             page?.imageUrl ||
                             page?.sourcePageImage ||
                             ''
-                        ).trim()
+                        ).trim(),
+
+                        pdfTextLayer: String(
+                            (textLayerPages || []).find(textPage =>
+                                Number(textPage?.pageNo || textPage?.page || 0) ===
+                                Number(page?.pageNo || page?.sourcePage || index + 1)
+                            )?.text || ''
+                        )
                     }));
 
                     for (
@@ -7707,7 +7834,9 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                                 pageNo,
                                 imageUrl:
                                     page.imageUrl,
-                                rawText
+                                rawText,
+                                pdfTextLayer:
+                                    page.pdfTextLayer
                             });
 
                             const localResult =
@@ -8821,6 +8950,8 @@ ${rawBlock}
                 const recognizeVisualSupportFromPreparedPages = async ({
                     file,
                     pages = [],
+                    layouts = [],
+                    textLayerPages = [],
                     onPageProgress = null,
                     strict = false,
                     expectedQuestionNumbers = [],
@@ -8844,6 +8975,7 @@ ${rawBlock}
                         await collectVisualSupportPageEvidence({
                             file,
                             pages,
+                            textLayerPages,
                             onPageProgress
                         });
 
@@ -8909,6 +9041,58 @@ ${rawBlock}
                         );
                     }
 
+                    const explicitAnswerEvidence =
+                        window.Qisi.PdfContentIntegrity.extractExplicitAnswerEvidence(
+                            (evidence.pages || []).map(page => ({
+                                pageNo: page.pageNo,
+                                text: page.pdfTextLayer || ''
+                            })),
+                            { expectedQuestionNumbers }
+                        );
+                    const reconciledAnswers =
+                        window.Qisi.PdfContentIntegrity.reconcileAnswersWithExplicitEvidence(
+                            structured.answers || [],
+                            explicitAnswerEvidence
+                        );
+                    structured.answers = reconciledAnswers.items;
+                    structured.solutions = (structured.solutions || []).map(item => ({
+                        ...item,
+                        solution: window.Qisi.PdfContentIntegrity.normalizeMathContent(
+                            item.solution || ''
+                        ).value
+                    }));
+                    const supportFigureBinding =
+                        window.Qisi.PdfContentIntegrity.bindPlacedFiguresToSolutions({
+                            solutions: structured.solutions,
+                            layouts,
+                            pageImages: evidence.pageImages || [],
+                            expectedQuestionNumbers,
+                            minOverlap: 0.9
+                        });
+                    structured.solutions = supportFigureBinding.solutions;
+
+                    console.info('[BATCH_PDF_SUPPORT_FIGURE_BINDING]', {
+                        filename: file.filename,
+                        decisions: supportFigureBinding.decisions,
+                        rejected: supportFigureBinding.rejected.map(item => ({
+                            question: item.question || '',
+                            page: item.figure?.page || 0,
+                            reason: item.reason || item.code || ''
+                        })),
+                        regionWarnings: supportFigureBinding.regionReport?.warnings || []
+                    });
+
+                    console.log('[BATCH_PDF_EXPLICIT_ANSWER_EVIDENCE]', {
+                        filename: file.filename,
+                        accepted: explicitAnswerEvidence.accepted.map(item => ({
+                            question: item.question,
+                            answer: item.answer,
+                            pageNo: item.pageNo
+                        })),
+                        ambiguous: explicitAnswerEvidence.ambiguous.map(item => item.question),
+                        decisions: reconciledAnswers.decisions
+                    });
+
                     const result = {
                         questions: [],
                         answers:
@@ -8922,7 +9106,17 @@ ${rawBlock}
                         pageImages:
                             evidence.pageImages || [],
                         failedPages:
-                            evidence.failedPages || []
+                            evidence.failedPages || [],
+                        explicitAnswerEvidence: {
+                            accepted: explicitAnswerEvidence.accepted,
+                            ambiguous: explicitAnswerEvidence.ambiguous,
+                            decisions: reconciledAnswers.decisions
+                        },
+                        supportFigureBinding: {
+                            decisions: supportFigureBinding.decisions,
+                            rejected: supportFigureBinding.rejected,
+                            regionWarnings: supportFigureBinding.regionReport?.warnings || []
+                        }
                     };
 
                     console.log(
@@ -9018,15 +9212,34 @@ ${rawBlock}
 
                     const hasQuestionRole = batchHasQuestionRole(file);
                     const hasAnswerOrSolutionRole = batchHasAnswerRole(file) || batchHasSolutionRole(file);
+                    let layouts = [];
+
+                    if (recognitionMode === 'standard') {
+                        try {
+                            layouts = await extractPdfLayoutWithPdfJs(file);
+                        } catch (error) {
+                            console.warn('[BATCH_PDF_TEXT_LAYER][layout-unavailable]', {
+                                filename: file.filename,
+                                message: error?.message || String(error)
+                            });
+                        }
+                    }
 
                     if (
                         recognitionMode === 'standard' &&
                         !hasQuestionRole &&
                         hasAnswerOrSolutionRole
                     ) {
+                        const textLayerPages = (layouts || []).map(page => ({
+                            pageNo: page.pageNo,
+                            text: (page.lines || []).map(line => line.text || '').join('\n')
+                        }));
+
                         return await recognizeVisualSupportFromPreparedPages({
                             file,
                             pages,
+                            layouts,
+                            textLayerPages,
                             onPageProgress,
                             expectedQuestionNumbers
                         });
@@ -9154,6 +9367,23 @@ ${rawBlock}
                     }]);
                     console.table(result.failedPages);
                     console.groupEnd();
+
+                    if (recognitionMode === 'standard' && hasQuestionRole && layouts.length) {
+                        const optionRepair =
+                            window.Qisi.PdfContentIntegrity.repairMissingOptionsFromPdfText({
+                                questions: result.questions,
+                                layouts,
+                                expectedQuestionNumbers
+                            });
+                        result.questions = optionRepair.questions.map(item =>
+                            window.Qisi.PdfContentIntegrity.normalizeQuestionItem(item)
+                        );
+                        console.info('[BATCH_PDF_TEXT_OPTION_EVIDENCE]', {
+                            filename: file.filename,
+                            decisions: optionRepair.decisions,
+                            rejected: optionRepair.rejected
+                        });
+                    }
 
                     return result;
                 };
@@ -10150,6 +10380,7 @@ const normalizeRecognizedFigureDescriptor = (raw = {}) => {
                     return (
                         source === 'auto-figure-crop' ||
                         source === 'pdf-layout-figure-crop' ||
+                        source === 'pdf-analysis-figure-crop' ||
                         source === 'manual-crop' ||
                         source === 'uploaded-question-image' ||
                         source === 'docx-inline-figure' ||
@@ -10749,28 +10980,30 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                                 }
                             );
 
-                            const items = processed.map(q => ({
-                                ...q,
-                                type: q.type || '单选题',
-                                sourceFileId: file.id,
-                                sourceFileName: file.filename || '',
-                                sourcePage: pageNo,
-                                sourcePageImage: imageUrl,
-                                sourceTrace: {
-                                    ...(q.sourceTrace || {}),
-                                    source: 'strict-visual-page-qwen',
-                                    model,
+                            const items = processed.map(q =>
+                                window.Qisi.PdfContentIntegrity.normalizeQuestionItem({
+                                    ...q,
+                                    type: q.type || '单选题',
                                     sourceFileId: file.id,
                                     sourceFileName: file.filename || '',
                                     sourcePage: pageNo,
-                                    pageIndex: pageNo,
-                                    sourcePageImage: imageUrl
-                                },
-                                warnings: [
-                                    ...(q.warnings || []),
-                                    '本题由整页视觉识别生成，请核对题型、题干和 LaTeX 公式。'
-                                ]
-                            }));
+                                    sourcePageImage: imageUrl,
+                                    sourceTrace: {
+                                        ...(q.sourceTrace || {}),
+                                        source: 'strict-visual-page-qwen',
+                                        model,
+                                        sourceFileId: file.id,
+                                        sourceFileName: file.filename || '',
+                                        sourcePage: pageNo,
+                                        pageIndex: pageNo,
+                                        sourcePageImage: imageUrl
+                                    },
+                                    warnings: [
+                                        ...(q.warnings || []),
+                                        '本题由整页视觉识别生成，请核对题型、题干和 LaTeX 公式。'
+                                    ]
+                                })
+                            );
 
                             console.groupCollapsed('[BATCH_DEBUG][strict-postprocess-result]');
                             console.log({
@@ -11157,6 +11390,34 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
 
                     let items = mergeStrictQuestionItemsByNumber(pageResults.flat().filter(Boolean));
 
+                    if (file.fileType === 'pdf') {
+                        try {
+                            const layouts = await extractPdfLayoutWithPdfJs(file);
+                            const expectedQuestionNumbers = expected
+                                ? Array.from({ length: expected }, (_, index) => String(index + 1))
+                                : items.map(item => item.questionNumber || item.question || '').filter(Boolean);
+                            const optionRepair =
+                                window.Qisi.PdfContentIntegrity.repairMissingOptionsFromPdfText({
+                                    questions: items,
+                                    layouts,
+                                    expectedQuestionNumbers
+                                });
+                            items = optionRepair.questions.map(item =>
+                                window.Qisi.PdfContentIntegrity.normalizeQuestionItem(item)
+                            );
+                            console.info('[BATCH_PDF_TEXT_OPTION_EVIDENCE]', {
+                                filename: file.filename,
+                                decisions: optionRepair.decisions,
+                                rejected: optionRepair.rejected
+                            });
+                        } catch (error) {
+                            console.warn('[BATCH_PDF_TEXT_OPTION_EVIDENCE][unavailable]', {
+                                filename: file.filename,
+                                message: error?.message || String(error)
+                            });
+                        }
+                    }
+
                     console.log('[BATCH_TIME][strict-initial-recognition]', {
                         filename: file.filename,
                         pageCount: pages.length,
@@ -11299,6 +11560,10 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                             confidence: Math.min(Number(item.confidence || 0.78), 0.65)
                         };
                     });
+
+                    items = items.map(item =>
+                        window.Qisi.PdfContentIntegrity.normalizeQuestionItem(item)
+                    );
 
                     console.log('[BATCH_DEBUG][strict-summary]', {
                         filename: file.filename,
@@ -14120,6 +14385,21 @@ ${source}`;
                             warnings.push(optionIssue);
                             mergeWarnings.push('missing_options');
                         }
+                        const normalizedPdfContent =
+                            item.contentIntegrity?.version === 'pdf-math-region-r1'
+                                ? window.Qisi.PdfContentIntegrity.normalizeQuestionItem({
+                                    ...item,
+                                    stem: cleanStem,
+                                    options: cleanOptions,
+                                    answer: cleanAnswer,
+                                    solution: cleanSolution,
+                                    warnings
+                                })
+                                : null;
+                        const answerEvidence =
+                            answer?.answerEvidence ||
+                            answer?.sourceTrace?.answerEvidence ||
+                            null;
                         const sourceTrace = item.sourceTrace || {};
                         const itemSourcePageImage = item.sourcePageImage || sourceTrace.sourcePageImage || '';
                         const inlineImages = mergeImageListsById(item.images || [], item.recognizedImages || []);
@@ -14184,13 +14464,16 @@ ${source}`;
                             tags: Array.isArray(meta.tags) ? meta.tags : [],
                             systemKnowledge,
                             personalKnowledge,
-                            stem: cleanStem,
-                            options: cleanOptions,
-                            answer: cleanAnswer,
-                            solution: cleanSolution,
+                            stem: normalizedPdfContent?.stem || cleanStem,
+                            options: normalizedPdfContent?.options || cleanOptions,
+                            answer: normalizedPdfContent?.answer || cleanAnswer,
+                            solution: normalizedPdfContent?.solution || cleanSolution,
                             images: inlineImages,
                             richBlocks: Array.isArray(item.richBlocks) ? item.richBlocks : [],
                             solutionRichBlocks: Array.isArray(solution?.richBlocks) ? solution.richBlocks : [],
+                            richFields: normalizedPdfContent?.richFields || item.richFields || null,
+                            contentIntegrity: normalizedPdfContent?.contentIntegrity || item.contentIntegrity || null,
+                            answerEvidence,
                             recognizedImages: Array.isArray(item.recognizedImages)
                                 ? item.recognizedImages
                                 : (Array.isArray(item.images) ? item.images : []),
@@ -14243,9 +14526,11 @@ ${source}`;
                                 docxFullText: itemDocxFullText,
                                 pageTextOriginal: itemPageTextOriginal,
                                 sourceTextOriginal: itemSourceTextOriginal,
+                                answerEvidence,
                                 imageIds: mergedImageIds
                             },
                             sourceBbox: item.question_bbox || [],
+                            normalizedQuestionBbox: item.normalizedQuestionBbox || [],
                             createdAt: now,
                             updatedAt: now
                         };
@@ -17740,6 +18025,8 @@ ${source}`;
                                                             parserPdfSupportGate?.failClosed
                                                                 ? []
                                                                 : parserPdfSupportGate?.solutions || [],
+                                                        explicitAnswerEvidence:
+                                                            pageResult.explicitAnswerEvidence?.accepted || [],
                                                         legacyFusedQuestionNumbers:
                                                             legacyPdfSupportGate.fusedQuestionNumbers || [],
                                                         parserFusedQuestionNumbers:
@@ -17754,11 +18041,49 @@ ${source}`;
                                                     warnings: [],
                                                     fieldDecisions: []
                                                 };
+                                            const supportVisualRowsByQuestion = new Map();
+                                            (pageResult.solutions || []).forEach(item => {
+                                                if (!Array.isArray(item?.images) || !item.images.length) return;
+                                                const questionNumber = normalizeQuestionKey(
+                                                    item?.question ||
+                                                    item?.questionNumber ||
+                                                    item?.no ||
+                                                    ''
+                                                );
+                                                if (!questionNumber) return;
+                                                if (!supportVisualRowsByQuestion.has(questionNumber)) {
+                                                    supportVisualRowsByQuestion.set(questionNumber, []);
+                                                }
+                                                supportVisualRowsByQuestion.get(questionNumber).push(item);
+                                            });
+                                            const effectiveSolutionsWithVisualEvidence =
+                                                (fieldControlledWrite.effectiveSolutionItems || []).map(item => {
+                                                    const questionNumber = normalizeQuestionKey(
+                                                        item?.question ||
+                                                        item?.questionNumber ||
+                                                        item?.no ||
+                                                        ''
+                                                    );
+                                                    const visualRows = supportVisualRowsByQuestion.get(questionNumber) || [];
+                                                    if (visualRows.length !== 1) return item;
+                                                    const visual = visualRows[0];
+                                                    return {
+                                                        ...item,
+                                                        images: visual.images,
+                                                        sourcePage: visual.sourcePage,
+                                                        sourcePageImage: visual.sourcePageImage,
+                                                        sourceTrace: {
+                                                            ...(item.sourceTrace || {}),
+                                                            ...(visual.sourceTrace || {}),
+                                                            figureEvidenceQuestion: questionNumber
+                                                        }
+                                                    };
+                                                });
                                             const pdfSupportGate = {
                                                 answers:
                                                     fieldControlledWrite.effectiveAnswerItems || [],
                                                 solutions:
-                                                    fieldControlledWrite.effectiveSolutionItems || [],
+                                                    effectiveSolutionsWithVisualEvidence,
                                                 failClosed:
                                                     legacyPdfSupportGate.failClosed &&
                                                     (!parserPdfSupportGate || parserPdfSupportGate.failClosed),
@@ -18674,13 +18999,35 @@ ${source}`;
                                     const imageId = makeBatchId('dimg');
                                     const imageConfidence = Number(recognizedImage.image_confidence || draft.confidence || 0.78);
                                     const imageStatus = imageConfidence >= 0.9 ? 'bound' : (imageConfidence >= 0.75 ? 'need_confirm' : 'low_confidence');
-                                    let croppedUrl = draft.solutionPageImage;
+                                    const solutionImagePage = Number(
+                                        recognizedImage.sourcePage || draft.solutionSourcePage || 0
+                                    ) || 0;
+                                    let croppedUrl = '';
                                     try {
                                         croppedUrl = await cropDataUrlByBbox(draft.solutionPageImage, bbox);
                                     } catch (error) {
-                                        console.warn('解析图片裁剪失败，保留页面图', error);
+                                        console.warn('解析图片裁剪失败，已拒绝整页回退', error);
+                                        window.Qisi.Utils.addWarningOnce(
+                                            draft,
+                                            '解析图片裁剪失败，已拒绝整页回退，请人工复核。'
+                                        );
+                                        continue;
                                     }
-                                    boundRefs.push({ id: imageId, url: croppedUrl, align: 'center' });
+                                    boundRefs.push({
+                                        id: imageId,
+                                        filename: `solution_q${draft.questionNumber || draft.order}_${idx + 1}.jpg`,
+                                        name: `solution_q${draft.questionNumber || draft.order}_${idx + 1}.jpg`,
+                                        url: croppedUrl,
+                                        align: 'center',
+                                        source: 'pdf-analysis-figure-crop',
+                                        sourcePage: solutionImagePage,
+                                        confidence: imageConfidence,
+                                        status: imageStatus,
+                                        description: `自动裁剪解析图：${
+                                            window.Qisi.Utils.cleanRecognizedText(recognizedImage.image_description) || '解析图片'
+                                        }`,
+                                        displayable: true
+                                    });
                                     draftImages.push({
                                         id: imageId,
                                         batchId,
@@ -18688,11 +19035,15 @@ ${source}`;
                                         filename: `solution_q${draft.questionNumber || draft.order}_${idx + 1}.jpg`,
                                         url: croppedUrl,
                                         sourceFileId: draft.sourceSolutionFileId,
-                                        sourcePage: draft.solutionSourcePage || 0,
+                                        sourcePage: solutionImagePage,
                                         bbox,
                                         confidence: imageConfidence,
-                                        description: window.Qisi.Utils.cleanRecognizedText(recognizedImage.image_description) || '解析图片',
+                                        description: `自动裁剪解析图：${
+                                            window.Qisi.Utils.cleanRecognizedText(recognizedImage.image_description) || '解析图片'
+                                        }`,
+                                        source: 'pdf-analysis-figure-crop',
                                         status: imageStatus,
+                                        displayable: true,
                                         createdAt: Date.now()
                                     });
                                 }
@@ -18704,7 +19055,7 @@ ${source}`;
                                     if (draft.imageReviewStatus !== 'confirmed') draft.warnings.push('该题解析图片需要确认后才能入库。');
                                 }
                             }
-                            await bindRecognizedQuestionFigures(draft, draftImages, files, batchId);
+                            await bindRecognizedQuestionFigures(draft, draftImages, files, batchId, drafts);
                         }
                         for (const file of files.filter(item => item.fileType === 'docx')) {
                             const docxRefs = docxEmbeddedImageCache.get(file.id) || [];

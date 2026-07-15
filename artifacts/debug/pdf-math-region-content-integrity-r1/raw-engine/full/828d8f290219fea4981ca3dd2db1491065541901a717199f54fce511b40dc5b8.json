@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "pdf-engine-replay-r1",
+  "capturedAt": "2026-07-15T15:48:45.343Z",
+  "metadata": {
+    "cacheKey": "828d8f290219fea4981ca3dd2db1491065541901a717199f54fce511b40dc5b8",
+    "sourceFileSha256": "48549EADEEE80340D3F58062762B724F56471C903F5EE0C3BDF2DBEC25762C7F",
+    "page": 4,
+    "renderDpi": 144,
+    "model": "qwen-vl-ocr-latest",
+    "promptVersion": "pdf-math-region-r1",
+    "promptSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "imageSha256": [
+      "23faa152a4eb26c2a396c80fa27e4d2e7ee67ca9db864f4bec3035b2d68354c3"
+    ],
+    "requestSchemaVersion": "qisi-ai-proxy-r1",
+    "endpoint": "/api/ai/ocr",
+    "request": {
+      "model": "qwen-vl-ocr-latest",
+      "input": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "image": "[redacted-image sha256=23faa152a4eb26c2a396c80fa27e4d2e7ee67ca9db864f4bec3035b2d68354c3 bytes=175515]",
+                "min_pixels": 3072,
+                "max_pixels": 30720000,
+                "enable_rotate": false
+              }
+            ]
+          }
+        ]
+      },
+      "parameters": {
+        "max_tokens": 8192,
+        "ocr_options": {
+          "task": "document_parsing"
+        }
+      }
+    }
+  },
+  "responseSha256": "82cacda5d35a96b11b7b907b26b33b0adaf8d3683edb852e086bafc756571c30",
+  "response": {
+    "output": {
+      "choices": [
+        {
+          "finish_reason": "stop",
+          "message": {
+            "content": [
+              {
+                "ocr_result": {
+                  "processed_text": "```latex\n\\begin{enumerate}\n    \\item \\textbf{【答案】6}\n    \\textbf{【详解】}以A为原点，$AB$，$AD$所在直线分别为$x$，$y$轴建立平面直角坐标系，则$A(0,0)$，$B(3,0)$，$C(2,\\sqrt{3})$，$D(0,\\sqrt{3})$，设$P(x,0)$，其中$0 \\leq x \\leq 3$，\n    \\begin{equation}\n    \\text{则} \\overline{CP} = (x-2,-\\sqrt{3})，\\overline{DP} = (x,-\\sqrt{3})，\\therefore \\overline{CP} \\cdot \\overline{DP} = x(x-2)+3 = x^2-2x+3 = (x-1)^2+2，\n    \\end{equation}\n    当$x=3$时，$\\overline{CP} \\cdot \\overline{DP}$有最大值6。\n    \\item \\textbf{【答案】$\\frac{\\sqrt{2}+1}{2}$}\n    \\textbf{【解答】}解：由题意，设$\\triangle ABC$中角$A$，$B$，$C$所对应的边长度分别为$a$，$b$，$c$，则有$b=2$，由$\\frac{3}{\\tan A} + \\frac{2}{\\tan B} = 1$，可得$\\frac{3\\cos A}{\\sin A} + \\frac{2\\cos B}{\\sin B} = 1$，\n    整理得$3\\cos A\\sin B + 2\\sin A\\cos B = \\sin A\\sin B$，$\\therefore \\cos A\\sin B + 2\\sin(A+B) = \\sin A\\sin B$，\n    $\\therefore A + B + C = \\pi$，$\\therefore \\cos A\\sin B + 2\\sin C = \\sin B\\sin A$，$\\therefore 2\\sin C = \\sin B(\\sin A - \\cos A)$，\n    由正弦定理可得$2c = b(\\sin A - \\cos A) = 2(\\sin A - \\cos A)$，$\\therefore c = \\sin A - \\cos A > 0$，则$A > \\frac{\\pi}{4}$，\n    故$\\triangle ABC$的面积$S = \\frac{1}{2}bc\\sin A = \\frac{1}{2} \\cdot 2 \\cdot (\\sin A - \\cos A)\\sin A = \\sin A(\\sin A - \\cos A)$\n    $= \\sin^2 A - \\sin A\\cos A = \\frac{1-\\cos 2A}{2} - \\frac{1}{2}\\sin 2A = \\frac{1}{2} - \\frac{\\sqrt{2}}{2}\\sin(2A + \\frac{\\pi}{4})$，\n    $\\because A \\in (\\frac{\\pi}{4},\\pi)$，$\\therefore 2A + \\frac{\\pi}{4} \\in (\\frac{3\\pi}{4},\\frac{9\\pi}{4})$，当$A = \\frac{5\\pi}{8}$时，$\\triangle ABC$的面积$S$取得最大值$\\frac{1+\\sqrt{2}}{2}$。\n\\end{enumerate}\n```"
+                },
+                "text": "```latex\n\\begin{enumerate}\n    \\item \\textbf{【答案】6}\n    \\textbf{【详解】}以A为原点，$AB$，$AD$所在直线分别为$x$，$y$轴建立平面直角坐标系，则$A(0,0)$，$B(3,0)$，$C(2,\\sqrt{3})$，$D(0,\\sqrt{3})$，设$P(x,0)$，其中$0 \\leq x \\leq 3$，\n    \\begin{equation}\n    \\text{则} \\overline{CP} = (x-2,-\\sqrt{3})，\\overline{DP} = (x,-\\sqrt{3})，\\therefore \\overline{CP} \\cdot \\overline{DP} = x(x-2)+3 = x^2-2x+3 = (x-1)^2+2，\n    \\end{equation}\n    当$x=3$时，$\\overline{CP} \\cdot \\overline{DP}$有最大值6。\n    \\item \\textbf{【答案】$\\frac{\\sqrt{2}+1}{2}$}\n    \\textbf{【解答】}解：由题意，设$\\triangle ABC$中角$A$，$B$，$C$所对应的边长度分别为$a$，$b$，$c$，则有$b=2$，由$\\frac{3}{\\tan A} + \\frac{2}{\\tan B} = 1$，可得$\\frac{3\\cos A}{\\sin A} + \\frac{2\\cos B}{\\sin B} = 1$，\n    整理得$3\\cos A\\sin B + 2\\sin A\\cos B = \\sin A\\sin B$，$\\therefore \\cos A\\sin B + 2\\sin(A+B) = \\sin A\\sin B$，\n    $\\therefore A + B + C = \\pi$，$\\therefore \\cos A\\sin B + 2\\sin C = \\sin B\\sin A$，$\\therefore 2\\sin C = \\sin B(\\sin A - \\cos A)$，\n    由正弦定理可得$2c = b(\\sin A - \\cos A) = 2(\\sin A - \\cos A)$，$\\therefore c = \\sin A - \\cos A > 0$，则$A > \\frac{\\pi}{4}$，\n    故$\\triangle ABC$的面积$S = \\frac{1}{2}bc\\sin A = \\frac{1}{2} \\cdot 2 \\cdot (\\sin A - \\cos A)\\sin A = \\sin A(\\sin A - \\cos A)$\n    $= \\sin^2 A - \\sin A\\cos A = \\frac{1-\\cos 2A}{2} - \\frac{1}{2}\\sin 2A = \\frac{1}{2} - \\frac{\\sqrt{2}}{2}\\sin(2A + \\frac{\\pi}{4})$，\n    $\\because A \\in (\\frac{\\pi}{4},\\pi)$，$\\therefore 2A + \\frac{\\pi}{4} \\in (\\frac{3\\pi}{4},\\frac{9\\pi}{4})$，当$A = \\frac{5\\pi}{8}$时，$\\triangle ABC$的面积$S$取得最大值$\\frac{1+\\sqrt{2}}{2}$。\n\\end{enumerate}\n```"
+              }
+            ],
+            "reasoning_content": "",
+            "role": "assistant"
+          }
+        }
+      ]
+    },
+    "usage": {
+      "image_tokens": 1963,
+      "input_tokens": 2018,
+      "input_tokens_details": {
+        "image_tokens": 1963,
+        "text_tokens": 55
+      },
+      "output_tokens": 791,
+      "output_tokens_details": {
+        "text_tokens": 791
+      },
+      "total_tokens": 2809
+    },
+    "request_id": "37328ed2-1cb5-9795-9750-85e99dd1daea"
+  }
+}
