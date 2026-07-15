@@ -649,7 +649,14 @@
                 const activeDraftPreviewImages = computed(() => {
                     const q = activeDraftQuestion.value;
                     if (!q) return [];
-                    return mergeImageListsById(q.images || [], activeDraftRealQuestionImages.value || []);
+                    const questionImages = mergeImageListsById(
+                        q.images || [],
+                        activeDraftRealQuestionImages.value || []
+                    );
+                    return mergeImageListsById(
+                        questionImages,
+                        (q.recognizedSolutionImages || []).filter(isValidQuestionPreviewImage)
+                    );
                 });
                 const toggleImagePositionMenu = (imageId = '') => {
                     const id = String(imageId || '').trim();
@@ -14182,6 +14189,8 @@ ${source}`;
                             answer: cleanAnswer,
                             solution: cleanSolution,
                             images: inlineImages,
+                            richBlocks: Array.isArray(item.richBlocks) ? item.richBlocks : [],
+                            solutionRichBlocks: Array.isArray(solution?.richBlocks) ? solution.richBlocks : [],
                             recognizedImages: Array.isArray(item.recognizedImages)
                                 ? item.recognizedImages
                                 : (Array.isArray(item.images) ? item.images : []),
@@ -18249,31 +18258,36 @@ ${source}`;
                                     }
                                     questionItems.push(...(structuredItems.length ? structuredItems : parseQuestionItemsFromText(text, file, false)));
                                 }
-                                if (!usedVisualRecognition && text && file.fileType !== 'pdf' && batchHasAnswerRole(file) && !isFullRole) {
+                                if (!usedVisualRecognition && (text || file.fileType === 'docx') && file.fileType !== 'pdf' && batchHasAnswerRole(file) && !isFullRole) {
                                     let supportTextForParsing = text;
+                                    let parsed;
                                     if (
                                         file.fileType === 'docx' &&
-                                        docxSourceRoute?.routePolicyDecision === 'deterministic-docx-support' &&
-                                        authoritativeQuestionContract?.authoritative
+                                        docxSourceRoute?.routePolicyDecision === 'deterministic-docx-support'
                                     ) {
-                                        const markerRepair = window.Qisi.DocxPipeline.repairDocxSupportQuestionMarkerArtifacts(
-                                            text,
-                                            authoritativeQuestionContract.questionNumbers
-                                        );
-                                        supportTextForParsing = markerRepair.text;
-                                        if (markerRepair.repairs.length) {
-                                            await db.draftImportFiles.update(file.id, {
-                                                supportMarkerRepairs: markerRepair.repairs,
-                                                updatedAt: Date.now()
-                                            });
-                                            console.log('[BATCH_ROUTE][docx-support-marker-repair]', {
-                                                filename: file.filename,
-                                                repairs: markerRepair.repairs
-                                            });
+                                        if (!window.QisiBatchImporter?.parseDocxSupportFile) {
+                                            throw new Error('批量录题 DOCX 答案模块未加载。');
                                         }
+                                        const supportResult = await window.QisiBatchImporter.parseDocxSupportFile(file);
+                                        parsed = {
+                                            answers: supportResult.answers || [],
+                                            solutions: supportResult.solutions || []
+                                        };
+                                        await db.draftImportFiles.update(file.id, {
+                                            supportContentOwner: 'qisi-docx-support-content',
+                                            supportContentDebug: supportResult.debug || {},
+                                            updatedAt: Date.now()
+                                        });
+                                        console.log('[BATCH_ROUTE][docx-support-rich-content]', {
+                                            filename: file.filename,
+                                            answerCount: parsed.answers.length,
+                                            solutionCount: parsed.solutions.length
+                                        });
                                     }
-                                    let parsed = mergeAnswerSolutionResults(parseAnswerAndSolutionItemsFromText(supportTextForParsing, file), visualAnswerResult);
-                                    if (allowDocxTextAi) {
+                                    if (!parsed) {
+                                        parsed = mergeAnswerSolutionResults(parseAnswerAndSolutionItemsFromText(supportTextForParsing, file), visualAnswerResult);
+                                    }
+                                    if (allowDocxTextAi && file.fileType !== 'docx') {
                                         try {
                                             parsed = mergeAnswerSolutionResults(parsed, await recognizeAnswerSolutionWithQwen(text, file));
                                         } catch (error) {

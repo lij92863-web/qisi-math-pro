@@ -226,6 +226,7 @@
                 sourceFileId: draft?.sourceFileId,
                 sourceFileName: draft?.sourceFileName,
                 sourcePage: draft?.sourcePage || 1,
+                richBlocks: Array.isArray(draft?.richBlocks) ? draft.richBlocks : [],
                 sourceTrace: {
                     ...(draft?.sourceTrace || {}),
                     imageIds: images.map(img => img.id)

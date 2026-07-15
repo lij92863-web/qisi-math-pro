@@ -17,7 +17,7 @@
         [0x00b1, '\\pm '], [0x00d7, '\\times '], [0x00f7, '\\div '], [0x03bb, '\\lambda '],
         [0x03c0, '\\pi '], [0x2208, '\\in '], [0x2212, '-'], [0x2229, '\\cap '],
         [0x222a, '\\cup '], [0x2260, '\\ne '], [0x2264, '\\le '], [0x2265, '\\ge '],
-        [0x2286, '\\subseteq '], [0x25b3, '\\triangle ']
+        [0x2286, '\\subseteq '], [0x22c5, '\\cdot '], [0x25b3, '\\triangle ']
     ]);
 
     class Cursor {
@@ -116,10 +116,29 @@
             cursor.diagnostics.push(`unsupported-template-${selector}`);
             return '';
         };
+        if (selector >= 0 && selector <= 8) {
+            const fences = [
+                ['\\langle', '\\rangle'], ['(', ')'], ['\\{', '\\}'], ['[', ']'],
+                ['|', '|'], ['\\|', '\\|'], ['\\lfloor', '\\rfloor'], ['\\lceil', '\\rceil'], ['[', ']']
+            ][selector];
+            const left = variation & 1 ? fences[0] : '.';
+            const right = variation & 2 ? fences[1] : '.';
+            return `\\left${left}${slots[0] || ''}\\right${right}`;
+        }
         if (selector === 10) return variation & 1 ? `\\sqrt[${slots[0] || ''}]{${slots[1] || ''}}` : `\\sqrt{${slots[0] || ''}}`;
         if (selector === 11) return `\\frac{${slots[0] || ''}}{${slots[1] || ''}}`;
         if (selector === 12) return `\\underline{${slots[0] || ''}}`;
         if (selector === 13) return `\\overline{${slots[0] || ''}}`;
+        if (selector === 14) return variation & 0x10
+            ? `\\overleftarrow{${slots[0] || ''}}`
+            : `\\overrightarrow{${slots[0] || ''}}`;
+        if (selector === 23) {
+            if (/^\\overrightarrow\{\}$/.test(slots[2] || '')) return `\\overrightarrow{${slots[0] || ''}}`;
+            if (/^\\overleftarrow\{\}$/.test(slots[2] || '')) return `\\overleftarrow{${slots[0] || ''}}`;
+            const lower = slots[1] ? `_{${slots[1]}}` : '';
+            const upper = slots[2] ? `^{${slots[2]}}` : '';
+            return `${slots[0] || ''}${lower}${upper}`;
+        }
         if (selector === 27) return `{${slots[0] || ''}}_{${slots[1] || ''}}`;
         if (selector === 28) return `{${slots[0] || ''}}^{${slots[1] || ''}}`;
         if (selector === 29) return `{${slots[0] || ''}}_{${slots[1] || ''}}^{${slots[2] || ''}}`;
@@ -193,6 +212,18 @@
             cursor.index += 2;
             if (options & 2) readRecord(cursor);
             return { kind: 'pile', latex: visible(readList(cursor)).map(row => row.latex).join('\\\\') };
+        }
+        if (type === 5) {
+            cursor.nudge(options);
+            cursor.index += 3;
+            const rows = cursor.byte();
+            const columns = cursor.byte();
+            cursor.index += Math.ceil((rows + 1) / 4) + Math.ceil((columns + 1) / 4);
+            const cells = visible(readList(cursor)).filter(row => row.kind === 'line').map(row => row.latex);
+            const matrixRows = Array.from({ length: rows }, (_, rowIndex) => (
+                Array.from({ length: columns }, (_, columnIndex) => cells[rowIndex * columns + columnIndex] || '').join('&')
+            ));
+            return { kind: 'matrix', latex: `\\begin{matrix}${matrixRows.join('\\\\')}\\end{matrix}` };
         }
         if (type === 6) { cursor.nudge(options); return { kind: 'embellishment', embell: cursor.byte(), latex: '' }; }
         cursor.diagnostics.push(`unsupported-record-${type}`);

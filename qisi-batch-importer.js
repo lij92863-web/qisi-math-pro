@@ -851,90 +851,205 @@
         return stripQuestionNo(stripOptionsFromStemText(blockText));
     };
 
+    const assertRichMathIntegrity = (rich, documentXml, translation) => {
+        const expectedPreviewRids = [...new Set(
+            rich.collectMathTypeObjectLinks(documentXml).map(link => String(link.previewRid))
+        )];
+        const missing = expectedPreviewRids.filter(rid => !translation.mathByRid.has(rid));
+        const conflicts = (translation.diagnostics || []).filter(row => row.code === 'OLE_PREVIEW_CONTENT_CONFLICT');
+        if (!missing.length && !conflicts.length) return expectedPreviewRids;
+
+        const error = new Error(`DOCX MathType content integrity failed: ${missing.length} formula(s) unresolved.`);
+        error.code = 'DOCX_MATHTYPE_INTEGRITY_BLOCKED';
+        error.diagnostics = { missingPreviewRids: missing, conflicts };
+        throw error;
+    };
+
+    const imageFromRichAsset = asset => ({
+        id: asset.assetId,
+        filename: `${asset.assetId}.${asset.ext || 'png'}`,
+        name: `${asset.assetId}.${asset.ext || 'png'}`,
+        url: asset.url,
+        align: 'center',
+        source: 'docx-rich-content',
+        displayable: true,
+        ext: asset.ext,
+        mime: asset.mime,
+        rid: asset.rid,
+        target: asset.target,
+        anchorType: asset.anchorType,
+        dimensions: asset.dimensions,
+        paragraphIndex: asset.paragraphIndex,
+        contentHash: asset.contentHash
+    });
+
+    const buildRichDraft = (question, index, fileRecord, helpers, defaultMeta) => {
+        const assets = question.assets || [];
+        const undisplayable = assets.filter(asset => !asset.url || !/^(png|jpe?g|gif|webp|svg)$/i.test(asset.ext || ''));
+        if (undisplayable.length) {
+            const error = new Error(`DOCX contains ${undisplayable.length} non-renderable anchored image(s).`);
+            error.code = 'DOCX_IMAGE_INTEGRITY_BLOCKED';
+            error.diagnostics = undisplayable.map(asset => ({ rid: asset.rid, target: asset.target, ext: asset.ext }));
+            throw error;
+        }
+
+        const id = helpers.makeBatchId
+            ? helpers.makeBatchId('dq')
+            : `dq_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`;
+        const rawBlock = (question.richBlocks || []).map(block => block.serialized || '').join('\n');
+        return {
+            id,
+            batchId: fileRecord.batchId || '',
+            order: index + 1,
+            questionNumber: String(question.number),
+            questionKey: question.questionKey,
+            type: question.type === '未知题型' ? (defaultMeta.defaultType || '解答题') : question.type,
+            stem: question.stem,
+            options: question.options,
+            answer: '',
+            solution: '',
+            images: assets.map(imageFromRichAsset),
+            questionImages: assets.map(imageFromRichAsset),
+            richBlocks: question.richBlocks,
+            rawBlock,
+            renderableText: rawBlock,
+            sourceFileId: fileRecord.id || '',
+            sourceFileName: fileRecord.filename || '',
+            sourcePage: 1,
+            sourceTrace: {
+                source: 'docx-rich-content',
+                sourceFileId: fileRecord.id || '',
+                sourceFileName: fileRecord.filename || '',
+                questionNo: String(question.number),
+                questionKey: question.questionKey,
+                sourceParagraphRange: question.sourceParagraphRange,
+                imageIds: assets.map(asset => asset.assetId),
+                blockTextHead: rawBlock.slice(0, 2000)
+            },
+            warnings: [],
+            status: 'pending',
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+        };
+    };
+
     const parseDocxFile = async (fileRecord, context = {}) => {
         const helpers = context.helpers || {};
         const defaultMeta = context.defaultMeta || {};
-        const warnings = [];
-        const draftImages = [];
+        const rich = window.Qisi?.DocxRichContent;
+        if (!rich) throw new Error('Qisi.DocxRichContent is not loaded.');
+        const zip = await loadDocxZip(fileRecord);
+        const { documentXml, relsXml } = await readDocxCoreXml(zip);
+        const mediaMap = await buildMediaMaps(zip, relsXml, fileRecord.filename);
+        const objectLinks = rich.collectMathTypeObjectLinks(documentXml);
+        const translation = await rich.translateMathTypeMedia(mediaMap, { objectLinks });
+        const expectedFormulaRids = assertRichMathIntegrity(rich, documentXml, translation);
+        const richBlocks = rich.extractDocxRichBlocks(documentXml, {
+            fileId: fileRecord.id || fileRecord.filename || 'docx',
+            mediaMap,
+            mathByRid: translation.mathByRid
+        });
+        const parsed = rich.parseQuestionRichBlocks(richBlocks);
+        const formulaErrors = richBlocks.flatMap(block => block.diagnostics || []).filter(row => row.kind === 'formula-error');
+        if (!parsed.ok || formulaErrors.length) {
+            const error = new Error('DOCX rich-content state machine could not preserve every formula or question boundary.');
+            error.code = 'DOCX_RICH_CONTENT_INTEGRITY_BLOCKED';
+            error.diagnostics = { parser: parsed.diagnostics, formulaErrors };
+            throw error;
+        }
+        const drafts = parsed.questions.map((question, index) => buildRichDraft(question, index, fileRecord, helpers, defaultMeta));
+
+        return {
+            drafts,
+            draftImages: [],
+            unmatchedAnswers: [],
+            warnings: [],
+            debug: {
+                blockCount: richBlocks.length,
+                mediaCount: mediaMap.size,
+                questionCount: drafts.length,
+                expectedFormulaCount: expectedFormulaRids.length,
+                translatedFormulaCount: translation.mathByRid.size,
+                formulaDiagnostics: translation.diagnostics
+            }
+        };
+    };
+
+    const parseDocxSupportFile = async (fileRecord) => {
+        const rich = window.Qisi?.DocxRichContent;
+        const support = window.Qisi?.DocxSupportContent;
+        if (!rich || !support) throw new Error('DOCX rich/support content modules are not loaded.');
 
         const zip = await loadDocxZip(fileRecord);
         const { documentXml, relsXml } = await readDocxCoreXml(zip);
         const mediaMap = await buildMediaMaps(zip, relsXml, fileRecord.filename);
-        const blocks = buildQuestionBlocksFromDocumentXml(documentXml);
+        const objectLinks = rich.collectMathTypeObjectLinks(documentXml);
+        const translation = await rich.translateMathTypeMedia(mediaMap, { objectLinks });
+        assertRichMathIntegrity(rich, documentXml, translation);
+        const richBlocks = rich.extractDocxRichBlocks(documentXml, {
+            fileId: fileRecord.id || fileRecord.filename || 'docx-support',
+            mediaMap,
+            mathByRid: translation.mathByRid
+        });
+        const parsed = support.parseAnswerRichBlocks(richBlocks);
+        if (!parsed.ok) {
+            const error = new Error('DOCX answer/analysis content failed explicit-boundary validation.');
+            error.code = 'DOCX_SUPPORT_CONTENT_INTEGRITY_BLOCKED';
+            error.diagnostics = parsed.diagnostics;
+            throw error;
+        }
 
-        const drafts = blocks.map((block, index) => {
-            const parsedOptions = parseOptionsFromBlock(block, mediaMap, helpers);
-            const optionImages = parsedOptions.optionImages || [];
-            const stem = parseStemFromBlock(block, parsedOptions.renderableText || '');
-
-            const type = optionCount(parsedOptions.options) >= 2
-                ? '\u5355\u9009\u9898'
-                : (defaultMeta.defaultType || '\u89e3\u7b54\u9898');
-
-            const id = helpers.makeBatchId
-                ? helpers.makeBatchId('dq')
-                : `dq_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`;
-
-            const draft = {
-                id,
-                batchId: fileRecord.batchId || '',
-                order: index + 1,
-                questionNumber: block.q,
-                type,
-                stem,
-                options: parsedOptions.options,
-                answer: '',
-                solution: '',
-                images: optionImages,
-                questionImages: [],
-                rawBlock: block.lines.join('\n'),
-                renderableText: parsedOptions.renderableText || '',
+        const supportItems = parsed.items.map(item => {
+            const undisplayable = item.analysisImages.filter(asset => !asset.url || !/^(png|jpe?g|gif|webp|svg)$/i.test(asset.ext || ''));
+            if (undisplayable.length) {
+                const error = new Error(`DOCX support contains ${undisplayable.length} non-renderable analysis image(s).`);
+                error.code = 'DOCX_SUPPORT_IMAGE_INTEGRITY_BLOCKED';
+                error.diagnostics = undisplayable;
+                throw error;
+            }
+            return {
+                ...item,
+                question: String(item.number),
+                questionNumber: String(item.number),
+                images: item.analysisImages.map(imageFromRichAsset),
                 sourceFileId: fileRecord.id || '',
                 sourceFileName: fileRecord.filename || '',
-                sourcePage: 1,
                 sourceTrace: {
-                    source: 'docx-importer',
-                    sourceFileId: fileRecord.id || '',
-                    sourceFileName: fileRecord.filename || '',
-                    questionNo: block.q,
-                    optionSource: parsedOptions.source,
-                    hasUndisplayableOption: parsedOptions.hasUndisplayable,
-                    blockTextHead: block.lines.join('\n').slice(0, 500)
-                },
-                warnings: [
-                    ...(parsedOptions.hasUndisplayable
-                        ? ['DOCX contains WMF/EMF/OLE option images; placeholders are shown for review.']
-                        : [])
-                ],
-                status: 'pending',
-                createdAt: Date.now(),
-                updatedAt: Date.now()
+                    source: 'docx-support-content',
+                    questionKey: item.questionKey,
+                    sourceParagraphRange: item.sourceParagraphRange
+                }
             };
-
-            console.log('[BATCH_IMPORTER][docx-draft]', {
-                q: draft.questionNumber,
-                type: draft.type,
-                optionCount: optionCount(draft.options),
-                optionA: draft.options[0] || '',
-                optionB: draft.options[1] || '',
-                optionC: draft.options[2] || '',
-                optionD: draft.options[3] || '',
-                stemHead: draft.stem.slice(0, 120),
-                optionImageCount: optionImages.length,
-                warningCount: draft.warnings.length
-            });
-
-            return draft;
         });
 
         return {
-            drafts,
-            draftImages,
-            unmatchedAnswers: [],
-            warnings,
+            supportItems,
+            answers: supportItems.map(item => ({
+                question: item.question,
+                questionNumber: item.questionNumber,
+                questionKey: item.questionKey,
+                answer: item.answer,
+                sourceFileId: item.sourceFileId,
+                sourceFileName: item.sourceFileName,
+                sourceTrace: item.sourceTrace
+            })),
+            solutions: supportItems.map(item => ({
+                question: item.question,
+                questionNumber: item.questionNumber,
+                questionKey: item.questionKey,
+                solution: item.solution,
+                richBlocks: item.richBlocks,
+                images: item.images,
+                imageRefs: item.images.map(image => image.id),
+                sourceFileId: item.sourceFileId,
+                sourceFileName: item.sourceFileName,
+                sourceTrace: item.sourceTrace
+            })),
             debug: {
-                blockCount: blocks.length,
-                mediaCount: mediaMap.size
+                supportCount: supportItems.length,
+                mediaCount: mediaMap.size,
+                translatedFormulaCount: translation.mathByRid.size,
+                formulaDiagnostics: translation.diagnostics
             }
         };
     };
@@ -992,6 +1107,7 @@
     window.QisiBatchImporter = {
         processBatch,
         parseDocxFile,
+        parseDocxSupportFile,
         parsePdfFile,
         extractDocxQuestionSkeleton
     };

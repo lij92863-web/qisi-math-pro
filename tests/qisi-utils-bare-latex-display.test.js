@@ -29,6 +29,10 @@ test('BMR7: normalizeBareLatexForDisplayTextBody protects existing math segments
         normalizeBareLatexForDisplayTextBody('已有 $\\frac{1}{2}$，新增 \\sqrt{2}'),
         '已有 $\\frac{1}{2}$，新增 $\\sqrt{2}$'
     );
+    assert.equal(
+        normalizeBareLatexForDisplayTextBody('∵$A+B+C=$π'),
+        '∵$A+B+C=$\u200B$\\pi$'
+    );
 });
 
 test('BMR7: normalizeBareLatexForDisplayOptionLine normalizes option labels and content', () => {

@@ -36,6 +36,16 @@ test('MathType translator output is canonicalized before rich serialization', ()
     assert.equal((serialized.match(/\$/g) || []).length, 2);
 });
 
+test('adjacent canonical math runs cannot collapse into a display delimiter', () => {
+    const serialized = rich.serializeRichRuns([
+        { kind: 'math', latex: 'a+b' },
+        { kind: 'math', latex: '=c' }
+    ]);
+
+    assert.equal(serialized, '$a+b$\u200B$=c$');
+    assert.doesNotMatch(serialized, /\$\$/);
+});
+
 test('structured OMML conversion keeps fraction, radical, and trig structure', () => {
     const xml = [
         '<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">',

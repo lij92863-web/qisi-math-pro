@@ -384,7 +384,19 @@
                 console.warn('[DISPLAY_LATEX_NORMALIZE][delimiter-issues]', { source, issues });
             }
 
-            const normalized = normalizeBareLatexForDisplaySpan(protectedText);
+            const tokenPattern = /(@@QISI_MATH_SEGMENT_\d+@@)/g;
+            const parts = protectedText.split(tokenPattern);
+            const normalized = parts.reduce((result, part, index) => {
+                const isProtected = /^@@QISI_MATH_SEGMENT_\d+@@$/.test(part);
+                const normalizedPart = isProtected
+                    ? part
+                    : normalizeBareLatexForDisplaySpan(part);
+                const previousWasProtected = index > 0 && /^@@QISI_MATH_SEGMENT_\d+@@$/.test(parts[index - 1]);
+                const nextIsProtected = index + 1 < parts.length && /^@@QISI_MATH_SEGMENT_\d+@@$/.test(parts[index + 1]);
+                const needsLeadingBoundary = previousWasProtected && normalizedPart.startsWith('$');
+                const needsTrailingBoundary = nextIsProtected && normalizedPart.endsWith('$');
+                return result + (needsLeadingBoundary ? '\u200B' : '') + normalizedPart + (needsTrailingBoundary ? '\u200B' : '');
+            }, '');
             return restoreLatexMathSegments(normalized, latexBlocks);
         };
 
