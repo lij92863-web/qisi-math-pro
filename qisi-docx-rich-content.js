@@ -1,5 +1,5 @@
 (function (root, factory) {
-    const api = factory();
+    const api = factory(root);
 
     root.Qisi = root.Qisi || {};
     root.Qisi.DocxRichContent = api;
@@ -9,8 +9,15 @@
     }
 })(
     typeof globalThis !== 'undefined' ? globalThis : this,
-    function () {
+    function (root) {
         'use strict';
+
+        const oleReader = root?.Qisi?.DocxOleReader || (
+            typeof require === 'function' ? require('./qisi-docx-ole-reader.js') : null
+        );
+        const mtefReader = root?.Qisi?.DocxMtefReader || (
+            typeof require === 'function' ? require('./qisi-docx-mtef-reader.js') : null
+        );
 
         const decodeXmlEntities = (value = '') => String(value || '')
             .replace(/&lt;/g, '<')
@@ -348,11 +355,22 @@
             return globalThis.btoa(binary);
         };
 
-        const collectMathTypeMtef = (mediaMap) => {
+        const collectMathTypeObjectLinks = (documentXml = '') => {
+            const links = [];
+            String(documentXml || '').replace(/<w:object\b[\s\S]*?<\/w:object>/gi, objectXml => {
+                const previewRid = objectXml.match(/<v:imagedata\b[^>]*(?:r:id|o:relid)=["']([^"']+)["']/i)?.[1] || '';
+                const oleRid = objectXml.match(/<o:OLEObject\b[^>]*(?:r:id|o:relid)=["']([^"']+)["']/i)?.[1] || '';
+                if (previewRid && oleRid) links.push({ previewRid, oleRid });
+                return '';
+            });
+            return links;
+        };
+
+        const collectMathTypeMtef = (mediaMap, options = {}) => {
             const entries = mediaMap instanceof Map
                 ? [...mediaMap.entries()]
                 : Object.entries(mediaMap || {});
-            const equations = [];
+            const equationsById = new Map();
             const diagnostics = [];
 
             for (const [rid, media] of entries) {
@@ -362,14 +380,39 @@
                     diagnostics.push({ rid, code: 'WMF_MTEF_NOT_FOUND', target: media?.target || '' });
                     continue;
                 }
-                equations.push({ id: String(rid), mtefBase64: bytesToBase64(mtef) });
+                equationsById.set(String(rid), { id: String(rid), mtefBase64: bytesToBase64(mtef), source: 'wmf-preview' });
             }
 
-            return { equations, diagnostics };
+            for (const link of options.objectLinks || []) {
+                const media = mediaMap instanceof Map ? mediaMap.get(link.oleRid) : mediaMap?.[link.oleRid];
+                if (!media?.url || !oleReader?.extractMtefFromOle) continue;
+                try {
+                    const mtef = oleReader.extractMtefFromOle(dataUrlToBytes(media.url));
+                    if (mtef.length) {
+                        equationsById.set(String(link.previewRid), {
+                            id: String(link.previewRid),
+                            mtefBase64: bytesToBase64(mtef),
+                            source: 'ole-equation-native',
+                            oleRid: String(link.oleRid)
+                        });
+                    } else {
+                        diagnostics.push({ rid: link.previewRid, oleRid: link.oleRid, code: 'OLE_MTEF_NOT_FOUND' });
+                    }
+                } catch (error) {
+                    diagnostics.push({
+                        rid: link.previewRid,
+                        oleRid: link.oleRid,
+                        code: 'OLE_MTEF_READ_FAILED',
+                        message: error?.message || String(error)
+                    });
+                }
+            }
+
+            return { equations: [...equationsById.values()], diagnostics };
         };
 
         const translateMathTypeMedia = async (mediaMap, options = {}) => {
-            const collected = collectMathTypeMtef(mediaMap);
+            const collected = collectMathTypeMtef(mediaMap, options);
             const mathByRid = new Map();
             if (!collected.equations.length) {
                 return { mathByRid, diagnostics: collected.diagnostics, requested: 0, translated: 0 };
@@ -391,21 +434,33 @@
                 body: JSON.stringify({ equations: collected.equations })
             });
             const payload = await response.json().catch(() => ({}));
-            if (!response.ok || !payload?.ok) {
+            if (!response.ok || !Array.isArray(payload?.equations)) {
                 const error = new Error(payload?.error || payload?.code || `MathType translation failed (${response.status}).`);
                 error.code = payload?.code || 'MATHTYPE_TRANSLATION_FAILED';
                 throw error;
             }
 
             const diagnostics = [...collected.diagnostics];
+            const equationById = new Map(collected.equations.map(row => [String(row.id), row]));
             for (const row of payload.equations || []) {
                 const normalized = normalizeLatexFragment(row?.latex || '');
                 if (row?.ok && normalized.ok) {
                     mathByRid.set(String(row.id), normalized.latex);
                 } else {
+                    const source = equationById.get(String(row?.id || ''));
+                    const mtef = source ? dataUrlToBytes(`data:application/octet-stream;base64,${source.mtefBase64}`) : new Uint8Array();
+                    const fallback = mtefReader?.mtefToLatex?.(mtef) || { ok: false, code: 'MTEF_FALLBACK_UNAVAILABLE' };
+                    const fallbackNormalized = fallback.ok ? normalizeLatexFragment(fallback.latex) : fallback;
+                    if (fallback.ok && fallbackNormalized.ok) {
+                        mathByRid.set(String(row.id), fallbackNormalized.latex);
+                        diagnostics.push({ rid: String(row.id), code: 'MATHTYPE_MTEF_FALLBACK_USED' });
+                        continue;
+                    }
                     diagnostics.push({
                         rid: String(row?.id || ''),
-                        code: normalized.ok ? (row?.code || 'MATHTYPE_TRANSLATION_FAILED') : normalized.code
+                        code: normalized.ok ? (row?.code || 'MATHTYPE_TRANSLATION_FAILED') : normalized.code,
+                        fallbackCode: fallbackNormalized.code,
+                        fallbackDiagnostics: fallback.diagnostics || []
                     });
                 }
             }
@@ -648,6 +703,7 @@
         return {
             canonicalizeMathCommands,
             collectMathTypeMtef,
+            collectMathTypeObjectLinks,
             decodeXmlEntities,
             extractDocxRichBlocks,
             extractMtefFromWmf,

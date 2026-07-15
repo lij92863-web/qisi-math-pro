@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const rich = require('../qisi-docx-rich-content.js');
+const mtefReader = require('../qisi-docx-mtef-reader.js');
 
 test('canonical LaTeX owns no delimiters and rejects nested delimiters', () => {
     assert.deepEqual(
@@ -65,4 +66,17 @@ test('WMF AppsMFC extraction returns the embedded MTEF payload', () => {
         Buffer.from(rich.extractMtefFromWmf(bytes)),
         mtef
     );
+});
+
+test('MTEF fallback deterministically preserves triangle and arc constructs rejected by legacy MathType', () => {
+    const triangle = Buffer.from('BQEABglEU01UNgAAE1dpbkFsbEJhc2ljQ29kZVBhZ2VzABEFVGltZXMgTmV3IFJvbWFuABEDU3ltYm9sABEDRXVjbGlkIFN5bWJvbAARBUNvdXJpZXIgTmV3ABEETVQgRXh0cmEAEQVBcmlhbAASAAghL0WPRC9BUPQQD0dfQVDyHx5BUPQVD0EA9EX0JfSPQl9BAPQQD0NfQQD0j0X0Kl9I9I9BAPQQD0D0j0F/SPQQD0EqX0RfRfRfRfRfQQ8MAQABAAECAgICAAMBAQEBAAQAAQAFAAYACgEAAgSLsyVWAgCDQQACAINCAAIAg0MAAAA=', 'base64');
+    const arcs = Buffer.from('BQEABglEU01UNgABE1dpbkFsbEJhc2ljQ29kZVBhZ2VzABEFVGltZXMgTmV3IFJvbWFuABEDU3ltYm9sABEFQ291cmllciBOZXcAEQRNVCBFeHRyYQATV2luQWxsQ29kZVBhZ2VzABEGy87M5QASAAghLyfyXyGPIS9HX0FQ8h8eQVD0FQ9BAPRF9CX0j0JfQQD0EA9DX0EA8h8gpfIKJfSPIfQQD0EA9A9I9Bf0j0EA8hpfRF9F9F9F9F9BDwwBAAEAAQICAgIAAgABAQEAAwABAAQABQAKAQADACIAAAEAEAAAAAAAAAAPAQIAg0QAAgCDRQAADwACAJYiIwAPAQIAgiwADwADACIAAAEADwECAINBAAIAg0MAAA8AAgCWIiMAAAA=', 'base64');
+
+    assert.deepEqual(mtefReader.mtefToLatex(triangle), {
+        ok: true,
+        code: 'MTEF_LATEX_OK',
+        latex: '\\triangle ABC',
+        diagnostics: []
+    });
+    assert.equal(mtefReader.mtefToLatex(arcs).latex, '\\widehat{DE},\\widehat{AC}');
 });

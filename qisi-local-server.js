@@ -248,7 +248,7 @@ async function translateMtefBatch(equations) {
     }
 
     const payload = JSON.parse(await fsp.readFile(outputPath, 'utf8'));
-    if (!payload?.ok || !Array.isArray(payload.equations)) {
+    if (!Array.isArray(payload?.equations)) {
       const code = payload?.code || 'MATHTYPE_INVALID_RESPONSE';
       throw new Error(`MathType helper returned ${code}.`);
     }
