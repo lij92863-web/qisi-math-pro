@@ -38,6 +38,43 @@ const compatibleChatResponse = text => ({
     choices: [{ message: { role: 'assistant', content: text } }]
 });
 
+const collectPreviewChecks = async (page, questionCount) => {
+    const visualChecks = [];
+    const questionNavItems = page.locator('.batch-question-nav-item');
+    for (let index = 0; index < questionCount; index += 1) {
+        await questionNavItems.nth(index).click();
+        await page.waitForTimeout(50);
+        visualChecks.push(await page.locator('.batch-preview-panel').evaluate((panel, questionNumber) => ({
+            questionNumber: String(questionNumber),
+            renderedMathCount: panel.querySelectorAll('.katex').length,
+            renderedImageCount: panel.querySelectorAll('.qisi-preview-image img').length,
+            renderErrorCount: panel.querySelectorAll('.latex-render-error').length,
+            renderErrorDetails: [...panel.querySelectorAll('.latex-render-error')].map(node => ({
+                title: node.getAttribute('title') || '',
+                text: node.textContent || ''
+            })),
+            renderedImageIds: [...panel.querySelectorAll('.qisi-preview-image')]
+                .map(node => node.getAttribute('data-image-id') || ''),
+            imagePlaceholderCount: panel.querySelectorAll('.latex-image-placeholder').length,
+            hasRawFailureText: /公式语法错误|图片暂不可预览/.test(panel.textContent || '')
+        }), index + 1));
+    }
+    return visualChecks;
+};
+
+const persistenceShape = question => ({
+    questionNumber: question.questionNumber,
+    type: question.type,
+    stem: question.stem,
+    options: question.options,
+    answer: question.answer,
+    solution: question.solution,
+    imageIds: (question.images || []).map(image => image.id),
+    solutionImageIds: (question.recognizedSolutionImages || []).map(image => image.id),
+    richBlockCount: (question.richBlocks || []).length,
+    solutionRichBlockCount: (question.solutionRichBlocks || []).length
+});
+
 test('real dual-format import reaches review with rendered content and without unsafe writes', {
     skip: !enabled,
     timeout: 360_000
@@ -196,26 +233,7 @@ test('real dual-format import reaches review with rendered content and without u
             assert.ok(apiResponses.filter(response => response.path === '/api/convert/mathtype-mtef').length >= 2);
         }
 
-        const visualChecks = [];
-        const questionNavItems = page.locator('.batch-question-nav-item');
-        for (let index = 0; index < expectedQuestionCount; index += 1) {
-            await questionNavItems.nth(index).click();
-            await page.waitForTimeout(50);
-            visualChecks.push(await page.locator('.batch-preview-panel').evaluate((panel, questionNumber) => ({
-                questionNumber: String(questionNumber),
-                renderedMathCount: panel.querySelectorAll('.katex').length,
-                renderedImageCount: panel.querySelectorAll('.qisi-preview-image img').length,
-                renderErrorCount: panel.querySelectorAll('.latex-render-error').length,
-                renderErrorDetails: [...panel.querySelectorAll('.latex-render-error')].map(node => ({
-                    title: node.getAttribute('title') || '',
-                    text: node.textContent || ''
-                })),
-                renderedImageIds: [...panel.querySelectorAll('.qisi-preview-image')]
-                    .map(node => node.getAttribute('data-image-id') || ''),
-                imagePlaceholderCount: panel.querySelectorAll('.latex-image-placeholder').length,
-                hasRawFailureText: /公式语法错误|图片暂不可预览/.test(panel.textContent || '')
-            }), index + 1));
-        }
+        const visualChecks = await collectPreviewChecks(page, expectedQuestionCount);
         visualChecks.forEach((row, index) => {
             if (row.renderErrorCount > 0) row.solutionSource = state.questions[index]?.solution || '';
         });
@@ -303,6 +321,29 @@ test('real dual-format import reaches review with rendered content and without u
             await page.locator('.batch-question-nav-item > span').allTextContents(),
             Array.from({ length: expectedQuestionCount }, (_, index) => `第 ${index + 1} 题`)
         );
+        const reloadedQuestions = await page.evaluate(async batchId => {
+            const probe = new window.Dexie('QisiMathVueDB');
+            await probe.open();
+            const questions = (await probe.table('draftQuestions').where('batchId').equals(batchId).toArray())
+                .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+            probe.close();
+            return questions;
+        }, state.batch.id);
+        assert.deepEqual(
+            reloadedQuestions.map(persistenceShape),
+            state.questions.map(persistenceShape)
+        );
+        const reloadedVisualChecks = await collectPreviewChecks(page, expectedQuestionCount);
+        assert.deepEqual(reloadedVisualChecks, visualChecks);
+        console.log('[QISI_PERSISTENCE_ROUNDTRIP]', JSON.stringify({
+            fixtureScope,
+            questionCount: reloadedQuestions.length,
+            renderedMathCount: reloadedVisualChecks.reduce((sum, row) => sum + row.renderedMathCount, 0),
+            renderedImageQuestionNumbers: reloadedVisualChecks
+                .filter(row => row.renderedImageCount > 0)
+                .map(row => row.questionNumber),
+            passed: true
+        }));
     } finally {
         await context.close();
         await browser.close();
