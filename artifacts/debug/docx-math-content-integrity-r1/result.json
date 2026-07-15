@@ -1,7 +1,7 @@
 {
   "decision": "DOCX_MATH_CONTENT_INTEGRITY_ACCEPTED",
   "baselineCommit": "d6b820f4696fa86ec6ddab1cf84891767666e858",
-  "finalImplementationCommit": "33f2facffb4ca687287ef4becd43edf271ad8d01",
+  "finalImplementationCommit": "db23e999d68f577ad45121472c5938c499a44c3e",
   "branch": "codex/debug-docx-math-content-integrity-r1",
   "fixtures": {
     "briefQuestion": "简略版题目（只有一页）.docx",
@@ -31,7 +31,7 @@
     },
     "answerCoverage": "12/12",
     "analysisCoverage": "12/12",
-    "formulaFragmentsRendered": "220/220",
+    "formulaFragmentsRendered": "228/228",
     "mathTypeAssets": {
       "question": "61/61",
       "support": "134/134"
@@ -51,7 +51,9 @@
     "missingAnalysisImages": [],
     "latexSyntaxErrors": [],
     "unrenderableLatex": [],
+    "unrenderedLatexFragments": [],
     "keyboardMathFragments": [],
+    "unwrappedLatexFragments": [],
     "rawJsonLeakage": [],
     "placeholderLeakage": [],
     "punctuationOnlyAnalyses": [],
@@ -69,8 +71,8 @@
   "tests": {
     "verifySafe": {
       "passed": true,
-      "tests": 959,
-      "passedCount": 955,
+      "tests": 961,
+      "passedCount": 957,
       "expectedSkipped": 4,
       "failed": 0,
       "todo": 0
@@ -100,5 +102,12 @@
     "realApiCalled": false
   },
   "frozenPdfFilesChanged": false,
-  "sourceFixturesCommitted": false
+  "sourceFixturesCommitted": false,
+  "portability": {
+    "followupFixAddedDependencies": false,
+    "docxPrimaryRequiresWord": false,
+    "requiresWindowsPowerShell": true,
+    "nativeMathTypeDllCurrentlyRequiredForFullFidelity": true,
+    "frontendCdnAssetsCurrentlyRequired": true
+  }
 }

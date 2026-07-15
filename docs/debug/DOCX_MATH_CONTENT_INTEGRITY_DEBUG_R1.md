@@ -4,7 +4,7 @@
 
 - Decision: `DOCX_MATH_CONTENT_INTEGRITY_ACCEPTED`
 - Baseline commit: `d6b820f4696fa86ec6ddab1cf84891767666e858`
-- Final implementation commit: `33f2facffb4ca687287ef4becd43edf271ad8d01`
+- Final implementation commit: `db23e999d68f577ad45121472c5938c499a44c3e`
 - Branch: `codex/debug-docx-math-content-integrity-r1`
 - Final evidence commit: 本报告所在的 release evidence commit（最终回复提供精确哈希）
 - Git status: 报告提交后 clean；分支未修改 `main`，冻结 PDF 文件相对 baseline 无 diff。
@@ -19,6 +19,7 @@
 | 答案为空、解析截断 | DOCX support producer/parser | 答案 DOCX 先压成普通文本，旧 marker repair 只保留部分段落；答案与解析 owner 不唯一 | 题目/答案共用 ordered rich blocks；support 状态机收集下一题前所有段落、公式与图片，并按显式 question key 对齐 |
 | 解析图片数据存在但预览缺失 | support parser → ReviewDraft → preview | 题号前 anchored image 的 token 在去前缀时丢失；`recognizedSolutionImages` 未进入预览 image collection | 保留 leading image token 和 paragraph anchor；持久化 support rich blocks；预览合并 analysis image collection |
 | 并发导入偶发缺公式 | local MathType service | MathType native API 跨 PowerShell 进程并发不安全；实测并发时答案仅 1/134 项由 native helper 成功 | 本地服务用可恢复的串行任务队列隔离 native MathType jobs；并发简略/完整版 E2E 均通过 |
+| 第 12 题后半段显示 LaTeX 源码 | rich math serialization → preview | 一个 MathType 对象同时包含中文说明与公式，旧序列化形成 `$故\triangle ...$`；预览为避免把中文送入 KaTeX 而降级为普通文本，所以 Console 没有异常但公式未渲染 | 序列化层将混合对象确定性拆为中文文本与独立 math islands；浏览器审计移除 `.katex` 后扫描残留命令，防止“已送入 KaTeX 的都成功”掩盖“未送入 KaTeX”的公式 |
 
 ## Production call graph
 
@@ -42,7 +43,7 @@
 
 ## Active owners changed
 
-- `qisi-docx-latex-content.js`: delimiter、canonical LaTeX、OMML text normalization、rich math serialization 的唯一 owner（255 行）。
+- `qisi-docx-latex-content.js`: delimiter、canonical LaTeX、OMML text normalization、rich math serialization 的唯一 owner（含混合中文/公式 MathType 拆分）。
 - `qisi-docx-ole-reader.js`: OLE/CFB `Equation Native` evidence owner。
 - `qisi-docx-mtef-reader.js`: MathType MTEF deterministic fallback owner。
 - `qisi-docx-rich-content.js`: ordered DOCX block/run、relationship image anchor 与基础 rich model owner（427 行）。
@@ -78,7 +79,7 @@
 - 含公式题: 12（按题干/选项/答案/解析合并统计）；含题图题: 3（4、8、11）；解析含图题: 3（2、6、8）。
 - 答案覆盖: `12/12`；解析覆盖: `12/12`；全部 12 题人工逐题核对。
 - 题图 3 + 解析图 3；source/imported/reloaded/rendered `6/6/6/6`。第 8 题同时渲染题图与解析图。
-- UI math fragments: `220/220` rendered；reload 后仍为 `220/220`。
+- UI math fragments: `228/228` rendered；reload 后仍为 `228/228`。第 12 题由 16 个已渲染片段增至 24 个，KaTeX 外残留 LaTeX 命令为 0。
 - MathType unique assets: full questions `61/61`、full answers `134/134` 均得到 canonical LaTeX。Native helper 直接成功 `58/61` 与 `126/134`，其余 11 个由确定性 MTEF reader 恢复；没有 AI/OCR 猜测。
 
 ### Question counts
@@ -89,7 +90,7 @@
 ### Formula counts
 
 - Brief UI formula fragments source-to-render contract: `97/97`，reload `97/97`。
-- Full UI formula fragments source-to-render contract: `220/220`，reload `220/220`；unique MathType assets `195/195`。
+- Full UI formula fragments source-to-render contract: `228/228`，reload `228/228`；unique MathType assets `195/195`。
 
 ### Image counts
 
@@ -112,6 +113,7 @@
 - Before: 第 6 题“如图……”后内容/图片可能截断；after: 9 个源解析段全部保留且图片渲染。
 - Before: Q2 明确解析写有“故选 C”但 answer 可为空；after: 只从显式 label 确定性派生 C，并保留 provenance。
 - Before: section heading 可进入上一题 D option；after: semantic audit `sectionHeadingInOptions=[]`。
+- Before: 第 12 题混合 MathType 块为 `$故\triangle ABC的面积S=...$`，预览安全降级后显示反斜杠源码；after: `故$\triangle ABC$的面积$S=...$`，24 个公式片段全部进入 KaTeX，DOM 中 KaTeX 外残留命令 0。
 
 ## Case 1–6
 
@@ -120,7 +122,7 @@
 3. 圆锥内切球题: 答案 C、完整多段解析、analysis image 和归属通过。
 4. 三角形选择题/section boundary: 源选项完整，section heading 未进入 D，下一 section 题号正常。
 5. 点在角终边上的填空题: 答案 6，分式/向量公式与解析完整，不存在 punctuation-only analysis。
-6. 正弦定理解析: `3\cos A\sin B+2\sin A\cos B=\sin A\sin B` 等键盘数学已规范化；中文保持普通文本。
+6. 正弦定理解析: `3\cos A\sin B+2\sin A\cos B=\sin A\sin B` 等键盘数学已规范化；第 12 题混合 MathType 中的中文保持普通文本，公式拆为独立 math islands。
 
 ## LaTeX、键盘数学与语义扫描
 
@@ -128,7 +130,7 @@
 - Nested/unclosed delimiter: 0。
 - Bare command/keyboard-style fragments: 0。
 - Raw JSON leakage / placeholder leakage / punctuation-only analysis: 0 / 0 / 0。
-- Scanner result（简略与完整）: `missingQuestionNumbers`, `duplicateQuestionNumbers`, `sectionHeadingInOptions`, `missingAnswers`, `missingAnalyses`, `missingAnalysisImages`, `latexSyntaxErrors`, `unrenderableLatex`, `keyboardMathFragments`, `rawJsonLeakage`, `placeholderLeakage`, `punctuationOnlyAnalyses`, `wrongAttachmentCandidates` 全部为空。
+- Scanner result（简略与完整）: `missingQuestionNumbers`, `duplicateQuestionNumbers`, `sectionHeadingInOptions`, `missingAnswers`, `missingAnalyses`, `missingAnalysisImages`, `latexSyntaxErrors`, `unrenderableLatex`, `unrenderedLatexFragments`, `keyboardMathFragments`, `unwrappedLatexFragments`, `rawJsonLeakage`, `placeholderLeakage`, `punctuationOnlyAnalyses`, `wrongAttachmentCandidates` 全部为空。
 
 ## Image binding 与 persistence roundtrip
 
@@ -142,13 +144,13 @@
 
 - 正常 UI 上传、角色选择、创建任务、等待 review、逐题打开预览、刷新、再次逐题检查全部通过。
 - 简略/完整版还以两个并发 browser contexts 运行，验证 native MathType queue 不串批。
-- Console（用户保留的 in-app browser，最终 13:50 刷新）: `errorCount=0`；只有 Tailwind CDN production warning、版本和 runtime boot 日志。
+- Console（用户保留的 in-app browser，最终 14:16 刷新）: `errorCount=0`；只有 Tailwind CDN production warning、版本和 runtime boot 日志。
 - Network: 每个任务两次 `/api/convert/mathtype-mtef` 均 HTTP 200；同源 failed requests 0；AI/OCR calls 0。
 - White screen / locked buttons / unhandled exceptions: 0 / 0 / 0。
 
 ## Full gates
 
-- `npm run verify:safe`: passed；959 tests，955 pass，4 expected skip，0 fail，0 todo；batch smoke 20/20；no-real-ai passed。
+- `npm run verify:safe`: passed；961 tests，957 pass，4 expected skip，0 fail，0 todo；batch smoke 20/20；no-real-ai passed。
 - `npm run verify:docx-stable`: passed，20/20。
 - `npm run verify:batch-safety`: passed；DOCX stable、PDF known-bad 65/65、no-real-ai、batch smoke 全通过。
 - `npm run verify:no-real-ai`: passed。
@@ -180,6 +182,7 @@ Formal question table count remained 0 throughout browser tests; work stopped at
 - Baseline repository has no `verify:personal-stable` npm script; this is reported as unavailable, not passed.
 - 页面仍加载 Tailwind CDN 并产生现有 production warning；不影响本地 DOCX import/render，且无 Console error。
 - Native MathType direct translator depends on the installed MathType DLL；unsupported items are recovered only by the deterministic MTEF reader and still fail closed if neither path can produce valid LaTeX。
+- 本次第 12 题修复为纯 JavaScript，未增加依赖；但当前系统整体尚不是完全免安装/离线可迁移包：完整公式保真仍依赖目标 Windows 电脑上的 MathType 6 `MT6.dll`，前端 Vue/KaTeX/Dexie/JSZip 等仍从 CDN 加载。新 DOCX 主链不要求 Word，PowerShell 为 Windows 自带。若要实现“复制到老师电脑即可运行”，应另立便携发行任务处理 native MathType 替代与前端依赖本地化，不应夹带在本次公式显示 bugfix 中。
 
 ## Git status
 
