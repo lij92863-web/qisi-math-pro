@@ -1,0 +1,434 @@
+(function (root, factory) {
+    const api = factory();
+
+    root.Qisi = root.Qisi || {};
+    root.Qisi.DocxRichContent = api;
+
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = api;
+    }
+})(
+    typeof globalThis !== 'undefined' ? globalThis : this,
+    function () {
+        'use strict';
+
+        const decodeXmlEntities = (value = '') => String(value || '')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&')
+            .replace(/&quot;/g, '"')
+            .replace(/&apos;/g, "'")
+            .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+            .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)));
+
+        const stripOnlyOuterMathDelimiters = (value = '') => {
+            let source = String(value || '').trim();
+            let changed = true;
+
+            while (changed) {
+                changed = false;
+                const pairs = [
+                    ['$$', '$$'],
+                    ['$', '$'],
+                    ['\\[', '\\]'],
+                    ['\\(', '\\)']
+                ];
+
+                for (const [start, end] of pairs) {
+                    if (source.startsWith(start) && source.endsWith(end) && source.length >= start.length + end.length) {
+                        source = source.slice(start.length, -end.length).trim();
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+
+            return source;
+        };
+
+        const canonicalizeMathCommands = (value = '') => {
+            let source = String(value || '')
+                .replace(/\r\n?/g, '\n')
+                .replace(/[＝]/g, '=')
+                .replace(/[−﹣]/g, '-')
+                .replace(/π/g, '\\pi ')
+                .replace(/∈/g, '\\in ')
+                .replace(/∩/g, '\\cap ')
+                .replace(/∪/g, '\\cup ')
+                .replace(/⊆/g, '\\subseteq ')
+                .replace(/≠/g, '\\ne ')
+                .replace(/≤/g, '\\le ')
+                .replace(/≥/g, '\\ge ')
+                .replace(/×/g, '\\times ')
+                .replace(/÷/g, '\\div ')
+                .replace(/°/g, '^{\\circ}');
+
+            source = source
+                .replace(/\\(?:rm|mathrm|text)\s*\{\s*\\pi\s*\}/g, '\\pi')
+                .replace(/\\(?:bf|mathbf)\s*\{\s*Z\s*\}/g, '\\mathbb{Z}')
+                .replace(/\{\s*(\\mathbb\{Z\}|\\pi)\s*\}/g, '$1')
+                .replace(/\\sqrt\s*([0-9A-Za-z])/g, '\\sqrt{$1}')
+                .replace(/([A-Za-z0-9}])\|([A-Za-z])/g, '$1\\mid $2');
+
+            for (let pass = 0; pass < 4; pass += 1) {
+                const next = source
+                    .replace(/\{\s*\{([^{}]*)\}\s*\}/g, '{$1}')
+                    .replace(/\\(?:rm|mathrm)\s*\{([^{}]*)\}/g, '$1');
+                if (next === source) break;
+                source = next;
+            }
+
+            return source
+                .replace(/[ \t]+/g, ' ')
+                .replace(/\s*([=+,:])\s*/g, '$1')
+                .replace(/\s*([{}])\s*/g, '$1')
+                .replace(/\\pi(?=[A-Za-z0-9])/g, '\\pi ')
+                .trim();
+        };
+
+        const readBalancedGroup = (source, start) => {
+            if (source[start] !== '{') return -1;
+            let depth = 0;
+            for (let index = start; index < source.length; index += 1) {
+                if (source[index] === '{' && source[index - 1] !== '\\') depth += 1;
+                if (source[index] === '}' && source[index - 1] !== '\\') depth -= 1;
+                if (depth === 0) return index + 1;
+                if (depth < 0) return -1;
+            }
+            return -1;
+        };
+
+        const validateLatexBalance = (value = '') => {
+            const source = String(value || '');
+            const stack = [];
+            const pairs = { '}': '{', ']': '[', ')': '(' };
+
+            for (let index = 0; index < source.length; index += 1) {
+                const char = source[index];
+                if (source[index - 1] === '\\') continue;
+                if ('{[('.includes(char)) stack.push(char);
+                if ('}])'.includes(char) && stack.pop() !== pairs[char]) {
+                    return { ok: false, code: 'UNBALANCED_LATEX', diagnostics: [`unexpected-${char}@${index}`] };
+                }
+            }
+
+            if (stack.length) {
+                return { ok: false, code: 'UNBALANCED_LATEX', diagnostics: [`unclosed-${stack.join('')}`] };
+            }
+
+            const environments = new Map();
+            source.replace(/\\(begin|end)\s*\{([^}]+)\}/g, (_, kind, name) => {
+                environments.set(name, (environments.get(name) || 0) + (kind === 'begin' ? 1 : -1));
+                return '';
+            });
+            const mismatch = [...environments.entries()].find(([, count]) => count !== 0);
+            if (mismatch) return { ok: false, code: 'UNBALANCED_LATEX', diagnostics: [`environment-${mismatch[0]}`] };
+
+            return { ok: true, code: 'LATEX_BALANCED', diagnostics: [] };
+        };
+
+        const validateCommandArguments = (value = '') => {
+            const source = String(value || '');
+            const failures = [];
+
+            for (const command of ['frac', 'sqrt']) {
+                const regex = new RegExp(`\\\\${command}\\b`, 'g');
+                let match;
+                while ((match = regex.exec(source)) !== null) {
+                    let cursor = regex.lastIndex;
+                    while (/\s/.test(source[cursor] || '')) cursor += 1;
+                    if (command === 'sqrt' && source[cursor] === '[') {
+                        const optionalEnd = source.indexOf(']', cursor + 1);
+                        cursor = optionalEnd >= 0 ? optionalEnd + 1 : cursor;
+                        while (/\s/.test(source[cursor] || '')) cursor += 1;
+                    }
+                    const firstEnd = readBalancedGroup(source, cursor);
+                    if (firstEnd < 0) {
+                        failures.push(`missing-${command}-arg@${match.index}`);
+                        continue;
+                    }
+                    if (command === 'frac') {
+                        cursor = firstEnd;
+                        while (/\s/.test(source[cursor] || '')) cursor += 1;
+                        if (readBalancedGroup(source, cursor) < 0) failures.push(`missing-frac-den@${match.index}`);
+                    }
+                }
+            }
+
+            return failures.length
+                ? { ok: false, code: 'MISSING_COMMAND_ARGUMENT', diagnostics: failures }
+                : { ok: true, code: 'COMMAND_ARGUMENTS_OK', diagnostics: [] };
+        };
+
+        const normalizeLatexFragment = (input) => {
+            const source = String(input ?? '').trim();
+            if (!source) return { ok: false, code: 'EMPTY_MATH_FRAGMENT', latex: '', diagnostics: [] };
+
+            const stripped = stripOnlyOuterMathDelimiters(source);
+            if (/\$|\\\(|\\\)|\\\[|\\\]/.test(stripped)) {
+                return {
+                    ok: false,
+                    code: 'NESTED_MATH_DELIMITER',
+                    latex: '',
+                    diagnostics: ['math delimiter remained inside fragment']
+                };
+            }
+
+            const latex = canonicalizeMathCommands(stripped);
+            const balance = validateLatexBalance(latex);
+            if (!balance.ok) return { ...balance, latex: '' };
+            const args = validateCommandArguments(latex);
+            if (!args.ok) return { ...args, latex: '' };
+            if (/\[object Object\]|undefined|null|<[^>]+>|[{}]\s*:\s*["']/.test(latex)) {
+                return { ok: false, code: 'INVALID_LATEX_PAYLOAD', latex: '', diagnostics: ['non-math payload'] };
+            }
+
+            return { ok: true, code: 'LATEX_OK', latex, diagnostics: [] };
+        };
+
+        const normalizePlainText = (value = '') => String(value || '')
+            .replace(/\r\n?/g, '\n')
+            .replace(/\u00a0/g, ' ');
+
+        const serializeRichRuns = (runs = [], diagnostics = []) => (runs || []).map((run, index) => {
+            if (run?.kind === 'text') return normalizePlainText(run.text);
+            if (run?.kind === 'tab') return '\t';
+            if (run?.kind === 'break') return '\n';
+            if (run?.kind === 'image') return run.token || (run.assetId ? `[[IMAGE:${run.assetId}]]` : '');
+            if (run?.kind !== 'math') return '';
+
+            const normalized = normalizeLatexFragment(run.latex);
+            if (normalized.ok) return `$${normalized.latex}$`;
+            diagnostics.push({
+                kind: 'formula-error',
+                source: String(run.rawSource || run.latex || ''),
+                code: normalized.code,
+                runIndex: index,
+                paragraphIndex: run.paragraphIndex ?? null
+            });
+            return '公式需要人工复核';
+        }).join('');
+
+        const parseXmlTree = (xml = '') => {
+            const root = { name: 'root', attrs: '', children: [] };
+            const stack = [root];
+            const token = /<([^>]+)>|([^<]+)/g;
+            let match;
+
+            while ((match = token.exec(String(xml || ''))) !== null) {
+                if (match[2] !== undefined) {
+                    if (match[2]) stack[stack.length - 1].children.push({ name: '#text', text: decodeXmlEntities(match[2]) });
+                    continue;
+                }
+
+                const raw = match[1].trim();
+                if (!raw || raw.startsWith('?') || raw.startsWith('!')) continue;
+                if (raw.startsWith('/')) {
+                    if (stack.length > 1) stack.pop();
+                    continue;
+                }
+
+                const selfClosing = raw.endsWith('/');
+                const body = selfClosing ? raw.slice(0, -1).trim() : raw;
+                const firstSpace = body.search(/\s/);
+                const qualified = firstSpace < 0 ? body : body.slice(0, firstSpace);
+                const node = {
+                    name: qualified.includes(':') ? qualified.split(':').pop() : qualified,
+                    attrs: firstSpace < 0 ? '' : body.slice(firstSpace + 1),
+                    children: []
+                };
+                stack[stack.length - 1].children.push(node);
+                if (!selfClosing) stack.push(node);
+            }
+
+            return root;
+        };
+
+        const xmlAttr = (node, localName) => {
+            const regex = new RegExp(`(?:\\b|:)${localName}=["']([^"']*)["']`);
+            return String(node?.attrs || '').match(regex)?.[1] || '';
+        };
+
+        const childByName = (node, name) => (node?.children || []).find(child => child.name === name);
+
+        const mathTextToLatex = (value = '') => canonicalizeMathCommands(String(value || '')
+            .replace(/\\/g, '\\backslash '));
+
+        const ommlNodeToLatex = (node) => {
+            if (!node) return '';
+            if (node.name === '#text') return mathTextToLatex(node.text);
+            if (/Pr$/.test(node.name) || ['ctrlPr', 'rPr'].includes(node.name)) return '';
+
+            const body = () => (node.children || []).map(ommlNodeToLatex).join('');
+            const valueOf = name => ommlNodeToLatex(childByName(node, name));
+
+            if (node.name === 'f') return `\\frac{${valueOf('num')}}{${valueOf('den')}}`;
+            if (node.name === 'rad') {
+                const degree = valueOf('deg');
+                const expression = valueOf('e');
+                return degree ? `\\sqrt[${degree}]{${expression}}` : `\\sqrt{${expression}}`;
+            }
+            if (node.name === 'sSup') return `{${valueOf('e')}}^{${valueOf('sup')}}`;
+            if (node.name === 'sSub') return `{${valueOf('e')}}_{${valueOf('sub')}}`;
+            if (node.name === 'sSubSup') return `{${valueOf('e')}}_{${valueOf('sub')}}^{${valueOf('sup')}}`;
+            if (node.name === 'bar') return `\\overline{${valueOf('e')}}`;
+            if (node.name === 'd') return `\\left(${valueOf('e')}\\right)`;
+            if (node.name === 'nary') return `\\sum ${valueOf('sub')}${valueOf('sup')}${valueOf('e')}`;
+            if (node.name === 'chr') return mathTextToLatex(xmlAttr(node, 'val'));
+            return body();
+        };
+
+        const ommlToLatexBody = (xml = '') => {
+            const tree = parseXmlTree(xml);
+            const raw = (tree.children || []).map(ommlNodeToLatex).join('');
+            const normalized = normalizeLatexFragment(raw);
+            return normalized.ok ? normalized.latex : '';
+        };
+
+        const toUint8Array = (value) => {
+            if (value instanceof Uint8Array) return value;
+            if (value instanceof ArrayBuffer) return new Uint8Array(value);
+            if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+            return new Uint8Array(value || []);
+        };
+
+        const findAscii = (bytes, text) => {
+            const needle = Array.from(String(text || '')).map(char => char.charCodeAt(0));
+            for (let index = 0; index <= bytes.length - needle.length; index += 1) {
+                let matches = true;
+                for (let offset = 0; offset < needle.length; offset += 1) {
+                    if (bytes[index + offset] !== needle[offset]) {
+                        matches = false;
+                        break;
+                    }
+                }
+                if (matches) return index;
+            }
+            return -1;
+        };
+
+        const readInt32LE = (bytes, offset) => (
+            bytes[offset] |
+            (bytes[offset + 1] << 8) |
+            (bytes[offset + 2] << 16) |
+            (bytes[offset + 3] << 24)
+        ) >>> 0;
+
+        const extractMtefFromWmf = (value) => {
+            const bytes = toUint8Array(value);
+            const signatureOffset = findAscii(bytes, 'AppsMFC');
+            if (signatureOffset < 0 || signatureOffset + 18 >= bytes.length) return new Uint8Array();
+
+            const dataLength = readInt32LE(bytes, signatureOffset + 14);
+            let payloadStart = signatureOffset + 18;
+            while (payloadStart < bytes.length && bytes[payloadStart] !== 0) payloadStart += 1;
+            payloadStart += 1;
+
+            if (!dataLength || payloadStart >= bytes.length) return new Uint8Array();
+            const payloadEnd = Math.min(bytes.length, payloadStart + dataLength);
+            const payload = bytes.slice(payloadStart, payloadEnd);
+            return payload[0] === 5 ? payload : new Uint8Array();
+        };
+
+        const dataUrlToBytes = (dataUrl = '') => {
+            const base64 = String(dataUrl || '').split(',', 2)[1] || '';
+            if (!base64) return new Uint8Array();
+            if (typeof Buffer !== 'undefined') return new Uint8Array(Buffer.from(base64, 'base64'));
+            const binary = globalThis.atob(base64);
+            return Uint8Array.from(binary, char => char.charCodeAt(0));
+        };
+
+        const bytesToBase64 = (bytes) => {
+            const value = toUint8Array(bytes);
+            if (typeof Buffer !== 'undefined') return Buffer.from(value).toString('base64');
+            let binary = '';
+            for (let index = 0; index < value.length; index += 0x8000) {
+                binary += String.fromCharCode(...value.subarray(index, index + 0x8000));
+            }
+            return globalThis.btoa(binary);
+        };
+
+        const collectMathTypeMtef = (mediaMap) => {
+            const entries = mediaMap instanceof Map
+                ? [...mediaMap.entries()]
+                : Object.entries(mediaMap || {});
+            const equations = [];
+            const diagnostics = [];
+
+            for (const [rid, media] of entries) {
+                if (String(media?.ext || '').toLowerCase() !== 'wmf') continue;
+                const mtef = extractMtefFromWmf(dataUrlToBytes(media?.url || ''));
+                if (!mtef.length) {
+                    diagnostics.push({ rid, code: 'WMF_MTEF_NOT_FOUND', target: media?.target || '' });
+                    continue;
+                }
+                equations.push({ id: String(rid), mtefBase64: bytesToBase64(mtef) });
+            }
+
+            return { equations, diagnostics };
+        };
+
+        const translateMathTypeMedia = async (mediaMap, options = {}) => {
+            const collected = collectMathTypeMtef(mediaMap);
+            const mathByRid = new Map();
+            if (!collected.equations.length) {
+                return { mathByRid, diagnostics: collected.diagnostics, requested: 0, translated: 0 };
+            }
+
+            const fetchImpl = options.fetchImpl || globalThis.fetch;
+            if (typeof fetchImpl !== 'function') {
+                return {
+                    mathByRid,
+                    diagnostics: [...collected.diagnostics, { code: 'MATHTYPE_FETCH_UNAVAILABLE' }],
+                    requested: collected.equations.length,
+                    translated: 0
+                };
+            }
+
+            const response = await fetchImpl(options.endpoint || '/api/convert/mathtype-mtef', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ equations: collected.equations })
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || !payload?.ok) {
+                const error = new Error(payload?.error || payload?.code || `MathType translation failed (${response.status}).`);
+                error.code = payload?.code || 'MATHTYPE_TRANSLATION_FAILED';
+                throw error;
+            }
+
+            const diagnostics = [...collected.diagnostics];
+            for (const row of payload.equations || []) {
+                const normalized = normalizeLatexFragment(row?.latex || '');
+                if (row?.ok && normalized.ok) {
+                    mathByRid.set(String(row.id), normalized.latex);
+                } else {
+                    diagnostics.push({
+                        rid: String(row?.id || ''),
+                        code: normalized.ok ? (row?.code || 'MATHTYPE_TRANSLATION_FAILED') : normalized.code
+                    });
+                }
+            }
+
+            return {
+                mathByRid,
+                diagnostics,
+                requested: collected.equations.length,
+                translated: mathByRid.size
+            };
+        };
+
+        return {
+            canonicalizeMathCommands,
+            collectMathTypeMtef,
+            decodeXmlEntities,
+            extractMtefFromWmf,
+            normalizeLatexFragment,
+            ommlToLatexBody,
+            serializeRichRuns,
+            stripOnlyOuterMathDelimiters,
+            translateMathTypeMedia,
+            validateLatexBalance
+        };
+    }
+);

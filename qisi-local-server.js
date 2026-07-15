@@ -14,8 +14,10 @@ const UPLOAD_DIR = path.join(TMP_DIR, 'uploads');
 const CONVERTED_DIR = path.join(TMP_DIR, 'converted');
 const TOOLS_DIR = path.join(ROOT, 'tools');
 const PS_CONVERTER = path.join(TOOLS_DIR, 'convert-docx-to-pdf.ps1');
+const PS_MATHTYPE_TRANSLATOR = path.join(TOOLS_DIR, 'translate-mathtype-mtef.ps1');
 const PORT = Number(process.env.PORT || 3000);
 const CONVERT_TIMEOUT_MS = Number(process.env.DOCX_CONVERT_TIMEOUT_MS || 120000);
+const MATHTYPE_TIMEOUT_MS = Number(process.env.MATHTYPE_TRANSLATE_TIMEOUT_MS || 60000);
 const CONVERTER_MODE = String(process.env.QISI_DOCX_CONVERTER || 'auto').toLowerCase();
 const DASHSCOPE_API_KEY = String(process.env.DASHSCOPE_API_KEY || '').trim();
 const AI_BODY_LIMIT = String(process.env.AI_BODY_LIMIT || '60mb');
@@ -192,6 +194,68 @@ function sanitizeFilename(name) {
     .replace(/\s+/g, '_')
     .replace(/_+/g, '_')
     .slice(0, 160);
+}
+
+function validateMtefBatch(body) {
+  const equations = Array.isArray(body?.equations) ? body.equations : null;
+  if (!equations || equations.length < 1 || equations.length > 512) {
+    return { ok: false, code: 'INVALID_MTEF_BATCH', equations: [] };
+  }
+
+  const normalized = [];
+  for (const row of equations) {
+    const id = String(row?.id || '').trim();
+    const mtefBase64 = String(row?.mtefBase64 || '').trim();
+    if (!id || id.length > 160 || !/^[A-Za-z0-9_.:-]+$/.test(id)) {
+      return { ok: false, code: 'INVALID_MTEF_ID', equations: [] };
+    }
+    if (!mtefBase64 || mtefBase64.length > 1024 * 1024 || !/^[A-Za-z0-9+/]+={0,2}$/.test(mtefBase64)) {
+      return { ok: false, code: 'INVALID_MTEF_PAYLOAD', equations: [] };
+    }
+    const bytes = Buffer.from(mtefBase64, 'base64');
+    if (!bytes.length || bytes[0] !== 5) {
+      return { ok: false, code: 'INVALID_MTEF_HEADER', equations: [] };
+    }
+    normalized.push({ id, mtefBase64 });
+  }
+
+  return { ok: true, code: 'MTEF_BATCH_OK', equations: normalized };
+}
+
+async function translateMtefBatch(equations) {
+  const jobDir = await fsp.mkdtemp(path.join(TMP_DIR, 'mathtype-'));
+  const inputPath = path.join(jobDir, 'input.json');
+  const outputPath = path.join(jobDir, 'output.json');
+
+  try {
+    await fsp.writeFile(inputPath, JSON.stringify({ equations }), 'utf8');
+    const result = await runProcess('powershell.exe', [
+      '-NoProfile',
+      '-ExecutionPolicy', 'Bypass',
+      '-File', PS_MATHTYPE_TRANSLATOR,
+      '-InputPath', inputPath,
+      '-OutputPath', outputPath
+    ], {
+      cwd: ROOT,
+      windowsHide: true,
+      timeoutMs: MATHTYPE_TIMEOUT_MS
+    });
+
+    if (!result.ok) {
+      throw new Error(
+        `MathType helper failed (${result.code}): ${String(result.stderr || result.stdout || '').trim()}`
+      );
+    }
+
+    const payload = JSON.parse(await fsp.readFile(outputPath, 'utf8'));
+    if (!payload?.ok || !Array.isArray(payload.equations)) {
+      const code = payload?.code || 'MATHTYPE_INVALID_RESPONSE';
+      throw new Error(`MathType helper returned ${code}.`);
+    }
+    return payload;
+  } finally {
+    await fsp.rm(jobDir, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 function killProcessTree(child) {
@@ -601,6 +665,37 @@ app.get('/api/convert/self-test', async (req, res) => {
       ok: false,
       error: error.message || String(error),
       result
+    });
+  }
+});
+
+app.post('/api/convert/mathtype-mtef', async (req, res) => {
+  const validation = validateMtefBatch(req.body);
+  if (!validation.ok) {
+    return res.status(400).json({
+      ok: false,
+      code: validation.code,
+      equations: []
+    });
+  }
+
+  try {
+    const result = await translateMtefBatch(validation.equations);
+    console.log('[MATHTYPE_TRANSLATE][complete]', {
+      requested: validation.equations.length,
+      translated: result.equations.filter(row => row.ok).length
+    });
+    return res.json(result);
+  } catch (error) {
+    console.error('[MATHTYPE_TRANSLATE][error]', {
+      requested: validation.equations.length,
+      message: error?.message || String(error)
+    });
+    return res.status(500).json({
+      ok: false,
+      code: 'MATHTYPE_TRANSLATION_FAILED',
+      error: error?.message || String(error),
+      equations: []
     });
   }
 });
