@@ -21,8 +21,11 @@
         };
 
         const splitOptions = (value = '') => {
-            const source = String(value || '');
-            const regex = /(^|[\s　])([A-D])\s*[.．、:：]\s*/g;
+            const source = String(value || '').replace(
+                /\$\{?([A-D])\}?\s*(?:\{\s*[.．、:：]\s*\}|[.．、:：])\s*(?=[\\A-Za-z0-9{(+-])/g,
+                (_, label) => `${label}. $`
+            );
+            const regex = /(^|[\s　]|\]\])([A-D])\s*[.．、:：]\s*/g;
             const markers = [];
             let match;
             while ((match = regex.exec(source)) !== null) {
@@ -38,7 +41,19 @@
             };
         };
 
-        const appendText = (current, value) => [current, String(value || '').trim()].filter(Boolean).join('\n');
+        const appendText = (current, value) => {
+            const previous = String(current || '').trim();
+            const next = String(value || '').trim();
+            if (!previous) return next;
+            if (!next) return previous;
+            const beginsMathContinuation = /^(?:\$|\\\(|\\\[|[A-Za-z]\s*[=＝<>≤≥])/.test(next);
+            const previousEndsSentence = /[。！？!?；;：:]$/.test(previous);
+            const previousEndsImage = /\[\[IMAGE:[^\]]+\]\]$/.test(previous);
+            const separator = beginsMathContinuation && !previousEndsSentence && !previousEndsImage
+                ? ' '
+                : '\n';
+            return `${previous}${separator}${next}`;
+        };
 
         const splitLeadingImageTokens = (value = '') => {
             const source = String(value || '');

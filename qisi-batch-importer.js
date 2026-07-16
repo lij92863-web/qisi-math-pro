@@ -450,15 +450,20 @@
     };
 
     const questionSectionBody = (paragraphs = []) => {
-        const firstSectionIndex = paragraphs.findIndex(paragraph =>
+        const partition = window.Qisi?.DocxSupportContent
+            ?.partitionQuestionAndSupportBlocks?.(paragraphs);
+        const questionParagraphs = partition?.hasSupportHeading
+            ? partition.questionBlocks
+            : paragraphs;
+        const firstSectionIndex = questionParagraphs.findIndex(paragraph =>
             isQuestionSectionHeading(paragraph?.text || paragraph?.serialized || '')
         );
-        const hasQuestionBeforeSection = firstSectionIndex > 0 && paragraphs
+        const hasQuestionBeforeSection = firstSectionIndex > 0 && questionParagraphs
             .slice(0, firstSectionIndex)
             .some(hasSubstantiveQuestionStart);
         return firstSectionIndex >= 0 && !hasQuestionBeforeSection
-            ? paragraphs.slice(firstSectionIndex)
-            : paragraphs;
+            ? questionParagraphs.slice(firstSectionIndex)
+            : questionParagraphs;
     };
 
     const buildQuestionBlocksFromDocumentXml = (documentXml = '', numberingXml = '') => {
@@ -480,6 +485,7 @@
             }
             const qNo = getQuestionNoFromLine(p.text || '') || (
                 Number.isInteger(p.numbering?.value) && Number(p.numbering?.level) === 0
+                    && (!p.numbering?.numFmt || p.numbering.numFmt === 'decimal')
                     ? String(p.numbering.value)
                     : ''
             );
@@ -521,17 +527,36 @@
 
     const prepareDocxQuestionRichBlocks = (richBlocks = []) => (
         questionSectionBody(richBlocks).map(block => {
+            const numbering = block.numbering || {};
+            const serialized = String(block.serialized || '');
             if (
-                !Number.isInteger(block.numbering?.value) ||
-                Number(block.numbering?.level) !== 0 ||
-                getQuestionNoFromLine(block.serialized || '')
+                !Number.isInteger(numbering.value) ||
+                Number(numbering.level) !== 0 ||
+                getQuestionNoFromLine(serialized)
             ) {
                 return block;
             }
-            return {
-                ...block,
-                serialized: `${block.numbering.display || `${block.numbering.value}.`} ${block.serialized || ''}`.trim()
-            };
+
+            if (!numbering.numFmt || numbering.numFmt === 'decimal') {
+                return {
+                    ...block,
+                    serialized: `${numbering.display || `${numbering.value}.`} ${serialized}`.trim()
+                };
+            }
+
+            if (numbering.numFmt === 'upperLetter') {
+                const optionLabel = String(numbering.display || '')
+                    .match(/^\s*([A-D])(?:\s*[.．、)])?\s*$/)?.[1] || '';
+                const alreadyLabelled = /^\s*[A-D]\s*[.．、)]/i.test(serialized);
+                if (optionLabel && !alreadyLabelled) {
+                    return {
+                        ...block,
+                        serialized: `${optionLabel}. ${serialized}`.trim()
+                    };
+                }
+            }
+
+            return block;
         })
     );
 
@@ -1014,6 +1039,12 @@
             mathByRid: translation.mathByRid,
             numberingXml
         });
+        const support = window.Qisi?.DocxSupportContent;
+        const documentPartition = support?.partitionQuestionAndSupportBlocks?.(richBlocks) || {
+            hasSupportHeading: false,
+            questionBlocks: richBlocks,
+            supportBlocks: []
+        };
         const questionBlocks = prepareDocxQuestionRichBlocks(richBlocks);
         const parsed = rich.parseQuestionRichBlocks(questionBlocks);
         const formulaErrors = richBlocks.flatMap(block => block.diagnostics || []).filter(row => row.kind === 'formula-error');
@@ -1023,7 +1054,46 @@
             error.diagnostics = { parser: parsed.diagnostics, formulaErrors };
             throw error;
         }
-        const drafts = parsed.questions.map((question, index) => buildRichDraft(question, index, fileRecord, helpers, defaultMeta));
+        let alignedSupport = null;
+        const roles = Array.isArray(fileRecord?.roles)
+            ? fileRecord.roles
+            : [fileRecord?.role].filter(Boolean);
+        if (roles.includes('full') && documentPartition.hasSupportHeading) {
+            if (!support) throw new Error('Qisi.DocxSupportContent is not loaded.');
+            const parsedSupport = support.parseAnswerRichBlocks(documentPartition.supportBlocks, {
+                allowNumberedAnswerMarkers: true
+            });
+            if (!parsedSupport.ok) {
+                const error = new Error('Combined DOCX answer/analysis section failed explicit-boundary validation.');
+                error.code = 'DOCX_SUPPORT_CONTENT_INTEGRITY_BLOCKED';
+                error.diagnostics = parsedSupport.diagnostics;
+                throw error;
+            }
+            alignedSupport = support.alignQuestionAndSupportByKey(parsed.questions, parsedSupport.items);
+            if (!alignedSupport.ok) {
+                const error = new Error('Combined DOCX answer/analysis sequence does not match the question skeleton.');
+                error.code = alignedSupport.code || 'DOCX_SUPPORT_KEY_MISMATCH';
+                error.diagnostics = alignedSupport.diagnostics;
+                throw error;
+            }
+        }
+
+        const supportByQuestionKey = new Map((alignedSupport?.items || []).map(row => [
+            row.question.questionKey,
+            row.support
+        ]));
+        const drafts = parsed.questions.map((question, index) => {
+            const draft = buildRichDraft(question, index, fileRecord, helpers, defaultMeta);
+            const supportItem = supportByQuestionKey.get(question.questionKey);
+            if (!supportItem) return draft;
+            return {
+                ...draft,
+                answer: supportItem.answer,
+                solution: supportItem.solution,
+                solutionRichBlocks: supportItem.richBlocks,
+                recognizedSolutionImages: supportItem.analysisImages.map(imageFromRichAsset)
+            };
+        });
 
         return {
             drafts,
@@ -1034,6 +1104,8 @@
                 blockCount: richBlocks.length,
                 mediaCount: mediaMap.size,
                 questionCount: drafts.length,
+                embeddedSupportCount: supportByQuestionKey.size,
+                hasEmbeddedSupportHeading: documentPartition.hasSupportHeading,
                 expectedFormulaCount: expectedFormulaRids.length,
                 translatedFormulaCount: translation.mathByRid.size,
                 formulaDiagnostics: translation.diagnostics
@@ -1058,7 +1130,13 @@
             mathByRid: translation.mathByRid,
             numberingXml
         });
-        const parsed = support.parseAnswerRichBlocks(richBlocks);
+        const documentPartition = support.partitionQuestionAndSupportBlocks(richBlocks);
+        const supportBlocks = documentPartition.hasSupportHeading
+            ? documentPartition.supportBlocks
+            : richBlocks;
+        const parsed = support.parseAnswerRichBlocks(supportBlocks, {
+            allowNumberedAnswerMarkers: documentPartition.hasSupportHeading
+        });
         if (!parsed.ok) {
             const error = new Error('DOCX answer/analysis content failed explicit-boundary validation.');
             error.code = 'DOCX_SUPPORT_CONTENT_INTEGRITY_BLOCKED';
@@ -1114,6 +1192,7 @@
             })),
             debug: {
                 supportCount: supportItems.length,
+                hasSupportHeading: documentPartition.hasSupportHeading,
                 mediaCount: mediaMap.size,
                 translatedFormulaCount: translation.mathByRid.size,
                 formulaDiagnostics: translation.diagnostics

@@ -61,6 +61,64 @@ test('adjacent canonical math runs cannot collapse into a display delimiter', ()
     assert.doesNotMatch(serialized, /\$\$/);
 });
 
+test('multi-letter vectors use a full-width arrow while single-letter vectors keep vec', () => {
+    assert.equal(
+        rich.normalizeLatexFragment('\\vec{BC}+\\vec{a}').latex,
+        '\\overrightarrow{BC}+\\vec{a}'
+    );
+});
+
+test('split piecewise MathType fragments are validated after bounded run assembly', () => {
+    const diagnostics = [];
+    const serialized = rich.serializeRichRuns([
+        { kind: 'text', text: '已知函数' },
+        { kind: 'math', latex: 'f(x)=\\left\\{\\begin{array}{ll}x^2+2x-3,&x\\le 0\\\\' },
+        { kind: 'text', text: '-2+\\ln x,&x>0' },
+        { kind: 'math', latex: '\\end{array}\\right.' },
+        { kind: 'text', text: '，令' },
+        { kind: 'math', latex: 'h(x)=f(x)-k' }
+    ], diagnostics);
+
+    assert.deepEqual(diagnostics, []);
+    assert.match(serialized, /\$f\(x\)=\\left\\\{\\begin\{array\}\{ll\}[\s\S]*\\end\{array\}\\right\.\$/);
+    assert.doesNotMatch(serialized, /公式需要人工复核|\[公式语法错误/);
+});
+
+test('one balanced multiline formula is serialized without raw line breaks inside delimiters', () => {
+    const serialized = rich.serializeRichRuns([{
+        kind: 'math',
+        latex: 'f(x)=\\left\\{\\begin{array}{l}x^2,&x\\le 0\\\\\n-2+\\ln x,&x>0\n\\end{array}\\right.'
+    }]);
+
+    assert.doesNotMatch(serialized, /\r|\n/);
+    assert.match(serialized, /\\begin\{array\}[\s\S]*\\end\{array\}/);
+});
+
+test('plain geometry identifiers next to Chinese prose and equations become inline math', () => {
+    const serialized = rich.serializeRichRuns([
+        { kind: 'text', text: '如图，四棱锥PABCD中，底面ABCD为矩形，V=' },
+        { kind: 'math', latex: '\\frac{\\sqrt{3}}{4}' }
+    ]);
+
+    assert.match(serialized, /四棱锥\$PABCD\$中/);
+    assert.match(serialized, /底面\$ABCD\$为/);
+    assert.match(serialized, /\$V=\$/);
+    assert.doesNotMatch(serialized, /\$\$/);
+});
+
+test('soft-hyphen split geometry names and cross-run V equals are rejoined safely', () => {
+    const serialized = rich.serializeRichRuns([
+        { kind: 'text', text: '四棱锥P\u00ad' },
+        { kind: 'math', latex: 'ABCD' },
+        { kind: 'text', text: '的体积 V＝' },
+        { kind: 'math', latex: '\\frac{\\sqrt{3}}{4}' }
+    ]);
+
+    assert.match(serialized, /四棱锥\$PABCD\$的体积/);
+    assert.match(serialized, /\$V=\$/);
+    assert.doesNotMatch(serialized, /\u00ad|\$\$/);
+});
+
 test('mixed Chinese MathType output keeps prose outside math delimiters', () => {
     const serialized = rich.serializeRichRuns([{
         kind: 'math',
@@ -70,6 +128,16 @@ test('mixed Chinese MathType output keeps prose outside math delimiters', () => 
     assert.equal(serialized, '故$\\triangle ABC$的面积$S=\\frac{1}{2}bc\\sin A$');
     const mathSegments = [...serialized.matchAll(/\$([^$]*)\$/g)].map(match => match[1]);
     assert.equal(mathSegments.some(segment => /[\u3400-\u9fff]/.test(segment)), false);
+});
+
+test('Chinese connective inside one balanced set expression stays within one renderable formula', () => {
+    const serialized = rich.serializeRichRuns([{
+        kind: 'math',
+        latex: 'C{U}_{}A={x\\mid x<-3 或 x\\ge 1}'
+    }]);
+
+    assert.equal(serialized, '$C{U}_{}A={x\\mid x<-3 \\text{或} x\\ge 1}$');
+    assert.equal(rich.normalizeLatexFragment(serialized).ok, true);
 });
 
 test('structured OMML conversion keeps fraction, radical, and trig structure', () => {

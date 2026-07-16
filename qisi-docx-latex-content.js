@@ -60,6 +60,7 @@
             source = source
                 .replace(/\\(?:rm|mathrm|text)\s*\{\s*\\pi\s*\}/g, '\\pi')
                 .replace(/\\(?:bf|mathbf)\s*\{\s*Z\s*\}/g, '\\mathbb{Z}')
+                .replace(/\\vec\s*\{\s*([A-Za-z]{2,})\s*\}/g, '\\overrightarrow{$1}')
                 .replace(/\\sqrt\s*([0-9A-Za-z])/g, '\\sqrt{$1}')
                 .replace(/([A-Za-z0-9}])\|([A-Za-z])/g, '$1\\mid $2');
 
@@ -72,7 +73,7 @@
             }
 
             const compact = source
-                .replace(/[ \t]+/g, ' ')
+                .replace(/\s+/g, ' ')
                 .replace(/\s*([=+,:])\s*/g, '$1')
                 .replace(/(^|[={(,:+\[])\s*-\s+(?=\\)/g, '$1-')
                 .replace(/\s*([{}])\s*/g, '$1')
@@ -250,7 +251,28 @@
 
         const normalizePlainText = (value = '') => String(value || '')
             .replace(/\r\n?/g, '\n')
-            .replace(/\u00a0/g, ' ');
+            .replace(/\u00a0/g, ' ')
+            .replace(/\u00ad/g, '');
+
+        const normalizeGeometryTextMath = (value = '') => String(value || '')
+            .split(/(\$[^$]*\$)/g)
+            .map((segment, index) => {
+                if (index % 2 === 1) return segment;
+                return segment
+                    .replace(
+                        /(^|[\u3400-\u9fff△∠，。；：、,;:（(\s])([A-Z]{2,5})(?=[\u3400-\u9fff△∠，。；：、,;:）)\s=＝⊥∥]|$)/g,
+                        (_, prefix, identifier) => `${prefix}$${identifier}$`
+                    )
+                    .replace(
+                        /(^|[\u3400-\u9fff，。；：、,;:（(\s])([A-Za-z])\s*([=＝])/g,
+                        (_, prefix, identifier) => `${prefix}$${identifier}=$`
+                    );
+            })
+            .reduce((result, segment) => (
+                result.endsWith('$') && segment.startsWith('$')
+                    ? `${result}\u200B${segment}`
+                    : result + segment
+            ), '');
 
         const serializeMixedMathText = (value = '') => {
             const source = String(value || '');
@@ -273,27 +295,86 @@
                 /\\[A-Za-z]+|[A-Za-z0-9_^=+\-*/<>()[\]{}]|[∵∴π≤≥≠∈∩∪√△]/.test(segment)
             );
 
-            return protectedSource
+            const segments = protectedSource
                 .split(/([\u3400-\u9fff，。；：、！？（）【】“”‘’]+)/g)
                 .filter(Boolean)
-                .map(segment => {
-                    const restored = restoreTextCommands(segment);
-                    return hasMathPayload(restored) ? `$${restored}$` : restored;
-                })
+                .map(segment => restoreTextCommands(segment));
+            const mathSegments = segments.filter(hasMathPayload);
+            const canSplitSafely = mathSegments.every(segment => normalizeLatexFragment(segment).ok);
+            if (!canSplitSafely) {
+                const embeddedText = source.replace(
+                    /([\u3400-\u9fff，。；：、！？（）【】“”‘’]+)/g,
+                    (_, text) => `\\text{${text}}`
+                );
+                return `$${embeddedText}$`;
+            }
+            return segments
+                .map(segment => hasMathPayload(segment) ? `$${segment}$` : segment)
                 .join('');
+        };
+
+        const mathAssemblyRunValue = run => {
+            if (run?.kind === 'math') return String(run.latex || '');
+            if (run?.kind === 'text') return normalizePlainText(run.text);
+            if (run?.kind === 'tab') return ' ';
+            if (run?.kind === 'break') return '\\\\';
+            return null;
+        };
+
+        const assembleSplitMathRuns = (runs, startIndex) => {
+            let candidate = String(runs[startIndex]?.latex || '');
+            let mathRunCount = 1;
+            for (let index = startIndex + 1; index < runs.length; index += 1) {
+                const value = mathAssemblyRunValue(runs[index]);
+                if (value === null) break;
+                candidate += value;
+                if (runs[index]?.kind === 'math') mathRunCount += 1;
+                const normalized = normalizeLatexFragment(candidate);
+                if (mathRunCount > 1 && normalized.ok) {
+                    return { endIndex: index, latex: normalized.latex };
+                }
+            }
+            return null;
         };
 
         const serializeRichRuns = (runs = [], diagnostics = []) => {
             const sourceRuns = runs || [];
-            const segments = sourceRuns.map((run, index) => {
-                if (run?.kind === 'text') return normalizePlainText(run.text);
-                if (run?.kind === 'tab') return '\t';
-                if (run?.kind === 'break') return '\n';
-                if (run?.kind === 'image') return run.token || (run.assetId ? `[[IMAGE:${run.assetId}]]` : '');
-                if (run?.kind !== 'math') return '';
+            const segments = [];
+            for (let index = 0; index < sourceRuns.length; index += 1) {
+                const run = sourceRuns[index];
+                if (run?.kind === 'text') {
+                    segments.push(normalizeGeometryTextMath(normalizePlainText(run.text)));
+                    continue;
+                }
+                if (run?.kind === 'tab') {
+                    segments.push('\t');
+                    continue;
+                }
+                if (run?.kind === 'break') {
+                    segments.push('\n');
+                    continue;
+                }
+                if (run?.kind === 'image') {
+                    segments.push(run.token || (run.assetId ? `[[IMAGE:${run.assetId}]]` : ''));
+                    continue;
+                }
+                if (run?.kind !== 'math') continue;
 
                 const normalized = normalizeLatexFragment(run.latex);
-                if (normalized.ok) return serializeMixedMathText(normalized.latex);
+                if (normalized.ok) {
+                    segments.push(serializeMixedMathText(normalized.latex));
+                    continue;
+                }
+
+                const assembled = ['UNBALANCED_LATEX', 'MISSING_COMMAND_ARGUMENT'].includes(normalized.code)
+                    ? assembleSplitMathRuns(sourceRuns, index)
+                    : null;
+                if (assembled) {
+                    segments.push(`$${assembled.latex}$`);
+                    index = assembled.endIndex;
+                    continue;
+                }
+
                 diagnostics.push({
                     kind: 'formula-error',
                     source: String(run.rawSource || run.latex || ''),
@@ -301,18 +382,23 @@
                     runIndex: index,
                     paragraphIndex: run.paragraphIndex ?? null
                 });
-                return '公式需要人工复核';
-            });
-            return segments.map((segment, index) => (
-                index > 0 && sourceRuns[index - 1]?.kind === 'math' && sourceRuns[index]?.kind === 'math'
-                    ? `\u200B${segment}`
-                    : segment
-            )).join('');
+                segments.push('公式需要人工复核');
+            }
+            const joined = segments.reduce((result, segment) => (
+                result.endsWith('$') && segment.startsWith('$')
+                    ? `${result}\u200B${segment}`
+                    : result + segment
+            ), '');
+            return normalizeGeometryTextMath(joined).replace(
+                /([A-Z])\u200B?\$([A-Z]{2,5})\$(?=[\u3400-\u9fff，。；：、,;:]|$)/g,
+                (_, prefix, suffix) => `$${prefix}${suffix}$`
+            );
         };
 
         return {
             canonicalizeMathCommands,
             decodeXmlEntities,
+            normalizeGeometryTextMath,
             normalizeLatexFragment,
             serializeRichRuns,
             stripOnlyOuterMathDelimiters,

@@ -93,9 +93,38 @@
         .match(/^((?:\s*\[\[IMAGE:[^\]]+\]\]\s*)+)/)?.[1]
         ?.trim() || '';
 
-    const parseAnswerRichBlocks = (blocks = []) => {
+    const isSupportHeading = value => {
+        const source = withoutLeadingImageTokens(value)
+            .replace(/\s+/g, '')
+            .replace(/[：:]$/, '');
+        return /^(?:《[^》]{1,160}》)?(?:参考答案(?:(?:及|与|和)(?:解析|详解))?|答案(?:及|与|和)(?:解析|详解)|答案解析|参考解析)$/.test(source);
+    };
+
+    const partitionQuestionAndSupportBlocks = (blocks = []) => {
+        const source = Array.isArray(blocks) ? blocks : [];
+        const headingIndex = source.findIndex(block => isSupportHeading(
+            block?.serialized ?? block?.text ?? ''
+        ));
+        if (headingIndex < 0) {
+            return {
+                hasSupportHeading: false,
+                headingBlock: null,
+                questionBlocks: source.slice(),
+                supportBlocks: []
+            };
+        }
+        return {
+            hasSupportHeading: true,
+            headingBlock: source[headingIndex],
+            questionBlocks: source.slice(0, headingIndex),
+            supportBlocks: source.slice(headingIndex + 1)
+        };
+    };
+
+    const parseAnswerRichBlocks = (blocks = [], options = {}) => {
         const items = [];
         const diagnostics = [];
+        const allowNumberedAnswerMarkers = options.allowNumberedAnswerMarkers === true;
         let sectionIndex = 1;
         let sawQuestion = false;
         let current = null;
@@ -108,7 +137,11 @@
                 if (sawQuestion) sectionIndex += 1;
                 continue;
             }
-            const marker = markerSource.match(/^\s*(\d+)\s*[.．、]?\s*【答案】\s*([\s\S]*)$/);
+            const explicitMarker = markerSource.match(/^\s*(\d+)\s*[.．、]?\s*【答案】\s*([\s\S]*)$/);
+            const numberedMarker = allowNumberedAnswerMarkers
+                ? markerSource.match(/^\s*(\d+)\s*[.．、]\s*([\s\S]*)$/)
+                : null;
+            const marker = explicitMarker || numberedMarker;
             if (marker) {
                 finishItem(current, items, diagnostics);
                 sawQuestion = true;
@@ -198,5 +231,11 @@
         };
     };
 
-    return { alignQuestionAndSupportByKey, normalizeKeyboardMath, parseAnswerRichBlocks };
+    return {
+        alignQuestionAndSupportByKey,
+        isSupportHeading,
+        normalizeKeyboardMath,
+        parseAnswerRichBlocks,
+        partitionQuestionAndSupportBlocks
+    };
 });

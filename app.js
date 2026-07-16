@@ -14430,7 +14430,17 @@ ${source}`;
                                 item.solution
                             );
                         const answer = itemAnswerText ? { answer: itemAnswerText, sourceFileId: item.sourceFileId, sourceFileName: files.find(f => f.id === item.sourceFileId)?.filename || '', matchKey: mergeKey } : answerMap.get(mergeKey);
-                        let solution = itemSolutionText ? { solution: itemSolutionText, sourceFileId: item.sourceFileId, sourceFileName: files.find(f => f.id === item.sourceFileId)?.filename || '', matchKey: mergeKey } : solutionMap.get(mergeKey);
+                        let solution = itemSolutionText ? {
+                            solution: itemSolutionText,
+                            richBlocks: Array.isArray(item.solutionRichBlocks) ? item.solutionRichBlocks : [],
+                            images: Array.isArray(item.recognizedSolutionImages) ? item.recognizedSolutionImages : [],
+                            imageRefs: Array.isArray(item.solutionImageRefs)
+                                ? item.solutionImageRefs
+                                : (item.recognizedSolutionImages || []).map(image => image.id).filter(Boolean),
+                            sourceFileId: item.sourceFileId,
+                            sourceFileName: files.find(f => f.id === item.sourceFileId)?.filename || '',
+                            matchKey: mergeKey
+                        } : solutionMap.get(mergeKey);
                         if (answer) usedAnswers.add(mergeKey);
                         const warnings = [...(item.warnings || [])];
                         const mergeWarnings = [];

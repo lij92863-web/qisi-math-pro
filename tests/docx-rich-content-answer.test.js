@@ -84,3 +84,48 @@ test('explicit support alignment rejects duplicates and missing question keys wi
     assert.equal(missing.code, 'DOCX_SUPPORT_KEY_MISMATCH');
     assert.deepEqual(missing.diagnostics.missingKeys, ['section-1/q-2']);
 });
+
+test('numbered answer shorthand is accepted only inside an explicit support section', () => {
+    const blocks = [
+        paragraph(0, '《期末练习》参考答案'),
+        paragraph(1, '1．B'),
+        paragraph(2, '【分析】排除其余选项'),
+        paragraph(3, '【详解】故选 B。'),
+        paragraph(4, '2．$\\frac{1}{2}$'),
+        paragraph(5, '【详解】直接计算。')
+    ];
+    const partition = support.partitionQuestionAndSupportBlocks(blocks);
+
+    assert.equal(partition.hasSupportHeading, true);
+    assert.deepEqual(partition.questionBlocks, []);
+    assert.deepEqual(partition.supportBlocks.map(block => block.paragraphIndex), [1, 2, 3, 4, 5]);
+
+    const parsed = support.parseAnswerRichBlocks(partition.supportBlocks, {
+        allowNumberedAnswerMarkers: partition.hasSupportHeading
+    });
+    assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
+    assert.deepEqual(parsed.items.map(item => item.answer), ['B', '$\\frac{1}{2}$']);
+    assert.match(parsed.items[0].solution, /排除其余选项[\s\S]*故选 B/);
+
+    const unsafe = support.parseAnswerRichBlocks([
+        paragraph(10, '1．这是一道题目，不是答案')
+    ]);
+    assert.equal(unsafe.items.length, 0);
+});
+
+test('combined DOCX is partitioned at the first explicit answer heading', () => {
+    const blocks = [
+        paragraph(0, '一、单选题'),
+        paragraph(1, '1．题目一'),
+        paragraph(2, '2．题目二'),
+        paragraph(3, '《期末练习》参考答案'),
+        paragraph(4, '1．A'),
+        paragraph(5, '2．C')
+    ];
+
+    const partition = support.partitionQuestionAndSupportBlocks(blocks);
+    assert.equal(partition.hasSupportHeading, true);
+    assert.equal(partition.headingBlock.paragraphIndex, 3);
+    assert.deepEqual(partition.questionBlocks.map(block => block.paragraphIndex), [0, 1, 2]);
+    assert.deepEqual(partition.supportBlocks.map(block => block.paragraphIndex), [4, 5]);
+});

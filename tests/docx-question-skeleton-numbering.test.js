@@ -5,10 +5,11 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const rich = require('../qisi-docx-rich-content.js');
+const support = require('../qisi-docx-support-content.js');
 
 const loadBatchImporter = () => {
     const window = {
-        Qisi: { DocxRichContent: rich }
+        Qisi: { DocxRichContent: rich, DocxSupportContent: support }
     };
     const context = vm.createContext({
         window,
@@ -46,8 +47,12 @@ const numberingXml = [
     '<w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0">',
     '<w:start w:val="10"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>',
     '</w:lvl></w:abstractNum>',
+    '<w:abstractNum w:abstractNumId="2"><w:lvl w:ilvl="0">',
+    '<w:start w:val="1"/><w:numFmt w:val="upperLetter"/><w:lvlText w:val="%1."/>',
+    '</w:lvl></w:abstractNum>',
     '<w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>',
     '<w:num w:numId="3"><w:abstractNumId w:val="0"/></w:num>',
+    '<w:num w:numId="4"><w:abstractNumId w:val="2"/></w:num>',
     '</w:numbering>'
 ].join('');
 
@@ -111,5 +116,48 @@ test('question skeleton preserves substantive questions before a later section h
     assert.deepEqual(
         Array.from(skeleton.questionNumbers),
         ['1', '2', '3', '4']
+    );
+});
+
+test('combined document skeleton stops before its reference-answer section', () => {
+    const importer = loadBatchImporter();
+    const documentXml = [
+        '<w:document><w:body>',
+        paragraph('一、选择题（本题共2小题）'),
+        paragraph('1. 第一题'),
+        paragraph('2. 第二题'),
+        paragraph('《测试卷》参考答案'),
+        paragraph('1．A'),
+        paragraph('2．B'),
+        '</w:body></w:document>'
+    ].join('');
+
+    const skeleton = importer.buildDocxQuestionSkeletonFromXml(documentXml, numberingXml);
+    assert.equal(skeleton.authoritative, true);
+    assert.deepEqual(Array.from(skeleton.questionNumbers), ['1', '2']);
+});
+
+test('Word upper-letter numbering restores only missing option labels', () => {
+    const importer = loadBatchImporter();
+    const documentXml = [
+        '<w:document><w:body>',
+        paragraph('一、选择题（本题共1小题）'),
+        paragraph('1. 题干'),
+        paragraph('选项甲', '4'),
+        paragraph('B. 选项乙', '4'),
+        paragraph('选项丙', '4'),
+        paragraph('D. 选项丁', '4'),
+        '</w:body></w:document>'
+    ].join('');
+
+    const blocks = rich.extractDocxRichBlocks(documentXml, { numberingXml });
+    const prepared = importer.prepareDocxQuestionRichBlocks(blocks);
+    const parsed = rich.parseQuestionRichBlocks(prepared);
+
+    assert.equal(parsed.ok, true);
+    assert.deepEqual(parsed.questions[0].options, ['选项甲', '选项乙', '选项丙', '选项丁']);
+    assert.deepEqual(
+        Array.from(importer.buildDocxQuestionSkeletonFromXml(documentXml, numberingXml).questionNumbers),
+        ['1']
     );
 });

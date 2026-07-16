@@ -209,6 +209,9 @@
 
         const convertDocxImporterDraftToRecognitionItem = (draft) => {
             const images = normalizeInlineImageList(draft?.images || []);
+            const recognizedSolutionImages = normalizeInlineImageList(
+                draft?.recognizedSolutionImages || []
+            );
             return {
                 question: draft?.questionNumber,
                 questionNumber: draft?.questionNumber,
@@ -219,6 +222,7 @@
                 answer: draft?.answer,
                 solution: draft?.solution,
                 images,
+                recognizedSolutionImages,
                 rawText: draft?.sourceTrace?.blockTextHead || '',
                 rawBlock: draft?.sourceTrace?.blockTextHead || '',
                 pageText: draft?.sourceTrace?.blockTextHead || '',
@@ -227,9 +231,13 @@
                 sourceFileName: draft?.sourceFileName,
                 sourcePage: draft?.sourcePage || 1,
                 richBlocks: Array.isArray(draft?.richBlocks) ? draft.richBlocks : [],
+                solutionRichBlocks: Array.isArray(draft?.solutionRichBlocks)
+                    ? draft.solutionRichBlocks
+                    : [],
                 sourceTrace: {
                     ...(draft?.sourceTrace || {}),
-                    imageIds: images.map(img => img.id)
+                    imageIds: images.map(img => img.id),
+                    solutionImageIds: recognizedSolutionImages.map(img => img.id)
                 },
                 warnings: draft?.warnings
             };

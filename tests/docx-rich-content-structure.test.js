@@ -96,3 +96,49 @@ test('MathType OLE preview becomes a math run rather than a generic image', () =
     assert.equal(blocks[0].assets.length, 0);
     assert.match(blocks[0].serialized, /\$A\\subseteq B\$/);
 });
+
+test('a continuation paragraph beginning with math stays in the preceding stem line', () => {
+    const parsed = rich.parseQuestionRichBlocks([
+        { paragraphIndex: 0, serialized: '一、单选题', runs: [], assets: [], diagnostics: [] },
+        { paragraphIndex: 1, serialized: '1．四棱锥的体积', runs: [], assets: [], diagnostics: [] },
+        { paragraphIndex: 2, serialized: '$V=\\frac{\\sqrt{3}}{4}$，则距离为（ ）', runs: [], assets: [], diagnostics: [] },
+        { paragraphIndex: 3, serialized: 'A．1 B．2 C．3 D．4', runs: [], assets: [], diagnostics: [] }
+    ]);
+
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.questions[0].stem, '四棱锥的体积 $V=\\frac{\\sqrt{3}}{4}$，则距离为（ ）');
+    assert.deepEqual(parsed.questions[0].options, ['1', '2', '3', '4']);
+});
+
+test('MathType-rendered option labels are normalized before deterministic splitting', () => {
+    const parsed = rich.parseQuestionRichBlocks([
+        { paragraphIndex: 0, serialized: '一、单选题', runs: [], assets: [], diagnostics: [] },
+        { paragraphIndex: 1, serialized: '4．在$\\triangle ABC$中，求角$C$（ ）', runs: [], assets: [], diagnostics: [] },
+        {
+            paragraphIndex: 2,
+            serialized: '${A}{.}\\frac{\\pi}{4}$ ${B}{.}\\frac{\\pi}{3}$ ${C}{.}\\frac{2\\pi}{3}$ ${D}{.}\\frac{3\\pi}{4}$',
+            runs: [], assets: [], diagnostics: []
+        }
+    ]);
+
+    assert.equal(parsed.questions[0].stem, '在$\\triangle ABC$中，求角$C$（ ）');
+    assert.deepEqual(parsed.questions[0].options, [
+        '$\\frac{\\pi}{4}$',
+        '$\\frac{\\pi}{3}$',
+        '$\\frac{2\\pi}{3}$',
+        '$\\frac{3\\pi}{4}$'
+    ]);
+});
+
+test('an image token immediately before option A stays in the stem exactly once', () => {
+    const token = '[[IMAGE:fixture:p2:r0:rId7]]';
+    const parsed = rich.parseQuestionRichBlocks([
+        { paragraphIndex: 0, serialized: '一、单选题', runs: [], assets: [], diagnostics: [] },
+        { paragraphIndex: 1, serialized: '5．如图，选择正确结论（ ）', runs: [], assets: [], diagnostics: [] },
+        { paragraphIndex: 2, serialized: `${token}A. 外心 B. 内心 C. 重心 D. 垂心`, runs: [], assets: [], diagnostics: [] }
+    ]);
+
+    assert.equal(parsed.questions[0].stem, `如图，选择正确结论（ ）\n${token}`);
+    assert.deepEqual(parsed.questions[0].options, ['外心', '内心', '重心', '垂心']);
+    assert.equal((parsed.questions[0].stem.match(/\[\[IMAGE:/g) || []).length, 1);
+});

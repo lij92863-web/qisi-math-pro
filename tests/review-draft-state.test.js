@@ -171,13 +171,20 @@ test('BMR3: converts DOCX importer draft to recognition item with normalized ima
             { id: 'img1', url: 'u1-copy' },
             { id: 'hidden', url: 'u2', displayable: false }
         ],
+        recognizedSolutionImages: [
+            { id: 'solution-img', url: 'solution-url' }
+        ],
+        solutionRichBlocks: [{ paragraphIndex: 8, serialized: '解析图' }],
         warnings: ['w']
     });
 
     assert.equal(item.questionNumber, '7');
     assert.equal(item.rawText, 'raw head');
     assert.deepEqual(item.images.map(img => img.id), ['img1']);
+    assert.deepEqual(item.recognizedSolutionImages.map(img => img.id), ['solution-img']);
+    assert.deepEqual(item.solutionRichBlocks, [{ paragraphIndex: 8, serialized: '解析图' }]);
     assert.deepEqual(item.sourceTrace.imageIds, ['img1']);
+    assert.deepEqual(item.sourceTrace.solutionImageIds, ['solution-img']);
 });
 
 test('BMR3: merges visual DOCX drafts by normalized question number', () => {

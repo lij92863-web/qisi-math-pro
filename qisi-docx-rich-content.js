@@ -311,6 +311,44 @@
             new RegExp(`<w:${tag}\\b[^>]*w:val=["']([^"']+)["']`, 'i')
         )?.[1] || '';
 
+        const formatAlphabeticNumber = (value, upper = true) => {
+            let cursor = Number(value);
+            if (!Number.isInteger(cursor) || cursor <= 0) return '';
+            let result = '';
+            while (cursor > 0) {
+                cursor -= 1;
+                result = String.fromCharCode(65 + (cursor % 26)) + result;
+                cursor = Math.floor(cursor / 26);
+            }
+            return upper ? result : result.toLowerCase();
+        };
+
+        const formatRomanNumber = (value, upper = true) => {
+            let cursor = Number(value);
+            if (!Number.isInteger(cursor) || cursor <= 0 || cursor >= 4000) return '';
+            const symbols = [
+                [1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'],
+                [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'],
+                [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']
+            ];
+            let result = '';
+            for (const [unit, symbol] of symbols) {
+                while (cursor >= unit) {
+                    result += symbol;
+                    cursor -= unit;
+                }
+            }
+            return upper ? result : result.toLowerCase();
+        };
+
+        const formatNumberingValue = (value, numFmt = '') => ({
+            decimal: String(value),
+            upperLetter: formatAlphabeticNumber(value, true),
+            lowerLetter: formatAlphabeticNumber(value, false),
+            upperRoman: formatRomanNumber(value, true),
+            lowerRoman: formatRomanNumber(value, false)
+        }[numFmt] || '');
+
         const createDocxNumberingResolver = (numberingXml = '') => {
             const abstractLevels = new Map();
             const numDefinitions = new Map();
@@ -363,15 +401,25 @@
                 const start = definition.overrides.get(level) || levelDefinition.start || 1;
                 const value = counters.has(key) ? counters.get(key) + 1 : start;
                 counters.set(key, value);
-                if (levelDefinition.numFmt !== 'decimal') {
-                    return { numId, level, numFmt: levelDefinition.numFmt, display: '', value: null };
-                }
-
                 const display = levelDefinition.lvlText.replace(/%(\d+)/g, (match, number) => {
-                    const referenced = counters.get(`${numId}:${Number(number) - 1}`);
-                    return Number.isInteger(referenced) ? String(referenced) : match;
+                    const referencedLevel = Number(number) - 1;
+                    const referenced = counters.get(`${numId}:${referencedLevel}`);
+                    const referencedDefinition = abstractLevels
+                        .get(definition.abstractId)
+                        ?.get(referencedLevel);
+                    const formatted = Number.isInteger(referenced)
+                        ? formatNumberingValue(referenced, referencedDefinition?.numFmt || '')
+                        : '';
+                    return formatted || match;
                 });
-                return { numId, level, numFmt: levelDefinition.numFmt, display, value };
+                const formattedValue = formatNumberingValue(value, levelDefinition.numFmt);
+                return {
+                    numId,
+                    level,
+                    numFmt: levelDefinition.numFmt,
+                    display: formattedValue ? display : '',
+                    value: formattedValue ? value : null
+                };
             };
         };
 
