@@ -319,16 +319,33 @@
             );
         };
 
+        const draftImageContentRole = img => {
+            const explicit = String(img?.contentRole || img?.role || img?.anchorField || '').toLowerCase();
+            const source = String(img?.source || '').toLowerCase();
+            const description = String(img?.description || '').toLowerCase();
+
+            if (
+                ['solution', 'analysis'].includes(explicit) ||
+                source === 'pdf-analysis-figure-crop' ||
+                /解析图|答案图/.test(description)
+            ) {
+                return 'solution';
+            }
+            return 'question';
+        };
+
         const shouldInlineDraftImageInStemForV2 = (img) => {
             if (!img || !img.id || !img.url) return false;
             if (img.status === 'deleted') return false;
             if (isSourcePageImageForStemTokenV2(img)) return false;
+            if (draftImageContentRole(img) !== 'question') return false;
 
             const source = String(img.source || '');
             const desc = String(img.description || '');
 
             return (
                 source === 'auto-figure-crop' ||
+                source === 'pdf-embedded-image-placement' ||
                 source === 'pdf-layout-figure-crop' ||
                 source === 'manual-crop' ||
                 source === 'uploaded-question-image' ||
@@ -336,43 +353,73 @@
             );
         };
 
+        const shouldInlineDraftImageInSolutionForV2 = img => (
+            Boolean(img?.id && img?.url) &&
+            img.status !== 'deleted' &&
+            !isSourcePageImageForStemTokenV2(img) &&
+            draftImageContentRole(img) === 'solution'
+        );
+
         const imageTokenForDraftImageV2 = (img) => {
             const id = String(img?.id || '').trim();
             return id ? `[[IMAGE:${id}]]` : '';
         };
 
-        const INLINE_IMAGE_TOKEN_RE_FOR_V2 = /\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\]/g;
+        const escapeRegExp = value => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-        const appendImageTokensToStemForV2 = (stem = '', images = []) => {
-            let output = String(stem || '').trim();
+        const replaceDraftImagePlacement = (content = '', image = {}, position = 'center') => {
+            const id = String(image?.id || '').trim();
+            if (!id) throw new Error('图片缺少 ID，无法修改位置。');
 
-            const existing = new Set(
-                (output.match(INLINE_IMAGE_TOKEN_RE_FOR_V2) || [])
-                    .map(token => token.trim())
+            const token = `[[IMAGE:${id}]]`;
+            const escapedToken = escapeRegExp(token);
+            const placementPattern = new RegExp(
+                `(?:\\\\begin\\{center\\}\\s*${escapedToken}\\s*\\\\end\\{center\\}` +
+                `|\\\\begin\\{wrapfigure\\}\\{[lr]\\}\\{[^}]+\\}\\s*` +
+                `(?:\\\\centering\\s*)?${escapedToken}\\s*\\\\end\\{wrapfigure\\}` +
+                `|${escapedToken})`,
+                'g'
             );
-
-            const tokens = (images || [])
-                .filter(shouldInlineDraftImageInStemForV2)
-                .map(imageTokenForDraftImageV2)
-                .filter(Boolean);
-
-            for (const token of tokens) {
-                if (!existing.has(token)) {
-                    output = `${output}\n${token}`.trim();
-                    existing.add(token);
-                }
-            }
-
-            return output;
+            const replacement = buildDraftImagePlacementCode(image, position);
+            const source = String(content || '');
+            let replaced = false;
+            const output = source.replace(placementPattern, () => {
+                if (replaced) return '';
+                replaced = true;
+                return replacement;
+            });
+            return replaced
+                ? output.replace(/\n{3,}/g, '\n\n').trim()
+                : `${source}\n${replacement}`.trim();
         };
 
-        const attachDraftImageTokensIntoStemsForV2 = (drafts = [], draftImages = []) => {
+        const insertDraftImageAtDefaultAnchor = (content = '', image = {}, field = 'stem') => {
+            const source = String(content || '').trim();
+            const token = imageTokenForDraftImageV2(image);
+            if (!token || source.includes(token)) return source;
+            const placement = buildDraftImagePlacementCode(image, image.align || 'center');
+
+            if (field !== 'solution') return `${source}\n${placement}`.trim();
+
+            const lines = source.split('\n');
+            const cueIndex = lines.findIndex(line => /如图|见图|下图|如下图|作出.*(?:图|截面)/.test(line));
+            if (cueIndex >= 0) {
+                lines.splice(cueIndex + 1, 0, placement);
+                return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+            }
+            return `${source}\n${placement}`.trim();
+        };
+
+        const attachDraftImageTokensIntoContentForV2 = (drafts = [], draftImages = []) => {
             if (!Array.isArray(drafts) || !drafts.length) return drafts;
 
             const imagesByQuestionId = new Map();
 
             for (const img of draftImages || []) {
-                if (!shouldInlineDraftImageInStemForV2(img)) continue;
+                if (
+                    !shouldInlineDraftImageInStemForV2(img) &&
+                    !shouldInlineDraftImageInSolutionForV2(img)
+                ) continue;
 
                 const qid = String(img.questionId || '').trim();
                 if (!qid) continue;
@@ -389,17 +436,59 @@
                 const imgs = imagesByQuestionId.get(qid) || [];
                 if (!imgs.length) return draft;
 
+                const stemImages = imgs.filter(shouldInlineDraftImageInStemForV2);
+                const solutionImages = imgs.filter(shouldInlineDraftImageInSolutionForV2);
+                let stem = String(draft.stem || '');
+                let solution = String(draft.solution || '');
+                stemImages.forEach(image => {
+                    stem = insertDraftImageAtDefaultAnchor(stem, image, 'stem');
+                });
+                solutionImages.forEach(image => {
+                    solution = insertDraftImageAtDefaultAnchor(solution, image, 'solution');
+                });
+                const sourceVerified = imgs.every(image =>
+                    ['pdf-embedded-image-placement', 'pdf-analysis-figure-crop', 'docx-inline-figure']
+                        .includes(String(image.source || ''))
+                );
+
                 return {
                     ...draft,
-                    stem: appendImageTokensToStemForV2(draft.stem || '', imgs),
+                    stem,
+                    solution,
                     hasImage: true,
                     imageReviewStatus:
-                        draft.imageReviewStatus && draft.imageReviewStatus !== 'none'
+                        sourceVerified
+                            ? 'confirmed'
+                            : (draft.imageReviewStatus && draft.imageReviewStatus !== 'none'
                             ? draft.imageReviewStatus
-                            : 'need_confirm',
+                            : 'need_confirm'),
                     updatedAt: Date.now()
                 };
             });
+        };
+
+        const attachDraftImageTokensIntoStemsForV2 = (drafts = [], draftImages = []) =>
+            attachDraftImageTokensIntoContentForV2(drafts, draftImages);
+
+        const buildOneClickSubmitPlan = (drafts = []) => {
+            const rows = Array.isArray(drafts) ? drafts : [];
+            const eligible = rows.filter(draft =>
+                draft?.id &&
+                draft.status !== 'submitted' &&
+                draft.selected !== false &&
+                !['existing', 'similar', 'answerConflict'].includes(String(draft.duplicateStatus || ''))
+            );
+            return {
+                ids: eligible.map(draft => draft.id),
+                count: eligible.length,
+                blockedDuplicate: rows.filter(draft =>
+                    draft?.status !== 'submitted' &&
+                    ['existing', 'similar', 'answerConflict'].includes(String(draft?.duplicateStatus || ''))
+                ).length,
+                skippedUnselected: rows.filter(draft =>
+                    draft?.status !== 'submitted' && draft?.selected === false
+                ).length
+            };
         };
 
         return {
@@ -414,7 +503,11 @@
             convertDocxImporterDraftToRecognitionItem,
             mergeDocxVisualDraftsByQuestionNumberForV2,
             buildDraftImagePlacementCode,
+            buildOneClickSubmitPlan,
+            draftImageContentRole,
+            replaceDraftImagePlacement,
             shouldInlineDraftImageInStemForV2,
+            attachDraftImageTokensIntoContentForV2,
             attachDraftImageTokensIntoStemsForV2
         };
     }

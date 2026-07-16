@@ -13,7 +13,10 @@ const {
     convertDocxImporterDraftToRecognitionItem,
     mergeDocxVisualDraftsByQuestionNumberForV2,
     buildDraftImagePlacementCode,
+    buildOneClickSubmitPlan,
+    replaceDraftImagePlacement,
     shouldInlineDraftImageInStemForV2,
+    attachDraftImageTokensIntoContentForV2,
     attachDraftImageTokensIntoStemsForV2
 } = require('../qisi-review-draft-state.js');
 
@@ -219,9 +222,63 @@ test('BMR3: attaches draft image tokens without mutating unrelated drafts', () =
     ]);
 
     assert.notEqual(result[0], drafts[0]);
-    assert.equal(result[0].stem, 'Stem 1\n[[IMAGE:img1]]');
+    assert.equal(result[0].stem, 'Stem 1\n\\begin{center}[[IMAGE:img1]]\\end{center}');
     assert.equal(result[0].hasImage, true);
     assert.equal(result[0].imageReviewStatus, 'need_confirm');
     assert.ok(result[0].updatedAt >= now);
     assert.equal(result[1], drafts[1]);
+});
+
+test('PDF analysis images anchor in solution after the first figure cue', () => {
+    const drafts = [{
+        id: 'q6',
+        stem: '圆锥题',
+        solution: '如图，作出圆锥SO的轴截面SAB,\n\n设上、下两部分的内切球半径分别为r，R。'
+    }];
+    const result = attachDraftImageTokensIntoContentForV2(drafts, [{
+        id: 'analysis-6',
+        questionId: 'q6',
+        url: 'data:image/png;base64,x',
+        source: 'pdf-analysis-figure-crop',
+        contentRole: 'solution'
+    }]);
+
+    assert.equal(result[0].stem, '圆锥题');
+    assert.match(
+        result[0].solution,
+        /^如图，作出圆锥SO的轴截面SAB,\n\\begin\{center\}\[\[IMAGE:analysis-6\]\]\\end\{center\}/
+    );
+});
+
+test('question figures default to centered inline placement and position changes replace it', () => {
+    const [draft] = attachDraftImageTokensIntoContentForV2(
+        [{ id: 'q8', stem: '如图，求三棱锥体积', solution: '' }],
+        [{ id: 'stem-8', questionId: 'q8', url: 'u', source: 'pdf-embedded-image-placement', contentRole: 'question' }]
+    );
+    assert.equal(
+        draft.stem,
+        '如图，求三棱锥体积\n\\begin{center}[[IMAGE:stem-8]]\\end{center}'
+    );
+    assert.equal(
+        replaceDraftImagePlacement(draft.stem, { id: 'stem-8' }, 'right'),
+        '如图，求三棱锥体积\n\\begin{wrapfigure}{r}{0.34\\linewidth}\\centering [[IMAGE:stem-8]]\\end{wrapfigure}'
+    );
+    assert.equal(
+        replaceDraftImagePlacement('legacy stem without a token', { id: 'stem-8' }, 'center'),
+        'legacy stem without a token\n\\begin{center}[[IMAGE:stem-8]]\\end{center}'
+    );
+});
+
+test('one-click submit plan accepts pending valid drafts without review state', () => {
+    const plan = buildOneClickSubmitPlan([
+        { id: 'q1', status: 'pending', selected: true, duplicateStatus: 'none' },
+        { id: 'q2', status: 'reviewed', selected: true, duplicateStatus: 'unchecked' },
+        { id: 'q3', status: 'submitted', selected: true, duplicateStatus: 'none' },
+        { id: 'q4', status: 'pending', selected: false, duplicateStatus: 'none' },
+        { id: 'q5', status: 'pending', selected: true, duplicateStatus: 'existing' }
+    ]);
+
+    assert.deepEqual(plan.ids, ['q1', 'q2']);
+    assert.equal(plan.blockedDuplicate, 1);
+    assert.equal(plan.skippedUnselected, 1);
 });

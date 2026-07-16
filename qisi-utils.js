@@ -372,7 +372,7 @@
 
         const normalizeBareLatexForDisplayTextBody = (text) => {
             const source = String(text ?? '');
-            if (!source || !BARE_LATEX_DISPLAY_SIGNAL_RE.test(source)) return source;
+            if (!source) return source;
 
             const {
                 protectedText,
@@ -380,12 +380,49 @@
                 issues
             } = protectLatexMathSegments(source);
 
+            // Structured PDF output can use \text{中文} as a prose bridge before
+            // a bare formula.  Unwrap it only outside existing math delimiters;
+            // otherwise the leading brace is absorbed into the following math
+            // island and the whole remainder is displayed as raw LaTeX.
+            const displayText = protectedText.replace(
+                /\\text\s*\{([^{}]*)\}/g,
+                '$1'
+            );
+            const repairedLatexBlocks = latexBlocks.map(block => {
+                const wrapped = String(block || '');
+                let body = '';
+                if (wrapped.startsWith('$$') && wrapped.endsWith('$$')) {
+                    body = wrapped.slice(2, -2);
+                } else if (
+                    (wrapped.startsWith('\\[') && wrapped.endsWith('\\]')) ||
+                    (wrapped.startsWith('\\(') && wrapped.endsWith('\\)'))
+                ) {
+                    body = wrapped.slice(2, -2);
+                } else if (wrapped.startsWith('$') && wrapped.endsWith('$')) {
+                    body = wrapped.slice(1, -1);
+                }
+
+                if (
+                    !/^\s*\\text\s*\{[^{}]+\}\s+/.test(body) ||
+                    !/[，。；：！？]/.test(body)
+                ) {
+                    return wrapped;
+                }
+
+                const unwrapped = body.replace(/\\text\s*\{([^{}]*)\}/g, '$1');
+                return normalizeBareLatexForDisplaySpan(unwrapped);
+            });
+
+            if (!BARE_LATEX_DISPLAY_SIGNAL_RE.test(displayText)) {
+                return restoreLatexMathSegments(displayText, repairedLatexBlocks);
+            }
+
             if (issues.length) {
                 console.warn('[DISPLAY_LATEX_NORMALIZE][delimiter-issues]', { source, issues });
             }
 
             const tokenPattern = /(@@QISI_MATH_SEGMENT_\d+@@)/g;
-            const parts = protectedText.split(tokenPattern);
+            const parts = displayText.split(tokenPattern);
             const normalized = parts.reduce((result, part, index) => {
                 const isProtected = /^@@QISI_MATH_SEGMENT_\d+@@$/.test(part);
                 const normalizedPart = isProtected
@@ -397,7 +434,7 @@
                 const needsTrailingBoundary = nextIsProtected && normalizedPart.endsWith('$');
                 return result + (needsLeadingBoundary ? '\u200B' : '') + normalizedPart + (needsTrailingBoundary ? '\u200B' : '');
             }, '');
-            return restoreLatexMathSegments(normalized, latexBlocks);
+            return restoreLatexMathSegments(normalized, repairedLatexBlocks);
         };
 
         const normalizeBareLatexForDisplayOptionLine = (line) => {

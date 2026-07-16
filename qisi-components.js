@@ -324,7 +324,10 @@
                 }
             };
 
-            const source = String(content || '')
+            const displaySource = typeof window.Qisi?.Utils?.normalizeBareLatexForDisplayText === 'function'
+                ? window.Qisi.Utils.normalizeBareLatexForDisplayText(content)
+                : content;
+            const source = String(displaySource || '')
                 .replace(/\r\n?/g, '\n')
                 .replace(/_*MATHPROTECT[_-]?\d+_*/gi, '')
                 .replace(/@@QISI_MATH_\d+@@/g, '')

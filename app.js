@@ -62,6 +62,10 @@
                 const activeDraftEditorOriginal = ref('');
                 const activeDraftEditorQuestionId = ref('');
                 const activeDraftEditorTextarea = ref(null);
+                // Vue's `toRaw` only unwraps the outer proxy. Review records contain nested
+                // reactive image objects, which IndexedDB cannot structured-clone directly.
+                const reviewRecordForStorage = value =>
+                    JSON.parse(JSON.stringify(toRaw(value)));
                 const cropModalOpen = ref(false);
                 const cropImageRef = ref(null);
                 const cropState = reactive({
@@ -95,7 +99,6 @@
                 const batchCreateWarning = ref('');
                 const batchExpectedQuestionCount = ref(0);
                 const unmatchedAnswers = ref([]);
-                const submitSummary = ref(null);
                 const batchDefaultMeta = reactive({
                     subject: '数学',
                     defaultType: '',
@@ -347,7 +350,6 @@
                         batchDraftImages.value = [];
                         batchImportFiles.value = [];
                         unmatchedAnswers.value = [];
-                        submitSummary.value = null;
                         batchImportMode.value = 'list';
                         await loadBatchImportData();
                         showBatchToast('批量录题草稿已清空，可以重新开始。');
@@ -587,7 +589,8 @@
 
                     const bound = batchDraftImages.value
                         .filter(image => image.questionId === qid)
-                        .filter(isRealQuestionFigureImageRow);
+                        .filter(isRealQuestionFigureImageRow)
+                        .filter(image => window.Qisi.ReviewDraftState.draftImageContentRole(image) === 'question');
 
                     const inline = (q.images || [])
                         .filter(isValidQuestionPreviewImage)
@@ -596,13 +599,29 @@
 
                             return (
                                 source === 'auto-figure-crop' ||
+                                source === 'pdf-embedded-image-placement' ||
                                 source === 'pdf-layout-figure-crop' ||
-                                source === 'pdf-analysis-figure-crop' ||
                                 source === 'manual-crop' ||
                                 source === 'uploaded-question-image' ||
                                 source === 'docx-inline-figure'
                             );
                         });
+
+                    return mergeImageListsById(inline, bound);
+                });
+
+                const activeDraftAnalysisImages = computed(() => {
+                    const q = activeDraftQuestion.value;
+                    const qid = q?.id;
+                    if (!q || !qid) return [];
+
+                    const bound = batchDraftImages.value
+                        .filter(image => image.questionId === qid)
+                        .filter(isRealQuestionFigureImageRow)
+                        .filter(image => window.Qisi.ReviewDraftState.draftImageContentRole(image) === 'solution');
+                    const inline = (q.images || [])
+                        .filter(isValidQuestionPreviewImage)
+                        .filter(image => window.Qisi.ReviewDraftState.draftImageContentRole(image) === 'solution');
 
                     return mergeImageListsById(inline, bound);
                 });
@@ -655,8 +674,10 @@
                         activeDraftRealQuestionImages.value || []
                     );
                     return mergeImageListsById(
-                        questionImages,
-                        (q.recognizedSolutionImages || []).filter(isValidQuestionPreviewImage)
+                        mergeImageListsById(questionImages, activeDraftAnalysisImages.value || []),
+                        (q.recognizedSolutionImages || [])
+                            .filter(isValidQuestionPreviewImage)
+                            .filter(image => image.url)
                     );
                 });
                 const toggleImagePositionMenu = (imageId = '') => {
@@ -670,14 +691,36 @@
                     imagePositionMenuId.value =
                         imagePositionMenuId.value === id ? '' : id;
                 };
-                const copyDraftImagePlacementLatex = async (image, position) => {
+                const setDraftImagePosition = async (image, position) => {
                     try {
-                        const code = window.Qisi.ReviewDraftState.buildDraftImagePlacementCode(image, position);
-                        const copied = await copyText(code);
+                        const q = activeDraftQuestion.value;
+                        if (!q || !image?.id) throw new Error('当前图片或题目不存在');
+                        const role = window.Qisi.ReviewDraftState.draftImageContentRole(image);
+                        const field = role === 'solution' ? 'solution' : 'stem';
+                        q[field] = window.Qisi.ReviewDraftState.replaceDraftImagePlacement(
+                            q[field] || '',
+                            image,
+                            position
+                        );
+                        q.images = (q.images || []).map(item =>
+                            item.id === image.id ? { ...item, align: position } : item
+                        );
+                        image.align = position;
+                        image.anchorField = field;
+                        q.userEdited = true;
+                        q.updatedAt = Date.now();
 
-                        if (!copied) {
-                            throw new Error('浏览器未允许写入剪贴板');
-                        }
+                        await db.transaction('rw', db.draftQuestions, db.draftImages, async () => {
+                            await db.draftQuestions.put(reviewRecordForStorage(q));
+                            const storedImage = await db.draftImages.get(image.id);
+                            if (storedImage) {
+                                await db.draftImages.update(image.id, {
+                                    align: position,
+                                    anchorField: field,
+                                    updatedAt: Date.now()
+                                });
+                            }
+                        });
 
                         imagePositionMenuId.value = '';
 
@@ -687,14 +730,19 @@
                             right: '靠右'
                         }[position] || '居中';
 
-                        if (position === 'left' || position === 'right') {
-                            showBatchToast(`${label}图片代码已复制，请粘贴到题干开头。`);
-                        } else {
-                            showBatchToast('居中图片代码已复制，请粘贴到题干中的目标位置。');
+                        if (field === 'stem') {
+                            window.Qisi.ReviewDraftState.syncActiveDraftEditorFromQuestion({
+                                activeDraftQuestion,
+                                activeDraftEditorBuffer,
+                                activeDraftEditorOriginal,
+                                activeDraftEditorQuestionId,
+                                buildDraftEditorSource
+                            });
                         }
+                        showBatchToast(`图片已${label}放置并保存。`);
                     } catch (error) {
-                        console.error('[BATCH_IMAGE][copy-placement-failed]', error);
-                        showBatchToast(`复制失败：${error?.message || String(error)}`);
+                        console.error('[BATCH_IMAGE][set-placement-failed]', error);
+                        showBatchToast(`图片位置保存失败：${error?.message || String(error)}`);
                     }
                 };
                 const activeDraftEditorDirty = computed(() =>
@@ -7005,7 +7053,27 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                 };
 
                 const bindRecognizedQuestionFigures = async (draft, draftImages, files, batchId, allDrafts = []) => {
-                    const figures = collectValidRecognizedFigures(draft);
+                    const sourceFileIdForDraft =
+                        draft.sourceQuestionFileId ||
+                        draft.sourceFileId ||
+                        draft.sourceTrace?.sourceFileId ||
+                        '';
+                    const sourceFileRecord = files.find(file => file.id === sourceFileIdForDraft);
+                    const recognizedFigures = collectValidRecognizedFigures(draft);
+                    const figures = sourceFileRecord?.fileType === 'pdf'
+                        ? recognizedFigures.filter(figure =>
+                            figure.source === 'pdf-embedded-image-placement' &&
+                            figure.sourceEvidence?.bbox
+                        )
+                        : recognizedFigures;
+
+                    if (recognizedFigures.length > figures.length) {
+                        draft.manualReviewRequired = true;
+                        window.Qisi.Utils.addWarningOnce(
+                            draft,
+                            '图片区域识别不可靠，已阻止错误挂载'
+                        );
+                    }
 
                     if (!figures.length) {
                         return;
@@ -7136,11 +7204,11 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                         if (!croppedUrl) continue;
 
                         const imageId = makeBatchId('dimg');
-                        const imageConfidence = Number(figure.image_confidence || draft.confidence || 0.78);
-                        const imageStatus =
-                            imageConfidence >= 0.9
-                                ? 'bound'
-                                : (imageConfidence >= 0.75 ? 'need_confirm' : 'low_confidence');
+                        // Every row in `figures` has already passed the local PDF placement,
+                        // unique-owner and contamination gates above. This confidence describes
+                        // the binding decision, not a model guess.
+                        const imageConfidence = 1;
+                        const imageStatus = 'bound';
                         const description = window.Qisi.Utils.cleanRecognizedText(figure.image_description || '题中图形');
                         const filename = `page_${sourcePage}_q${draft.questionNumber || draft.order}_figure_${index + 1}.jpg`;
 
@@ -7156,7 +7224,10 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                             bbox: normalizedFigureBbox,
                             confidence: imageConfidence,
                             description: `自动裁剪题图：${description}`,
-                            source: 'auto-figure-crop',
+                            source: figure.source || 'pdf-embedded-image-placement',
+                            contentRole: 'question',
+                            anchorField: 'stem',
+                            sourceEvidence: figure.sourceEvidence || null,
                             status: imageStatus,
                             displayable: true,
                             createdAt: Date.now(),
@@ -7171,7 +7242,15 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                             name: imageRow.name,
                             url: croppedUrl,
                             align: 'center',
-                            source: 'auto-figure-crop',
+                            source: imageRow.source,
+                            sourcePage,
+                            bbox: normalizedFigureBbox,
+                            confidence: imageConfidence,
+                            status: imageStatus,
+                            contentRole: 'question',
+                            anchorField: 'stem',
+                            sourceEvidence: imageRow.sourceEvidence,
+                            description: imageRow.description,
                             displayable: true
                         });
                     }
@@ -7184,7 +7263,7 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                     draft.hasImage = true;
 
                     const statuses = draftImages
-                        .filter(image => image.questionId === draft.id && image.source === 'auto-figure-crop')
+                        .filter(image => image.questionId === draft.id && image.contentRole === 'question')
                         .map(image => image.status);
 
                     draft.imageReviewStatus =
@@ -9214,7 +9293,7 @@ ${rawBlock}
                     const hasAnswerOrSolutionRole = batchHasAnswerRole(file) || batchHasSolutionRole(file);
                     let layouts = [];
 
-                    if (recognitionMode === 'standard') {
+                    if (hasQuestionRole || hasAnswerOrSolutionRole) {
                         try {
                             layouts = await extractPdfLayoutWithPdfJs(file);
                         } catch (error) {
@@ -9368,20 +9447,29 @@ ${rawBlock}
                     console.table(result.failedPages);
                     console.groupEnd();
 
-                    if (recognitionMode === 'standard' && hasQuestionRole && layouts.length) {
-                        const optionRepair =
-                            window.Qisi.PdfContentIntegrity.repairMissingOptionsFromPdfText({
+                    if (hasQuestionRole && layouts.length) {
+                        const integrityResult =
+                            window.Qisi.PdfContentIntegrity.applyQuestionLayoutIntegrity({
                                 questions: result.questions,
                                 layouts,
-                                expectedQuestionNumbers
+                                expectedQuestionNumbers,
+                                minFigureOverlap: 0.9
                             });
-                        result.questions = optionRepair.questions.map(item =>
-                            window.Qisi.PdfContentIntegrity.normalizeQuestionItem(item)
-                        );
+                        result.questions = integrityResult.questions;
                         console.info('[BATCH_PDF_TEXT_OPTION_EVIDENCE]', {
                             filename: file.filename,
-                            decisions: optionRepair.decisions,
-                            rejected: optionRepair.rejected
+                            decisions: integrityResult.optionRepair.decisions,
+                            rejected: integrityResult.optionRepair.rejected
+                        });
+                        console.info('[BATCH_PDF_QUESTION_FIGURE_BINDING]', {
+                            filename: file.filename,
+                            decisions: integrityResult.figureBinding.decisions,
+                            rejected: integrityResult.figureBinding.rejected.map(item => ({
+                                question: item.question || '',
+                                page: item.figure?.page || 0,
+                                reason: item.reason || item.code || ''
+                            })),
+                            regionWarnings: integrityResult.figureBinding.regionReport?.warnings || []
                         });
                     }
 
@@ -10299,7 +10387,12 @@ const normalizeRecognizedFigureDescriptor = (raw = {}) => {
                             raw.confidence ??
                             raw.score ??
                             0.78
-                        )
+                        ),
+                        source: raw.source || '',
+                        sourcePage: Number(raw.sourcePage || raw.page || raw.pageNo || 0) || 0,
+                        contentRole: raw.contentRole || raw.role || '',
+                        anchorField: raw.anchorField || '',
+                        sourceEvidence: raw.sourceEvidence || null
                     };
                 };
 
@@ -10379,6 +10472,7 @@ const normalizeRecognizedFigureDescriptor = (raw = {}) => {
 
                     return (
                         source === 'auto-figure-crop' ||
+                        source === 'pdf-embedded-image-placement' ||
                         source === 'pdf-layout-figure-crop' ||
                         source === 'pdf-analysis-figure-crop' ||
                         source === 'manual-crop' ||
@@ -11396,19 +11490,28 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                             const expectedQuestionNumbers = expected
                                 ? Array.from({ length: expected }, (_, index) => String(index + 1))
                                 : items.map(item => item.questionNumber || item.question || '').filter(Boolean);
-                            const optionRepair =
-                                window.Qisi.PdfContentIntegrity.repairMissingOptionsFromPdfText({
+                            const integrityResult =
+                                window.Qisi.PdfContentIntegrity.applyQuestionLayoutIntegrity({
                                     questions: items,
                                     layouts,
-                                    expectedQuestionNumbers
+                                    expectedQuestionNumbers,
+                                    minFigureOverlap: 0.9
                                 });
-                            items = optionRepair.questions.map(item =>
-                                window.Qisi.PdfContentIntegrity.normalizeQuestionItem(item)
-                            );
+                            items = integrityResult.questions;
                             console.info('[BATCH_PDF_TEXT_OPTION_EVIDENCE]', {
                                 filename: file.filename,
-                                decisions: optionRepair.decisions,
-                                rejected: optionRepair.rejected
+                                decisions: integrityResult.optionRepair.decisions,
+                                rejected: integrityResult.optionRepair.rejected
+                            });
+                            console.info('[BATCH_PDF_QUESTION_FIGURE_BINDING]', {
+                                filename: file.filename,
+                                decisions: integrityResult.figureBinding.decisions,
+                                rejected: integrityResult.figureBinding.rejected.map(item => ({
+                                    question: item.question || '',
+                                    page: item.figure?.page || 0,
+                                    reason: item.reason || item.code || ''
+                                })),
+                                regionWarnings: integrityResult.figureBinding.regionReport?.warnings || []
                             });
                         } catch (error) {
                             console.warn('[BATCH_PDF_TEXT_OPTION_EVIDENCE][unavailable]', {
@@ -16539,7 +16642,7 @@ ${source}`;
                         });
                         drafts = batchGateResult.drafts;
                         const finalDraftImages = batchFinalGateRebindDraftImages(draftImages, batchGateResult);
-                        drafts = window.Qisi.ReviewDraftState.attachDraftImageTokensIntoStemsForV2(drafts, finalDraftImages);
+                        drafts = window.Qisi.ReviewDraftState.attachDraftImageTokensIntoContentForV2(drafts, finalDraftImages);
                         const unmatched = result.unmatched || [];
                         const problemCount = drafts.filter(q => draftQuestionProblems(q).length > 0).length;
 
@@ -18994,11 +19097,23 @@ ${source}`;
                             if (draft.solutionPageImage && Array.isArray(draft.recognizedSolutionImages) && draft.recognizedSolutionImages.length) {
                                 const boundRefs = [];
                                 for (const [idx, recognizedImage] of draft.recognizedSolutionImages.entries()) {
+                                    if (
+                                        recognizedImage?.source !== 'pdf-embedded-image-placement' ||
+                                        !recognizedImage?.sourceEvidence?.bbox
+                                    ) {
+                                        draft.manualReviewRequired = true;
+                                        window.Qisi.Utils.addWarningOnce(
+                                            draft,
+                                            '解析图片区域识别不可靠，已阻止错误挂载'
+                                        );
+                                        continue;
+                                    }
                                     const bbox = recognizedImage.image_bbox || recognizedImage.bbox || [];
                                     if (!Array.isArray(bbox) || bbox.length !== 4) continue;
                                     const imageId = makeBatchId('dimg');
-                                    const imageConfidence = Number(recognizedImage.image_confidence || draft.confidence || 0.78);
-                                    const imageStatus = imageConfidence >= 0.9 ? 'bound' : (imageConfidence >= 0.75 ? 'need_confirm' : 'low_confidence');
+                                    // Only locally verified PDF placements reach this branch.
+                                    const imageConfidence = 1;
+                                    const imageStatus = 'bound';
                                     const solutionImagePage = Number(
                                         recognizedImage.sourcePage || draft.solutionSourcePage || 0
                                     ) || 0;
@@ -19023,6 +19138,9 @@ ${source}`;
                                         sourcePage: solutionImagePage,
                                         confidence: imageConfidence,
                                         status: imageStatus,
+                                        contentRole: 'solution',
+                                        anchorField: 'solution',
+                                        sourceEvidence: recognizedImage.sourceEvidence || null,
                                         description: `自动裁剪解析图：${
                                             window.Qisi.Utils.cleanRecognizedText(recognizedImage.image_description) || '解析图片'
                                         }`,
@@ -19042,6 +19160,9 @@ ${source}`;
                                             window.Qisi.Utils.cleanRecognizedText(recognizedImage.image_description) || '解析图片'
                                         }`,
                                         source: 'pdf-analysis-figure-crop',
+                                        contentRole: 'solution',
+                                        anchorField: 'solution',
+                                        sourceEvidence: recognizedImage.sourceEvidence || null,
                                         status: imageStatus,
                                         displayable: true,
                                         createdAt: Date.now()
@@ -19328,7 +19449,7 @@ ${source}`;
                         drafts = batchGateResult.drafts;
 
                         const finalDraftImages = batchFinalGateRebindDraftImages(draftImages, batchGateResult);
-                        drafts = window.Qisi.ReviewDraftState.attachDraftImageTokensIntoStemsForV2(drafts, finalDraftImages);
+                        drafts = window.Qisi.ReviewDraftState.attachDraftImageTokensIntoContentForV2(drafts, finalDraftImages);
 
                         console.groupCollapsed('[BATCH_IMAGE][figure-binding]');
                         console.table(drafts.map(draft => ({
@@ -19561,7 +19682,7 @@ ${source}`;
 
                     cleanSingleDraftForSave(q);
 
-                    await db.draftQuestions.put(toRaw(q));
+                    await db.draftQuestions.put(reviewRecordForStorage(q));
                     showBatchToast('已保存草稿。');
                 };
 
@@ -19613,20 +19734,28 @@ ${source}`;
                 const saveActiveDraftQuestion = async (options = {}) => {
                     const q = activeDraftQuestion.value;
                     if (!q) return false;
+                    const savedQuestionId = q.id;
 
                     commitDraftEditorBufferToQuestion(q);
                     q.userEdited = true;
                     cleanSingleDraftForSave(q);
                     normalizeDraftQuestionBeforeSave(q);
 
-                    await db.draftQuestions.put(toRaw(q));
+                    await db.draftQuestions.put(reviewRecordForStorage(q));
                     await refreshBatchStats(q.batchId);
-
-                    activeDraftEditorOriginal.value = activeDraftEditorBuffer.value;
-                    activeDraftEditorQuestionId.value = q.id || '';
+                    await loadBatchImportData();
+                    activeDraftQuestionId.value = savedQuestionId;
+                    await nextTick();
+                    window.Qisi.ReviewDraftState.syncActiveDraftEditorFromQuestion({
+                        activeDraftQuestion,
+                        activeDraftEditorBuffer,
+                        activeDraftEditorOriginal,
+                        activeDraftEditorQuestionId,
+                        buildDraftEditorSource
+                    });
 
                     if (!options.silent) {
-                        showBatchToast('题目 LaTeX 已保存。');
+                        showBatchToast('题目、答案和解析修改已保存。');
                     }
 
                     return true;
@@ -19641,9 +19770,9 @@ ${source}`;
                     for (const image of activeDraftRealQuestionImages.value) {
                         image.status = 'bound';
                         image.confidence = Math.max(image.confidence || 0, 0.9);
-                        await db.draftImages.put(toRaw(image));
+                        await db.draftImages.put(reviewRecordForStorage(image));
                     }
-                    await db.draftQuestions.put(toRaw(q));
+                    await db.draftQuestions.put(reviewRecordForStorage(q));
                     await refreshBatchStats(q.batchId);
                     await loadBatchImportData();
                     showBatchToast('图片已确认。');
@@ -19657,6 +19786,7 @@ ${source}`;
                     image.status = 'deleted';
                     q.images = (q.images || []).filter(img => img.id !== imageId);
                     q.stem = removeImageTokenFromStemForV2(q.stem || '', imageId);
+                    q.solution = removeImageTokenFromStemForV2(q.solution || '', imageId);
                     const cleanedEditorSource = removeImageTokenFromStemForV2(
                         q.editorSource ||
                             activeDraftEditorBuffer.value ||
@@ -19671,15 +19801,17 @@ ${source}`;
                         activeDraftEditorOriginal.value = cleanedEditorSource;
                     }
 
-                    const remainingRealImages = activeDraftRealQuestionImages.value
-                        .filter(img => img.id !== imageId && img.status !== 'deleted');
+                    const remainingRealImages = [
+                        ...activeDraftRealQuestionImages.value,
+                        ...activeDraftAnalysisImages.value
+                    ].filter(img => img.id !== imageId && img.status !== 'deleted');
 
                     q.hasImage = remainingRealImages.length > 0 || (q.images || []).length > 0;
                     if (!q.hasImage) q.imageReviewStatus = 'none';
                     cleanSingleDraftForSave(q);
                     await db.transaction('rw', db.draftImages, db.draftQuestions, async () => {
-                        await db.draftImages.put(toRaw(image));
-                        await db.draftQuestions.put(toRaw(q));
+                        await db.draftImages.put(reviewRecordForStorage(image));
+                        await db.draftQuestions.put(reviewRecordForStorage(q));
                     });
                     await loadBatchImportData();
                 };
@@ -19866,7 +19998,7 @@ ${source}`;
                     q.updatedAt = now;
 
                     await db.transaction('rw', db.draftImages, db.draftQuestions, async () => {
-                        await db.draftImages.put(toRaw(croppedImage));
+                        await db.draftImages.put(reviewRecordForStorage(croppedImage));
 
                         await db.draftQuestions.update(q.id, {
                             stem: nextStem,
@@ -19908,8 +20040,8 @@ ${source}`;
                     q.warnings = [...new Set([...(q.warnings || []), '该题图片需要确认后才能入库。'])];
                     cleanSingleDraftForSave(q);
                     await db.transaction('rw', db.draftImages, db.draftQuestions, async () => {
-                        await db.draftImages.put(toRaw(image));
-                        await db.draftQuestions.put(toRaw(q));
+                        await db.draftImages.put(reviewRecordForStorage(image));
+                        await db.draftQuestions.put(reviewRecordForStorage(q));
                     });
                     await refreshBatchStats(q.batchId);
                     await loadBatchImportData();
@@ -19933,8 +20065,9 @@ ${source}`;
                     if (['单选题', '多选题', '填空题'].includes(q.type) && !String(q.answer || '').trim()) return '答案为空，请先补充答案。';
                     const solutionIssue = solutionQualityIssue(q.stem, q.options, q.solution);
                     if (solutionIssue) return `${solutionIssue} 请先核对解析。`;
-                    // 安全审核版：图片未确认只 warning，不阻塞入库。
-                    // if (q.imageReviewStatus === 'need_confirm' || q.imageReviewStatus === 'low_confidence') return '该题图片尚未确认，请先确认图片是否正确。';
+                    if (q.imageReviewStatus === 'need_confirm' || q.imageReviewStatus === 'low_confidence') {
+                        return '该题存在未经来源证据确认的图片，已阻止直接入库。';
+                    }
                     return '';
                 };
 
@@ -20026,30 +20159,6 @@ ${source}`;
                     return before !== after;
                 };
 
-                const markDraftReviewed = async () => {
-                    const q = activeDraftQuestion.value;
-                    if (!q) return;
-
-                    if (activeDraftEditorDirty.value) {
-                        await saveActiveDraftQuestion({ silent: true });
-                    }
-
-                    normalizeDraftQuestionBeforeSave(q);
-                    const error = validateDraftForReview(q);
-                    if (error) {
-                        alert(error);
-                        return;
-                    }
-                    q.status = 'reviewed';
-                    q.userEdited = true;
-                    q.updatedAt = Date.now();
-                    await db.draftQuestions.put(toRaw(q));
-                    await refreshBatchStats(q.batchId);
-                    activeDraftEditorOriginal.value = activeDraftEditorBuffer.value;
-                    await loadBatchImportData();
-                    showBatchToast('已标记为确认。');
-                };
-
                 const detectDraftDuplicate = (q) => {
                     const core = questionCoreFingerprint(q);
                     const stem = questionStemFingerprint(q);
@@ -20080,20 +20189,11 @@ ${source}`;
                     const q = await db.draftQuestions.get(questionId);
                     if (!q || q.status === 'submitted') return false;
                     normalizeDraftQuestionBeforeSave(q);
-                    if (q.status !== 'reviewed') {
-                        if (!silent) alert('请先标记已确认，再提交入库。');
-                        return false;
-                    }
                     const reviewError = validateDraftForReview(q);
                     if (reviewError) {
                         if (!silent) alert(reviewError);
                         return false;
                     }
-                    // 安全审核版：图片未确认只 warning，不阻塞入库。
-                    // if (q.imageReviewStatus === 'need_confirm' || q.imageReviewStatus === 'low_confidence') {
-                    //     if (!silent) alert('该题图片尚未确认，请先确认图片是否正确。');
-                    //     return false;
-                    // }
                     await loadData();
                     const duplicateStatus = detectDraftDuplicate(q);
                     if (duplicateStatus !== 'none') {
@@ -20189,19 +20289,28 @@ ${source}`;
                     await db.draftImportBatches.update(batchId, { reviewedCount, submittedCount, problemCount, unassignedImageCount, status, updatedAt: Date.now() });
                 };
 
-                const openBatchSubmitSummary = () => {
-                    const candidates = batchDraftQuestions.value.filter(q =>
-                        q.status === 'reviewed' &&
-                        q.duplicateStatus === 'none'
+                const submitAllDraftsOneClick = async () => {
+                    if (activeDraftEditorDirty.value) {
+                        await saveActiveDraftQuestion({ silent: true });
+                    }
+                    const plan = window.Qisi.ReviewDraftState.buildOneClickSubmitPlan(
+                        batchDraftQuestions.value
                     );
-                    submitSummary.value = {
-                        count: candidates.length,
-                        ids: candidates.map(q => q.id),
-                        pending: batchDraftQuestions.value.filter(q => q.status === 'pending').length,
-                        missingAnswer: batchDraftQuestions.value.filter(q => (q.mergeWarnings || []).includes('missing_answer') || !String(q.answer || '').trim()).length,
-                        duplicate: batchDraftQuestions.value.filter(q => q.duplicateStatus && q.duplicateStatus !== 'none').length,
-                        image: batchDraftQuestions.value.filter(q => ['need_confirm', 'low_confidence'].includes(q.imageReviewStatus)).length
-                    };
+                    if (!plan.ids.length) {
+                        showBatchToast('没有可直接提交的题目；请检查重复题、缺失字段或图片证据。');
+                        return;
+                    }
+
+                    let okCount = 0;
+                    for (const id of plan.ids) {
+                        if (await submitDraftQuestion(id, true)) okCount += 1;
+                    }
+                    const blocked = plan.ids.length - okCount + plan.blockedDuplicate;
+                    showBatchToast(
+                        blocked > 0
+                            ? `已提交 ${okCount} 道题，${blocked} 道未通过入库校验。`
+                            : `已提交 ${okCount} 道题。`
+                    );
                 };
 
                 const rerunActiveBatchRecognition = async () => {
@@ -20317,16 +20426,6 @@ ${source}`;
                 const showCropNotice = (sourceImage = null) => {
                     const page = sourceImage?.sourcePage ? `第 ${sourceImage.sourcePage} 页` : '来源原图';
                     alert(`${page}已保留；重新裁剪将在接入页面坐标后开放。`);
-                };
-
-                const confirmBatchSubmit = async () => {
-                    if (!submitSummary.value) return;
-                    let okCount = 0;
-                    for (const id of submitSummary.value.ids) {
-                        if (await submitDraftQuestion(id, true)) okCount += 1;
-                    }
-                    submitSummary.value = null;
-                    showBatchToast(`已提交 ${okCount} 道题。`);
                 };
 
                 const deleteBatchImport = async (batchId) => {
@@ -21900,20 +21999,6 @@ ${source}`;
                     await loadData();
                 };
 
-                const installLatexDisplayNormalizer = () => {
-                    if (!LatexPreview?.computed?.htmlContent || LatexPreview.__qisiDisplayLatexNormalizerInstalled) return;
-                    const originalHtmlContent = LatexPreview.computed.htmlContent;
-                    LatexPreview.computed.htmlContent = function () {
-                        return originalHtmlContent.call({
-                            ...this,
-                            content: window.Qisi.Utils.normalizeBareLatexForDisplayText(this.content),
-                            options: window.Qisi.Utils.normalizeBareLatexForDisplayOptions(this.options),
-                            images: this.images || []
-                        });
-                    };
-                    LatexPreview.__qisiDisplayLatexNormalizerInstalled = true;
-                };
-
                 window.__qisiLatexDisplayNormalizeSelfTest = function () {
                     const cases = [
                         {
@@ -22549,7 +22634,6 @@ Promise.all([imageReady, fontReady]).then(() => {
                     });
                 }
 
-                installLatexDisplayNormalizer();
 
                 return {
                     view, questions, filteredQuestions, cart, currentPage, 
@@ -22560,8 +22644,8 @@ Promise.all([imageReady, fontReady]).then(() => {
                     confirmItems, filteredConfirmItems, confirmStatusFilter, confirmStatusOptions, confirmStatusCount, batchPersonalKnowledge, batchSystemKnowledge, flatSystemKnowledge, flatPersonalKnowledge, flatKnowledge, applyBatchKnowledge, confirmAddExternalToPersonal,
                     importBankInput, openImportBankPicker, handleImportBankFileChange, pendingImportPreview, cancelImportPreview, confirmImportBankPreview, exportQuestionBankPackage,
                     undoLatestExternalMerge, deleteExternalBatch, recalculateExternalBatchStatus,
-                    batchImportMode, batchImportBatches, recentBatchImportBatches, batchImportFiles, batchDraftQuestions, filteredDraftQuestions, batchDraftImages, batchImportFilter, activeBatchId, activeBatch, activeDraftQuestionId, activeDraftQuestion, batchRecognitionSummary, activeDraftEditorBuffer, activeDraftEditorOriginal, activeDraftEditorDirty, activeDraftEditorPreview, activeDraftEditorTextarea, activeDraftImages, activeDraftRealQuestionImages, activeDraftSourcePageImages, activeDraftPreviewImages, unassignedDraftImages, activeDraftTab, batchUploadInput, isDraggingBatchFiles, batchToast, unassignedImageModal, imagePositionMenuId, cropModalOpen, cropImageRef, cropState, cropSelectionStyle, pendingPurposeFile, pendingPurposeRoles, batchCreateFiles, batchCreateTypeHint, batchCreateWarning, batchExpectedQuestionCount, batchDefaultMeta, unmatchedAnswers, submitSummary,
-                    openBatchCreate, openBatchList, clearBatchDraftWorkspace, openBatchFilePicker, handleBatchFileChange, handleBatchDrop, handleBatchHomeDrop, togglePurposeRole, confirmBatchFilePurpose, cancelBatchFilePurpose, editBatchFilePurpose, removeBatchCreateFile, createDraftImportBatch, processDraftImportBatch, runBatchRecognition, rerunActiveBatchRecognition, dedupeActiveBatchDraftsNow, openBatchReview, selectDraftQuestion, updateDraftQuestionField, saveActiveDraftQuestion, markDraftReviewed, submitDraftQuestion, openBatchSubmitSummary, confirmBatchSubmit, deleteBatchImport, validatePageRange, batchStatusText, draftQuestionStatusText, roleLabel, rolesLabel, fileTypeText, formatFileSize, draftQuestionProblems, duplicateLabel, confirmDraftImages, deleteDraftImage, toggleImagePositionMenu, copyDraftImagePlacementLatex, openSourcePageCrop, closeCropModal, resetCropState, startManualCrop, moveManualCrop, endManualCrop, saveManualCropToDraft, bindUnassignedImage, deleteUnassignedImage, showUnmatchedAnswerList, showActiveRawText, showCropNotice, cleanupActiveBatchDisplayPollution, markActiveDraftUserEdited, insertDraftEditorText, discardActiveDraftEditorChanges,
+                    batchImportMode, batchImportBatches, recentBatchImportBatches, batchImportFiles, batchDraftQuestions, filteredDraftQuestions, batchDraftImages, batchImportFilter, activeBatchId, activeBatch, activeDraftQuestionId, activeDraftQuestion, batchRecognitionSummary, activeDraftEditorBuffer, activeDraftEditorOriginal, activeDraftEditorDirty, activeDraftEditorPreview, activeDraftEditorTextarea, activeDraftImages, activeDraftRealQuestionImages, activeDraftAnalysisImages, activeDraftSourcePageImages, activeDraftPreviewImages, unassignedDraftImages, activeDraftTab, batchUploadInput, isDraggingBatchFiles, batchToast, unassignedImageModal, imagePositionMenuId, cropModalOpen, cropImageRef, cropState, cropSelectionStyle, pendingPurposeFile, pendingPurposeRoles, batchCreateFiles, batchCreateTypeHint, batchCreateWarning, batchExpectedQuestionCount, batchDefaultMeta, unmatchedAnswers,
+                    openBatchCreate, openBatchList, clearBatchDraftWorkspace, openBatchFilePicker, handleBatchFileChange, handleBatchDrop, handleBatchHomeDrop, togglePurposeRole, confirmBatchFilePurpose, cancelBatchFilePurpose, editBatchFilePurpose, removeBatchCreateFile, createDraftImportBatch, processDraftImportBatch, runBatchRecognition, rerunActiveBatchRecognition, dedupeActiveBatchDraftsNow, openBatchReview, selectDraftQuestion, updateDraftQuestionField, saveActiveDraftQuestion, submitDraftQuestion, submitAllDraftsOneClick, deleteBatchImport, validatePageRange, batchStatusText, draftQuestionStatusText, roleLabel, rolesLabel, fileTypeText, formatFileSize, draftQuestionProblems, duplicateLabel, confirmDraftImages, deleteDraftImage, toggleImagePositionMenu, setDraftImagePosition, openSourcePageCrop, closeCropModal, resetCropState, startManualCrop, moveManualCrop, endManualCrop, saveManualCropToDraft, bindUnassignedImage, deleteUnassignedImage, showUnmatchedAnswerList, showActiveRawText, showCropNotice, cleanupActiveBatchDisplayPollution, markActiveDraftUserEdited, insertDraftEditorText, discardActiveDraftEditorChanges,
                     syncActiveDraftEditorFromQuestion: () => window.Qisi.ReviewDraftState.syncActiveDraftEditorFromQuestion({
                         activeDraftQuestion,
                         activeDraftEditorBuffer,

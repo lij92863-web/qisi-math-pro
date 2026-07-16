@@ -667,8 +667,7 @@
                                     <div class="batch-editor-actions">
                                         <button class="material-light-btn" @click="saveActiveDraftQuestion"><icon name="save" size="14"></icon> 保存修改</button>
                                         <button v-if="activeDraftEditorDirty" class="material-light-btn" @click="discardActiveDraftEditorChanges">放弃修改</button>
-                                        <button class="material-primary-btn" @click="markDraftReviewed"><icon name="check-circle" size="14"></icon> 标记已确认</button>
-                                        <button class="material-primary-btn" :disabled="activeDraftQuestion.status === 'submitted'" @click="submitDraftQuestion(activeDraftQuestion.id)"><icon name="send" size="14"></icon> {{ activeDraftQuestion.status === 'submitted' ? '该题已入库' : '提交入库' }}</button>
+                                        <button class="material-primary-btn" :disabled="activeDraftQuestion.status === 'submitted'" @click="submitDraftQuestion(activeDraftQuestion.id)"><icon name="send" size="14"></icon> {{ activeDraftQuestion.status === 'submitted' ? '该题已入库' : '一键提交本题' }}</button>
                                     </div>
                                 </section>
 
@@ -721,9 +720,34 @@
                                                 <div class="image-position-control">
                                                     <button class="material-light-btn" @click.stop="toggleImagePositionMenu(img.id)">图片位置</button>
                                                     <div v-if="imagePositionMenuId === img.id" class="image-position-popover" @click.stop>
-                                                        <button type="button" @click="copyDraftImagePlacementLatex(img, 'left')">靠左</button>
-                                                        <button type="button" @click="copyDraftImagePlacementLatex(img, 'center')">居中</button>
-                                                        <button type="button" @click="copyDraftImagePlacementLatex(img, 'right')">靠右</button>
+                                                        <button type="button" @click="setDraftImagePosition(img, 'left')">靠左</button>
+                                                        <button type="button" @click="setDraftImagePosition(img, 'center')">居中</button>
+                                                        <button type="button" @click="setDraftImagePosition(img, 'right')">靠右</button>
+                                                    </div>
+                                                </div>
+                                                <button class="material-light-btn danger" @click="deleteDraftImage(img.id)">删除图片</button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="batch-preview-card">
+                                        <div class="batch-preview-head">
+                                            <h2>当前解析图片</h2>
+                                        </div>
+                                        <div v-if="activeDraftAnalysisImages.length === 0" class="batch-empty slim">当前题暂无解析图片。</div>
+                                        <div v-for="img in activeDraftAnalysisImages" :key="img.id" class="batch-image-item">
+                                            <img :src="img.url" />
+                                            <div>
+                                                <span>来源页码：{{ img.sourcePage || '无' }}｜置信度：{{ Math.round((img.confidence || 0) * 100) }}%</span>
+                                                <span>状态：已绑定到解析</span>
+                                            </div>
+                                            <div class="batch-image-actions">
+                                                <div class="image-position-control">
+                                                    <button class="material-light-btn" @click.stop="toggleImagePositionMenu(img.id)">图片位置</button>
+                                                    <div v-if="imagePositionMenuId === img.id" class="image-position-popover" @click.stop>
+                                                        <button type="button" @click="setDraftImagePosition(img, 'left')">靠左</button>
+                                                        <button type="button" @click="setDraftImagePosition(img, 'center')">居中</button>
+                                                        <button type="button" @click="setDraftImagePosition(img, 'right')">靠右</button>
                                                     </div>
                                                 </div>
                                                 <button class="material-light-btn danger" @click="deleteDraftImage(img.id)">删除图片</button>
@@ -753,7 +777,7 @@
 
                             <div class="batch-bottom-bar">
                                 <span>{{ activeDraftQuestion ? '当前：第 ' + (activeDraftQuestion.questionNumber || activeDraftQuestion.order) + ' 题｜' + draftQuestionStatusText(activeDraftQuestion.status) : '暂无题目' }}</span>
-                                <button class="material-primary-btn" @click="openBatchSubmitSummary">提交已确认题目</button>
+                                <button class="material-primary-btn" @click="submitAllDraftsOneClick">一键提交</button>
                             </div>
                         </div>
                     </template>
@@ -837,24 +861,6 @@
                                     <option v-for="q in batchDraftQuestions" :key="q.id" :value="q.id">第 {{ q.questionNumber || q.order }} 题</option>
                                 </select>
                                 <button class="material-light-btn danger" @click="deleteUnassignedImage(img.id)">删除</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div v-if="submitSummary" class="material-modal-backdrop">
-                        <div class="material-modal batch-purpose-modal">
-                            <div class="external-confirm-header">
-                                <div><h2>提交已确认题目</h2><p>本次将提交 {{ submitSummary.count }} 道已确认题。</p></div>
-                            </div>
-                            <div class="batch-submit-summary">
-                                <span>未确认 {{ submitSummary.pending }} 道</span>
-                                <span>缺答案 {{ submitSummary.missingAnswer }} 道</span>
-                                <span>疑似重复 {{ submitSummary.duplicate }} 道</span>
-                                <span>图片未确认 {{ submitSummary.image }} 道</span>
-                            </div>
-                            <div class="flex justify-end gap-2 mt-4">
-                                <button class="material-light-btn" @click="submitSummary = null">返回继续检查</button>
-                                <button class="material-primary-btn" :disabled="submitSummary.count === 0" @click="confirmBatchSubmit">确认提交</button>
                             </div>
                         </div>
                     </div>
@@ -1515,10 +1521,10 @@
     </template>
     <script src="./qisi-config.js?v=foundation-01"></script>
     <script src="./qisi-runtime.js?v=foundation-01"></script>
-    <script src="./qisi-utils.js?v=foundation-01"></script>
+    <script src="./qisi-utils.js?v=pdf-math-region-integrity-r1-4"></script>
     <script src="./qisi-db.js?v=foundation-01"></script>
     <script src="./qisi-backup.js?v=foundation-01"></script>
-    <script src="./qisi-components.js?v=foundation-01"></script>
+    <script src="./qisi-components.js?v=pdf-math-region-integrity-r1-4"></script>
     <script src="./qisi-file-dispatcher.js?v=white-fix-3"></script>
     <script src="./qisi-docx-ole-reader.js?v=docx-integrity-r1"></script>
     <script src="./qisi-docx-mtef-reader.js?v=docx-integrity-r1"></script>
@@ -1529,14 +1535,14 @@
     <script src="./qisi-batch-importer.js?v=foundation-01"></script>
     <script src="./qisi-support-parser.js?v=stage1a-support-parser-04"></script>
     <script src="./qisi-support-repair.js?v=stage1a-support-repair-01"></script>
-    <script src="./qisi-pdf-content-integrity.js?v=pdf-math-region-integrity-r1"></script>
+    <script src="./qisi-pdf-content-integrity.js?v=pdf-math-region-integrity-r1-8"></script>
     <script src="./qisi-pdf-support-aligner.js?v=stageC5A-pdf-support-aligner-01"></script>
     <script src="./qisi-pdf-support-block-parser.js?v=stageC7E-block-parser-01"></script>
     <script src="./qisi-pdf-support-controlled-write.js?v=stageC7T-field-write-01"></script>
     <script src="./qisi-pdf-safe-partial-pipeline.js?v=bmr8-pdf-page-trace-01"></script>
     <script src="./qisi-docx-pipeline.js?v=bmr9-docx-helpers-01"></script>
     <script src="./qisi-ui-events.js?v=bmr5-question-gap-warning-01"></script>
-    <script src="./qisi-review-draft-state.js?v=bmr3-review-draft-01"></script>
-    <script src="./app.js?v=latex-display-options-guard-01"></script>
+    <script src="./qisi-review-draft-state.js?v=pdf-math-region-integrity-r1-3"></script>
+    <script src="./app.js?v=pdf-math-region-integrity-r1-8"></script>
 </body>
 </html>

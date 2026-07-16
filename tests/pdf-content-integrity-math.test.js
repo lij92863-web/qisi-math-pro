@@ -149,3 +149,42 @@ test('a second PDF normalization uses preserved raw stem and option evidence', (
     assert.equal(second.options[1], String.raw`$B \subseteq A$`);
     assert.deepEqual(second.contentIntegrity.issues, []);
 });
+
+test('raw vector LaTeX after text commands is split into renderable rich math runs', () => {
+    const source = String.raw`\text{则} \overline{CP} = (x-2,-\sqrt{3}),
+\overline{DP} = (x,-\sqrt{3}), \therefore
+\overline{CP}\cdot\overline{DP} = x(x-2)+3 = (x-1)^2+2`;
+    const normalized = integrity.normalizeMathContent(source);
+
+    assert.equal(normalized.rawLatexOutsideMathBlocks, 0);
+    assert.doesNotMatch(normalized.value, /\\text\{则\}/);
+    assert.match(normalized.value, /则\s*\$/);
+    for (const command of ['overline', 'sqrt', 'therefore', 'cdot']) {
+        assert.ok(
+            normalized.richRuns.some(run => run.kind === 'math' && run.latex.includes(`\\${command}`)),
+            `${command} should be a math run`
+        );
+    }
+    assert.deepEqual(normalized.issues, []);
+});
+
+test('wrapped mixed prose and vector math is resegmented before persistence', () => {
+    const source = '$\\text{\u5219} \\overline{CP} = (x-2,-\\sqrt{3})\uff0c' +
+        '\\overline{DP} = (x,-\\sqrt{3})\uff0c\\therefore ' +
+        '\\overline{CP} \\cdot \\overline{DP} = x(x-2)+3$';
+    const normalized = integrity.normalizeMathContent(source);
+
+    assert.equal(normalized.rawLatexOutsideMathBlocks, 0);
+    assert.doesNotMatch(normalized.value, /\\text\s*\{/);
+    assert.match(normalized.value, /^\u5219\s*\$/);
+    assert.deepEqual(normalized.issues, []);
+});
+
+test('valid formulas keep internal text commands intact', () => {
+    const source = '$x=\\begin{cases}1,&\\text{当 }x>0，\\\\0,&\\text{其他}\u3002\\end{cases}$';
+    const normalized = integrity.normalizeMathContent(source);
+
+    assert.match(normalized.value, /\\text\{当 /);
+    assert.match(normalized.value, /\\text\{其他\}/);
+    assert.equal(normalized.rawLatexOutsideMathBlocks, 0);
+});

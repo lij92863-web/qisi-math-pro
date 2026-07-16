@@ -86,6 +86,9 @@ test('dual PDF normal UI uses local answer evidence and preserves renderable con
     const capturedPaths = [];
     const explicitEvidenceLogs = [];
     const optionEvidenceLogs = [];
+    const questionFigureBindingLogs = [];
+    const pdfDebugConsole = [];
+    const structuredConsoleErrors = [];
     const requestBodies = new WeakMap();
     let ocrPageIndex = 0;
     let realQuestionPage = 0;
@@ -104,6 +107,9 @@ test('dual PDF normal UI uses local answer evidence and preserves renderable con
 
     page.on('pageerror', error => browserErrors.push(`pageerror:${error.message}`));
     page.on('console', message => {
+        if (message.text().includes('BATCH_PDF') || message.text().includes('pdf-layout')) {
+            pdfDebugConsole.push(`${message.type()}:${message.text()}`);
+        }
         if (message.text().startsWith('[BATCH_PDF_EXPLICIT_ANSWER_EVIDENCE]')) {
             capturePromises.push(
                 Promise.all(message.args().map(argument => argument.jsonValue()))
@@ -116,8 +122,18 @@ test('dual PDF normal UI uses local answer evidence and preserves renderable con
                     .then(values => optionEvidenceLogs.push(values))
             );
         }
+        if (message.text().startsWith('[BATCH_PDF_QUESTION_FIGURE_BINDING]')) {
+            capturePromises.push(
+                Promise.all(message.args().map(argument => argument.jsonValue()))
+                    .then(values => questionFigureBindingLogs.push(values))
+            );
+        }
         if (['error', 'warning'].includes(message.type())) {
             browserErrors.push(`${message.type()}:${message.text()}`);
+            capturePromises.push(
+                Promise.all(message.args().map(argument => argument.jsonValue().catch(() => String(argument))))
+                    .then(values => structuredConsoleErrors.push(values))
+            );
         }
     });
 
@@ -319,6 +335,15 @@ test('dual PDF normal UI uses local answer evidence and preserves renderable con
             probe.close();
             return { questions, images, formalCount };
         }, latestBatch.id);
+        const displayNormalizationDebug = datasetName === 'full'
+            ? await page.evaluate(source => {
+                const normalized = window.Qisi.Utils.normalizeBareLatexForDisplayText(source);
+                return {
+                    normalized,
+                    outsideMath: normalized.replace(/\$[^$]*\$/g, '')
+                };
+            }, state.questions[10]?.solution || '')
+            : null;
         await Promise.all(capturePromises);
 
         assert.equal(state.questions.length, dataset.questionNumbers.length);
@@ -345,7 +370,10 @@ test('dual PDF normal UI uses local answer evidence and preserves renderable con
                 })),
                 draftImageRows: state.images
                     .filter(image => image.questionId === state.questions[3].id)
-                    .map(image => ({ bbox: image.bbox, sourcePage: image.sourcePage, status: image.status }))
+                    .map(image => ({ bbox: image.bbox, sourcePage: image.sourcePage, status: image.status })),
+                questionFigureBindingLogs,
+                browserErrors,
+                pdfDebugConsole
             })
         );
         assert.match(state.questions[5].solution, /\\left\(\\frac\{?1\}?\{?3\}?\\right\)\^3=\\frac\{?1\}?\{?27\}?/);
@@ -366,19 +394,157 @@ test('dual PDF normal UI uses local answer evidence and preserves renderable con
             await navItems.nth(index).click();
             const check = await page.locator('.batch-preview-panel').evaluate(panel => {
                 const currentImageCard = [...panel.querySelectorAll('.batch-preview-card')]
-                    .find(card => card.querySelector('h2')?.textContent?.includes('当前题目图片'));
+                    .find(card => (card.querySelector('h2')?.textContent || '').includes('\u5f53\u524d\u9898\u76ee\u56fe\u7247'));
                 return {
                     katex: panel.querySelectorAll('.katex').length,
                     images: panel.querySelectorAll('.qisi-preview-image img').length,
                     currentImages: currentImageCard?.querySelectorAll('.batch-image-item img').length || 0,
+                    questionImages: currentImageCard?.querySelectorAll('.batch-image-item img').length || 0,
+                    analysisImages: [...panel.querySelectorAll('.batch-preview-card')]
+                        .find(card => (card.querySelector('h2')?.textContent || '').includes('\u5f53\u524d\u89e3\u6790\u56fe\u7247'))
+                        ?.querySelectorAll('.batch-image-item img').length || 0,
                     errors: panel.querySelectorAll('.latex-render-error').length,
-                    text: panel.textContent || ''
+                    text: panel.innerText || panel.textContent || ''
                 };
             });
             previewChecks.push(check);
         }
         assert.equal(previewChecks.every(check => check.katex > 0 && check.errors === 0), true);
         assert.equal(previewChecks[3].images > 0, true);
+        for (const questionNumber of dataset.stemFigures) {
+            assert.ok(
+                previewChecks[Number(questionNumber) - 1].questionImages >= 1,
+                JSON.stringify({
+                    questionNumber,
+                    check: previewChecks[Number(questionNumber) - 1],
+                    questionFigureBindingLogs
+                })
+            );
+        }
+        for (const questionNumber of dataset.analysisFigures) {
+            assert.ok(
+                previewChecks[Number(questionNumber) - 1].analysisImages >= 1,
+                JSON.stringify({ questionNumber, check: previewChecks[Number(questionNumber) - 1] })
+            );
+        }
+        assert.equal(
+            previewChecks.every(check => !/\\text\s*\{|\\(?:overline|sqrt|therefore|cdot)\b/.test(check.text)),
+            true,
+            JSON.stringify({
+                displayNormalizationDebug,
+                q11Preview: previewChecks[10]?.text || ''
+            })
+        );
+
+        for (const questionNumber of dataset.stemFigures) {
+            const question = state.questions[Number(questionNumber) - 1];
+            const rows = state.images.filter(image => image.questionId === question.id);
+            assert.ok(
+                rows.some(image =>
+                    image.source === 'pdf-embedded-image-placement' &&
+                    image.status === 'bound' &&
+                    image.confidence === 1
+                ),
+                JSON.stringify({ questionNumber, rows: rows.map(({ url, ...row }) => row) })
+            );
+            assert.ok(
+                question.images.some(image =>
+                    image.source === 'pdf-embedded-image-placement' &&
+                    image.status === 'bound' &&
+                    image.confidence === 1
+                ),
+                JSON.stringify({ questionNumber, images: question.images.map(({ url, ...image }) => image) })
+            );
+            assert.match(question.stem, /\[\[IMAGE:[^\]]+\]\]/);
+        }
+        for (const questionNumber of dataset.analysisFigures) {
+            const question = state.questions[Number(questionNumber) - 1];
+            const rows = state.images.filter(image => image.questionId === question.id);
+            assert.ok(
+                rows.some(image =>
+                    image.source === 'pdf-analysis-figure-crop' &&
+                    image.status === 'bound' &&
+                    image.confidence === 1
+                ),
+                JSON.stringify({ questionNumber, rows: rows.map(({ url, ...row }) => row) })
+            );
+            assert.match(question.solution, /\[\[IMAGE:[^\]]+\]\]/);
+        }
+
+        assert.equal(
+            await page.getByRole('button', { name: '\u6807\u8bb0\u5df2\u786e\u8ba4', exact: true }).count(),
+            0
+        );
+        assert.equal(
+            await page.getByRole('button', { name: '\u4e00\u952e\u63d0\u4ea4\u672c\u9898', exact: true }).count(),
+            1
+        );
+        assert.equal(
+            await page.getByRole('button', { name: '\u4e00\u952e\u63d0\u4ea4', exact: true }).count(),
+            1
+        );
+
+        await navItems.nth(3).click();
+        const questionImageCard = page.locator('.batch-preview-card').filter({
+            has: page.getByRole('heading', { name: '\u5f53\u524d\u9898\u76ee\u56fe\u7247', exact: true })
+        });
+        assert.equal(await questionImageCard.count(), 1);
+        await questionImageCard.getByRole('button', { name: '\u56fe\u7247\u4f4d\u7f6e', exact: true }).click();
+        await questionImageCard.getByRole('button', { name: '\u9760\u53f3', exact: true }).click();
+        await page.waitForFunction(async questionId => {
+            const probe = new window.Dexie('QisiMathVueDB');
+            await probe.open();
+            const images = await probe.table('draftImages').where('questionId').equals(questionId).toArray();
+            probe.close();
+            return images.some(image => image.align === 'right');
+        }, state.questions[3].id);
+        const propertyCard = page.locator('.batch-editor-card').filter({
+            has: page.getByRole('heading', { name: '\u9898\u76ee\u5c5e\u6027', exact: true })
+        });
+        await propertyCard.getByLabel('\u5e74\u4efd', { exact: true }).fill('2026');
+        const saveButton = page.getByRole('button', { name: /\u4fdd\u5b58\u4fee\u6539/ });
+        assert.equal(await saveButton.count(), 1);
+        await saveButton.click();
+        try {
+            await page.getByText('\u9898\u76ee\u3001\u7b54\u6848\u548c\u89e3\u6790\u4fee\u6539\u5df2\u4fdd\u5b58\u3002', { exact: true })
+                .waitFor({ timeout: 5000 });
+        } catch (error) {
+            await Promise.all(capturePromises);
+            const diagnostic = await page.evaluate(async questionId => {
+                const probe = new window.Dexie('QisiMathVueDB');
+                await probe.open();
+                const question = await probe.table('draftQuestions').get(questionId);
+                probe.close();
+                return {
+                    year: question?.year || '',
+                    toast: document.querySelector('.batch-toast')?.textContent || '',
+                    activeQuestion: document.querySelector('.batch-question-nav-item.active span')?.textContent || ''
+                };
+            }, state.questions[3].id);
+            assert.fail(JSON.stringify({ diagnostic, browserErrors, structuredConsoleErrors, cause: error.message }));
+        }
+        await page.waitForFunction(async questionId => {
+            const probe = new window.Dexie('QisiMathVueDB');
+            await probe.open();
+            const question = await probe.table('draftQuestions').get(questionId);
+            probe.close();
+            return question?.year === '2026';
+        }, state.questions[3].id);
+
+        const interactionState = await page.evaluate(async questionId => {
+            const probe = new window.Dexie('QisiMathVueDB');
+            await probe.open();
+            const question = await probe.table('draftQuestions').get(questionId);
+            const images = await probe.table('draftImages').where('questionId').equals(questionId).toArray();
+            const formalCount = await probe.table('questions').count();
+            probe.close();
+            return { question, images, formalCount };
+        }, state.questions[3].id);
+        assert.equal(interactionState.question.year, '2026');
+        assert.match(interactionState.question.stem, /\\begin\{wrapfigure\}\{r\}/);
+        assert.ok(interactionState.question.images.some(image => image.align === 'right'));
+        assert.ok(interactionState.images.some(image => image.align === 'right'));
+        assert.equal(interactionState.formalCount, 0);
 
         if (datasetName === 'full') {
             const fieldText = question => [question.stem, ...(question.options || []), question.solution].join('\n');
@@ -405,7 +571,7 @@ test('dual PDF normal UI uses local answer evidence and preserves renderable con
             );
             assert.ok(state.questions[5].images.some(image => image.source === 'pdf-analysis-figure-crop'));
             assert.ok(state.questions[5].images.some(image => image.sourcePage === 2));
-            assert.ok(previewChecks[5].currentImages >= 1);
+            assert.ok(previewChecks[5].analysisImages >= 1);
             assert.match(fieldText(state.questions[6]), /\\left/);
             assert.match(fieldText(state.questions[6]), /\\right/);
             assert.ok(state.questions[7].images.length >= 1);
@@ -421,12 +587,17 @@ test('dual PDF normal UI uses local answer evidence and preserves renderable con
                         .map(({ url, ...image }) => image)
                 })
             );
-            assert.ok(previewChecks[7].currentImages >= 1);
+            assert.ok(previewChecks[7].analysisImages >= 1);
             assert.equal(state.questions[10].answer, '6');
             for (const command of ['overrightarrow', 'cdot', 'sqrt', 'therefore']) {
                 assert.match(fieldText(state.questions[10]), new RegExp(`\\\\${command}`));
             }
             assert.equal(previewChecks[10].errors, 0);
+            assert.doesNotMatch(
+                previewChecks[10].text,
+                /\\text\s*\{|\\(?:overline|overrightarrow|sqrt|therefore|cdot)\b/,
+                JSON.stringify(displayNormalizationDebug)
+            );
         }
 
         const audit = auditPdfImportContent(state.questions, {
@@ -453,6 +624,12 @@ test('dual PDF normal UI uses local answer evidence and preserves renderable con
             browserErrors.filter(message => message.startsWith('pageerror:') || /\[LATEX_RENDER\]/.test(message)),
             []
         );
+        assert.deepEqual(
+            browserErrors.filter(message =>
+                /DataCloneError|set-placement-failed|Vue \u8fd0\u884c\u9519\u8bef|\u672a\u5904\u7406\u7684\u5f02\u6b65\u9519\u8bef/.test(message)
+            ),
+            []
+        );
 
         await page.reload({ waitUntil: 'domcontentloaded' });
         const persisted = await page.evaluate(async batchId => {
@@ -464,6 +641,8 @@ test('dual PDF normal UI uses local answer evidence and preserves renderable con
             return questions.map(question => ({
                 questionNumber: question.questionNumber,
                 answer: question.answer,
+                year: question.year,
+                stem: question.stem,
                 richFields: question.richFields,
                 contentIntegrity: question.contentIntegrity,
                 normalizedQuestionBbox: question.normalizedQuestionBbox,
@@ -472,6 +651,8 @@ test('dual PDF normal UI uses local answer evidence and preserves renderable con
             }));
         }, latestBatch.id);
         assert.equal(persisted.length, dataset.questionNumbers.length);
+        assert.equal(persisted[3].year, '2026');
+        assert.match(persisted[3].stem, /\\begin\{wrapfigure\}\{r\}/);
         assert.equal(persisted.every(question => question.richFields && question.contentIntegrity), true);
         assert.equal(
             persisted.every(question => question.normalizedQuestionBbox.length === 4),
@@ -495,14 +676,17 @@ test('dual PDF normal UI uses local answer evidence and preserves renderable con
                 await reloadedNavItems.nth(index).click();
                 const reloadedCheck = await page.locator('.batch-preview-panel').evaluate(panel => {
                     const currentImageCard = [...panel.querySelectorAll('.batch-preview-card')]
-                        .find(card => card.querySelector('h2')?.textContent?.includes('当前题目图片'));
+                        .find(card => (card.querySelector('h2')?.textContent || '').includes('\u5f53\u524d\u9898\u76ee\u56fe\u7247'));
                     return {
                         currentImages: currentImageCard?.querySelectorAll('.batch-image-item img').length || 0,
+                        analysisImages: [...panel.querySelectorAll('.batch-preview-card')]
+                            .find(card => (card.querySelector('h2')?.textContent || '').includes('\u5f53\u524d\u89e3\u6790\u56fe\u7247'))
+                            ?.querySelectorAll('.batch-image-item img').length || 0,
                         errors: panel.querySelectorAll('.latex-render-error').length
                     };
                 });
                 assert.equal(reloadedCheck.errors, 0);
-                assert.ok(reloadedCheck.currentImages >= 1);
+                assert.ok(reloadedCheck.analysisImages >= 1);
             }
         }
         console.log('[PDF_MATH_REGION_BROWSER_RESULT]', JSON.stringify({

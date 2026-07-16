@@ -592,8 +592,20 @@
                         page,
                         regions: regionReport.regions
                     });
-                    if (contamination.contaminated) {
-                        rejected.push({ figure, question, reason: contamination.reason, contamination });
+                    const textContamination = detectFigureTextContamination({
+                        cropBbox: normalizedBbox,
+                        ownerQuestion: question,
+                        lines: layout?.lines || []
+                    });
+                    if (contamination.contaminated || textContamination.contaminated) {
+                        rejected.push({
+                            figure,
+                            question,
+                            reason: textContamination.reason || contamination.reason,
+                            contamination: textContamination.contaminated
+                                ? textContamination
+                                : contamination
+                        });
                         return;
                     }
 
@@ -604,7 +616,14 @@
                         image_description: 'PDF 解析原图',
                         image_confidence: 1,
                         source: 'pdf-embedded-image-placement',
-                        sourcePage: page
+                        sourcePage: page,
+                        contentRole: 'solution',
+                        anchorField: 'solution',
+                        sourceEvidence: {
+                            imageRef: figureValue?.imageRef || '',
+                            page,
+                            bbox: normalizedBbox
+                        }
                     };
                     target.images = [...(Array.isArray(target.images) ? target.images : []), image];
                     target.sourcePage = page;
@@ -671,6 +690,80 @@
                 });
             });
             return regions;
+        };
+
+        const buildValidatedQuestionBboxRegions = (
+            questions = [],
+            expectedQuestionNumbers = []
+        ) => {
+            const rows = Array.isArray(questions) ? questions : [];
+            const expected = (expectedQuestionNumbers || [])
+                .map(normalizeQuestionNumber)
+                .filter(Boolean);
+            const actual = rows
+                .map(item => normalizeQuestionNumber(
+                    item?.question || item?.questionNumber || item?.no || ''
+                ))
+                .filter(Boolean);
+            const warnings = [];
+
+            if (!expected.length || actual.join(',') !== expected.join(',')) {
+                warnings.push({
+                    code: 'question-bbox-sequence-mismatch',
+                    expected,
+                    actual
+                });
+            }
+
+            const candidates = rows.map(item => {
+                const question = normalizeQuestionNumber(
+                    item?.question || item?.questionNumber || item?.no || ''
+                );
+                const normalizedBbox = normalizeBbox(
+                    item?.normalizedQuestionBbox || item?.question_bbox || item?.sourceBbox || [],
+                    { space: item?.normalizedQuestionBbox ? 'normalized' : 'auto' }
+                );
+                const page = Number(item?.sourcePage || item?.page || item?.pageNo || 0) || 0;
+                return {
+                    id: question,
+                    question,
+                    questionNumber: question,
+                    sourceFileId: String(item?.sourceFileId || item?.sourceQuestionFileId || ''),
+                    page,
+                    normalizedBbox
+                };
+            });
+            const invalid = candidates.filter(candidate =>
+                !candidate.question || !candidate.page || !candidate.normalizedBbox.length
+            );
+            if (invalid.length) {
+                warnings.push({
+                    code: 'question-bbox-evidence-missing',
+                    questionNumbers: invalid.map(candidate => candidate.question).filter(Boolean)
+                });
+            }
+
+            const regions = deriveQuestionOwnershipRegions(candidates);
+            const ambiguous = regions.filter(region => region.boundaryAmbiguous);
+            const safeRegions = regions.filter(region => !region.boundaryAmbiguous);
+            if (ambiguous.length) {
+                warnings.push({
+                    code: 'question-bbox-boundary-ambiguous',
+                    questionNumbers: ambiguous.map(region => region.question)
+                });
+            }
+
+            const ok = Boolean(expected.length) &&
+                actual.join(',') === expected.join(',') &&
+                !invalid.length &&
+                safeRegions.length > 0;
+            return {
+                ok,
+                complete: ok && safeRegions.length === expected.length,
+                source: 'validated-question-bbox-sequence',
+                regions: ok ? safeRegions : [],
+                warnings
+            };
         };
 
         const assignFigureOwner = ({ figure = {}, candidates = [], minOverlap = 0.9 } = {}) => {
@@ -746,6 +839,251 @@
                 reason: foreignRegions.length ? 'foreign-question-overlap' : '',
                 foreignRegions
             };
+        };
+
+        const normalizedLayoutLineBbox = line => normalizeBbox(
+            line?.normalizedBbox || [line?.nx1, line?.ny1, line?.nx2, line?.ny2],
+            { space: line?.normalizedBbox ? 'normalized' : 'thousandths' }
+        );
+
+        const detectFigureTextContamination = ({
+            cropBbox,
+            ownerQuestion = '',
+            lines = [],
+            minLineOverlap = 0.2
+        } = {}) => {
+            const normalizedCrop = normalizeBbox(cropBbox, { space: 'normalized' });
+            if (!normalizedCrop.length) {
+                return { contaminated: true, reason: 'invalid-crop-bbox', lines: [] };
+            }
+
+            const overlapping = (Array.isArray(lines) ? lines : []).map(line => {
+                const bbox = normalizedLayoutLineBbox(line);
+                if (!bbox.length) return null;
+                const overlap = bboxOverlapRatio(bbox, normalizedCrop);
+                if (overlap < minLineOverlap) return null;
+                return { text: String(line?.text || '').trim(), bbox, overlap };
+            }).filter(row => row?.text);
+            const owner = normalizeQuestionNumber(ownerQuestion);
+
+            const foreignQuestion = overlapping.find(row => {
+                const marker = row.text.match(/^\s*(\d{1,3})\s*[.．、]\s*/);
+                return marker && normalizeQuestionNumber(marker[1]) !== owner;
+            });
+            if (foreignQuestion) {
+                return {
+                    contaminated: true,
+                    reason: 'figure-crop-foreign-question',
+                    lines: overlapping,
+                    foreignQuestion: normalizeQuestionNumber(foreignQuestion.text)
+                };
+            }
+
+            const optionLabels = new Set();
+            overlapping.forEach(row => {
+                for (const match of row.text.matchAll(/(?:^|\s)([A-DＡ-Ｄ])\s*[.．、:：)）]/g)) {
+                    optionLabels.add(match[1].replace(/[Ａ-Ｄ]/g, char =>
+                        String.fromCharCode(char.charCodeAt(0) - 65248)
+                    ).toUpperCase());
+                }
+            });
+            if (optionLabels.size >= 2) {
+                return {
+                    contaminated: true,
+                    reason: 'figure-crop-contains-options',
+                    lines: overlapping,
+                    optionLabels: [...optionLabels]
+                };
+            }
+
+            if (overlapping.some(row => /选择题|填空题|解答题|【\s*(?:答案|详解|解析)\s*】/.test(row.text))) {
+                return { contaminated: true, reason: 'figure-crop-contains-heading', lines: overlapping };
+            }
+
+            const proseLines = overlapping.filter(row =>
+                (row.text.match(/[\u4e00-\u9fff]/g) || []).length >= 8
+            );
+            const proseCharacters = proseLines.reduce((total, row) =>
+                total + (row.text.match(/[\u4e00-\u9fff]/g) || []).length, 0
+            );
+            if (proseLines.length >= 2 || proseCharacters >= 18) {
+                return { contaminated: true, reason: 'figure-crop-contains-prose', lines: overlapping };
+            }
+
+            return { contaminated: false, reason: '', lines: overlapping };
+        };
+
+        const bindPlacedFiguresToQuestions = ({
+            questions = [],
+            layouts = [],
+            expectedQuestionNumbers = [],
+            minOverlap = 0.9
+        } = {}) => {
+            const textRegionReport = buildQuestionTextRegions(layouts, { expectedQuestionNumbers });
+            const decisions = [];
+            const rejected = [];
+            const rows = (Array.isArray(questions) ? questions : []).map(item => {
+                const originalCandidates = [
+                    ...(Array.isArray(item?.recognizedImages) ? item.recognizedImages : []),
+                    ...(Array.isArray(item?.images) ? item.images.filter(image => !image?.url) : [])
+                ];
+                const safeImages = (Array.isArray(item?.images) ? item.images : [])
+                    .filter(image => image?.url && image?.source !== 'auto-figure-crop');
+                return {
+                    ...item,
+                    images: safeImages,
+                    recognizedImages: [],
+                    sourceTrace: {
+                        ...(item?.sourceTrace || {}),
+                        unverifiedRecognizedImages: originalCandidates
+                    }
+                };
+            });
+            const bboxRegionReport = buildValidatedQuestionBboxRegions(
+                rows,
+                expectedQuestionNumbers
+            );
+            const regionReport = textRegionReport.ok && textRegionReport.complete
+                ? { ...textRegionReport, source: 'pdf-text-question-markers' }
+                : (bboxRegionReport.ok
+                    ? {
+                        ...bboxRegionReport,
+                        warnings: [
+                            ...(textRegionReport.warnings || []),
+                            ...(bboxRegionReport.warnings || [])
+                        ],
+                        textRegionWarnings: textRegionReport.warnings || []
+                    }
+                    : {
+                        ok: false,
+                        complete: false,
+                        source: '',
+                        regions: [],
+                        warnings: [
+                            ...(textRegionReport.warnings || []),
+                            ...(bboxRegionReport.warnings || [])
+                        ]
+                    });
+            if (!regionReport.ok) {
+                return { questions: rows, decisions, rejected: regionReport.warnings, regionReport };
+            }
+
+            const byQuestion = new Map();
+            rows.forEach(item => {
+                const question = normalizeQuestionNumber(item?.question || item?.questionNumber || item?.no || '');
+                if (!question) return;
+                if (!byQuestion.has(question)) byQuestion.set(question, []);
+                byQuestion.get(question).push(item);
+            });
+
+            (layouts || []).forEach(layout => {
+                const page = Number(layout?.pageNo || layout?.page || 0) || 0;
+                (layout?.placedImages || []).forEach(figureValue => {
+                    const normalizedBbox = normalizeBbox(
+                        figureValue?.normalizedBbox || figureValue?.bbox || [],
+                        { space: figureValue?.normalizedBbox ? 'normalized' : 'auto' }
+                    );
+                    const width = normalizedBbox.length ? normalizedBbox[2] - normalizedBbox[0] : 0;
+                    const height = normalizedBbox.length ? normalizedBbox[3] - normalizedBbox[1] : 0;
+                    const area = bboxArea(normalizedBbox);
+                    const figure = { ...figureValue, page, normalizedBbox };
+                    if (!normalizedBbox.length || width < 0.06 || height < 0.04 || area < 0.003 || area > 0.45) {
+                        rejected.push({ figure, reason: 'implausible-illustration-geometry' });
+                        return;
+                    }
+
+                    const ownership = assignFigureOwner({
+                        figure,
+                        candidates: regionReport.regions,
+                        minOverlap
+                    });
+                    if (ownership.status !== 'assigned') {
+                        rejected.push({ figure, reason: ownership.reason, matches: ownership.matches });
+                        return;
+                    }
+
+                    const question = normalizeQuestionNumber(ownership.owner.question || ownership.owner.id || '');
+                    const targets = byQuestion.get(question) || [];
+                    if (targets.length !== 1) {
+                        rejected.push({
+                            figure,
+                            question,
+                            reason: targets.length ? 'duplicate-question-owner' : 'question-owner-missing'
+                        });
+                        return;
+                    }
+
+                    const regionContamination = detectCropContamination({
+                        cropBbox: normalizedBbox,
+                        ownerId: question,
+                        page,
+                        regions: regionReport.regions
+                    });
+                    const textContamination = detectFigureTextContamination({
+                        cropBbox: normalizedBbox,
+                        ownerQuestion: question,
+                        lines: layout?.lines || []
+                    });
+                    if (regionContamination.contaminated || textContamination.contaminated) {
+                        const target = targets[0];
+                        target.manualReviewRequired = true;
+                        target.warnings = [...new Set([
+                            ...(target.warnings || []),
+                            '图片区域识别不可靠，已阻止错误挂载'
+                        ])];
+                        rejected.push({
+                            figure,
+                            question,
+                            reason: textContamination.reason || regionContamination.reason,
+                            contamination: textContamination.contaminated
+                                ? textContamination
+                                : regionContamination
+                        });
+                        return;
+                    }
+
+                    const descriptor = {
+                        image_bbox: normalizedBbox.map(value => Math.round(value * 1000)),
+                        normalizedBbox,
+                        image_description: 'PDF 内嵌题图',
+                        image_confidence: 1,
+                        source: 'pdf-embedded-image-placement',
+                        sourcePage: page,
+                        contentRole: 'question',
+                        anchorField: 'stem',
+                        sourceEvidence: {
+                            imageRef: figureValue?.imageRef || '',
+                            page,
+                            bbox: normalizedBbox
+                        }
+                    };
+                    targets[0].recognizedImages.push(descriptor);
+                    decisions.push({
+                        question,
+                        page,
+                        bbox: descriptor.image_bbox,
+                        overlap: ownership.overlap,
+                        source: descriptor.source
+                    });
+                });
+            });
+
+            rows.forEach(item => {
+                const unverified = item.sourceTrace?.unverifiedRecognizedImages || [];
+                if (!unverified.length || item.recognizedImages.length) return;
+                item.manualReviewRequired = true;
+                item.warnings = [...new Set([
+                    ...(item.warnings || []),
+                    '图片区域识别不可靠，已阻止错误挂载'
+                ])];
+                rejected.push({
+                    question: normalizeQuestionNumber(item.question || item.questionNumber || ''),
+                    reason: 'model-figure-without-local-pdf-evidence',
+                    candidateCount: unverified.length
+                });
+            });
+
+            return { questions: rows, decisions, rejected, regionReport };
         };
 
         const stripDuplicateOptionLabel = (value, expectedLabel, hasIndependentLabel = true) => {
@@ -1143,9 +1481,21 @@
 
             for (const run of parsed.runs) {
                 if (run.kind === 'math') {
-                    richRuns.push({ ...run, latex: normalizeKeyboardMath(run.latex) });
+                    const normalizedLatex = normalizeKeyboardMath(run.latex);
+                    const unwrappedMixedText = normalizedLatex
+                        .replace(/\\text\s*\{([^{}]*)\}/g, '$1');
+                    const isWrappedProseBridge =
+                        /^\s*\\text\s*\{[^{}]+\}\s+/.test(normalizedLatex) &&
+                        /[，。；：！？]/.test(unwrappedMixedText);
+                    if (isWrappedProseBridge && /\\[A-Za-z]+/.test(normalizedLatex)) {
+                        richRuns.push(...splitBareMathRuns(unwrappedMixedText));
+                    } else {
+                        richRuns.push({ ...run, latex: normalizedLatex });
+                    }
                 } else {
-                    richRuns.push(...splitBareMathRuns(run.text));
+                    const plainTextCommands = String(run.text || '')
+                        .replace(/\\text\s*\{([^{}]*)\}/g, '$1');
+                    richRuns.push(...splitBareMathRuns(plainTextCommands));
                 }
             }
 
@@ -1237,6 +1587,32 @@
                 ];
             }
             return item;
+        };
+
+        const applyQuestionLayoutIntegrity = ({
+            questions = [],
+            layouts = [],
+            expectedQuestionNumbers = [],
+            minFigureOverlap = 0.9
+        } = {}) => {
+            const optionRepair = repairMissingOptionsFromPdfText({
+                questions,
+                layouts,
+                expectedQuestionNumbers
+            });
+            const normalizedQuestions = optionRepair.questions.map(normalizeQuestionItem);
+            const figureBinding = bindPlacedFiguresToQuestions({
+                questions: normalizedQuestions,
+                layouts,
+                expectedQuestionNumbers,
+                minOverlap: minFigureOverlap
+            });
+
+            return {
+                questions: figureBinding.questions,
+                optionRepair,
+                figureBinding
+            };
         };
 
         const normalizeQuestionNumber = value => {
@@ -1421,17 +1797,21 @@
 
         return {
             QUESTION_STATES,
+            applyQuestionLayoutIntegrity,
             assignFigureOwner,
             bboxArea,
             bboxIntersection,
             bboxOverlapRatio,
             bindPlacedFiguresToSolutions,
+            bindPlacedFiguresToQuestions,
             buildAlignmentReport,
             buildQuestionRegions,
             buildQuestionTextRegions,
+            buildValidatedQuestionBboxRegions,
             buildSupportQuestionRegions,
             compositeQuestionKey,
             detectCropContamination,
+            detectFigureTextContamination,
             deriveQuestionOwnershipRegions,
             extractExplicitAnswerEvidence,
             extractFourLabeledOptions,

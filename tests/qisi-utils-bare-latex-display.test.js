@@ -54,3 +54,46 @@ test('BMR7: normalizeBareLatexForDisplayOptions preserves non-array input', () =
     assert.deepEqual(normalizeBareLatexForDisplayOptions(['\\sqrt{2}', 'plain']), ['$\\sqrt{2}$', 'plain']);
     assert.equal(normalizeBareLatexForDisplayOptions(null), null);
 });
+
+test('PDF Q11: legacy draft text commands do not leave vector LaTeX outside math delimiters', () => {
+    const source = '\\text{\u5219} \\overline{CP} = (x-2,-\\sqrt{3}), ' +
+        '\\overline{DP} = (x,-\\sqrt{3}), \\therefore ' +
+        '\\overline{CP} \\cdot \\overline{DP} = x(x-2)+3 = (x-1)^2+2';
+    const normalized = normalizeBareLatexForDisplayText(source);
+    const outsideMath = normalized.replace(/\$[^$]*\$/g, '');
+
+    assert.doesNotMatch(normalized, /\\text\s*\{/);
+    assert.doesNotMatch(
+        outsideMath,
+        /\\(?:overline|sqrt|therefore|cdot)\b/
+    );
+});
+
+test('PDF Q11: Chinese punctuation keeps every legacy vector island renderable', () => {
+    const source = '\\text{\u5219} \\overline{CP} = (x-2,-\\sqrt{3})\uff0c' +
+        '\\overline{DP} = (x,-\\sqrt{3})\uff0c\\therefore ' +
+        '\\overline{CP} \\cdot \\overline{DP} = x(x-2)+3';
+    const normalized = normalizeBareLatexForDisplayText(source);
+    const outsideMath = normalized.replace(/\$[^$]*\$/g, '');
+
+    assert.doesNotMatch(normalized, /\\text\s*\{/);
+    assert.doesNotMatch(outsideMath, /\\(?:overline|sqrt|therefore|cdot)\b/);
+});
+
+test('PDF Q11: an already wrapped mixed prose block is repaired for legacy drafts', () => {
+    const source = '$\\text{\u5219} \\overline{CP} = (x-2,-\\sqrt{3})\uff0c' +
+        '\\overline{DP} = (x,-\\sqrt{3})\uff0c\\therefore ' +
+        '\\overline{CP} \\cdot \\overline{DP} = x(x-2)+3$';
+    const normalized = normalizeBareLatexForDisplayText(source);
+    const outsideMath = normalized.replace(/\$[^$]*\$/g, '');
+
+    assert.doesNotMatch(normalized, /\\text\s*\{/);
+    assert.doesNotMatch(outsideMath, /\\(?:overline|sqrt|therefore|cdot)\b/);
+});
+
+test('PDF display normalization preserves valid internal text commands', () => {
+    const source = '$x=\\begin{cases}1,&\\text{当 }x>0，\\\\0,&\\text{其他}\u3002\\end{cases}$';
+    const normalized = normalizeBareLatexForDisplayText(source);
+
+    assert.equal(normalized, source);
+});
