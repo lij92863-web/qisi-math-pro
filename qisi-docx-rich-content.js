@@ -23,6 +23,10 @@
             typeof require === 'function' ? require('./qisi-docx-latex-content.js') : null
         );
         if (!latexContent) throw new Error('Qisi.DocxLatexContent is required.');
+        const tableLatex = root?.Qisi?.DocxTableLatex || (
+            typeof require === 'function' ? require('./qisi-docx-table-latex.js') : null
+        );
+        if (!tableLatex) throw new Error('Qisi.DocxTableLatex is required.');
         const {
             canonicalizeMathCommands,
             decodeXmlEntities,
@@ -226,6 +230,43 @@
             return { equations: [...equationsById.values()], diagnostics };
         };
 
+        const requestMathTypeTranslations = async (equations = [], options = {}) => {
+            const rows = Array.isArray(equations) ? equations : [];
+            if (!rows.length) return [];
+            const fetchImpl = options.fetchImpl || globalThis.fetch;
+            if (typeof fetchImpl !== 'function') {
+                const error = new Error('MathType translation fetch is unavailable.');
+                error.code = 'MATHTYPE_FETCH_UNAVAILABLE';
+                throw error;
+            }
+            const configuredSize = Number(options.batchSize);
+            const batchSize = Number.isInteger(configuredSize) && configuredSize > 0
+                ? Math.min(512, configuredSize)
+                : 512;
+            const translated = [];
+
+            for (let offset = 0; offset < rows.length; offset += batchSize) {
+                const batch = rows.slice(offset, offset + batchSize);
+                const response = await fetchImpl(options.endpoint || '/api/convert/mathtype-mtef', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ equations: batch })
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok || !Array.isArray(payload?.equations)) {
+                    const error = new Error(payload?.error || payload?.code || `MathType translation failed (${response.status}).`);
+                    error.code = payload?.code || 'MATHTYPE_TRANSLATION_FAILED';
+                    error.batchIndex = Math.floor(offset / batchSize);
+                    error.batchOffset = offset;
+                    error.batchLength = batch.length;
+                    throw error;
+                }
+                translated.push(...payload.equations);
+            }
+
+            return translated;
+        };
+
         const translateMathTypeMedia = async (mediaMap, options = {}) => {
             const collected = collectMathTypeMtef(mediaMap, options);
             const mathByRid = new Map();
@@ -243,21 +284,14 @@
                 };
             }
 
-            const response = await fetchImpl(options.endpoint || '/api/convert/mathtype-mtef', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ equations: collected.equations })
+            const translatedRows = await requestMathTypeTranslations(collected.equations, {
+                ...options,
+                fetchImpl
             });
-            const payload = await response.json().catch(() => ({}));
-            if (!response.ok || !Array.isArray(payload?.equations)) {
-                const error = new Error(payload?.error || payload?.code || `MathType translation failed (${response.status}).`);
-                error.code = payload?.code || 'MATHTYPE_TRANSLATION_FAILED';
-                throw error;
-            }
 
             const diagnostics = [...collected.diagnostics];
             const equationById = new Map(collected.equations.map(row => [String(row.id), row]));
-            for (const row of payload.equations || []) {
+            for (const row of translatedRows) {
                 const normalized = normalizeLatexFragment(row?.latex || '');
                 if (row?.ok && normalized.ok) {
                     mathByRid.set(String(row.id), normalized.latex);
@@ -503,15 +537,85 @@
             };
         };
 
+        const serializeTableCellRichContent = (cellXml, context, baseIndex) => {
+            const previewParts = [];
+            const latexParts = [];
+            const assets = [];
+            const diagnostics = [];
+            const blocks = tableLatex.extractTopLevelWordBlocks(cellXml);
+
+            blocks.forEach((block, childIndex) => {
+                const paragraphIndex = baseIndex * 1000 + childIndex;
+                if (block.kind === 'paragraph') {
+                    const extracted = extractParagraphRuns(block.xml, context, paragraphIndex);
+                    const serialized = serializeRichRuns(extracted.runs, extracted.diagnostics);
+                    if (serialized) {
+                        previewParts.push(serialized);
+                        latexParts.push(tableLatex.toLatexCellContent(serialized));
+                    }
+                    assets.push(...extracted.assets);
+                    diagnostics.push(...extracted.diagnostics);
+                    return;
+                }
+
+                const nested = tableLatex.convertWordTableToLatex(block.xml, {
+                    usableWidthTwips: context.usableWidthTwips,
+                    serializeCell: (nestedCellXml, location) => serializeTableCellRichContent(
+                        nestedCellXml,
+                        context,
+                        paragraphIndex * 100 + Number(location?.cellIndex || 0)
+                    )
+                });
+                previewParts.push(nested.latex);
+                latexParts.push(nested.latex);
+                assets.push(...nested.assets);
+                diagnostics.push(...nested.diagnostics);
+            });
+
+            return {
+                previewContent: previewParts.join('\n').trim(),
+                latexContent: latexParts.join('\n').trim(),
+                assets,
+                diagnostics
+            };
+        };
+
         const extractDocxRichBlocks = (documentXml = '', options = {}) => {
             const context = {
                 fileId: options.fileId || 'docx',
                 mediaMap: options.mediaMap || new Map(),
-                mathByRid: options.mathByRid || new Map()
+                mathByRid: options.mathByRid || new Map(),
+                usableWidthTwips: tableLatex.resolveUsableWidthTwips(documentXml)
             };
             const resolveNumbering = createDocxNumberingResolver(options.numberingXml || '');
-            const paragraphs = String(documentXml || '').match(/<w:p\b[\s\S]*?<\/w:p>/gi) || [];
-            return paragraphs.map((xml, paragraphIndex) => {
+            const flowBlocks = tableLatex.extractTopLevelWordBlocks(documentXml);
+            return flowBlocks.map((flowBlock, paragraphIndex) => {
+                if (flowBlock.kind === 'table') {
+                    const converted = tableLatex.convertWordTableToLatex(flowBlock.xml, {
+                        usableWidthTwips: context.usableWidthTwips,
+                        serializeCell: (cellXml, location) => serializeTableCellRichContent(
+                            cellXml,
+                            context,
+                            paragraphIndex * 100 + Number(location?.cellIndex || 0)
+                        )
+                    });
+                    return {
+                        kind: 'table',
+                        paragraphIndex,
+                        style: '',
+                        numbering: null,
+                        pageBreak: false,
+                        sectionBreak: false,
+                        runs: [{ kind: 'latex-table', latex: converted.latex, paragraphIndex }],
+                        assets: converted.assets,
+                        diagnostics: converted.diagnostics,
+                        serialized: converted.latex,
+                        tableModel: converted.model,
+                        sourceXmlHash: stableHash(flowBlock.xml)
+                    };
+                }
+
+                const xml = flowBlock.xml;
                 const extracted = extractParagraphRuns(xml, context, paragraphIndex);
                 const diagnostics = [...extracted.diagnostics];
                 return {
@@ -539,10 +643,12 @@
             collectMathTypeObjectLinks,
             decodeXmlEntities,
             extractDocxRichBlocks,
+            extractTopLevelWordBlocks: tableLatex.extractTopLevelWordBlocks,
             extractMtefFromWmf,
             normalizeLatexFragment,
             ommlToLatexBody,
             parseQuestionRichBlocks,
+            requestMathTypeTranslations,
             serializeRichRuns,
             stripOnlyOuterMathDelimiters,
             translateMathTypeMedia,

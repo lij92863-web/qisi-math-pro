@@ -62,7 +62,10 @@
                 .replace(/\\(?:bf|mathbf)\s*\{\s*Z\s*\}/g, '\\mathbb{Z}')
                 .replace(/\\vec\s*\{\s*([A-Za-z]{2,})\s*\}/g, '\\overrightarrow{$1}')
                 .replace(/\\sqrt\s*([0-9A-Za-z])/g, '\\sqrt{$1}')
-                .replace(/([A-Za-z0-9}])\|([A-Za-z])/g, '$1\\mid $2');
+                .replace(/([A-Za-z0-9}])\|([A-Za-z])/g, (match, left, right, offset, fullSource) => {
+                    const prefix = String(fullSource || '').slice(Math.max(0, offset - 8), offset + 1);
+                    return /\\left$/.test(prefix) ? match : `${left}\\mid ${right}`;
+                });
 
             for (let pass = 0; pass < 4; pass += 1) {
                 const next = source
@@ -82,12 +85,20 @@
             return unwrapStandaloneConstants(collapseRedundantFracGroups(compact));
         };
 
+        const isEscapedAt = (source = '', index = 0) => {
+            let slashCount = 0;
+            for (let cursor = index - 1; cursor >= 0 && source[cursor] === '\\'; cursor -= 1) {
+                slashCount += 1;
+            }
+            return slashCount % 2 === 1;
+        };
+
         const readBalancedGroup = (source, start) => {
             if (source[start] !== '{') return -1;
             let depth = 0;
             for (let index = start; index < source.length; index += 1) {
-                if (source[index] === '{' && source[index - 1] !== '\\') depth += 1;
-                if (source[index] === '}' && source[index - 1] !== '\\') depth -= 1;
+                if (source[index] === '{' && !isEscapedAt(source, index)) depth += 1;
+                if (source[index] === '}' && !isEscapedAt(source, index)) depth -= 1;
                 if (depth === 0) return index + 1;
                 if (depth < 0) return -1;
             }
@@ -165,15 +176,22 @@
 
             for (let index = 0; index < flexible.value.length; index += 1) {
                 const char = flexible.value[index];
-                if (flexible.value[index - 1] === '\\') continue;
-                if ('{[('.includes(char)) stack.push(char);
-                if ('}])'.includes(char) && stack.pop() !== pairs[char]) {
-                    return { ok: false, code: 'UNBALANCED_LATEX', diagnostics: [`unexpected-${char}@${index}`] };
+                if (isEscapedAt(flexible.value, index)) continue;
+                if ('{[('.includes(char)) stack.push({ char, index });
+                if ('}])'.includes(char)) {
+                    const openedEntry = stack.pop();
+                    const opened = openedEntry?.char;
+                    const isMixedBoundary = (opened === '[' && char === ')') || (opened === '(' && char === ']');
+                    const isIntervalBoundary = isMixedBoundary
+                        && /,/.test(flexible.value.slice((openedEntry?.index ?? index) + 1, index));
+                    if (opened !== pairs[char] && !isIntervalBoundary) {
+                        return { ok: false, code: 'UNBALANCED_LATEX', diagnostics: [`unexpected-${char}@${index}`] };
+                    }
                 }
             }
 
             if (stack.length) {
-                return { ok: false, code: 'UNBALANCED_LATEX', diagnostics: [`unclosed-${stack.join('')}`] };
+                return { ok: false, code: 'UNBALANCED_LATEX', diagnostics: [`unclosed-${stack.map(entry => entry.char).join('')}`] };
             }
 
             const environments = new Map();
@@ -242,7 +260,7 @@
             if (/\\(?:overrightarrow|overleftarrow|widehat|widetilde|vec)\s*\{\s*\}/.test(latex)) {
                 return { ok: false, code: 'EMPTY_MATH_TEMPLATE', latex: '', diagnostics: ['empty directional template'] };
             }
-            if (/\[object Object\]|undefined|null|<[^>]+>|[{}]\s*:\s*["']/.test(latex)) {
+            if (/\[object Object\]|undefined|null|<\/?[A-Za-z][A-Za-z0-9-]*(?:\s+[^<>]*)?\s*\/?>|[{}]\s*:\s*["']/.test(latex)) {
                 return { ok: false, code: 'INVALID_LATEX_PAYLOAD', latex: '', diagnostics: ['non-math payload'] };
             }
 

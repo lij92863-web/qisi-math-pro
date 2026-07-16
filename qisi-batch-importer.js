@@ -407,8 +407,12 @@
 
     const splitDocxParagraphs = (documentXml = '') => {
         const paragraphs = [];
+        const richFlow = window.Qisi?.DocxRichContent?.extractTopLevelWordBlocks?.(documentXml);
+        const paragraphXml = Array.isArray(richFlow)
+            ? richFlow.filter(block => block?.kind === 'paragraph').map(block => block.xml)
+            : (String(documentXml || '').match(/<w:p[\s\S]*?<\/w:p>/g) || []);
 
-        String(documentXml || '').replace(/<w:p[\s\S]*?<\/w:p>/g, (pXml) => {
+        paragraphXml.forEach(pXml => {
             const text = extractTextFromXmlFragment(pXml);
             const hasObject = /<w:object\b|<w:drawing\b|<v:imagedata\b|<o:OLEObject\b/.test(pXml);
 
@@ -420,7 +424,6 @@
                 });
             }
 
-            return '';
         });
 
         return paragraphs;

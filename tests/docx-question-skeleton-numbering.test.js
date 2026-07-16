@@ -161,3 +161,27 @@ test('Word upper-letter numbering restores only missing option labels', () => {
         ['1']
     );
 });
+
+test('question skeleton ignores decimal values inside Word tables', () => {
+    const importer = loadBatchImporter();
+    const scoreTable = [
+        '<w:tbl><w:tblGrid><w:gridCol w:w="1200"/><w:gridCol w:w="1200"/></w:tblGrid>',
+        '<w:tr><w:tc>', paragraph('评委编号'), '</w:tc><w:tc>', paragraph('模型得分'), '</w:tc></w:tr>',
+        '<w:tr><w:tc>', paragraph('7.0'), '</w:tc><w:tc>', paragraph('9.3'), '</w:tc></w:tr>',
+        '<w:tr><w:tc>', paragraph('8.3'), '</w:tc><w:tc>', paragraph('8.9'), '</w:tc></w:tr>',
+        '</w:tbl>'
+    ].join('');
+    const documentXml = [
+        '<w:document><w:body>',
+        paragraph('1. 第一题'),
+        scoreTable,
+        paragraph('2. 第二题'),
+        paragraph('3. 第三题'),
+        '</w:body></w:document>'
+    ].join('');
+
+    const skeleton = importer.buildDocxQuestionSkeletonFromXml(documentXml, '');
+
+    assert.equal(skeleton.authoritative, true, JSON.stringify(skeleton.diagnostics));
+    assert.deepEqual(Array.from(skeleton.questionNumbers), ['1', '2', '3']);
+});

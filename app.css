@@ -1242,6 +1242,45 @@
             white-space: nowrap;
         }
 
+        .qisi-latex-table-wrap {
+            display: block;
+            max-width: 100%;
+            margin: 12px auto;
+            overflow-x: auto;
+            color: #0f172a;
+        }
+
+        .qisi-latex-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            background: #fff;
+            font-size: 0.96em;
+            line-height: 1.55;
+        }
+
+        .qisi-latex-table td {
+            box-sizing: border-box;
+            border: 1px solid #1f2937;
+            padding: 7px 10px;
+            overflow-wrap: anywhere;
+        }
+
+        .qisi-latex-table .katex {
+            font-size: 1em;
+        }
+
+        @media print {
+            .qisi-latex-table-wrap {
+                overflow: visible;
+                break-inside: avoid;
+            }
+
+            .qisi-latex-table td {
+                padding: 4px 7px;
+            }
+        }
+
         .math-content img { 
             max-width: 100%; 
             max-height: 200px; 

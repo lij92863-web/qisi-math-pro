@@ -22146,8 +22146,20 @@ ${source}`;
                     .trim();
 
                 const renderLatexForPrint = (text, images = []) => {
-                    const source = formatLatexForPrint(text).replace(/<br><br>/g, '\n\n');
+                    const tableChunks = [];
+                    const tableApi = window.Qisi?.DocxTableLatex;
+                    let source = formatLatexForPrint(text).replace(/<br><br>/g, '\n\n');
                     if (!source) return '';
+
+                    if (tableApi?.replaceLatexTableBlocks && tableApi?.renderLatexTableHtml) {
+                        source = tableApi.replaceLatexTableBlocks(source, block => {
+                            const token = `@@QISI_PRINT_TABLE_${tableChunks.length}@@`;
+                            tableChunks.push(tableApi.renderLatexTableHtml(block, {
+                                renderCell: cellContent => renderLatexForPrint(cellContent, images)
+                            }));
+                            return token;
+                        });
+                    }
 
                     const parsed = tokenizeLatexSource(source);
 
@@ -22155,7 +22167,7 @@ ${source}`;
                         console.warn('[PRINT_LATEX][delimiter-issues]', { content: source, issues: parsed.issues });
                     }
 
-                    return parsed.segments
+                    let rendered = parsed.segments
                         .map(segment => {
                             if (segment.type !== 'math') {
                                 return renderPrintTextChunk(segment.raw, images);
@@ -22189,6 +22201,10 @@ ${source}`;
                             }
                         })
                         .join('');
+                    tableChunks.forEach((chunk, index) => {
+                        rendered = rendered.replace(`@@QISI_PRINT_TABLE_${index}@@`, chunk);
+                    });
+                    return rendered;
                 };
 
                 const hydrateQuestionsForPrint = async (qs) => {

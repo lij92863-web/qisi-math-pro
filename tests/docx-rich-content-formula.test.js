@@ -51,6 +51,29 @@ test('MathType translator output is canonicalized before rich serialization', ()
     assert.equal((serialized.match(/\$/g) || []).length, 2);
 });
 
+test('piecewise MathType LaTeX accepts row breaks before grouped rows', () => {
+    const translated = String.raw`$f\left( x \right) = \left\{ {\begin{array}{*{20}{l}}
+{\left| {{{\log }_2}\left( {x - 1} \right)} \right|,1 < x \le 3}\\
+{{{\left( {x - 4} \right)}^2},x > 3}
+\end{array}} \right.$`;
+
+    const normalized = rich.normalizeLatexFragment(translated);
+
+    assert.equal(normalized.ok, true, JSON.stringify(normalized));
+    assert.match(normalized.latex, /\\begin\{array\}/);
+    assert.match(normalized.latex, /\\right\./);
+});
+
+test('vertical bars used by flexible delimiters are not rewritten as mid relations', () => {
+    const normalized = rich.normalizeLatexFragment(
+        String.raw`f\left(x\right)=\left\{\begin{matrix}\left|log{2}_{}\left(x-1\right)\right|,1<x\le 3\\\left(x-4\right){}^{2},x>3\end{matrix}\right.`
+    );
+
+    assert.equal(normalized.ok, true, JSON.stringify(normalized));
+    assert.match(normalized.latex, /\\left\|log/);
+    assert.doesNotMatch(normalized.latex, /\\left\\mid/);
+});
+
 test('adjacent canonical math runs cannot collapse into a display delimiter', () => {
     const serialized = rich.serializeRichRuns([
         { kind: 'math', latex: 'a+b' },
@@ -183,4 +206,34 @@ test('MTEF fallback deterministically preserves triangle and arc constructs reje
         diagnostics: []
     });
     assert.equal(mtefReader.mtefToLatex(arcs).latex, '\\widehat{DE},\\widehat{AC}');
+});
+
+test('accepts half-open interval notation with intentionally mixed boundary delimiters', () => {
+    assert.deepEqual(rich.normalizeLatexFragment('$x \\in [0,+\\infty)$'), {
+        ok: true,
+        code: 'LATEX_OK',
+        latex: 'x \\in [0,+\\infty)',
+        diagnostics: []
+    });
+    assert.equal(rich.normalizeLatexFragment('(-\\infty,1]').ok, true);
+});
+
+test('recovers exact TeX source stored in a MathType future record', () => {
+    const source = '\\because f(0)=-1<0, f(1)=\\sin 1>0';
+    const payload = Buffer.from(`TeX Input Language\0${source}\0`, 'latin1');
+    const mtef = Buffer.concat([
+        Buffer.from([5, 1, 0, 7, 8]),
+        Buffer.from('DSMT7\0', 'latin1'),
+        Buffer.from([1, 102, payload.length]),
+        payload,
+        Buffer.from([0])
+    ]);
+
+    assert.deepEqual(mtefReader.mtefToLatex(mtef), {
+        ok: true,
+        code: 'MTEF_LATEX_OK',
+        latex: source,
+        diagnostics: []
+    });
+    assert.equal(rich.normalizeLatexFragment(source).ok, true);
 });

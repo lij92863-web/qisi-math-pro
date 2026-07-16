@@ -129,6 +129,18 @@
                     return token;
                 };
                 const extractId = extractPreviewImageIdFromCode;
+                const tableApi = window.Qisi?.DocxTableLatex;
+
+                if (
+                    tableApi?.replaceLatexTableBlocks &&
+                    tableApi?.renderLatexTableHtml
+                ) {
+                    source = tableApi.replaceLatexTableBlocks(source, block => protectRenderedHtml(
+                        tableApi.renderLatexTableHtml(block, {
+                            renderCell: cellContent => renderLatexPreviewHtml(cellContent, images)
+                        })
+                    ));
+                }
 
                 source = source.replace(
                     /\\begin\{wrapfigure\}\s*\{([lr])\}\s*\{[^}]+\}[\s\S]*?\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\][\s\S]*?\\end\{wrapfigure\}/g,
@@ -323,6 +335,23 @@
                     );
                 }
             };
+
+            const tableApiForSource = window.Qisi?.DocxTableLatex;
+            const tableParts = tableApiForSource?.splitLatexTableBlocks
+                ? tableApiForSource.splitLatexTableBlocks(content)
+                : [{ kind: 'text', value: content }];
+            if (
+                tableApiForSource?.renderLatexTableHtml
+                && tableParts.some(part => part.kind === 'table')
+            ) {
+                return tableParts.map(part => (
+                    part.kind === 'table'
+                        ? tableApiForSource.renderLatexTableHtml(part.value, {
+                            renderCell: cellContent => renderLatexPreviewHtml(cellContent, images)
+                        })
+                        : renderLatexPreviewHtml(part.value, images)
+                )).join('');
+            }
 
             const displaySource = typeof window.Qisi?.Utils?.normalizeBareLatexForDisplayText === 'function'
                 ? window.Qisi.Utils.normalizeBareLatexForDisplayText(content)

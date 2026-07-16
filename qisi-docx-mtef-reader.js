@@ -110,6 +110,13 @@
 
     const visible = rows => rows.filter(row => row?.latex || row?.kind === 'line');
 
+    const decodeFutureLatex = (type, payload) => {
+        if (type !== 102 || !payload?.length) return '';
+        const parts = String.fromCharCode(...payload).split('\0');
+        if (parts[0] !== 'TeX Input Language') return '';
+        return String(parts[1] || '').trim();
+    };
+
     const templateLatex = (selector, variation, rows, cursor) => {
         const slots = visible(rows).filter(row => row.kind === 'line').map(row => row.latex);
         const unsupported = () => {
@@ -169,8 +176,10 @@
         const type = cursor.byte();
         if (type === 0) return { kind: 'end', latex: '' };
         if (type >= 100) {
-            cursor.index += cursor.unsigned();
-            return { kind: 'future', latex: '' };
+            const length = cursor.unsigned();
+            const payload = cursor.bytes.slice(cursor.index, cursor.index + length);
+            cursor.index += length;
+            return { kind: 'future', latex: decodeFutureLatex(type, payload) };
         }
         if (type >= 10 && type <= 14) return { kind: 'size', latex: '' };
         if (type === 19) { cursor.cString(); return { kind: 'encoding', latex: '' }; }

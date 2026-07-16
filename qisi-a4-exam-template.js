@@ -43,7 +43,7 @@
 
 \usepackage{amsmath,amssymb,mathtools,bm}
 \usepackage{graphicx,wrapfig,float}
-\usepackage{enumitem,array,tabularx,booktabs}
+\usepackage{enumitem,array,tabularx,booktabs,multirow}
 \usepackage{needspace}
 \usepackage{fontspec}
 
@@ -356,6 +356,10 @@ main { width: 100%; margin: 0; padding: 0; }
 .print-image.centered { display: block; margin: 2mm auto 2.5mm; }
 .print-image.float-left { float: left; margin: 1mm 3mm 2mm 0; }
 .print-image.float-right { float: right; margin: 1mm 0 2mm 3mm; }
+.qisi-latex-table-wrap { display: block; max-width: 100%; margin: 2.5mm auto; overflow: visible; break-inside: avoid; page-break-inside: avoid; }
+.qisi-latex-table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; font-size: 0.96em; line-height: 1.5; }
+.qisi-latex-table td { box-sizing: border-box; border: 0.25mm solid #111827; padding: 1.2mm 1.8mm; overflow-wrap: anywhere; }
+.qisi-latex-table .katex { font-size: 1em; }
 .missing-image, .latex-render-error { color: #b91c1c; font-size: 9pt; }
 .secret-mark, .corner-marks { display: none; }
 
