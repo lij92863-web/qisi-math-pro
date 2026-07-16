@@ -121,10 +121,8 @@
                 
                 const ocrDraftStore = reactive({ rawText: '' });
 
-                const customTemplates = ref([]);
                 const templateOverrides = ref(safeStorage.json('qisi_template_overrides', {}) || {});
-                const latexTemplate = ref(safeStorage.get('qisi_template', DEFAULT_TEMPLATE) || DEFAULT_TEMPLATE);
-                const editMode = ref('system'); 
+                const latexTemplate = ref(DEFAULT_TEMPLATE);
                 const currentPresetKey = ref('');
                 const editTplName = ref('');
                 
@@ -20526,21 +20524,15 @@ ${source}`;
                     return { id, name: override.name || tpl.name, desc: tpl.desc, code: override.code || tpl.code, system: true };
                 };
 
-                const allTemplateCards = computed(() => [
-                    ...Object.entries(PRESET_TEMPLATES).map(([id, tpl]) => getTemplateCard(id, tpl)),
-                    ...customTemplates.value.map(tpl => ({ id: tpl.id, name: tpl.name, desc: tpl.desc || '自定义模板', code: tpl.code, system: false }))
-                ]);
+                const allTemplateCards = computed(() => Object.entries(PRESET_TEMPLATES)
+                    .map(([id, tpl]) => getTemplateCard(id, tpl)));
 
-                const examPresets = computed(() => ({
-                    ...Object.fromEntries(Object.entries(EXAM_LAYOUT_PRESETS).map(([id, preset]) => {
+                const examPresets = computed(() => Object.fromEntries(
+                    Object.entries(EXAM_LAYOUT_PRESETS).map(([id, preset]) => {
                         const override = templateOverrides.value[id] || {};
                         return [id, { ...preset, name: override.name || preset.name, desc: PRESET_TEMPLATES[id]?.desc || preset.desc }];
-                    })),
-                    ...Object.fromEntries(customTemplates.value.map(tpl => [
-                        tpl.id,
-                        { name: tpl.name, desc: tpl.desc || '自定义 LaTeX 模板，使用通用组卷配置。', config: { ...EXAM_LAYOUT_PRESETS[DEFAULT_PRESET_KEY].config, title: tpl.name } }
-                    ]))
-                }));
+                    })
+                ));
 
                 const selectedExamPreset = computed(() => examPresets.value[selectedExamTemplate.value] || examPresets.value[DEFAULT_PRESET_KEY]);
 
@@ -20575,21 +20567,10 @@ ${source}`;
                 const activeExamGroups = computed(() => getExamGroupsForQuestions(cartQuestionsOrdered.value));
 
                 const templateFeatureOptions = computed(() => {
-                    const common = [
+                    return [
                         { key: 'showHeaderFields', label: '显示班级 / 姓名 / 评分' },
-                        { key: 'showAnswerGrid', label: '显示选择题答题表' },
-                        { key: 'showCornerMarks', label: '显示页面角标' },
-                        { key: 'compactMode', label: '紧凑排版，适合题量多' }
+                        { key: 'showAnswerGrid', label: '显示晚测答题表' }
                     ];
-                    if (selectedExamTemplate.value === 'examZh') {
-                        return [
-                            { key: 'showSecretMark', label: '显示“绝密 ★ 启用前”' },
-                            { key: 'showNotice', label: '显示考试注意事项' },
-                            { key: 'showHeaderFields', label: '显示班级 / 姓名 / 考号栏' },
-                            { key: 'compactMode', label: '紧凑排版，适合题量多' }
-                        ];
-                    }
-                    return common;
                 });
 
                 const getGroupCfg = (type) => {
@@ -20753,7 +20734,6 @@ ${source}`;
                             batchDraftQuestions.value = await db.draftQuestions.where('batchId').equals(activeBatchId.value).sortBy('order');
                             batchDraftImages.value = await db.draftImages.where('batchId').equals(activeBatchId.value).toArray();
                         }
-                        customTemplates.value = await db.customTemplates.orderBy('createdAt').reverse().toArray();
                         const savedPersonal = await db.personalKnowledge.get('tree');
                         personalKnowledgeTree.value = Array.isArray(savedPersonal?.nodes) ? savedPersonal.nodes : [];
                     } catch (error) {
@@ -21547,7 +21527,7 @@ ${source}`;
                     try {
                         restoringExamConfig.value = true;
                         const savedTemplate = safeStorage.get('qisi_exam_template', DEFAULT_PRESET_KEY) || DEFAULT_PRESET_KEY;
-                        const hasSavedTemplate = !!EXAM_LAYOUT_PRESETS[savedTemplate] || customTemplates.value.some(t => t.id === savedTemplate);
+                        const hasSavedTemplate = !!EXAM_LAYOUT_PRESETS[savedTemplate];
                         selectedExamTemplate.value = hasSavedTemplate ? savedTemplate : DEFAULT_PRESET_KEY;
                         const savedConfig = hasSavedTemplate ? safeStorage.json('qisi_exam_config', null) : null;
                         Object.assign(examConfig, EXAM_LAYOUT_PRESETS[selectedExamTemplate.value]?.config || EXAM_LAYOUT_PRESETS[DEFAULT_PRESET_KEY].config, savedConfig || {});
@@ -21571,13 +21551,11 @@ ${source}`;
                         }
                     } catch (e) {}
                     
-                    const isCustom = customTemplates.value.find(t => t.code === latexTemplate.value);
-                    if (isCustom) { editMode.value = 'custom'; currentPresetKey.value = isCustom.id; editTplName.value = isCustom.name; } 
-                    else {
-                        const isSystem = allTemplateCards.value.find(t => t.system && t.code === latexTemplate.value);
-                        if (isSystem) { editMode.value = 'system'; currentPresetKey.value = isSystem.id; editTplName.value = isSystem.name; } 
-                        else { editMode.value = 'new'; currentPresetKey.value = ''; editTplName.value = '我的修改模板'; }
-                    }
+                    const isSystem = allTemplateCards.value.find(t => t.system && t.code === latexTemplate.value)
+                        || getTemplateCard(DEFAULT_PRESET_KEY, PRESET_TEMPLATES[DEFAULT_PRESET_KEY]);
+                    currentPresetKey.value = isSystem.id;
+                    editTplName.value = isSystem.name;
+                    latexTemplate.value = isSystem.code;
                     syncExamGroups();
                     const savedView = safeStorage.get('qisi_last_view');
                     if (['entry', 'batchImport', 'library', 'exam', 'personal', 'template'].includes(savedView)) view.value = savedView;
@@ -21596,7 +21574,7 @@ ${source}`;
                     safeStorage.set('qisi_exam_template', key);
                     if (restoringExamConfig.value) return;
                     Object.assign(examConfig, EXAM_LAYOUT_PRESETS[key]?.config || EXAM_LAYOUT_PRESETS[DEFAULT_PRESET_KEY].config);
-                    if (PRESET_TEMPLATES[key] && editMode.value === 'system' && currentPresetKey.value !== key) {
+                    if (PRESET_TEMPLATES[key] && currentPresetKey.value !== key) {
                         const tpl = getTemplateCard(key, PRESET_TEMPLATES[key]);
                         currentPresetKey.value = tpl.id;
                         editTplName.value = tpl.name;
@@ -22229,9 +22207,7 @@ ${source}`;
 
                 const buildHeaderFields = () => {
                     if (!examConfig.showHeaderFields) return '';
-                    const fields = selectedExamTemplate.value === 'examZh'
-                        ? ['班级', '姓名', '考号']
-                        : ['班别', '姓名', '评分'];
+                    const fields = ['班别', '姓名', '评分'];
                     return `<div class="student-fields">${fields.map(label => `<span>${label}<i></i></span>`).join('')}</div>`;
                 };
 
@@ -22253,15 +22229,6 @@ ${source}`;
 
                 const buildNotice = () => {
                     if (!examConfig.showNotice) return '';
-                    if (selectedExamTemplate.value === 'examZh') {
-                        return `<div class="notice exam-notice"><b>注意事项：</b>
-                            <ol>
-                                <li>答卷前，考生务必将自己的姓名、准考证号填写在答题卡上。</li>
-                                <li>回答选择题时，选出每小题答案后，用铅笔把答题卡上对应题目的答案标号涂黑。如需改动，用橡皮擦干净后，再选涂其它答案标号。回答非选择题时，将答案写在答题卡上。写在本试卷上无效。</li>
-                                <li>考试结束后，将本试卷和答题卡一并交回。</li>
-                            </ol>
-                        </div>`;
-                    }
                     return '<div class="notice">注意事项：请将答案填写在指定位置，保持卷面整洁。</div>';
                 };
 
@@ -22309,9 +22276,8 @@ ${source}`;
 
                 const buildQuestionContent = (qs = cartQuestionsOrdered.value) => {
                     const groups = getExamGroupsForQuestions(qs);
-                    const headerClass = selectedExamTemplate.value === 'quizSheet' ? 'header quiz-sheet-header' : 'header';
-                    let content = `${examConfig.showCornerMarks ? '<div class="corner-marks"><i></i><i></i><i></i><i></i></div>' : ''}<main class="${examConfig.compactMode ? 'paper-compact' : ''} ${selectedExamTemplate.value === 'quizSheet' ? 'paper-quiz-sheet' : ''}">${selectedExamTemplate.value === 'examZh' && examConfig.showSecretMark ? '<div class="secret-mark">绝密 ★ 启用前</div>' : ''}<div class="${headerClass}">
-                        <div class="title" style="font-size:24px;font-weight:bold;margin-bottom:8px;">${escapeHtml(examConfig.title || examTitle.value)}</div>
+                    let content = `<main><div class="header">
+                        <div class="title">${escapeHtml(examConfig.title || examTitle.value)}</div>
                         ${examConfig.subtitle ? `<div class="subtitle">${escapeHtml(examConfig.subtitle)}</div>` : ''}
                         ${examConfig.organizer ? `<div class="organizer">组卷人：${escapeHtml(examConfig.organizer)}</div>` : ''}
                         ${buildHeaderFields()}
@@ -22341,106 +22307,16 @@ ${source}`;
                 };
 
                 const openPrintWindow = (content, title = '试卷打印') => {
-                    const html = `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8" />
-<title>${escapeHtml(title)}</title>
-<link rel="stylesheet" href="https://unpkg.com/katex@0.16.8/dist/katex.min.css"/>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&display=swap">
-<style>
-body {
-    font-family: ${examConfig.fontFamily === '霞鹜文楷' ? '"LXGW WenKai", "KaiTi", serif' : '"Noto Serif SC", "Source Han Serif SC", "Microsoft YaHei", "SimSun", serif'};
-    padding:24px;
-    color:#111;
-    line-height:1.8;
-    font-size:${examConfig.fontSize === '五号' ? '14px' : '16px'};
-}
-.subtitle,.organizer { font-size:14px; color:#333; }
-.notice { margin:12px auto 0; padding:0; border:0; text-align:left; font-size:13px; }
-.exam-notice { max-width:100%; line-height:1.55; }
-.exam-notice b { display:block; margin-bottom:3px; }
-.exam-notice ol { margin:0; padding-left:1.8em; text-align:left; }
-.secret-mark { font-weight:bold; margin-bottom:12px; }
-.header { text-align:center; margin-bottom:24px; border-bottom:0; padding-bottom:0; }
-.quiz-sheet-header { margin-bottom:16px; }
-.student-fields { display:flex; justify-content:center; gap:14mm; margin:8px 0 6px; font-weight:bold; }
-.student-fields span { display:inline-flex; align-items:flex-end; gap:2mm; white-space:nowrap; }
-.student-fields i { display:inline-block; width:34mm; border-bottom:1px solid #111; transform:translateY(-2px); }
-.answer-grid-wrap { display:flex; flex-direction:column; align-items:center; gap:4mm; margin:4px 0 7mm; }
-.answer-grid { border-collapse:collapse; font-weight:bold; }
-.answer-grid th,.answer-grid td { border:1px solid #111; min-width:12mm; height:8mm; text-align:center; padding:0 2mm; }
-.answer-grid th { min-width:13mm; }
-.answer-lines { display:grid; grid-template-columns:repeat(3, 1fr); gap:8mm; width:82%; font-weight:bold; }
-.answer-lines span { display:flex; align-items:flex-end; gap:2mm; }
-.answer-lines i { flex:1; border-bottom:2px solid #111; transform:translateY(-2px); }
-.corner-marks i { position:fixed; width:7mm; height:7mm; z-index:0; }
-.corner-marks i:nth-child(1) { left:18mm; top:14mm; border-right:1px solid #bbb; border-bottom:1px solid #bbb; }
-.corner-marks i:nth-child(2) { right:18mm; top:14mm; border-left:1px solid #bbb; border-bottom:1px solid #bbb; }
-.corner-marks i:nth-child(3) { left:18mm; bottom:14mm; border-right:1px solid #bbb; border-top:1px solid #bbb; }
-.corner-marks i:nth-child(4) { right:18mm; bottom:14mm; border-left:1px solid #bbb; border-top:1px solid #bbb; }
-.group-title { margin:24px 0 10px; font-weight:bold; border:0; padding:0; font-size:17px; }
-.paper-compact .group-title { margin:14px 0 8px; }
-.exam-question { margin-bottom:28px; break-inside:avoid; page-break-inside:avoid; display:flow-root; overflow:visible; }
-.paper-compact .exam-question { margin-bottom:16px; }
-.question-row { display:grid; grid-template-columns:2.4em minmax(0, 1fr); column-gap:0; align-items:start; }
-.q-index { font-weight:bold; line-height:1.8; }
-.question-stem { margin-bottom:12px; min-width:0; line-break:strict; text-wrap:pretty; display:flow-root; overflow:visible; }
-.question-stem::after,.exam-question::after { content:""; display:block; clear:both; }
-.question-flow-body { min-width:0; overflow:visible; line-break:strict; text-wrap:pretty; }
-.question-flow-body::after { content:""; display:block; clear:both; }
-.gaokao-options { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); column-gap:14px; row-gap:8px; margin-top:10px; padding-left:2.2em; width:100%; box-sizing:border-box; }
-.gaokao-options:has(.option-content .katex-display), .gaokao-options.long-options { grid-template-columns:repeat(2, minmax(0, 1fr)); }
-.question-flow-body .qisi-flow-options { clear:none !important; display:block !important; width:auto !important; margin-top:10px; padding-left:2.2em; }
-.question-flow-body .qisi-flow-options .gaokao-option { display:block; margin-bottom:5px; }
-.question-flow-body .qisi-flow-options .option-label { display:inline-block; width:1.8em; margin-right:0; }
-.question-flow-body .qisi-flow-options .option-content { display:inline; }
-.question-head { display:none; }
-.print-toolbar { position:sticky; top:0; margin:-24px -24px 18px; padding:10px 24px; background:#f8fafc; border-bottom:1px solid #e5e7eb; font-family:"Microsoft YaHei", sans-serif; }
-.print-toolbar button { border:0; background:#1a73e8; color:#fff; border-radius:6px; padding:8px 14px; font-weight:700; cursor:pointer; }
-.print-toolbar button:disabled { background:#94a3b8; cursor:wait; }
-@media print { .print-toolbar { display:none; } }
-.q-note { margin-top:8px; font-size:13px; color:#555; border-left:3px solid ${examConfig.themeColor || '#1f9d45'}; padding-left:8px; }
-.print-answer,.print-solution { clear:both; margin-top:8px; padding:8px 10px; background:#f8fafc; border:1px solid #e5e7eb; border-radius:4px; }
-.answer-section.new-page { break-before:page; }
-.answer-section h2 { text-align:center; margin-bottom:20px; }
-.answer-item { margin-bottom:12px; }
-.answer-solution { margin-top:4px; color:#333; }
-.gaokao-option { display:flex; align-items:flex-start; min-width:0; break-inside:avoid; page-break-inside:avoid; }
-.option-label { margin-right:6px; font-weight:bold; line-height:1.8; }
-.option-content { flex:1; min-width:0; line-height:1.8; overflow-wrap:normal; word-break:normal; }
-.option-content .katex, .katex { font-size:1.04em; white-space:nowrap; }
-.katex-display { margin:.5em 0; overflow-x:auto; overflow-y:hidden; }
-.answer-blank,.nowrap { display:inline-block; white-space:nowrap; break-inside:avoid; }
-.answer-blank { min-width:2.4em; text-align:center; }
-.print-image { max-width:82mm; max-height:48mm; width:auto; height:auto; object-fit:contain; page-break-inside:avoid; break-inside:avoid; }
-.print-image.centered { display:block; margin:8px auto 10px; }
-.print-image.float-left { float:left; margin:4px 12px 8px 0; }
-.print-image.float-right { float:right; margin:4px 0 8px 12px; }
-.missing-image { color:#dc2626; font-size:12px; }
-@page { size:${examConfig.paperSize || 'A4'}; margin:18mm 16mm; }
-</style>
-</head>
-<body>
-<div class="print-toolbar"><button id="printBtn" onclick="window.print()" disabled>正在准备图片...</button></div>
-${content}
-<script>
-const btn = document.getElementById('printBtn');
-const imgs = Array.from(document.images);
-const imageReady = Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise(resolve => {
-    img.onload = resolve;
-    img.onerror = resolve;
-})));
-const fontReady = document.fonts?.ready || Promise.resolve();
-Promise.all([imageReady, fontReady]).then(() => {
-    if (btn) {
-        btn.disabled = false;
-        btn.textContent = '渲染已就绪，打印 / 另存为 PDF';
-    }
-});
-</script>
-</body>
-</html>`;
+                    const printTemplate = window.Qisi?.A4ExamTemplate;
+                    if (!printTemplate) {
+                        throw new Error('A4 打印模板模块未加载');
+                    }
+
+                    const html = printTemplate.buildPrintDocument({
+                        content,
+                        title,
+                        config: { ...toRaw(examConfig), paperSize: 'A4', fontSize: '五号', fontFamily: '宋体' }
+                    });
                     const blob = new Blob(['\uFEFF' + html], { type: 'text/html;charset=utf-8' });
                     const url = URL.createObjectURL(blob);
                     const link = document.createElement('a');
@@ -22486,42 +22362,30 @@ Promise.all([imageReady, fontReady]).then(() => {
                 };
 
                 const selectTemplateCard = (tpl) => {
-                    editMode.value = tpl.system ? 'system' : 'custom';
                     currentPresetKey.value = tpl.id;
                     editTplName.value = tpl.name;
                     latexTemplate.value = tpl.code;
-                    if ((tpl.system && EXAM_LAYOUT_PRESETS[tpl.id]) || (!tpl.system && tpl.id)) selectedExamTemplate.value = tpl.id;
+                    if (tpl.system && EXAM_LAYOUT_PRESETS[tpl.id]) selectedExamTemplate.value = tpl.id;
                 };
                 const selectPresetTemplate = (key) => selectTemplateCard(getTemplateCard(key, PRESET_TEMPLATES[key]));
-                const selectCustomTemplate = (tpl) => selectTemplateCard({ ...tpl, system: false });
-                const triggerNewCustomTemplate = () => { editMode.value = 'new'; currentPresetKey.value = ''; editTplName.value = '我的新模板'; latexTemplate.value = DEFAULT_TEMPLATE; };
                 const handleCodeInput = (e) => { latexTemplate.value = e.target.value; };
-                
-                const saveNewCustomTemplate = async () => {
-                    const tpl = { id: 'tpl_' + Date.now(), name: editTplName.value, code: ensureImagePackagesForLatex(latexTemplate.value), createdAt: Date.now() };
-                    latexTemplate.value = tpl.code;
-                    await db.customTemplates.put(tpl); await loadData(); 
-                    editMode.value = 'custom'; currentPresetKey.value = tpl.id; alert('已存为新模板');
-                };
-                
+
                 const updateExistingCustomTemplate = async () => {
-                    if (PRESET_TEMPLATES[currentPresetKey.value]) {
-                        templateOverrides.value = {
-                            ...templateOverrides.value,
-                            [currentPresetKey.value]: { name: editTplName.value, code: ensureImagePackagesForLatex(latexTemplate.value), updatedAt: Date.now() }
-                        };
-                        latexTemplate.value = templateOverrides.value[currentPresetKey.value].code;
-                        safeStorage.set('qisi_template_overrides', JSON.stringify(toRaw(templateOverrides.value)));
-                        alert('系统模板已更新');
+                    if (!PRESET_TEMPLATES[currentPresetKey.value]) return;
+                    const nextCode = ensureImagePackagesForLatex(latexTemplate.value);
+                    const validation = window.Qisi.A4ExamTemplate.validateStrictLatex(nextCode);
+                    if (!validation.ok) {
+                        alert(`模板未保存：\n${validation.issues.join('\n')}`);
                         return;
                     }
-                    const nextCode = ensureImagePackagesForLatex(latexTemplate.value);
-                    latexTemplate.value = nextCode;
-                    await db.customTemplates.update(currentPresetKey.value, { name: editTplName.value, code: nextCode });
-                    await loadData(); alert('已更新');
+                    templateOverrides.value = {
+                        ...templateOverrides.value,
+                        [currentPresetKey.value]: { name: editTplName.value, code: nextCode, updatedAt: Date.now() }
+                    };
+                    latexTemplate.value = templateOverrides.value[currentPresetKey.value].code;
+                    safeStorage.set('qisi_template_overrides', JSON.stringify(toRaw(templateOverrides.value)));
+                    alert('A4 模板已更新');
                 };
-                
-                const deleteCustomTemplate = async (id) => { await db.customTemplates.delete(id); await loadData(); selectPresetTemplate(DEFAULT_PRESET_KEY); };
 
                 const savePersonalKnowledge = async () => {
                     await db.personalKnowledge.put({ id: 'tree', nodes: toRaw(personalKnowledgeTree.value), updatedAt: Date.now() });
@@ -22669,7 +22533,7 @@ Promise.all([imageReady, fontReady]).then(() => {
                     cartGrouped: computed(() => { const sel = questions.value.filter(q => q && cart.value.includes(q.id)); return sel.reduce((acc, q) => { (acc[q.type] = acc[q.type] || []).push(q); return acc; }, {}); }),
                     cartQuestionsOrdered, activeExamGroups, examQuestionMeta, examGroupConfig, selectedExamTemplate, examConfig, examPresets, selectedExamPreset, templateFeatureOptions, printBusy, moveCartQuestion, examDisplayIndex, startExamPointerDrag, dropExamQuestion, draggingExamQuestionId, dragOverExamQuestionId, resetExamOrder, groupSummaryText, syncExamGroups, openExamBuilder, finishExamBuild,
                     entryForm, entryTab, entryPreviewStem, entryPreviewOptions, isDraggingImg, isDraggingOcr, ocrDraftStore, ocrLoading, examTitle, exportMode, latexTemplate,
-                    presets: PRESET_TEMPLATES, allTemplateCards, customTemplates, currentPresetKey, editMode, editTplName, 
+                    presets: PRESET_TEMPLATES, allTemplateCards, currentPresetKey, editTplName,
                     knowledgeTree, personalKnowledgeTree, personalTreeRows, activeKnowledge, activeKnowledgeType, libraryKnowledgeMode, activeKnowledgeTree, activeKnowledgeCounts, knowledgeCounts, personalKnowledgeCounts, handleKnowledgeSelect, switchLibraryKnowledgeMode, isCartOpen, cartPanelAvailable, showEntryKnowledge, showEntryPersonalKnowledge, hoverL1, hoverPersonalL1,
                     personalL1Name, personalL2Name, personalL3Name, selectedPersonalL1Id, selectedPersonalL2Id,
                     createPersonalL1, createPersonalL2, createPersonalL3, togglePersonalExpanded, addPersonalChild, deletePersonalRow, renamePersonalNode, deletePersonalNode,
@@ -22680,12 +22544,7 @@ Promise.all([imageReady, fontReady]).then(() => {
                         if (area && area.selectionStart !== area.selectionEnd) { selected = area.value.substring(area.selectionStart, area.selectionEnd); }
                         entryForm[f] += (entryForm[f] ? '\n\n' : '') + selected; 
                     },
-                    selectPresetTemplate, selectCustomTemplate, selectTemplateCard, triggerNewCustomTemplate, handleCodeInput, saveNewCustomTemplate, updateExistingCustomTemplate, deleteCustomTemplate,
-                    setGlobalTemplate: () => {
-                        latexTemplate.value = ensureImagePackagesForLatex(latexTemplate.value);
-                        safeStorage.set('qisi_template', latexTemplate.value);
-                        alert('全局默认已更新');
-                    },
+                    selectPresetTemplate, selectTemplateCard, handleCodeInput, updateExistingCustomTemplate,
                     changeEntryAlign: (id, align) => {
                         const img = entryForm.images.find(i => i.id === id); if(img) img.align = align;
                         const escapedId = String(id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

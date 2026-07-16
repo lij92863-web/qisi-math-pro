@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>A4 分页预览验收</title>
+</head>
+<body>
+    <script src="../../qisi-a4-exam-template.js"></script>
+    <script>
+        const questions = Array.from({ length: 30 }, (_, index) => `
+            <div class="exam-question">
+                <div class="question-row">
+                    <span class="q-index">${index + 1}.</span>
+                    <div class="question-flow-body">
+                        已知函数 f(x)=x²+${index + 1}，求该函数在指定区间上的最值，并说明理由。这是一道用于检查 A4 纸张、宋体五号字、选项布局和真实分页的测试题。
+                        <div class="gaokao-options">
+                            <div class="gaokao-option"><span class="option-label">A.</span><span class="option-content">选项一</span></div>
+                            <div class="gaokao-option"><span class="option-label">B.</span><span class="option-content">选项二</span></div>
+                            <div class="gaokao-option"><span class="option-label">C.</span><span class="option-content">选项三</span></div>
+                            <div class="gaokao-option"><span class="option-label">D.</span><span class="option-content">选项四</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>`).join('');
+        const content = `<main>
+            <div class="header">
+                <div class="title">高中数学作业</div>
+                <div class="student-fields"><span>班别<i></i></span><span>姓名<i></i></span><span>评分<i></i></span></div>
+            </div>
+            <div class="group-title">一、单选题（共 30 题）</div>
+            ${questions}
+        </main>`;
+        const html = window.Qisi.A4ExamTemplate.buildPrintDocument({
+            content,
+            title: 'A4 分页预览验收',
+            katexCssHref: ''
+        });
+        document.open();
+        document.write(html);
+        document.close();
+    </script>
+</body>
+</html>
