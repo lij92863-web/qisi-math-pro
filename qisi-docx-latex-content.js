@@ -74,7 +74,7 @@
             const compact = source
                 .replace(/[ \t]+/g, ' ')
                 .replace(/\s*([=+,:])\s*/g, '$1')
-                .replace(/(^|[=(,:+])\s*-\s+(?=\\)/g, '$1-')
+                .replace(/(^|[={(,:+\[])\s*-\s+(?=\\)/g, '$1-')
                 .replace(/\s*([{}])\s*/g, '$1')
                 .replace(/\\pi(?=[A-Za-z0-9])/g, '\\pi ')
                 .trim();
@@ -121,14 +121,50 @@
             return /\\(?:frac|sqrt)\s*$/.test(prefix) ? match : body;
         });
 
+        const maskFlexibleLeftRightDelimiters = (value = '') => {
+            const source = String(value || '');
+            let depth = 0;
+            let failure = '';
+            const masked = source.replace(
+                /\\(left|right)\s*(?:\\(?:langle|rangle|lvert|rvert|lVert|rVert|vert|Vert|lfloor|rfloor|lceil|rceil|lbrace|rbrace|backslash|uparrow|downarrow|updownarrow|Uparrow|Downarrow|Updownarrow)|\\[{}|.]|[()[\]{}|.])/g,
+                (match, kind, offset) => {
+                    if (kind === 'left') {
+                        depth += 1;
+                    } else if (depth > 0) {
+                        depth -= 1;
+                    } else if (!failure) {
+                        failure = `unexpected-right@${offset}`;
+                    }
+                    return ' '.repeat(match.length);
+                }
+            );
+
+            if (!failure && /\\(?:left|right)\b/.test(masked)) {
+                failure = 'left-right-delimiter-missing';
+            }
+            if (!failure && depth) failure = `unclosed-left-${depth}`;
+
+            return failure
+                ? { ok: false, diagnostics: [failure], value: masked }
+                : { ok: true, diagnostics: [], value: masked };
+        };
+
         const validateLatexBalance = (value = '') => {
             const source = String(value || '');
+            const flexible = maskFlexibleLeftRightDelimiters(source);
+            if (!flexible.ok) {
+                return {
+                    ok: false,
+                    code: 'UNBALANCED_LATEX',
+                    diagnostics: flexible.diagnostics
+                };
+            }
             const stack = [];
             const pairs = { '}': '{', ']': '[', ')': '(' };
 
-            for (let index = 0; index < source.length; index += 1) {
-                const char = source[index];
-                if (source[index - 1] === '\\') continue;
+            for (let index = 0; index < flexible.value.length; index += 1) {
+                const char = flexible.value[index];
+                if (flexible.value[index - 1] === '\\') continue;
                 if ('{[('.includes(char)) stack.push(char);
                 if ('}])'.includes(char) && stack.pop() !== pairs[char]) {
                     return { ok: false, code: 'UNBALANCED_LATEX', diagnostics: [`unexpected-${char}@${index}`] };

@@ -13,7 +13,8 @@
     const readDocxCoreXml = async (zip) => {
         const documentXml = await zip.file('word/document.xml')?.async('text') || '';
         const relsXml = await zip.file('word/_rels/document.xml.rels')?.async('text').catch(() => '') || '';
-        return { documentXml, relsXml };
+        const numberingXml = await zip.file('word/numbering.xml')?.async('text').catch(() => '') || '';
+        return { documentXml, relsXml, numberingXml };
     };
 
     const parseRelationships = (relsXml = '') => {
@@ -432,20 +433,63 @@
             line
         ).questionNumber;
     };
-    const buildQuestionBlocksFromDocumentXml = (documentXml = '') => {
-        const paragraphs = splitDocxParagraphs(documentXml);
+
+    const isQuestionSectionHeading = (value = '') => /^(?:(?:第[一二三四五六七八九十ⅠⅡⅢIVX]+卷)|(?:[一二三四五六七八九十]+|\d+)\s*[、.．]\s*)?(?:单项选择题|多项选择题|单选题|多选题|选择题|填空题|解答题|计算题|证明题|综合题)(?=\s*(?:[（(:：]|$))/u.test(
+        normalizeDocxText(value)
+    );
+
+    const hasSubstantiveQuestionStart = (paragraph = {}) => {
+        const source = normalizeDocxText(paragraph?.text || paragraph?.serialized || '');
+        const marker = parseLeadingQuestionMarker(source);
+        const content = marker.questionNumber
+            ? source.slice(marker.markerLength)
+            : Number.isInteger(paragraph?.numbering?.value) && Number(paragraph?.numbering?.level) === 0
+                ? source
+                : '';
+        return /[A-Za-z\u3400-\u9fff]|\\[A-Za-z]+|\[\[IMAGE(?::|\])/u.test(content);
+    };
+
+    const questionSectionBody = (paragraphs = []) => {
+        const firstSectionIndex = paragraphs.findIndex(paragraph =>
+            isQuestionSectionHeading(paragraph?.text || paragraph?.serialized || '')
+        );
+        const hasQuestionBeforeSection = firstSectionIndex > 0 && paragraphs
+            .slice(0, firstSectionIndex)
+            .some(hasSubstantiveQuestionStart);
+        return firstSectionIndex >= 0 && !hasQuestionBeforeSection
+            ? paragraphs.slice(firstSectionIndex)
+            : paragraphs;
+    };
+
+    const buildQuestionBlocksFromDocumentXml = (documentXml = '', numberingXml = '') => {
+        const resolveNumbering = window.Qisi?.DocxRichContent?.createDocxNumberingResolver?.(numberingXml);
+        const paragraphs = splitDocxParagraphs(documentXml).map(paragraph => ({
+            ...paragraph,
+            numbering: typeof resolveNumbering === 'function'
+                ? resolveNumbering(paragraph.rawXml || '')
+                : null
+        }));
         const blocks = [];
         let current = null;
 
-        for (const p of paragraphs) {
-            const qNo = getQuestionNoFromLine(p.text || '');
+        for (const p of questionSectionBody(paragraphs)) {
+            if (isQuestionSectionHeading(p.text || '')) {
+                if (current) blocks.push(current);
+                current = null;
+                continue;
+            }
+            const qNo = getQuestionNoFromLine(p.text || '') || (
+                Number.isInteger(p.numbering?.value) && Number(p.numbering?.level) === 0
+                    ? String(p.numbering.value)
+                    : ''
+            );
 
             if (qNo) {
                 if (current) blocks.push(current);
 
                 current = {
                     q: qNo,
-                    lines: [p.text || ''],
+                    lines: [p.text || p.numbering?.display || ''],
                     rawXmlParts: [p.rawXml || '']
                 };
             } else if (current) {
@@ -468,6 +512,28 @@
 
         return blocks;
     };
+
+    const buildDocxQuestionSkeletonFromXml = (documentXml = '', numberingXml = '') => (
+        buildQuestionSkeletonFromBlocks(
+            buildQuestionBlocksFromDocumentXml(documentXml, numberingXml)
+        )
+    );
+
+    const prepareDocxQuestionRichBlocks = (richBlocks = []) => (
+        questionSectionBody(richBlocks).map(block => {
+            if (
+                !Number.isInteger(block.numbering?.value) ||
+                Number(block.numbering?.level) !== 0 ||
+                getQuestionNoFromLine(block.serialized || '')
+            ) {
+                return block;
+            }
+            return {
+                ...block,
+                serialized: `${block.numbering.display || `${block.numbering.value}.`} ${block.serialized || ''}`.trim()
+            };
+        })
+    );
 
     const buildQuestionSkeletonFromBlocks = (blocks = []) => {
         const entries = (blocks || [])
@@ -580,7 +646,8 @@
             await loadDocxZip(fileRecord);
 
         const {
-            documentXml
+            documentXml,
+            numberingXml
         } = await readDocxCoreXml(zip);
 
         if (!documentXml) {
@@ -589,13 +656,10 @@
             );
         }
 
-        const blocks =
-            buildQuestionBlocksFromDocumentXml(
-                documentXml
-            );
-
-        const skeleton =
-            buildQuestionSkeletonFromBlocks(blocks);
+        const skeleton = buildDocxQuestionSkeletonFromXml(
+            documentXml,
+            numberingXml
+        );
 
         console.groupCollapsed(
             '[BATCH_IMPORTER][docx-question-skeleton]'
@@ -939,7 +1003,7 @@
         const rich = window.Qisi?.DocxRichContent;
         if (!rich) throw new Error('Qisi.DocxRichContent is not loaded.');
         const zip = await loadDocxZip(fileRecord);
-        const { documentXml, relsXml } = await readDocxCoreXml(zip);
+        const { documentXml, relsXml, numberingXml } = await readDocxCoreXml(zip);
         const mediaMap = await buildMediaMaps(zip, relsXml, fileRecord.filename);
         const objectLinks = rich.collectMathTypeObjectLinks(documentXml);
         const translation = await rich.translateMathTypeMedia(mediaMap, { objectLinks });
@@ -947,9 +1011,11 @@
         const richBlocks = rich.extractDocxRichBlocks(documentXml, {
             fileId: fileRecord.id || fileRecord.filename || 'docx',
             mediaMap,
-            mathByRid: translation.mathByRid
+            mathByRid: translation.mathByRid,
+            numberingXml
         });
-        const parsed = rich.parseQuestionRichBlocks(richBlocks);
+        const questionBlocks = prepareDocxQuestionRichBlocks(richBlocks);
+        const parsed = rich.parseQuestionRichBlocks(questionBlocks);
         const formulaErrors = richBlocks.flatMap(block => block.diagnostics || []).filter(row => row.kind === 'formula-error');
         if (!parsed.ok || formulaErrors.length) {
             const error = new Error('DOCX rich-content state machine could not preserve every formula or question boundary.');
@@ -981,7 +1047,7 @@
         if (!rich || !support) throw new Error('DOCX rich/support content modules are not loaded.');
 
         const zip = await loadDocxZip(fileRecord);
-        const { documentXml, relsXml } = await readDocxCoreXml(zip);
+        const { documentXml, relsXml, numberingXml } = await readDocxCoreXml(zip);
         const mediaMap = await buildMediaMaps(zip, relsXml, fileRecord.filename);
         const objectLinks = rich.collectMathTypeObjectLinks(documentXml);
         const translation = await rich.translateMathTypeMedia(mediaMap, { objectLinks });
@@ -989,7 +1055,8 @@
         const richBlocks = rich.extractDocxRichBlocks(documentXml, {
             fileId: fileRecord.id || fileRecord.filename || 'docx-support',
             mediaMap,
-            mathByRid: translation.mathByRid
+            mathByRid: translation.mathByRid,
+            numberingXml
         });
         const parsed = support.parseAnswerRichBlocks(richBlocks);
         if (!parsed.ok) {
@@ -1109,6 +1176,8 @@
         parseDocxFile,
         parseDocxSupportFile,
         parsePdfFile,
-        extractDocxQuestionSkeleton
+        extractDocxQuestionSkeleton,
+        buildDocxQuestionSkeletonFromXml,
+        prepareDocxQuestionRichBlocks
     };
 })();

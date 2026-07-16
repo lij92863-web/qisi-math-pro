@@ -20,6 +20,21 @@ test('canonical LaTeX owns no delimiters and rejects nested delimiters', () => {
     assert.equal(broken.code, 'NESTED_MATH_DELIMITER');
 });
 
+test('canonical LaTeX accepts mixed left-right delimiters for half-open intervals', () => {
+    const normalized = rich.normalizeLatexFragment(
+        '\\[\\left( { - \\infty ,0} \\right) \\cup \\left( {0,1} \\right]\\]'
+    );
+
+    assert.equal(normalized.ok, true);
+    assert.equal(
+        normalized.latex,
+        '\\left({-\\infty,0}\\right) \\cup \\left({0,1}\\right]'
+    );
+    assert.equal(rich.normalizeLatexFragment('(a+b]').ok, false);
+    assert.equal(rich.normalizeLatexFragment('\\right]x').ok, false);
+    assert.equal(rich.normalizeLatexFragment('\\left\\frac{1}{2}\\right)').ok, false);
+});
+
 test('MathType translator output is canonicalized before rich serialization', () => {
     const translated = '$A = \\left\\{ {x|x = \\sin \\frac{{n{\\rm{\\pi }}}}{2},n \\in {\\bf{Z}}} \\right\\}$';
     const normalized = rich.normalizeLatexFragment(translated);

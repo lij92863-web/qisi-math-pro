@@ -307,6 +307,74 @@
             return extent ? { cx: Number(extent[1]), cy: Number(extent[2]) } : null;
         };
 
+        const readWordVal = (xml = '', tag = '') => String(xml || '').match(
+            new RegExp(`<w:${tag}\\b[^>]*w:val=["']([^"']+)["']`, 'i')
+        )?.[1] || '';
+
+        const createDocxNumberingResolver = (numberingXml = '') => {
+            const abstractLevels = new Map();
+            const numDefinitions = new Map();
+            const counters = new Map();
+
+            String(numberingXml || '').replace(
+                /<w:abstractNum\b([^>]*)>([\s\S]*?)<\/w:abstractNum>/gi,
+                (_, attrs, body) => {
+                    const abstractId = attrs.match(/w:abstractNumId=["']([^"']+)["']/i)?.[1] || '';
+                    const levels = new Map();
+                    String(body || '').replace(/<w:lvl\b([^>]*)>([\s\S]*?)<\/w:lvl>/gi, (__, levelAttrs, levelBody) => {
+                        const level = Number(levelAttrs.match(/w:ilvl=["'](\d+)["']/i)?.[1] || 0);
+                        levels.set(level, {
+                            start: Number(readWordVal(levelBody, 'start') || 1),
+                            numFmt: readWordVal(levelBody, 'numFmt'),
+                            lvlText: readWordVal(levelBody, 'lvlText') || `%${level + 1}.`
+                        });
+                        return '';
+                    });
+                    if (abstractId) abstractLevels.set(abstractId, levels);
+                    return '';
+                }
+            );
+
+            String(numberingXml || '').replace(/<w:num\b([^>]*)>([\s\S]*?)<\/w:num>/gi, (_, attrs, body) => {
+                const numId = attrs.match(/w:numId=["']([^"']+)["']/i)?.[1] || '';
+                const abstractId = readWordVal(body, 'abstractNumId');
+                const overrides = new Map();
+                String(body || '').replace(/<w:lvlOverride\b([^>]*)>([\s\S]*?)<\/w:lvlOverride>/gi, (__, levelAttrs, levelBody) => {
+                    const level = Number(levelAttrs.match(/w:ilvl=["'](\d+)["']/i)?.[1] || 0);
+                    const start = Number(readWordVal(levelBody, 'startOverride'));
+                    if (Number.isInteger(start) && start > 0) overrides.set(level, start);
+                    return '';
+                });
+                if (numId && abstractId) numDefinitions.set(numId, { abstractId, overrides });
+                return '';
+            });
+
+            return (paragraphXml = '') => {
+                const numPr = String(paragraphXml || '').match(/<w:numPr\b[\s\S]*?<\/w:numPr>/i)?.[0] || '';
+                const numId = readWordVal(numPr, 'numId');
+                const level = Number(readWordVal(numPr, 'ilvl') || 0);
+                if (!numId) return null;
+
+                const definition = numDefinitions.get(numId);
+                const levelDefinition = abstractLevels.get(definition?.abstractId)?.get(level);
+                if (!definition || !levelDefinition) return { numId, level, display: '', value: null };
+
+                const key = `${numId}:${level}`;
+                const start = definition.overrides.get(level) || levelDefinition.start || 1;
+                const value = counters.has(key) ? counters.get(key) + 1 : start;
+                counters.set(key, value);
+                if (levelDefinition.numFmt !== 'decimal') {
+                    return { numId, level, numFmt: levelDefinition.numFmt, display: '', value: null };
+                }
+
+                const display = levelDefinition.lvlText.replace(/%(\d+)/g, (match, number) => {
+                    const referenced = counters.get(`${numId}:${Number(number) - 1}`);
+                    return Number.isInteger(referenced) ? String(referenced) : match;
+                });
+                return { numId, level, numFmt: levelDefinition.numFmt, display, value };
+            };
+        };
+
         const createImageRun = (xml, context, paragraphIndex, runIndex) => {
             const rid = extractRid(xml);
             const media = mapValue(context.mediaMap, rid) || {};
@@ -370,15 +438,22 @@
             return { runs, assets, diagnostics };
         };
 
-        const extractParagraphMetadata = (xml = '') => ({
-            style: String(xml).match(/<w:pStyle\b[^>]*w:val=["']([^"']+)["']/i)?.[1] || '',
-            numbering: {
-                numId: String(xml).match(/<w:numId\b[^>]*w:val=["']([^"']+)["']/i)?.[1] || '',
-                level: String(xml).match(/<w:ilvl\b[^>]*w:val=["']([^"']+)["']/i)?.[1] || ''
-            },
-            pageBreak: /<w:br\b[^>]*w:type=["']page["']/i.test(xml),
-            sectionBreak: /<w:sectPr\b/i.test(xml)
-        });
+        const extractParagraphMetadata = (xml = '', resolveNumbering = null) => {
+            const resolved = typeof resolveNumbering === 'function'
+                ? resolveNumbering(xml)
+                : null;
+            return {
+                style: String(xml).match(/<w:pStyle\b[^>]*w:val=["']([^"']+)["']/i)?.[1] || '',
+                numbering: resolved || {
+                    numId: String(xml).match(/<w:numId\b[^>]*w:val=["']([^"']+)["']/i)?.[1] || '',
+                    level: String(xml).match(/<w:ilvl\b[^>]*w:val=["']([^"']+)["']/i)?.[1] || '',
+                    display: '',
+                    value: null
+                },
+                pageBreak: /<w:br\b[^>]*w:type=["']page["']/i.test(xml),
+                sectionBreak: /<w:sectPr\b/i.test(xml)
+            };
+        };
 
         const extractDocxRichBlocks = (documentXml = '', options = {}) => {
             const context = {
@@ -386,6 +461,7 @@
                 mediaMap: options.mediaMap || new Map(),
                 mathByRid: options.mathByRid || new Map()
             };
+            const resolveNumbering = createDocxNumberingResolver(options.numberingXml || '');
             const paragraphs = String(documentXml || '').match(/<w:p\b[\s\S]*?<\/w:p>/gi) || [];
             return paragraphs.map((xml, paragraphIndex) => {
                 const extracted = extractParagraphRuns(xml, context, paragraphIndex);
@@ -393,7 +469,7 @@
                 return {
                     kind: 'paragraph',
                     paragraphIndex,
-                    ...extractParagraphMetadata(xml),
+                    ...extractParagraphMetadata(xml, resolveNumbering),
                     runs: extracted.runs,
                     assets: extracted.assets,
                     diagnostics,
@@ -410,6 +486,7 @@
         const { parseQuestionRichBlocks } = questionStructure;
         return {
             canonicalizeMathCommands,
+            createDocxNumberingResolver,
             collectMathTypeMtef,
             collectMathTypeObjectLinks,
             decodeXmlEntities,
