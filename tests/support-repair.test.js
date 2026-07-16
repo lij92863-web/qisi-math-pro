@@ -419,6 +419,27 @@ test(
 );
 
 test(
+    'repairChoiceOptions never treats set-membership A as an option in an explicit non-choice question',
+    () => {
+        let splitCalled = false;
+        const stem = String.raw`集合$B=\left\{x\left|x\in A\text{且}\frac{1}{x}\in A\right.\right\}$`;
+        const result = repairChoiceOptions(stem, [], '解答题', {
+            sanitizeChoiceOptions: value => Array.isArray(value) ? value : [],
+            normalizeMathTextForLatexSafe: value => value,
+            stripQuestionSectionNoise: value => value,
+            splitQuestionForStorage: () => {
+                splitCalled = true;
+                return { stem: 'wrong', options: ['wrong A', 'wrong B'] };
+            }
+        });
+
+        assert.equal(splitCalled, false);
+        assert.equal(result.stem, stem);
+        assert.deepEqual(result.options, []);
+    }
+);
+
+test(
     'tryRepairedCandidate repairs LaTeX JSON and returns parsed questions',
     () => {
         const result =

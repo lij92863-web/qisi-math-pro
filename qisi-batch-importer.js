@@ -971,6 +971,7 @@
         target: asset.target,
         anchorType: asset.anchorType,
         dimensions: asset.dimensions,
+        layout: asset.layout || null,
         paragraphIndex: asset.paragraphIndex,
         contentHash: asset.contentHash
     });
@@ -989,6 +990,12 @@
             ? helpers.makeBatchId('dq')
             : `dq_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`;
         const rawBlock = (question.richBlocks || []).map(block => block.serialized || '').join('\n');
+        const questionLayout = window.Qisi?.DocxLayout?.buildQuestionLayout
+            ? window.Qisi.DocxLayout.buildQuestionLayout({
+                options: question.options || [],
+                richBlocks: question.richBlocks || []
+            })
+            : null;
         return {
             id,
             batchId: fileRecord.batchId || '',
@@ -1002,6 +1009,7 @@
             solution: '',
             images: assets.map(imageFromRichAsset),
             questionImages: assets.map(imageFromRichAsset),
+            layout: questionLayout,
             richBlocks: question.richBlocks,
             rawBlock,
             renderableText: rawBlock,

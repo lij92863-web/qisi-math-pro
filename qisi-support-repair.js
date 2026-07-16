@@ -473,6 +473,16 @@
             const cleanOptions =
                 sanitize(options);
 
+            const normalizedType = String(type || '').trim();
+            const explicitlyNonChoice = Boolean(normalizedType) && !/(?:单选|多选|选择题)/.test(normalizedType);
+
+            if (explicitlyNonChoice) {
+                return {
+                    stem: normalizeMath(stripNoise(stem)),
+                    options: cleanOptions
+                };
+            }
+
             const hasOptions =
                 cleanOptions
                     .filter(Boolean)

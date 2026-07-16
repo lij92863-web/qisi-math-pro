@@ -163,11 +163,12 @@ test('BMR3: converts DOCX importer draft to recognition item with normalized ima
         options: ['A', 'B'],
         answer: 'A',
         solution: 'S',
+        layout: { version: 'docx-layout-r1', optionColumns: 2 },
         sourceFileId: 'file-1',
         sourceFileName: 'q.docx',
         sourceTrace: { blockTextHead: 'raw head' },
         images: [
-            { id: 'img1', url: 'u1' },
+            { id: 'img1', url: 'u1', dimensions: { cx: 12, cy: 8 }, layout: { anchorType: 'inline' } },
             { id: 'img1', url: 'u1-copy' },
             { id: 'hidden', url: 'u2', displayable: false }
         ],
@@ -180,7 +181,10 @@ test('BMR3: converts DOCX importer draft to recognition item with normalized ima
 
     assert.equal(item.questionNumber, '7');
     assert.equal(item.rawText, 'raw head');
+    assert.deepEqual(item.layout, { version: 'docx-layout-r1', optionColumns: 2 });
     assert.deepEqual(item.images.map(img => img.id), ['img1']);
+    assert.deepEqual(item.images[0].dimensions, { cx: 12, cy: 8 });
+    assert.deepEqual(item.images[0].layout, { anchorType: 'inline' });
     assert.deepEqual(item.recognizedSolutionImages.map(img => img.id), ['solution-img']);
     assert.deepEqual(item.solutionRichBlocks, [{ paragraphIndex: 8, serialized: '解析图' }]);
     assert.deepEqual(item.sourceTrace.imageIds, ['img1']);

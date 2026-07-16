@@ -58,6 +58,11 @@
                 .replace(/°/g, '^{\\circ}');
 
             source = source
+                .replace(
+                    /\\begin\{array\}\s*\{\s*\*\s*\{\s*\d+\s*\}\s*\{\s*([lcr])\s*\}\s*\}/g,
+                    '\\begin{array}{$1}'
+                )
+                .replace(/\\mathop\s*\\(sum|prod|int|oint)(?![A-Za-z])/g, '\\$1')
                 .replace(/\\(?:rm|mathrm|text)\s*\{\s*\\pi\s*\}/g, '\\pi')
                 .replace(/\\(?:bf|mathbf)\s*\{\s*Z\s*\}/g, '\\mathbb{Z}')
                 .replace(/\\vec\s*\{\s*([A-Za-z]{2,})\s*\}/g, '\\overrightarrow{$1}')

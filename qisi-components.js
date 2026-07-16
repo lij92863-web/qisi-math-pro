@@ -43,7 +43,10 @@
                 );
             }).join('');
 
-            return '<div class="gaokao-options qisi-flow-options">' + rowsHtml + '</div>';
+            const columns = window.Qisi?.DocxLayout?.resolveOptionColumns
+                ? window.Qisi.DocxLayout.resolveOptionColumns({ options: validRows.map(row => row.content) })
+                : 1;
+            return `<div class="gaokao-options qisi-flow-options" style="--qisi-option-columns:${columns}">` + rowsHtml + '</div>';
         };
 
         const LatexPreview = {
@@ -129,7 +132,17 @@
                     return token;
                 };
                 const extractId = extractPreviewImageIdFromCode;
+                const layoutApi = window.Qisi?.DocxLayout;
                 const tableApi = window.Qisi?.DocxTableLatex;
+
+                if (layoutApi?.replaceLayoutBlocks && layoutApi?.renderLayoutHtml) {
+                    source = layoutApi.replaceLayoutBlocks(source, block => protectRenderedHtml(
+                        layoutApi.renderLayoutHtml(block, {
+                            renderImage: item => renderImageToken(item.id, 'center'),
+                            renderContent: value => renderLatexPreviewHtml(value, images)
+                        })
+                    ));
+                }
 
                 if (
                     tableApi?.replaceLatexTableBlocks &&
@@ -335,6 +348,24 @@
                     );
                 }
             };
+
+            const layoutApiForSource = window.Qisi?.DocxLayout;
+            const layoutParts = layoutApiForSource?.splitLayoutBlocks
+                ? layoutApiForSource.splitLayoutBlocks(content)
+                : [{ kind: 'text', value: content }];
+            if (
+                layoutApiForSource?.renderLayoutHtml &&
+                layoutParts.some(part => part.kind === 'layout')
+            ) {
+                return layoutParts.map(part => (
+                    part.kind === 'layout'
+                        ? layoutApiForSource.renderLayoutHtml(part.value, {
+                            renderImage: item => renderImageToken(item.id, 'center'),
+                            renderContent: value => renderLatexPreviewHtml(value, images)
+                        })
+                        : renderLatexPreviewHtml(part.value, images)
+                )).join('');
+            }
 
             const tableApiForSource = window.Qisi?.DocxTableLatex;
             const tableParts = tableApiForSource?.splitLatexTableBlocks

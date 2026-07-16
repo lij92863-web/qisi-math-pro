@@ -1238,7 +1238,7 @@
         }
         
         .math-content .katex { 
-            font-size: 1.05em; 
+            font-size: calc(1em * var(--qisi-math-scale, 1.08));
             white-space: nowrap;
         }
 
@@ -1267,7 +1267,7 @@
         }
 
         .qisi-latex-table .katex {
-            font-size: 1em;
+            font-size: calc(1em * var(--qisi-math-scale, 1.08));
         }
 
         @media print {
@@ -1295,7 +1295,7 @@
            ========================================= */
         .gaokao-options {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            grid-template-columns: repeat(var(--qisi-option-columns, 4), minmax(0, 1fr));
             column-gap: 24px;
             row-gap: 8px;
             margin-top: 14px;
@@ -1326,7 +1326,7 @@
         }
 
         .option-content .katex {
-            font-size: 1.04em;
+            font-size: calc(1em * var(--qisi-math-scale, 1.08));
         }
 
         .option-content .math-content {
@@ -2316,6 +2316,57 @@
             margin: 12px auto;
         }
 
+        .qisi-image-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            width: 100%;
+            margin: 12px 0;
+            clear: both;
+        }
+
+        .qisi-image-row-item {
+            flex: 0 1 calc(var(--qisi-source-width, .46) * 100%);
+            min-width: 0;
+        }
+
+        .qisi-image-row .qisi-preview-image-center,
+        .qisi-media-figure .qisi-preview-image-center {
+            display: block;
+            width: 100%;
+            max-width: none;
+            margin: 0;
+            float: none;
+            clear: none;
+        }
+
+        .qisi-media-before {
+            display: block;
+            margin-bottom: 7px;
+        }
+
+        .qisi-media-text {
+            display: grid;
+            grid-template-columns: minmax(0, calc(var(--qisi-media-width, .42) * 100%)) minmax(0, 1fr);
+            align-items: center;
+            gap: 14px;
+            width: 100%;
+            margin: 10px 0;
+            clear: both;
+        }
+
+        .qisi-media-figure,
+        .qisi-media-copy {
+            display: block;
+            min-width: 0;
+        }
+
+        .qisi-media-copy {
+            line-height: inherit;
+            overflow-wrap: anywhere;
+        }
+
         .gaokao-options {
             position: relative;
         }
@@ -2340,7 +2391,7 @@
         .qisi-question-flow-preview .qisi-flow-options {
             clear: both !important;
             display: grid !important;
-            grid-template-columns: 1fr !important;
+            grid-template-columns: repeat(var(--qisi-option-columns, 1), minmax(0, 1fr)) !important;
             width: 100% !important;
             min-width: 0;
             min-height: 1.8em;
@@ -2352,7 +2403,7 @@
         .qisi-review-preview-options {
             clear: both;
             display: grid;
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(var(--qisi-option-columns, 1), minmax(0, 1fr));
             width: 100%;
             min-width: 0;
             margin-top: 12px;
@@ -2476,6 +2527,18 @@
         }
 
         @media (max-width: 560px) {
+            .qisi-image-row,
+            .qisi-media-text {
+                display: block;
+            }
+
+            .qisi-image-row-item,
+            .qisi-media-figure {
+                display: block;
+                width: min(82%, 260px);
+                margin: 12px auto;
+            }
+
             .qisi-question-flow-preview .qisi-preview-image-left,
             .qisi-question-flow-preview .qisi-preview-image-right {
                 float: none;

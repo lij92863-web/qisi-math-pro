@@ -60,8 +60,19 @@ test('piecewise MathType LaTeX accepts row breaks before grouped rows', () => {
     const normalized = rich.normalizeLatexFragment(translated);
 
     assert.equal(normalized.ok, true, JSON.stringify(normalized));
-    assert.match(normalized.latex, /\\begin\{array\}/);
+    assert.match(normalized.latex, /\\begin\{array\}\{l\}/);
+    assert.doesNotMatch(normalized.latex, /\*\{\d+\}/);
     assert.match(normalized.latex, /\\right\./);
+});
+
+test('redundant MathType mathop wrappers around large operators are KaTeX-compatible', () => {
+    const normalized = rich.normalizeLatexFragment(
+        String.raw`\mathop \sum \limits_{i=1}^5 x_i+\mathop\prod_{j=1}^n y_j`
+    );
+
+    assert.equal(normalized.ok, true, JSON.stringify(normalized));
+    assert.equal(normalized.latex, String.raw`\sum \limits_{i=1}^5 x_i+\prod_{j=1}^n y_j`);
+    assert.doesNotMatch(normalized.latex, /\\mathop/);
 });
 
 test('vertical bars used by flexible delimiters are not rewritten as mid relations', () => {

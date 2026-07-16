@@ -203,7 +203,12 @@
                     ext: img.ext || '',
                     mime: img.mime || '',
                     rid: img.rid || '',
-                    target: img.target || ''
+                    target: img.target || '',
+                    anchorType: img.anchorType || '',
+                    dimensions: img.dimensions || null,
+                    layout: img.layout || null,
+                    paragraphIndex: Number.isInteger(img.paragraphIndex) ? img.paragraphIndex : null,
+                    contentHash: img.contentHash || ''
                 }));
         };
 
@@ -221,6 +226,7 @@
                 options: draft?.options,
                 answer: draft?.answer,
                 solution: draft?.solution,
+                layout: draft?.layout || null,
                 images,
                 recognizedSolutionImages,
                 rawText: draft?.sourceTrace?.blockTextHead || '',

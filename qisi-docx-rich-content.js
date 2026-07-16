@@ -27,6 +27,10 @@
             typeof require === 'function' ? require('./qisi-docx-table-latex.js') : null
         );
         if (!tableLatex) throw new Error('Qisi.DocxTableLatex is required.');
+        const docxLayout = root?.Qisi?.DocxLayout || (
+            typeof require === 'function' ? require('./qisi-docx-layout.js') : null
+        );
+        if (!docxLayout) throw new Error('Qisi.DocxLayout is required.');
         const {
             canonicalizeMathCommands,
             decodeXmlEntities,
@@ -457,10 +461,31 @@
             };
         };
 
+        const extractImageLayout = (xml = '', anchorType = 'inline') => {
+            const source = String(xml || '');
+            const position = axis => {
+                const block = source.match(new RegExp(`<wp:position${axis}\\b[^>]*[\\s\\S]*?<\\/wp:position${axis}>`, 'i'))?.[0] || '';
+                return {
+                    relativeFrom: block.match(/relativeFrom=["']([^"']+)["']/i)?.[1] || '',
+                    align: block.match(/<wp:align>([^<]+)<\/wp:align>/i)?.[1] || '',
+                    offsetEmu: Number(block.match(/<wp:posOffset>(-?\d+)<\/wp:posOffset>/i)?.[1]) || 0
+                };
+            };
+            return {
+                anchorType,
+                dimensions: extractDimensions(source),
+                wrapMode: source.match(/<wp:(wrapNone|wrapSquare|wrapTight|wrapThrough|wrapTopAndBottom)\b/i)?.[1] || '',
+                behindDocument: /<wp:anchor\b[^>]*behindDoc=["']1["']/i.test(source),
+                horizontal: position('H'),
+                vertical: position('V')
+            };
+        };
+
         const createImageRun = (xml, context, paragraphIndex, runIndex) => {
             const rid = extractRid(xml);
             const media = mapValue(context.mediaMap, rid) || {};
             const anchorType = /<(?:wp:)?anchor\b/i.test(xml) ? 'anchor' : 'inline';
+            const layout = extractImageLayout(xml, anchorType);
             const assetId = `${context.fileId || 'docx'}:p${paragraphIndex}:r${runIndex}:${rid || 'missing'}`;
             const asset = {
                 assetId,
@@ -472,12 +497,13 @@
                 mime: media.mime || '',
                 url: media.url || '',
                 anchorType,
-                dimensions: extractDimensions(xml),
+                dimensions: layout.dimensions,
+                layout,
                 paragraphIndex,
                 runIndex,
                 contentHash: stableHash(media.url || media.target || `${rid}:${paragraphIndex}:${runIndex}`)
             };
-            return { kind: 'image', assetId, token: `[[IMAGE:${assetId}]]`, paragraphIndex, asset };
+            return { kind: 'image', assetId, token: `[[IMAGE:${assetId}]]`, paragraphIndex, layout, asset };
         };
 
         const tokenPattern = () => /<m:oMathPara\b[\s\S]*?<\/m:oMathPara>|<m:oMath\b[\s\S]*?<\/m:oMath>|<w:object\b[\s\S]*?<\/w:object>|<w:drawing\b[\s\S]*?<\/w:drawing>|<w:pict\b[\s\S]*?<\/w:pict>|<w:t\b[^>]*>[\s\S]*?<\/w:t>|<w:tab\b[^>]*\/?\s*>|<w:br\b[^>]*\/?\s*>/gi;
@@ -536,6 +562,13 @@
                 sectionBreak: /<w:sectPr\b/i.test(xml)
             };
         };
+
+        const serializeParagraphWithLayout = (extracted, context, diagnostics = extracted.diagnostics) => docxLayout.serializeParagraphLayout({
+            runs: extracted.runs,
+            assets: extracted.assets,
+            usableWidthTwips: context.usableWidthTwips,
+            serializeRuns: runs => serializeRichRuns(runs, diagnostics)
+        });
 
         const serializeTableCellRichContent = (cellXml, context, baseIndex) => {
             const previewParts = [];
@@ -625,7 +658,7 @@
                     runs: extracted.runs,
                     assets: extracted.assets,
                     diagnostics,
-                    serialized: serializeRichRuns(extracted.runs, diagnostics),
+                    serialized: serializeParagraphWithLayout(extracted, context, diagnostics),
                     sourceXmlHash: stableHash(xml)
                 };
             });

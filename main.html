@@ -18,7 +18,7 @@
     <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
     <script src="https://unpkg.com/lucide@0.378.0/dist/umd/lucide.min.js"></script>
-    <link rel="stylesheet" href="./app.css?v=docx-table-r3">
+    <link rel="stylesheet" href="./app.css?v=docx-layout-r1">
 </head>
 <body><div id="app"></div>
 
@@ -118,7 +118,7 @@
                 <latex-preview :content="isEditing && activeEditTab === 'stem' ? editStem : q?.stem" :images="isEditing ? editImages : (q?.images||[])"></latex-preview>
                 
                 <!-- 【绝赞重构】标准高考试卷排版 -->
-                <div v-if="(q?.type === '单选题' || q?.type === '多选题') && q?.options && q.options.some(opt => String(opt || '').trim() !== '') && !isEditing" class="gaokao-options">
+                <div v-if="(q?.type === '单选题' || q?.type === '多选题') && q?.options && q.options.some(opt => String(opt || '').trim() !== '') && !isEditing" class="gaokao-options" :style="{'--qisi-option-columns': q?.layout?.optionColumns || 4}">
                     <div v-for="(opt, idx) in q.options" :key="idx" class="gaokao-option">
                         <span class="option-label">{{String.fromCharCode(65+idx)}}.</span>
                         <span class="option-content">
@@ -383,7 +383,7 @@
                             <div class="entry-question-preview bg-[#f9fafb] rounded-lg p-3 flex-1 overflow-y-auto custom-scrollbar border border-gray-100 shadow-inner">
                                 <latex-preview :content="entryPreviewStem" :images="entryForm.images"></latex-preview>
                                 <template v-if="entryPreviewOptions && entryPreviewOptions.some(opt => String(opt || '').trim() !== '')">
-                                    <div class="gaokao-options">
+                                    <div class="gaokao-options" :style="{'--qisi-option-columns': entryForm?.layout?.optionColumns || 4}">
                                         <div v-for="(opt, idx) in entryPreviewOptions" :key="idx" v-show="String(opt || '').trim() !== ''" class="gaokao-option">
                                             <span class="option-label">{{String.fromCharCode(65+idx)}}.</span>
                                             <span class="option-content">
@@ -686,7 +686,8 @@
                                             </latex-preview>
                                             <div
                                                 v-if="(activeDraftQuestion.type === '单选题' || activeDraftQuestion.type === '多选题') && activeDraftEditorPreview.options && activeDraftEditorPreview.options.some(opt => String(opt || '').trim() !== '')"
-                                                class="qisi-review-preview-options">
+                                                class="qisi-review-preview-options"
+                                                :style="{'--qisi-option-columns': activeDraftQuestion?.layout?.optionColumns || 1}">
                                                 <div
                                                     v-for="(opt, idx) in activeDraftEditorPreview.options"
                                                     v-show="String(opt || '').trim() !== ''"
@@ -1155,7 +1156,7 @@
 
                                 <div class="confirm-question-preview" :class="{'expanded': item.expanded}">
                                     <latex-preview :content="item.question.stem" :images="item.question.images"></latex-preview>
-                                    <div v-if="item.expanded && (item.question.type === '单选题' || item.question.type === '多选题') && item.question.options && item.question.options.some(opt => String(opt || '').trim() !== '')" class="gaokao-options">
+                                    <div v-if="item.expanded && (item.question.type === '单选题' || item.question.type === '多选题') && item.question.options && item.question.options.some(opt => String(opt || '').trim() !== '')" class="gaokao-options" :style="{'--qisi-option-columns': item.question?.layout?.optionColumns || 4}">
                                         <div v-for="(opt, idx) in item.question.options" :key="idx" class="gaokao-option">
                                             <span class="option-label">{{String.fromCharCode(65+idx)}}.</span>
                                             <span class="option-content">
@@ -1317,7 +1318,7 @@
                                     <div class="exam-index">{{examDisplayIndex(q.id)}}</div>
                                     <div class="flex-1 min-w-0">
                                         <latex-preview :content="q?.stem" :images="q?.images || []"></latex-preview>
-                                        <div v-if="(q?.type === '单选题' || q?.type === '多选题') && q?.options && q.options.some(opt => String(opt || '').trim() !== '')" class="gaokao-options">
+                                        <div v-if="(q?.type === '单选题' || q?.type === '多选题') && q?.options && q.options.some(opt => String(opt || '').trim() !== '')" class="gaokao-options" :style="{'--qisi-option-columns': q?.layout?.optionColumns || 4}">
                                             <div v-for="(opt, idx) in q.options" :key="idx" class="gaokao-option">
                                                 <span class="option-label">{{String.fromCharCode(65+idx)}}.</span>
                                                 <span class="option-content"><latex-preview :content="opt" :images="q.images"></latex-preview></span>
@@ -1511,18 +1512,19 @@
     <script src="./qisi-utils.js?v=pdf-math-region-integrity-r1-4"></script>
     <script src="./qisi-db.js?v=foundation-01"></script>
     <script src="./qisi-backup.js?v=foundation-01"></script>
-    <script src="./qisi-components.js?v=docx-table-r3"></script>
+    <script src="./qisi-docx-layout.js?v=docx-layout-r1"></script>
+    <script src="./qisi-components.js?v=docx-layout-r1"></script>
     <script src="./qisi-file-dispatcher.js?v=white-fix-3"></script>
     <script src="./qisi-docx-ole-reader.js?v=docx-integrity-r1"></script>
     <script src="./qisi-docx-mtef-reader.js?v=docx-table-r3"></script>
-    <script src="./qisi-docx-latex-content.js?v=docx-table-r3"></script>
+    <script src="./qisi-docx-latex-content.js?v=docx-layout-r1"></script>
     <script src="./qisi-docx-table-latex.js?v=docx-table-r3"></script>
     <script src="./qisi-docx-question-structure.js?v=docx-general-r2"></script>
-    <script src="./qisi-docx-rich-content.js?v=docx-table-r3"></script>
+    <script src="./qisi-docx-rich-content.js?v=docx-layout-r1"></script>
     <script src="./qisi-docx-support-content.js?v=docx-general-r2"></script>
-    <script src="./qisi-batch-importer.js?v=docx-table-r3"></script>
+    <script src="./qisi-batch-importer.js?v=docx-layout-r1"></script>
     <script src="./qisi-support-parser.js?v=stage1a-support-parser-04"></script>
-    <script src="./qisi-support-repair.js?v=stage1a-support-repair-01"></script>
+    <script src="./qisi-support-repair.js?v=docx-layout-r1"></script>
     <script src="./qisi-pdf-content-integrity.js?v=pdf-math-region-integrity-r1-8"></script>
     <script src="./qisi-pdf-support-aligner.js?v=stageC5A-pdf-support-aligner-01"></script>
     <script src="./qisi-pdf-support-block-parser.js?v=stageC7E-block-parser-01"></script>
@@ -1530,7 +1532,7 @@
     <script src="./qisi-pdf-safe-partial-pipeline.js?v=bmr8-pdf-page-trace-01"></script>
     <script src="./qisi-docx-pipeline.js?v=bmr9-docx-helpers-01"></script>
     <script src="./qisi-ui-events.js?v=bmr5-question-gap-warning-01"></script>
-    <script src="./qisi-review-draft-state.js?v=docx-general-r2"></script>
-    <script src="./app.js?v=docx-table-r3"></script>
+    <script src="./qisi-review-draft-state.js?v=docx-layout-r1"></script>
+    <script src="./app.js?v=docx-layout-r1"></script>
 </body>
 </html>

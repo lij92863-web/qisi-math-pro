@@ -4518,7 +4518,12 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             ext: img.ext || '',
                             mime: img.mime || '',
                             rid: img.rid || '',
-                            target: img.target || ''
+                            target: img.target || '',
+                            anchorType: img.anchorType || '',
+                            dimensions: img.dimensions || null,
+                            layout: img.layout || null,
+                            paragraphIndex: Number.isInteger(img.paragraphIndex) ? img.paragraphIndex : null,
+                            contentHash: img.contentHash || ''
                         }));
                 };
 
@@ -14580,6 +14585,7 @@ ${source}`;
                             answer: normalizedPdfContent?.answer || cleanAnswer,
                             solution: normalizedPdfContent?.solution || cleanSolution,
                             images: inlineImages,
+                            layout: item.layout || null,
                             richBlocks: Array.isArray(item.richBlocks) ? item.richBlocks : [],
                             solutionRichBlocks: Array.isArray(solution?.richBlocks) ? solution.richBlocks : [],
                             richFields: normalizedPdfContent?.richFields || item.richFields || null,
@@ -16309,6 +16315,9 @@ ${source}`;
                         solution,
 
                         images,
+                        layout: draft.layout || null,
+                        richBlocks: Array.isArray(draft.richBlocks) ? draft.richBlocks : [],
+                        solutionRichBlocks: Array.isArray(draft.solutionRichBlocks) ? draft.solutionRichBlocks : [],
 
                         sourcePageImage: '',
                         sourceQuestionFileId: file.id || '',
@@ -20227,7 +20236,14 @@ ${source}`;
 
                     const allImagesForSubmit = mergeImageListsById(q.images || [], boundDraftImages || []);
 
-                    const imageRefs = allImagesForSubmit.map(img => ({ id: img.id, align: img.align || 'center' }));
+                    const imageRefs = allImagesForSubmit.map(img => ({
+                        id: img.id,
+                        align: img.align || 'center',
+                        anchorType: img.anchorType || '',
+                        dimensions: img.dimensions || null,
+                        layout: img.layout || null,
+                        paragraphIndex: Number.isInteger(img.paragraphIndex) ? img.paragraphIndex : null
+                    }));
                     const imagePayloads = [];
                     for (const img of allImagesForSubmit) {
                         if (img?.url?.startsWith('data:')) {
@@ -20248,6 +20264,7 @@ ${source}`;
                         answer: q.answer,
                         solution: q.solution,
                         images: imageRefs,
+                        layout: q.layout || null,
                         meta: {
                             grade: q.grade,
                             diff: q.diff,
@@ -22146,20 +22163,44 @@ ${source}`;
                     .trim();
 
                 const renderLatexForPrint = (text, images = []) => {
-                    const tableChunks = [];
+                    const structuralChunks = [];
+                    const protectStructuralHtml = (html) => {
+                        const token = `@@QISI_PRINT_STRUCTURE_${structuralChunks.length}@@`;
+                        structuralChunks.push(html);
+                        return token;
+                    };
+                    const layoutApi = window.Qisi?.DocxLayout;
                     const tableApi = window.Qisi?.DocxTableLatex;
-                    let source = formatLatexForPrint(text).replace(/<br><br>/g, '\n\n');
+                    let source = String(text || '').replace(/<br><br>/g, '\n\n');
                     if (!source) return '';
+
+                    if (layoutApi?.replaceLayoutBlocks && layoutApi?.renderLayoutHtml) {
+                        source = layoutApi.replaceLayoutBlocks(source, block => protectStructuralHtml(
+                            layoutApi.renderLayoutHtml(block, {
+                                renderImage: item => {
+                                    const image = (images || []).find(candidate =>
+                                        String(candidate.id || '') === String(item.id || '') ||
+                                        String(candidate.filename || '') === String(item.id || '') ||
+                                        String(candidate.name || '') === String(item.id || '')
+                                    );
+                                    return image
+                                        ? printImageHtml(image, 'center')
+                                        : `<span class="missing-image">[丢失:${escapeHtml(item.id)}]</span>`;
+                                },
+                                renderContent: value => renderLatexForPrint(value, images)
+                            })
+                        ));
+                    }
 
                     if (tableApi?.replaceLatexTableBlocks && tableApi?.renderLatexTableHtml) {
                         source = tableApi.replaceLatexTableBlocks(source, block => {
-                            const token = `@@QISI_PRINT_TABLE_${tableChunks.length}@@`;
-                            tableChunks.push(tableApi.renderLatexTableHtml(block, {
+                            return protectStructuralHtml(tableApi.renderLatexTableHtml(block, {
                                 renderCell: cellContent => renderLatexForPrint(cellContent, images)
                             }));
-                            return token;
                         });
                     }
+
+                    source = formatLatexForPrint(source);
 
                     const parsed = tokenizeLatexSource(source);
 
@@ -22201,8 +22242,8 @@ ${source}`;
                             }
                         })
                         .join('');
-                    tableChunks.forEach((chunk, index) => {
-                        rendered = rendered.replace(`@@QISI_PRINT_TABLE_${index}@@`, chunk);
+                    structuralChunks.forEach((chunk, index) => {
+                        rendered = rendered.replace(`@@QISI_PRINT_STRUCTURE_${index}@@`, chunk);
                     });
                     return rendered;
                 };
@@ -22287,7 +22328,13 @@ ${source}`;
                         })
                         .join('');
 
-                    return '<div class="gaokao-options qisi-flow-options">' + rows + '</div>';
+                    const layoutApi = window.Qisi?.DocxLayout;
+                    const columns = Number(q.layout?.optionColumns) || (
+                        layoutApi?.resolveOptionColumns
+                            ? layoutApi.resolveOptionColumns({ options: q.options || [] })
+                            : 4
+                    );
+                    return `<div class="gaokao-options qisi-flow-options" style="--qisi-option-columns:${columns}">` + rows + '</div>';
                 };
 
                 const buildQuestionContent = (qs = cartQuestionsOrdered.value) => {
@@ -22331,7 +22378,13 @@ ${source}`;
                     const html = printTemplate.buildPrintDocument({
                         content,
                         title,
-                        config: { ...toRaw(examConfig), paperSize: 'A4', fontSize: '五号', fontFamily: '宋体' }
+                        config: {
+                            ...toRaw(examConfig),
+                            paperSize: 'A4',
+                            fontSize: '五号',
+                            fontFamily: '宋体',
+                            mathScale: window.Qisi?.DocxLayout?.measureMathScale?.(document) || 1.08
+                        }
                     });
                     const blob = new Blob(['\uFEFF' + html], { type: 'text/html;charset=utf-8' });
                     const url = URL.createObjectURL(blob);

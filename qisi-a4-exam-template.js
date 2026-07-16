@@ -208,6 +208,7 @@
         const buildPrintCss = (config = {}) => {
             const themeColor = normalizeThemeColor(config.themeColor);
             const bodySize = config.fontSize === '小四' ? 12 : 10.5;
+            const mathScale = Math.min(1.16, Math.max(1.02, Number(config.mathScale) || 1.08));
 
             return `
 :root {
@@ -219,6 +220,8 @@
     --qisi-page-margin-bottom: ${PAGE.marginBottomMm}mm;
     --qisi-content-width: ${PAGE.contentWidthMm}mm;
     --qisi-content-height: ${PAGE.contentHeightMm}mm;
+    --qisi-math-scale: ${mathScale.toFixed(3)};
+    --qisi-option-columns: 4;
 }
 * { box-sizing: border-box; }
 html { margin: 0; min-height: 100%; background: #e5e7eb; }
@@ -326,7 +329,7 @@ main { width: 100%; margin: 0; padding: 0; }
 .question-flow-body::after, .exam-question::after { content: ""; display: block; clear: both; }
 .gaokao-options {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(var(--qisi-option-columns, 4), minmax(0, 1fr));
     gap: 1.5mm 4mm;
     width: 100%;
     margin: 1.5mm 0 0;
@@ -336,7 +339,7 @@ main { width: 100%; margin: 0; padding: 0; }
 .gaokao-option { display: flex; align-items: flex-start; min-width: 0; break-inside: avoid; page-break-inside: avoid; }
 .option-label { flex: 0 0 1.8em; font-weight: 400; }
 .option-content { flex: 1; min-width: 0; overflow-wrap: normal; word-break: normal; }
-.option-content .katex, .katex { font-size: 1em; white-space: nowrap; }
+.option-content .katex, .katex { font-size: calc(1em * var(--qisi-math-scale)); white-space: nowrap; }
 .katex-display { margin: .35em 0; overflow: visible; }
 .answer-grid-wrap { margin: 2mm 0 4mm; }
 .answer-grid { margin: 0 auto; border-collapse: collapse; font-weight: 700; }
@@ -356,10 +359,37 @@ main { width: 100%; margin: 0; padding: 0; }
 .print-image.centered { display: block; margin: 2mm auto 2.5mm; }
 .print-image.float-left { float: left; margin: 1mm 3mm 2mm 0; }
 .print-image.float-right { float: right; margin: 1mm 0 2mm 3mm; }
+.qisi-image-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3mm;
+    width: 100%;
+    margin: 2mm 0 2.5mm;
+    clear: both;
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+.qisi-image-row-item { flex: 0 1 calc(var(--qisi-source-width, .46) * 100%); min-width: 0; }
+.qisi-image-row .print-image { display: block; width: 100%; max-width: 100%; height: auto; margin: 0 auto; }
+.qisi-media-before { display: block; margin-bottom: 1.5mm; }
+.qisi-media-text {
+    display: grid;
+    grid-template-columns: minmax(0, calc(var(--qisi-media-width, .42) * 100%)) minmax(0, 1fr);
+    align-items: center;
+    gap: 3mm;
+    width: 100%;
+    margin: 2mm 0 2.5mm;
+    clear: both;
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+.qisi-media-figure, .qisi-media-copy { display: block; min-width: 0; }
+.qisi-media-figure .print-image { display: block; width: 100%; max-width: 100%; height: auto; margin: 0; }
 .qisi-latex-table-wrap { display: block; max-width: 100%; margin: 2.5mm auto; overflow: visible; break-inside: avoid; page-break-inside: avoid; }
 .qisi-latex-table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; font-size: 0.96em; line-height: 1.5; }
 .qisi-latex-table td { box-sizing: border-box; border: 0.25mm solid #111827; padding: 1.2mm 1.8mm; overflow-wrap: anywhere; }
-.qisi-latex-table .katex { font-size: 1em; }
+.qisi-latex-table .katex { font-size: calc(1em * var(--qisi-math-scale)); }
 .missing-image, .latex-render-error { color: #b91c1c; font-size: 9pt; }
 .secret-mark, .corner-marks { display: none; }
 
@@ -425,6 +455,33 @@ main { width: 100%; margin: 0; padding: 0; }
         return blocks;
     };
 
+    const minimumReadableScale = 0.72;
+    const fitQuestionImages = (node, pageContent) => {
+        if (!node || !pageContent || pageContent.scrollHeight <= pageContent.clientHeight + 1) return false;
+        const images = Array.from(node.querySelectorAll('.print-image')).filter(image => {
+            const rect = image.getBoundingClientRect();
+            return rect.width > 24 && rect.height > 24;
+        });
+        if (!images.length) return false;
+
+        const measurements = images.map(image => ({ image, rect: image.getBoundingClientRect() }));
+        const totalImageHeight = measurements.reduce((sum, item) => sum + item.rect.height, 0);
+        const excess = pageContent.scrollHeight - pageContent.clientHeight + 2;
+        if (totalImageHeight <= 0 || excess <= 0) return false;
+        const requiredScale = (totalImageHeight - excess) / totalImageHeight;
+        if (requiredScale < minimumReadableScale || requiredScale >= 1) return false;
+
+        measurements.forEach(({ image, rect }) => {
+            image.style.maxWidth = Math.max(24, rect.width * requiredScale) + 'px';
+            image.style.maxHeight = Math.max(24, rect.height * requiredScale) + 'px';
+            image.style.width = 'auto';
+            image.style.height = 'auto';
+            image.dataset.qisiFitScale = requiredScale.toFixed(3);
+        });
+        node.dataset.qisiImagesCompressed = requiredScale.toFixed(3);
+        return pageContent.scrollHeight <= pageContent.clientHeight + 1;
+    };
+
     const paginate = () => {
         preview.replaceChildren();
         let page = null;
@@ -448,12 +505,16 @@ main { width: 100%; margin: 0; padding: 0; }
 
             const clone = entry.node.cloneNode(true);
             content.appendChild(clone);
+            fitQuestionImages(clone, content);
 
             const nextEntry = blocks[index + 1];
             const shouldProbeNext = clone.classList.contains('group-title') && nextEntry;
             let probe = null;
             if (shouldProbeNext) {
                 probe = nextEntry.node.cloneNode(true);
+                probe.querySelectorAll('.gaokao-options, .qisi-image-row, .qisi-media-text, .print-image, .q-note, .print-answer, .print-solution').forEach(node => node.remove());
+                probe.style.maxHeight = '4.5em';
+                probe.style.overflow = 'hidden';
                 content.appendChild(probe);
             }
 

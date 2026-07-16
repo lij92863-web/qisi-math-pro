@@ -71,6 +71,18 @@ test('print CSS uses exact A4 geometry and permits question fragmentation', () =
     assert.match(css, /\.exam-question\s*\{[\s\S]*break-inside:\s*auto/);
     assert.match(css, /@media print\s*\{[\s\S]*padding:\s*0 !important/);
     assert.equal(css.includes('height: 100vh'), false);
+    assert.match(css, /--qisi-math-scale:/);
+    assert.match(css, /qisi-image-row/);
+    assert.match(css, /--qisi-option-columns/);
+});
+
+test('screen pagination applies adaptive image fitting before moving a whole question', () => {
+    const html = template.buildPrintDocument({ content: '<main></main>', katexCssHref: '' });
+    const fitIndex = html.indexOf('fitQuestionImages');
+    const overflowIndex = html.indexOf('const overflowed =');
+    assert.ok(fitIndex >= 0, 'adaptive image fitter is missing');
+    assert.ok(overflowIndex > fitIndex, 'overflow is decided before adaptive image fitting');
+    assert.match(html, /minimumReadableScale/);
 });
 
 test('browser preview creates discrete A4 sheets and PDF spans physical A4 pages', { timeout: 60_000 }, async () => {
