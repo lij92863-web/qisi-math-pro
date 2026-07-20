@@ -341,13 +341,22 @@
             .trim();
 
         const BARE_LATEX_DISPLAY_SIGNAL_RE =
-            /\\(?:frac|dfrac|sqrt|angle|sin|cos|tan|log|ln|pi|theta|alpha|beta|gamma|Delta|overline|vec|overrightarrow)\b|鈭\?|鈭歿2\}|√\s*2|蟺|π/;
+            /\\(?:frac|dfrac|sqrt|angle|sin|cos|tan|log|ln|pi|theta|alpha|beta|gamma|Delta|overline|vec|overrightarrow|left|right|in|notin|mid|subset|subseteq|supset|supseteq)\b|鈭\?|鈭歿2\}|√\s*2|蟺|π/;
 
         const normalizeBareLatexForDisplaySpan = (span = '') => {
             const source = String(span || '');
             if (!BARE_LATEX_DISPLAY_SIGNAL_RE.test(source)) return source;
 
-            return source.replace(
+            const textCommands = [];
+            const protectedSource = source.replace(
+                /\\text\s*\{[^{}]*\}/g,
+                command => {
+                    const token = `QISILATEXTEXT${textCommands.length}QISI`;
+                    textCommands.push(command);
+                    return token;
+                }
+            );
+            const normalizedSource = protectedSource.replace(
                 /[A-Za-z0-9\\{}()[\]^_+\-*/=.,:;|<>!~ \t鈭歿?√蟺π]+/g,
                 (run) => {
                     if (!BARE_LATEX_DISPLAY_SIGNAL_RE.test(run)) return run;
@@ -357,6 +366,9 @@
                     let body = run.slice(leading.length, run.length - trailing.length);
                     if (!body) return run;
 
+                    const trailingPunctuation = body.match(/[，。；：！？,.!?;:]+$/)?.[0] || '';
+                    if (trailingPunctuation) body = body.slice(0, -trailingPunctuation.length);
+
                     if (!BARE_LATEX_DISPLAY_SIGNAL_RE.test(body)) return run;
 
                     const normalized = normalizeBareLatexExpressionForDisplay(body);
@@ -365,8 +377,12 @@
                         return run;
                     }
 
-                    return `${leading}$${normalized}$${trailing}`;
+                    return `${leading}$${normalized}$${trailingPunctuation}${trailing}`;
                 }
+            );
+            return normalizedSource.replace(
+                /QISILATEXTEXT(\d+)QISI/g,
+                (_, index) => textCommands[Number(index)] || ''
             );
         };
 
@@ -386,7 +402,11 @@
             // island and the whole remainder is displayed as raw LaTeX.
             const displayText = protectedText.replace(
                 /\\text\s*\{([^{}]*)\}/g,
-                '$1'
+                (command, body, offset, fullSource) => {
+                    const prefix = String(fullSource || '').slice(0, offset);
+                    const embeddedInBareMath = /\\(?:left|right|frac|sqrt|in|notin|mid|subset|subseteq|supset|supseteq|overline|vec|overrightarrow)[^，。；：！？\n]*$/.test(prefix);
+                    return embeddedInBareMath ? command : body;
+                }
             );
             const repairedLatexBlocks = latexBlocks.map(block => {
                 const wrapped = String(block || '');

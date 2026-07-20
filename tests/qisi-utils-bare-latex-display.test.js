@@ -97,3 +97,14 @@ test('PDF display normalization preserves valid internal text commands', () => {
 
     assert.equal(normalized, source);
 });
+
+test('DOCX set-builder notation with Chinese text stays in one balanced math segment', () => {
+    const source = '集合B满足B=\\left\\{x\\left|x\\in A\\text{且}\\frac{1}{x}\\in A\\right.\\right\\}.';
+    const normalized = normalizeBareLatexForDisplayText(source);
+
+    assert.equal(
+        normalized,
+        '集合B满足$B=\\left\\{x\\left|x\\in A\\text{且}\\frac{1}{x}\\in A\\right.\\right\\}$.'
+    );
+    assert.equal((normalized.match(/\$/g) || []).length, 2);
+});

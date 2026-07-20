@@ -75,6 +75,28 @@ test('redundant MathType mathop wrappers around large operators are KaTeX-compat
     assert.doesNotMatch(normalized.latex, /\\mathop/);
 });
 
+test('MathType fallback maps evidenced MT Extra codes and rejects unknown private-use characters', () => {
+    const header = [
+        ...Buffer.from([5, 1, 0, 7, 8]),
+        ...Buffer.from('DSMT7\0', 'latin1'),
+        1
+    ];
+    const chars = (...codes) => Buffer.from([
+        ...header,
+        ...codes.flatMap(code => [2, 0, 128, code & 0xff, (code >> 8) & 0xff]),
+        0
+    ]);
+
+    assert.equal(mtefReader.mtefToLatex(chars(0xec07, 0xec08, 0xe98f, 0x64)).latex, '\\cdot d');
+    assert.equal(mtefReader.mtefToLatex(chars(0xef0a, 0x6c)).latex, 'l');
+    assert.equal(mtefReader.mtefToLatex(chars(0xe123)).ok, false);
+    assert.equal(rich.normalizeLatexFragment('x\ue123y').code, 'PRIVATE_USE_MATH_CHARACTER');
+});
+
+test('known relation commands are separated from following identifiers', () => {
+    assert.equal(rich.normalizeLatexFragment('S=\\frac{1}{2}\\cdotd').latex, 'S=\\frac{1}{2}\\cdot d');
+});
+
 test('vertical bars used by flexible delimiters are not rewritten as mid relations', () => {
     const normalized = rich.normalizeLatexFragment(
         String.raw`f\left(x\right)=\left\{\begin{matrix}\left|log{2}_{}\left(x-1\right)\right|,1<x\le 3\\\left(x-4\right){}^{2},x>3\end{matrix}\right.`

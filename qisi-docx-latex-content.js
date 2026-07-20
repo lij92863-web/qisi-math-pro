@@ -63,6 +63,10 @@
                     '\\begin{array}{$1}'
                 )
                 .replace(/\\mathop\s*\\(sum|prod|int|oint)(?![A-Za-z])/g, '\\$1')
+                .replace(
+                    /\\(subseteq|supseteq|notin|subset(?!eq)|supset(?!eq)|parallel|perp|cdot|times|div|pm|in(?!fty))(?=[A-Za-z])/g,
+                    '$& '
+                )
                 .replace(/\\(?:rm|mathrm|text)\s*\{\s*\\pi\s*\}/g, '\\pi')
                 .replace(/\\(?:bf|mathbf)\s*\{\s*Z\s*\}/g, '\\mathbb{Z}')
                 .replace(/\\vec\s*\{\s*([A-Za-z]{2,})\s*\}/g, '\\overrightarrow{$1}')
@@ -258,6 +262,15 @@
             }
 
             const latex = canonicalizeMathCommands(stripped);
+            const privateUse = latex.match(/[\uE000-\uF8FF]/u);
+            if (privateUse) {
+                return {
+                    ok: false,
+                    code: 'PRIVATE_USE_MATH_CHARACTER',
+                    latex: '',
+                    diagnostics: [`U+${privateUse[0].codePointAt(0).toString(16).toUpperCase()}`]
+                };
+            }
             const balance = validateLatexBalance(latex);
             if (!balance.ok) return { ...balance, latex: '' };
             const args = validateCommandArguments(latex);

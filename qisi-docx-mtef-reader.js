@@ -17,7 +17,10 @@
         [0x00b1, '\\pm '], [0x00d7, '\\times '], [0x00f7, '\\div '], [0x03bb, '\\lambda '],
         [0x03c0, '\\pi '], [0x2208, '\\in '], [0x2212, '-'], [0x2229, '\\cap '],
         [0x222a, '\\cup '], [0x2260, '\\ne '], [0x2264, '\\le '], [0x2265, '\\ge '],
-        [0x2286, '\\subseteq '], [0x22c5, '\\cdot '], [0x25b3, '\\triangle ']
+        [0x2286, '\\subseteq '], [0x22c5, '\\cdot '], [0x25b3, '\\triangle '],
+        // MathType's MT Extra fallback encoding uses these private-use codes
+        // when the native LaTeX translator rejects an otherwise readable row.
+        [0xec07, ''], [0xec08, ''], [0xe98f, '\\cdot '], [0xef0a, '']
     ]);
 
     class Cursor {
@@ -92,6 +95,9 @@
     const charLatex = code => {
         if (symbolMap.has(code)) return symbolMap.get(code);
         if (code >= 0x20 && code <= 0x7e) return String.fromCharCode(code);
+        if (code >= 0xe000 && code <= 0xf8ff) {
+            throw new Error(`Unsupported MTEF private-use character U+${code.toString(16).toUpperCase()}.`);
+        }
         if (code <= 0x10ffff) return String.fromCodePoint(code);
         return '';
     };
