@@ -2,15 +2,13 @@
 
 ## Current stage
 
-C13A2 — Manual refactor master plan and behavior freeze design
+T1 — UI and script-order behavior freeze
 
 ## Objective
 
-Audit the current production dependency graph and define a complete, staged,
-rollback-safe refactor plan before changing runtime behavior.
-
-This stage is documentation and read-only verification only. It does not migrate
-production functions yet.
+Turn the current production script order and safe top-level UI navigation into
+executable contracts before the first runtime refactor. This stage changes tests
+only; it must not change application behavior.
 
 ## Required reading
 
@@ -21,15 +19,16 @@ production functions yet.
 - `ai/ACCEPTANCE_CRITERIA.md`
 - `ai/TESTING_GUIDE.md`
 - `ai/CODEX_WORKFLOW.md`
-- `skills/qisi-module-refactor/SKILL.md`
-- `skills/app-js-boundary/SKILL.md`
+- `ai/APP_JS_REFACTOR_MASTER_PLAN_R1.md`
 - `skills/testing-verification/SKILL.md`
 - `skills/git-stage-workflow/SKILL.md`
 
 ## Allowed files
 
 - `ai/CODEX_TASK.local.md`
-- `ai/APP_JS_REFACTOR_MASTER_PLAN_R1.md`
+- `tests/main-html-script-order.test.js`
+- `tests/app-ui-handler-contract.test.js`
+- `tests/app-ui-navigation-browser.test.js`
 
 ## Forbidden files
 
@@ -37,7 +36,6 @@ production functions yet.
 - `main.html`
 - `app.css`
 - `qisi-*.js`
-- `tests/`
 - `scripts/`
 - `package.json`
 - `package-lock.json`
@@ -48,39 +46,34 @@ production functions yet.
 ## Required commands
 
 ```powershell
-git status --short
-git diff --check
-$env:QISI_ALLOWED_DIFF="ai/CODEX_TASK.local.md,ai/APP_JS_REFACTOR_MASTER_PLAN_R1.md"
-npm.cmd run verify:diff-scope
+node --test tests/main-html-script-order.test.js tests/app-ui-handler-contract.test.js tests/app-ui-navigation-browser.test.js
 npm.cmd run verify:batch-safety
 npm.cmd run verify:safe
+$env:QISI_ALLOWED_DIFF="ai/CODEX_TASK.local.md,tests/main-html-script-order.test.js,tests/app-ui-handler-contract.test.js,tests/app-ui-navigation-browser.test.js"
+npm.cmd run verify:diff-scope
 ```
 
 ## Acceptance criteria
 
-- Current architecture facts are measured from the repository, not copied from an external audit.
-- The plan defines invariants, stage boundaries, allowed files, gates, rollback points, and stop conditions.
-- The first production migration candidate is explicitly named and justified.
-- No runtime or test file changes in this stage.
-- All required gates pass without real AI/OCR calls.
+- Local script `src` values are parsed, unique, and ordered; `app.js` is last.
+- Route B remains absent and controlled-write remains before `app.js`.
+- Template click expressions are inventoried and unresolved simple setup handlers fail the test.
+- Playwright actually clicks every current top-level application view in an isolated browser context.
+- Page errors, error-level console messages, and AI/OCR requests are zero.
+- No runtime file changes.
+- Full safe and batch-safety gates pass.
 
 ## Stop conditions
 
-Stop if:
-
-- the working tree was dirty before the stage;
-- a runtime file would need to change while writing the plan;
-- a required safety gate fails;
-- any real AI/OCR call appears necessary.
+Stop if a runtime file would be needed to make the behavior-freeze tests pass, an
+out-of-scope failure occurs, or any real AI/OCR request is attempted.
 
 ## Commit
 
-If all checks pass:
-
 ```bash
-git add ai/CODEX_TASK.local.md ai/APP_JS_REFACTOR_MASTER_PLAN_R1.md
-git commit -m "stage C13A2 plan manual app refactor"
+git add ai/CODEX_TASK.local.md tests/main-html-script-order.test.js tests/app-ui-handler-contract.test.js tests/app-ui-navigation-browser.test.js
+git commit -m "stage T1 freeze UI and script contracts"
 ```
 
-After this planning stage, stop. Production extraction begins only under the next
-explicit task stage.
+After T1 is committed, the user's explicit continuation authorizes transition to
+the separately scoped R1 task; do not mix R1 production files into the T1 commit.
