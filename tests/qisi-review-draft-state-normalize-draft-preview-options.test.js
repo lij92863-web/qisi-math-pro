@@ -79,11 +79,12 @@ describe('normalizeDraftPreviewOptions', () => {
         }
     });
 
-    it('app.js explicitly calls Qisi ReviewDraftState helper', () => {
+    it('editor projection owns option normalization and app.js delegates to the projection', () => {
         const rootDir = path.join(__dirname, '..');
         const app = fs.readFileSync(path.join(rootDir, 'app.js'), 'utf8');
-        assert.match(app, /window\.Qisi\.ReviewDraftState\.normalizeDraftPreviewOptions\(question\)/);
+        const moduleSource = fs.readFileSync(path.join(rootDir, 'qisi-review-draft-state.js'), 'utf8');
+        assert.match(app, /window\.Qisi\.ReviewDraftState\.buildDraftEditorProjection\(/);
         assert.doesNotMatch(app, /const\s+normalizeDraftPreviewOptions\s*=/);
+        assert.match(moduleSource, /options:\s*normalizeDraftPreviewOptions\(question\)/);
     });
 });
-

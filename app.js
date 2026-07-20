@@ -736,102 +736,8 @@
                     );
                 };
 
-                const normalizeEditorChoiceLabel = (value) =>
-                    String(value || '')
-                        .replace(/[Ａ-Ｄａ-ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
-                        .toUpperCase();
-
-                const splitChoiceSourceForEditor = (source) => {
-                    const text = window.Qisi.ReviewDraftState.normalizeDraftEditorNewlines(source);
-                    if (!text.trim()) return null;
-
-                    const labelRegex = /(^|\n)[ \t　]*([A-DＡ-Ｄa-dａ-ｄ])\s*[.．。、:：)）]/g;
-                    const hits = [];
-                    let match;
-
-                    while ((match = labelRegex.exec(text)) !== null) {
-                        hits.push({
-                            label: normalizeEditorChoiceLabel(match[2]),
-                            start: match.index + String(match[1] || '').length,
-                            contentStart: labelRegex.lastIndex
-                        });
-                    }
-
-                    let bestSequence = null;
-
-                    for (let startIndex = 0; startIndex < hits.length; startIndex += 1) {
-                        if (hits[startIndex].label !== 'A') continue;
-
-                        const sequence = [hits[startIndex]];
-                        let expectedCode = 'B'.charCodeAt(0);
-
-                        for (let index = startIndex + 1; index < hits.length; index += 1) {
-                            const expectedLabel = String.fromCharCode(expectedCode);
-
-                            if (hits[index].label === expectedLabel) {
-                                sequence.push(hits[index]);
-                                expectedCode += 1;
-                                if (expectedCode > 'D'.charCodeAt(0)) break;
-                            }
-                        }
-
-                        if (sequence.length >= 2 && (!bestSequence || sequence.length > bestSequence.length)) {
-                            bestSequence = sequence;
-                        }
-                    }
-
-                    if (!bestSequence) return null;
-
-                    const options = ['', '', '', ''];
-
-                    bestSequence.forEach((hit, index) => {
-                        const next = bestSequence[index + 1];
-                        const end = next ? next.start : text.length;
-                        const optionIndex = hit.label.charCodeAt(0) - 65;
-                        options[optionIndex] = text.slice(hit.contentStart, end).trim();
-                    });
-
-                    const stem = text.slice(0, bestSequence[0].start).trimEnd();
-                    if (!stem.trim()) return null;
-
-                    return { stem, options };
-                };
-
-                const buildDraftEditorProjection = (source, question) => {
-                    const text = window.Qisi.ReviewDraftState.normalizeDraftEditorNewlines(source);
-                    const type = String(question?.type || '解答题').trim();
-                    const isChoice = type === '单选题' || type === '多选题';
-
-                    if (!isChoice) {
-                        return {
-                            stem: text,
-                            options: ['', '', '', ''],
-                            type,
-                            parsedOptions: false
-                        };
-                    }
-
-                    const split = splitChoiceSourceForEditor(text);
-
-                    if (split) {
-                        return {
-                            stem: split.stem,
-                            options: [0, 1, 2, 3].map(index => String(split.options?.[index] || '')),
-                            type,
-                            parsedOptions: true
-                        };
-                    }
-
-                    return {
-                        stem: text,
-                        options: window.Qisi.ReviewDraftState.normalizeDraftPreviewOptions(question),
-                        type,
-                        parsedOptions: false
-                    };
-                };
-
                 const activeDraftEditorPreview = computed(() =>
-                    buildDraftEditorProjection(
+                    window.Qisi.ReviewDraftState.buildDraftEditorProjection(
                         activeDraftEditorBuffer.value,
                         activeDraftQuestion.value
                     )
@@ -880,65 +786,20 @@
                     },
                     { immediate: true }
                 );
-                const draftHasImageToken = (q) => {
-                    const options = Array.isArray(q?.options) ? q.options : [];
-                    const text = [
-                        q?.stem,
-                        ...options,
-                        q?.answer,
-                        q?.solution
-                    ].map(value => String(value || '')).join('\n');
-                    return /\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\]|\\includegraphics(?:\[[^\]]*\])?\{[^}]+\}/.test(text);
-                };
-                const batchRecognitionSummary = computed(() => {
-                    const drafts = batchDraftQuestions.value || [];
-                    const missingAnswers = [];
-                    const missingSolutions = [];
-                    const missingOptions = [];
-                    let withOptions = 0;
-                    let withAnswers = 0;
-                    let withSolutions = 0;
-                    let withImageTokens = 0;
-
-                    drafts.forEach((q, index) => {
-                        const questionNo = window.Qisi.ReviewDraftState.draftSummaryQuestionNo(q, index);
-                        const optionCount = countValidOptions(q?.options);
-                        if (optionCount > 0) withOptions += 1;
-                        if (window.Qisi.Utils.cleanRecognizedText(q?.answer)) {
-                            withAnswers += 1;
-                        } else {
-                            missingAnswers.push(questionNo);
-                        }
-                        if (window.Qisi.Utils.cleanRecognizedText(q?.solution)) {
-                            withSolutions += 1;
-                        } else {
-                            missingSolutions.push(questionNo);
-                        }
-                        if (draftHasImageToken(q)) withImageTokens += 1;
-                        if (isChoiceDraft(q) && optionCount < 4) missingOptions.push(questionNo);
-                    });
-
-                    return {
-                        total: drafts.length,
-                        withOptions,
-                        withAnswers,
-                        withSolutions,
-                        withImageTokens,
-                        missingAnswers,
-                        missingSolutions,
-                        missingOptions
-                    };
-                });
+                const batchRecognitionSummary = computed(() => (
+                    window.Qisi.ReviewDraftState.buildBatchRecognitionSummary(
+                        batchDraftQuestions.value,
+                        { countValidOptions }
+                    )
+                ));
                 const unassignedDraftImages = computed(() => batchDraftImages.value.filter(image => !image.questionId && image.status === 'unassigned'));
-                const filteredDraftQuestions = computed(() => {
-                    const items = batchDraftQuestions.value || [];
-                    if (batchImportFilter.value === 'pending') return items.filter(q => q.status === 'pending');
-                    if (batchImportFilter.value === 'reviewed') return items.filter(q => q.status === 'reviewed');
-                    if (batchImportFilter.value === 'problems') return items.filter(q => draftQuestionProblems(q).length > 0);
-                    if (batchImportFilter.value === 'images') return items.filter(q => q.hasImage);
-                    if (batchImportFilter.value === 'submitted') return items.filter(q => q.status === 'submitted');
-                    return items;
-                });
+                const filteredDraftQuestions = computed(() => (
+                    window.Qisi.ReviewDraftState.filterDraftQuestions(
+                        batchDraftQuestions.value,
+                        batchImportFilter.value,
+                        draftQuestionProblems
+                    )
+                ));
 
                 const defaultMetaForStorage = () => ({
                     ...toRaw(batchDefaultMeta),
@@ -15236,23 +15097,11 @@ ${source}`;
                     };
                 }
 
-                const draftQuestionProblems = (q) => {
-                    if (!q) return [];
-                    const problems = [];
-                    if ((q.warnings || []).length) problems.push(...q.warnings);
-                    if (!window.Qisi.Utils.cleanRecognizedText(q.stem)) problems.push('题干为空，请先补充题干。');
-                    if ([q.stem, ...(Array.isArray(q.options) ? q.options : []), q.answer, q.solution].some(window.Qisi.Utils.hasUnconvertedImagePlaceholder)) {
-                        problems.push('存在未转换的 DOCX 公式图片占位，不能作为最终识别结果。');
-                    }
-                    const optionIssue = choiceOptionIssue(q.type, q.options, q.answer);
-                    if (optionIssue) problems.push(optionIssue);
-                    if (['单选题', '多选题', '填空题'].includes(q.type) && !window.Qisi.Utils.cleanRecognizedText(q.answer)) problems.push('答案为空，请先补充答案。');
-                    const solutionIssue = solutionQualityIssue(q.stem, q.options, q.solution);
-                    if (solutionIssue) problems.push(solutionIssue);
-                    if (q.duplicateStatus && q.duplicateStatus !== 'none') problems.push('重复或答案冲突需要确认。');
-                    if (q.imageReviewStatus === 'need_confirm' || q.imageReviewStatus === 'low_confidence') problems.push('该题图片尚未确认，请先确认图片是否正确。');
-                    return [...new Set(problems)];
-                };
+                const draftQuestionProblems = (q) => window.Qisi.ReviewDraftState.buildDraftQuestionProblems(q, {
+                    hasUnconvertedImagePlaceholder: window.Qisi.Utils.hasUnconvertedImagePlaceholder,
+                    choiceOptionIssue,
+                    solutionQualityIssue
+                });
 
                 const extractLatexFragmentsForCheck = (text = '') => {
                     const source = String(text || '');

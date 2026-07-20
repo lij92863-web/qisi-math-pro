@@ -69,6 +69,107 @@
         const normalizeDraftEditorNewlines = (value) =>
             String(value ?? '').replace(/\r\n?/g, '\n');
 
+        const normalizeEditorChoiceLabel = value =>
+            String(value || '')
+                .replace(/[Ａ-Ｄａ-ｄ]/g, character =>
+                    String.fromCharCode(character.charCodeAt(0) - 65248)
+                )
+                .toUpperCase();
+
+        const splitChoiceSourceForEditor = source => {
+            const text = normalizeDraftEditorNewlines(source);
+            if (!text.trim()) return null;
+
+            const labelRegex = /(^|\n)[ \t　]*([A-DＡ-Ｄa-dａ-ｄ])\s*[.．。、:：)）]/g;
+            const hits = [];
+            let match;
+
+            while ((match = labelRegex.exec(text)) !== null) {
+                hits.push({
+                    label: normalizeEditorChoiceLabel(match[2]),
+                    start: match.index + String(match[1] || '').length,
+                    contentStart: labelRegex.lastIndex
+                });
+            }
+
+            let bestSequence = null;
+
+            for (let startIndex = 0; startIndex < hits.length; startIndex += 1) {
+                if (hits[startIndex].label !== 'A') continue;
+
+                const sequence = [hits[startIndex]];
+                let expectedCode = 'B'.charCodeAt(0);
+
+                for (let index = startIndex + 1; index < hits.length; index += 1) {
+                    const expectedLabel = String.fromCharCode(expectedCode);
+
+                    if (hits[index].label === expectedLabel) {
+                        sequence.push(hits[index]);
+                        expectedCode += 1;
+                        if (expectedCode > 'D'.charCodeAt(0)) break;
+                    }
+                }
+
+                if (
+                    sequence.length >= 2 &&
+                    (!bestSequence || sequence.length > bestSequence.length)
+                ) {
+                    bestSequence = sequence;
+                }
+            }
+
+            if (!bestSequence) return null;
+
+            const options = ['', '', '', ''];
+
+            bestSequence.forEach((hit, index) => {
+                const next = bestSequence[index + 1];
+                const end = next ? next.start : text.length;
+                const optionIndex = hit.label.charCodeAt(0) - 65;
+                options[optionIndex] = text.slice(hit.contentStart, end).trim();
+            });
+
+            const stem = text.slice(0, bestSequence[0].start).trimEnd();
+            if (!stem.trim()) return null;
+
+            return { stem, options };
+        };
+
+        const buildDraftEditorProjection = (source, question) => {
+            const text = normalizeDraftEditorNewlines(source);
+            const type = String(question?.type || '解答题').trim();
+            const isChoice = type === '单选题' || type === '多选题';
+
+            if (!isChoice) {
+                return {
+                    stem: text,
+                    options: ['', '', '', ''],
+                    type,
+                    parsedOptions: false
+                };
+            }
+
+            const split = splitChoiceSourceForEditor(text);
+
+            if (split) {
+                return {
+                    stem: split.stem,
+                    options: [0, 1, 2, 3].map(index =>
+                        String(split.options?.[index] || '')
+                    ),
+                    type,
+                    parsedOptions: true
+                };
+            }
+
+            return {
+                stem: text,
+                options: normalizeDraftPreviewOptions(question),
+                type,
+                parsedOptions: false
+            };
+        };
+
         const syncActiveDraftEditorFromQuestion = ({
             activeDraftQuestion,
             activeDraftEditorBuffer,
@@ -95,6 +196,145 @@
 
         const draftSummaryQuestionNo = (q, index) =>
             String(q?.questionNumber || q?.question || q?.order || index + 1);
+
+        const draftHasImageToken = question => {
+            const options = Array.isArray(question?.options) ? question.options : [];
+            const text = [
+                question?.stem,
+                ...options,
+                question?.answer,
+                question?.solution
+            ].map(value => String(value || '')).join('\n');
+            return /\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\]|\\includegraphics(?:\[[^\]]*\])?\{[^}]+\}/.test(text);
+        };
+
+        const buildBatchRecognitionSummary = (drafts, dependencies = {}) => {
+            const items = drafts || [];
+            const { countValidOptions } = dependencies;
+            const missingAnswers = [];
+            const missingSolutions = [];
+            const missingOptions = [];
+            let withOptions = 0;
+            let withAnswers = 0;
+            let withSolutions = 0;
+            let withImageTokens = 0;
+
+            items.forEach((question, index) => {
+                const questionNumber = draftSummaryQuestionNo(question, index);
+                const optionCount = countValidOptions(question?.options);
+                if (optionCount > 0) withOptions += 1;
+                if (cleanRecognizedText(question?.answer)) {
+                    withAnswers += 1;
+                } else {
+                    missingAnswers.push(questionNumber);
+                }
+                if (cleanRecognizedText(question?.solution)) {
+                    withSolutions += 1;
+                } else {
+                    missingSolutions.push(questionNumber);
+                }
+                if (draftHasImageToken(question)) withImageTokens += 1;
+                if (
+                    (question?.type === '单选题' || question?.type === '多选题') &&
+                    optionCount < 4
+                ) {
+                    missingOptions.push(questionNumber);
+                }
+            });
+
+            return {
+                total: items.length,
+                withOptions,
+                withAnswers,
+                withSolutions,
+                withImageTokens,
+                missingAnswers,
+                missingSolutions,
+                missingOptions
+            };
+        };
+
+        const buildDraftQuestionProblems = (question, dependencies = {}) => {
+            if (!question) return [];
+
+            const {
+                hasUnconvertedImagePlaceholder,
+                choiceOptionIssue,
+                solutionQualityIssue
+            } = dependencies;
+            const problems = [];
+
+            if ((question.warnings || []).length) {
+                problems.push(...question.warnings);
+            }
+            if (!cleanRecognizedText(question.stem)) {
+                problems.push('题干为空，请先补充题干。');
+            }
+            if ([
+                question.stem,
+                ...(Array.isArray(question.options) ? question.options : []),
+                question.answer,
+                question.solution
+            ].some(hasUnconvertedImagePlaceholder)) {
+                problems.push('存在未转换的 DOCX 公式图片占位，不能作为最终识别结果。');
+            }
+
+            const optionIssue = choiceOptionIssue(
+                question.type,
+                question.options,
+                question.answer
+            );
+            if (optionIssue) problems.push(optionIssue);
+
+            if (
+                ['单选题', '多选题', '填空题'].includes(question.type) &&
+                !cleanRecognizedText(question.answer)
+            ) {
+                problems.push('答案为空，请先补充答案。');
+            }
+
+            const solutionIssue = solutionQualityIssue(
+                question.stem,
+                question.options,
+                question.solution
+            );
+            if (solutionIssue) problems.push(solutionIssue);
+
+            if (
+                question.duplicateStatus &&
+                question.duplicateStatus !== 'none'
+            ) {
+                problems.push('重复或答案冲突需要确认。');
+            }
+            if (
+                question.imageReviewStatus === 'need_confirm' ||
+                question.imageReviewStatus === 'low_confidence'
+            ) {
+                problems.push('该题图片尚未确认，请先确认图片是否正确。');
+            }
+
+            return [...new Set(problems)];
+        };
+
+        const filterDraftQuestions = (drafts, filter, getProblems) => {
+            const items = drafts || [];
+            if (filter === 'pending') {
+                return items.filter(question => question.status === 'pending');
+            }
+            if (filter === 'reviewed') {
+                return items.filter(question => question.status === 'reviewed');
+            }
+            if (filter === 'problems') {
+                return items.filter(question => getProblems(question).length > 0);
+            }
+            if (filter === 'images') {
+                return items.filter(question => question.hasImage);
+            }
+            if (filter === 'submitted') {
+                return items.filter(question => question.status === 'submitted');
+            }
+            return items;
+        };
 
         const draftRawOptionSourceCandidates = (q, deps = {}) => {
             const cleanText = deps.cleanRecognizedText || cleanRecognizedText;
@@ -509,8 +749,13 @@
             summarizeDraftStatus,
             normalizeDraftPreviewOptions,
             normalizeDraftEditorNewlines,
+            buildDraftEditorProjection,
             syncActiveDraftEditorFromQuestion,
             draftSummaryQuestionNo,
+            draftHasImageToken,
+            buildBatchRecognitionSummary,
+            buildDraftQuestionProblems,
+            filterDraftQuestions,
             draftRawOptionSourceCandidates,
             repairDraftChoiceOptionsFromCachedFileText,
             finalDraftNeedsOptionVisionRepair,

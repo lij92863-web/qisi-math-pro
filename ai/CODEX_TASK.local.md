@@ -2,67 +2,66 @@
 
 ## Current stage
 
-R5 — Extract bounded exam print rendering
+R6 — Expand review draft projection ownership
 
 ## Objective
 
-Extract only the six pure exam/answer HTML assembly functions from `app.js` into
-`qisi-exam-print-renderer.js`, with dependency injection for LaTeX rendering,
-option-column resolution, grouping, summaries, and reactive configuration.
+Move only pure review editor preview parsing, recognition-summary projection,
+problem aggregation, image-token detection, and draft-list filtering from `app.js`
+into the existing production `qisi-review-draft-state.js` module.
 
 ## app.js boundary declaration
 
-- Why `app.js` must be touched: remove the inline pure print HTML builders and retain two thin production wrappers.
-- Exact regions: `buildHeaderFields`, `buildAnswerGrid`, `buildNotice`, `buildAnswerContent`, `buildPrintOptionsHtml`, and `buildQuestionContent`.
-- Why a `qisi-*.js` module is not sufficient alone: current Vue config/title/meta, group policy, LaTeX renderer, and DOCX option-column resolver must be injected at call time.
-- Expected line-level scope: replace roughly 100 lines with bounded wrapper calls; `app.js` must shrink materially.
-- Keep KaTeX, recursive LaTeX/image rendering, image hydration, IndexedDB, DOM/document access, print-window creation, Blob/URL lifecycle, and downloads in `app.js`.
+- Why `app.js` must be touched: remove the characterized inline review projections and replace them with dependency-injected module calls.
+- Exact regions: editor choice parser/projection, `draftHasImageToken`, `batchRecognitionSummary`, `filteredDraftQuestions`, and `draftQuestionProblems`.
+- Why the module is not sufficient alone: Vue computeds and existing safety helpers (`choiceOptionIssue`, `solutionQualityIssue`, Qisi Utils) remain coordinator dependencies.
+- Expected line-level scope: wrappers/calls only; approximately 140 lines must leave `app.js`.
+- Keep editor refs/watch/actions, draft mutation, cleanup evidence, image selectors/transactions/cropping, submit-to-bank, DB, AI/OCR, recognition, and rerun workflows in `app.js`.
 
 ## Allowed files
 
 - `ai/CODEX_TASK.local.md`
-- `qisi-exam-print-renderer.js`
+- `qisi-review-draft-state.js`
 - `app.js`
 - `main.html`
 - `package.json`
-- `tests/exam-print-renderer.test.js`
-- `tests/main-html-script-order.test.js`
-- A pre-existing print/source-contract test only when the full gate proves it asserts the removed inline implementation
+- `tests/review-draft-projections.test.js`
+- `tests/qisi-review-draft-state-normalize-draft-preview-options.test.js`
+- A pre-existing source-contract test only when the full gate proves it asserts one of the removed inline implementations
 
 ## Forbidden files
 
-- DOCX/PDF recognition, AI/OCR, batch, review, DB/storage modules or schemas
-- `qisi-a4-exam-template.js`, print CSS, templates, lockfile, env, data, backups, and user materials
-- behavior changes to pagination, image hydration, Blob lifetime, or formula rendering
+- DOCX/PDF/AI/OCR, batch-final-gate, print, DB/storage modules or schemas
+- review image mutation/placement/crop/submit code
+- templates/styles, lockfile, env, data, backups, and user materials
+- activation of research-only `qisi-review-view-model.js`
 
 ## Required gates
 
 ```powershell
-node --test tests/exam-print-renderer.test.js tests/a4-exam-template.test.js tests/main-html-script-order.test.js tests/app-ui-navigation-browser.test.js
-node --check qisi-exam-print-renderer.js
+node --test tests/review-draft-projections.test.js tests/review-draft-state.test.js tests/qisi-review-draft-state-normalize-draft-preview-options.test.js tests/app-ui-navigation-browser.test.js
+node --check qisi-review-draft-state.js
 node --check app.js
 npm.cmd run verify:batch-safety
 npm.cmd run verify:safe
-$env:QISI_REAL_PRINT_LAYOUT="1"
-node --test tests/docx-layout-real-browser.test.js
-$env:QISI_ALLOWED_DIFF="ai/CODEX_TASK.local.md,qisi-exam-print-renderer.js,app.js,main.html,package.json,tests/exam-print-renderer.test.js,tests/main-html-script-order.test.js"
+$env:QISI_ALLOWED_DIFF="ai/CODEX_TASK.local.md,qisi-review-draft-state.js,app.js,main.html,package.json,tests/review-draft-projections.test.js,tests/qisi-review-draft-state-normalize-draft-preview-options.test.js"
 npm.cmd run verify:diff-scope
 ```
 
 ## Acceptance criteria
 
-- Exact legacy HTML, truthiness, numbering, escaping, option labels/columns, answer-grid bounds, and failure contracts are characterized.
-- The module is pure, deterministic, Node/browser compatible, and does not mutate questions, config, metadata, groups, or images.
-- Production uses the module; the six old inline implementations are removed.
-- No DOM, window, Blob, IndexedDB, KaTeX, image hydration, or print-window lifecycle enters the module.
-- Existing A4 geometry/pagination tests and the opt-in real print-layout browser test pass with zero page/console errors.
+- Exact editor label parsing, longest-sequence choice, option padding/fallback, CRLF behavior, summary counters, problem order/dedupe, and filter identity semantics are characterized.
+- New exports are pure, deterministic, fail fast only on exercised missing dependencies, and do not mutate drafts/options/warnings/images.
+- Production uses the module; old inline implementations are removed; existing downstream handler names remain unchanged.
+- Missing solution alone remains non-problematic; image filter continues to use `q.hasImage`; no recognition policy changes.
+- No draft writes, cleanup evidence, image transactions, submission, DB, AI/OCR, or network code moves.
 - Full gates pass with zero real AI/OCR calls.
 
 ## Commit
 
 ```bash
-git add ai/CODEX_TASK.local.md qisi-exam-print-renderer.js app.js main.html package.json tests/exam-print-renderer.test.js tests/main-html-script-order.test.js
-git commit -m "stage R5 extract exam print renderer"
+git add ai/CODEX_TASK.local.md qisi-review-draft-state.js app.js main.html package.json tests/review-draft-projections.test.js tests/qisi-review-draft-state-normalize-draft-preview-options.test.js
+git commit -m "stage R6 extract review projections"
 ```
 
-Continue to R6 after a green commit under the user's continuous-refactor instruction.
+Continue to R7 after a green commit under the user's continuous-refactor instruction.
