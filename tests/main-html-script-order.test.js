@@ -10,6 +10,7 @@ const EXPECTED_LOCAL_SCRIPT_PATHS = [
     './qisi-a4-exam-template.js',
     './qisi-config.js',
     './qisi-exam-grouping.js',
+    './qisi-library-view-state.js',
     './qisi-runtime.js',
     './qisi-utils.js',
     './qisi-db.js',

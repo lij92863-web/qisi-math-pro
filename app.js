@@ -148,17 +148,12 @@
                 };
 
                 const buildQuestionFingerprintMaps = (items) => {
-                    const coreMap = new Map();
-                    const stemMap = new Map();
-                    (items || []).forEach(q => {
-                        if (!q) return;
-                        const core = questionCoreFingerprint(q);
-                        const stem = questionStemFingerprint(q);
-                        if (core && !coreMap.has(core)) coreMap.set(core, q);
-                        if (stem && !stemMap.has(stem)) stemMap.set(stem, q);
+                    const maps = window.Qisi.LibraryViewState.buildQuestionFingerprintMaps(items, {
+                        coreFingerprint: questionCoreFingerprint,
+                        stemFingerprint: questionStemFingerprint
                     });
-                    coreFingerprintMap.value = coreMap;
-                    stemFingerprintMap.value = stemMap;
+                    coreFingerprintMap.value = maps.coreMap;
+                    stemFingerprintMap.value = maps.stemMap;
                 };
 
                 const resetLibraryFilters = () => {
@@ -173,48 +168,24 @@
                 const activeKnowledgeTree = computed(() => libraryKnowledgeMode.value === 'personal' ? personalKnowledgeTree.value : (libraryKnowledgeMode.value === 'external' ? [] : knowledgeTree));
                 const activeKnowledgeCounts = computed(() => libraryKnowledgeMode.value === 'personal' ? personalKnowledgeCounts.value : (libraryKnowledgeMode.value === 'external' ? {} : knowledgeCounts.value));
 
-                const filteredQuestions = computed(() => {
-                    let result = questions.value;
-                    if(activeKnowledge.value) {
-                        const getAllChildrenNames = (node) => {
-                            let names = [node.name];
-                            if (node.children) node.children.forEach(c => names = names.concat(getAllChildrenNames(c)));
-                            return names;
-                        };
-                        
-                        let targetNode = null;
-                        const sourceTree = activeKnowledgeType.value === 'personal' ? personalKnowledgeTree.value : knowledgeTree;
-                        targetNode = window.Qisi.Utils.findNode(sourceTree, activeKnowledge.value);
-                        
-                        if (targetNode) {
-                            const allowedNames = getAllChildrenNames(targetNode);
-                            result = result.filter(q => {
-                                const kn = getQuestionKnowledge(q, activeKnowledgeType.value);
-                                return q && allowedNames.includes(kn);
-                            });
-                        } else {
-                            result = result.filter(q => {
-                                const kn = getQuestionKnowledge(q, activeKnowledgeType.value);
-                                return q && kn === activeKnowledge.value;
-                            });
-                        }
-                    }
-                    return result.filter(q => window.Qisi.Utils.questionMatchesLibraryFilters(q, {
+                const filteredQuestions = computed(() => window.Qisi.LibraryViewState.filterLibraryQuestions(
+                    questions.value,
+                    {
+                        activeKnowledge: activeKnowledge.value,
+                        knowledgeType: activeKnowledgeType.value,
+                        knowledgeTree: activeKnowledgeType.value === 'personal'
+                            ? personalKnowledgeTree.value
+                            : knowledgeTree,
+                        findNode: window.Qisi.Utils.findNode,
+                        getQuestionKnowledge,
+                        questionMatchesLibraryFilters: window.Qisi.Utils.questionMatchesLibraryFilters,
                         keyword: librarySearchKeyword.value,
                         filters: libraryFilters,
                         hasText
-                    }));
-                });
-
-                const flattenKnowledgeTree = (tree, prefix = []) => {
-                    const rows = [];
-                    for (const node of tree || []) {
-                        const path = [...prefix, node.name];
-                        rows.push({ id: node.id, name: node.name, path: path.join(' / ') });
-                        if (node.children?.length) rows.push(...flattenKnowledgeTree(node.children, path));
                     }
-                    return rows;
-                };
+                ));
+
+                const flattenKnowledgeTree = window.Qisi.LibraryViewState.flattenKnowledgeTree;
 
                 const flatSystemKnowledge = computed(() => flattenKnowledgeTree(knowledgeTree));
                 const flatPersonalKnowledge = computed(() => flattenKnowledgeTree(personalKnowledgeTree.value));
