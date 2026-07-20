@@ -1,7 +1,6 @@
 require('dotenv').config();
 
 const express = require('express');
-const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -17,6 +16,7 @@ const TOOLS_DIR = path.join(ROOT, 'tools');
 const PS_CONVERTER = path.join(TOOLS_DIR, 'convert-docx-to-pdf.ps1');
 const PS_MATHTYPE_TRANSLATOR = path.join(TOOLS_DIR, 'translate-mathtype-mtef.ps1');
 const PORT = Number(process.env.PORT || 3000);
+const HOST = String(process.env.QISI_HOST || '127.0.0.1').trim() || '127.0.0.1';
 const CONVERT_TIMEOUT_MS = Number(process.env.DOCX_CONVERT_TIMEOUT_MS || 120000);
 const MATHTYPE_TIMEOUT_MS = Number(process.env.MATHTYPE_TRANSLATE_TIMEOUT_MS || 60000);
 const CONVERTER_MODE = String(process.env.QISI_DOCX_CONVERTER || 'auto').toLowerCase();
@@ -27,6 +27,70 @@ const DASHSCOPE_CHAT_UPSTREAM = 'https://dashscope.aliyuncs.com/' + 'compatible-
 const DASHSCOPE_OCR_UPSTREAM = 'https://dashscope.aliyuncs.com/' + 'api/v1/services/aigc/' + 'multimodal-generation/' + 'generation';
 // Supported modes: auto / libreoffice-first / word-first / libreoffice-only / word-only
 
+function normalizeServerPort(value, fallback = 3000) {
+  const port = Number(value);
+  if (Number.isInteger(port) && port >= 0 && port <= 65535) return port;
+  return fallback;
+}
+
+function normalizeServerHost(value) {
+  return String(value || '').trim() || '127.0.0.1';
+}
+
+function isAllowedLocalOrigin(origin, servicePort) {
+  const rawOrigin = String(origin || '').trim();
+  if (!rawOrigin) return true;
+
+  let parsed;
+  try {
+    parsed = new URL(rawOrigin);
+  } catch (_) {
+    return false;
+  }
+
+  if (parsed.protocol !== 'http:') return false;
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) return false;
+  if (parsed.pathname !== '/') return false;
+
+  const hostname = String(parsed.hostname || '').toLowerCase();
+  if (!['localhost', '127.0.0.1', '[::1]'].includes(hostname)) return false;
+
+  const originPort = parsed.port ? Number(parsed.port) : 80;
+  return originPort === normalizeServerPort(servicePort, -1);
+}
+
+function createLocalOriginMiddleware(runtime) {
+  return (req, res, next) => {
+    const origin = String(req.get('origin') || '').trim();
+
+    res.vary('Origin');
+    if (!isAllowedLocalOrigin(origin, runtime.port)) {
+      return res.status(403).json({
+        ok: false,
+        code: 'ORIGIN_NOT_ALLOWED',
+        error: 'This local service only accepts requests from its own loopback origin.'
+      });
+    }
+
+    if (origin) {
+      res.set('Access-Control-Allow-Origin', origin);
+      res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.set('Access-Control-Allow-Headers', 'Content-Type');
+    }
+
+    if (req.method === 'OPTIONS') return res.status(204).end();
+    return next();
+  };
+}
+
+const DEFAULT_RUNTIME = {
+  port: normalizeServerPort(PORT),
+  host: normalizeServerHost(HOST),
+  dashscopeApiKey: DASHSCOPE_API_KEY,
+  aiRequestTimeoutMs: AI_REQUEST_TIMEOUT_MS,
+  fetchImpl: (...args) => globalThis.fetch(...args)
+};
+
 for (const dir of [TMP_DIR, UPLOAD_DIR, CONVERTED_DIR, TOOLS_DIR]) {
   fs.mkdirSync(dir, { recursive: true });
 }
@@ -35,12 +99,11 @@ const app = express();
 const aiJsonParser = express.json({ limit: AI_BODY_LIMIT, type: 'application/json' });
 const enqueueMathTypeTranslation = createSerialTaskQueue();
 
-app.use(cors({ origin: true, credentials: false }));
-
 app.get('/api/ai/health', (req, res) => {
+  const runtime = res.locals.qisiRuntime || DEFAULT_RUNTIME;
   res.json({
     ok: true,
-    configured: Boolean(DASHSCOPE_API_KEY)
+    configured: Boolean(runtime.dashscopeApiKey)
   });
 });
 
@@ -72,7 +135,11 @@ function validateAiRequestBody(body) {
 }
 
 async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
-  if (!DASHSCOPE_API_KEY) {
+  const runtime = res.locals.qisiRuntime || DEFAULT_RUNTIME;
+  const apiKey = String(runtime.dashscopeApiKey || '').trim();
+  const timeoutMs = Math.max(10000, Number(runtime.aiRequestTimeoutMs || AI_REQUEST_TIMEOUT_MS));
+
+  if (!apiKey) {
     return res.status(503).json({
       ok: false,
       code: 'DASHSCOPE_NOT_CONFIGURED',
@@ -90,7 +157,7 @@ async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   const bodyText = JSON.stringify(req.body);
   const model = validation.model;
   const startedAt = Date.now();
@@ -102,10 +169,10 @@ async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
       bytes: aiRequestBodySize(req.body)
     });
 
-    const upstream = await fetch(upstreamUrl, {
+    const upstream = await runtime.fetchImpl(upstreamUrl, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${DASHSCOPE_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
       body: bodyText,
@@ -156,7 +223,7 @@ async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
       ok: false,
       code: aborted ? 'AI_PROXY_TIMEOUT' : 'AI_PROXY_FETCH_FAILED',
       error: aborted
-        ? `DashScope upstream request timed out after ${AI_REQUEST_TIMEOUT_MS}ms.`
+        ? `DashScope upstream request timed out after ${timeoutMs}ms.`
         : 'DashScope upstream request failed.'
     });
   } finally {
@@ -551,11 +618,12 @@ async function convertDocxToPdf(inputPath) {
 }
 
 app.get('/api/health', (req, res) => {
+  const runtime = res.locals.qisiRuntime || DEFAULT_RUNTIME;
   res.json({
     ok: true,
     service: 'qisi-local-server',
     platform: process.platform,
-    port: PORT
+    port: runtime.port
   });
 });
 
@@ -781,12 +849,114 @@ app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => 
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`[qisi-local-server] running at http://localhost:${PORT}`);
-  console.log(`[qisi-local-server] open http://localhost:${PORT}/main.html`);
-  console.log(`[qisi-local-server] health check: http://localhost:${PORT}/api/health`);
-  console.log(`[qisi-local-server] converter self-test: http://localhost:${PORT}/api/convert/self-test`);
+function createQisiLocalServer(options = {}) {
+  const runtime = {
+    port: normalizeServerPort(options.port ?? PORT),
+    host: normalizeServerHost(options.host ?? HOST),
+    dashscopeApiKey: String(options.dashscopeApiKey ?? DASHSCOPE_API_KEY).trim(),
+    aiRequestTimeoutMs: Math.max(10000, Number(options.aiRequestTimeoutMs ?? AI_REQUEST_TIMEOUT_MS)),
+    fetchImpl: typeof options.fetchImpl === 'function'
+      ? options.fetchImpl
+      : (...args) => globalThis.fetch(...args)
+  };
+  const serviceApp = express();
+  let server = null;
+
+  serviceApp.use(createLocalOriginMiddleware(runtime));
+  serviceApp.use((req, res, next) => {
+    res.locals.qisiRuntime = runtime;
+    next();
+  });
+  serviceApp.use(app);
+
+  async function start(overrides = {}) {
+    if (server?.listening) return server;
+
+    runtime.port = normalizeServerPort(overrides.port ?? runtime.port);
+    runtime.host = normalizeServerHost(overrides.host ?? runtime.host);
+
+    server = await new Promise((resolve, reject) => {
+      const pending = serviceApp.listen(runtime.port, runtime.host);
+      const onError = (error) => {
+        pending.off('listening', onListening);
+        reject(error);
+      };
+      const onListening = () => {
+        pending.off('error', onError);
+        resolve(pending);
+      };
+      pending.once('error', onError);
+      pending.once('listening', onListening);
+    }).catch(error => {
+      server = null;
+      throw error;
+    });
+
+    const address = server.address();
+    if (address && typeof address === 'object') runtime.port = address.port;
+    return server;
+  }
+
+  async function close() {
+    if (!server) return;
+    const activeServer = server;
+    server = null;
+    await new Promise((resolve, reject) => {
+      activeServer.close(error => error ? reject(error) : resolve());
+    });
+  }
+
+  return {
+    app: serviceApp,
+    start,
+    close,
+    get server() {
+      return server;
+    },
+    get host() {
+      return runtime.host;
+    },
+    get port() {
+      return runtime.port;
+    }
+  };
+}
+
+async function startQisiLocalServer(options = {}) {
+  const service = createQisiLocalServer(options);
+  await service.start();
+  return service;
+}
+
+function logServerStarted(service) {
+  const browserHost = service.host === '127.0.0.1' ? 'localhost' : service.host;
+  const displayHost = browserHost.includes(':') && !browserHost.startsWith('[')
+    ? `[${browserHost}]`
+    : browserHost;
+  const baseUrl = `http://${displayHost}:${service.port}`;
+
+  console.log(`[qisi-local-server] running at ${baseUrl}`);
+  console.log(`[qisi-local-server] open ${baseUrl}/main.html`);
+  console.log(`[qisi-local-server] health check: ${baseUrl}/api/health`);
+  console.log(`[qisi-local-server] converter self-test: ${baseUrl}/api/convert/self-test`);
   console.log(`[qisi-local-server] converter mode: ${CONVERTER_MODE}`);
   console.log('[qisi-local-server] LibreOffice candidates:');
   findLibreOfficeExecutable().forEach(p => console.log(`  - ${p}`));
-});
+}
+
+module.exports = {
+  createQisiLocalServer,
+  startQisiLocalServer,
+  isAllowedLocalOrigin,
+  normalizeServerHost,
+  normalizeServerPort
+};
+
+if (require.main === module) {
+  startQisiLocalServer()
+    .then(logServerStarted)
+    .catch(error => {
+      console.error('[qisi-local-server] failed to start', error?.message || String(error));
+      process.exitCode = 1;
+    });
+}

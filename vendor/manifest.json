@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "description": "Pinned browser distributions used by main.html. All files are served locally; package registry/CDN access is never required at runtime.",
+  "assets": [
+    {
+      "package": "tailwindcss",
+      "version": "3.4.17",
+      "source": "https://cdn.tailwindcss.com/3.4.17",
+      "path": "tailwindcss/3.4.17/tailwind.browser.min.js",
+      "sha256": "176e894661aa9cdc9a5cba6c720044cbbf7b8bd80d1c9a142a7c24b1b6c50d15"
+    },
+    {
+      "package": "katex",
+      "version": "0.16.8",
+      "source": "npm:katex@0.16.8",
+      "path": "katex/0.16.8/katex.min.css",
+      "sha256": "df9ef84e97d38557de02183e238f8ddfd10988b37741492e12c3157bc856011e"
+    },
+    {
+      "package": "katex",
+      "version": "0.16.8",
+      "source": "npm:katex@0.16.8",
+      "path": "katex/0.16.8/katex.min.js",
+      "sha256": "d4f0ea25c4ccb7986b229d6427794b7063cf3209b0376cf5a64bfc4dd7918c95"
+    },
+    {
+      "package": "katex",
+      "version": "0.16.8",
+      "source": "npm:katex@0.16.8",
+      "path": "katex/0.16.8/contrib/auto-render.min.js",
+      "sha256": "9cb8dacfc086c2966c9ec4ba54f4a2dc43b7cbe2b33cec1a2743d886c7fb47a7"
+    },
+    {
+      "package": "vue",
+      "version": "3.5.40",
+      "source": "npm:vue@3.5.40",
+      "path": "vue/3.5.40/vue.global.prod.js",
+      "sha256": "9e0039a3f6ed0e85308e24d737447f1af6af83d229d69e1267a32b29bc2a1337"
+    },
+    {
+      "package": "vue-virtual-scroller",
+      "version": "2.0.0-beta.8",
+      "source": "npm:vue-virtual-scroller@2.0.0-beta.8",
+      "path": "vue-virtual-scroller/2.0.0-beta.8/vue-virtual-scroller.css",
+      "sha256": "b315b2e031eede603430e4dab4f9d213a9d9824117b957bd547618e10bf4b02e"
+    },
+    {
+      "package": "vue-virtual-scroller",
+      "version": "2.0.0-beta.8",
+      "source": "npm:vue-virtual-scroller@2.0.0-beta.8",
+      "path": "vue-virtual-scroller/2.0.0-beta.8/vue-virtual-scroller.min.js",
+      "sha256": "7e836cde5a6dc977ee2093523d5d17265c816b12095e91bbc46202060272d838"
+    },
+    {
+      "package": "dexie",
+      "version": "3.2.4",
+      "source": "npm:dexie@3.2.4",
+      "path": "dexie/3.2.4/dexie.min.js",
+      "sha256": "1c3292c03803242f5d6a25ae42ae4f98124f6b96657d1857f27353eb47aa2ac1"
+    },
+    {
+      "package": "jszip",
+      "version": "3.10.1",
+      "source": "npm:jszip@3.10.1",
+      "path": "jszip/3.10.1/jszip.min.js",
+      "sha256": "acc7e41455a80765b5fd9c7ee1b8078a6d160bbbca455aeae854de65c947d59e"
+    },
+    {
+      "package": "pdfjs-dist",
+      "version": "3.11.174",
+      "source": "npm:pdfjs-dist@3.11.174",
+      "path": "pdfjs-dist/3.11.174/pdf.min.js",
+      "sha256": "5b5799e6f8c680663207ac5b42ee14eed2a406fa7af48f50c154f0c0b1566946"
+    },
+    {
+      "package": "pdfjs-dist",
+      "version": "3.11.174",
+      "source": "npm:pdfjs-dist@3.11.174",
+      "path": "pdfjs-dist/3.11.174/pdf.worker.min.js",
+      "sha256": "feabdf309770ed24bba31a5467836cdc8cf639c705af27d52b585b041bb8527b"
+    },
+    {
+      "package": "lucide",
+      "version": "0.378.0",
+      "source": "npm:lucide@0.378.0",
+      "path": "lucide/0.378.0/lucide.min.js",
+      "sha256": "92c1fad8bd479c978382b146f38552fb520ccf84a077f0665c5eb8809d4b0220"
+    }
+  ]
+}

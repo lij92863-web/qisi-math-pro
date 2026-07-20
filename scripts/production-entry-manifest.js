@@ -4,6 +4,15 @@
 // Keep browserScriptOrder aligned with the normalized local `src` values in
 // main.html. Root qisi-*.js files must belong to exactly one category.
 const browserScriptOrder = Object.freeze([
+    'vendor/tailwindcss/3.4.17/tailwind.browser.min.js',
+    'vendor/katex/0.16.8/katex.min.js',
+    'vendor/katex/0.16.8/contrib/auto-render.min.js',
+    'vendor/vue/3.5.40/vue.global.prod.js',
+    'vendor/vue-virtual-scroller/2.0.0-beta.8/vue-virtual-scroller.min.js',
+    'vendor/dexie/3.2.4/dexie.min.js',
+    'vendor/jszip/3.10.1/jszip.min.js',
+    'vendor/pdfjs-dist/3.11.174/pdf.min.js',
+    'vendor/lucide/0.378.0/lucide.min.js',
     'qisi-a4-exam-template.js',
     'qisi-config.js',
     'qisi-exam-grouping.js',

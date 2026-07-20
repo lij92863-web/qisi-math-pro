@@ -3851,7 +3851,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                     window.pdfjsLib.GlobalWorkerOptions.workerSrc =
                         window.pdfjsLib.GlobalWorkerOptions.workerSrc ||
-                        'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+                        './vendor/pdfjs-dist/3.11.174/pdf.worker.min.js';
 
                     const buffer = await (await dataUrlToBlob(file.uploadPath)).arrayBuffer();
                     const pdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
@@ -3908,7 +3908,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                     window.pdfjsLib.GlobalWorkerOptions.workerSrc =
                         window.pdfjsLib.GlobalWorkerOptions.workerSrc ||
-                        'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+                        './vendor/pdfjs-dist/3.11.174/pdf.worker.min.js';
 
                     const buffer = await (await dataUrlToBlob(file.uploadPath)).arrayBuffer();
                     const pdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
@@ -7164,7 +7164,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
 
                     window.pdfjsLib.GlobalWorkerOptions.workerSrc =
                         window.pdfjsLib.GlobalWorkerOptions.workerSrc ||
-                        'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+                        './vendor/pdfjs-dist/3.11.174/pdf.worker.min.js';
 
                     let buffer;
                     try {
@@ -21777,6 +21777,10 @@ ${source}`;
                     const html = printTemplate.buildPrintDocument({
                         content,
                         title,
+                        katexCssHref: new URL(
+                            './vendor/katex/0.16.8/katex.min.css',
+                            window.location.href
+                        ).href,
                         config: {
                             ...toRaw(examConfig),
                             paperSize: 'A4',

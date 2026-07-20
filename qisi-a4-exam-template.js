@@ -553,7 +553,7 @@ main { width: 100%; margin: 0; padding: 0; }
             content = '',
             title = '试卷打印',
             config = {},
-            katexCssHref = 'https://unpkg.com/katex@0.16.8/dist/katex.min.css'
+            katexCssHref = '/vendor/katex/0.16.8/katex.min.css'
         } = {}) => {
             const katexLink = katexCssHref
                 ? `<link rel="stylesheet" href="${escapeHtml(katexCssHref)}">`
