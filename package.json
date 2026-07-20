@@ -6,7 +6,7 @@
   "main": "qisi-local-server.js",
   "scripts": {
     "start": "node qisi-local-server.js",
-    "check": "node --check qisi-a4-exam-template.js && node --check qisi-config.js && node --check qisi-exam-grouping.js && node --check qisi-library-view-state.js && node --check qisi-entry-view-state.js && node --check qisi-knowledge-tree-state.js && node --check qisi-exam-print-renderer.js && node --check qisi-runtime.js && node --check qisi-backup.js && node --check qisi-utils.js && node --check qisi-db.js && node --check qisi-components.js && node --check qisi-docx-layout.js && node --check qisi-docx-table-latex.js && node --check qisi-batch-importer.js && node --check qisi-support-parser.js && node --check qisi-review-draft-state.js && node --check qisi-batch-final-gate.js && node --check qisi-batch-engine-v2.js && node --check qisi-pdf-content-integrity.js && node --check qisi-pdf-support-controlled-write.js && node --check app.js && node --check qisi-local-server.js",
+    "check": "node scripts/check-production-syntax.js",
     "test": "node --test",
     "smoke:batch:mock": "node --test tests/batch-smoke-mock.test.js",
     "verify:personal-stable": "npm run verify:docx-stable",

@@ -2,65 +2,63 @@
 
 ## Current stage
 
-R7 — Extract the pure batch final-gate policy without changing the mutating coordinator.
+H1 — Production-entry governance and removal of confirmed migration debris.
 
 ## Objective
 
-Move candidate identity, option validity, quality scoring/ranking, candidate merge,
-diagnostics, and image rebinding from `app.js` into a deterministic
-`qisi-batch-final-gate.js` module. Keep grouping, timestamp/order mutation,
-logging, persistence, and every DOCX/PDF/AI/OCR workflow in `app.js`.
+Create one machine-readable inventory for every root `qisi-*.js` module, make
+production syntax checking consume that inventory, remove only the five confirmed
+unreachable migration scaffolds and their dedicated tests, and remove all implicit
+tool dependence on `.bm_a4_app_before.js` before deleting the ignored local copy.
 
-## app.js boundary declaration
+## Boundaries
 
-- `app.js` may only inject the existing cleaners/key/image merge helpers, call the
-  new pure module, and retain the existing mutating `batchFinalGateDedupeDrafts` loop.
-- Exact removable regions: final-gate text/count helpers, origin/question identity,
-  option validity/count, score/rank helpers, candidate merge, diagnostics row
-  projection, and draft-image rebinding.
-- Existing grouping by `sourceKey::questionNumber`, warning addition, ordering,
-  `Date.now()`, console diagnostics, and write sites stay in the coordinator.
-- No scoring weights, fallback precedence, warning wording, ownership rule, schema,
-  or fail-closed policy may change.
+- Historical Markdown may continue to describe old commits; production code and
+  current tests/tools must not require deleted scaffolds.
+- Do not delete Node production/safety modules or frozen PDF research modules.
+- Do not change DOCX/PDF/AI/OCR behavior, app state, schemas, UI, or persistence.
+- The manifest is the single ordered truth for local browser scripts and production
+  syntax checks; duplicate hand-maintained script arrays must be removed.
 
 ## Allowed files
 
 - `ai/CODEX_TASK.local.md`
-- `qisi-batch-final-gate.js`
-- `app.js`
-- `main.html`
+- `scripts/production-entry-manifest.js`
+- `scripts/check-production-syntax.js`
+- `scripts/base-migration-inventory.js`
+- the four `scripts/bm-a4-*` tools that formerly defaulted to the snapshot
 - `package.json`
-- `tests/batch-final-gate.test.js`
-- `tests/main-html-script-order.test.js` only if the script manifest requires it
+- `tests/production-entry-manifest.test.js`
+- `tests/main-html-script-order.test.js`
+- `tests/bm-a4-explicit-baseline.test.js`
+- `tests/app-facade-wiring.test.js` (replace its dead-scaffold assertions with live wiring)
+- `tests/base-migration-execution-gate.test.js` (replace a deleted scaffold sample name only)
+- the five confirmed scaffold modules and five dedicated tests, deletion only
+- ignored root `.bm_a4_app_before.js`, deletion only after tool tests pass
 
 ## Forbidden files
 
-- DOCX/PDF parser, support alignment, controlled-write, AI/OCR, DB/storage modules
-- draft schema, recognition call sites, input fixtures, templates/styles, lockfile
-- any real network or AI/OCR call
-- exporting or moving the mutating dedupe/persistence coordinator
+- `app.js`, `main.html`, all live domain modules, DB/data/user materials
+- DOCX/PDF parser or alignment policy, AI/OCR/network behavior
+- broad test cleanup unrelated to the removed scaffolds
 
 ## Required gates
 
 ```powershell
-node --check qisi-batch-final-gate.js
-node --check app.js
-node --test tests/batch-final-gate.test.js tests/main-html-script-order.test.js tests/app-ui-navigation-browser.test.js
+node --test tests/production-entry-manifest.test.js tests/main-html-script-order.test.js tests/bm-a4-explicit-baseline.test.js tests/app-facade-wiring.test.js
+npm.cmd run check
 npm.cmd run verify:batch-safety
 npm.cmd run verify:safe
 ```
 
 ## Acceptance criteria
 
-- Legacy identity precedence, first-four option semantics, exact score weights,
-  LaTeX-signal counting, source bonuses, merge selection, evidence fields, warnings,
-  and orphan-image rules are characterized and unchanged.
-- Module functions are deterministic, non-mutating, explicit-dependency APIs and
-  usable from Node plus the browser namespace.
-- Missing required policy functions fail loudly when exercised; no silent simplified
-  production fallback is introduced.
-- Production delegates to the module; removed inline helpers do not remain duplicated.
-- DOCX+DOCX stays stable and PDF support remains fail closed.
-- Zero real AI/OCR calls; full gates pass.
+- Every root qisi module is classified exactly once and production order matches main.
+- Five dead scaffolds are absent and no current production/test/tool requires them.
+- Candidate ranker/planner use direct source analysis; staged/long-run tools require an
+  explicit `--before` path and work with temporary fixtures.
+- The ignored 22,813-line snapshot is absent after verification and remains recoverable
+  from Git history.
+- Full gates pass with zero real AI/OCR calls.
 
-Continue directly to H1 after a green commit under the user's continuous-refactor instruction.
+Continue directly to H2 after a green commit.

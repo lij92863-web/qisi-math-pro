@@ -33,8 +33,23 @@ function nakedCalls(appSource, helper) {
     return results;
 }
 
-function analyzeFiles({ beforePath = '.bm_a4_app_before.js', afterPath = 'app.js', modulePath = 'qisi-utils.js' } = {}) {
-    const before = fs.existsSync(beforePath) ? fs.readFileSync(beforePath, 'utf8') : '';
+function requireExplicitBeforePath(beforePath) {
+    if (typeof beforePath !== 'string' || !beforePath.trim()) {
+        const error = new Error('Explicit --before <path> is required; no historical baseline is selected automatically.');
+        error.code = 'QISI_EXPLICIT_BEFORE_REQUIRED';
+        throw error;
+    }
+    if (!fs.existsSync(beforePath)) {
+        const error = new Error(`Explicit baseline does not exist: ${beforePath}`);
+        error.code = 'QISI_BEFORE_NOT_FOUND';
+        throw error;
+    }
+    return beforePath;
+}
+
+function analyzeFiles({ beforePath, afterPath = 'app.js', modulePath = 'qisi-utils.js' } = {}) {
+    const explicitBeforePath = requireExplicitBeforePath(beforePath);
+    const before = fs.readFileSync(explicitBeforePath, 'utf8');
     const after = fs.readFileSync(afterPath, 'utf8');
     const moduleSource = fs.readFileSync(modulePath, 'utf8');
     return analyzeSources({ before, after, moduleSource });
@@ -85,15 +100,20 @@ function analyzeSources({ before = '', after = '', moduleSource = '' }) {
 }
 
 function main(argv = process.argv.slice(2)) {
-    const args = {};
-    for (let i = 0; i < argv.length; i += 1) {
-        if (argv[i] === '--before') args.beforePath = argv[i + 1];
-        if (argv[i] === '--after') args.afterPath = argv[i + 1];
-        if (argv[i] === '--module') args.modulePath = argv[i + 1];
+    try {
+        const args = {};
+        for (let i = 0; i < argv.length; i += 1) {
+            if (argv[i] === '--before') args.beforePath = argv[i + 1];
+            if (argv[i] === '--after') args.afterPath = argv[i + 1];
+            if (argv[i] === '--module') args.modulePath = argv[i + 1];
+        }
+        const result = analyzeFiles(args);
+        console.log(JSON.stringify(result, null, 2));
+        if (!result.ok) process.exitCode = 1;
+    } catch (error) {
+        console.error(`bm-a4-staged-migration-verify: ${error.message}`);
+        process.exitCode = 1;
     }
-    const result = analyzeFiles(args);
-    console.log(JSON.stringify(result, null, 2));
-    if (!result.ok) process.exitCode = 1;
 }
 
 if (require.main === module) main();
@@ -101,6 +121,7 @@ if (require.main === module) main();
 module.exports = {
     analyzeSources,
     analyzeFiles,
+    requireExplicitBeforePath,
     hasModuleExport,
     nakedCalls
 };

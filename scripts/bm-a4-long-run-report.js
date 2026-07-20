@@ -6,18 +6,13 @@ const { checkFixtureCoverage } = require('./bm-a4-fixture-coverage-check');
 const { auditDocs } = require('./bm-a4-doc-audit');
 const { analyzeFiles } = require('./bm-a4-staged-migration-verify');
 
-function buildReport() {
+function buildReport({ beforePath, afterPath = 'app.js', modulePath = 'qisi-utils.js' } = {}) {
+    const staged = analyzeFiles({ beforePath, afterPath, modulePath });
     const helperExtraction = extractHelpers('app.js');
     const callsiteMap = mapCallsites('app.js');
     const riskMatrix = classifyRisks();
     const fixtureCoverage = checkFixtureCoverage();
     const docAudit = auditDocs();
-    const staged = analyzeFiles({
-        beforePath: '.bm_a4_app_before.js',
-        afterPath: 'app.js',
-        modulePath: 'qisi-utils.js'
-    });
-
     return {
         helperExtraction,
         callsiteMap,
@@ -86,12 +81,24 @@ function markdownReport(result) {
 }
 
 function main(argv = process.argv.slice(2)) {
-    const result = buildReport();
-    const reportIndex = argv.indexOf('--write-report');
-    if (reportIndex >= 0) {
-        fs.writeFileSync(argv[reportIndex + 1], markdownReport(result));
-    } else {
-        console.log(JSON.stringify(result, null, 2));
+    try {
+        const beforeIndex = argv.indexOf('--before');
+        const afterIndex = argv.indexOf('--after');
+        const moduleIndex = argv.indexOf('--module');
+        const result = buildReport({
+            beforePath: beforeIndex >= 0 ? argv[beforeIndex + 1] : undefined,
+            afterPath: afterIndex >= 0 ? argv[afterIndex + 1] : 'app.js',
+            modulePath: moduleIndex >= 0 ? argv[moduleIndex + 1] : 'qisi-utils.js'
+        });
+        const reportIndex = argv.indexOf('--write-report');
+        if (reportIndex >= 0) {
+            fs.writeFileSync(argv[reportIndex + 1], markdownReport(result));
+        } else {
+            console.log(JSON.stringify(result, null, 2));
+        }
+    } catch (error) {
+        console.error(`bm-a4-long-run-report: ${error.message}`);
+        process.exitCode = 1;
     }
 }
 

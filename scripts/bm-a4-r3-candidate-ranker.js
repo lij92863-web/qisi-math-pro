@@ -1,11 +1,22 @@
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { analyzeSources } = require('./bm-a4-staged-migration-verify');
 
-function getNakedCallsites() {
-    const cmd = 'node scripts/bm-a4-staged-migration-verify.js --before .bm_a4_app_before.js --after app.js --module qisi-utils.js';
-    const output = execSync(cmd, { encoding: 'utf8', cwd: path.resolve(__dirname, '..') });
-    const data = JSON.parse(output);
+function readAnalysisSources({ afterSource, moduleSource, afterPath = 'app.js', modulePath = 'qisi-utils.js' } = {}) {
+    const rootPath = path.resolve(__dirname, '..');
+    return {
+        after: typeof afterSource === 'string'
+            ? afterSource
+            : fs.readFileSync(path.resolve(rootPath, afterPath), 'utf8'),
+        moduleSource: typeof moduleSource === 'string'
+            ? moduleSource
+            : fs.readFileSync(path.resolve(rootPath, modulePath), 'utf8')
+    };
+}
+
+function getNakedCallsites(input = {}) {
+    const sources = readAnalysisSources(input);
+    const data = analyzeSources({ after: sources.after, moduleSource: sources.moduleSource });
     if (!data.ok || !data.naked) return [];
     const sites = [];
     for (const [helper, calls] of Object.entries(data.naked)) {
@@ -14,10 +25,6 @@ function getNakedCallsites() {
         }
     }
     return sites;
-}
-
-function readAppLines() {
-    return fs.readFileSync(path.resolve(__dirname, '..', 'app.js'), 'utf8').split('\n');
 }
 
 function getContext(lines, lineNum, radius) {
@@ -88,9 +95,11 @@ function rankCallsite(site, appLines) {
     return { callsiteId: `R3-${String(site.line).padStart(5, '0')}`, helper: site.helper, line: site.line, text: site.text, score, decision, reasons, risks, replacementAllowed: decision === 'AUTO_FIXTURE_CANDIDATE' };
 }
 
-function rankAll() {
-    const sites = getNakedCallsites();
-    const appLines = readAppLines();
+function rankAll(input = {}) {
+    const sources = readAnalysisSources(input);
+    const sourceInput = { afterSource: sources.after, moduleSource: sources.moduleSource };
+    const sites = getNakedCallsites(sourceInput);
+    const appLines = sources.after.split('\n');
     const ranked = sites.map(s => rankCallsite(s, appLines)).sort((a, b) => b.score - a.score);
     const summary = {
         ok: true, total: ranked.length,
@@ -128,4 +137,4 @@ function main(argv = process.argv.slice(2)) {
 
 if (require.main === module) main();
 
-module.exports = { rankCallsite, rankAll, markdownReport, RISK_PATTERNS };
+module.exports = { rankCallsite, rankAll, markdownReport, RISK_PATTERNS, getNakedCallsites };

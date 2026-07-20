@@ -1,14 +1,25 @@
 const fs = require('fs');
-const { execSync } = require('child_process');
 const path = require('path');
+const { analyzeSources } = require('./bm-a4-staged-migration-verify');
 
 const MAX_SHARD_SIZE = 10;
 const DEFAULT_SHARD_SIZE = 5;
 
-function getNakedCallsites() {
-    const cmd = 'node scripts/bm-a4-staged-migration-verify.js --before .bm_a4_app_before.js --after app.js --module qisi-utils.js';
-    const output = execSync(cmd, { encoding: 'utf8', cwd: path.resolve(__dirname, '..') });
-    const data = JSON.parse(output);
+function readAnalysisSources({ afterSource, moduleSource, afterPath = 'app.js', modulePath = 'qisi-utils.js' } = {}) {
+    const rootPath = path.resolve(__dirname, '..');
+    return {
+        after: typeof afterSource === 'string'
+            ? afterSource
+            : fs.readFileSync(path.resolve(rootPath, afterPath), 'utf8'),
+        moduleSource: typeof moduleSource === 'string'
+            ? moduleSource
+            : fs.readFileSync(path.resolve(rootPath, modulePath), 'utf8')
+    };
+}
+
+function getNakedCallsites(input = {}) {
+    const sources = readAnalysisSources(input);
+    const data = analyzeSources({ after: sources.after, moduleSource: sources.moduleSource });
     if (!data.ok || !data.naked) return [];
     const sites = [];
     for (const [helper, calls] of Object.entries(data.naked)) {
@@ -19,9 +30,8 @@ function getNakedCallsites() {
     return sites;
 }
 
-function readAppContext(line, radius = 3) {
-    const appPath = path.resolve(__dirname, '..', 'app.js');
-    const lines = fs.readFileSync(appPath, 'utf8').split('\n');
+function readAppContext(line, radius = 3, input = {}) {
+    const lines = readAnalysisSources(input).after.split('\n');
     const idx = line - 1;
     const start = Math.max(0, idx - radius);
     const end = Math.min(lines.length, idx + radius + 1);
@@ -114,10 +124,14 @@ function planShards(sites, maxSize = MAX_SHARD_SIZE) {
     });
 }
 
-function generatePlan(json = false) {
-    const sites = getNakedCallsites();
+function generatePlan(options = false) {
+    const json = typeof options === 'boolean' ? options : Boolean(options.json);
+    const input = typeof options === 'object' && options ? options : {};
+    const sources = readAnalysisSources(input);
+    const sourceInput = { afterSource: sources.after, moduleSource: sources.moduleSource };
+    const sites = getNakedCallsites(sourceInput);
     const enriched = sites.map(site => {
-        const context = readAppContext(site.line, 3);
+        const context = readAppContext(site.line, 3, sourceInput);
         const contextText = [
             ...context.before.map(b => b.text),
             context.line.text,

@@ -6,42 +6,9 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const MAIN_HTML = path.join(ROOT, 'main.html');
 
-const EXPECTED_LOCAL_SCRIPT_PATHS = [
-    './qisi-a4-exam-template.js',
-    './qisi-config.js',
-    './qisi-exam-grouping.js',
-    './qisi-library-view-state.js',
-    './qisi-entry-view-state.js',
-    './qisi-knowledge-tree-state.js',
-    './qisi-exam-print-renderer.js',
-    './qisi-runtime.js',
-    './qisi-utils.js',
-    './qisi-db.js',
-    './qisi-backup.js',
-    './qisi-docx-layout.js',
-    './qisi-components.js',
-    './qisi-file-dispatcher.js',
-    './qisi-docx-ole-reader.js',
-    './qisi-docx-mtef-reader.js',
-    './qisi-docx-latex-content.js',
-    './qisi-docx-table-latex.js',
-    './qisi-docx-question-structure.js',
-    './qisi-docx-rich-content.js',
-    './qisi-docx-support-content.js',
-    './qisi-batch-importer.js',
-    './qisi-support-parser.js',
-    './qisi-support-repair.js',
-    './qisi-pdf-content-integrity.js',
-    './qisi-pdf-support-aligner.js',
-    './qisi-pdf-support-block-parser.js',
-    './qisi-pdf-support-controlled-write.js',
-    './qisi-pdf-safe-partial-pipeline.js',
-    './qisi-docx-pipeline.js',
-    './qisi-ui-events.js',
-    './qisi-review-draft-state.js',
-    './qisi-batch-final-gate.js',
-    './app.js'
-];
+const { browserScriptOrder } = require('../scripts/production-entry-manifest.js');
+
+const EXPECTED_LOCAL_SCRIPT_PATHS = browserScriptOrder.map(file => `./${file}`);
 
 const readStartTags = (html, tagName) => {
     const lower = html.toLowerCase();

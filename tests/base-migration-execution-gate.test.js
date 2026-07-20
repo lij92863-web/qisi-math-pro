@@ -202,7 +202,7 @@ test('BM-AUTO verify: BM21 sample should classify as SCAFFOLD_ONLY', () => {
     const args = [
         '--before', 'app.js',
         '--after', 'app.js',
-        '--module', 'qisi-app-facade.js',
+        '--module', 'qisi-sample-scaffold.js',
         '--old-names', 'someNonExistentHelper'
     ];
     const result = classify(args);
