@@ -134,17 +134,19 @@
                 const selectedPersonalL1Id = ref('');
                 const selectedPersonalL2Id = ref('');
                 const cartPanelAvailable = computed(() => view.value === 'library' || view.value === 'exam');
-                const entryParsedQuestion = computed(() => splitQuestionForStorage(entryForm.stem, entryForm.type, entryForm.options));
-                const entryPreviewStem = computed(() => entryParsedQuestion.value.stem || entryForm.stem);
-                const entryPreviewOptions = computed(() => entryParsedQuestion.value.options || []);
+                const entryPreview = computed(() => window.Qisi.EntryViewState.buildEntryPreview(entryForm, { splitQuestionForStorage }));
+                const entryPreviewStem = computed(() => entryPreview.value.stem);
+                const entryPreviewOptions = computed(() => entryPreview.value.options);
                 
                 const activeKnowledge = ref(null);
                 const activeKnowledgeType = ref('system');
                 const libraryKnowledgeMode = ref('system');
 
                 const syncEntryLegacyKnowledge = () => {
-                    entryForm.knowledge = entryForm.personalKnowledge || entryForm.systemKnowledge || '';
-                    entryForm.knowledgeType = entryForm.personalKnowledge ? 'personal' : 'system';
+                    const projection = window.Qisi.EntryViewState.projectEntryKnowledge(entryForm);
+                    entryForm.knowledge = projection.knowledge;
+                    entryForm.knowledgeType = projection.knowledgeType;
+                    return projection;
                 };
 
                 const buildQuestionFingerprintMaps = (items) => {
@@ -21620,8 +21622,9 @@ ${source}`;
                 };
 
                 const submitQuestion = async () => {
-                    if(!entryForm.stem.trim()) {
-                        alert('题干为空，先把 OCR 内容送入题干或手动输入题目。');
+                    const validation = window.Qisi.EntryViewState.validateEntryForm(entryForm);
+                    if(!validation.valid) {
+                        alert(validation.message);
                         return;
                     }
 
@@ -21632,11 +21635,7 @@ ${source}`;
                             .filter(i => i && i.id)
                             .map(i => ({id: i.id, align: i.align || 'center'}));
                         const tags = String(entryForm.tags || '').split(',').map(x => x.trim()).filter(Boolean);
-                        syncEntryLegacyKnowledge();
-                        const systemKnowledge = entryForm.systemKnowledge || '';
-                        const personalKnowledge = entryForm.personalKnowledge || '';
-                        const primaryKnowledge = personalKnowledge || systemKnowledge || '';
-                        const primaryKnowledgeType = personalKnowledge ? 'personal' : 'system';
+                        const { systemKnowledge, personalKnowledge, knowledge: primaryKnowledge, knowledgeType: primaryKnowledgeType } = syncEntryLegacyKnowledge();
 
                         for (const img of entryForm.images) {
                             if (img?.url && img.url.startsWith('data:')) {
@@ -21655,7 +21654,7 @@ ${source}`;
                             systemKnowledge,
                             personalKnowledge,
                             stem: prepared.stem,
-                            options: prepared.options.map(opt => opt || ''),
+                            options: window.Qisi.EntryViewState.normalizeEntryOptions(prepared.options),
                             answer: entryForm.answer,
                             solution: entryForm.solution,
                             images: cleanImages,
