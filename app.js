@@ -22411,21 +22411,19 @@ ${source}`;
                     await db.personalKnowledge.put({ id: 'tree', nodes: toRaw(personalKnowledgeTree.value), updatedAt: Date.now() });
                 };
 
-                const personalTreeRows = computed(() => {
-                    const rows = [];
-                    const walk = (nodes, level, parent = null, grandParent = null) => {
-                        (nodes || []).forEach(node => {
-                            const children = Array.isArray(node.children) ? node.children : [];
-                            rows.push({ node, level, parent, grandParent, hasChildren: children.length > 0 });
-                            if (children.length > 0 && node.expanded !== false) walk(children, level + 1, node, level === 1 ? node : grandParent);
-                        });
-                    };
-                    walk(personalKnowledgeTree.value, 1);
-                    return rows;
-                });
+                const personalTreeState = window.Qisi.KnowledgeTreeState;
+                const replacePersonalKnowledgeTree = (nextTree) => {
+                    const previousHover = hoverPersonalL1.value;
+                    personalKnowledgeTree.value = nextTree;
+                    if (previousHover?.id) {
+                        hoverPersonalL1.value = personalTreeState.findPersonalNodeById(nextTree, previousHover.id) || previousHover;
+                    }
+                };
+
+                const personalTreeRows = computed(() => personalTreeState.buildPersonalTreeRows(personalKnowledgeTree.value));
 
                 const togglePersonalExpanded = async (node) => {
-                    node.expanded = node.expanded === false;
+                    replacePersonalKnowledgeTree(personalTreeState.togglePersonalNodeExpanded(personalKnowledgeTree.value, node));
                     await savePersonalKnowledge();
                 };
 
@@ -22433,10 +22431,8 @@ ${source}`;
                     const label = row.level === 1 ? '二级方向名称' : '三级知识点名称';
                     const name = prompt(label, '');
                     if (!name || !name.trim()) return;
-                    row.node.children = row.node.children || [];
                     const child = { id: `pk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name: name.trim(), children: row.level === 1 ? [] : undefined, expanded: true };
-                    row.node.children.push(child);
-                    row.node.expanded = true;
+                    replacePersonalKnowledgeTree(personalTreeState.appendPersonalNode(personalKnowledgeTree.value, row.node, child));
                     if (row.level === 1) {
                         selectedPersonalL1Id.value = row.node.id;
                         selectedPersonalL2Id.value = child.id;
@@ -22456,7 +22452,7 @@ ${source}`;
                     const name = personalL1Name.value.trim();
                     if (!name) return;
                     const node = { id: `pk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name, children: [], expanded: true };
-                    personalKnowledgeTree.value.push(node);
+                    replacePersonalKnowledgeTree(personalTreeState.appendPersonalNode(personalKnowledgeTree.value, null, node));
                     selectedPersonalL1Id.value = node.id;
                     selectedPersonalL2Id.value = '';
                     personalL1Name.value = '';
@@ -22467,10 +22463,8 @@ ${source}`;
                     const parent = personalKnowledgeTree.value.find(n => n.id === selectedPersonalL1Id.value);
                     const name = personalL2Name.value.trim();
                     if (!parent || !name) return;
-                    parent.children = parent.children || [];
-                    parent.expanded = true;
                     const node = { id: `pk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name, children: [], expanded: true };
-                    parent.children.push(node);
+                    replacePersonalKnowledgeTree(personalTreeState.appendPersonalNode(personalKnowledgeTree.value, parent, node));
                     selectedPersonalL2Id.value = node.id;
                     personalL2Name.value = '';
                     await savePersonalKnowledge();
@@ -22481,9 +22475,8 @@ ${source}`;
                     const parent = l1?.children?.find(n => n.id === selectedPersonalL2Id.value);
                     const name = personalL3Name.value.trim();
                     if (!parent || !name) return;
-                    parent.children = parent.children || [];
-                    parent.expanded = true;
-                    parent.children.push({ id: `pk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name });
+                    const node = { id: `pk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name };
+                    replacePersonalKnowledgeTree(personalTreeState.appendPersonalNode(personalKnowledgeTree.value, parent, node));
                     personalL3Name.value = '';
                     await savePersonalKnowledge();
                 };
@@ -22491,27 +22484,20 @@ ${source}`;
                 const renamePersonalNode = async (node) => {
                     const name = prompt('新的知识点名称', node.name);
                     if (!name || !name.trim()) return;
-                    node.name = name.trim();
+                    replacePersonalKnowledgeTree(personalTreeState.renamePersonalNode(personalKnowledgeTree.value, node, name.trim()));
                     await savePersonalKnowledge();
                 };
 
                 const deletePersonalNode = async (level, id, parentId = '') => {
                     if (!confirm('确定删除这个知识点及其下级吗？')) return;
+                    replacePersonalKnowledgeTree(personalTreeState.deletePersonalNode(personalKnowledgeTree.value, level, id, parentId));
                     if (level === 1) {
-                        personalKnowledgeTree.value = personalKnowledgeTree.value.filter(n => n.id !== id);
                         if (selectedPersonalL1Id.value === id) {
                             selectedPersonalL1Id.value = '';
                             selectedPersonalL2Id.value = '';
                         }
                     } else if (level === 2) {
-                        const l1 = personalKnowledgeTree.value.find(n => n.id === parentId);
-                        if (l1) l1.children = (l1.children || []).filter(n => n.id !== id);
                         if (selectedPersonalL2Id.value === id) selectedPersonalL2Id.value = '';
-                    } else {
-                        for (const l1 of personalKnowledgeTree.value) {
-                            const l2 = l1.children?.find(n => n.id === parentId);
-                            if (l2) l2.children = (l2.children || []).filter(n => n.id !== id);
-                        }
                     }
                     await savePersonalKnowledge();
                 };
