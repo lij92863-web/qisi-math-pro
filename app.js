@@ -15248,307 +15248,14 @@ ${source}`;
                 // 解决：同一题号出现“好版本 + 坏版本”重复保存的问题。
                 // ============================================================
 
-                const BATCH_FINAL_GATE_BAD_CHAR_RE = /[�□▯▢■●◆◇�]/g;
-
-                const batchFinalGateText = (value = '') => {
-                    try {
-                        return window.Qisi.Utils.cleanRecognizedText(value || '');
-                    } catch {
-                        return String(value || '').trim();
-                    }
-                };
-
-                const batchFinalGateNormalizeQuestionNo = (item = {}) => {
-                    const raw =
-                        item.questionNumber ??
-                        item.question ??
-                        item.no ??
-                        item.index ??
-                        item.order ??
-                        item.sourceTrace?.questionNo ??
-                        '';
-
-                    try {
-                        return normalizeQuestionKey(raw);
-                    } catch {
-                        const m = String(raw || '').match(/\d{1,3}/);
-                        return m ? String(Number(m[0])) : '';
-                    }
-                };
-
-                const batchFinalGateOriginFileKey = (item = {}) => {
-                    return String(
-                        item.sourceDocxFileId ||
-                        item.sourceQuestionFileId ||
-                        item.sourceFileId ||
-                        item.sourceTrace?.sourceDocxFileId ||
-                        item.sourceTrace?.sourceQuestionFileId ||
-                        item.sourceTrace?.sourceFileId ||
-                        item.sourceFileName ||
-                        item.sourceTrace?.sourceFileName ||
-                        'unknown-file'
-                    );
-                };
-
-                const batchFinalGateBadCharCount = (value = '') => {
-                    const text = String(value || '');
-                    const matches = text.match(BATCH_FINAL_GATE_BAD_CHAR_RE);
-                    return matches ? matches.length : 0;
-                };
-
-                const batchFinalGateLatexSignalCount = (value = '') => {
-                    const text = String(value || '');
-                    const matches = text.match(
-                        /\\frac|\\sqrt|\\sin|\\cos|\\tan|\\angle|\\triangle|\\vec|\\overrightarrow|\\overline|\\left|\\right|\\subset|\\subseteq|\\cap|\\cup|\\in|\\pi|\\theta|\\cdot|\$|[_^{}]/g
-                    );
-                    return matches ? matches.length : 0;
-                };
-
-                const batchFinalGateChineseCount = (value = '') => {
-                    const matches = String(value || '').match(/[\u4e00-\u9fa5]/g);
-                    return matches ? matches.length : 0;
-                };
-
-                const batchFinalGateMediaTokenCount = (value = '') => {
-                    const text = String(value || '');
-                    const matches = text.match(/\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\]|\\includegraphics(?:\[[^\]]*\])?\{[^}]+\}/g);
-                    return matches ? matches.length : 0;
-                };
-
-                const batchFinalGateCleanOptions = (options = []) => {
-                    try {
-                        return window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options || []);
-                    } catch {
-                        const arr = Array.isArray(options) ? options : ['', '', '', ''];
-                        return [0, 1, 2, 3].map(i => String(arr[i] || '').trim());
-                    }
-                };
-
-                const batchFinalGateMeaningfulOption = (value = '') => {
-                    const raw = String(value || '').trim();
-
-                    if (!raw) return false;
-
-                    // 纯图片 token 也是有效选项。
-                    if (batchFinalGateMediaTokenCount(raw) > 0) return true;
-
-                    const text = batchFinalGateText(raw)
-                        .replace(/^[\s　]*[（(]?\s*[A-DＡ-Ｄ]\s*[\.\．、:：\)）]?\s*/i, '')
-                        .replace(/[.\s、，。:：；;()（）]/g, '')
-                        .trim();
-
-                    if (!text) return false;
-                    if (/^[A-D]$/i.test(text)) return false;
-
-                    return true;
-                };
-
-                const batchFinalGateOptionCount = (options = []) => {
-                    return batchFinalGateCleanOptions(options).filter(batchFinalGateMeaningfulOption).length;
-                };
-
-                const batchFinalGateAllText = (item = {}) => {
-                    const options = Array.isArray(item.options) ? item.options : [];
-                    return [
-                        item.stem,
-                        options.join('\n'),
-                        item.answer,
-                        item.solution,
-                        item.rawText,
-                        item.rawBlock,
-                        item.sourceTrace?.rawBlock,
-                        item.sourceTrace?.pageText
-                    ].map(x => String(x || '')).join('\n');
-                };
-
-                const batchFinalGateSourceBonus = (item = {}) => {
-                    const source = String(
-                        item.sourceTrace?.source ||
-                        item.recognitionSource ||
-                        item.source ||
-                        ''
-                    ).toLowerCase();
-
-                    let score = 0;
-
-                    // 视觉结构化一般比 PDF 文本层乱码更可靠。
-                    if (/visual|vision|qwen|strict|page-qwen|image/.test(source)) score += 50;
-
-                    // docx-importer 已经做过结构化 XML 解析，也应加分。
-                    if (/docx-importer/.test(source)) score += 40;
-
-                    // 文本层不是不能用，但如果含乱码，要扣分。
-                    if (/pdf-text|text-layer|fallback|local/.test(source)) score -= 10;
-
-                    return score;
-                };
-
-                const batchFinalGateQualityScore = (item = {}) => {
-                    const stem = batchFinalGateText(item.stem || '');
-                    const options = Array.isArray(item.options) ? item.options : ['', '', '', ''];
-                    const optionText = options.join('\n');
-                    const all = batchFinalGateAllText(item);
-
-                    const optionCount = batchFinalGateOptionCount(options);
-                    const badChars = batchFinalGateBadCharCount(all);
-                    const latexSignals = batchFinalGateLatexSignalCount(all);
-                    const chinese = batchFinalGateChineseCount(stem);
-                    const mediaTokens = batchFinalGateMediaTokenCount(all);
-
-                    let score = 0;
-
-                    // 选择题最重要：选项完整。
-                    score += optionCount * 60;
-                    if (optionCount >= 4) score += 180;
-                    if (optionCount >= 2) score += 60;
-
-                    // 题干需要有正常中文。
-                    score += Math.min(120, chinese * 2);
-
-                    // 数学题保留 LaTeX 信号。
-                    score += Math.min(240, latexSignals * 20);
-
-                    // 图片 token / 配图保留。
-                    score += Math.min(80, mediaTokens * 30);
-
-                    if (Array.isArray(item.images) && item.images.length) score += 50;
-                    if (item.sourcePageImage || item.sourceTrace?.sourcePageImage) score += 25;
-
-                    // 坏字符必须重罚。
-                    score -= badChars * 80;
-
-                    // 占位草稿不能赢。
-                    if (/未能自动切出题目|识别失败|图片题识别草稿|请查看右侧图片并补全|请对照右侧原图手动补全/.test(stem)) {
-                        score -= 600;
-                    }
-
-                    // 题干太短扣分。
-                    if (stem.length < 8) score -= 180;
-
-                    // 选择题语义明显但没有选项，严重扣分。
-                    if (
-                        optionCount === 0 &&
-                        /单选|多选|下列|正确的是|错误的是|命题|侧棱长|形状为/.test(stem)
-                    ) {
-                        score -= 220;
-                    }
-
-                    // 只有 A/B/C/D 标签，没有内容，严重扣分。
-                    if (optionCount === 0 && /(^|\n)\s*A\s*[\.\．、:：\)）]\s*($|\n)/.test(optionText)) {
-                        score -= 200;
-                    }
-
-                    score += batchFinalGateSourceBonus(item);
-
-                    return score;
-                };
-
-                const batchFinalGateMergeImages = (...lists) => {
-                    if (typeof mergeImageListsById === 'function') {
-                        return mergeImageListsById(...lists);
-                    }
-
-                    const map = new Map();
-
-                    for (const list of lists) {
-                        for (const img of (Array.isArray(list) ? list : [])) {
-                            if (!img) continue;
-                            const id = String(img.id || img.filename || img.name || '').trim();
-                            if (!id) continue;
-                            if (!map.has(id)) map.set(id, img);
-                        }
-                    }
-
-                    return [...map.values()];
-                };
-
-                const batchFinalGateBetterText = (current = '', candidate = '') => {
-                    const a = batchFinalGateText(current);
-                    const b = batchFinalGateText(candidate);
-
-                    if (!a && b) return candidate;
-                    if (a && !b) return current;
-
-                    const aBad = batchFinalGateBadCharCount(a);
-                    const bBad = batchFinalGateBadCharCount(b);
-                    const aMath = batchFinalGateLatexSignalCount(a);
-                    const bMath = batchFinalGateLatexSignalCount(b);
-
-                    if (aBad > 0 && bBad === 0 && b.length >= 6) return candidate;
-                    if (bBad > 0 && aBad === 0) return current;
-
-                    if (bMath > aMath && bBad <= aBad) return candidate;
-
-                    if (b.length > a.length * 1.25 && bBad <= aBad) return candidate;
-
-                    return current;
-                };
-
-                const batchFinalGateMergeCandidateIntoBest = (best = {}, other = {}) => {
-                    const merged = { ...best };
-
-                    const bestOptions = Array.isArray(best.options) ? best.options : ['', '', '', ''];
-                    const otherOptions = Array.isArray(other.options) ? other.options : ['', '', '', ''];
-
-                    const bestOptionCount = batchFinalGateOptionCount(bestOptions);
-                    const otherOptionCount = batchFinalGateOptionCount(otherOptions);
-
-                    // 选项以更完整、更少乱码者为准。
-                    if (
-                        otherOptionCount > bestOptionCount ||
-                        (
-                            otherOptionCount === bestOptionCount &&
-                            batchFinalGateBadCharCount(otherOptions.join('\n')) < batchFinalGateBadCharCount(bestOptions.join('\n')) &&
-                            batchFinalGateLatexSignalCount(otherOptions.join('\n')) >= batchFinalGateLatexSignalCount(bestOptions.join('\n'))
-                        )
-                    ) {
-                        merged.options = otherOptions;
-                    }
-
-                    merged.stem = batchFinalGateBetterText(best.stem, other.stem);
-                    merged.answer = batchFinalGateBetterText(best.answer, other.answer);
-                    merged.solution = batchFinalGateBetterText(best.solution, other.solution);
-
-                    merged.images = batchFinalGateMergeImages(best.images || [], other.images || []);
-                    merged.recognizedImages = batchFinalGateMergeImages(best.recognizedImages || [], other.recognizedImages || []);
-
-                    // 保留原图证据。
-                    if (!merged.sourcePageImage && other.sourcePageImage) merged.sourcePageImage = other.sourcePageImage;
-                    if (!merged.answerPageImage && other.answerPageImage) merged.answerPageImage = other.answerPageImage;
-                    if (!merged.solutionPageImage && other.solutionPageImage) merged.solutionPageImage = other.solutionPageImage;
-
-                    const bestTrace = best.sourceTrace || {};
-                    const otherTrace = other.sourceTrace || {};
-
-                    merged.sourceTrace = {
-                        ...bestTrace,
-                        sourcePageImage: bestTrace.sourcePageImage || otherTrace.sourcePageImage || other.sourcePageImage || '',
-                        rawBlock: bestTrace.rawBlock || otherTrace.rawBlock || other.rawBlock || other.rawText || '',
-                        pageText: bestTrace.pageText || otherTrace.pageText || other.pageText || other.sourceText || '',
-                        duplicateMergedFrom: [
-                            ...(Array.isArray(bestTrace.duplicateMergedFrom) ? bestTrace.duplicateMergedFrom : []),
-                            {
-                                id: other.id || '',
-                                questionNumber: other.questionNumber || other.question || other.order || '',
-                                source: otherTrace.source || other.recognitionSource || other.source || '',
-                                score: batchFinalGateQualityScore(other),
-                                badChars: batchFinalGateBadCharCount(batchFinalGateAllText(other)),
-                                optionCount: batchFinalGateOptionCount(other.options),
-                                stemHead: batchFinalGateText(other.stem || '').slice(0, 100)
-                            }
-                        ]
-                    };
-
-                    merged.warnings = [
-                        ...new Set([
-                            ...(best.warnings || []),
-                            ...(other.warnings || []),
-                            `检测到重复题号，系统已合并候选并保留质量更高版本。`
-                        ])
-                    ];
-
-                    return merged;
-                };
+                const batchFinalGatePolicy = Object.freeze({
+                    cleanRecognizedText: value => window.Qisi.Utils.cleanRecognizedText(value || ''),
+                    cleanDisplayOptionsForBatchSave: options =>
+                        window.Qisi.Utils.cleanDisplayOptionsForBatchSave(options || []),
+                    normalizeQuestionKey,
+                    mergeImageListsById
+                });
+                const batchFinalGateApi = window.Qisi.BatchFinalGate;
 
                 const batchFinalGateDedupeDrafts = (drafts = [], context = {}) => {
                     const stage = context.stage || 'unknown';
@@ -15558,36 +15265,43 @@ ${source}`;
                     for (const draft of drafts || []) {
                         if (!draft) continue;
 
-                        const qNo = batchFinalGateNormalizeQuestionNo(draft);
-                        const sourceKey = batchFinalGateOriginFileKey(draft);
+                        const identity = batchFinalGateApi.getCandidateIdentity(
+                            draft,
+                            batchFinalGatePolicy
+                        );
 
-                        if (!qNo) {
+                        if (!identity.questionNumber) {
                             noQuestion.push(draft);
                             continue;
                         }
 
-                        const key = `${sourceKey}::${qNo}`;
-
-                        if (!groups.has(key)) groups.set(key, []);
-                        groups.get(key).push(draft);
+                        if (!groups.has(identity.key)) groups.set(identity.key, []);
+                        groups.get(identity.key).push(draft);
                     }
 
                     const kept = [];
                     const removedIds = new Set();
                     const idMap = new Map();
 
-                    for (const [key, group] of groups.entries()) {
+                    for (const group of groups.values()) {
                         if (group.length === 1) {
                             kept.push(group[0]);
                             continue;
                         }
 
-                        const ranked = [...group].sort((a, b) => batchFinalGateQualityScore(b) - batchFinalGateQualityScore(a));
+                        const ranked = batchFinalGateApi.rankCandidates(
+                            group,
+                            batchFinalGatePolicy
+                        );
                         let best = ranked[0];
 
                         for (const other of ranked.slice(1)) {
                             const beforeBestId = best.id;
-                            best = batchFinalGateMergeCandidateIntoBest(best, other);
+                            best = batchFinalGateApi.mergeCandidate(
+                                best,
+                                other,
+                                batchFinalGatePolicy
+                            );
 
                             if (other.id) {
                                 removedIds.add(other.id);
@@ -15608,78 +15322,50 @@ ${source}`;
                     kept.push(...noQuestion);
 
                     kept.sort((a, b) => {
-                        const qa = Number(batchFinalGateNormalizeQuestionNo(a)) || Number.MAX_SAFE_INTEGER;
-                        const qb = Number(batchFinalGateNormalizeQuestionNo(b)) || Number.MAX_SAFE_INTEGER;
+                        const leftIdentity = batchFinalGateApi.getCandidateIdentity(
+                            a,
+                            batchFinalGatePolicy
+                        );
+                        const rightIdentity = batchFinalGateApi.getCandidateIdentity(
+                            b,
+                            batchFinalGatePolicy
+                        );
+                        const qa = Number(leftIdentity.questionNumber) || Number.MAX_SAFE_INTEGER;
+                        const qb = Number(rightIdentity.questionNumber) || Number.MAX_SAFE_INTEGER;
                         if (qa !== qb) return qa - qb;
-
-                        const sa = batchFinalGateOriginFileKey(a);
-                        const sb = batchFinalGateOriginFileKey(b);
-                        return sa.localeCompare(sb);
+                        return leftIdentity.sourceKey.localeCompare(rightIdentity.sourceKey);
                     });
 
                     kept.forEach((draft, idx) => {
-                        const qNo = batchFinalGateNormalizeQuestionNo(draft);
+                        const { questionNumber } = batchFinalGateApi.getCandidateIdentity(
+                            draft,
+                            batchFinalGatePolicy
+                        );
                         draft.order = idx + 1;
-                        draft.questionNumber = qNo || String(idx + 1);
+                        draft.questionNumber = questionNumber || String(idx + 1);
                         draft.updatedAt = Date.now();
                     });
 
                     console.groupCollapsed(`[BATCH_FINAL_GATE][${stage}]`);
                     console.log('before =', (drafts || []).length, 'after =', kept.length);
-                    console.table((drafts || []).map((d, idx) => ({
+                    console.table((drafts || []).map((draft, idx) => ({
                         idx,
-                        id: d.id,
-                        q: d.questionNumber || d.question || d.order,
-                        sourceKey: batchFinalGateOriginFileKey(d),
-                        source: d.sourceTrace?.source || d.recognitionSource || d.source || '',
-                        score: batchFinalGateQualityScore(d),
-                        optionCount: batchFinalGateOptionCount(d.options),
-                        badChars: batchFinalGateBadCharCount(batchFinalGateAllText(d)),
-                        latexSignals: batchFinalGateLatexSignalCount(batchFinalGateAllText(d)),
-                        stemHead: batchFinalGateText(d.stem || '').slice(0, 80)
+                        ...batchFinalGateApi.buildCandidateDiagnostics(
+                            draft,
+                            batchFinalGatePolicy
+                        )
                     })));
-                    console.table(kept.map((d, idx) => ({
-                        keptIdx: idx,
-                        id: d.id,
-                        q: d.questionNumber || d.question || d.order,
-                        sourceKey: batchFinalGateOriginFileKey(d),
-                        source: d.sourceTrace?.source || d.recognitionSource || d.source || '',
-                        score: batchFinalGateQualityScore(d),
-                        optionCount: batchFinalGateOptionCount(d.options),
-                        badChars: batchFinalGateBadCharCount(batchFinalGateAllText(d)),
-                        latexSignals: batchFinalGateLatexSignalCount(batchFinalGateAllText(d)),
-                        stemHead: batchFinalGateText(d.stem || '').slice(0, 80)
+                    console.table(kept.map((draft, keptIdx) => ({
+                        keptIdx,
+                        ...batchFinalGateApi.buildCandidateDiagnostics(
+                            draft,
+                            batchFinalGatePolicy
+                        )
                     })));
                     console.groupEnd();
 
                     return { drafts: kept, removedIds, idMap };
                 };
-
-                const batchFinalGateRebindDraftImages = (draftImages = [], gateResult = {}) => {
-                    const keptDraftIds = new Set((gateResult.drafts || []).map(d => d.id).filter(Boolean));
-                    const idMap = gateResult.idMap || new Map();
-
-                    const rows = [];
-
-                    for (const img of draftImages || []) {
-                        if (!img) continue;
-
-                        const next = { ...img };
-
-                        if (next.questionId && idMap.has(next.questionId)) {
-                            next.questionId = idMap.get(next.questionId);
-                        }
-
-                        if (next.questionId && !keptDraftIds.has(next.questionId)) {
-                            continue;
-                        }
-
-                        rows.push(next);
-                    }
-
-                    return rows;
-                };
-
                 const cleanDocxImporterTextForV2 = (text = '') => {
                     const raw = window.Qisi.Utils.cleanRecognizedText(text || '');
                     if (!raw) return '';
@@ -16480,7 +16166,7 @@ ${source}`;
                             files
                         });
                         drafts = batchGateResult.drafts;
-                        const finalDraftImages = batchFinalGateRebindDraftImages(draftImages, batchGateResult);
+                        const finalDraftImages = batchFinalGateApi.rebindDraftImages(draftImages, batchGateResult);
                         drafts = window.Qisi.ReviewDraftState.attachDraftImageTokensIntoContentForV2(drafts, finalDraftImages);
                         const unmatched = result.unmatched || [];
                         const problemCount = drafts.filter(q => draftQuestionProblems(q).length > 0).length;
@@ -19287,7 +18973,7 @@ ${source}`;
                         });
                         drafts = batchGateResult.drafts;
 
-                        const finalDraftImages = batchFinalGateRebindDraftImages(draftImages, batchGateResult);
+                        const finalDraftImages = batchFinalGateApi.rebindDraftImages(draftImages, batchGateResult);
                         drafts = window.Qisi.ReviewDraftState.attachDraftImageTokensIntoContentForV2(drafts, finalDraftImages);
 
                         console.groupCollapsed('[BATCH_IMAGE][figure-binding]');
@@ -20187,12 +19873,15 @@ ${source}`;
                         files: batchImportFiles.value || []
                     });
 
-                    const finalDraftImages = batchFinalGateRebindDraftImages(draftImages, gateResult);
+                    const finalDraftImages = batchFinalGateApi.rebindDraftImages(draftImages, gateResult);
                     const finalDrafts = gateResult.drafts;
 
                     const problemCount = finalDrafts.filter(q => {
                         const isChoice = q.type === '单选题' || q.type === '多选题';
-                        const optionCount = batchFinalGateOptionCount(q.options);
+                        const optionCount = batchFinalGateApi.countMeaningfulOptions(
+                            q.options,
+                            batchFinalGatePolicy
+                        );
                         return isChoice && optionCount < 4;
                     }).length;
 

@@ -39,6 +39,7 @@ const EXPECTED_LOCAL_SCRIPT_PATHS = [
     './qisi-docx-pipeline.js',
     './qisi-ui-events.js',
     './qisi-review-draft-state.js',
+    './qisi-batch-final-gate.js',
     './app.js'
 ];
 
