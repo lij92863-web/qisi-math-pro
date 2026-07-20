@@ -2,78 +2,64 @@
 
 ## Current stage
 
-T1 — UI and script-order behavior freeze
+R1 — Extract exam grouping policy
 
 ## Objective
 
-Turn the current production script order and safe top-level UI navigation into
-executable contracts before the first runtime refactor. This stage changes tests
-only; it must not change application behavior.
+Move only the pure exam grouping and group-summary policy from `app.js` into a
+browser/Node module without changing observable behavior.
 
-## Required reading
+## app.js boundary declaration
 
-- `AGENTS.md`
-- `ai/AGENT_CONSTITUTION.md`
-- `ai/MODULE_BOUNDARIES.md`
-- `ai/STABLE_CHAINS.md`
-- `ai/ACCEPTANCE_CRITERIA.md`
-- `ai/TESTING_GUIDE.md`
-- `ai/CODEX_WORKFLOW.md`
-- `ai/APP_JS_REFACTOR_MASTER_PLAN_R1.md`
-- `skills/testing-verification/SKILL.md`
-- `skills/git-stage-workflow/SKILL.md`
+- Why touch `app.js`: remove the two old pure definitions and replace them with module calls.
+- Exact regions: current `getExamGroupsForQuestions`, `groupSummaryText`, and their direct calls.
+- New business logic in `app.js`: none.
+- Expected scope: a small net line reduction; no unrelated formatting.
 
 ## Allowed files
 
 - `ai/CODEX_TASK.local.md`
+- `qisi-exam-grouping.js`
+- `app.js`
+- `main.html`
+- `package.json`
+- `tests/exam-grouping.test.js`
 - `tests/main-html-script-order.test.js`
-- `tests/app-ui-handler-contract.test.js`
-- `tests/app-ui-navigation-browser.test.js`
 
 ## Forbidden files
 
-- `app.js`
-- `main.html`
+- DOCX/PDF/AI/OCR modules
+- `qisi-db.js`
 - `app.css`
-- `qisi-*.js`
-- `scripts/`
-- `package.json`
-- `package-lock.json`
-- `.env`
-- `tmp/`
-- production data, backups, and user test materials
+- other tests or scripts
+- `package-lock.json`, `.env`, `tmp/`, data, backups, user materials
 
-## Required commands
+## Required tests
 
 ```powershell
-node --test tests/main-html-script-order.test.js tests/app-ui-handler-contract.test.js tests/app-ui-navigation-browser.test.js
+node --test tests/exam-grouping.test.js tests/main-html-script-order.test.js tests/app-ui-navigation-browser.test.js
+node --check qisi-exam-grouping.js
+node --check app.js
 npm.cmd run verify:batch-safety
 npm.cmd run verify:safe
-$env:QISI_ALLOWED_DIFF="ai/CODEX_TASK.local.md,tests/main-html-script-order.test.js,tests/app-ui-handler-contract.test.js,tests/app-ui-navigation-browser.test.js"
 npm.cmd run verify:diff-scope
 ```
 
 ## Acceptance criteria
 
-- Local script `src` values are parsed, unique, and ordered; `app.js` is last.
-- Route B remains absent and controlled-write remains before `app.js`.
-- Template click expressions are inventoried and unresolved simple setup handlers fail the test.
-- Playwright actually clicks every current top-level application view in an isolated browser context.
-- Page errors, error-level console messages, and AI/OCR requests are zero.
-- No runtime file changes.
-- Full safe and batch-safety gates pass.
-
-## Stop conditions
-
-Stop if a runtime file would be needed to make the behavior-freeze tests pass, an
-out-of-scope failure occurs, or any real AI/OCR request is attempted.
+- Existing output semantics are characterized, including current edge cases.
+- Module is pure, does not mutate inputs, and supports Node/browser exports.
+- `app.js` old definitions are removed and production callsites use the module.
+- New module loads exactly once before `app.js` and is included in syntax checks.
+- `app.js` has a net line reduction.
+- All gates pass with zero real AI/OCR calls.
 
 ## Commit
 
 ```bash
-git add ai/CODEX_TASK.local.md tests/main-html-script-order.test.js tests/app-ui-handler-contract.test.js tests/app-ui-navigation-browser.test.js
-git commit -m "stage T1 freeze UI and script contracts"
+git add ai/CODEX_TASK.local.md qisi-exam-grouping.js app.js main.html package.json tests/exam-grouping.test.js tests/main-html-script-order.test.js
+git commit -m "stage R1 extract exam grouping policy"
 ```
 
-After T1 is committed, the user's explicit continuation authorizes transition to
-the separately scoped R1 task; do not mix R1 production files into the T1 commit.
+The user's explicit continuous-refactor instruction authorizes transition to R2
+after this commit, subject to all hard stop conditions.
