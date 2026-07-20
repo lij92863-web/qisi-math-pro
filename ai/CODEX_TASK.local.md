@@ -1,29 +1,35 @@
-﻿# CODEX_TASK.local.md
+# CODEX_TASK.local.md
 
 ## Current stage
 
-C8A — Agent constitution and skills bootstrap
+C13A2 — Manual refactor master plan and behavior freeze design
 
 ## Objective
 
-Create the root `AGENTS.md`, `ai/*.md`, and `skills/*/SKILL.md` files that define the engineering workflow for this project.
+Audit the current production dependency graph and define a complete, staged,
+rollback-safe refactor plan before changing runtime behavior.
 
-This task is documentation/rules only.
+This stage is documentation and read-only verification only. It does not migrate
+production functions yet.
 
 ## Required reading
 
-- `AGENTS.md` if it already exists
-- `ai/AGENT_CONSTITUTION.md` if it already exists
-- `ai/MODULE_BOUNDARIES.md` if it already exists
-- `ai/STABLE_CHAINS.md` if it already exists
-- `ai/ACCEPTANCE_CRITERIA.md` if it already exists
-- `ai/TESTING_GUIDE.md` if it already exists
+- `AGENTS.md`
+- `ai/AGENT_CONSTITUTION.md`
+- `ai/MODULE_BOUNDARIES.md`
+- `ai/STABLE_CHAINS.md`
+- `ai/ACCEPTANCE_CRITERIA.md`
+- `ai/TESTING_GUIDE.md`
+- `ai/CODEX_WORKFLOW.md`
+- `skills/qisi-module-refactor/SKILL.md`
+- `skills/app-js-boundary/SKILL.md`
+- `skills/testing-verification/SKILL.md`
+- `skills/git-stage-workflow/SKILL.md`
 
 ## Allowed files
 
-- `AGENTS.md`
-- `ai/*.md`
-- `skills/*/SKILL.md`
+- `ai/CODEX_TASK.local.md`
+- `ai/APP_JS_REFACTOR_MASTER_PLAN_R1.md`
 
 ## Forbidden files
 
@@ -37,40 +43,44 @@ This task is documentation/rules only.
 - `package-lock.json`
 - `.env`
 - `tmp/`
-- any data or backup file
+- production data, backups, and user test materials
 
 ## Required commands
 
-```bash
+```powershell
 git status --short
-git branch --show-current
-git log --oneline -10
-npm run verify:safe
+git diff --check
+$env:QISI_ALLOWED_DIFF="ai/CODEX_TASK.local.md,ai/APP_JS_REFACTOR_MASTER_PLAN_R1.md"
+npm.cmd run verify:diff-scope
+npm.cmd run verify:batch-safety
+npm.cmd run verify:safe
 ```
 
 ## Acceptance criteria
 
-- All requested instruction files exist.
-- No business code changed.
-- `npm run verify:safe` passes.
-- Final report includes changed files, diff stat, test result, and commit hash if committed.
+- Current architecture facts are measured from the repository, not copied from an external audit.
+- The plan defines invariants, stage boundaries, allowed files, gates, rollback points, and stop conditions.
+- The first production migration candidate is explicitly named and justified.
+- No runtime or test file changes in this stage.
+- All required gates pass without real AI/OCR calls.
 
 ## Stop conditions
 
 Stop if:
 
-- working tree is dirty before starting
-- `verify:safe` fails
-- a forbidden file would need to be edited
-- any real AI/OCR call appears necessary
+- the working tree was dirty before the stage;
+- a runtime file would need to change while writing the plan;
+- a required safety gate fails;
+- any real AI/OCR call appears necessary.
 
 ## Commit
 
 If all checks pass:
 
 ```bash
-git add AGENTS.md ai skills
-git commit -m "stage C8A add agent constitution and skills"
+git add ai/CODEX_TASK.local.md ai/APP_JS_REFACTOR_MASTER_PLAN_R1.md
+git commit -m "stage C13A2 plan manual app refactor"
 ```
 
-After commit, stop.
+After this planning stage, stop. Production extraction begins only under the next
+explicit task stage.
