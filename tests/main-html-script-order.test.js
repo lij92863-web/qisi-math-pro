@@ -13,6 +13,7 @@ const EXPECTED_LOCAL_SCRIPT_PATHS = [
     './qisi-library-view-state.js',
     './qisi-entry-view-state.js',
     './qisi-knowledge-tree-state.js',
+    './qisi-exam-print-renderer.js',
     './qisi-runtime.js',
     './qisi-utils.js',
     './qisi-db.js',

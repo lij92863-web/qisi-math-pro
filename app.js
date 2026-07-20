@@ -22213,112 +22213,22 @@ ${source}`;
                     }));
                 };
 
-                const buildHeaderFields = () => {
-                    if (!examConfig.showHeaderFields) return '';
-                    const fields = ['班别', '姓名', '评分'];
-                    return `<div class="student-fields">${fields.map(label => `<span>${label}<i></i></span>`).join('')}</div>`;
-                };
+                const buildAnswerContent = (qs, forceNewPage = true) => (
+                    window.Qisi.ExamPrintRenderer.buildAnswerContent(qs, forceNewPage, { renderLatex: renderLatexForPrint })
+                );
 
-                const buildAnswerGrid = (count) => {
-                    if (!examConfig.showAnswerGrid) return '';
-                    const total = Math.max(1, Math.min(Number(examConfig.answerGridCount || count || 0), 20));
-                    const nums = Array.from({ length: total }, (_, idx) => idx + 1);
-                    const lineStart = Math.max(1, Number(examConfig.answerLineStart || total + 1));
-                    const lineCount = Math.max(0, Math.min(Number(examConfig.answerLineCount || 0), 10));
-                    const blanks = Array.from({ length: lineCount }, (_, idx) => lineStart + idx);
-                    return `<div class="answer-grid-wrap">
-                        <table class="answer-grid">
-                            <tr><th>题号</th>${nums.map(n => `<td>${n}</td>`).join('')}</tr>
-                            <tr><th>答案</th>${nums.map(() => '<td></td>').join('')}</tr>
-                        </table>
-                        <div class="answer-lines">${blanks.map(n => `<span>${n}.<i></i></span>`).join('')}</div>
-                    </div>`;
-                };
-
-                const buildNotice = () => {
-                    if (!examConfig.showNotice) return '';
-                    return '<div class="notice">注意事项：请将答案填写在指定位置，保持卷面整洁。</div>';
-                };
-
-                const buildAnswerContent = (qs, forceNewPage = true) => {
-                    let content = `<div class="answer-section ${forceNewPage ? 'new-page' : ''}"><h2>参考答案与解析</h2>`;
-                    qs.forEach((q, index) => {
-                        content += `<div class="answer-item"><b>${index + 1}.</b> ${q.answer ? renderLatexForPrint(q.answer, q.images || []) : '________'}`;
-                        if (q.solution) content += `<div class="answer-solution">${renderLatexForPrint(q.solution, q.images || [])}</div>`;
-                        content += `</div>`;
-                    });
-                    return content + `</div>`;
-                };
-
-                const buildPrintOptionsHtml = (q) => {
-                    if (!(q.type === '单选题' || q.type === '多选题')) {
-                        return '';
-                    }
-
-                    if (!Array.isArray(q.options) || !q.options.some(option => String(option || '').trim())) {
-                        return '';
-                    }
-
-                    const rows = q.options
-                        .map((option, index) => {
-                            if (!String(option || '').trim()) {
-                                return '';
-                            }
-
-                            return (
-                                '<div class="gaokao-option">' +
-                                    '<span class="option-label">' +
-                                        String.fromCharCode(65 + index) +
-                                        '.' +
-                                    '</span>' +
-                                    '<span class="option-content">' +
-                                        renderLatexForPrint(option, q.images || []) +
-                                    '</span>' +
-                                '</div>'
-                            );
-                        })
-                        .join('');
-
-                    const layoutApi = window.Qisi?.DocxLayout;
-                    const columns = Number(q.layout?.optionColumns) || (
-                        layoutApi?.resolveOptionColumns
-                            ? layoutApi.resolveOptionColumns({ options: q.options || [] })
-                            : 4
-                    );
-                    return `<div class="gaokao-options qisi-flow-options" style="--qisi-option-columns:${columns}">` + rows + '</div>';
-                };
-
-                const buildQuestionContent = (qs = cartQuestionsOrdered.value) => {
-                    const groups = getExamGroupsForQuestions(qs);
-                    let content = `<main><div class="header">
-                        <div class="title">${escapeHtml(examConfig.title || examTitle.value)}</div>
-                        ${examConfig.subtitle ? `<div class="subtitle">${escapeHtml(examConfig.subtitle)}</div>` : ''}
-                        ${examConfig.organizer ? `<div class="organizer">组卷人：${escapeHtml(examConfig.organizer)}</div>` : ''}
-                        ${buildHeaderFields()}
-                        ${buildAnswerGrid(qs.length)}
-                        ${buildNotice()}
-                    </div>`;
-
-                    let printIndex = 1;
-                    groups.forEach((group, groupIndex) => {
-                        const sectionNo = CHINESE_SECTION_NUMBERS[groupIndex] || String(groupIndex + 1);
-                        content += `<div class="group-title">${sectionNo}、${escapeHtml(groupSummaryText(group))}</div>`;
-                        group.items.forEach((q) => {
-                            const meta = examQuestionMeta[q.id] || {};
-                            const safeStem = renderLatexForPrint(q.stem, q.images || []);
-                            const optionsHtml = buildPrintOptionsHtml(q);
-
-                            content += `<div class="exam-question">
-                                <div class="question-row"><span class="q-index">${printIndex}.</span><div class="question-flow-body">${safeStem}${optionsHtml}</div></div>`;
-                            if (meta.note) content += `<div class="q-note">${escapeHtml(meta.note)}</div>`;
-                            if (examConfig.showAnswer && q.answer) content += `<div class="print-answer"><b>答案：</b>${renderLatexForPrint(q.answer, q.images || [])}</div>`;
-                            if (examConfig.showSolution && q.solution) content += `<div class="print-solution"><b>解析：</b>${renderLatexForPrint(q.solution, q.images || [])}</div>`;
-                            content += `</div>`;
-                            printIndex += 1;
-                        });
-                    });
-                    return content + `</main>`;
-                };
+                const buildQuestionContent = (qs = cartQuestionsOrdered.value) => (
+                    window.Qisi.ExamPrintRenderer.buildQuestionContent(qs, {
+                        config: examConfig,
+                        fallbackTitle: examTitle.value,
+                        questionMeta: examQuestionMeta,
+                        sectionNumbers: CHINESE_SECTION_NUMBERS,
+                        getGroups: getExamGroupsForQuestions,
+                        formatGroupSummary: groupSummaryText,
+                        renderLatex: renderLatexForPrint,
+                        resolveOptionColumns: window.Qisi?.DocxLayout?.resolveOptionColumns
+                    })
+                );
 
                 const openPrintWindow = (content, title = '试卷打印') => {
                     const printTemplate = window.Qisi?.A4ExamTemplate;
