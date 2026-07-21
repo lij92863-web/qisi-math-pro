@@ -1,12 +1,9 @@
 ﻿        const App = {
             components: { Icon, LatexPreview, KnowledgeTree, QuestionCard },
             setup() {
-                console.log('当前运行版本：batch-refactor-01-DOCX批量录题模块拆分');
                 const view = ref('entry'); 
                 const questions = ref([]);
                 const cart = ref([]);
-                const currentPage = ref(1);
-                const pageSize = 10;
                 const externalQuestions = ref([]);
                 const importBatches = ref([]);
                 const activeExternalBatchId = ref(null);
@@ -19,22 +16,8 @@
                 const importBankInput = ref(null);
                 const pendingImportPreview = ref(null);
                 const externalOnlyUnprocessed = ref(false);
-                const librarySearchInput = ref('');
-                const librarySearchKeyword = ref('');
-                const libraryFilters = reactive({ type: '', diff: '', grade: '', answerState: '', imageState: '' });
-                const coreFingerprintMap = ref(new Map());
-                const stemFingerprintMap = ref(new Map());
-                const examTitle = ref('高中数学期末模拟测试');
-                const exportMode = ref(safeStorage.get('qisi_export_mode', 'questions') || 'questions');
                 const selectedExamTemplate = ref(DEFAULT_PRESET_KEY);
-                const examConfig = reactive({ ...EXAM_LAYOUT_PRESETS[DEFAULT_PRESET_KEY].config });
-                const examQuestionMeta = reactive({});
-                const examGroupConfig = reactive({});
-                const draggingExamQuestionId = ref('');
-                const dragOverExamQuestionId = ref('');
-                const restoringExamConfig = ref(false);
                 const ocrLoading = ref(false);
-                const printBusy = ref(false);
                 const isDraggingImg = ref(false);
                 const isDraggingOcr = ref(false);
                 const isCartOpen = ref(false);
@@ -44,24 +27,45 @@
                 const draftFileXmlCache = new Map();
                 const draftFileRidImageUrlMapCache = new Map();
                 const draftFileRidImageMetaMapCache = new Map();
-                const batchImportMode = ref('list');
                 const batchImportBatches = ref([]);
                 const batchImportFiles = ref([]);
                 const batchDraftQuestions = ref([]);
                 const batchDraftImages = ref([]);
-                const batchImportFilter = ref('all');
-                const activeBatchId = ref('');
-                const activeDraftQuestionId = ref('');
-                const activeDraftTab = ref('stem');
                 const batchUploadInput = ref(null);
                 const isDraggingBatchFiles = ref(false);
-                const batchToast = ref('');
-                const unassignedImageModal = ref(false);
-                const imagePositionMenuId = ref('');
-                const activeDraftEditorBuffer = ref('');
-                const activeDraftEditorOriginal = ref('');
-                const activeDraftEditorQuestionId = ref('');
-                const activeDraftEditorTextarea = ref(null);
+                const {
+                    batchImportMode,
+                    batchImportFilter,
+                    activeBatchId,
+                    activeDraftQuestionId,
+                    activeDraftTab,
+                    batchToast,
+                    unassignedImageModal,
+                    imagePositionMenuId,
+                    activeDraftEditorBuffer,
+                    activeDraftEditorOriginal,
+                    activeDraftEditorQuestionId,
+                    activeDraftEditorTextarea,
+                    recentBatchImportBatches,
+                    activeBatch,
+                    activeDraftQuestion,
+                    activeDraftEditorDirty,
+                    activeDraftEditorPreview,
+                    filteredDraftQuestions,
+                    buildDraftEditorSource,
+                    toggleImagePositionMenu,
+                    discardActiveDraftEditorChanges
+                } = window.Qisi.ReviewComposable.useReview(
+                    { batchImportBatches, batchDraftQuestions },
+                    {
+                        ref,
+                        computed,
+                        ReviewDraftState: window.Qisi.ReviewDraftState,
+                        mergeStemWithOptions: (...args) => mergeStemWithOptions(...args),
+                        draftQuestionProblems: question => draftQuestionProblems(question),
+                        notify: message => showBatchToast(message)
+                    }
+                );
                 // Vue's `toRaw` only unwraps the outer proxy. Review records contain nested
                 // reactive image objects, which IndexedDB cannot structured-clone directly.
                 const reviewRecordForStorage = value =>
@@ -112,80 +116,189 @@
                     personalKnowledge: ''
                 });
                 
-                const entryForm = reactive({ grade: '高一', diff: '中等', type: '解答题', knowledge: '', knowledgeType: 'system', systemKnowledge: '', personalKnowledge: '', tags: '', stem: '', options: ['', '', '', ''], answer: '', solution: '', images: [] });
-                const entryTab = ref('stem');
-                const showEntryKnowledge = ref(false);
-                const showEntryPersonalKnowledge = ref(false);
-                const hoverL1 = ref(null);
                 const hoverPersonalL1 = ref(null);
+                const {
+                    entryForm,
+                    entryTab,
+                    showEntryKnowledge,
+                    showEntryPersonalKnowledge,
+                    hoverL1,
+                    entryPreviewStem,
+                    entryPreviewOptions,
+                    syncEntryLegacyKnowledge,
+                    selectKnowledge,
+                    changeEntryAlign,
+                    removeEntryImage,
+                    copyMainSnippet
+                } = window.Qisi.EntryComposable.useEntry(
+                    { ref, reactive, computed },
+                    {
+                        EntryViewState: window.Qisi.EntryViewState,
+                        splitQuestionForStorage,
+                        copyText,
+                        notify: message => alert(message)
+                    }
+                );
                 
                 const ocrDraftStore = reactive({ rawText: '' });
 
-                const templateOverrides = ref(safeStorage.json('qisi_template_overrides', {}) || {});
-                const latexTemplate = ref(DEFAULT_TEMPLATE);
-                const currentPresetKey = ref('');
-                const editTplName = ref('');
-                
                 const knowledgeTree = reactive(MATH_KNOWLEDGE_TREE);
-                const personalKnowledgeTree = ref([]);
-                const personalL1Name = ref('');
-                const personalL2Name = ref('');
-                const personalL3Name = ref('');
-                const selectedPersonalL1Id = ref('');
-                const selectedPersonalL2Id = ref('');
-                const cartPanelAvailable = computed(() => view.value === 'library' || view.value === 'exam');
-                const entryPreview = computed(() => window.Qisi.EntryViewState.buildEntryPreview(entryForm, { splitQuestionForStorage }));
-                const entryPreviewStem = computed(() => entryPreview.value.stem);
-                const entryPreviewOptions = computed(() => entryPreview.value.options);
-                
-                const activeKnowledge = ref(null);
-                const activeKnowledgeType = ref('system');
-                const libraryKnowledgeMode = ref('system');
-
-                const syncEntryLegacyKnowledge = () => {
-                    const projection = window.Qisi.EntryViewState.projectEntryKnowledge(entryForm);
-                    entryForm.knowledge = projection.knowledge;
-                    entryForm.knowledgeType = projection.knowledgeType;
-                    return projection;
-                };
-
-                const buildQuestionFingerprintMaps = (items) => {
-                    const maps = window.Qisi.LibraryViewState.buildQuestionFingerprintMaps(items, {
-                        coreFingerprint: questionCoreFingerprint,
-                        stemFingerprint: questionStemFingerprint
-                    });
-                    coreFingerprintMap.value = maps.coreMap;
-                    stemFingerprintMap.value = maps.stemMap;
-                };
-
-                const resetLibraryFilters = () => {
-                    librarySearchInput.value = '';
-                    librarySearchKeyword.value = '';
-                    Object.assign(libraryFilters, { type: '', diff: '', grade: '', answerState: '', imageState: '' });
-                    currentPage.value = 1;
-                };
-                
-                const knowledgeCounts = computed(() => window.Qisi.UiEvents.buildKnowledgeCounts(knowledgeTree, 'system', questions.value, getQuestionKnowledge));
-                const personalKnowledgeCounts = computed(() => window.Qisi.UiEvents.buildKnowledgeCounts(personalKnowledgeTree.value, 'personal', questions.value, getQuestionKnowledge));
-                const activeKnowledgeTree = computed(() => libraryKnowledgeMode.value === 'personal' ? personalKnowledgeTree.value : (libraryKnowledgeMode.value === 'external' ? [] : knowledgeTree));
-                const activeKnowledgeCounts = computed(() => libraryKnowledgeMode.value === 'personal' ? personalKnowledgeCounts.value : (libraryKnowledgeMode.value === 'external' ? {} : knowledgeCounts.value));
-
-                const filteredQuestions = computed(() => window.Qisi.LibraryViewState.filterLibraryQuestions(
-                    questions.value,
+                const {
+                    templateOverrides,
+                    latexTemplate,
+                    currentPresetKey,
+                    editTplName,
+                    personalKnowledgeTree,
+                    personalL1Name,
+                    personalL2Name,
+                    personalL3Name,
+                    selectedPersonalL1Id,
+                    selectedPersonalL2Id,
+                    personalTreeRows,
+                    getTemplateCard,
+                    allTemplateCards,
+                    selectTemplateCard,
+                    selectPresetTemplate,
+                    handleCodeInput,
+                    updateExistingCustomTemplate,
+                    togglePersonalExpanded,
+                    addPersonalChild,
+                    deletePersonalRow,
+                    createPersonalL1,
+                    createPersonalL2,
+                    createPersonalL3,
+                    renamePersonalNode,
+                    deletePersonalNode
+                } = window.Qisi.SettingsComposable.useSettings(
                     {
-                        activeKnowledge: activeKnowledge.value,
-                        knowledgeType: activeKnowledgeType.value,
-                        knowledgeTree: activeKnowledgeType.value === 'personal'
-                            ? personalKnowledgeTree.value
-                            : knowledgeTree,
-                        findNode: window.Qisi.Utils.findNode,
+                        hoverPersonalL1,
+                        selectedExamTemplate,
+                        templateOverrides: safeStorage.json('qisi_template_overrides', {}) || {},
+                        personalKnowledgeTree: []
+                    },
+                    {
+                        ref,
+                        computed,
+                        DEFAULT_TEMPLATE,
+                        PRESET_TEMPLATES,
+                        EXAM_LAYOUT_PRESETS,
+                        KnowledgeTreeState: window.Qisi.KnowledgeTreeState,
+                        ensureImagePackagesForLatex: (...args) => ensureImagePackagesForLatex(...args),
+                        validateStrictLatex: code => window.Qisi.A4ExamTemplate.validateStrictLatex(code),
+                        persistPersonalTree: (nodes, updatedAt) => db.personalKnowledge.put({
+                            id: 'tree',
+                            nodes: toRaw(nodes),
+                            updatedAt
+                        }),
+                        persistTemplateOverrides: overrides => safeStorage.set(
+                            'qisi_template_overrides',
+                            JSON.stringify(toRaw(overrides))
+                        ),
+                        now: () => Date.now(),
+                        createId: prefix => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                        requestText: (label, initialValue) => prompt(label, initialValue),
+                        confirmAction: message => confirm(message),
+                        notify: message => alert(message)
+                    }
+                );
+                const {
+                    currentPage,
+                    pageSize,
+                    librarySearchInput,
+                    librarySearchKeyword,
+                    libraryFilters,
+                    coreFingerprintMap,
+                    stemFingerprintMap,
+                    activeKnowledge,
+                    activeKnowledgeType,
+                    libraryKnowledgeMode,
+                    filteredQuestions,
+                    totalPages,
+                    paginatedQuestions,
+                    knowledgeCounts,
+                    personalKnowledgeCounts,
+                    activeKnowledgeTree,
+                    activeKnowledgeCounts,
+                    buildQuestionFingerprintMaps,
+                    resetLibraryFilters,
+                    switchLibraryKnowledgeMode,
+                    handleKnowledgeSelect
+                } = window.Qisi.LibraryComposable.useLibrary(
+                    {
+                        questions,
+                        knowledgeTree,
+                        personalKnowledgeTree,
+                        activeExternalBatchId,
+                        externalPickMode,
+                        selectedExternalIds
+                    },
+                    {
+                        ref,
+                        reactive,
+                        computed,
+                        LibraryViewState: window.Qisi.LibraryViewState,
+                        UiEvents: window.Qisi.UiEvents,
+                        Utils: window.Qisi.Utils,
                         getQuestionKnowledge,
-                        questionMatchesLibraryFilters: window.Qisi.Utils.questionMatchesLibraryFilters,
-                        keyword: librarySearchKeyword.value,
-                        filters: libraryFilters,
+                        questionCoreFingerprint,
+                        questionStemFingerprint,
                         hasText
                     }
-                ));
+                );
+                const {
+                    examTitle,
+                    exportMode,
+                    examConfig,
+                    examQuestionMeta,
+                    examGroupConfig,
+                    draggingExamQuestionId,
+                    dragOverExamQuestionId,
+                    restoringExamConfig,
+                    printBusy,
+                    cartQuestionsOrdered,
+                    examPresets,
+                    selectedExamPreset,
+                    activeExamGroups,
+                    templateFeatureOptions,
+                    getExamGroupsForQuestions,
+                    groupSummaryText,
+                    getGroupCfg,
+                    syncExamMeta,
+                    syncExamGroups,
+                    openExamBuilder,
+                    toggleCart,
+                    reorderQuestionWithinType,
+                    moveCartQuestion,
+                    examDisplayIndex,
+                    dropExamQuestion,
+                    resetExamOrder,
+                    clearCart
+                } = window.Qisi.ExamComposable.useExam(
+                    {
+                        questions,
+                        cart,
+                        view,
+                        isCartOpen,
+                        selectedExamTemplate,
+                        templateOverrides,
+                        initialExamTitle: '高中数学期末模拟测试',
+                        initialExportMode: safeStorage.get('qisi_export_mode', 'questions') || 'questions'
+                    },
+                    {
+                        ref,
+                        reactive,
+                        computed,
+                        PRESET_TEMPLATES,
+                        EXAM_LAYOUT_PRESETS,
+                        DEFAULT_PRESET_KEY,
+                        DEFAULT_GROUP_CONFIG,
+                        QUESTION_TYPE_LABELS,
+                        EXAM_TYPE_ORDER,
+                        ExamGrouping: window.Qisi.ExamGrouping,
+                        confirmAction: message => confirm(message)
+                    }
+                );
+                const cartPanelAvailable = computed(() => view.value === 'library' || view.value === 'exam');
 
                 const flattenKnowledgeTree = window.Qisi.LibraryViewState.flattenKnowledgeTree;
 
@@ -520,9 +633,6 @@
                     applyLocal(batchImportBatches.value.find(batch => batch.id === batchId));
                 };
 
-                const recentBatchImportBatches = computed(() => [...batchImportBatches.value].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 12));
-                const activeBatch = computed(() => batchImportBatches.value.find(batch => batch.id === activeBatchId.value) || null);
-                const activeDraftQuestion = computed(() => batchDraftQuestions.value.find(question => question.id === activeDraftQuestionId.value) || batchDraftQuestions.value[0] || null);
                 const isValidQuestionPreviewImage = (img) => {
                     if (!img?.url) return false;
                     if (img.displayable === false) return false;
@@ -651,17 +761,6 @@
                             .filter(image => image.url)
                     );
                 });
-                const toggleImagePositionMenu = (imageId = '') => {
-                    const id = String(imageId || '').trim();
-
-                    if (!id) {
-                        imagePositionMenuId.value = '';
-                        return;
-                    }
-
-                    imagePositionMenuId.value =
-                        imagePositionMenuId.value === id ? '' : id;
-                };
                 const setDraftImagePosition = async (image, position) => {
                     try {
                         const q = activeDraftQuestion.value;
@@ -716,33 +815,6 @@
                         showBatchToast(`图片位置保存失败：${error?.message || String(error)}`);
                     }
                 };
-                const activeDraftEditorDirty = computed(() =>
-                    activeDraftEditorBuffer.value !== activeDraftEditorOriginal.value
-                );
-
-                const buildDraftEditorSource = (q) => {
-                    if (!q) return '';
-
-                    if (typeof q.editorSource === 'string' && q.editorSource.length > 0) {
-                        return window.Qisi.ReviewDraftState.normalizeDraftEditorNewlines(q.editorSource);
-                    }
-
-                    return window.Qisi.ReviewDraftState.normalizeDraftEditorNewlines(
-                        mergeStemWithOptions(
-                            q.stem || '',
-                            q.options || ['', '', '', ''],
-                            q.type || '解答题'
-                        )
-                    );
-                };
-
-                const activeDraftEditorPreview = computed(() =>
-                    window.Qisi.ReviewDraftState.buildDraftEditorProjection(
-                        activeDraftEditorBuffer.value,
-                        activeDraftQuestion.value
-                    )
-                );
-
                 const insertDraftEditorText = async (text = '') => {
                     const textarea = activeDraftEditorTextarea.value;
                     const insertion = String(text || '');
@@ -768,11 +840,6 @@
                     textarea.setSelectionRange(cursor, cursor);
                 };
 
-                const discardActiveDraftEditorChanges = () => {
-                    activeDraftEditorBuffer.value = activeDraftEditorOriginal.value;
-                    showBatchToast('已放弃未保存修改。');
-                };
-
                 watch(
                     () => activeDraftQuestion.value?.id || '',
                     () => {
@@ -793,14 +860,6 @@
                     )
                 ));
                 const unassignedDraftImages = computed(() => batchDraftImages.value.filter(image => !image.questionId && image.status === 'unassigned'));
-                const filteredDraftQuestions = computed(() => (
-                    window.Qisi.ReviewDraftState.filterDraftQuestions(
-                        batchDraftQuestions.value,
-                        batchImportFilter.value,
-                        draftQuestionProblems
-                    )
-                ));
-
                 const defaultMetaForStorage = () => ({
                     ...toRaw(batchDefaultMeta),
                     tags: String(batchDefaultMeta.tags || '').split(',').map(tag => tag.trim()).filter(Boolean)
@@ -20043,86 +20102,6 @@ ${source}`;
                     ? confirmItems.value
                     : confirmItems.value.filter(item => item.status === confirmStatusFilter.value));
 
-                const cartQuestionsOrdered = computed(() => cart.value
-                    .map(id => questions.value.find(q => q && q.id === id))
-                    .filter(Boolean));
-
-                const getTemplateCard = (id, tpl) => {
-                    const override = templateOverrides.value[id] || {};
-                    return { id, name: override.name || tpl.name, desc: tpl.desc, code: override.code || tpl.code, system: true };
-                };
-
-                const allTemplateCards = computed(() => Object.entries(PRESET_TEMPLATES)
-                    .map(([id, tpl]) => getTemplateCard(id, tpl)));
-
-                const examPresets = computed(() => Object.fromEntries(
-                    Object.entries(EXAM_LAYOUT_PRESETS).map(([id, preset]) => {
-                        const override = templateOverrides.value[id] || {};
-                        return [id, { ...preset, name: override.name || preset.name, desc: PRESET_TEMPLATES[id]?.desc || preset.desc }];
-                    })
-                ));
-
-                const selectedExamPreset = computed(() => examPresets.value[selectedExamTemplate.value] || examPresets.value[DEFAULT_PRESET_KEY]);
-
-                const getExamGroupsForQuestions = (sourceQuestions) => window.Qisi.ExamGrouping.buildExamGroups(
-                    sourceQuestions,
-                    {
-                        typeOrder: EXAM_TYPE_ORDER,
-                        groupConfig: examGroupConfig,
-                        defaultGroupConfig: DEFAULT_GROUP_CONFIG,
-                        typeLabels: QUESTION_TYPE_LABELS,
-                        questionMeta: examQuestionMeta
-                    }
-                );
-
-                const activeExamGroups = computed(() => getExamGroupsForQuestions(cartQuestionsOrdered.value));
-
-                const templateFeatureOptions = computed(() => {
-                    return [
-                        { key: 'showHeaderFields', label: '显示班级 / 姓名 / 评分' },
-                        { key: 'showAnswerGrid', label: '显示晚测答题表' }
-                    ];
-                });
-
-                const getGroupCfg = (type) => {
-                    if (!examGroupConfig[type]) {
-                        examGroupConfig[type] = { ...(DEFAULT_GROUP_CONFIG[type] || { title: QUESTION_TYPE_LABELS[type] || type || '其他题型', points: 0 }) };
-                    }
-                    return examGroupConfig[type];
-                };
-
-                const syncExamMeta = () => {
-                    cartQuestionsOrdered.value.forEach((q, idx) => {
-                        const groupCfg = getGroupCfg(q.type);
-                        if (!examQuestionMeta[q.id]) {
-                            examQuestionMeta[q.id] = {
-                                name: q.type || `第 ${idx + 1} 题`,
-                                points: Number(groupCfg.points || 0),
-                                source: q.knowledge || q.meta?.knowledge || '',
-                                note: ''
-                            };
-                        } else if (!examQuestionMeta[q.id].points) {
-                            examQuestionMeta[q.id].points = Number(groupCfg.points || 0);
-                        }
-                    });
-                };
-
-                const syncExamGroups = () => {
-                    activeExamGroups.value.forEach(group => {
-                        const cfg = getGroupCfg(group.type);
-                        if (!cfg.text) cfg.text = groupSummaryText(group);
-                    });
-                    syncExamMeta();
-                };
-
-                const openExamBuilder = () => {
-                    syncExamGroups();
-                    view.value = 'exam';
-                    isCartOpen.value = false;
-                };
-
-                const groupSummaryText = window.Qisi.ExamGrouping.formatExamGroupSummary;
-
                 watch(cartQuestionsOrdered, () => {
                     syncExamMeta();
                 }, { deep: true });
@@ -20163,34 +20142,6 @@ ${source}`;
                 watch(externalOnlyUnprocessed, () => {
                     currentPage.value = 1;
                 });
-
-                const switchLibraryKnowledgeMode = (mode) => {
-                    libraryKnowledgeMode.value = mode;
-                    activeKnowledgeType.value = mode;
-                    activeKnowledge.value = null;
-                    currentPage.value = 1;
-                    if (mode !== 'external') {
-                        activeExternalBatchId.value = null;
-                        externalPickMode.value = false;
-                        selectedExternalIds.value = [];
-                    }
-                };
-
-                const handleKnowledgeSelect = (payload) => {
-                    const name = typeof payload === 'object' ? payload.name : payload;
-                    const type = typeof payload === 'object' ? payload.type : libraryKnowledgeMode.value;
-                    activeKnowledge.value = name;
-                    activeKnowledgeType.value = type || libraryKnowledgeMode.value;
-                    currentPage.value = 1;
-                };
-
-                const selectKnowledge = (name, type = 'system') => {
-                    if (type === 'personal') entryForm.personalKnowledge = name || '';
-                    else entryForm.systemKnowledge = name || '';
-                    syncEntryLegacyKnowledge();
-                    showEntryKnowledge.value = false;
-                    showEntryPersonalKnowledge.value = false;
-                };
 
                 const attachQuestionImageUrls = async (items) => {
                     for (const q of items || []) {
@@ -21224,58 +21175,6 @@ ${source}`;
                     }
                 };
 
-                const toggleCart = (id) => { 
-                    if (cart.value.includes(id)) cart.value = cart.value.filter(i => i !== id); 
-                    else {
-                        cart.value.push(id);
-                        syncExamMeta();
-                    }
-                };
-                const moveCartQuestion = (id, dir) => {
-                    const q = questions.value.find(item => item?.id === id);
-                    if (!q) return;
-                    const type = q.type || '其他题型';
-                    const typeIds = cart.value.filter(cartId => {
-                        const item = questions.value.find(question => question?.id === cartId);
-                        return item && (item.type || '其他题型') === type;
-                    });
-                    const idx = typeIds.indexOf(id);
-                    const next = idx + dir;
-                    if (idx < 0 || next < 0 || next >= typeIds.length) return;
-                    reorderQuestionWithinType(id, next);
-                };
-                const examDisplayIndex = (id) => {
-                    let index = 1;
-                    for (const group of activeExamGroups.value) {
-                        for (const item of group.items) {
-                            if (item.id === id) return index;
-                            index += 1;
-                        }
-                    }
-                    return index;
-                };
-
-                const reorderQuestionWithinType = (sourceId, targetIndex) => {
-                    const sourceQ = questions.value.find(q => q?.id === sourceId);
-                    if (!sourceQ) return false;
-                    const type = sourceQ.type || '其他题型';
-                    const typeIds = cart.value.filter(id => {
-                        const q = questions.value.find(item => item?.id === id);
-                        return q && (q.type || '其他题型') === type;
-                    });
-                    const currentIndex = typeIds.indexOf(sourceId);
-                    const withoutSource = typeIds.filter(id => id !== sourceId);
-                    const nextIndex = Math.max(0, Math.min(targetIndex, withoutSource.length));
-                    if (currentIndex === nextIndex) return false;
-                    withoutSource.splice(nextIndex, 0, sourceId);
-                    const queue = [...withoutSource];
-                    cart.value = cart.value.map(id => {
-                        const q = questions.value.find(item => item?.id === id);
-                        return q && (q.type || '其他题型') === type ? queue.shift() : id;
-                    });
-                    return true;
-                };
-
                 let examDragCleanup = null;
                 const startExamPointerDrag = (id, e) => {
                     if (e?.button !== undefined && e.button !== 0) return;
@@ -21441,23 +21340,6 @@ ${source}`;
                     document.addEventListener('pointerup', onEnd);
                     document.addEventListener('pointercancel', onEnd);
                 };
-                const dropExamQuestion = (targetId) => {
-                    const sourceId = draggingExamQuestionId.value;
-                    draggingExamQuestionId.value = '';
-                    dragOverExamQuestionId.value = '';
-                    if (!sourceId || sourceId === targetId) return;
-                    const sourceQ = questions.value.find(q => q.id === sourceId);
-                    const targetQ = questions.value.find(q => q.id === targetId);
-                    if (!sourceQ || !targetQ || sourceQ.type !== targetQ.type) return;
-                    const typeIds = cart.value.filter(id => {
-                        const q = questions.value.find(item => item?.id === id);
-                        return q && q.type === sourceQ.type;
-                    });
-                    const targetIndex = typeIds.filter(id => id !== sourceId).indexOf(targetId);
-                    if (targetIndex >= 0) reorderQuestionWithinType(sourceId, targetIndex);
-                };
-                const resetExamOrder = () => { cart.value = [...cart.value].sort((a, b) => String(a).localeCompare(String(b))); };
-                const clearCart = () => { if (confirm("确定清空试卷篮吗？")) cart.value = []; };
                 const deleteQuestion = async (id) => { await db.questions.delete(id); await loadData(); cart.value = cart.value.filter(i => i !== id); };
                 
                 const saveEditedQuestion = async (id, stem, imgs, g, t, d, ans, sol, tagsStr, opts, knowledge, systemKnowledgeArg = '', personalKnowledgeArg = '') => {
@@ -21833,127 +21715,6 @@ ${source}`;
                     printExam();
                 };
 
-                const selectTemplateCard = (tpl) => {
-                    currentPresetKey.value = tpl.id;
-                    editTplName.value = tpl.name;
-                    latexTemplate.value = tpl.code;
-                    if (tpl.system && EXAM_LAYOUT_PRESETS[tpl.id]) selectedExamTemplate.value = tpl.id;
-                };
-                const selectPresetTemplate = (key) => selectTemplateCard(getTemplateCard(key, PRESET_TEMPLATES[key]));
-                const handleCodeInput = (e) => { latexTemplate.value = e.target.value; };
-
-                const updateExistingCustomTemplate = async () => {
-                    if (!PRESET_TEMPLATES[currentPresetKey.value]) return;
-                    const nextCode = ensureImagePackagesForLatex(latexTemplate.value);
-                    const validation = window.Qisi.A4ExamTemplate.validateStrictLatex(nextCode);
-                    if (!validation.ok) {
-                        alert(`模板未保存：\n${validation.issues.join('\n')}`);
-                        return;
-                    }
-                    templateOverrides.value = {
-                        ...templateOverrides.value,
-                        [currentPresetKey.value]: { name: editTplName.value, code: nextCode, updatedAt: Date.now() }
-                    };
-                    latexTemplate.value = templateOverrides.value[currentPresetKey.value].code;
-                    safeStorage.set('qisi_template_overrides', JSON.stringify(toRaw(templateOverrides.value)));
-                    alert('A4 模板已更新');
-                };
-
-                const savePersonalKnowledge = async () => {
-                    await db.personalKnowledge.put({ id: 'tree', nodes: toRaw(personalKnowledgeTree.value), updatedAt: Date.now() });
-                };
-
-                const personalTreeState = window.Qisi.KnowledgeTreeState;
-                const replacePersonalKnowledgeTree = (nextTree) => {
-                    const previousHover = hoverPersonalL1.value;
-                    personalKnowledgeTree.value = nextTree;
-                    if (previousHover?.id) {
-                        hoverPersonalL1.value = personalTreeState.findPersonalNodeById(nextTree, previousHover.id) || previousHover;
-                    }
-                };
-
-                const personalTreeRows = computed(() => personalTreeState.buildPersonalTreeRows(personalKnowledgeTree.value));
-
-                const togglePersonalExpanded = async (node) => {
-                    replacePersonalKnowledgeTree(personalTreeState.togglePersonalNodeExpanded(personalKnowledgeTree.value, node));
-                    await savePersonalKnowledge();
-                };
-
-                const addPersonalChild = async (row) => {
-                    const label = row.level === 1 ? '二级方向名称' : '三级知识点名称';
-                    const name = prompt(label, '');
-                    if (!name || !name.trim()) return;
-                    const child = { id: `pk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name: name.trim(), children: row.level === 1 ? [] : undefined, expanded: true };
-                    replacePersonalKnowledgeTree(personalTreeState.appendPersonalNode(personalKnowledgeTree.value, row.node, child));
-                    if (row.level === 1) {
-                        selectedPersonalL1Id.value = row.node.id;
-                        selectedPersonalL2Id.value = child.id;
-                    } else {
-                        selectedPersonalL1Id.value = row.grandParent?.id || '';
-                        selectedPersonalL2Id.value = row.node.id;
-                    }
-                    await savePersonalKnowledge();
-                };
-
-                const deletePersonalRow = (row) => {
-                    const parentId = row.level === 1 ? '' : row.parent?.id || '';
-                    deletePersonalNode(row.level, row.node.id, parentId);
-                };
-
-                const createPersonalL1 = async () => {
-                    const name = personalL1Name.value.trim();
-                    if (!name) return;
-                    const node = { id: `pk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name, children: [], expanded: true };
-                    replacePersonalKnowledgeTree(personalTreeState.appendPersonalNode(personalKnowledgeTree.value, null, node));
-                    selectedPersonalL1Id.value = node.id;
-                    selectedPersonalL2Id.value = '';
-                    personalL1Name.value = '';
-                    await savePersonalKnowledge();
-                };
-
-                const createPersonalL2 = async () => {
-                    const parent = personalKnowledgeTree.value.find(n => n.id === selectedPersonalL1Id.value);
-                    const name = personalL2Name.value.trim();
-                    if (!parent || !name) return;
-                    const node = { id: `pk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name, children: [], expanded: true };
-                    replacePersonalKnowledgeTree(personalTreeState.appendPersonalNode(personalKnowledgeTree.value, parent, node));
-                    selectedPersonalL2Id.value = node.id;
-                    personalL2Name.value = '';
-                    await savePersonalKnowledge();
-                };
-
-                const createPersonalL3 = async () => {
-                    const l1 = personalKnowledgeTree.value.find(n => n.id === selectedPersonalL1Id.value);
-                    const parent = l1?.children?.find(n => n.id === selectedPersonalL2Id.value);
-                    const name = personalL3Name.value.trim();
-                    if (!parent || !name) return;
-                    const node = { id: `pk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name };
-                    replacePersonalKnowledgeTree(personalTreeState.appendPersonalNode(personalKnowledgeTree.value, parent, node));
-                    personalL3Name.value = '';
-                    await savePersonalKnowledge();
-                };
-
-                const renamePersonalNode = async (node) => {
-                    const name = prompt('新的知识点名称', node.name);
-                    if (!name || !name.trim()) return;
-                    replacePersonalKnowledgeTree(personalTreeState.renamePersonalNode(personalKnowledgeTree.value, node, name.trim()));
-                    await savePersonalKnowledge();
-                };
-
-                const deletePersonalNode = async (level, id, parentId = '') => {
-                    if (!confirm('确定删除这个知识点及其下级吗？')) return;
-                    replacePersonalKnowledgeTree(personalTreeState.deletePersonalNode(personalKnowledgeTree.value, level, id, parentId));
-                    if (level === 1) {
-                        if (selectedPersonalL1Id.value === id) {
-                            selectedPersonalL1Id.value = '';
-                            selectedPersonalL2Id.value = '';
-                        }
-                    } else if (level === 2) {
-                        if (selectedPersonalL2Id.value === id) selectedPersonalL2Id.value = '';
-                    }
-                    await savePersonalKnowledge();
-                };
-
                 if (typeof window !== 'undefined') {
                     Object.assign(window, {
                         cleanDisplayTextForBatchSave,
@@ -21968,9 +21729,7 @@ ${source}`;
 
 
                 return {
-                    view, questions, filteredQuestions, cart, currentPage, 
-                    totalPages: computed(() => Math.ceil(filteredQuestions.value.length/pageSize)||1),
-                    paginatedQuestions: computed(() => filteredQuestions.value.slice((currentPage.value-1)*pageSize, currentPage.value*pageSize)),
+                    view, questions, filteredQuestions, cart, currentPage, totalPages, paginatedQuestions,
                     externalQuestions, importBatches, externalTeacherGroups, failedImportBatches, activeExternalBatchId, filteredExternalQuestions, paginatedExternalQuestions, externalTotalPages,
                     externalPickMode, selectedExternalIds, toggleExternalPick, clearExternalSelection, selectAllExternalOnPage, openExternalConfirmPage, externalOnlyUnprocessed,
                     confirmItems, filteredConfirmItems, confirmStatusFilter, confirmStatusOptions, confirmStatusCount, batchPersonalKnowledge, batchSystemKnowledge, flatSystemKnowledge, flatPersonalKnowledge, flatKnowledge, applyBatchKnowledge, confirmAddExternalToPersonal,
@@ -22003,35 +21762,7 @@ ${source}`;
                         entryForm[f] += (entryForm[f] ? '\n\n' : '') + selected; 
                     },
                     selectPresetTemplate, selectTemplateCard, handleCodeInput, updateExistingCustomTemplate,
-                    changeEntryAlign: (id, align) => {
-                        const img = entryForm.images.find(i => i.id === id); if(img) img.align = align;
-                        const escapedId = String(id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                        const tokenSource = `\\[\\[(?:IMAGE|FORMULA_IMAGE):${escapedId}\\]\\]`;
-                        const includeSource = `\\\\includegraphics(?:\\[[^\\]]*\\])?\\{${escapedId}\\}`;
-                        const r = new RegExp(`(?:\\\\begin\\{(?:center|flushleft|flushright)\\}\\s*)?(?:${tokenSource}|${includeSource})(?:\\s*\\\\end\\{(?:center|flushleft|flushright)\\})?`, 'g');
-                        const rep = `\\begin{${align}}[[IMAGE:${id}]]\\end{${align}}`;
-                        entryForm.stem = entryForm.stem.replace(r, rep); entryForm.answer = entryForm.answer.replace(r, rep); entryForm.solution = entryForm.solution.replace(r, rep);
-                    },
-                    removeEntryImage: (id) => {
-                        entryForm.images = entryForm.images.filter(i => i.id !== id);
-                        const escapedId = String(id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                        const tokenSource = `\\[\\[(?:IMAGE|FORMULA_IMAGE):${escapedId}\\]\\]`;
-                        const includeSource = `\\\\includegraphics(?:\\[[^\\]]*\\])?\\{${escapedId}\\}`;
-                        const block = new RegExp(`\\n?\\\\begin\\{(?:wrapfigure|center|flushleft|flushright)\\}[\\s\\S]*?(?:${tokenSource}|${includeSource})[\\s\\S]*?\\\\end\\{(?:wrapfigure|center|flushleft|flushright)\\}`, 'g');
-                        const inline = new RegExp(`\\n?(?:${tokenSource}|${includeSource})`, 'g');
-                        const clean = value => String(value || '').replace(block, '').replace(inline, '').replace(/\n{3,}/g, '\n\n').trim();
-                        entryForm.stem = clean(entryForm.stem);
-                        entryForm.answer = clean(entryForm.answer);
-                        entryForm.solution = clean(entryForm.solution);
-                    },
-                    selectKnowledge,
-                    copyMainSnippet: async (id) => {
-                        const img = entryForm.images.find(i => i.id === id);
-                        const align = img && img.align ? img.align : 'center';
-                        const snippet = `\\begin{${align}}[[IMAGE:${id}]]\\end{${align}}`;
-                        const ok = await copyText(snippet);
-                        alert(ok ? "LaTeX 短码已复制！配图选行内浮动时，请将短码置于文字内部！" : "复制失败，请手动复制短码。");
-                    }
+                    changeEntryAlign, removeEntryImage, selectKnowledge, copyMainSnippet
                 };
             },
             template: '#app-tpl'
@@ -22068,15 +21799,16 @@ ${source}`;
 
                 app.mount('#app');
 
-                console.log('[QISI_RUNTIME][booted]', {
-                    build: 'foundation-01'
-                });
-
                 return app;
             },
             {
                 requiredModules: [
-                    'Backup'
+                    'Backup',
+                    'SettingsComposable',
+                    'EntryComposable',
+                    'LibraryComposable',
+                    'ExamComposable',
+                    'ReviewComposable'
                 ]
             }
         );

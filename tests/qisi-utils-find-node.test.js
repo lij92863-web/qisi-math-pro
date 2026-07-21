@@ -84,11 +84,13 @@ describe('findNode', () => {
         assert.equal(findNode(tree, '不存在'), null);
     });
 
-    it('app.js injects the Qisi Utils helper into the library selector', () => {
+    it('app.js injects Qisi Utils into the library composable selector boundary', () => {
         const rootDir = path.join(__dirname, '..');
         const app = fs.readFileSync(path.join(rootDir, 'app.js'), 'utf8');
+        const libraryComposable = fs.readFileSync(path.join(rootDir, 'qisi-library-composable.js'), 'utf8');
         const libraryState = fs.readFileSync(path.join(rootDir, 'qisi-library-view-state.js'), 'utf8');
-        assert.match(app, /findNode:\s*window\.Qisi\.Utils\.findNode/);
+        assert.match(app, /Utils:\s*window\.Qisi\.Utils/);
+        assert.match(libraryComposable, /findNode:\s*requireModuleFunction\(dependencies,\s*['"]Utils['"],\s*['"]findNode['"]\)/);
         assert.match(libraryState, /const\s+targetNode\s*=\s*findNode\(knowledgeTree,\s*activeKnowledge\)/);
         assert.doesNotMatch(app, /const\s+findNode\s*=/);
     });

@@ -106,8 +106,9 @@ test('BM-AUTO verify: SCAFFOLD_ONLY — app.js unchanged + new module added', ()
     // Use a temp file without window.Qisi.Utils references to test SCAFFOLD_ONLY
     const { classify } = require(verifyPath);
     const appContent = fs.readFileSync(path.join(rootDir, 'app.js'), 'utf8');
-    // Remove all window.Qisi.Utils references to simulate an app that doesn't call the module
-    const stripped = appContent.replace(/window\.Qisi\.Utils\./g, '');
+    // Remove every Qisi.Utils reference, including whole-module dependency injection,
+    // to simulate an app that does not call the module.
+    const stripped = appContent.replace(/window\.Qisi\.Utils(?:\.[A-Za-z_$][\w$]*)?/g, 'null');
     writeTemp('.bm_test_scaffold_app.js', stripped);
 
     const args = [

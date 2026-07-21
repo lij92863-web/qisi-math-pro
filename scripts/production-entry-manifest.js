@@ -16,9 +16,13 @@ const browserScriptOrder = Object.freeze([
     'qisi-a4-exam-template.js',
     'qisi-config.js',
     'qisi-exam-grouping.js',
+    'qisi-exam-composable.js',
     'qisi-library-view-state.js',
+    'qisi-library-composable.js',
     'qisi-entry-view-state.js',
+    'qisi-entry-composable.js',
     'qisi-knowledge-tree-state.js',
+    'qisi-settings-composable.js',
     'qisi-exam-print-renderer.js',
     'qisi-runtime.js',
     'qisi-utils.js',
@@ -45,6 +49,7 @@ const browserScriptOrder = Object.freeze([
     'qisi-docx-pipeline.js',
     'qisi-ui-events.js',
     'qisi-review-draft-state.js',
+    'qisi-review-composable.js',
     'qisi-batch-final-gate.js',
     'app.js'
 ]);

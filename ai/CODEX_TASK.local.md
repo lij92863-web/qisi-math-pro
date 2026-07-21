@@ -2,60 +2,64 @@
 
 ## Current stage
 
-H2 — Secure loopback service and make the primary UI boot without CDN access.
+R8 — Split the remaining view-local state/actions into five explicit composables,
+with a complete UI action ownership contract. Execute R8.0 through R8.6 continuously.
 
 ## Objective
 
-Reject cross-site access to privileged localhost endpoints, bind the service to a
-loopback host by default, expose a testable server factory without changing normal
-`npm start`, and replace production CDN dependencies with pinned local assets.
+Create `useSettings`, `useEntry`, `useLibrary`, `useExam`, and `useReview` UMD
+factories. Each factory must own real view-local refs/computeds/actions, use explicit
+dependencies, and shrink `app.js`; it must not merely wrap a dependency bag.
 
-## Boundaries
+## Shared coordinator state that stays in app.js
 
-- No AI/OCR request may reach a real upstream during tests.
-- Local same-origin requests and requests without `Origin` (desktop/tools) remain valid.
-- Only explicit localhost/127.0.0.1/[::1] origins on the configured port are allowed.
-- Static UI remains reachable at the same URL and existing API response schemas stay.
-- Offline work is dependency packaging only; do not rewrite application business logic.
+- `view`, `questions`, `cart`, `knowledgeTree`, `selectedExamTemplate`,
+  `hoverPersonalL1`, `isCartOpen`
+- object URL/DOCX/XML/recognition caches
+- all watches, lifecycle hooks, timers, DB/network/AI/OCR registration
+- DOCX/PDF recognition, controlled write, crop Canvas, print-window/Blob and
+  persistence transaction coordinators
+
+## Composable contract
+
+- API form: `Qisi.XComposable.useX(context, dependencies)`.
+- Inject Vue primitives and every effect (`persist*`, prompt/confirm/notify,
+  clock/id, clipboard, DOM callbacks) by name.
+- No hidden `window.Qisi`, `db`, `fetch`, DOM, clock, random, storage, AI/OCR.
+- Missing exercised dependencies fail loudly; construction triggers zero effects.
+- Preserve ref/reactive identity, initial values, handler names, template bindings,
+  warning text, and existing behavior exactly.
+- Existing setup return remains flat and explicit; no opaque spread-only exposure.
 
 ## Allowed files
 
-- `ai/CODEX_TASK.local.md`
-- `qisi-local-server.js`
-- one small server security policy/factory module if useful
-- `main.html`
-- `qisi-a4-exam-template.js` only for a local KaTeX CSS URL
-- `package.json`, `package-lock.json`
+- `ai/CODEX_TASK.local.md`, `app.js`, `main.html`, `package.json`
 - `scripts/production-entry-manifest.js`
-- `scripts/check-production-syntax.js`
-- local `vendor/` browser assets copied from exact pinned packages
-- `tests/local-server-origin-security.test.js`
-- `tests/offline-ui-browser.test.js`
-- `tests/production-entry-manifest.test.js` and script-order test only for manifest/resource contracts
+- `qisi-settings-composable.js`, `qisi-entry-composable.js`,
+  `qisi-library-composable.js`, `qisi-exam-composable.js`, `qisi-review-composable.js`
+- matching `tests/*-composable.test.js`
+- UI action acceptance manifest/tests and existing handler/navigation tests when
+  updating their intentional hashes/counts/ownership expectations
 
 ## Forbidden files
 
-- DOCX/PDF parsers, review schema, DB/user data
-- real DashScope/AI/OCR calls, broad style changes, unrelated dependency upgrades
-- accepting wildcard/private-network browser origins
+- DOCX/PDF/AI/OCR modules, DB schema/data, review draft schema, A4 renderer/template
+- recognition or persistence semantics, user materials, unrelated cleanup
+- moving the 15k-line recognition coordinator merely to reduce line count
 
-## Required gates
+## Per-stage gates
 
 ```powershell
-node --test tests/local-server-origin-security.test.js tests/offline-ui-browser.test.js tests/production-entry-manifest.test.js tests/app-ui-navigation-browser.test.js
-npm.cmd run check
+node --check <new-module> app.js
+node --test <module-test> tests/app-ui-handler-contract.test.js tests/app-ui-navigation-browser.test.js
 npm.cmd run verify:batch-safety
 npm.cmd run verify:safe
 ```
 
-## Acceptance criteria
+## Final R8 acceptance
 
-- Malicious Origin receives an explicit denial before handlers and causes zero upstream calls.
-- Local origins/no-Origin work; server listens on loopback by default and remains startable.
-- Main UI boots with all external requests blocked, visits primary views, renders math, and
-  records zero page/console errors and zero AI/OCR calls.
-- Browser dependency versions are pinned locally; production HTML has no runtime CDN request.
-- `app.js` changes are limited to the three PDF worker URLs and the absolute print KaTeX asset URL.
-- Full gates pass.
-
-Continue directly to R8.0 after a green commit.
+- Every one of the 117 distinct click expressions has an explicit owner/risk/evidence entry.
+- Five composables have real behavior tests, no construction effects, and production wiring.
+- Browser navigation/action smoke has zero page/console errors and zero AI/OCR calls.
+- `app.js` is smaller after every stage and retains only declared cross-view/high-risk work.
+- Full gates pass before moving to final real-material verification.
