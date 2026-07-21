@@ -14,6 +14,7 @@
     "verify:pdf-known-bad": "node scripts/verify-pdf-known-bad.js",
     "verify:batch-safety": "node scripts/verify-batch-safety.js",
     "verify:no-real-ai": "node scripts/verify-no-real-ai.js",
+    "audit:real-materials": "node scripts/audit-real-material-sources.js",
     "verify:diff-scope": "node scripts/verify-diff-scope.js",
     "verify:safe": "npm run check && npm test && npm run smoke:batch:mock && npm run verify:no-real-ai",
     "verify": "npm run check && npm test",
