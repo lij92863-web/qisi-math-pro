@@ -84,6 +84,27 @@ Forbidden: DOCX stable behavior changes, semantic answer attachment, DB schema.
 Required gates: full/prefix/missing/duplicate/jump-back/unknown/mismatch/objective
 fixtures, `verify:pdf-known-bad`, `verify:batch-safety`, `verify:safe`, then real PDFs.
 
+Real-test authorization recorded on 2026-07-22:
+
+- Purpose: exercise the question-PDF + answer-PDF workflow up to five complete runs.
+- Inputs: `完整版题目.pdf` and `完整版答案.pdf` only.
+- Endpoints: local `/api/ai/chat` and `/api/ai/ocr` proxy routes only; direct
+  DashScope browser requests remain forbidden.
+- Models: the production standard-mode choices currently configured by the app
+  (`qwen-vl-plus`, `qwen-plus`, and `qwen-vl-ocr-latest` only when the structured
+  OCR fallback is actually required).
+- Maximum: five complete dual-PDF runs and at most 60 total upstream calls across
+  those runs. Stop before another run if the observed cumulative count would exceed
+  the cap; never start an accurate-mode fallback.
+- Cost risk: paid DashScope usage proportional to rendered PDF pages; use standard
+  mode and record actual text/vision call counts after every run.
+- Success: expected question sequence is reliable, answers/solutions align without
+  shift, previews contain no raw LaTeX leakage/mojibake, and PDF safety gates pass.
+- Abort: any authentication, balance, quota, rate-limit, model-validation, sequence
+  jump-back/duplicate, answer/solution mismatch, or unexpected model fallback error.
+- Business code may be modified only after the failing evidence is captured and only
+  inside the bounded R9D PDF stage.
+
 ### R9E — Review and print visual integrity
 
 Objective: browser-verify every produced draft for readable math, correct image/table
@@ -137,4 +158,3 @@ Stop the affected stage, not the whole program, when:
 - answer/solution ownership is uncertain;
 - a test failure is outside scope;
 - a requested claim cannot be supported by actual evidence.
-
