@@ -1,65 +1,140 @@
 # CODEX_TASK.local.md
 
-## Current stage
+## Current program
 
-R8 — Split the remaining view-local state/actions into five explicit composables,
-with a complete UI action ownership contract. Execute R8.0 through R8.6 continuously.
+R9 — Final release hardening and exhaustive real-material acceptance.
+
+The user explicitly requested continuous execution across R9A through R9H with one
+bounded commit per stage. A later stage may start only after the current stage's
+scope gate and required tests pass. Any failing gate stops progression until the
+failure is fixed within scope or reported as an external blocker.
 
 ## Objective
 
-Create `useSettings`, `useEntry`, `useLibrary`, `useExam`, and `useReview` UMD
-factories. Each factory must own real view-local refs/computeds/actions, use explicit
-dependencies, and shrink `app.js`; it must not merely wrap a dependency bag.
+Produce a release candidate that is demonstrably safe across every file currently
+in `C:\Users\Administrator\Desktop\题目与答案`, including combined
+question+answer documents such as `高二.docx`, without file-specific branches or
+semantic guessing. Verify recognition, question order, answers, solutions, formulas,
+images, tables, layout, printing, question-bank workflows, and interactive controls.
 
-## Shared coordinator state that stays in app.js
+## Global invariants
 
-- `view`, `questions`, `cart`, `knowledgeTree`, `selectedExamTemplate`,
-  `hoverPersonalL1`, `isCartOpen`
-- object URL/DOCX/XML/recognition caches
-- all watches, lifecycle hooks, timers, DB/network/AI/OCR registration
-- DOCX/PDF recognition, controlled write, crop Canvas, print-window/Blob and
-  persistence transaction coordinators
+- Work only on `codex/*`; never modify `main` directly.
+- DOCX+DOCX remains the stable baseline.
+- PDF support remains `full`, safe `prefix`, or `fail-closed` only.
+- Missing support is safer than incorrectly attached support.
+- Preserve raw evidence, source trace, warnings, and unmatched blocks.
+- No filename hashes, exact document titles, exact question text, or fixed expected
+  answer lists may enter production algorithms.
+- New complex logic belongs in focused `qisi-*.js` modules with Node/browser exports.
+- `app.js` changes are limited to explicit module wiring and small UI orchestration.
+- Do not change database schema or user source files.
+- Test question-bank writes must occur only through the normal UI in the isolated
+  in-app-browser profile; never write IndexedDB directly.
+- No real `/api/ai/chat`, `/api/ai/ocr`, DashScope, or paid vision call until a
+  dedicated stage records model, endpoint, maximum calls, cost risk, success and
+  abort criteria. Local DOCX conversion and deterministic parsing are allowed.
+- Every bug fix requires a generalized fixture or invariant proving the class of
+  failure, not the named source document.
+- Every performance change requires before/after timing or complexity evidence.
 
-## Composable contract
+## R9 stages
 
-- API form: `Qisi.XComposable.useX(context, dependencies)`.
-- Inject Vue primitives and every effect (`persist*`, prompt/confirm/notify,
-  clock/id, clipboard, DOM callbacks) by name.
-- No hidden `window.Qisi`, `db`, `fetch`, DOM, clock, random, storage, AI/OCR.
-- Missing exercised dependencies fail loudly; construction triggers zero effects.
-- Preserve ref/reactive identity, initial values, handler names, template bindings,
-  warning text, and existing behavior exactly.
-- Existing setup return remains flat and explicit; no opaque spread-only exposure.
+### R9A — Release contract and inventory
 
-## Allowed files
+Objective: freeze the material inventory, acceptance schema, stage boundaries, and
+evidence rules. Documentation only.
 
-- `ai/CODEX_TASK.local.md`, `app.js`, `main.html`, `package.json`
-- `scripts/production-entry-manifest.js`
-- `qisi-settings-composable.js`, `qisi-entry-composable.js`,
-  `qisi-library-composable.js`, `qisi-exam-composable.js`, `qisi-review-composable.js`
-- matching `tests/*-composable.test.js`
-- UI action acceptance manifest/tests and existing handler/navigation tests when
-  updating their intentional hashes/counts/ownership expectations
+Allowed files:
 
-## Forbidden files
+- `ai/CODEX_TASK.local.md`
+- `docs/stages/STAGE_R9A_RELEASE_CONTRACT.md`
 
-- DOCX/PDF/AI/OCR modules, DB schema/data, review draft schema, A4 renderer/template
-- recognition or persistence semantics, user materials, unrelated cleanup
-- moving the 15k-line recognition coordinator merely to reduce line count
+Required gate: `npm.cmd run verify:safe`.
 
-## Per-stage gates
+### R9B — Deterministic real-material audit harness
 
-```powershell
-node --check <new-module> app.js
-node --test <module-test> tests/app-ui-handler-contract.test.js tests/app-ui-navigation-browser.test.js
-npm.cmd run verify:batch-safety
-npm.cmd run verify:safe
-```
+Objective: build a local-only, no-AI harness that runs all current DOCX/PDF files,
+records per-file/per-question structural evidence, timings, warnings, formula/image/
+table counts, and creates an auditable result without modifying source materials.
 
-## Final R8 acceptance
+Allowed files are limited to focused scripts, tests, fixtures derived from generalized
+minimal cases, package scripts when necessary, the stage document, and this task file.
+Production recognition code is read-only in R9B.
 
-- Every one of the 117 distinct click expressions has an explicit owner/risk/evidence entry.
-- Five composables have real behavior tests, no construction effects, and production wiring.
-- Browser navigation/action smoke has zero page/console errors and zero AI/OCR calls.
-- `app.js` is smaller after every stage and retains only declared cross-view/high-risk work.
-- Full gates pass before moving to final real-material verification.
+Required gates: focused harness tests, `verify:batch-safety`, `verify:safe`.
+
+### R9C — DOCX recognition integrity
+
+Objective: fix generalized DOCX failures proven by R9B, including answer-at-end
+documents, question skeletons, MathType/OMML/LaTeX preservation, tables, images,
+options, and mixed question/answer/solution sections.
+
+Forbidden: PDF support modules, AI/OCR endpoints, DB schema, file-specific rules.
+
+Required gates: new generalized fixtures, `verify:docx-stable`,
+`verify:batch-safety`, `verify:safe`, then real-material rerun.
+
+### R9D — PDF integrity and safe alignment
+
+Objective: fix generalized PDF failures while preserving fail-closed alignment.
+
+Forbidden: DOCX stable behavior changes, semantic answer attachment, DB schema.
+
+Required gates: full/prefix/missing/duplicate/jump-back/unknown/mismatch/objective
+fixtures, `verify:pdf-known-bad`, `verify:batch-safety`, `verify:safe`, then real PDFs.
+
+### R9E — Review and print visual integrity
+
+Objective: browser-verify every produced draft for readable math, correct image/table
+placement, option layout, page breaking, and source-vs-question image separation.
+Fix only generalized layout policies with visual or DOM evidence.
+
+Required gates: focused visual/layout tests, zero browser page errors,
+`verify:batch-safety`, `verify:safe`.
+
+### R9F — Interaction and question-bank acceptance
+
+Objective: exercise all 117 recorded click expressions and every visible question-bank
+control using isolated test data inserted through the normal reviewed UI. Each action
+must have automated evidence or a captured manual acceptance result; dead controls fail.
+
+Forbidden: direct IndexedDB writes, weakening the action manifest, production data.
+
+Required gates: UI action contract, browser smoke, `verify:safe`.
+
+### R9G — Measured performance and architecture hardening
+
+Objective: profile DOCX/PDF paths, remove measured bottlenecks and verified redundancy,
+and re-audit the earlier Kimi findings. Changes must be split by subsystem and keep
+stable-chain semantics unchanged.
+
+Required evidence: before/after timings or complexity proof, architecture manifest,
+focused tests, `verify:batch-safety`, `verify:safe`.
+
+### R9H — Final release acceptance
+
+Objective: rerun all current real materials and automated gates, inspect browser logs,
+verify the remote branch, and produce a per-file/per-question/per-action report.
+
+Acceptance requires:
+
+- zero unexplained recognition or rendering error;
+- zero incorrectly attached answer, solution, image, table, or question block;
+- zero raw LaTeX leakage outside explicitly supported raw-source views;
+- zero mojibake or formula syntax error in preview and print;
+- zero dead or misleading button;
+- zero real AI/OCR calls unless separately authorized and budgeted;
+- clean working tree and one scoped commit per completed stage.
+
+## Stop conditions
+
+Stop the affected stage, not the whole program, when:
+
+- the working tree is unexpectedly dirty;
+- a required change falls outside the stage allowlist;
+- a real AI/OCR call becomes necessary without the explicit budget contract;
+- answer/solution ownership is uncertain;
+- a test failure is outside scope;
+- a requested claim cannot be supported by actual evidence.
+
