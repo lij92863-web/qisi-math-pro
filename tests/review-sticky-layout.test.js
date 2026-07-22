@@ -25,7 +25,7 @@ test('long batch review keeps navigation and preview rails pinned with independe
         await page.setContent(`
             <style>${css}</style>
             <div class="app-container">
-                <header class="sidebar">奇思数学 Pro</header>
+                <header class="sidebar">TEX题库</header>
                 <main class="main-content">
                     <div class="batch-review-shell">
                         <div class="batch-review-top">审核工具栏</div>

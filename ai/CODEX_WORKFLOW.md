@@ -1,4 +1,4 @@
-﻿# Codex Workflow — 奇思数学 Pro
+﻿# Codex Workflow — TEX题库
 
 This is the standard workflow for Codex tasks.
 

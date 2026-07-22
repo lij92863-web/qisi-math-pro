@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>奇思数学 Pro | 本地题库系统</title>
+    <title>TEX题库 | 本地数学题库系统</title>
     <link rel="stylesheet" href="./vendor/tailwindcss/3.4.17/qisi-tailwind.min.css">
     <link rel="stylesheet" href="./vendor/katex/0.16.8/katex.min.css">
     <script src="./vendor/katex/0.16.8/katex.min.js"></script>
@@ -15,7 +15,7 @@
     <script src="./vendor/jszip/3.10.1/jszip.min.js"></script>
     <script src="./vendor/pdfjs-dist/3.11.174/pdf.min.js"></script>
     <script src="./vendor/lucide/0.378.0/lucide.min.js"></script>
-    <link rel="stylesheet" href="./app.css?v=docx-layout-r1">
+    <link rel="stylesheet" href="./app.css?v=tex-ui-r1">
 </head>
 <body><div id="app"></div>
 
@@ -31,25 +31,25 @@
 
     <!-- [组件3]: 侧边知识树 -->
     <template id="knowledge-tree-tpl">
-        <div class="text-[13px] text-gray-700 font-medium select-none">
+        <div class="knowledge-tree-root text-gray-700 select-none">
             <div @click="select(null)" class="flex items-center gap-2 p-2 mb-2 rounded-lg cursor-pointer transition-colors" :class="activeNode === null ? 'bg-blue-50 text-blue-600 font-bold' : 'hover:bg-gray-50'">
                 <icon name="layers" size="16"></icon> 全部题库
             </div>
             <div v-for="l1 in treeData" :key="l1.id" class="mb-1">
-                <div class="flex items-center gap-1.5 p-1.5 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors" :class="{'bg-blue-50 text-blue-600': activeNode === l1.name}">
+                <div class="knowledge-tree-row level-one flex items-center gap-1.5 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors" :class="{'bg-blue-50 text-blue-600': activeNode === l1.name}">
                     <button @click.stop="toggle(l1)" class="tree-toggle-btn"><icon :name="l1.expanded ? 'chevron-down' : 'chevron-right'" size="14" class="text-gray-400"></icon></button>
                     <span @click="select(l1.name)" class="flex-1 truncate font-bold text-gray-800" :class="{'text-blue-600': activeNode === l1.name}">{{l1.name}}</span>
                 </div>
                 <div v-show="l1.expanded" class="pl-2 border-l border-gray-100 ml-2 mt-0.5 flex flex-col gap-0.5">
                     <div v-for="l2 in l1.children" :key="l2.id">
-                        <div class="flex items-center gap-1.5 p-1.5 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors text-[12px] font-bold text-gray-600" :class="{'bg-blue-50 text-blue-600': activeNode === l2.name}">
+                        <div class="knowledge-tree-row level-two flex items-center gap-1.5 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors font-bold text-gray-600" :class="{'bg-blue-50 text-blue-600': activeNode === l2.name}">
                             <button @click.stop="toggle(l2)" class="tree-toggle-btn"><icon :name="l2.expanded ? 'chevron-down' : 'chevron-right'" size="12" class="text-gray-300"></icon></button>
                             <span @click="select(l2.name)" class="flex-1 truncate">{{l2.name}}</span>
                         </div>
                         <div v-show="l2.expanded" class="pl-4 flex flex-col gap-0.5 mt-0.5">
                             <div v-for="l3 in l2.children" :key="l3.id" @click="select(l3.name)" class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors" :class="{'bg-blue-50 text-blue-600 font-bold': activeNode === l3.name}">
-                                <span class="flex-1 truncate text-[11px] text-gray-500 hover:text-blue-600" :class="{'text-blue-600 font-bold': activeNode === l3.name}">{{l3.name}}</span>
-                                <span v-if="counts[l3.name]" class="text-[10px] text-gray-400">{{counts[l3.name]}}</span>
+                                <span class="knowledge-tree-leaf flex-1 truncate text-gray-600 hover:text-blue-600" :class="{'text-blue-600 font-bold': activeNode === l3.name}">{{l3.name}}</span>
+                                <span v-if="counts[l3.name]" class="knowledge-tree-count text-gray-500">{{counts[l3.name]}}</span>
                             </div>
                         </div>
                     </div>
@@ -191,11 +191,9 @@
     <template id="app-tpl">
         <div class="app-container">
             <aside class="sidebar">
-                <div class="flex items-center gap-3 px-2 mb-8 mt-2">
-                    <div class="w-8 h-8 bg-[#1a73e8] rounded-xl flex items-center justify-center text-white shadow-sm">
-                        <icon name="brain-circuit" size="18"></icon>
-                    </div>
-                    <span class="font-bold text-[16px] tracking-tight text-[#1f2937]">奇思数学 Pro</span>
+                <div class="app-brand flex items-center gap-3 px-2 mb-8 mt-2" aria-label="TEX题库">
+                    <img class="app-brand-logo" src="./assets/tex-logo.png" alt="TEX题库标志" />
+                    <span class="app-brand-name">TEX题库</span>
                 </div>
                 
                 <div class="px-3 mb-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">主控制台</div>
@@ -1331,9 +1329,12 @@
 
                     <aside class="exam-config-panel bg-white rounded-xl shadow-sm border border-gray-200">
                         <div class="p-5 border-b border-gray-100">
-                            <label class="text-[11px] font-bold text-gray-500 mb-1.5 block">当前模板</label>
-                            <div class="input-base bg-gray-50 font-bold text-gray-800">{{selectedExamPreset.name}}</div>
+                            <label class="text-[11px] font-bold text-gray-500 mb-1.5 block">当前题目模板</label>
+                            <select class="input-base font-bold text-gray-800" v-model="selectedExamTemplate">
+                                <option v-for="(preset, key) in examPresets" :key="key" :value="key">{{preset.name}}</option>
+                            </select>
                             <p class="text-[11px] text-gray-400 mt-2">{{selectedExamPreset.desc}}</p>
+                            <p class="text-[11px] text-gray-500 mt-1">答案统一使用带框参考答案模板。</p>
                         </div>
 
                         <div class="p-5 space-y-4 overflow-y-auto custom-scrollbar flex-1">
@@ -1357,7 +1358,7 @@
                                 </div>
                                 <div class="space-y-1.5">
                                     <label class="config-label">字号</label>
-                                    <div class="input-base bg-gray-50 font-bold">五号（10.5 pt）</div>
+                                    <div class="input-base bg-gray-50 font-bold">正文 {{examConfig.bodySizePt || 10.5}} pt</div>
                                 </div>
                             </div>
                             <div class="space-y-1.5">
@@ -1385,7 +1386,7 @@
                             <label v-for="item in templateFeatureOptions" :key="item.key" class="config-check">
                                 <input type="checkbox" v-model="examConfig[item.key]" /> {{item.label}}
                             </label>
-                            <div v-if="examConfig.showAnswerGrid" class="grid grid-cols-3 gap-2">
+                            <div v-if="examConfig.showAnswerGrid && examConfig.answerGridMode !== 'adaptive-by-type'" class="grid grid-cols-3 gap-2">
                                 <div class="space-y-1.5">
                                     <label class="config-label">答题表题数</label>
                                     <input type="number" min="1" max="20" class="input-base" v-model.number="examConfig.answerGridCount" />
@@ -1398,6 +1399,9 @@
                                     <label class="config-label">下划线数量</label>
                                     <input type="number" min="0" max="10" class="input-base" v-model.number="examConfig.answerLineCount" />
                                 </div>
+                            </div>
+                            <div v-else-if="examConfig.showAnswerGrid" class="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[12px] font-semibold leading-5 text-blue-700">
+                                答题区按真实题型自动生成：选择题进入上方答题框；填空题进入下方横线，每行最多 3 条。
                             </div>
                         </div>
                         <div class="p-5 border-t border-gray-100 bg-white">
@@ -1419,7 +1423,7 @@
                             </div>
 
                         </div>
-                        <p class="mt-4 pt-4 border-t border-gray-100 text-[11px] leading-5 text-gray-500">系统只保留这一套 A4 模板；组卷与打印统一使用此版式。</p>
+                        <p class="mt-4 pt-4 border-t border-gray-100 text-[11px] leading-5 text-gray-500">题目可选无框版或带框版；两者的答案均统一使用带框参考答案模板。</p>
                     </div>
                     <div class="flex-1 bg-white p-6 rounded-xl border flex flex-col min-w-0">
                         <div class="flex justify-between items-end mb-4">
@@ -1503,17 +1507,17 @@
             </div>
         </div>
     </template>
-    <script src="./qisi-a4-exam-template.js?v=a4-teacher-template-r1"></script>
-    <script src="./qisi-config.js?v=a4-teacher-template-r1"></script>
+    <script src="./qisi-a4-exam-template.js?v=a4-template-r4"></script>
+    <script src="./qisi-config.js?v=a4-template-r2"></script>
     <script src="./qisi-exam-grouping.js?v=exam-grouping-r1"></script>
-    <script src="./qisi-exam-composable.js?v=exam-composable-r1"></script>
-    <script src="./qisi-library-view-state.js?v=library-view-state-r1"></script>
+    <script src="./qisi-exam-composable.js?v=exam-composable-r2"></script>
+    <script src="./qisi-library-view-state.js?v=library-view-state-r2"></script>
     <script src="./qisi-library-composable.js?v=library-composable-r1"></script>
     <script src="./qisi-entry-view-state.js?v=entry-view-state-r1"></script>
     <script src="./qisi-entry-composable.js?v=entry-composable-r1"></script>
     <script src="./qisi-knowledge-tree-state.js?v=knowledge-tree-state-r1"></script>
     <script src="./qisi-settings-composable.js?v=settings-composable-r1"></script>
-    <script src="./qisi-exam-print-renderer.js?v=exam-print-renderer-r1"></script>
+    <script src="./qisi-exam-print-renderer.js?v=exam-print-renderer-r3"></script>
     <script src="./qisi-runtime.js?v=foundation-01"></script>
     <script src="./qisi-utils.js?v=docx-display-integrity-r1"></script>
     <script src="./qisi-db.js?v=foundation-01"></script>

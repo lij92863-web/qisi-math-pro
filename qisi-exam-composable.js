@@ -19,6 +19,12 @@
 
         const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
 
+        const indexQuestionsById = questions => new Map(
+            (Array.isArray(questions) ? questions : [])
+                .filter(question => question && question.id != null)
+                .map(question => [question.id, question])
+        );
+
         const requireFunction = (dependencies, name) => {
             const dependency = dependencies[name];
             if (typeof dependency !== 'function') {
@@ -99,8 +105,11 @@
             const restoringExamConfig = ref(false);
             const printBusy = ref(false);
 
+            const questionById = computed(() => indexQuestionsById(questions.value));
+            const getQuestionById = id => questionById.value.get(id);
+
             const cartQuestionsOrdered = computed(() => cart.value
-                .map(id => questions.value.find(question => question && question.id === id))
+                .map(getQuestionById)
                 .filter(Boolean));
 
             const examPresets = computed(() => Object.fromEntries(
@@ -202,12 +211,12 @@
             };
 
             const reorderQuestionWithinType = (sourceId, targetIndex) => {
-                const sourceQuestion = questions.value.find(question => question?.id === sourceId);
+                const sourceQuestion = getQuestionById(sourceId);
                 if (!sourceQuestion) return false;
 
                 const type = sourceQuestion.type || '其他题型';
                 const typeIds = cart.value.filter(id => {
-                    const question = questions.value.find(item => item?.id === id);
+                    const question = getQuestionById(id);
                     return question && (question.type || '其他题型') === type;
                 });
                 const currentIndex = typeIds.indexOf(sourceId);
@@ -218,7 +227,7 @@
                 withoutSource.splice(nextIndex, 0, sourceId);
                 const queue = [...withoutSource];
                 cart.value = cart.value.map(id => {
-                    const question = questions.value.find(item => item?.id === id);
+                    const question = getQuestionById(id);
                     return question && (question.type || '其他题型') === type
                         ? queue.shift()
                         : id;
@@ -227,12 +236,12 @@
             };
 
             const moveCartQuestion = (id, direction) => {
-                const question = questions.value.find(item => item?.id === id);
+                const question = getQuestionById(id);
                 if (!question) return;
 
                 const type = question.type || '其他题型';
                 const typeIds = cart.value.filter(cartId => {
-                    const item = questions.value.find(candidate => candidate?.id === cartId);
+                    const item = getQuestionById(cartId);
                     return item && (item.type || '其他题型') === type;
                 });
                 const index = typeIds.indexOf(id);
@@ -258,8 +267,8 @@
                 dragOverExamQuestionId.value = '';
                 if (!sourceId || sourceId === targetId) return;
 
-                const sourceQuestion = questions.value.find(question => question.id === sourceId);
-                const targetQuestion = questions.value.find(question => question.id === targetId);
+                const sourceQuestion = getQuestionById(sourceId);
+                const targetQuestion = getQuestionById(targetId);
                 if (
                     !sourceQuestion ||
                     !targetQuestion ||
@@ -267,7 +276,7 @@
                 ) return;
 
                 const typeIds = cart.value.filter(id => {
-                    const question = questions.value.find(item => item?.id === id);
+                    const question = getQuestionById(id);
                     return question && question.type === sourceQuestion.type;
                 });
                 const targetIndex = typeIds
@@ -325,6 +334,7 @@
         };
 
         return {
+            indexQuestionsById,
             useExam
         };
     }

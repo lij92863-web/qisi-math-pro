@@ -1,4 +1,4 @@
-﻿# Agent Constitution — 奇思数学 Pro
+﻿# Agent Constitution — TEX题库
 
 This document defines non-negotiable rules for all coding agents.
 

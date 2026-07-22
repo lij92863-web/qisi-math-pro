@@ -1,4 +1,4 @@
-﻿# Acceptance Criteria — 奇思数学 Pro
+﻿# Acceptance Criteria — TEX题库
 
 Every task must satisfy these criteria before completion.
 

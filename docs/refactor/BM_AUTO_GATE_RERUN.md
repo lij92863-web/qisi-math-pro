@@ -43,7 +43,7 @@ Exit:     0
 Details:
   - ok: true
   - server started, health 200
-  - browser opened app page: 奇思数学 Pro | 题库架构拆分版
+  - browser opened app page: TEX题库 | 题库架构拆分版
   - realApiCalled: false
   - result: pass
 ```

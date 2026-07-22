@@ -1,4 +1,4 @@
-﻿# Testing Guide — 奇思数学 Pro
+﻿# Testing Guide — TEX题库
 
 ## 1. Existing commands
 

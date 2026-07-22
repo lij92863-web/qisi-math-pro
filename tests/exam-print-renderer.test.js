@@ -7,6 +7,7 @@ const vm = require('node:vm');
 const {
     buildAnswerContent,
     buildAnswerGrid,
+    buildAnswerSummaryGrid,
     buildHeaderFields,
     buildNotice,
     buildPrintOptionsHtml,
@@ -26,6 +27,7 @@ const deepFreeze = value => {
 test('exam print renderer exposes its pure API in Node and a browser global', () => {
     assert.equal(typeof buildAnswerContent, 'function');
     assert.equal(typeof buildAnswerGrid, 'function');
+    assert.equal(typeof buildAnswerSummaryGrid, 'function');
     assert.equal(typeof buildHeaderFields, 'function');
     assert.equal(typeof buildNotice, 'function');
     assert.equal(typeof buildPrintOptionsHtml, 'function');
@@ -37,6 +39,7 @@ test('exam print renderer exposes its pure API in Node and a browser global', ()
 
     assert.equal(typeof context.Qisi.ExamPrintRenderer.buildAnswerContent, 'function');
     assert.equal(typeof context.Qisi.ExamPrintRenderer.buildAnswerGrid, 'function');
+    assert.equal(typeof context.Qisi.ExamPrintRenderer.buildAnswerSummaryGrid, 'function');
     assert.equal(typeof context.Qisi.ExamPrintRenderer.buildHeaderFields, 'function');
     assert.equal(typeof context.Qisi.ExamPrintRenderer.buildNotice, 'function');
     assert.equal(typeof context.Qisi.ExamPrintRenderer.buildPrintOptionsHtml, 'function');
@@ -61,7 +64,7 @@ test('header fields and notice preserve exact legacy truthiness and HTML', () =>
     );
 });
 
-test('answer grid preserves exact markup, numbering, and configured blank lines', () => {
+test('legacy answer grid preserves configured numbering and blank lines', () => {
     const result = buildAnswerGrid(9, {
         showAnswerGrid: true,
         answerGridCount: 3,
@@ -69,14 +72,49 @@ test('answer grid preserves exact markup, numbering, and configured blank lines'
         answerLineCount: 2
     });
 
-    assert.equal(result, `<div class="answer-grid-wrap">
-                        <table class="answer-grid">
-                            <tr><th>题号</th><td>1</td><td>2</td><td>3</td></tr>
-                            <tr><th>答案</th><td></td><td></td><td></td></tr>
-                        </table>
-                        <div class="answer-lines"><span>7.<i></i></span><span>8.<i></i></span></div>
-                    </div>`);
+    assert.match(result, /class="answer-grid"/);
+    assert.match(result, /<tr><th>题号<\/th><td>1<\/td><td>2<\/td><td>3<\/td><\/tr>/);
+    assert.match(result, /<div class="answer-lines"><span>7\.<i><\/i><\/span><span>8\.<i><\/i><\/span><\/div>/);
     assert.equal(buildAnswerGrid(9, { showAnswerGrid: false }), '');
+});
+
+test('boxed question grid derives choice boxes and fill-in lines from actual types with at most three lines per row', () => {
+    const questions = [
+        ...Array.from({ length: 9 }, () => ({ type: '单选题' })),
+        ...Array.from({ length: 5 }, () => ({ type: '填空题' })),
+        { type: '解答题' }
+    ];
+    const result = buildAnswerGrid(questions, {
+        showAnswerGrid: true,
+        answerGridMode: 'adaptive-by-type'
+    });
+
+    const boxed = (result.match(/<tr><th>题号<\/th>(.*?)<\/tr>/) || [])[1];
+    assert.deepEqual([...boxed.matchAll(/<td>(\d+)<\/td>/g)].map(match => Number(match[1])), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    assert.deepEqual([...result.matchAll(/<span>(\d+)\.<i><\/i><\/span>/g)].map(match => Number(match[1])), [10, 11, 12, 13, 14]);
+    assert.doesNotMatch(result, /<span>15\./);
+});
+
+test('adaptive answer frame wraps choices after nine columns and never truncates real question numbers', () => {
+    const questions = [
+        ...Array.from({ length: 12 }, () => ({ type: '单选题' })),
+        ...Array.from({ length: 35 }, () => ({ type: '填空题' }))
+    ];
+    const result = buildAnswerGrid(questions, {
+        showAnswerGrid: true,
+        answerGridMode: 'adaptive-by-type'
+    });
+
+    assert.equal((result.match(/class="answer-grid"/g) || []).length, 2);
+    assert.deepEqual(
+        [...result.matchAll(/<tr><th>题号<\/th>(.*?)<\/tr>/g)]
+            .flatMap(match => [...match[1].matchAll(/<td>(\d+)<\/td>/g)].map(cell => Number(cell[1]))),
+        Array.from({ length: 12 }, (_, index) => index + 1)
+    );
+    assert.deepEqual(
+        [...result.matchAll(/<span>(\d+)\.<i><\/i><\/span>/g)].map(match => Number(match[1])),
+        Array.from({ length: 35 }, (_, index) => index + 13)
+    );
 });
 
 test('answer grid retains fallback, clamp, decimal, and NaN quirks', () => {
@@ -117,7 +155,7 @@ test('answer grid retains fallback, clamp, decimal, and NaN quirks', () => {
     assert.match(notANumber, /<tr><th>答案<\/th><\/tr>/);
 });
 
-test('answer content keeps numbering, blank answers, page class, and renderer call order', () => {
+test('boxed answer content renders one 10-column summary, detail rows, and each LaTeX field only once', () => {
     const image = { id: 'img-1' };
     const calls = [];
     const renderLatex = (value, images) => {
@@ -132,11 +170,12 @@ test('answer content keeps numbering, blank answers, page class, and renderer ca
 
     const result = buildAnswerContent(questions, false, { renderLatex });
 
-    assert.equal(result, '<div class="answer-section "><h2>参考答案与解析</h2>' +
-        '<div class="answer-item"><b>1.</b> <render>A</render><div class="answer-solution"><render>解一</render></div></div>' +
-        '<div class="answer-item"><b>2.</b> ________<div class="answer-solution"><render>解二</render></div></div>' +
-        '<div class="answer-item"><b>3.</b> <render>   </render></div>' +
-        '</div>');
+    assert.match(result, /^<div class="answer-section "><h2>《高中数学作业》参考答案<\/h2>/);
+    assert.match(result, /class="answer-summary-grid"/);
+    assert.equal((result.match(/answer-summary-cell/g) || []).length, 10);
+    assert.match(result, /<div class="answer-item-heading">1．<render>A<\/render><\/div>/);
+    assert.match(result, /<div class="answer-solution">【详解】<render>解一<\/render><\/div>/);
+    assert.match(result, /<div class="answer-item-heading">2．________<\/div>/);
     assert.deepEqual(calls.map(call => call.value), ['A', '解一', '解二', '   ']);
     assert.strictEqual(calls[0].images, questions[0].images);
     assert.strictEqual(calls[1].images, questions[0].images);
@@ -144,7 +183,7 @@ test('answer content keeps numbering, blank answers, page class, and renderer ca
     assert.deepEqual(calls[3].images, []);
     assert.equal(
         buildAnswerContent([], undefined, { renderLatex }),
-        '<div class="answer-section new-page"><h2>参考答案与解析</h2></div>'
+        '<div class="answer-section new-page"><h2>《高中数学作业》参考答案</h2></div>'
     );
 });
 
@@ -307,7 +346,7 @@ test('question content preserves exact HTML, global numbering, dependency order,
         }
     });
 
-    assert.equal(result, `<main><div class="header">
+    assert.equal(result, `<main class="question-template-unboxed-question"><div class="header">
                         <div class="title">&lt;标题&amp;&quot;&#39;&gt;</div>
                         <div class="subtitle">&lt;副标题&gt;</div>
                         <div class="organizer">组卷人：O&#39;Reilly &amp; 同事</div>
@@ -355,7 +394,7 @@ test('question content uses fallback title, legacy falsy metadata, and empty gro
 
     const result = buildQuestionContent(questions, dependencies);
 
-    assert.equal(result, `<main><div class="header">
+    assert.equal(result, `<main class="question-template-unboxed-question"><div class="header">
                         <div class="title">&lt;备用&amp;标题&gt;</div>
                         
                         
@@ -420,7 +459,7 @@ test('generated question and answer HTML remains compatible with the strict A4 d
     assert.match(documentHtml, /margin:\s*25\.4mm 31\.75mm 25\.4mm 31\.75mm/);
     assert.match(documentHtml, /--qisi-content-width:\s*146\.5mm/);
     assert.match(documentHtml, /--qisi-content-height:\s*246\.2mm/);
-    assert.match(documentHtml, /id="qisiPrintSource" class="qisi-print-source"><main>/);
+    assert.match(documentHtml, /id="qisiPrintSource" class="qisi-print-source"><main class="question-template-unboxed-question">/);
     assert.match(documentHtml, /class="answer-section new-page"/);
     assert.match(documentHtml, /class="exam-question"/);
     assert.match(documentHtml, /--qisi-option-columns:4/);

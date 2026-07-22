@@ -313,7 +313,7 @@
                 );
             }
 
-            const filename = `qisi-full-backup-${Date.now()}.zip`;
+            const filename = `tex-question-bank-backup-${Date.now()}.zip`;
 
             downloadBlob(blob, filename);
 

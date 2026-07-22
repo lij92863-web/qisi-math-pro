@@ -1,10 +1,10 @@
-﻿# AGENTS.md — 奇思数学 Pro Coding Agent Instructions
+﻿# AGENTS.md — TEX题库 Coding Agent Instructions
 
 This file is the root instruction file for coding agents working on this repository.
 
 ## Project identity
 
-奇思数学 Pro is a local-first high-school math question-bank and batch-import system.
+TEX题库 is a local-first high-school math question-bank and batch-import system.
 
 Primary domain risks:
 

@@ -83,10 +83,10 @@
                 const targetNode = findNode(knowledgeTree, activeKnowledge);
 
                 if (targetNode) {
-                    const allowedNames = collectKnowledgeNames(targetNode);
+                    const allowedNames = new Set(collectKnowledgeNames(targetNode));
                     result = result.filter(question => {
                         const knowledge = getQuestionKnowledge(question, knowledgeType);
-                        return question && allowedNames.includes(knowledge);
+                        return question && allowedNames.has(knowledge);
                     });
                 } else {
                     result = result.filter(question => {

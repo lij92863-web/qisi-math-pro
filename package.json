@@ -1,8 +1,8 @@
 {
-  "name": "qisi-math-pro-local",
+  "name": "tex-question-bank-local",
   "version": "1.0.0",
   "private": true,
-  "description": "Qisi Math Pro local service",
+  "description": "TEX Question Bank local service",
   "main": "qisi-local-server.js",
   "scripts": {
     "start": "node qisi-local-server.js",

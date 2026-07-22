@@ -19,13 +19,21 @@ const PORT = Number(process.env.PORT || 3000);
 const HOST = String(process.env.QISI_HOST || '127.0.0.1').trim() || '127.0.0.1';
 const CONVERT_TIMEOUT_MS = Number(process.env.DOCX_CONVERT_TIMEOUT_MS || 120000);
 const MATHTYPE_TIMEOUT_MS = Number(process.env.MATHTYPE_TRANSLATE_TIMEOUT_MS || 60000);
-const CONVERTER_MODE = String(process.env.QISI_DOCX_CONVERTER || 'auto').toLowerCase();
+const CONVERTER_MODE = String(process.env.QISI_DOCX_CONVERTER || 'word-first').toLowerCase();
 const DASHSCOPE_API_KEY = String(process.env.DASHSCOPE_API_KEY || '').trim();
 const AI_BODY_LIMIT = String(process.env.AI_BODY_LIMIT || '60mb');
 const AI_REQUEST_TIMEOUT_MS = Math.max(10000, Number(process.env.AI_REQUEST_TIMEOUT_MS || 90000));
 const DASHSCOPE_CHAT_UPSTREAM = 'https://dashscope.aliyuncs.com/' + 'compatible-mode/v1/' + 'chat/completions';
 const DASHSCOPE_OCR_UPSTREAM = 'https://dashscope.aliyuncs.com/' + 'api/v1/services/aigc/' + 'multimodal-generation/' + 'generation';
 // Supported modes: auto / libreoffice-first / word-first / libreoffice-only / word-only
+
+function buildConverterOrder(mode, platform = process.platform) {
+  const normalizedMode = String(mode || 'word-first').toLowerCase();
+  if (normalizedMode === 'libreoffice-only') return ['libre'];
+  if (normalizedMode === 'word-only') return platform === 'win32' ? ['word'] : [];
+  if (normalizedMode === 'libreoffice-first') return platform === 'win32' ? ['libre', 'word'] : ['libre'];
+  return platform === 'win32' ? ['word', 'libre'] : ['libre'];
+}
 
 function normalizeServerPort(value, fallback = 3000) {
   const port = Number(value);
@@ -574,27 +582,7 @@ async function convertDocxToPdf(inputPath) {
 
   const mode = CONVERTER_MODE;
 
-  if (mode === 'libreoffice-only') {
-    try {
-      return await tryLibre();
-    } catch (error) {
-      errors.push(`LibreOffice: ${error.message || String(error)}`);
-      throw new Error(errors.join('\n'));
-    }
-  }
-
-  if (mode === 'word-only') {
-    try {
-      return await tryWord();
-    } catch (error) {
-      errors.push(`Word COM: ${error.message || String(error)}`);
-      throw new Error(errors.join('\n'));
-    }
-  }
-
-  const order = mode === 'word-first'
-    ? ['word', 'libre']
-    : ['libre', 'word'];
+  const order = buildConverterOrder(mode);
 
   for (const item of order) {
     if (item === 'libre') {
@@ -605,7 +593,7 @@ async function convertDocxToPdf(inputPath) {
       }
     }
 
-    if (item === 'word' && process.platform === 'win32') {
+    if (item === 'word') {
       try {
         return await tryWord();
       } catch (error) {
@@ -837,7 +825,8 @@ app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => 
           'Confirm npm start is running.',
           'Confirm the browser is opened at http://localhost:3000/main.html.',
           'On Windows, confirm Microsoft Word is installed and can open this DOCX normally.',
-          'Install LibreOffice as a fallback converter if Word COM is unavailable.',
+          'LibreOffice is optional; the app does not require teachers to install it.',
+          'Without a visual converter, the browser keeps using the built-in DOCX parser and asks for manual review only where visual evidence is missing.',
           'If Word shows first-run, activation, privacy, protected-view, or add-in dialogs, open Word manually and finish those prompts first.'
         ]
       }
@@ -947,6 +936,7 @@ function logServerStarted(service) {
 module.exports = {
   createQisiLocalServer,
   startQisiLocalServer,
+  buildConverterOrder,
   isAllowedLocalOrigin,
   normalizeServerHost,
   normalizeServerPort

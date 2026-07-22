@@ -5,13 +5,20 @@ const path = require('node:path');
 const { chromium } = require('playwright');
 
 const template = require('../qisi-a4-exam-template');
+const printRenderer = require('../qisi-exam-print-renderer');
 
 const ROOT = path.join(__dirname, '..');
 
-test('teacher A4 preset is the only exposed built-in template', () => {
-    assert.deepEqual(Object.keys(template.PRESET_TEMPLATES), ['teacherA4']);
-    assert.deepEqual(Object.keys(template.EXAM_LAYOUT_PRESETS), ['teacherA4']);
+test('question presets expose unboxed and boxed A4 layouts with one shared boxed answer contract', () => {
+    assert.deepEqual(Object.keys(template.PRESET_TEMPLATES), ['teacherA4', 'boxedQuestionA4']);
+    assert.deepEqual(Object.keys(template.EXAM_LAYOUT_PRESETS), ['teacherA4', 'boxedQuestionA4']);
     assert.equal(template.DEFAULT_PRESET_KEY, 'teacherA4');
+    assert.equal(template.PRESET_TEMPLATES.teacherA4.name, '无框版题目');
+    assert.equal(template.PRESET_TEMPLATES.boxedQuestionA4.name, '带框版题目');
+    assert.equal(template.DEFAULT_CONFIG.answerTemplate, 'boxed-answer');
+    assert.equal(template.BOXED_CONFIG.answerTemplate, 'boxed-answer');
+    assert.equal(template.BOXED_CONFIG.answerGridMode, 'adaptive-by-type');
+    assert.equal(template.BOXED_CONFIG.bodySizePt, 11.5);
 
     const configSource = fs.readFileSync(path.join(ROOT, 'qisi-config.js'), 'utf8');
     const appSource = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
@@ -23,9 +30,56 @@ test('teacher A4 preset is the only exposed built-in template', () => {
         assert.equal(htmlSource.includes(legacy), false, `main.html no longer displays ${legacy}`);
     }
 
-    assert.ok(htmlSource.includes('qisi-a4-exam-template.js?v=a4-teacher-template-r1'));
+    assert.ok(htmlSource.includes('qisi-a4-exam-template.js?v=a4-template-r4'));
     assert.ok(htmlSource.indexOf('qisi-a4-exam-template.js') < htmlSource.indexOf('qisi-config.js'));
     assert.equal(htmlSource.includes('新建模板'), false);
+});
+
+test('boxed LaTeX source carries the reference answer-frame geometry without weakening strict validation', () => {
+    assert.match(template.BOXED_LATEX_TEMPLATE, /TEX题库带框版题目模板/);
+    assert.match(template.BOXED_LATEX_TEMPLATE, /\{\{ADAPTIVE_ANSWER_FRAME\}\}/);
+    assert.match(template.BOXED_LATEX_TEMPLATE, /选择题进入上方答题框/);
+    assert.match(template.BOXED_LATEX_TEMPLATE, /五道填空题排成 3 \+ 2 两行/);
+    assert.deepEqual(template.validateStrictLatex(template.BOXED_LATEX_TEMPLATE), { ok: true, issues: [] });
+});
+
+test('boxed question lays five fill-in answer lines out as three plus two in a real browser', { timeout: 30_000 }, async () => {
+    const questions = [
+        ...Array.from({ length: 9 }, () => ({ type: '单选题' })),
+        ...Array.from({ length: 5 }, () => ({ type: '填空题' }))
+    ];
+    const answerFrame = printRenderer.buildAnswerGrid(questions, template.BOXED_CONFIG);
+    const browser = await chromium.launch({ headless: true });
+
+    try {
+        const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
+        await page.setContent(template.buildPrintDocument({
+            content: `<main>${answerFrame}</main>`,
+            config: template.BOXED_CONFIG,
+            katexCssHref: ''
+        }));
+        await page.waitForFunction(() => document.documentElement.dataset.qisiPreviewReady === 'true');
+
+        const layout = await page.evaluate(() => ({
+            boxNumbers: [...document.querySelectorAll('.qisi-paper-page .answer-grid tr:first-child td')].map(node => node.textContent.trim()),
+            lineRows: [...document.querySelectorAll('.qisi-paper-page .answer-lines span')].map(node => ({
+                number: node.textContent.trim().replace('.', ''),
+                top: Math.round(node.getBoundingClientRect().top)
+            }))
+        }));
+        const rows = layout.lineRows.reduce((groups, item) => {
+            const row = groups.get(item.top) || [];
+            row.push(item);
+            groups.set(item.top, row);
+            return groups;
+        }, new Map());
+
+        assert.deepEqual(layout.boxNumbers, ['1', '2', '3', '4', '5', '6', '7', '8', '9']);
+        assert.deepEqual(layout.lineRows.map(item => item.number), ['10', '11', '12', '13', '14']);
+        assert.deepEqual([...rows.values()].map(row => row.length), [3, 2]);
+    } finally {
+        await browser.close();
+    }
 });
 
 test('strict LaTeX source matches the retained teacher documents', () => {
@@ -74,6 +128,8 @@ test('print CSS uses exact A4 geometry and permits question fragmentation', () =
     assert.match(css, /--qisi-math-scale:/);
     assert.match(css, /qisi-image-row/);
     assert.match(css, /--qisi-option-columns/);
+    assert.match(template.buildPrintCss(template.BOXED_CONFIG), /font-size:\s*11\.5pt/);
+    assert.match(css, /answer-summary-grid/);
 });
 
 test('print body, option numerals, and KaTeX roots stay regular under bold source ancestry', { timeout: 30_000 }, async () => {

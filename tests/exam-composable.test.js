@@ -4,10 +4,25 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const { useExam } = require('../qisi-exam-composable.js');
+const { indexQuestionsById, useExam } = require('../qisi-exam-composable.js');
 const ExamGrouping = require('../qisi-exam-grouping.js');
 
 const ROOT = path.join(__dirname, '..');
+
+test('question index provides stable constant-time lookup without mutating the source list', () => {
+    const source = Object.freeze([
+        Object.freeze({ id: 'q1', stem: 'one' }),
+        null,
+        Object.freeze({ id: 'q2', stem: 'two' })
+    ]);
+    const index = indexQuestionsById(source);
+
+    assert.equal(index.size, 2);
+    assert.strictEqual(index.get('q1'), source[0]);
+    assert.strictEqual(index.get('q2'), source[2]);
+    assert.equal(index.get('missing'), undefined);
+    assert.equal(source.length, 3);
+});
 
 const deepFreeze = value => {
     if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
@@ -217,7 +232,7 @@ test('construction owns exact fresh defaults, preserves shared ref identities, a
     assert.strictEqual(vue.reactiveInputs[0], exam.examConfig);
     assert.strictEqual(vue.reactiveInputs[1], exam.examQuestionMeta);
     assert.strictEqual(vue.reactiveInputs[2], exam.examGroupConfig);
-    assert.equal(vue.computedGetters.length, 5);
+    assert.equal(vue.computedGetters.length, 6);
     assert.deepEqual(effects, { confirms: [], grouping: [], summaries: [] });
     assert.equal(JSON.stringify({
         PRESET_TEMPLATES,

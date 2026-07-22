@@ -1,4 +1,4 @@
-﻿# Stable Chains — 奇思数学 Pro
+﻿# Stable Chains — TEX题库
 
 This document defines behavior that must not regress.
 

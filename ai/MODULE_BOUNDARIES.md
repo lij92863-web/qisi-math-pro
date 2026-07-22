@@ -1,4 +1,4 @@
-﻿# Module Boundaries — 奇思数学 Pro
+﻿# Module Boundaries — TEX题库
 
 This document defines file-level ownership and risk boundaries.
 

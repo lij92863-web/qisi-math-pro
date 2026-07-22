@@ -1279,7 +1279,7 @@
                     jpegQuality: 0.86
                 };
                 const DOCX_TEXT_ONLY_WARNING =
-                    '当前 Word 文件未能通过本地服务转成 PDF，只能使用文本层兜底，复杂公式和选项可能不完整。请确认已运行 npm start，并从 http://localhost:3000/main.html 打开软件。';
+                    '当前未取得 DOCX 页面图像，系统已继续使用内置 DOCX 解析器；只有依赖页面坐标的图片绑定需要人工复核。LibreOffice 不是运行必需项。';
                 let activeRecognitionMode = 'standard';
                 let activeBatchCostStats = null;
 
@@ -21669,7 +21669,11 @@ ${source}`;
                 };
 
                 const buildAnswerContent = (qs, forceNewPage = true) => (
-                    window.Qisi.ExamPrintRenderer.buildAnswerContent(qs, forceNewPage, { renderLatex: renderLatexForPrint })
+                    window.Qisi.ExamPrintRenderer.buildAnswerContent(qs, forceNewPage, {
+                        renderLatex: renderLatexForPrint,
+                        config: examConfig,
+                        fallbackTitle: examTitle.value
+                    })
                 );
 
                 const buildQuestionContent = (qs = cartQuestionsOrdered.value) => (

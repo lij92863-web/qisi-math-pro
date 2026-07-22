@@ -13,6 +13,7 @@
         'use strict';
 
         const TEMPLATE_ID = 'teacherA4';
+        const BOXED_TEMPLATE_ID = 'boxedQuestionA4';
         const PAGE = Object.freeze({
             widthMm: 210,
             heightMm: 297,
@@ -27,7 +28,7 @@
         const STRICT_LATEX_TEMPLATE = String.raw`% !TEX program = xelatex
 \documentclass[UTF8,a4paper,zihao=5]{ctexart}
 
-% 奇思数学教师常用 A4 试卷模板
+% TEX题库无框版题目模板
 % 版式依据：题目与答案目录中的日常作业、晚测和基础训练文件。
 \usepackage[
   paperwidth=210mm,
@@ -120,6 +121,19 @@
 % {{ANSWERS}}
 \end{document}`;
 
+        const BOXED_LATEX_TEMPLATE = STRICT_LATEX_TEMPLATE
+            .replace('% TEX题库无框版题目模板', '% TEX题库带框版题目模板')
+            .replace(
+                '\\qisifields\n\n% {{QUESTIONS}}',
+                String.raw`\qisifields
+
+% {{ADAPTIVE_ANSWER_FRAME}}
+% 模板引擎按真实题型生成：选择题进入上方答题框；填空题进入下方横线；
+% 横线严格按每行最多三题排列，例如五道填空题排成 3 + 2 两行。
+
+% {{QUESTIONS}}`
+            );
+
         const DEFAULT_CONFIG = Object.freeze({
             title: '高中数学作业',
             subtitle: '',
@@ -147,22 +161,46 @@
             answerLineCount: 3,
             showCornerMarks: false,
             compactMode: false,
-            showSecretMark: false
+            showSecretMark: false,
+            templateVariant: 'unboxed-question',
+            answerTemplate: 'boxed-answer',
+            bodySizePt: 10.5,
+            groupTitleSizePt: 10.5,
+            answerBodySizePt: 10.5
+        });
+
+        const BOXED_CONFIG = Object.freeze({
+            ...DEFAULT_CONFIG,
+            showAnswerGrid: true,
+            answerGridMode: 'adaptive-by-type',
+            templateVariant: 'boxed-question',
+            bodySizePt: 11.5,
+            groupTitleSizePt: 12
         });
 
         const PRESET_TEMPLATES = Object.freeze({
             [TEMPLATE_ID]: Object.freeze({
-                name: '教师常用 A4 模板',
-                desc: '复刻日常作业/晚测版式：标准 A4、左右 31.75 mm、上下 25.4 mm、宋体五号、真实跨页。',
+                name: '无框版题目',
+                desc: '标准 A4 无答题框题目版；保留原有稳定排版与真实跨页。',
                 code: STRICT_LATEX_TEMPLATE
+            }),
+            [BOXED_TEMPLATE_ID]: Object.freeze({
+                name: '带框版题目',
+                desc: '一比一复刻周二晚测：11.5 pt 正文；选择题自适应答题框，填空题自适应横线且每行最多三题。',
+                code: BOXED_LATEX_TEMPLATE
             })
         });
 
         const EXAM_LAYOUT_PRESETS = Object.freeze({
             [TEMPLATE_ID]: Object.freeze({
-                name: '教师常用 A4 模板',
+                name: PRESET_TEMPLATES[TEMPLATE_ID].name,
                 desc: PRESET_TEMPLATES[TEMPLATE_ID].desc,
                 config: DEFAULT_CONFIG
+            }),
+            [BOXED_TEMPLATE_ID]: Object.freeze({
+                name: PRESET_TEMPLATES[BOXED_TEMPLATE_ID].name,
+                desc: PRESET_TEMPLATES[BOXED_TEMPLATE_ID].desc,
+                config: BOXED_CONFIG
             })
         });
 
@@ -207,7 +245,18 @@
 
         const buildPrintCss = (config = {}) => {
             const themeColor = normalizeThemeColor(config.themeColor);
-            const bodySize = config.fontSize === '小四' ? 12 : 10.5;
+            const configuredBodySize = Number(config.bodySizePt);
+            const bodySize = Number.isFinite(configuredBodySize)
+                ? Math.min(14, Math.max(9, configuredBodySize))
+                : (config.fontSize === '小四' ? 12 : 10.5);
+            const configuredGroupTitleSize = Number(config.groupTitleSizePt);
+            const groupTitleSize = Number.isFinite(configuredGroupTitleSize)
+                ? Math.min(16, Math.max(9, configuredGroupTitleSize))
+                : bodySize;
+            const configuredAnswerBodySize = Number(config.answerBodySizePt);
+            const answerBodySize = Number.isFinite(configuredAnswerBodySize)
+                ? Math.min(14, Math.max(9, configuredAnswerBodySize))
+                : 10.5;
             const mathScale = Math.min(1.16, Math.max(1.02, Number(config.mathScale) || 1.08));
 
             return `
@@ -313,7 +362,7 @@ main { width: 100%; margin: 0; padding: 0; }
     margin: 3mm 0 1.5mm;
     padding: 0;
     border: 0;
-    font-size: 10.5pt;
+    font-size: ${groupTitleSize}pt;
     line-height: 1.5;
     font-weight: 700;
     break-after: avoid-page;
@@ -345,15 +394,28 @@ main { width: 100%; margin: 0; padding: 0; }
 .option-content .katex, .question-flow-body .katex, .katex { font-size: calc(1em * var(--qisi-math-scale)); font-weight: 400; font-synthesis: none; white-space: nowrap; }
 .katex-display { margin: .35em 0; overflow: visible; }
 .answer-grid-wrap { margin: 2mm 0 4mm; }
-.answer-grid { margin: 0 auto; border-collapse: collapse; font-weight: 700; }
-.answer-grid th, .answer-grid td { min-width: 11mm; height: 7mm; padding: 0 1mm; border: .4pt solid #111; text-align: center; }
-.answer-lines { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8mm; width: 88%; margin: 2mm auto 0; font-weight: 700; }
+.answer-grid { width: 150.32mm; margin: 0 -1.91mm; border-collapse: collapse; table-layout: fixed; font-weight: 400; }
+.answer-grid col.answer-grid-label { width: 14.38mm; }
+.answer-grid col.answer-grid-short { width: 13.37mm; }
+.answer-grid col.answer-grid-long { width: 18.56mm; }
+.answer-grid th, .answer-grid td { height: 7.23mm; padding: 0 1.9mm; border: .5pt solid #111; text-align: center; vertical-align: middle; }
+.answer-grid tr:last-child th, .answer-grid tr:last-child td { height: 7.46mm; }
+.answer-grid th { font-weight: 400; }
+.answer-grid + .answer-grid { margin-top: 2mm; }
+.answer-lines { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 8mm; row-gap: 3mm; width: 100%; margin: 3mm 0 0; font-weight: 400; }
 .answer-lines span { display: flex; align-items: flex-end; gap: 1.5mm; }
 .answer-lines i { flex: 1; border-bottom: .4pt solid #111; transform: translateY(-1.5px); }
+.answer-section { font-size: ${answerBodySize}pt; line-height: 1.5; }
 .answer-section.new-page { break-before: page; page-break-before: always; }
-.answer-section h2 { margin: 0 0 4mm; text-align: center; font-size: 15pt; break-after: avoid-page; }
+.answer-section h2 { margin: 0 0 4mm; text-align: center; font-size: 10.5pt; line-height: 1.5; font-weight: 700; break-after: avoid-page; }
+.answer-summary-grid-wrap { width: 150.35mm; margin: 0 -1.925mm 4mm; break-inside: avoid; page-break-inside: avoid; }
+.answer-summary-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.answer-summary-grid col.answer-summary-label { width: 13.64mm; }
+.answer-summary-grid col.answer-summary-cell { width: 13.671mm; }
+.answer-summary-grid th, .answer-summary-grid td { height: 7.4mm; padding: 0 1.9mm; border: .5pt solid #111; text-align: center; vertical-align: middle; font-weight: 400; }
 .answer-item { margin: 0 0 3mm; break-inside: auto; page-break-inside: auto; }
-.answer-solution { margin-top: 1mm; color: #222; }
+.answer-item-heading { margin: 0; font-weight: 400; }
+.answer-solution { margin-top: 1mm; color: #111; }
 .q-note { margin-top: 1.5mm; padding-left: 2mm; border-left: 2px solid ${themeColor}; font-size: 9pt; color: #444; }
 .print-answer, .print-solution { margin-top: 1.5mm; }
 .answer-blank, .nowrap { display: inline-block; white-space: nowrap; break-inside: avoid; }
@@ -585,11 +647,14 @@ ${katexLink}
 
         return {
             TEMPLATE_ID,
+            BOXED_TEMPLATE_ID,
             DEFAULT_PRESET_KEY: TEMPLATE_ID,
             PAGE,
             STRICT_LATEX_TEMPLATE,
+            BOXED_LATEX_TEMPLATE,
             DEFAULT_TEMPLATE: STRICT_LATEX_TEMPLATE,
             DEFAULT_CONFIG,
+            BOXED_CONFIG,
             PRESET_TEMPLATES,
             EXAM_LAYOUT_PRESETS,
             validateStrictLatex,

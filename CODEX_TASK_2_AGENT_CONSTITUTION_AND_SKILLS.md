@@ -1,4 +1,4 @@
-# CODEX TASK 2：建立奇思数学 Pro 的 Agent 宪法与 Skill 体系
+# CODEX TASK 2：建立 TEX题库 的 Agent 宪法与 Skill 体系
 
 > 目标：在当前项目中建立一套可被 Codex 自动读取、可被人类审查、可长期迭代的工程化规则体系。  
 > 本任务 **只新增/更新文档型规则文件**，不得修改业务代码，不得修功能，不得重构。
@@ -7,7 +7,7 @@
 
 ## 0. 任务背景
 
-当前项目是「奇思数学 Pro」本地题库与批量录题系统，核心风险集中在：
+当前项目是「TEX题库」本地题库与批量录题系统，核心风险集中在：
 
 1. `app.js` 体量过大，承担 UI 状态、批量录题流程、DOCX/PDF 调度、草稿落库、审核页操作等职责。
 2. DOCX+DOCX 是稳定主链，必须优先保护。
@@ -89,13 +89,13 @@ git commit -m "chore: add agent constitution and skills workflow"
 在项目根目录创建 `AGENTS.md`，内容如下：
 
 ```markdown
-# AGENTS.md — 奇思数学 Pro Coding Agent Instructions
+# AGENTS.md — TEX题库 Coding Agent Instructions
 
 This file is the root instruction file for coding agents working on this repository.
 
 ## Project identity
 
-奇思数学 Pro is a local-first high-school math question-bank and batch-import system.
+TEX题库 is a local-first high-school math question-bank and batch-import system.
 
 Primary domain risks:
 
@@ -192,7 +192,7 @@ Stop immediately when:
 创建 `ai/AGENT_CONSTITUTION.md`：
 
 ```markdown
-# Agent Constitution — 奇思数学 Pro
+# Agent Constitution — TEX题库
 
 This document defines non-negotiable rules for all coding agents.
 
@@ -375,7 +375,7 @@ Stop instead of guessing when:
 创建 `ai/MODULE_BOUNDARIES.md`：
 
 ```markdown
-# Module Boundaries — 奇思数学 Pro
+# Module Boundaries — TEX题库
 
 This document defines file-level ownership and risk boundaries.
 
@@ -543,7 +543,7 @@ If the task file does not explicitly allow a file, do not edit it.
 创建 `ai/STABLE_CHAINS.md`：
 
 ```markdown
-# Stable Chains — 奇思数学 Pro
+# Stable Chains — TEX题库
 
 This document defines behavior that must not regress.
 
@@ -670,7 +670,7 @@ A real-test task must specify:
 创建 `ai/ACCEPTANCE_CRITERIA.md`：
 
 ```markdown
-# Acceptance Criteria — 奇思数学 Pro
+# Acceptance Criteria — TEX题库
 
 Every task must satisfy these criteria before completion.
 
@@ -796,7 +796,7 @@ Reject or stop a task when:
 创建 `ai/TESTING_GUIDE.md`：
 
 ```markdown
-# Testing Guide — 奇思数学 Pro
+# Testing Guide — TEX题库
 
 ## 1. Existing commands
 
@@ -918,7 +918,7 @@ works
 创建 `ai/CODEX_WORKFLOW.md`：
 
 ```markdown
-# Codex Workflow — 奇思数学 Pro
+# Codex Workflow — TEX题库
 
 This is the standard workflow for Codex tasks.
 

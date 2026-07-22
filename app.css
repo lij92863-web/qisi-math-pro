@@ -13,8 +13,24 @@
             --shadow-tiny: 0 1px 2px rgba(16, 24, 40, .05);
         }
         
+        @font-face {
+            font-family: "Noto Sans TEX";
+            src: url("./vendor/fonts/noto-sans/NotoSans-Regular.ttf") format("truetype");
+            font-style: normal;
+            font-weight: 400 600;
+            font-display: swap;
+        }
+
+        @font-face {
+            font-family: "Noto Sans TEX";
+            src: url("./vendor/fonts/noto-sans/NotoSans-Bold.ttf") format("truetype");
+            font-style: normal;
+            font-weight: 700 900;
+            font-display: swap;
+        }
+
         body { 
-            font-family: 'Inter', 'Noto Sans SC', sans-serif;
+            font-family: "Noto Sans TEX", "Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif;
             background-color: var(--bg);
             color: var(--text);
             -webkit-font-smoothing: antialiased;
@@ -81,6 +97,22 @@
             flex-shrink: 0;
         }
 
+        .app-brand { min-width: 146px; }
+        .app-brand-logo {
+            width: 42px;
+            height: 42px;
+            flex: 0 0 42px;
+            object-fit: contain;
+            filter: drop-shadow(0 5px 9px rgba(31, 41, 55, .10));
+        }
+        .app-brand-name {
+            color: #202124;
+            font-size: 17px;
+            font-weight: 800;
+            letter-spacing: -.35px;
+            white-space: nowrap;
+        }
+
         .sidebar > .px-3 {
             display: none;
         }
@@ -110,11 +142,14 @@
             cursor: pointer;
         }
 
-        .input-base { width: 100%; background: #ffffff; border: 1px solid #d8dee8; border-radius: 10px; padding: 8px 12px; font-size: 13px; font-weight: 500; font-family: inherit; color: #1f2937; transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease; outline: none; box-shadow: 0 1px 0 rgba(16,24,40,.02); }
+        .input-base { width: 100%; background: #ffffff; border: 1px solid #d8dee8; border-radius: 11px; padding: 9px 13px; font-size: 14px; font-weight: 600; font-family: inherit; color: #202124; transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease; outline: none; box-shadow: 0 1px 0 rgba(16,24,40,.02); }
         .input-base:hover { border-color: #c6d0dc; background: #fcfdff; }
         .input-base:focus { border-color: #76a7ff; box-shadow: 0 0 0 4px rgba(37,99,235,0.11); }
-        select.input-base { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; cursor: pointer; padding-right: 28px; }
-        .entry-compact-control { height: 34px; padding-top: 6px; padding-bottom: 6px; font-size: 12px; }
+        select.input-base { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%235f6368' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; cursor: pointer; padding-right: 30px; }
+        select.input-base option { color: #202124; background: #fff; font: 600 14px/1.5 "Noto Sans TEX", "Microsoft YaHei UI", sans-serif; }
+        .entry-compact-control { height: 42px; padding-top: 8px; padding-bottom: 8px; font-size: 14px; }
+        .entry-main-card label { color: #4b5563 !important; font-size: 12px !important; font-weight: 700 !important; letter-spacing: .01em; }
+        .entry-main-card .entry-compact-control span { font-size: 14px !important; font-weight: 600 !important; }
         .entry-option-input { height: 44px; min-height: 44px; padding: 6px 8px; font-size: 12px; line-height: 1.45; }
         
         .textarea-code { width: 100%; min-height: 180px; padding: 12px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; outline: none; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.8; resize: none; transition: border 0.2s; }
@@ -560,7 +595,7 @@
 
         .batch-review-grid {
             display: grid;
-            grid-template-columns: clamp(190px, 12vw, 230px) minmax(0, 3fr) minmax(440px, 2fr);
+            grid-template-columns: clamp(200px, 12vw, 240px) minmax(560px, 2.5fr) minmax(500px, 1.9fr);
             gap: 12px;
             flex: 1;
             min-height: 0;
@@ -805,13 +840,13 @@
         }
 
         .knowledge-sidebar {
-            width: 260px;
+            width: 304px;
             flex-shrink: 0;
             background: var(--surface-strong);
             border: 1px solid var(--line);
             border-radius: 14px;
             overflow-y: auto;
-            padding: 16px;
+            padding: 18px;
             box-shadow: var(--shadow-tiny);
         }
 
@@ -821,20 +856,20 @@
         }
 
         .library-filter-sidebar > div:last-child {
-            padding: 10px 12px 14px;
+            padding: 12px 14px 16px;
             overflow-y: auto;
             max-height: calc(100vh - 180px);
         }
 
         .library-filter-head {
-            height: 36px;
-            padding: 0 12px;
+            height: 46px;
+            padding: 0 16px;
             background: linear-gradient(135deg, #14a044, #22c55e);
             color: #fff;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            font-size: 14px;
+            font-size: 17px;
             font-weight: 800;
         }
 
@@ -1188,7 +1223,7 @@
         @media (min-width: 1280px) {
             .entry-layout {
                 display: grid;
-                grid-template-columns: minmax(680px, 1.65fr) minmax(520px, 1fr);
+                grid-template-columns: minmax(640px, 1.42fr) minmax(560px, 1fr);
                 gap: 20px;
                 align-items: stretch;
             }
@@ -1198,7 +1233,7 @@
             }
         }
 
-        @media (max-width: 1100px) {
+        @media (max-width: 1400px) {
             .batch-review-grid {
                 grid-template-columns: 1fr;
             }
@@ -1410,8 +1445,8 @@
             top: 100%;
             left: 0;
             margin-top: 8px;
-            width: 580px;
-            height: 380px;
+            width: min(720px, 72vw);
+            height: 430px;
             background: rgba(255,255,255,.96);
             border: 1px solid var(--line);
             border-radius: 14px;
@@ -1422,10 +1457,10 @@
             overflow: hidden;
         }
         
-        .cascader-col-1 { width: 35%; background: #f7f9fc; border-right: 1px solid var(--line); overflow-y: auto; }
-        .cascader-col-2 { width: 65%; background: #ffffff; overflow-y: auto; padding: 16px; }
+        .cascader-col-1 { width: 36%; background: #f7f9fc; border-right: 1px solid var(--line); overflow-y: auto; }
+        .cascader-col-2 { width: 64%; background: #ffffff; overflow-y: auto; padding: 20px; }
 
-        .cascader-l1-item { padding: 12px 16px; font-size: 12px; font-weight: 700; color: #4b5563; cursor: pointer; transition: transform .16s ease, background-color .16s ease, color .16s ease; }
+        .cascader-l1-item { padding: 13px 17px; font-size: 14px; font-weight: 700; color: #303846; cursor: pointer; transition: transform .16s ease, background-color .16s ease, color .16s ease; }
         .cascader-l1-item:hover, .cascader-l1-item.active { background: #ffffff; color: var(--primary); }
         .cascader-l1-item.selected { color: var(--primary); background: var(--primary-soft); }
 
@@ -1435,7 +1470,7 @@
             border-radius: 8px;
             padding: 4px 7px;
             margin: 0 0 8px -7px;
-            font-size: 12px;
+            font-size: 14px;
             font-weight: 800;
             cursor: pointer;
             transition: background-color .16s ease, color .16s ease, transform .16s ease;
@@ -1486,12 +1521,12 @@
         }
 
         .material-segmented button {
-            height: 30px;
+            height: 36px;
             min-width: 0;
             border: 1px solid transparent;
             background: transparent;
             color: #64748b;
-            font-size: 11px;
+            font-size: 13px;
             font-weight: 800;
             padding: 0 6px;
             border-radius: 8px;
@@ -1605,7 +1640,7 @@
             grid-template-columns: minmax(220px, 1.4fr) repeat(5, minmax(90px, .7fr)) auto;
             gap: 8px;
             align-items: center;
-            padding: 10px;
+            padding: 12px;
             margin-bottom: 12px;
             background: #fff;
             border: 1px solid #e8eaed;
@@ -1617,8 +1652,8 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            height: 36px;
-            padding: 0 10px;
+            height: 42px;
+            padding: 0 12px;
             border: 1px solid #dadce0;
             border-radius: 10px;
             background: #f8fafc;
@@ -1629,12 +1664,12 @@
         .library-search-bar select {
             width: 100%;
             min-width: 0;
-            height: 36px;
+            height: 42px;
             border: 1px solid #dadce0;
             border-radius: 10px;
             background: #fff;
-            color: #3c4043;
-            font-size: 12px;
+            color: #202124;
+            font-size: 14px;
             font-weight: 700;
             outline: none;
         }
@@ -1644,6 +1679,17 @@
             border: 0;
             background: transparent;
         }
+
+        .library-search-input input::placeholder { color: #6b7280; opacity: 1; }
+        .library-search-bar select { padding: 0 10px; font-family: inherit; }
+        .library-search-bar select option { color: #202124; background: #fff; font: 600 14px/1.5 "Noto Sans TEX", "Microsoft YaHei UI", sans-serif; }
+
+        .knowledge-tree-root { color: #263244; font-size: 14px; font-weight: 600; line-height: 1.45; }
+        .knowledge-tree-row { min-height: 38px; padding: 8px 9px; }
+        .knowledge-tree-row.level-one { color: #172033; font-size: 14px; font-weight: 750; }
+        .knowledge-tree-row.level-two { min-height: 36px; font-size: 13.5px; color: #2f3b4d; }
+        .knowledge-tree-leaf { font-size: 13px; font-weight: 600; }
+        .knowledge-tree-count { font-size: 11px; font-weight: 700; }
 
         .material-light-btn,
         .material-primary-btn {
