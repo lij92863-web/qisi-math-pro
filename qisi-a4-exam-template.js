@@ -233,7 +233,10 @@ body {
     background: #e5e7eb;
     font-family: "Times New Roman", "SimSun", "Songti SC", "STSong", serif;
     font-size: ${bodySize}pt;
+    font-weight: 400;
+    font-synthesis: none;
     line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
 }
 .qisi-print-toolbar {
     position: sticky;
@@ -325,7 +328,7 @@ main { width: 100%; margin: 0; padding: 0; }
 }
 .question-row { position: relative; display: block; padding-left: 2em; }
 .q-index { position: absolute; left: 0; top: 0; width: 2em; font-weight: 400; line-height: 1.5; }
-.question-flow-body { display: block; min-width: 0; line-break: strict; overflow: visible; }
+.question-flow-body { display: block; min-width: 0; line-break: strict; overflow: visible; font-weight: 400; font-synthesis: none; }
 .question-flow-body::after, .exam-question::after { content: ""; display: block; clear: both; }
 .gaokao-options {
     display: grid;
@@ -336,10 +339,10 @@ main { width: 100%; margin: 0; padding: 0; }
     padding: 0;
 }
 .gaokao-options.long-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.gaokao-option { display: flex; align-items: flex-start; min-width: 0; break-inside: avoid; page-break-inside: avoid; }
-.option-label { flex: 0 0 1.8em; font-weight: 400; }
-.option-content { flex: 1; min-width: 0; overflow-wrap: normal; word-break: normal; }
-.option-content .katex, .katex { font-size: calc(1em * var(--qisi-math-scale)); white-space: nowrap; }
+.gaokao-option { display: flex; align-items: flex-start; min-width: 0; break-inside: avoid; page-break-inside: avoid; font-weight: 400; font-synthesis: none; }
+.option-label { flex: 0 0 1.8em; font-weight: 400; font-synthesis: none; }
+.option-content { flex: 1; min-width: 0; overflow-wrap: normal; word-break: normal; font-weight: 400; font-synthesis: none; }
+.option-content .katex, .question-flow-body .katex, .katex { font-size: calc(1em * var(--qisi-math-scale)); font-weight: 400; font-synthesis: none; white-space: nowrap; }
 .katex-display { margin: .35em 0; overflow: visible; }
 .answer-grid-wrap { margin: 2mm 0 4mm; }
 .answer-grid { margin: 0 auto; border-collapse: collapse; font-weight: 700; }

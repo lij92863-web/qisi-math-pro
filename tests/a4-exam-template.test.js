@@ -76,6 +76,55 @@ test('print CSS uses exact A4 geometry and permits question fragmentation', () =
     assert.match(css, /--qisi-option-columns/);
 });
 
+test('print body, option numerals, and KaTeX roots stay regular under bold source ancestry', { timeout: 30_000 }, async () => {
+    const browser = await chromium.launch({ headless: true });
+
+    try {
+        const page = await browser.newPage();
+        const content = `
+            <main>
+                <div class="exam-question">
+                    <div class="question-row">
+                        <span class="q-index">1.</span>
+                        <div class="question-flow-body"><strong>题干 <span class="katex">90</span></strong></div>
+                    </div>
+                    <div class="gaokao-options">
+                        <div class="gaokao-option">
+                            <span class="option-label">A.</span>
+                            <span class="option-content"><strong><span class="katex">292π</span></strong></span>
+                        </div>
+                    </div>
+                </div>
+            </main>`;
+        await page.setContent(template.buildPrintDocument({ content, katexCssHref: '' }));
+
+        const result = await page.evaluate(() => {
+            const styleOf = selector => getComputedStyle(document.querySelector(selector));
+            return {
+                bodyWeight: styleOf('body').fontWeight,
+                bodySynthesis: styleOf('body').fontSynthesis,
+                questionWeight: styleOf('.question-flow-body').fontWeight,
+                optionLabelWeight: styleOf('.option-label').fontWeight,
+                formulaWeight: styleOf('.question-flow-body .katex').fontWeight,
+                optionFormulaWeight: styleOf('.option-content .katex').fontWeight,
+                formulaSynthesis: styleOf('.option-content .katex').fontSynthesis
+            };
+        });
+
+        assert.deepEqual(result, {
+            bodyWeight: '400',
+            bodySynthesis: 'none',
+            questionWeight: '400',
+            optionLabelWeight: '400',
+            formulaWeight: '400',
+            optionFormulaWeight: '400',
+            formulaSynthesis: 'none'
+        });
+    } finally {
+        await browser.close();
+    }
+});
+
 test('screen pagination applies adaptive image fitting before moving a whole question', () => {
     const html = template.buildPrintDocument({ content: '<main></main>', katexCssHref: '' });
     const fitIndex = html.indexOf('fitQuestionImages');
