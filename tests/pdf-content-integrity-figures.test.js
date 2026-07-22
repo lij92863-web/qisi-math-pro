@@ -239,6 +239,21 @@ test('embedded question figures bind by explicit regions and reject text-band cr
     assert.equal(result.questions[0].recognizedImages.length, 1);
     assert.equal(result.questions[0].recognizedImages[0].source, 'pdf-embedded-image-placement');
     assert.equal(result.questions[0].recognizedImages[0].contentRole, 'question');
+    assert.equal(
+        integrity.isVerifiedPdfQuestionFigure(result.questions[0].recognizedImages[0], '4'),
+        true
+    );
+    assert.equal(
+        integrity.isVerifiedPdfQuestionFigure(result.questions[0].recognizedImages[0], '5'),
+        false
+    );
+    assert.equal(
+        integrity.isVerifiedPdfQuestionFigure({
+            ...result.questions[0].recognizedImages[0],
+            image_bbox: [0, 0, 1000, 1000]
+        }, '4'),
+        false
+    );
     assert.ok(result.rejected.some(item => item.reason === 'figure-crop-contains-options'));
     assert.equal(result.questions[0].manualReviewRequired, true);
 });
@@ -267,6 +282,34 @@ test('validated question bbox sequence safely fills a missing PDF text marker bo
     assert.equal(result.regionReport.source, 'validated-question-bbox-sequence');
     assert.equal(result.decisions.length, 1);
     assert.equal(result.decisions[0].question, '11');
+});
+
+test('PDF text regions recover question numbers split into separate glyph runs', () => {
+    const result = integrity.bindPlacedFiguresToQuestions({
+        questions: [
+            { question: '10', stem: 'previous' },
+            { question: '11', stem: 'figure question' },
+            { question: '12', stem: 'next' }
+        ],
+        layouts: [{
+            pageNo: 2,
+            lines: [
+                { text: '10 . previous', nx1: 100, ny1: 100, nx2: 500, ny2: 130 },
+                { text: '1 1 . figure question', nx1: 100, ny1: 300, nx2: 500, ny2: 330 },
+                { text: '１２．next', nx1: 100, ny1: 700, nx2: 500, ny2: 730 }
+            ],
+            placedImages: [
+                { imageRef: 'q11-figure', normalizedBbox: [0.6, 0.4, 0.85, 0.6] }
+            ]
+        }],
+        expectedQuestionNumbers: ['10', '11', '12']
+    });
+
+    assert.equal(result.regionReport.ok, true);
+    assert.equal(result.regionReport.complete, true);
+    assert.deepEqual(result.regionReport.markers.map(marker => marker.question), ['10', '11', '12']);
+    assert.deepEqual(result.decisions.map(decision => decision.question), ['11']);
+    assert.equal(result.questions[1].recognizedImages[0].source, 'pdf-embedded-image-placement');
 });
 
 test('question bbox fallback fails closed when the expected sequence is incomplete', () => {

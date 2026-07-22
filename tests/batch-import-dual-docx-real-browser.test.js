@@ -8,15 +8,13 @@ const enabled = process.env.QISI_REAL_BROWSER === '1';
 const useRealAi = process.env.QISI_REAL_AI === '1';
 const fixtureFormat = String(process.env.QISI_BATCH_FORMAT || 'docx').toLowerCase();
 const fixtureScope = String(process.env.QISI_BATCH_SCOPE || 'simplified').toLowerCase();
+const forcePrintAcceptance = process.env.QISI_DUAL_PRINT_ACCEPTANCE === '1';
 const expectedQuestionCount = fixtureScope === 'full' ? 12 : 6;
 const baseUrl = process.env.QISI_BASE_URL || 'http://localhost:3000/main.html';
 const fixtureRoot = process.env.QISI_BATCH_FIXTURE_ROOT || 'C:\\Users\\Administrator\\Desktop\\题目与答案';
 
-const rawStrictVisionPayload = JSON.stringify({
-    questions: Array.from(
-        { length: expectedQuestionCount },
-        (_, index) => index + 1
-    ).map(number => ({
+const buildRawStrictVisionPayload = questionNumbers => JSON.stringify({
+    questions: questionNumbers.map(number => ({
         questionNumber: String(number),
         type: '单选题',
         stem: `第 ${number} 题视觉公式 $x_${number}^2+1$`,
@@ -33,6 +31,10 @@ const rawStrictVisionPayload = JSON.stringify({
         images: []
     }))
 });
+
+const rawStrictVisionPayload = buildRawStrictVisionPayload(
+    Array.from({ length: expectedQuestionCount }, (_, index) => index + 1)
+);
 
 const compatibleChatResponse = text => ({
     choices: [{ message: { role: 'assistant', content: text } }]
@@ -83,6 +85,26 @@ const persistenceShape = question => ({
     solutionRichBlockCount: (question.solutionRichBlocks || []).length
 });
 
+const imageContentRole = image => {
+    const explicit = String(image?.contentRole || image?.role || image?.anchorField || '').toLowerCase();
+    return ['solution', 'analysis'].includes(explicit) || image?.source === 'pdf-analysis-figure-crop'
+        ? 'solution'
+        : 'question';
+};
+
+const questionImagesOf = question => (question?.images || [])
+    .filter(image => imageContentRole(image) === 'question');
+
+const solutionImagesOf = question => {
+    const recognized = question?.recognizedSolutionImages || [];
+    const rows = recognized.length
+        ? recognized
+        : (question?.images || []).filter(image => imageContentRole(image) === 'solution');
+    return rows.filter((image, index) =>
+        rows.findIndex(other => String(other?.id || '') === String(image?.id || '')) === index
+    );
+};
+
 test('real dual-format import reaches review with rendered content and without unsafe writes', {
     skip: !enabled,
     timeout: 360_000
@@ -91,14 +113,15 @@ test('real dual-format import reaches review with rendered content and without u
     const context = await browser.newContext();
     const page = await context.newPage();
     let aiCalls = 0;
+    const aiModels = [];
+    const realAiCallCap = Math.max(1, Number(process.env.QISI_REAL_AI_CALL_CAP || 20));
+    const allowedRealAiModels = new Set(['qwen-vl-plus', 'qwen-plus', 'qwen-vl-ocr-latest']);
+    let mockQuestionPageCallCount = 0;
     const browserErrors = [];
     const apiResponses = [];
     const failedRequests = [];
 
     page.on('pageerror', error => browserErrors.push(`pageerror: ${error.message}`));
-    page.on('request', request => {
-        if (/\/api\/ai\/(?:chat|ocr)$/.test(new URL(request.url()).pathname)) aiCalls += 1;
-    });
     page.on('requestfailed', request => {
         failedRequests.push({
             url: request.url(),
@@ -118,17 +141,51 @@ test('real dual-format import reaches review with rendered content and without u
     });
 
     try {
-        if (!useRealAi) {
+        if (useRealAi) {
+            await page.route(/\/api\/ai\/(?:chat|ocr)$/, async route => {
+                aiCalls += 1;
+                let model = '';
+                try {
+                    model = String(route.request().postDataJSON()?.model || '');
+                } catch (_) {
+                    model = '';
+                }
+                aiModels.push(model);
+                if (aiCalls > realAiCallCap || !allowedRealAiModels.has(model)) {
+                    await route.abort('blockedbyclient');
+                    return;
+                }
+                await route.continue();
+            });
+        } else {
             await page.route('**/api/ai/**', async route => {
                 const url = route.request().url();
                 if (url.endsWith('/health')) {
                     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, configured: true }) });
                     return;
                 }
+                if (/\/api\/ai\/(?:chat|ocr)$/.test(new URL(url).pathname)) aiCalls += 1;
+                let responsePayload = rawStrictVisionPayload;
+                try {
+                    const model = String(route.request().postDataJSON()?.model || '');
+                    if (new URL(url).pathname.endsWith('/chat') && model === 'qwen-vl-plus') {
+                        mockQuestionPageCallCount += 1;
+                        const firstNumber = fixtureScope === 'full' && mockQuestionPageCallCount === 2 ? 7 : 1;
+                        const lastNumber = fixtureScope === 'full' && mockQuestionPageCallCount === 2 ? 12 : 6;
+                        responsePayload = buildRawStrictVisionPayload(
+                            Array.from(
+                                { length: lastNumber - firstNumber + 1 },
+                                (_, index) => firstNumber + index
+                            )
+                        );
+                    }
+                } catch (_) {
+                    responsePayload = rawStrictVisionPayload;
+                }
                 await route.fulfill({
                     status: 200,
                     contentType: 'application/json',
-                    body: JSON.stringify(compatibleChatResponse(rawStrictVisionPayload))
+                    body: JSON.stringify(compatibleChatResponse(responsePayload))
                 });
             });
         }
@@ -197,6 +254,49 @@ test('real dual-format import reaches review with rendered content and without u
             return { batch, questions, files, formalCount };
         });
 
+        console.log('[QISI_DUAL_FORMAT_OBSERVATION]', JSON.stringify({
+            fixtureFormat,
+            fixtureScope,
+            status: state.batch.status,
+            questionNumbers: state.questions.map(question => question.questionNumber),
+            answers: state.questions.map(question => question.answer),
+            solutionPresent: state.questions.map(question => Boolean(String(question.solution || '').trim())),
+            aiCalls,
+            aiModels,
+            imageAssignments: state.questions.map(question => ({
+                questionNumber: question.questionNumber,
+                questionImageCount: questionImagesOf(question).length,
+                solutionImageCount: solutionImagesOf(question).length,
+                questionImageSources: questionImagesOf(question).map(image => image.source || image.sourceType || ''),
+                solutionImageSources: solutionImagesOf(question).map(image => image.source || image.sourceType || '')
+            })).filter(row => row.questionImageCount || row.solutionImageCount),
+            figureDiagnostics: state.questions
+                .filter(question => ['4', '8', '11'].includes(String(question.questionNumber)))
+                .map(question => ({
+                    questionNumber: question.questionNumber,
+                    sourcePage: question.sourcePage,
+                    hasSourcePageImage: Boolean(question.sourcePageImage || question.sourceTrace?.sourcePageImage),
+                    recognizedImages: (question.recognizedImages || []).map(image => ({
+                        source: image.source || '',
+                        sourcePage: image.sourcePage || 0,
+                        bbox: image.image_bbox || image.bbox || []
+                    })),
+                    warningCount: (question.warnings || []).length,
+                    warnings: question.warnings || []
+                })),
+            apiResponses,
+            failedRequests
+        }));
+
+        if (useRealAi) {
+            assert.ok(aiCalls <= realAiCallCap, `AI call cap exceeded: ${aiCalls}/${realAiCallCap}`);
+            assert.equal(
+                aiModels.every(model => allowedRealAiModels.has(model)),
+                true,
+                `unexpected AI model: ${JSON.stringify(aiModels)}`
+            );
+        }
+
         assert.equal(state.batch.status, 'review');
         assert.equal(state.questions.length, expectedQuestionCount);
         assert.equal(state.formalCount, 0);
@@ -230,6 +330,24 @@ test('real dual-format import reaches review with rendered content and without u
                 );
             });
         }
+        const expectedQuestionImageNumbers = fixtureScope === 'full' ? ['4', '8', '11'] : ['4'];
+        const expectedSolutionImageNumbers = fixtureScope === 'full' ? ['2', '6', '8'] : ['2', '6'];
+        assert.deepEqual(
+            state.questions
+                .filter(question => questionImagesOf(question).length > 0)
+                .map(question => question.questionNumber),
+            expectedQuestionImageNumbers,
+            'question-image ownership must match the source document'
+        );
+        if (useRealAi || fixtureFormat === 'docx') {
+            assert.deepEqual(
+                state.questions
+                    .filter(question => solutionImagesOf(question).length > 0)
+                    .map(question => question.questionNumber),
+                expectedSolutionImageNumbers,
+                'solution-image ownership must match the source document'
+            );
+        }
         assert.equal(state.questions.some(question => /闂傚|待转换|\[object Object\]|undefined|null/i.test([
             question.stem,
             ...(question.options || []),
@@ -242,6 +360,11 @@ test('real dual-format import reaches review with rendered content and without u
         }
 
         const visualChecks = await collectPreviewChecks(page, expectedQuestionCount);
+        console.log('[QISI_DUAL_VISUAL_OBSERVATION]', JSON.stringify({
+            fixtureFormat,
+            fixtureScope,
+            visualChecks
+        }));
         visualChecks.forEach((row, index) => {
             if (row.renderErrorCount > 0) row.solutionSource = state.questions[index]?.solution || '';
         });
@@ -261,14 +384,16 @@ test('real dual-format import reaches review with rendered content and without u
                 true,
                 `预览存在公式或图片渲染错误：${JSON.stringify(visualChecks)}`
             );
-            const imageQuestionNumbers = fixtureScope === 'full' ? ['2', '4', '6', '8', '11'] : ['2', '4', '6'];
-            assert.deepEqual(
-                visualChecks.filter(row => row.renderedImageCount > 0).map(row => row.questionNumber),
-                imageQuestionNumbers
-            );
-            if (fixtureScope === 'full') {
-                assert.equal(visualChecks.find(row => row.questionNumber === '8')?.renderedImageCount, 2);
-            }
+        }
+        const imageQuestionNumbers = fixtureFormat === 'pdf' && !useRealAi
+            ? expectedQuestionImageNumbers
+            : (fixtureScope === 'full' ? ['2', '4', '6', '8', '11'] : ['2', '4', '6']);
+        assert.deepEqual(
+            visualChecks.filter(row => row.renderedImageCount > 0).map(row => row.questionNumber),
+            imageQuestionNumbers
+        );
+        if (fixtureScope === 'full' && (useRealAi || fixtureFormat === 'docx')) {
+            assert.equal(visualChecks.find(row => row.questionNumber === '8')?.renderedImageCount, 2);
         }
         assert.deepEqual(
             browserErrors.filter(message =>
@@ -316,6 +441,7 @@ test('real dual-format import reaches review with rendered content and without u
             problemCount: state.batch.problemCount,
             formalCount: state.formalCount,
             aiCalls,
+            aiModels,
             apiResponses,
             failedRequests,
             contentAudit,
@@ -357,6 +483,103 @@ test('real dual-format import reaches review with rendered content and without u
                 .map(row => row.questionNumber),
             passed: true
         }));
+
+        if (fixtureScope === 'full' && (forcePrintAcceptance || (fixtureFormat === 'pdf' && useRealAi))) {
+            const submittedQuestionNumbers = ['4'];
+            for (const questionNumber of submittedQuestionNumbers) {
+                await page.locator('.batch-question-nav-item').nth(Number(questionNumber) - 1).click();
+                await page.waitForFunction(expectedLabel =>
+                    document.querySelector('.batch-question-nav-item.active > span')?.textContent?.trim() === expectedLabel,
+                `\u7b2c ${questionNumber} \u9898`, { timeout: 10_000 });
+                await page.getByRole('button', { name: '\u4e00\u952e\u63d0\u4ea4\u672c\u9898', exact: true }).click();
+                await page.waitForFunction(async ({ expected, draftId }) => {
+                    const probe = new window.Dexie('QisiMathVueDB');
+                    await probe.open();
+                    const count = await probe.table('questions').count();
+                    const draft = await probe.table('draftQuestions').get(draftId);
+                    probe.close();
+                    return count >= expected && draft?.status === 'submitted';
+                }, {
+                    expected: submittedQuestionNumbers.indexOf(questionNumber) + 1,
+                    draftId: state.questions[Number(questionNumber) - 1].id
+                }, { timeout: 30_000 });
+                await page.waitForTimeout(300);
+                const stableFormalCount = await page.evaluate(async () => {
+                    const probe = new window.Dexie('QisiMathVueDB');
+                    await probe.open();
+                    const count = await probe.table('questions').count();
+                    probe.close();
+                    return count;
+                });
+                assert.equal(stableFormalCount, submittedQuestionNumbers.indexOf(questionNumber) + 1);
+            }
+
+            await page.getByRole('button', { name: '\u9898\u5e93\u4e0e\u68c0\u7d22' }).click();
+            await page.getByRole('button', { name: '\u7cfb\u7edf\u77e5\u8bc6\u70b9', exact: true }).click();
+            await page.getByRole('button', { name: '\u91cd\u7f6e\u7b5b\u9009', exact: true }).click();
+            const cards = page.locator('.question-card');
+            console.log('[QISI_LIBRARY_SUBMIT_OBSERVATION]', JSON.stringify(await page.evaluate(async () => {
+                const probe = new window.Dexie('QisiMathVueDB');
+                await probe.open();
+                const formalQuestions = await probe.table('questions').toArray();
+                probe.close();
+                return {
+                    formalQuestions: formalQuestions.map(question => ({
+                        id: question.id,
+                        questionNumber: question.questionNumber,
+                        stemHead: String(question.stem || '').slice(0, 40)
+                    })),
+                    cardCount: document.querySelectorAll('.question-card').length,
+                    libraryTextHead: document.querySelector('.question-flow')?.textContent?.trim().slice(0, 500) || '',
+                    activeMode: document.querySelector('.material-segmented .active')?.textContent?.trim() || ''
+                };
+            })));
+            await page.waitForFunction(
+                expected => document.querySelectorAll('.question-card').length >= expected,
+                submittedQuestionNumbers.length,
+                { timeout: 30_000 }
+            );
+            assert.equal(await cards.count(), submittedQuestionNumbers.length);
+            for (let index = 0; index < submittedQuestionNumbers.length; index += 1) {
+                await cards.nth(index).getByRole('button', { name: '\u9009\u9898', exact: true }).click();
+            }
+            await page.getByRole('button', { name: '\u667a\u80fd\u7ec4\u5377\u53f0' }).click();
+
+            const popupPromise = page.waitForEvent('popup');
+            await page.getByRole('button', { name: '\u6253\u5370 PDF', exact: true }).click();
+            const popup = await popupPromise;
+            await popup.waitForLoadState('domcontentloaded');
+            await popup.waitForFunction(
+                () => ['true', 'error'].includes(document.documentElement.dataset.qisiPreviewReady),
+                null,
+                { timeout: 30_000 }
+            );
+            const printAcceptance = await popup.evaluate(() => ({
+                ready: document.documentElement.dataset.qisiPreviewReady,
+                pageCount: document.querySelectorAll('.qisi-paper-page').length,
+                questionCount: document.querySelectorAll('.qisi-paper-page .exam-question').length,
+                imageCount: document.querySelectorAll('.qisi-paper-page img.print-image').length,
+                brokenImageCount: [...document.images].filter(image => !image.complete || !image.naturalWidth).length,
+                renderErrorCount: document.querySelectorAll('.latex-render-error').length,
+                rawMarkerCount: (document.body.textContent || '').match(/QISI_(?:LAYOUT|TABLE)_(?:BEGIN|END)/g)?.length || 0,
+                overflowCount: [...document.querySelectorAll('.qisi-paper-page')].filter(pageNode => {
+                    const content = pageNode.querySelector('.qisi-page-content');
+                    return content && content.scrollHeight > content.clientHeight + 2;
+                }).length
+            }));
+            assert.deepEqual(printAcceptance, {
+                ready: 'true',
+                pageCount: printAcceptance.pageCount,
+                questionCount: submittedQuestionNumbers.length,
+                imageCount: submittedQuestionNumbers.length,
+                brokenImageCount: 0,
+                renderErrorCount: 0,
+                rawMarkerCount: 0,
+                overflowCount: 0
+            });
+            assert.ok(printAcceptance.pageCount >= 1);
+            console.log('[QISI_DUAL_PRINT_ACCEPTANCE]', JSON.stringify({ fixtureFormat, ...printAcceptance }));
+        }
     } finally {
         await context.close();
         await browser.close();

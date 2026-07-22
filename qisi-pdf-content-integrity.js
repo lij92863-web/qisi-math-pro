@@ -273,6 +273,37 @@
             return placements;
         };
 
+        const isVerifiedPdfQuestionFigure = (figureValue = {}, expectedQuestion = '') => {
+            const evidence = figureValue?.sourceEvidence || {};
+            const question = normalizeQuestionNumber(expectedQuestion);
+            const ownerQuestion = normalizeQuestionNumber(evidence.ownerQuestion);
+            const page = Number(figureValue?.sourcePage || evidence.page || 0) || 0;
+            const evidencePage = Number(evidence.page || 0) || 0;
+            const descriptorSource = figureValue?.image_bbox ||
+                figureValue?.normalizedBbox ||
+                figureValue?.bbox || [];
+            const descriptorBbox = normalizeBbox(descriptorSource, {
+                space: !figureValue?.image_bbox && figureValue?.normalizedBbox
+                    ? 'normalized'
+                    : 'auto'
+            });
+            const evidenceBbox = normalizeBbox(evidence.bbox || [], {
+                space: 'normalized'
+            });
+            const sameBbox = descriptorBbox.length === 4 && evidenceBbox.length === 4 &&
+                descriptorBbox.every((value, index) => Math.abs(value - evidenceBbox[index]) <= 0.002);
+
+            return Boolean(
+                figureValue?.source === 'pdf-embedded-image-placement' &&
+                figureValue?.contentRole === 'question' &&
+                figureValue?.anchorField === 'stem' &&
+                evidence.validation === 'pdf-local-layout-v1' &&
+                question && ownerQuestion === question &&
+                page && page === evidencePage &&
+                sameBbox
+            );
+        };
+
         const buildSupportQuestionRegions = (layouts = [], options = {}) => {
             const pages = (Array.isArray(layouts) ? layouts : [])
                 .map((page, index) => ({
@@ -354,6 +385,17 @@
             return { ok: true, markers, regions, warnings: [] };
         };
 
+        const extractLeadingQuestionMarker = textValue => {
+            const text = String(textValue || '')
+                .replace(/[\uFF10-\uFF19]/g, char =>
+                    String.fromCharCode(char.charCodeAt(0) - 0xFEE0)
+                );
+            const match = text.match(/^\s*((?:\d\s*){1,3})[.．、]\s*/);
+            if (!match) return null;
+            const question = normalizeQuestionNumber(match[1].replace(/\s+/g, ''));
+            return question ? { question, evidence: match[0] } : null;
+        };
+
         const buildQuestionTextRegions = (layouts = [], options = {}) => {
             const pages = (Array.isArray(layouts) ? layouts : [])
                 .map((page, index) => ({
@@ -370,9 +412,9 @@
             pages.forEach(page => {
                 (page.lines || []).forEach((line, lineIndex) => {
                     const text = String(line?.text || '').trim();
-                    const match = text.match(/^\s*(\d{1,3})\s*[.．、]\s*/);
-                    if (!match) return;
-                    const question = normalizeQuestionNumber(match[1]);
+                    const marker = extractLeadingQuestionMarker(text);
+                    if (!marker) return;
+                    const question = marker.question;
                     if (!question || (expectedSet.size && !expectedSet.has(question))) return;
                     const topRaw = Number(line?.ny1 ?? line?.y1 ?? 0);
                     const top = topRaw > 1 ? topRaw / 1000 : topRaw;
@@ -620,9 +662,14 @@
                         contentRole: 'solution',
                         anchorField: 'solution',
                         sourceEvidence: {
+                            validation: 'pdf-local-solution-layout-v1',
                             imageRef: figureValue?.imageRef || '',
                             page,
-                            bbox: normalizedBbox
+                            bbox: normalizedBbox,
+                            ownerQuestion: question,
+                            ownerRegionBbox: ownership.owner.normalizedBbox,
+                            ownershipSource: regionReport.source,
+                            overlap: ownership.overlap
                         }
                     };
                     target.images = [...(Array.isArray(target.images) ? target.images : []), image];
@@ -867,8 +914,8 @@
             const owner = normalizeQuestionNumber(ownerQuestion);
 
             const foreignQuestion = overlapping.find(row => {
-                const marker = row.text.match(/^\s*(\d{1,3})\s*[.．、]\s*/);
-                return marker && normalizeQuestionNumber(marker[1]) !== owner;
+                const marker = extractLeadingQuestionMarker(row.text);
+                return marker && marker.question !== owner;
             });
             if (foreignQuestion) {
                 return {
@@ -1052,9 +1099,14 @@
                         contentRole: 'question',
                         anchorField: 'stem',
                         sourceEvidence: {
+                            validation: 'pdf-local-layout-v1',
                             imageRef: figureValue?.imageRef || '',
                             page,
-                            bbox: normalizedBbox
+                            bbox: normalizedBbox,
+                            ownerQuestion: question,
+                            ownerRegionBbox: ownership.owner.normalizedBbox,
+                            ownershipSource: regionReport.source,
+                            overlap: ownership.overlap
                         }
                     };
                     targets[0].recognizedImages.push(descriptor);
@@ -1627,6 +1679,7 @@
                 (options.expectedQuestionNumbers || []).map(normalizeQuestionNumber).filter(Boolean)
             );
             const candidates = [];
+            let activeQuestion = '';
 
             for (const [index, page] of (Array.isArray(pages) ? pages : []).entries()) {
                 const pageNo = Number(page?.pageNo || page?.page || index + 1) || index + 1;
@@ -1635,21 +1688,45 @@
                     .split(/\n+/);
 
                 for (const [lineIndex, line] of lines.entries()) {
-                    const match = line.match(/^\s*(\d{1,3})\s*【\s*答案\s*】\s*([A-DＡ-Ｄ]{1,4})(?![A-Za-z])/i);
-                    if (!match) continue;
-                    const question = normalizeQuestionNumber(match[1]);
-                    if (!question || (expected.size && !expected.has(question))) continue;
-                    const answer = match[2].replace(/[Ａ-Ｄ]/g, char =>
-                        String.fromCharCode(char.charCodeAt(0) - 0xFEE0)
-                    ).toUpperCase();
-                    candidates.push({
-                        question,
-                        answer,
-                        pageNo,
-                        lineIndex,
-                        evidence: line.trim(),
-                        source: 'pdf-text-layer-explicit-answer'
-                    });
+                    const marker = line.match(
+                        /^\s*(\d{1,3})\s*【\s*答案\s*】\s*([A-DＡ-Ｄ]{1,4})?(?![A-Za-z])/i
+                    );
+                    if (marker) {
+                        const question = normalizeQuestionNumber(marker[1]);
+                        activeQuestion = question && (!expected.size || expected.has(question))
+                            ? question
+                            : '';
+                        if (!activeQuestion || !marker[2]) continue;
+                        const answer = marker[2].replace(/[Ａ-Ｄ]/g, char =>
+                            String.fromCharCode(char.charCodeAt(0) - 0xFEE0)
+                        ).toUpperCase();
+                        candidates.push({
+                            question: activeQuestion,
+                            answer,
+                            pageNo,
+                            lineIndex,
+                            evidence: line.trim(),
+                            source: 'pdf-text-layer-explicit-answer'
+                        });
+                        continue;
+                    }
+
+                    if (!activeQuestion) continue;
+                    const conclusionPattern = /(?:故选|答案(?:为|是)|正确答案(?:为|是))\s*[:：]?\s*([A-DＡ-Ｄ]{1,4})(?![A-Za-z])/gi;
+                    let conclusion;
+                    while ((conclusion = conclusionPattern.exec(line)) !== null) {
+                        const answer = conclusion[1].replace(/[Ａ-Ｄ]/g, char =>
+                            String.fromCharCode(char.charCodeAt(0) - 0xFEE0)
+                        ).toUpperCase();
+                        candidates.push({
+                            question: activeQuestion,
+                            answer,
+                            pageNo,
+                            lineIndex,
+                            evidence: line.trim(),
+                            source: 'pdf-text-layer-explicit-solution-conclusion'
+                        });
+                    }
                 }
             }
 
@@ -1703,7 +1780,7 @@
                     item.warnings = [
                         ...new Set([
                             ...(item.warnings || []),
-                            '模型答案与 PDF 明文答案冲突，已采用同题号【答案】明文证据。'
+                            '模型答案与 PDF 明文答案冲突，已采用同题号明确答案/解析结论证据。'
                         ])
                     ];
                 }
@@ -1815,7 +1892,9 @@
             deriveQuestionOwnershipRegions,
             extractExplicitAnswerEvidence,
             extractFourLabeledOptions,
+            extractLeadingQuestionMarker,
             extractPlacedImageBboxes,
+            isVerifiedPdfQuestionFigure,
             mergeMathFragments,
             multiplyTransformMatrices,
             normalizeBbox,

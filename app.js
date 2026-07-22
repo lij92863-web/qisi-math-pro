@@ -6956,10 +6956,14 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                         '';
                     const sourceFileRecord = files.find(file => file.id === sourceFileIdForDraft);
                     const recognizedFigures = collectValidRecognizedFigures(draft);
-                    const figures = sourceFileRecord?.fileType === 'pdf'
+                    const isPdfSource = sourceFileRecord?.fileType === 'pdf';
+                    const draftQuestionNumber = draft.questionNumber || draft.question || draft.order || '';
+                    const figures = isPdfSource
                         ? recognizedFigures.filter(figure =>
-                            figure.source === 'pdf-embedded-image-placement' &&
-                            figure.sourceEvidence?.bbox
+                            window.Qisi.PdfContentIntegrity?.isVerifiedPdfQuestionFigure(
+                                figure,
+                                draftQuestionNumber
+                            )
                         )
                         : recognizedFigures;
 
@@ -7053,35 +7057,50 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                             figure.image_bbox,
                             { space: 'auto' }
                         ) || [];
-                        const ownerDecision = window.Qisi.PdfContentIntegrity?.assignFigureOwner({
-                            figure: {
-                                page: sourcePage,
-                                normalizedBbox: normalizedFigureBbox
-                            },
-                            candidates: candidateRegions,
-                            minOverlap: 0.9
-                        });
-                        const contamination = window.Qisi.PdfContentIntegrity?.detectCropContamination({
-                            cropBbox: normalizedFigureBbox,
-                            ownerId: draft.id,
-                            page: sourcePage,
-                            regions: candidateRegions
-                        });
+                        const figureSourcePage = Number(
+                            figure.sourcePage || figure.sourceEvidence?.page || sourcePage
+                        ) || sourcePage;
 
-                        if (
-                            !ownerDecision ||
-                            ownerDecision.status !== 'assigned' ||
-                            String(ownerDecision.owner?.id || '') !== String(draft.id || '') ||
-                            contamination?.contaminated
-                        ) {
-                            draft.manualReviewRequired = true;
-                            window.Qisi.Utils.addWarningOnce(
-                                draft,
+                        if (isPdfSource) {
+                            if (figureSourcePage !== sourcePage) {
+                                draft.manualReviewRequired = true;
+                                window.Qisi.Utils.addWarningOnce(
+                                    draft,
+                                    '题图页码与题目来源页不一致，已拒绝自动绑定。'
+                                );
+                                continue;
+                            }
+                        } else {
+                            const ownerDecision = window.Qisi.PdfContentIntegrity?.assignFigureOwner({
+                                figure: {
+                                    page: sourcePage,
+                                    normalizedBbox: normalizedFigureBbox
+                                },
+                                candidates: candidateRegions,
+                                minOverlap: 0.9
+                            });
+                            const contamination = window.Qisi.PdfContentIntegrity?.detectCropContamination({
+                                cropBbox: normalizedFigureBbox,
+                                ownerId: draft.id,
+                                page: sourcePage,
+                                regions: candidateRegions
+                            });
+
+                            if (
+                                !ownerDecision ||
+                                ownerDecision.status !== 'assigned' ||
+                                String(ownerDecision.owner?.id || '') !== String(draft.id || '') ||
                                 contamination?.contaminated
-                                    ? '题图裁剪与其他题目区域重叠，已拒绝自动绑定。'
-                                    : '题图归属无法唯一证明，已拒绝按最近题号自动绑定。'
-                            );
-                            continue;
+                            ) {
+                                draft.manualReviewRequired = true;
+                                window.Qisi.Utils.addWarningOnce(
+                                    draft,
+                                    contamination?.contaminated
+                                        ? '题图裁剪与其他题目区域重叠，已拒绝自动绑定。'
+                                        : '题图归属无法唯一证明，已拒绝按最近题号自动绑定。'
+                                );
+                                continue;
+                            }
                         }
 
                         let croppedUrl = '';
@@ -7106,7 +7125,7 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                         const imageConfidence = 1;
                         const imageStatus = 'bound';
                         const description = window.Qisi.Utils.cleanRecognizedText(figure.image_description || '题中图形');
-                        const filename = `page_${sourcePage}_q${draft.questionNumber || draft.order}_figure_${index + 1}.jpg`;
+                        const filename = `page_${figureSourcePage}_q${draft.questionNumber || draft.order}_figure_${index + 1}.jpg`;
 
                         const imageRow = {
                             id: imageId,
@@ -7116,7 +7135,7 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                             name: filename,
                             url: croppedUrl,
                             sourceFileId,
-                            sourcePage,
+                            sourcePage: figureSourcePage,
                             bbox: normalizedFigureBbox,
                             confidence: imageConfidence,
                             description: `自动裁剪题图：${description}`,
@@ -7139,7 +7158,7 @@ ${pageMarkdown || '（OCR Markdown 为空，请主要依据页面图片识别）
                             url: croppedUrl,
                             align: 'center',
                             source: imageRow.source,
-                            sourcePage,
+                            sourcePage: figureSourcePage,
                             bbox: normalizedFigureBbox,
                             confidence: imageConfidence,
                             status: imageStatus,
@@ -10797,7 +10816,9 @@ ${expected ? `【人工预期】本文件人工填写的预计题数为 ${expect
 
 ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
 
-                    const configuredModels = getVisionModelsForMode('accurate');
+                    const configuredModels = getVisionModelsForMode(
+                        activeRecognitionMode || 'standard'
+                    );
                     const models = [...new Set(
                         (configuredModels || []).filter(model => /vl/i.test(String(model || '')))
                     )];

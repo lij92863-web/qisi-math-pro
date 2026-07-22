@@ -46,6 +46,43 @@ test('conflicting duplicate explicit answers are ambiguous and never used', () =
     assert.deepEqual(result.decisions, []);
 });
 
+test('blank answer label uses only a unique explicit choice conclusion in the same numbered block', () => {
+    const evidence = integrity.extractExplicitAnswerEvidence([{
+        pageNo: 1,
+        text: [
+            '1【答案】B',
+            '【详解】逐项判断，故选：B',
+            '2【答案】',
+            '【详解】计算得侧棱长为 5，故选：C',
+            '3【答案】B'
+        ].join('\n')
+    }], { expectedQuestionNumbers: ['1', '2', '3'] });
+
+    assert.deepEqual(
+        evidence.accepted.map(item => [item.question, item.answer]),
+        [['1', 'B'], ['2', 'C'], ['3', 'B']]
+    );
+    assert.equal(
+        evidence.accepted.find(item => item.question === '2').source,
+        'pdf-text-layer-explicit-solution-conclusion'
+    );
+});
+
+test('unanchored or conflicting solution conclusions are rejected instead of guessed', () => {
+    const unanchored = integrity.extractExplicitAnswerEvidence([{
+        pageNo: 1,
+        text: '一段没有题号答案块的解析，故选：C'
+    }], { expectedQuestionNumbers: ['2'] });
+    assert.deepEqual(unanchored.accepted, []);
+
+    const conflicting = integrity.extractExplicitAnswerEvidence([{
+        pageNo: 1,
+        text: '2【答案】B\n【详解】另一处写成故选：C'
+    }], { expectedQuestionNumbers: ['2'] });
+    assert.deepEqual(conflicting.accepted, []);
+    assert.equal(conflicting.ambiguous[0].question, '2');
+});
+
 test('alignment uses section, explicit question number and subquestion path', () => {
     const report = integrity.buildAlignmentReport({
         questionItems: [
