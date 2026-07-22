@@ -24,7 +24,17 @@ const TEXT = {
     personal: '\u4e2a\u4eba\u7ba1\u7406',
     personalHeading: '\u4e2a\u4eba\u77e5\u8bc6\u70b9\u7ba1\u7406',
     template: '\u6781\u5ba2\u6392\u7248\u914d\u7f6e',
-    templateHeading: '\u6a21\u677f\u9884\u8bbe\u5e93'
+    templateHeading: '\u6a21\u677f\u9884\u8bbe\u5e93',
+    systemPicker: '\u9009\u62e9\u7cfb\u7edf\u8282\u70b9',
+    personalPicker: '\u9009\u62e9\u4e2a\u4eba\u8282\u70b9',
+    stemTab: '\u9898\u5e72',
+    answerTab: '\u7b54\u6848',
+    solutionTab: '\u89e3\u6790',
+    librarySearch: '\u641c\u7d22\u9898\u5e72\u3001\u7b54\u6848\u3001\u89e3\u6790',
+    resetFilters: '\u91cd\u7f6e\u7b5b\u9009',
+    onlyQuestions: '\u53ea\u6253\u5370\u9898\u76ee',
+    withAnswers: '\u4e00\u4efd PDF\uff1a\u9898\u76ee\u540e\u53e6\u8d77\u65b0\u9875\u5370\u7b54\u6848',
+    splitPdf: '\u4e24\u4efd PDF\uff1a\u9898\u76ee\u548c\u7b54\u6848\u5206\u5f00'
 };
 
 function reserveLoopbackPort() {
@@ -163,6 +173,33 @@ test('top-level application views remain navigable in an isolated browser contex
                 view.button + ' should be the active navigation item');
         }
 
+        await navigation.getByRole('button', { name: TEXT.entry, exact: true }).click();
+        const entryRoot = page.locator('.entry-layout');
+        const systemPicker = entryRoot.getByRole('button', { name: TEXT.systemPicker, exact: true });
+        const personalPicker = entryRoot.getByRole('button', { name: TEXT.personalPicker, exact: true });
+        await systemPicker.click();
+        assert.equal(await entryRoot.locator('.knowledge-cascader:visible').count(), 1);
+        await personalPicker.click();
+        assert.equal(
+            await entryRoot.locator('.knowledge-cascader:visible').count(),
+            1,
+            'one click must switch directly from the system picker to the personal picker'
+        );
+        await personalPicker.click();
+        assert.equal(await entryRoot.locator('.knowledge-cascader:visible').count(), 0);
+
+        for (const [tabName, fieldName] of [
+            [TEXT.answerTab, 'answer'],
+            [TEXT.solutionTab, 'solution'],
+            [TEXT.stemTab, 'stem']
+        ]) {
+            await entryRoot.getByRole('button', { name: tabName, exact: true }).click();
+            assert.match(
+                await entryRoot.locator('textarea.textarea-code').getAttribute('placeholder') || '',
+                new RegExp(`\uff1a${fieldName}`)
+            );
+        }
+
         await navigation.getByRole('button', { name: TEXT.batch, exact: true }).click();
         await page.locator('.batch-import-page')
             .getByRole('button', { name: TEXT.createTask, exact: true }).click();
@@ -178,6 +215,31 @@ test('top-level application views remain navigable in an isolated browser contex
             await modeButton.click();
             assert.match(await modeButton.getAttribute('class') || '', /(?:^|\s)active(?:\s|$)/,
                 mode + ' filter should become active');
+        }
+
+        const libraryRoot = page.locator('.library-layout');
+        const librarySearch = libraryRoot.getByPlaceholder(TEXT.librarySearch, { exact: true });
+        const librarySelects = libraryRoot.locator('select');
+        assert.equal(await librarySelects.count(), 5);
+        await librarySearch.fill('R9E-filter-probe');
+        await librarySelects.nth(0).selectOption({ label: '\u5355\u9009\u9898' });
+        await librarySelects.nth(1).selectOption({ label: '\u8f83\u96be' });
+        await librarySelects.nth(2).selectOption({ label: '\u9ad8\u4e8c' });
+        await librarySelects.nth(3).selectOption({ label: '\u6709\u89e3\u6790' });
+        await librarySelects.nth(4).selectOption({ label: '\u6709\u56fe\u7247' });
+        await libraryRoot.getByRole('button', { name: TEXT.resetFilters, exact: true }).click();
+        assert.equal(await librarySearch.inputValue(), '');
+        assert.deepEqual(
+            await librarySelects.evaluateAll(nodes => nodes.map(node => node.value)),
+            ['', '', '', '', '']
+        );
+
+        await navigation.getByRole('button', { name: TEXT.exam, exact: true }).click();
+        const examRoot = page.locator('.exam-builder');
+        for (const mode of [TEXT.withAnswers, TEXT.splitPdf, TEXT.onlyQuestions]) {
+            const modeButton = examRoot.getByRole('button', { name: mode, exact: true });
+            await modeButton.click();
+            assert.match(await modeButton.getAttribute('class') || '', /border-\[#22a039\]/);
         }
 
         await page.waitForTimeout(100);

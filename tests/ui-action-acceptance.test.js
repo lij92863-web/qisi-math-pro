@@ -58,7 +58,7 @@ const EXPECTED_AI_OCR_EXPRESSIONS = Object.freeze([
     'runBatchRecognition(batch.id)'
 ].sort());
 
-const EXPECTED_BROWSER_NAVIGATION_EXPRESSIONS = Object.freeze([
+const EXPECTED_BROWSER_INTERACTION_EXPRESSIONS = Object.freeze([
     "openBatchCreate('mixed')",
     'openBatchList',
     'openExamBuilder',
@@ -69,7 +69,14 @@ const EXPECTED_BROWSER_NAVIGATION_EXPRESSIONS = Object.freeze([
     "view = 'entry'",
     "view = 'library'",
     "view = 'personal'",
-    "view = 'template'"
+    "view = 'template'",
+    'showEntryKnowledge = !showEntryKnowledge; showEntryPersonalKnowledge = false',
+    'showEntryPersonalKnowledge = !showEntryPersonalKnowledge; showEntryKnowledge = false',
+    'entryTab = t.id',
+    'resetLibraryFilters',
+    "exportMode='questions'",
+    "exportMode='withAnswers'",
+    "exportMode='split'"
 ].sort());
 
 function collectClickExpressions(html) {
@@ -164,14 +171,14 @@ test('blocking dialogs, file choosers and AI/OCR entrypoints are exact', () => {
     );
 });
 
-test('only the eleven actions exercised by the current navigation smoke claim browser evidence', () => {
+test('browser smoke claims evidence only for the eighteen interactions it exercises', () => {
     const covered = actionManifest
         .filter(action => action.automatedEvidence === 'tests/app-ui-navigation-browser.test.js')
         .map(action => action.expression)
         .sort();
 
-    assert.equal(covered.length, 11);
-    assert.deepEqual(covered, EXPECTED_BROWSER_NAVIGATION_EXPRESSIONS);
+    assert.equal(covered.length, 18);
+    assert.deepEqual(covered, EXPECTED_BROWSER_INTERACTION_EXPRESSIONS);
 });
 
 test('all 117 actions are either automated or have a concrete isolated manual procedure', () => {

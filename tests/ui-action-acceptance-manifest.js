@@ -230,7 +230,7 @@ const FILE_CHOOSER_EXPRESSIONS = new Set([
     'openImportBankPicker'
 ]);
 
-const BROWSER_NAVIGATION_EXPRESSIONS = new Set([
+const BROWSER_INTERACTION_EXPRESSIONS = new Set([
     "view = 'entry'",
     "view = 'batchImport'; openBatchList()",
     "view = 'library'",
@@ -241,7 +241,14 @@ const BROWSER_NAVIGATION_EXPRESSIONS = new Set([
     'openBatchList',
     "switchLibraryKnowledgeMode('system')",
     "switchLibraryKnowledgeMode('personal')",
-    "switchLibraryKnowledgeMode('external')"
+    "switchLibraryKnowledgeMode('external')",
+    'showEntryKnowledge = !showEntryKnowledge; showEntryPersonalKnowledge = false',
+    'showEntryPersonalKnowledge = !showEntryPersonalKnowledge; showEntryKnowledge = false',
+    'entryTab = t.id',
+    'resetLibraryFilters',
+    "exportMode='questions'",
+    "exportMode='withAnswers'",
+    "exportMode='split'"
 ]);
 
 const COMPOSABLE_EVIDENCE = Object.freeze({
@@ -373,7 +380,7 @@ function delegateOwnerFor(owner, expression, risk) {
 }
 
 function automatedEvidenceFor(expression) {
-    if (BROWSER_NAVIGATION_EXPRESSIONS.has(expression)) {
+    if (BROWSER_INTERACTION_EXPRESSIONS.has(expression)) {
         return 'tests/app-ui-navigation-browser.test.js';
     }
     for (const [testFile, expressions] of Object.entries(COMPOSABLE_EVIDENCE)) {
@@ -437,6 +444,6 @@ module.exports = Object.freeze({
             .filter(([, dialogs]) => dialogs.includes('prompt')).map(([expression]) => expression).sort()),
         fileChooserExpressions: Object.freeze([...FILE_CHOOSER_EXPRESSIONS].sort()),
         aiOcrExpressions: Object.freeze([...R3_EXPRESSIONS].sort()),
-        browserNavigationExpressions: Object.freeze([...BROWSER_NAVIGATION_EXPRESSIONS].sort())
+        browserInteractionExpressions: Object.freeze([...BROWSER_INTERACTION_EXPRESSIONS].sort())
     })
 });

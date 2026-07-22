@@ -232,11 +232,11 @@
                             <!-- 系统知识点级联面板 -->
                             <div class="flex flex-col gap-1 relative">
                                 <label class="text-[10px] font-bold text-gray-500">系统知识点</label>
-                                <button @click="showEntryKnowledge = !showEntryKnowledge; showEntryPersonalKnowledge = false" class="w-full text-left input-base entry-compact-control hover:border-blue-400 transition-colors flex justify-between items-center bg-white cursor-pointer">
+                                <button @click="showEntryKnowledge = !showEntryKnowledge; showEntryPersonalKnowledge = false" class="relative z-20 w-full text-left input-base entry-compact-control hover:border-blue-400 transition-colors flex justify-between items-center bg-white cursor-pointer">
                                     <span class="truncate mr-2 text-[12px] font-medium" :class="entryForm.systemKnowledge ? 'text-blue-600' : 'text-gray-700'">{{ entryForm.systemKnowledge || '选择系统节点' }}</span>
                                     <icon name="chevron-down" size="12" class="text-gray-400 shrink-0"></icon>
                                 </button>
-                                <div v-if="showEntryKnowledge" @click="showEntryKnowledge = false" class="fixed inset-0 z-40"></div>
+                                <div v-if="showEntryKnowledge" @click="showEntryKnowledge = false" class="fixed inset-0 z-10"></div>
                                 <div v-if="showEntryKnowledge" class="knowledge-cascader custom-scrollbar right-0 left-auto">
                                     <div class="cascader-col-1 custom-scrollbar">
                                         <div v-for="l1 in knowledgeTree" :key="l1.id" @mouseenter="hoverL1 = l1" @click="selectKnowledge(l1.name, 'system')" class="cascader-l1-item flex justify-between items-center" :class="{'active': hoverL1 && hoverL1.id === l1.id, 'selected': entryForm.systemKnowledge === l1.name}">
@@ -264,11 +264,11 @@
                             <!-- 个人知识点级联面板 -->
                             <div class="flex flex-col gap-1 relative">
                                 <label class="text-[10px] font-bold text-gray-500">个人知识点</label>
-                                <button @click="showEntryPersonalKnowledge = !showEntryPersonalKnowledge; showEntryKnowledge = false" class="w-full text-left input-base entry-compact-control hover:border-green-400 transition-colors flex justify-between items-center bg-white cursor-pointer">
+                                <button @click="showEntryPersonalKnowledge = !showEntryPersonalKnowledge; showEntryKnowledge = false" class="relative z-20 w-full text-left input-base entry-compact-control hover:border-green-400 transition-colors flex justify-between items-center bg-white cursor-pointer">
                                     <span class="truncate mr-2 text-[12px] font-medium" :class="entryForm.personalKnowledge ? 'text-green-600' : 'text-gray-700'">{{ entryForm.personalKnowledge || '选择个人节点' }}</span>
                                     <icon name="chevron-down" size="12" class="text-gray-400 shrink-0"></icon>
                                 </button>
-                                <div v-if="showEntryPersonalKnowledge" @click="showEntryPersonalKnowledge = false" class="fixed inset-0 z-40"></div>
+                                <div v-if="showEntryPersonalKnowledge" @click="showEntryPersonalKnowledge = false" class="fixed inset-0 z-10"></div>
                                 <div v-if="showEntryPersonalKnowledge" class="knowledge-cascader custom-scrollbar right-0 left-auto">
                                     <div class="cascader-col-1 custom-scrollbar">
                                         <div v-if="personalKnowledgeTree.length === 0" class="p-4 text-[12px] text-gray-400">先到个人管理创建知识点</div>
