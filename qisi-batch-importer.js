@@ -1066,6 +1066,8 @@
             throw error;
         }
         let alignedSupport = null;
+        let embeddedSupportWarnings = [];
+        let embeddedUnmatchedAnswers = [];
         const roles = Array.isArray(fileRecord?.roles)
             ? fileRecord.roles
             : [fileRecord?.role].filter(Boolean);
@@ -1075,13 +1077,39 @@
                 allowNumberedAnswerMarkers: true
             });
             if (!parsedSupport.ok) {
-                const error = new Error('Combined DOCX answer/analysis section failed explicit-boundary validation.');
-                error.code = 'DOCX_SUPPORT_CONTENT_INTEGRITY_BLOCKED';
-                error.diagnostics = parsedSupport.diagnostics;
-                throw error;
+                const recoverableCodes = new Set([
+                    'DOCX_SUPPORT_DUPLICATE_KEY',
+                    'DOCX_SUPPORT_ANSWER_MISSING'
+                ]);
+                const recoverable = parsedSupport.diagnostics.every(row => recoverableCodes.has(row?.code));
+                if (!recoverable || !support.alignQuestionAndSupportSafePartial) {
+                    const error = new Error('Combined DOCX answer/analysis section failed explicit-boundary validation.');
+                    error.code = 'DOCX_SUPPORT_CONTENT_INTEGRITY_BLOCKED';
+                    error.diagnostics = parsedSupport.diagnostics;
+                    throw error;
+                }
+                alignedSupport = support.alignQuestionAndSupportSafePartial(
+                    parsed.questions,
+                    parsedSupport.items
+                );
+                if (alignedSupport.ok) {
+                    const unresolvedNumbers = alignedSupport.diagnostics.missingKeys
+                        .map(key => key.match(/\/q-(\d+)$/)?.[1] || '')
+                        .filter(Boolean);
+                    embeddedSupportWarnings = [
+                        `合并 DOCX 的答案区存在重复、缺失或空答案题号；已按显式题号安全挂载，其余留待复核：${unresolvedNumbers.join('、') || '未知'}`
+                    ];
+                    embeddedUnmatchedAnswers = (alignedSupport.rejected || []).map(row => ({
+                        question: String(row?.support?.number || ''),
+                        answer: String(row?.support?.answer || ''),
+                        sourceFile: fileRecord.filename || '',
+                        reason: row.reason
+                    }));
+                }
+            } else {
+                alignedSupport = support.alignQuestionAndSupportByKey(parsed.questions, parsedSupport.items);
             }
-            alignedSupport = support.alignQuestionAndSupportByKey(parsed.questions, parsedSupport.items);
-            if (!alignedSupport.ok) {
+            if (!alignedSupport?.ok) {
                 const error = new Error('Combined DOCX answer/analysis sequence does not match the question skeleton.');
                 error.code = alignedSupport.code || 'DOCX_SUPPORT_KEY_MISMATCH';
                 error.diagnostics = alignedSupport.diagnostics;
@@ -1109,14 +1137,16 @@
         return {
             drafts,
             draftImages: [],
-            unmatchedAnswers: [],
-            warnings: [],
+            unmatchedAnswers: embeddedUnmatchedAnswers,
+            warnings: embeddedSupportWarnings,
             debug: {
                 blockCount: richBlocks.length,
                 mediaCount: mediaMap.size,
                 questionCount: drafts.length,
                 embeddedSupportCount: supportByQuestionKey.size,
                 hasEmbeddedSupportHeading: documentPartition.hasSupportHeading,
+                embeddedSupportAlignmentCode: alignedSupport?.code || '',
+                embeddedSupportDiagnostics: alignedSupport?.diagnostics || null,
                 expectedFormulaCount: expectedFormulaRids.length,
                 translatedFormulaCount: translation.mathByRid.size,
                 formulaDiagnostics: translation.diagnostics

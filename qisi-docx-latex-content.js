@@ -40,8 +40,39 @@
             return source;
         };
 
+        const unwrapMathTypeUserCommands = (value = '') => {
+            const source = String(value || '');
+            let output = '';
+            let cursor = 0;
+            const pattern = /\\user\d+\s*/g;
+            let match;
+            while ((match = pattern.exec(source)) !== null) {
+                const groupStart = pattern.lastIndex;
+                const groupEnd = readBalancedGroup(source, groupStart);
+                if (groupEnd < 0) continue;
+                output += source.slice(cursor, match.index);
+                output += source.slice(groupStart + 1, groupEnd - 1);
+                cursor = groupEnd;
+                pattern.lastIndex = groupEnd;
+            }
+            return output + source.slice(cursor);
+        };
+
+        const closeSingleTrailingSetBuilderBrace = (value = '') => {
+            const source = String(value || '');
+            let depth = 0;
+            for (let index = 0; index < source.length; index += 1) {
+                if (isEscapedAt(source, index)) continue;
+                if (source[index] === '{') depth += 1;
+                if (source[index] === '}') depth -= 1;
+                if (depth < 0) return source;
+            }
+            const setBuilderStart = source.search(/=\s*\{[^{}]*\\mid\b/);
+            return depth === 1 && setBuilderStart >= 0 ? `${source}}` : source;
+        };
+
         const canonicalizeMathCommands = (value = '') => {
-            let source = String(value || '')
+            let source = unwrapMathTypeUserCommands(value)
                 .replace(/\r\n?/g, '\n')
                 .replace(/[＝]/g, '=')
                 .replace(/[−﹣]/g, '-')
@@ -55,9 +86,20 @@
                 .replace(/≥/g, '\\ge ')
                 .replace(/×/g, '\\times ')
                 .replace(/÷/g, '\\div ')
-                .replace(/°/g, '^{\\circ}');
+                .replace(/°/g, '^{\\circ}')
+                .replace(/∁\s*\{([^{}]+)\}_\{\}/g, '\\complement_{$1}')
+                .replace(/∁/g, '\\complement ')
+                .replace(/∣/g, '\\mid ');
+
+            source = closeSingleTrailingSetBuilderBrace(source);
 
             source = source
+                .replace(/\^{2,}/g, '^')
+                .replace(
+                    /\\left\s*\.\s*((?:(?!\\(?:left|right)\b)[\s\S])*?)\\right\s*\)/g,
+                    '$1)'
+                )
+                .replace(/\{\[([^{}\[\]]+)\}(?=[^\[]*\])/g, '[$1')
                 .replace(
                     /\\begin\{array\}\s*\{\s*\*\s*\{\s*\d+\s*\}\s*\{\s*([lcr])\s*\}\s*\}/g,
                     '\\begin{array}{$1}'

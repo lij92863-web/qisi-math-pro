@@ -31,6 +31,41 @@ test('DOCX content audit accepts complete renderable aligned content', () => {
     assert.equal(auditIssueCount(result), 0, JSON.stringify(result));
 });
 
+test('DOCX content audit accepts a layout includegraphics reference only when the same image renders', () => {
+    const imageId = 'support:q6:image-1';
+    const question = {
+        questionNumber: '6',
+        stem: '题干',
+        options: [],
+        answer: 'C',
+        solution: `\\includegraphics[width=\\linewidth]{${imageId}}\n由图可得`,
+        recognizedSolutionImages: [{ id: imageId }]
+    };
+    const accepted = auditDocxImportContent([question], {
+        expectedQuestionNumbers: ['6'],
+        expectedAnalysisImageNumbers: ['6'],
+        visualChecks: [{
+            questionNumber: '6',
+            renderErrorCount: 0,
+            renderErrorDetails: [],
+            renderedImageIds: [imageId]
+        }]
+    });
+    const notRendered = auditDocxImportContent([question], {
+        expectedQuestionNumbers: ['6'],
+        expectedAnalysisImageNumbers: ['6'],
+        visualChecks: [{
+            questionNumber: '6',
+            renderErrorCount: 0,
+            renderErrorDetails: [],
+            renderedImageIds: []
+        }]
+    });
+
+    assert.equal(auditIssueCount(accepted), 0, JSON.stringify(accepted));
+    assert.deepEqual(notRendered.missingAnalysisImages, ['6']);
+});
+
 test('DOCX content audit fails closed on structural, formula, image, and leakage regressions', () => {
     const result = auditDocxImportContent([{
         questionNumber: '1',

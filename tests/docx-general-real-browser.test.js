@@ -33,6 +33,15 @@ const allScenarios = [
         ],
         requireSupport: false,
         weeklyAssertions: true
+    },
+    {
+        id: 'combined-long-trailing-answer',
+        expectedCount: 56,
+        files: [
+            { name: '高二.docx', roles: ['题目 + 答案 + 解析'] }
+        ],
+        requireSupport: false,
+        longCombinedAssertions: true
     }
 ];
 const requestedScenario = String(process.env.QISI_DOCX_GENERAL_SCENARIO || '').trim();
@@ -232,6 +241,17 @@ test('general DOCX formats pass the normal browser workflow without AI', {
                         const keys = (question.images || []).map(image => image.contentHash || image.id);
                         assert.equal(new Set(keys).size, keys.length, `duplicate image in Q${question.questionNumber}`);
                     }
+                }
+
+                if (scenario.longCombinedAssertions) {
+                    const answeredNumbers = state.questions
+                        .filter(question => String(question.answer || '').trim())
+                        .map(question => String(question.questionNumber));
+                    assert.equal(answeredNumbers.length, 54, JSON.stringify(answeredNumbers));
+                    assert.equal(answeredNumbers.includes('48'), false);
+                    assert.equal(answeredNumbers.includes('49'), false);
+                    assert.equal(answeredNumbers.includes('50'), true);
+                    assert.equal(state.batch.problemCount >= 2, true);
                 }
 
                 assert.deepEqual(

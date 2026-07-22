@@ -97,7 +97,70 @@
         const source = withoutLeadingImageTokens(value)
             .replace(/\s+/g, '')
             .replace(/[：:]$/, '');
-        return /^(?:《[^》]{1,160}》)?(?:参考答案(?:(?:及|与|和)(?:解析|详解))?|答案(?:及|与|和)(?:解析|详解)|答案解析|参考解析)$/.test(source);
+        const suffix = '(?:参考答案(?:(?:及|与|和)(?:解析|详解))?|答案(?:(?:及|与|和)(?:解析|详解))?|答案解析|参考解析)';
+        if (new RegExp(`^(?:《[^》]{1,160}》)?${suffix}$`).test(source)) return true;
+
+        const labelled = source.match(new RegExp(`^(.{1,48})(${suffix})$`));
+        if (!labelled) return false;
+        // Accept a short standalone paper/grade label such as “高二答案”, but
+        // do not mistake an instruction like “选择正确答案” for a section split.
+        return /(?:初[一二三]|高[一二三]|年级|学期|数学|试卷|试题|测试|练习|作业|周测|月考|期中|期末)/.test(labelled[1]);
+    };
+
+    const compactMarkerPattern = () => /(^|[ \t\u00a0]{2,}|\n)(\d{1,3})\s*[.．、]\s*/g;
+
+    const splitCompactNumberedSupportBlock = block => {
+        const rawSource = String(block?.serialized || '');
+        const automaticNumber = Number(block?.numbering?.value);
+        const hasAutomaticDecimalMarker = (
+            Number.isInteger(automaticNumber) &&
+            automaticNumber > 0 &&
+            automaticNumber <= 999 &&
+            block?.numbering?.numFmt === 'decimal' &&
+            /^\s*\d{1,3}\s*[.．、]\s*$/.test(String(block?.numbering?.display || '')) &&
+            !/^\s*\d{1,3}\s*[.．、]/.test(rawSource)
+        );
+        const source = hasAutomaticDecimalMarker
+            ? `${automaticNumber}．${rawSource}`
+            : rawSource;
+        const markers = [];
+        const pattern = compactMarkerPattern();
+        let match;
+        while ((match = pattern.exec(source)) !== null) {
+            markers.push({
+                start: match.index + match[1].length,
+                contentStart: pattern.lastIndex,
+                number: Number(match[2])
+            });
+        }
+        if (markers.length < 2) {
+            return hasAutomaticDecimalMarker
+                ? [{ ...block, serialized: source, compactSupportNumber: automaticNumber }]
+                : [block];
+        }
+
+        return markers.map((marker, index) => {
+            const end = index + 1 < markers.length
+                ? markers[index + 1].start
+                : source.length;
+            const serialized = source.slice(marker.start, end).trim();
+            const assets = (block?.assets || []).filter(asset => {
+                const id = String(asset?.assetId || asset?.id || '');
+                return id && serialized.includes(id);
+            });
+            const diagnostics = (block?.diagnostics || []).filter(row => {
+                const rid = String(row?.rid || '');
+                return rid && serialized.includes(rid);
+            });
+            return {
+                ...block,
+                numbering: null,
+                serialized,
+                assets,
+                diagnostics,
+                compactSupportNumber: marker.number
+            };
+        });
     };
 
     const partitionQuestionAndSupportBlocks = (blocks = []) => {
@@ -128,7 +191,10 @@
         let sectionIndex = 1;
         let sawQuestion = false;
         let current = null;
-        for (const block of blocks || []) {
+        const sourceBlocks = allowNumberedAnswerMarkers
+            ? (blocks || []).flatMap(splitCompactNumberedSupportBlock)
+            : (blocks || []);
+        for (const block of sourceBlocks) {
             const value = String(block?.serialized || '').trim();
             const markerSource = withoutLeadingImageTokens(value);
             if (sectionHeading(markerSource)) {
@@ -231,11 +297,102 @@
         };
     };
 
+    const alignQuestionAndSupportSafePartial = (questions = [], supportItems = []) => {
+        const questionDuplicates = duplicateKeys(questions);
+        if (questionDuplicates.length) {
+            return {
+                ok: false,
+                code: 'DOCX_QUESTION_DUPLICATE_KEY',
+                diagnostics: { questionDuplicates }
+            };
+        }
+
+        const questionByKey = new Map((questions || []).map(question => [
+            String(question?.questionKey || ''),
+            question
+        ]));
+        const questionByNumber = new Map();
+        for (const question of questions || []) {
+            const number = String(question?.questionKey || '').match(/\/q-(\d+)$/)?.[1] || '';
+            if (!number) continue;
+            if (questionByNumber.has(number)) questionByNumber.set(number, null);
+            else questionByNumber.set(number, question);
+        }
+
+        const candidatesByQuestionKey = new Map();
+        const rejected = [];
+        for (const support of supportItems || []) {
+            const supportKey = String(support?.questionKey || '');
+            const number = supportKey.match(/\/q-(\d+)$/)?.[1] || '';
+            const question = questionByKey.get(supportKey) || questionByNumber.get(number);
+            if (!question) {
+                rejected.push({ reason: 'unknown-question-key', support });
+                continue;
+            }
+            const targetKey = String(question.questionKey || '');
+            const bucket = candidatesByQuestionKey.get(targetKey) || [];
+            bucket.push(support);
+            candidatesByQuestionKey.set(targetKey, bucket);
+        }
+
+        const items = [];
+        const ambiguousKeys = [];
+        const emptyAnswerKeys = [];
+        for (const question of questions || []) {
+            const key = String(question?.questionKey || '');
+            const candidates = candidatesByQuestionKey.get(key) || [];
+            if (candidates.length > 1) {
+                ambiguousKeys.push(key);
+                candidates.forEach(support => rejected.push({ reason: 'duplicate-question-key', support }));
+                continue;
+            }
+            if (!candidates.length) continue;
+            if (!String(candidates[0]?.answer || '').trim()) {
+                emptyAnswerKeys.push(key);
+                rejected.push({ reason: 'empty-answer', support: candidates[0] });
+                continue;
+            }
+            items.push({ question, support: candidates[0] });
+        }
+
+        const acceptedKeys = new Set(items.map(item => String(item.question?.questionKey || '')));
+        const missingKeys = (questions || [])
+            .map(question => String(question?.questionKey || ''))
+            .filter(key => key && !acceptedKeys.has(key));
+        return {
+            ok: true,
+            complete: missingKeys.length === 0 && rejected.length === 0,
+            code: missingKeys.length || rejected.length
+                ? 'DOCX_SUPPORT_SAFE_PARTIAL'
+                : 'DOCX_SUPPORT_ALIGNED',
+            diagnostics: {
+                missingKeys,
+                ambiguousKeys,
+                emptyAnswerKeys,
+                rejectedCount: rejected.length
+            },
+            items,
+            rejected
+        };
+    };
+
+    const shouldParseDocxTextSupportFallback = ({
+        isFullRole = false,
+        hasAnswerOrSolutionRole = false,
+        importerDebug = null
+    } = {}) => {
+        const supportWasHandledByImporter = importerDebug?.hasEmbeddedSupportHeading === true;
+        return (isFullRole === true || hasAnswerOrSolutionRole === true) && !supportWasHandledByImporter;
+    };
+
     return {
         alignQuestionAndSupportByKey,
+        alignQuestionAndSupportSafePartial,
         isSupportHeading,
         normalizeKeyboardMath,
         parseAnswerRichBlocks,
-        partitionQuestionAndSupportBlocks
+        partitionQuestionAndSupportBlocks,
+        shouldParseDocxTextSupportFallback,
+        splitCompactNumberedSupportBlock
     };
 });

@@ -146,9 +146,36 @@
         const beforeContent = plainRunContent(beforeRuns, serializeRuns);
         const afterContent = plainRunContent(afterRuns, serializeRuns);
         if (!afterContent) return fallback;
+        if (/^\s*\d{1,3}\s*[.．、:：]?\s*【答案】/.test(afterContent)) {
+            // Support parsing intentionally understands transparent image
+            // tokens before an answer marker and assigns those assets to the
+            // newly opened answer item. An opaque layout payload would hide
+            // the marker and attach the image to the previous answer.
+            return fallback;
+        }
 
         const widthRatio = sourceWidthRatio(images[0], assetsById, usableWidthTwips);
-        return serializeLayoutModel({
+        const leadingBoundary = afterContent.match(
+            /^(\s*(?:\d{1,3}|[A-D])\s*[.．、:：]\s*)([\s\S]+)$/
+        );
+        const optionMarkers = [...afterContent.matchAll(/(?:^|[\t\n\s])([A-D])\s*[.．、:：]/g)];
+        if (/^\s*[A-D]\s*[.．、:：]/.test(afterContent) && optionMarkers.length > 1) {
+            const imageOnlyLayout = serializeLayoutModel({
+                type: 'image-row',
+                items: [{
+                    id: imageId(images[0]),
+                    widthRatio: Number(clamp(widthRatio, 0.26, 0.58).toFixed(4)),
+                    dimensions: runDimensions(images[0], assetsById)
+                }]
+            });
+            // Multiple choices are structural siblings, not copy belonging to
+            // a single media-text cell. Keep every label outside the opaque
+            // layout payload so option splitting cannot corrupt its LaTeX.
+            return [beforeContent, imageOnlyLayout, afterContent]
+                .filter(Boolean)
+                .join('\n');
+        }
+        const layoutSource = serializeLayoutModel({
             type: 'media-text',
             beforeContent,
             image: {
@@ -156,8 +183,15 @@
                 widthRatio: Number(clamp(widthRatio, 0.26, 0.58).toFixed(4)),
                 dimensions: runDimensions(images[0], assetsById)
             },
-            afterContent
+            afterContent: leadingBoundary ? leadingBoundary[2].trim() : afterContent
         });
+        // A Word paragraph may place a figure immediately before the next
+        // question/option marker. Keep the visual media-text relationship, but
+        // expose that marker before the opaque layout block so the structural
+        // parser can open the correct owner instead of attaching it backwards.
+        return leadingBoundary
+            ? `${leadingBoundary[1].trim()} ${layoutSource}`
+            : layoutSource;
     };
 
     const layoutBlockPattern = () => /% QISI_LAYOUT_BEGIN ([0-9a-f]{8}) ([A-Za-z0-9+/=$\u200b\u2060]+)\r?\n[\s\S]*?% QISI_LAYOUT_END \1/g;

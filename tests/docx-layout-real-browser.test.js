@@ -1,14 +1,19 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
 const { chromium } = require('playwright');
 
 const enabled = process.env.QISI_REAL_DOCX_LAYOUT === '1';
 const baseUrl = process.env.QISI_BASE_URL || 'http://localhost:3000/main.html';
+const fixtureRoot = process.env.QISI_DOCX_LAYOUT_ROOT || 'C:\\Users\\Administrator\\Desktop\\题目与答案';
+const expectedQuestionCount = 19;
 const allSourceFiles = [
-    'C:\\Users\\Administrator\\Desktop\\广东佛山市第一中学2026届高三一模检测数学试题.docx',
-    'C:\\Users\\Administrator\\Desktop\\河北昌黎第一中学2025-2026学年高三考前自测考试数学试卷.docx',
-    'C:\\Users\\Administrator\\Desktop\\湖北省武汉市2025届高三下学期毕业生四月调研考试数学试题.docx'
-];
+    '广东佛山市第一中学2026届高三一模检测数学试题.docx',
+    '广东深圳高级中学（集团）2026届高三适应性考试数学试卷 (1).docx',
+    '广东省十二所重点中学校2026届高三年级第一次模拟考（十二校一模）数学试题.docx',
+    '河北昌黎第一中学2025-2026学年高三考前自测考试数学试卷.docx',
+    '湖北省武汉市2025届高三下学期毕业生四月调研考试数学试题.docx'
+].map(name => path.join(fixtureRoot, name));
 const requestedFile = String(process.env.QISI_DOCX_LAYOUT_FILE || '').trim();
 const purposeRole = process.env.QISI_DOCX_LAYOUT_ROLE === 'full'
     ? '题目 + 答案 + 解析'
@@ -98,7 +103,12 @@ test('real DOCX layout evidence survives the normal UI without AI/OCR', {
                     await page.waitForTimeout(750);
                 }
                 assert.equal(state?.batch?.status, 'review', `${file}: ${JSON.stringify(state?.batch)}`);
-                assert.ok(state.questions.length > 0, file);
+                assert.equal(state.questions.length, expectedQuestionCount, file);
+                assert.deepEqual(
+                    state.questions.map(question => String(question.questionNumber)),
+                    Array.from({ length: expectedQuestionCount }, (_, index) => String(index + 1)),
+                    file
+                );
                 assert.equal(state.formalCount, 0, file);
                 assert.equal(forbiddenCalls, 0, file);
 
@@ -210,12 +220,16 @@ test('normal UI print preserves tables, option columns, image rows, and A4 pagin
     const context = await browser.newContext();
     const page = await context.newPage();
     const errors = [];
+    const dialogs = [];
     let forbiddenCalls = 0;
     page.on('pageerror', error => errors.push(`pageerror:${error.message}`));
     page.on('console', message => {
         if (message.type() === 'error') errors.push(`console:${message.text()}`);
     });
-    page.on('dialog', dialog => dialog.accept());
+    page.on('dialog', dialog => {
+        dialogs.push(dialog.message());
+        return dialog.accept();
+    });
     await page.route(/\/api\/(?:ai|ocr)\//, async route => {
         forbiddenCalls += 1;
         await route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
@@ -226,7 +240,9 @@ test('normal UI print preserves tables, option columns, image rows, and A4 pagin
         await page.getByRole('button', { name: '批量录题' }).click();
         const createButton = page.getByRole('button', { name: '创建任务', exact: true });
         if (await createButton.count()) await createButton.click();
-        await page.locator('input[type="file"][multiple]').setInputFiles(allSourceFiles[2]);
+        await page.locator('input[type="file"][multiple]').setInputFiles(
+            allSourceFiles.find(file => file.includes('武汉')) || allSourceFiles[allSourceFiles.length - 1]
+        );
         const modal = page.locator('.batch-purpose-modal');
         await modal.getByRole('checkbox', { name: '题目', exact: true }).check();
         await modal.getByRole('button', { name: '确认添加' }).click();
@@ -249,18 +265,38 @@ test('normal UI print preserves tables, option columns, image rows, and A4 pagin
         await page.getByRole('button', { name: '答案内容', exact: true }).click();
         await page.locator('.batch-editor-card.content textarea').fill('A');
         await page.getByRole('button', { name: '保存修改', exact: true }).click();
+        const saveDeadline = Date.now() + 30_000;
+        while (Date.now() < saveDeadline) {
+            state = await readState(page);
+            if (state.questions[3]?.answer === 'A') break;
+            await page.waitForTimeout(100);
+        }
+        assert.equal(
+            state.questions[3]?.answer,
+            'A',
+            `Q4 save did not persist; dialogs=${JSON.stringify(dialogs)}; errors=${JSON.stringify(errors)}`
+        );
         await page.getByRole('button', { name: '一键提交本题', exact: true }).click();
+        const waitForFormalCount = async (expected, label) => {
+            const deadline = Date.now() + 30_000;
+            while (Date.now() < deadline) {
+                state = await readState(page);
+                if (state.formalCount >= expected) return;
+                await page.waitForTimeout(250);
+            }
+            assert.equal(
+                state.formalCount,
+                expected,
+                `${label}; dialogs=${JSON.stringify(dialogs)}; errors=${JSON.stringify(errors)}; ` +
+                    `draft=${JSON.stringify(state.questions.find(question => Number(question.questionNumber) === (expected === 1 ? 4 : 19)))}; ` +
+                    `batch=${JSON.stringify(state.batch)}`
+            );
+        };
+        await waitForFormalCount(1, 'Q4 submit did not finish');
 
         await nav.nth(18).click();
         await page.getByRole('button', { name: '一键提交本题', exact: true }).click();
-
-        const submitDeadline = Date.now() + 120_000;
-        while (Date.now() < submitDeadline) {
-            state = await readState(page);
-            if (state.formalCount >= 2) break;
-            await page.waitForTimeout(500);
-        }
-        assert.equal(state.formalCount, 2, 'normal UI did not submit the two print fixtures');
+        await waitForFormalCount(2, 'Q19 submit did not finish');
 
         await page.getByRole('button', { name: '题库与检索' }).click();
         const cards = page.locator('.question-card');

@@ -18167,7 +18167,14 @@ ${source}`;
                                         // DOCX importer 的 inline 图片通过 item.images -> mergeDraftRecognition -> draft.images 传递。
                                         // 直接 push draftImages 会造成 questionId 与最终 draft.id 不一致。
 
-                                        if (isFullRole || hasAnswerOrSolutionRole) {
+                                        const shouldParseTextSupportFallback =
+                                            window.Qisi.DocxSupportContent.shouldParseDocxTextSupportFallback({
+                                                isFullRole,
+                                                hasAnswerOrSolutionRole,
+                                                importerDebug: docxImporterResult?.debug
+                                            });
+
+                                        if (shouldParseTextSupportFallback) {
                                             let parsed = text
                                                 ? parseAnswerAndSolutionItemsFromText(text, file)
                                                 : { answers: [], solutions: [] };
@@ -19287,7 +19294,7 @@ ${source}`;
                         normalizeImagePlacementDuplicates(migratedSource)
                     );
                     activeDraftEditorBuffer.value = source;
-                    const projection = buildDraftEditorProjection(source, q);
+                    const projection = window.Qisi.ReviewDraftState.buildDraftEditorProjection(source, q);
                     const isChoice = q.type === '单选题' || q.type === '多选题';
 
                     q.editorSource = source;
@@ -19315,7 +19322,7 @@ ${source}`;
                     return projection;
                 };
 
-                const saveActiveDraftQuestion = async (options = {}) => {
+                const persistActiveDraftQuestion = async (options = {}) => {
                     const q = activeDraftQuestion.value;
                     if (!q) return false;
                     const savedQuestionId = q.id;
@@ -19344,6 +19351,9 @@ ${source}`;
 
                     return true;
                 };
+                const saveActiveDraftQuestion = window.Qisi.ReviewDraftState.createSingleFlightAsync(
+                    persistActiveDraftQuestion
+                );
 
                 const confirmDraftImages = async () => {
                     const q = activeDraftQuestion.value;
@@ -19763,10 +19773,7 @@ ${source}`;
                 }[status] || '无重复');
 
                 const submitDraftQuestion = async (questionId = activeDraftQuestionId.value, silent = false) => {
-                    if (
-                        questionId === activeDraftQuestionId.value &&
-                        activeDraftEditorDirty.value
-                    ) {
+                    if (questionId === activeDraftQuestionId.value) {
                         await saveActiveDraftQuestion({ silent: true });
                     }
 

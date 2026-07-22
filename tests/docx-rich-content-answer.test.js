@@ -129,3 +129,98 @@ test('combined DOCX is partitioned at the first explicit answer heading', () => 
     assert.deepEqual(partition.questionBlocks.map(block => block.paragraphIndex), [0, 1, 2]);
     assert.deepEqual(partition.supportBlocks.map(block => block.paragraphIndex), [4, 5]);
 });
+
+test('a standalone grade or paper label can introduce a compact answer section', () => {
+    const partition = support.partitionQuestionAndSupportBlocks([
+        paragraph(0, '1．题目一'),
+        paragraph(1, '高二答案'),
+        paragraph(2, '1．2           2．3           3．$\\sqrt{2}$')
+    ]);
+
+    assert.equal(partition.hasSupportHeading, true);
+    assert.equal(partition.headingBlock.paragraphIndex, 1);
+    const parsed = support.parseAnswerRichBlocks(partition.supportBlocks, {
+        allowNumberedAnswerMarkers: true
+    });
+    assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
+    assert.deepEqual(parsed.items.map(item => item.number), [1, 2, 3]);
+    assert.deepEqual(parsed.items.map(item => item.answer), ['2', '3', '$\\sqrt{2}$']);
+});
+
+test('compact answer rows preserve explicit numbers and reject duplicates', () => {
+    const safe = support.parseAnswerRichBlocks([
+        paragraph(1, '1．A    2．B    3．C'),
+        paragraph(2, '4．$\\frac{1}{2}$    5．D')
+    ], { allowNumberedAnswerMarkers: true });
+    assert.equal(safe.ok, true, JSON.stringify(safe.diagnostics));
+    assert.deepEqual(safe.items.map(item => item.answer), ['A', 'B', 'C', '$\\frac{1}{2}$', 'D']);
+
+    const duplicate = support.parseAnswerRichBlocks([
+        paragraph(3, '48．A    49．B    49．C    50．D')
+    ], { allowNumberedAnswerMarkers: true });
+    assert.equal(duplicate.ok, false);
+    assert.match(JSON.stringify(duplicate.diagnostics), /DOCX_SUPPORT_DUPLICATE_KEY/);
+});
+
+test('a Word-numbered first answer is restored before compact literal markers', () => {
+    const parsed = support.parseAnswerRichBlocks([paragraph(
+        236,
+        '$(-\\infty,-2)$           7．1           8．$6$',
+        {
+            numbering: {
+                numId: '1',
+                level: 0,
+                numFmt: 'decimal',
+                display: '6．',
+                value: 6
+            }
+        }
+    )], { allowNumberedAnswerMarkers: true });
+
+    assert.equal(parsed.ok, true, JSON.stringify(parsed.diagnostics));
+    assert.deepEqual(parsed.items.map(item => item.number), [6, 7, 8]);
+    assert.deepEqual(parsed.items.map(item => item.answer), ['$(-\\infty,-2)$', '1', '$6$']);
+});
+
+test('safe partial alignment never shifts later answers across a missing and duplicate number', () => {
+    const questions = [47, 48, 49, 50].map(number => ({
+        questionKey: `section-1/q-${number}`
+    }));
+    const supports = [
+        { questionKey: 'section-1/q-47', number: 47, answer: 'A' },
+        { questionKey: 'section-1/q-49', number: 49, answer: 'B' },
+        { questionKey: 'section-1/q-49', number: 49, answer: 'C' },
+        { questionKey: 'section-1/q-50', number: 50, answer: 'D' }
+    ];
+
+    const result = support.alignQuestionAndSupportSafePartial(questions, supports);
+    assert.equal(result.ok, true);
+    assert.equal(result.complete, false);
+    assert.equal(result.code, 'DOCX_SUPPORT_SAFE_PARTIAL');
+    assert.deepEqual(
+        result.items.map(item => item.question.questionKey),
+        ['section-1/q-47', 'section-1/q-50']
+    );
+    assert.deepEqual(result.diagnostics.missingKeys, ['section-1/q-48', 'section-1/q-49']);
+    assert.deepEqual(result.diagnostics.ambiguousKeys, ['section-1/q-49']);
+    assert.equal(result.rejected.length, 2);
+});
+
+test('whole-text support fallback is skipped when the importer already handled embedded support', () => {
+    assert.equal(support.shouldParseDocxTextSupportFallback({
+        isFullRole: true,
+        importerDebug: { hasEmbeddedSupportHeading: true }
+    }), false);
+    assert.equal(support.shouldParseDocxTextSupportFallback({
+        hasAnswerOrSolutionRole: true,
+        importerDebug: { hasEmbeddedSupportHeading: true }
+    }), false);
+    assert.equal(support.shouldParseDocxTextSupportFallback({
+        isFullRole: true,
+        importerDebug: { hasEmbeddedSupportHeading: false }
+    }), true);
+    assert.equal(support.shouldParseDocxTextSupportFallback({
+        hasAnswerOrSolutionRole: true
+    }), true);
+    assert.equal(support.shouldParseDocxTextSupportFallback({}), false);
+});

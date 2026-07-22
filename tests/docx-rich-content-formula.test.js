@@ -97,6 +97,53 @@ test('known relation commands are separated from following identifiers', () => {
     assert.equal(rich.normalizeLatexFragment('S=\\frac{1}{2}\\cdotd').latex, 'S=\\frac{1}{2}\\cdot d');
 });
 
+test('MathType private style wrappers and duplicate superscript markers become standard LaTeX', () => {
+    const styled = rich.normalizeLatexFragment(String.raw`f(1)=\user2{e},x_2\user2{e}^{x_1}`);
+    const degree = rich.normalizeLatexFragment(String.raw`\tan{{15}^^\circ}`);
+
+    assert.equal(styled.ok, true, JSON.stringify(styled));
+    assert.equal(styled.latex, String.raw`f(1)=e,x_2e^{x_1}`);
+    assert.doesNotMatch(styled.latex, /\\user/);
+    assert.equal(degree.ok, true, JSON.stringify(degree));
+    assert.equal(degree.latex, String.raw`\tan{{15}^\circ}`);
+    assert.doesNotMatch(degree.latex, /\^\^/);
+});
+
+test('MathType invisible-left plus visible-right delimiter is canonicalized without weakening balance checks', () => {
+    const normalized = rich.normalizeLatexFragment(
+        String.raw`$y={e^{{x_2}}}x+(1-\left.{{x_2}}\right){e^{{x_2}}}$`
+    );
+
+    assert.equal(normalized.ok, true, JSON.stringify(normalized));
+    assert.equal(normalized.latex, String.raw`y={e^{x_2}}x+(1-{x_2}){e^{x_2}}`);
+    assert.equal(rich.normalizeLatexFragment(String.raw`x+\right)`).ok, false);
+});
+
+test('invisible-left right-brace pair is not consumed by a later parenthesis pair', () => {
+    const normalized = rich.normalizeLatexFragment(
+        String.raw`\left.{x>4}\right\}\cap\{x\mid-3<x\le4\}=\left(-3,0\right)`
+    );
+
+    assert.equal(normalized.ok, true, JSON.stringify(normalized));
+    assert.match(normalized.latex, /\\left\.\{x>4\}\\right\\\}/);
+    assert.match(normalized.latex, /\\left\(-3,0\\right\)/);
+});
+
+test('bounded MathType repairs preserve complement set-builder and bracketed summand semantics', () => {
+    const complement = rich.normalizeLatexFragment('∁{U}_{}A={x∣x<-2');
+    const summand = rich.normalizeLatexFragment(
+        String.raw`\sum\limits_{i=1}^{80}f(i)=\sum\limits_{i=1}^{80}{[g}(i)+i]`
+    );
+
+    assert.equal(complement.ok, true, JSON.stringify(complement));
+    assert.equal(complement.latex, String.raw`\complement_{U}A={x\mid x<-2}`);
+    assert.equal(summand.ok, true, JSON.stringify(summand));
+    assert.equal(summand.latex, String.raw`\sum\limits_{i=1}^{80}f(i)=\sum\limits_{i=1}^{80}[g(i)+i]`);
+
+    assert.equal(rich.normalizeLatexFragment(String.raw`A={x+1`).ok, false);
+    assert.equal(rich.normalizeLatexFragment(String.raw`[g(i)+i}`).ok, false);
+});
+
 test('vertical bars used by flexible delimiters are not rewritten as mid relations', () => {
     const normalized = rich.normalizeLatexFragment(
         String.raw`f\left(x\right)=\left\{\begin{matrix}\left|log{2}_{}\left(x-1\right)\right|,1<x\le 3\\\left(x-4\right){}^{2},x>3\end{matrix}\right.`

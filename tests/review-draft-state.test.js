@@ -14,11 +14,34 @@ const {
     mergeDocxVisualDraftsByQuestionNumberForV2,
     buildDraftImagePlacementCode,
     buildOneClickSubmitPlan,
+    createSingleFlightAsync,
     replaceDraftImagePlacement,
     shouldInlineDraftImageInStemForV2,
     attachDraftImageTokensIntoContentForV2,
     attachDraftImageTokensIntoStemsForV2
 } = require('../qisi-review-draft-state.js');
+
+test('review save coordinator serializes rapid save and submit clicks', async () => {
+    let calls = 0;
+    let release;
+    const gate = new Promise(resolve => { release = resolve; });
+    const save = createSingleFlightAsync(async value => {
+        calls += 1;
+        await gate;
+        return value;
+    });
+
+    const first = save('saved-answer');
+    const second = save('stale-answer');
+    assert.equal(calls, 0);
+    release();
+    assert.equal(await first, 'saved-answer');
+    assert.equal(await second, 'saved-answer');
+    assert.equal(calls, 1);
+
+    assert.equal(await save('next-edit'), 'next-edit');
+    assert.equal(calls, 2);
+});
 
 test('BM08: summarize', () => {
     const r = summarizeDraftStatus([

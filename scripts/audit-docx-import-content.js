@@ -24,6 +24,16 @@ const duplicateValues = values => {
     return [...duplicate];
 };
 
+const escapeRegExp = value => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const solutionReferencesImage = (solution = '', imageId = '') => {
+    const source = String(solution || '');
+    const id = String(imageId || '');
+    if (!id) return false;
+    if (source.includes(`[[IMAGE:${id}]]`)) return true;
+    return new RegExp(`\\\\includegraphics(?:\\[[^\\]]*\\])?\\{${escapeRegExp(id)}\\}`).test(source);
+};
+
 const mathFreeText = value => String(value || '')
     .replace(/\$[^$]*\$/g, ' ')
     .replace(/\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]/g, ' ');
@@ -54,7 +64,7 @@ const auditDocxImportContent = (questions = [], options = {}) => {
             const owner = imageOwners.get(id);
             if (owner && owner !== number) wrongAttachmentCandidates.push({ imageId: id, owners: [owner, number] });
             imageOwners.set(id, number);
-            if (!solution.includes(`[[IMAGE:${id}]]`) || !renderedImageIds.has(id)) {
+            if (!solutionReferencesImage(solution, id) || !renderedImageIds.has(id)) {
                 missingAnalysisImages.push(number);
             }
         }

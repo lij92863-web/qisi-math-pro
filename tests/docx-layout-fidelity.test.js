@@ -65,6 +65,55 @@ test('an inline Word drawing followed by formulas keeps media and text on the sa
     assert.match(html, /qisi-media-copy/);
 });
 
+test('a figure before the next question exposes the marker without losing media-text layout', () => {
+    const serialized = layout.serializeParagraphLayout({
+        runs: [
+            imageRun('question-nine', 1500000, 1200000),
+            { kind: 'text', text: '9．如图，在梯形中求最值' }
+        ],
+        assets: [{ assetId: 'question-nine', dimensions: { cx: 1500000, cy: 1200000 } }],
+        serializeRuns: runs => runs.map(run => run.token || run.text || '').join('')
+    });
+
+    assert.match(serialized, /^9．\s+% QISI_LAYOUT_BEGIN/);
+    const model = layout.extractLayoutModel(serialized);
+    assert.equal(model.type, 'media-text');
+    assert.equal(model.image.id, 'question-nine');
+    assert.equal(model.afterContent, '如图，在梯形中求最值');
+    assert.doesNotMatch(model.afterContent, /^9[.．]/);
+});
+
+test('an image before an explicit answer marker stays transparent to the support parser', () => {
+    const serialized = layout.serializeParagraphLayout({
+        runs: [
+            imageRun('answer-two', 1500000, 1200000),
+            { kind: 'text', text: '2【答案】C' }
+        ],
+        assets: [{ assetId: 'answer-two', dimensions: { cx: 1500000, cy: 1200000 } }],
+        serializeRuns: runs => runs.map(run => run.token || run.text || '').join('')
+    });
+
+    assert.equal(serialized, '[[IMAGE:answer-two]]2【答案】C');
+    assert.doesNotMatch(serialized, /QISI_LAYOUT_BEGIN/);
+});
+
+test('a figure before several options keeps all labels outside the image layout payload', () => {
+    const serialized = layout.serializeParagraphLayout({
+        runs: [
+            imageRun('choice-figure', 1500000, 1200000),
+            { kind: 'text', text: 'A．外心    B．内心    C．重心    D．垂心' }
+        ],
+        assets: [{ assetId: 'choice-figure', dimensions: { cx: 1500000, cy: 1200000 } }],
+        serializeRuns: runs => runs.map(run => run.token || run.text || '').join('')
+    });
+
+    const parts = layout.splitLayoutBlocks(serialized);
+    assert.deepEqual(parts.map(part => part.kind), ['layout', 'text']);
+    assert.equal(layout.extractLayoutModel(parts[0].value).type, 'image-row');
+    assert.match(parts[1].value, /A．外心\s+B．内心\s+C．重心\s+D．垂心/);
+    assert.doesNotMatch(parts[0].value, /A．外心|B．内心|C．重心|D．垂心/);
+});
+
 test('option columns preserve source row evidence but shrink when A4 capacity is insufficient', () => {
     assert.equal(layout.resolveOptionColumns({
         options: ['$1$', '$2$', '$3$', '$4$'],

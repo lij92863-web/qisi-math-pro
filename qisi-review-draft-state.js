@@ -745,6 +745,25 @@
             };
         };
 
+        const createSingleFlightAsync = (executor) => {
+            if (typeof executor !== 'function') {
+                throw new TypeError('createSingleFlightAsync requires a function');
+            }
+
+            let inFlight = null;
+            return async (...args) => {
+                if (inFlight) return inFlight;
+
+                const task = Promise.resolve().then(() => executor(...args));
+                inFlight = task;
+                try {
+                    return await task;
+                } finally {
+                    if (inFlight === task) inFlight = null;
+                }
+            };
+        };
+
         return {
             summarizeDraftStatus,
             normalizeDraftPreviewOptions,
@@ -763,6 +782,7 @@
             mergeDocxVisualDraftsByQuestionNumberForV2,
             buildDraftImagePlacementCode,
             buildOneClickSubmitPlan,
+            createSingleFlightAsync,
             draftImageContentRole,
             replaceDraftImagePlacement,
             shouldInlineDraftImageInStemForV2,
