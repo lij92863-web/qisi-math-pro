@@ -31,6 +31,14 @@ const readLocalScriptOrder = () => {
         .map(normalizeLocalScriptSrc);
 };
 
+const readLocalStyleOrder = () => {
+    const html = fs.readFileSync(path.join(ROOT, 'main.html'), 'utf8');
+    return [...html.matchAll(/<link\b[^>]*\brel\s*=\s*(["'])stylesheet\1[^>]*\bhref\s*=\s*(["'])(.*?)\2[^>]*>/gi)]
+        .map(match => match[3].trim())
+        .filter(src => /^(?:\.\/|\/)/.test(src))
+        .map(normalizeLocalScriptSrc);
+};
+
 test('every root qisi module belongs to exactly one explicit category', () => {
     const entries = Object.entries(manifest.categoryFiles);
     assert.deepEqual(
@@ -78,6 +86,16 @@ test('main.html local production script order equals the manifest single source 
 
     const qisiBrowserScripts = actual.filter(file => qisiModulePattern.test(file));
     assert.deepEqual(qisiBrowserScripts, manifest.categoryFiles['browser-live']);
+});
+
+test('main.html local production styles are pinned, present, and ordered', () => {
+    const actual = readLocalStyleOrder();
+    assert.deepEqual(actual, manifest.browserStyleOrder);
+    assert.equal(new Set(actual).size, actual.length);
+
+    for (const file of manifest.browserStyleOrder) {
+        assert.equal(fs.existsSync(path.join(ROOT, file)), true, `${file} must exist`);
+    }
 });
 
 test('node, research, scaffold, and absent modules never enter the browser script graph', () => {

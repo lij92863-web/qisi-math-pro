@@ -30,6 +30,54 @@
             useLocalAiProxy: true
         });
 
+        const shouldEnableDiagnostics = ({ search = '', storageValue = '' } = {}) => {
+            let queryEnabled = false;
+            try {
+                const params = new URLSearchParams(String(search || ''));
+                queryEnabled = ['1', 'true', 'yes'].includes(
+                    String(params.get('qisiDebug') || '').toLowerCase()
+                );
+            } catch (_) {
+                queryEnabled = false;
+            }
+
+            return queryEnabled || ['1', 'true', 'yes'].includes(
+                String(storageValue || '').toLowerCase()
+            );
+        };
+
+        const isDiagnosticsEnabled = () => {
+            let storageValue = '';
+            try {
+                storageValue = globalThis.localStorage?.getItem('qisi:debug') || '';
+            } catch (_) {
+                storageValue = '';
+            }
+
+            return shouldEnableDiagnostics({
+                search: globalThis.location?.search || '',
+                storageValue
+            });
+        };
+
+        const nativeConsole = globalThis.console || {};
+        const callConsole = (method, args, force = false) => {
+            if (!force && !isDiagnosticsEnabled()) return;
+            const fn = nativeConsole[method];
+            if (typeof fn === 'function') fn.apply(nativeConsole, args);
+        };
+        const diagnosticConsole = Object.freeze({
+            log: (...args) => callConsole('log', args),
+            info: (...args) => callConsole('info', args),
+            debug: (...args) => callConsole('debug', args),
+            group: (...args) => callConsole('group', args),
+            groupCollapsed: (...args) => callConsole('groupCollapsed', args),
+            groupEnd: (...args) => callConsole('groupEnd', args),
+            table: (...args) => callConsole('table', args),
+            warn: (...args) => callConsole('warn', args, true),
+            error: (...args) => callConsole('error', args, true)
+        });
+
         const REQUIRED_GLOBALS = [
             'Vue',
             'Dexie',
@@ -137,7 +185,10 @@
             getRuntimeDependency,
             setRuntimeDependency,
             showFatalError,
-            boot
+            boot,
+            console: diagnosticConsole,
+            isDiagnosticsEnabled,
+            shouldEnableDiagnostics
         };
 
         return {

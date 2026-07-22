@@ -4,7 +4,6 @@
 // Keep browserScriptOrder aligned with the normalized local `src` values in
 // main.html. Root qisi-*.js files must belong to exactly one category.
 const browserScriptOrder = Object.freeze([
-    'vendor/tailwindcss/3.4.17/tailwind.browser.min.js',
     'vendor/katex/0.16.8/katex.min.js',
     'vendor/katex/0.16.8/contrib/auto-render.min.js',
     'vendor/vue/3.5.40/vue.global.prod.js',
@@ -52,6 +51,13 @@ const browserScriptOrder = Object.freeze([
     'qisi-review-composable.js',
     'qisi-batch-final-gate.js',
     'app.js'
+]);
+
+const browserStyleOrder = Object.freeze([
+    'vendor/tailwindcss/3.4.17/qisi-tailwind.min.css',
+    'vendor/katex/0.16.8/katex.min.css',
+    'vendor/vue-virtual-scroller/2.0.0-beta.8/vue-virtual-scroller.css',
+    'app.css'
 ]);
 
 const categoryFiles = Object.freeze({
@@ -120,6 +126,7 @@ const categoryFor = file => {
 
 module.exports = Object.freeze({
     browserScriptOrder,
+    browserStyleOrder,
     categoryFiles,
     categoryPolicy,
     classificationEvidence,

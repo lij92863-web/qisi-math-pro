@@ -1,6 +1,7 @@
 ﻿        const App = {
             components: { Icon, LatexPreview, KnowledgeTree, QuestionCard },
             setup() {
+                const console = window.Qisi?.Runtime?.console || globalThis.console;
                 const view = ref('entry'); 
                 const questions = ref([]);
                 const cart = ref([]);
@@ -22,6 +23,11 @@
                 const isDraggingOcr = ref(false);
                 const isCartOpen = ref(false);
                 const objectUrls = new Set();
+                const printObjectUrls = new Set();
+                const releasePrintObjectUrls = () => {
+                    printObjectUrls.forEach(url => URL.revokeObjectURL(url));
+                    printObjectUrls.clear();
+                };
                 const docxEmbeddedImageCache = new Map();
                 const draftFileTextCache = new Map();
                 const draftFileXmlCache = new Map();
@@ -1309,7 +1315,7 @@
                     }
                 };
 
-                const batchDebugEnabled = true;
+                const batchDebugEnabled = window.Qisi?.Runtime?.isDiagnosticsEnabled?.() === true;
                 const toBatchDebugQuestion = (item = {}) => ({
                     question: item.question ?? item.questionNumber ?? item.no ?? item.index ?? item.题号 ?? '',
                     type: item.type ?? item.题型 ?? '',
@@ -21003,6 +21009,7 @@ ${source}`;
                 };
 
                 onMounted(async () => {
+                    window.addEventListener('beforeunload', releasePrintObjectUrls, { once: true });
                     try {
                         if (navigator.storage?.persist) await navigator.storage.persist();
                     } catch (error) {
@@ -21701,6 +21708,7 @@ ${source}`;
                     });
                     const blob = new Blob(['\uFEFF' + html], { type: 'text/html;charset=utf-8' });
                     const url = URL.createObjectURL(blob);
+                    printObjectUrls.add(url);
                     const link = document.createElement('a');
                     link.href = url;
                     link.target = '_blank';
@@ -21709,7 +21717,6 @@ ${source}`;
                     document.body.appendChild(link);
                     link.click();
                     link.remove();
-                    setTimeout(() => URL.revokeObjectURL(url), 10 * 60 * 1000);
                     return true;
                 };
 

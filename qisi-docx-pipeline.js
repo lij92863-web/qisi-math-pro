@@ -10,6 +10,7 @@
     function (root) {
         'use strict';
 
+        const console = root.Qisi?.Runtime?.console || root.console;
         const utils = () => root.Qisi?.Utils || {};
 
         const cleanRecognizedText = (value) => {

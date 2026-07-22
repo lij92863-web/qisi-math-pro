@@ -109,6 +109,8 @@ test('production browser dependencies are complete, pinned, and locally addresse
     assert.deepEqual([...requiredPackages], [], 'every required browser package has a pinned asset');
 
     assert.doesNotMatch(html, /(?:src|href)\s*=\s*["']https?:\/\//i);
+    assert.doesNotMatch(html, /tailwind\.browser\.min\.js/i);
+    assert.match(html, /\.\/vendor\/tailwindcss\/3\.4\.17\/qisi-tailwind\.min\.css/);
     assert.doesNotMatch(printTemplate, /katexCssHref\s*=\s*["']https?:\/\//i);
     assert.doesNotMatch(appSource, /unpkg\.com\/pdfjs-dist/i);
     assert.equal(

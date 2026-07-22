@@ -6,6 +6,7 @@
   "main": "qisi-local-server.js",
   "scripts": {
     "start": "node qisi-local-server.js",
+    "build:css": "tailwindcss -c tailwind.config.cjs -i styles/tailwind.css -o vendor/tailwindcss/3.4.17/qisi-tailwind.min.css --minify",
     "check": "node scripts/check-production-syntax.js",
     "test": "node --test",
     "smoke:batch:mock": "node --test tests/batch-smoke-mock.test.js",
@@ -28,6 +29,7 @@
     "multer": "^1.4.5-lts.1"
   },
   "devDependencies": {
-    "playwright": "^1.61.0"
+    "playwright": "^1.61.0",
+    "tailwindcss": "^3.4.17"
   }
 }
