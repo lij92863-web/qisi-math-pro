@@ -1,0 +1,792 @@
+{
+  "root": "C:\\Users\\Administrator\\Desktop\\题目与答案",
+  "generatedAt": "2026-07-22T01:17:24.284Z",
+  "fileCount": 16,
+  "docxCount": 13,
+  "pdfCount": 3,
+  "failureCount": 0,
+  "totalDurationMs": 237.22220000000004,
+  "files": [
+    {
+      "fileName": "2026年7月9日高中数学作业.docx",
+      "extension": ".docx",
+      "byteLength": 470468,
+      "sha256": "ccc8c8f821d4df1aedf058ba6d7637439fdd2bb9194d13bdc7194387e8fa1571",
+      "ok": true,
+      "durationMs": 25.6718,
+      "structure": {
+        "packageEntryCount": 577,
+        "paragraphCount": 191,
+        "tableCount": 1,
+        "tableRowCount": 4,
+        "drawingCount": 2,
+        "legacyObjectCount": 320,
+        "oleObjectCount": 320,
+        "ommlCount": 0,
+        "numberedParagraphCount": 0,
+        "mediaCount": 236,
+        "mediaExtensions": [
+          ".png",
+          ".wmf"
+        ],
+        "embeddingCount": 320,
+        "embeddingExtensions": [
+          ".bin"
+        ],
+        "skeleton": {
+          "authoritative": true,
+          "questionNumbers": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14"
+          ],
+          "diagnostics": {
+            "reason": "ok",
+            "entryCount": 14,
+            "noDuplicates": true,
+            "strictlyIncreasing": true,
+            "contiguous": true
+          }
+        }
+      }
+    },
+    {
+      "fileName": "答案.docx",
+      "extension": ".docx",
+      "byteLength": 335436,
+      "sha256": "e5ecc02d13a21291075097eddd09a50c428a700875b27e5c7cecb9028f053a84",
+      "ok": true,
+      "durationMs": 7.6266,
+      "structure": {
+        "packageEntryCount": 405,
+        "paragraphCount": 152,
+        "tableCount": 1,
+        "tableRowCount": 4,
+        "drawingCount": 1,
+        "legacyObjectCount": 212,
+        "oleObjectCount": 212,
+        "ommlCount": 0,
+        "numberedParagraphCount": 0,
+        "mediaCount": 171,
+        "mediaExtensions": [
+          ".png",
+          ".wmf"
+        ],
+        "embeddingCount": 212,
+        "embeddingExtensions": [
+          ".bin"
+        ],
+        "skeleton": {
+          "authoritative": false,
+          "questionNumbers": [],
+          "diagnostics": {
+            "reason": "no-explicit-question-markers",
+            "entryCount": 0,
+            "noDuplicates": true,
+            "strictlyIncreasing": true,
+            "contiguous": true
+          }
+        }
+      }
+    },
+    {
+      "fileName": "高二.docx",
+      "extension": ".docx",
+      "byteLength": 363012,
+      "sha256": "65a15db7a5e613d4446be316d6860a4d55e05ebc985d1b527a0ca4bd50aa9938",
+      "ok": true,
+      "durationMs": 11.4539,
+      "structure": {
+        "packageEntryCount": 440,
+        "paragraphCount": 259,
+        "tableCount": 0,
+        "tableRowCount": 0,
+        "drawingCount": 1,
+        "legacyObjectCount": 220,
+        "oleObjectCount": 220,
+        "ommlCount": 0,
+        "numberedParagraphCount": 203,
+        "mediaCount": 192,
+        "mediaExtensions": [
+          ".png",
+          ".wmf"
+        ],
+        "embeddingCount": 220,
+        "embeddingExtensions": [
+          ".bin"
+        ],
+        "skeleton": {
+          "authoritative": true,
+          "questionNumbers": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16",
+            "17",
+            "18",
+            "19",
+            "20",
+            "21",
+            "22",
+            "23",
+            "24",
+            "25",
+            "26",
+            "27",
+            "28",
+            "29",
+            "30",
+            "31",
+            "32",
+            "33",
+            "34",
+            "35",
+            "36",
+            "37",
+            "38",
+            "39",
+            "40",
+            "41",
+            "42",
+            "43",
+            "44",
+            "45",
+            "46",
+            "47",
+            "48",
+            "49",
+            "50",
+            "51",
+            "52",
+            "53",
+            "54",
+            "55",
+            "56"
+          ],
+          "diagnostics": {
+            "reason": "ok",
+            "entryCount": 56,
+            "noDuplicates": true,
+            "strictlyIncreasing": true,
+            "contiguous": true
+          }
+        }
+      }
+    },
+    {
+      "fileName": "广东佛山市第一中学2026届高三一模检测数学试题.docx",
+      "extension": ".docx",
+      "byteLength": 1599596,
+      "sha256": "3341420384d4546c5ffb2ba385be46efab7980832e5485753bd87a551ebaf4cf",
+      "ok": true,
+      "durationMs": 20.9484,
+      "structure": {
+        "packageEntryCount": 1188,
+        "paragraphCount": 363,
+        "tableCount": 2,
+        "tableRowCount": 6,
+        "drawingCount": 9,
+        "legacyObjectCount": 674,
+        "oleObjectCount": 674,
+        "ommlCount": 2,
+        "numberedParagraphCount": 0,
+        "mediaCount": 493,
+        "mediaExtensions": [
+          ".png",
+          ".wmf"
+        ],
+        "embeddingCount": 674,
+        "embeddingExtensions": [
+          ".bin"
+        ],
+        "skeleton": {
+          "authoritative": true,
+          "questionNumbers": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16",
+            "17",
+            "18",
+            "19"
+          ],
+          "diagnostics": {
+            "reason": "ok",
+            "entryCount": 19,
+            "noDuplicates": true,
+            "strictlyIncreasing": true,
+            "contiguous": true
+          }
+        }
+      }
+    },
+    {
+      "fileName": "广东深圳高级中学（集团）2026届高三适应性考试数学试卷 (1).docx",
+      "extension": ".docx",
+      "byteLength": 2163558,
+      "sha256": "e66c87064eda0c6678c5fce0b211cb7a5063a337db76d5b26f8a084e8ccc9cd9",
+      "ok": true,
+      "durationMs": 22.4949,
+      "structure": {
+        "packageEntryCount": 1071,
+        "paragraphCount": 421,
+        "tableCount": 4,
+        "tableRowCount": 11,
+        "drawingCount": 12,
+        "legacyObjectCount": 609,
+        "oleObjectCount": 609,
+        "ommlCount": 0,
+        "numberedParagraphCount": 0,
+        "mediaCount": 441,
+        "mediaExtensions": [
+          ".png",
+          ".wmf"
+        ],
+        "embeddingCount": 609,
+        "embeddingExtensions": [
+          ".bin"
+        ],
+        "skeleton": {
+          "authoritative": true,
+          "questionNumbers": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16",
+            "17",
+            "18",
+            "19"
+          ],
+          "diagnostics": {
+            "reason": "ok",
+            "entryCount": 19,
+            "noDuplicates": true,
+            "strictlyIncreasing": true,
+            "contiguous": true
+          }
+        }
+      }
+    },
+    {
+      "fileName": "广东省十二所重点中学校2026届高三年级第一次模拟考（十二校一模）数学试题.docx",
+      "extension": ".docx",
+      "byteLength": 1128037,
+      "sha256": "a7167274161950665e7b775a9b31581e9e31b2c676094fb230462e09264c2739",
+      "ok": true,
+      "durationMs": 16.0518,
+      "structure": {
+        "packageEntryCount": 1231,
+        "paragraphCount": 449,
+        "tableCount": 5,
+        "tableRowCount": 12,
+        "drawingCount": 3,
+        "legacyObjectCount": 716,
+        "oleObjectCount": 716,
+        "ommlCount": 0,
+        "numberedParagraphCount": 0,
+        "mediaCount": 494,
+        "mediaExtensions": [
+          ".png",
+          ".wmf"
+        ],
+        "embeddingCount": 716,
+        "embeddingExtensions": [
+          ".bin"
+        ],
+        "skeleton": {
+          "authoritative": true,
+          "questionNumbers": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16",
+            "17",
+            "18",
+            "19"
+          ],
+          "diagnostics": {
+            "reason": "ok",
+            "entryCount": 19,
+            "noDuplicates": true,
+            "strictlyIncreasing": true,
+            "contiguous": true
+          }
+        }
+      }
+    },
+    {
+      "fileName": "河北昌黎第一中学2025-2026学年高三考前自测考试数学试卷.docx",
+      "extension": ".docx",
+      "byteLength": 1900318,
+      "sha256": "23445a879af85d8f69a3e84694d7aa3f6bf0a50d05ac7c636fa613ba2750fd70",
+      "ok": true,
+      "durationMs": 17.4344,
+      "structure": {
+        "packageEntryCount": 1288,
+        "paragraphCount": 425,
+        "tableCount": 3,
+        "tableRowCount": 9,
+        "drawingCount": 13,
+        "legacyObjectCount": 737,
+        "oleObjectCount": 737,
+        "ommlCount": 0,
+        "numberedParagraphCount": 0,
+        "mediaCount": 530,
+        "mediaExtensions": [
+          ".png",
+          ".wmf"
+        ],
+        "embeddingCount": 737,
+        "embeddingExtensions": [
+          ".bin"
+        ],
+        "skeleton": {
+          "authoritative": true,
+          "questionNumbers": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16",
+            "17",
+            "18",
+            "19"
+          ],
+          "diagnostics": {
+            "reason": "ok",
+            "entryCount": 19,
+            "noDuplicates": true,
+            "strictlyIncreasing": true,
+            "contiguous": true
+          }
+        }
+      }
+    },
+    {
+      "fileName": "湖北省武汉市2025届高三下学期毕业生四月调研考试数学试题.docx",
+      "extension": ".docx",
+      "byteLength": 1377812,
+      "sha256": "a75dde3f5f44cc752553b82d835e02733df557c7063a8e4da993efdcc750d683",
+      "ok": true,
+      "durationMs": 16.5783,
+      "structure": {
+        "packageEntryCount": 1164,
+        "paragraphCount": 392,
+        "tableCount": 2,
+        "tableRowCount": 7,
+        "drawingCount": 6,
+        "legacyObjectCount": 654,
+        "oleObjectCount": 654,
+        "ommlCount": 0,
+        "numberedParagraphCount": 0,
+        "mediaCount": 489,
+        "mediaExtensions": [
+          ".png",
+          ".wmf"
+        ],
+        "embeddingCount": 654,
+        "embeddingExtensions": [
+          ".bin"
+        ],
+        "skeleton": {
+          "authoritative": true,
+          "questionNumbers": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16",
+            "17",
+            "18",
+            "19"
+          ],
+          "diagnostics": {
+            "reason": "ok",
+            "entryCount": 19,
+            "noDuplicates": true,
+            "strictlyIncreasing": true,
+            "contiguous": true
+          }
+        }
+      }
+    },
+    {
+      "fileName": "简略版题目（只有一页）.docx",
+      "extension": ".docx",
+      "byteLength": 187888,
+      "sha256": "200956fedfb492d552362fff6138a6677ed087bf492dda20e018da92c25c9c43",
+      "ok": true,
+      "durationMs": 4.2332,
+      "structure": {
+        "packageEntryCount": 87,
+        "paragraphCount": 18,
+        "tableCount": 0,
+        "tableRowCount": 0,
+        "drawingCount": 1,
+        "legacyObjectCount": 35,
+        "oleObjectCount": 35,
+        "ommlCount": 0,
+        "numberedParagraphCount": 1,
+        "mediaCount": 34,
+        "mediaExtensions": [
+          ".png",
+          ".wmf"
+        ],
+        "embeddingCount": 35,
+        "embeddingExtensions": [
+          ".bin"
+        ],
+        "skeleton": {
+          "authoritative": true,
+          "questionNumbers": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6"
+          ],
+          "diagnostics": {
+            "reason": "ok",
+            "entryCount": 6,
+            "noDuplicates": true,
+            "strictlyIncreasing": true,
+            "contiguous": true
+          }
+        }
+      }
+    },
+    {
+      "fileName": "简略版题目（只有一页）.pdf",
+      "extension": ".pdf",
+      "byteLength": 192050,
+      "sha256": "1e1b402221fa5bcb802b878fc06d2f3915c95e58bcbb89b1d295a07f9e65c890",
+      "ok": true,
+      "durationMs": 26.3516,
+      "structure": {
+        "pageCount": 1,
+        "encrypted": false,
+        "tagged": false,
+        "pageSize": "595.3 x 841.9 pts (A4)",
+        "widthPoints": 595.3,
+        "heightPoints": 841.9,
+        "pdfVersion": "1.7",
+        "fileSizeBytes": 0
+      }
+    },
+    {
+      "fileName": "题目.docx",
+      "extension": ".docx",
+      "byteLength": 174549,
+      "sha256": "1b4d71a3fef186f991cb9b6b7867485af2f1dada61d46921f939a967b26b79dd",
+      "ok": true,
+      "durationMs": 4.3334,
+      "structure": {
+        "packageEntryCount": 224,
+        "paragraphCount": 37,
+        "tableCount": 0,
+        "tableRowCount": 0,
+        "drawingCount": 1,
+        "legacyObjectCount": 108,
+        "oleObjectCount": 108,
+        "ommlCount": 0,
+        "numberedParagraphCount": 0,
+        "mediaCount": 95,
+        "mediaExtensions": [
+          ".png",
+          ".wmf"
+        ],
+        "embeddingCount": 108,
+        "embeddingExtensions": [
+          ".bin"
+        ],
+        "skeleton": {
+          "authoritative": true,
+          "questionNumbers": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14"
+          ],
+          "diagnostics": {
+            "reason": "ok",
+            "entryCount": 14,
+            "noDuplicates": true,
+            "strictlyIncreasing": true,
+            "contiguous": true
+          }
+        }
+      }
+    },
+    {
+      "fileName": "完整版答案.docx",
+      "extension": ".docx",
+      "byteLength": 331074,
+      "sha256": "8f1f74870836b896f721f52ace87754cd794c4413a00d1ee39d4cf628cefc2ac",
+      "ok": true,
+      "durationMs": 5.7132,
+      "structure": {
+        "packageEntryCount": 301,
+        "paragraphCount": 80,
+        "tableCount": 0,
+        "tableRowCount": 0,
+        "drawingCount": 3,
+        "legacyObjectCount": 146,
+        "oleObjectCount": 146,
+        "ommlCount": 0,
+        "numberedParagraphCount": 0,
+        "mediaCount": 137,
+        "mediaExtensions": [
+          ".png",
+          ".wmf"
+        ],
+        "embeddingCount": 146,
+        "embeddingExtensions": [
+          ".bin"
+        ],
+        "skeleton": {
+          "authoritative": false,
+          "questionNumbers": [],
+          "diagnostics": {
+            "reason": "no-explicit-question-markers",
+            "entryCount": 0,
+            "noDuplicates": true,
+            "strictlyIncreasing": true,
+            "contiguous": true
+          }
+        }
+      }
+    },
+    {
+      "fileName": "完整版答案.pdf",
+      "extension": ".pdf",
+      "byteLength": 243387,
+      "sha256": "48549eadeee80340d3f58062762b724f56471c903f5ee0c3bdf2dbec25762c7f",
+      "ok": true,
+      "durationMs": 24.1027,
+      "structure": {
+        "pageCount": 4,
+        "encrypted": false,
+        "tagged": false,
+        "pageSize": "595.3 x 841.9 pts (A4)",
+        "widthPoints": 595.3,
+        "heightPoints": 841.9,
+        "pdfVersion": "1.7",
+        "fileSizeBytes": 0
+      }
+    },
+    {
+      "fileName": "完整版题目.docx",
+      "extension": ".docx",
+      "byteLength": 274279,
+      "sha256": "bc242b530399c6ac422742bdab70e69785f86ab4ebba93a5c472a1d1894e5a27",
+      "ok": true,
+      "durationMs": 3.8006,
+      "structure": {
+        "packageEntryCount": 148,
+        "paragraphCount": 33,
+        "tableCount": 0,
+        "tableRowCount": 0,
+        "drawingCount": 3,
+        "legacyObjectCount": 66,
+        "oleObjectCount": 66,
+        "ommlCount": 0,
+        "numberedParagraphCount": 2,
+        "mediaCount": 64,
+        "mediaExtensions": [
+          ".png",
+          ".wmf"
+        ],
+        "embeddingCount": 66,
+        "embeddingExtensions": [
+          ".bin"
+        ],
+        "skeleton": {
+          "authoritative": true,
+          "questionNumbers": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12"
+          ],
+          "diagnostics": {
+            "reason": "ok",
+            "entryCount": 12,
+            "noDuplicates": true,
+            "strictlyIncreasing": true,
+            "contiguous": true
+          }
+        }
+      }
+    },
+    {
+      "fileName": "完整版题目.pdf",
+      "extension": ".pdf",
+      "byteLength": 326073,
+      "sha256": "50dc9a7e98299807f45521a50048240010be78212a21c840c30b2149739dd75d",
+      "ok": true,
+      "durationMs": 24.6839,
+      "structure": {
+        "pageCount": 2,
+        "encrypted": false,
+        "tagged": false,
+        "pageSize": "595.3 x 841.9 pts (A4)",
+        "widthPoints": 595.3,
+        "heightPoints": 841.9,
+        "pdfVersion": "1.7",
+        "fileSizeBytes": 0
+      }
+    },
+    {
+      "fileName": "周二晚测.docx",
+      "extension": ".docx",
+      "byteLength": 233570,
+      "sha256": "c0acdf64799b1cc5df523f8c5c679d29dda95fd063a23509bb39ae8a9b5f132f",
+      "ok": true,
+      "durationMs": 5.7435,
+      "structure": {
+        "packageEntryCount": 168,
+        "paragraphCount": 57,
+        "tableCount": 1,
+        "tableRowCount": 2,
+        "drawingCount": 3,
+        "legacyObjectCount": 80,
+        "oleObjectCount": 80,
+        "ommlCount": 0,
+        "numberedParagraphCount": 16,
+        "mediaCount": 69,
+        "mediaExtensions": [
+          ".png",
+          ".wmf"
+        ],
+        "embeddingCount": 80,
+        "embeddingExtensions": [
+          ".bin"
+        ],
+        "skeleton": {
+          "authoritative": true,
+          "questionNumbers": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12"
+          ],
+          "diagnostics": {
+            "reason": "ok",
+            "entryCount": 12,
+            "noDuplicates": true,
+            "strictlyIncreasing": true,
+            "contiguous": true
+          }
+        }
+      }
+    }
+  ]
+}
