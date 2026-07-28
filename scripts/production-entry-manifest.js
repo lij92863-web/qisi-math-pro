@@ -61,6 +61,26 @@ const browserStyleOrder = Object.freeze([
     'app.css'
 ]);
 
+const handoutBrowserScriptOrder = Object.freeze([
+    'vendor/katex/0.16.8/katex.min.js',
+    'vendor/vue/3.5.40/vue.global.prod.js',
+    'vendor/dexie/3.2.4/dexie.min.js',
+    'qisi-db.js',
+    'qisi-handout-model.js',
+    'qisi-handout-question-instance.js',
+    'qisi-handout-asset-repository.js',
+    'qisi-handout-repository.js',
+    'qisi-handout-question-library.js',
+    'qisi-handout-editor-state.js',
+    'qisi-handout-preview.js',
+    'qisi-handout-app.js'
+]);
+
+const handoutBrowserStyleOrder = Object.freeze([
+    'vendor/katex/0.16.8/katex.min.css',
+    'handout.css'
+]);
+
 const categoryFiles = Object.freeze({
     'browser-live': Object.freeze(
         browserScriptOrder.filter(file => /^qisi-[a-z0-9-]+\.js$/.test(file))
@@ -70,6 +90,12 @@ const categoryFiles = Object.freeze({
         'qisi-handout-model.js',
         'qisi-handout-question-instance.js',
         'qisi-handout-repository.js'
+    ]),
+    'browser-handout-entry': Object.freeze([
+        'qisi-handout-app.js',
+        'qisi-handout-editor-state.js',
+        'qisi-handout-preview.js',
+        'qisi-handout-question-library.js'
     ]),
     'node-entry': Object.freeze([
         'qisi-local-server.js'
@@ -97,6 +123,7 @@ const categoryFiles = Object.freeze({
 const categoryPolicy = Object.freeze({
     'browser-live': Object.freeze({ mustExist: true, production: true, syntaxCheck: true }),
     'browser-library': Object.freeze({ mustExist: true, production: true, syntaxCheck: true }),
+    'browser-handout-entry': Object.freeze({ mustExist: true, production: true, syntaxCheck: true }),
     'node-entry': Object.freeze({ mustExist: true, production: true, syntaxCheck: true }),
     'node-dependency': Object.freeze({ mustExist: true, production: true, syntaxCheck: true }),
     'node-safety': Object.freeze({ mustExist: true, production: true, syntaxCheck: true }),
@@ -107,8 +134,12 @@ const categoryPolicy = Object.freeze({
 
 const classificationEvidence = Object.freeze({
     'qisi-handout-asset-repository.js': 'H2 handout asset domain library, loaded by the isolated H3 entry',
+    'qisi-handout-app.js': 'H3 isolated handout browser entry, never loaded by main.html',
+    'qisi-handout-editor-state.js': 'H3 structured handout editor state and undo/redo policy',
     'qisi-handout-model.js': 'H2 handout schema and validation domain library',
+    'qisi-handout-preview.js': 'H3 HTML preview projection with student-content safety',
     'qisi-handout-question-instance.js': 'H2 immutable question snapshot domain library',
+    'qisi-handout-question-library.js': 'H3 read-only adapter for formal question-bank insertion',
     'qisi-handout-repository.js': 'H2 handout persistence domain library, loaded by the isolated H3 entry',
     'qisi-local-server.js': 'package.json main/start entry',
     'qisi-serial-task-queue.js': 'required by qisi-local-server.js',
@@ -139,6 +170,8 @@ const categoryFor = file => {
 module.exports = Object.freeze({
     browserScriptOrder,
     browserStyleOrder,
+    handoutBrowserScriptOrder,
+    handoutBrowserStyleOrder,
     categoryFiles,
     categoryPolicy,
     classificationEvidence,

@@ -126,6 +126,47 @@
             };
         };
 
+        const remapHandoutAssetIds = (handout, value) => {
+            const idMap = value instanceof Map
+                ? value
+                : new Map(Object.entries(value || {}));
+            const remapImages = images =>
+                (Array.isArray(images) ? images : []).map(image => {
+                    const current = String(image?.assetId || '');
+                    return {
+                        ...image,
+                        assetId: idMap.get(current) || current
+                    };
+                });
+
+            return {
+                ...handout,
+                blocks: (handout?.blocks || []).map(block => {
+                    if (block?.type === 'image') {
+                        const current = String(block.assetId || '');
+                        return {
+                            ...block,
+                            assetId: idMap.get(current) || current
+                        };
+                    }
+                    if (block?.type !== 'question') {
+                        return {
+                            ...block
+                        };
+                    }
+
+                    return {
+                        ...block,
+                        snapshot: {
+                            ...block.snapshot,
+                            images: remapImages(block.snapshot?.images)
+                        },
+                        images: remapImages(block.images)
+                    };
+                })
+            };
+        };
+
         const createHandoutAssetRepository = ({ db }) => {
             const table = requireTable(db, 'handoutAssets');
 
@@ -165,6 +206,7 @@
             normalizeAssetRecord,
             collectHandoutAssetIds,
             verifyHandoutAssetGraph,
+            remapHandoutAssetIds,
             createHandoutAssetRepository
         };
     }

@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TEX题库 · 讲义制作</title>
+    <link rel="stylesheet" href="./vendor/katex/0.16.8/katex.min.css">
+    <link rel="stylesheet" href="./handout.css">
+</head>
+<body>
+    <div id="handout-app">
+        <main class="handout-boot" role="status">
+            <div class="tex-wordmark" aria-label="TEX">T<span>E</span><i>X</i></div>
+            <h1>讲义制作正在启动</h1>
+            <p>正在打开本地讲义与题库数据……</p>
+        </main>
+    </div>
+
+    <template id="handout-app-template">
+        <div class="handout-shell" :data-ready="ready ? 'true' : 'false'">
+            <header class="handout-topbar">
+                <a class="brand" href="./main.html" aria-label="返回 TEX题库">
+                    <span class="tex-wordmark tex-wordmark-small">T<span>E</span><i>X</i></span>
+                    <span>
+                        <strong>TEX题库</strong>
+                        <small>讲义制作</small>
+                    </span>
+                </a>
+
+                <div class="document-title" v-if="editor">
+                    <label for="handout-title">讲义名称</label>
+                    <input
+                        id="handout-title"
+                        data-testid="handout-title"
+                        v-model="titleDraft"
+                        maxlength="160"
+                        @input="commitTitle"
+                        @blur="commitTitle"
+                    >
+                </div>
+
+                <div class="topbar-actions">
+                    <span class="save-state" :class="saveStatus">
+                        <span class="status-dot"></span>
+                        {{ saveStatusLabel }}
+                    </span>
+                    <button data-testid="undo" class="icon-button" :disabled="!canUndo" @click="performUndo" title="撤销">↶</button>
+                    <button data-testid="redo" class="icon-button" :disabled="!canRedo" @click="performRedo" title="重做">↷</button>
+                    <button data-testid="save-now" class="button subtle" :disabled="!editor || saving" @click="flushSave">立即保存</button>
+                    <div class="edition-switch" role="group" aria-label="预览版本">
+                        <button
+                            data-testid="student-preview"
+                            :class="{ active: previewEdition === 'student' }"
+                            @click="previewEdition = 'student'"
+                        >学生版</button>
+                        <button
+                            data-testid="teacher-preview"
+                            :class="{ active: previewEdition === 'teacher' }"
+                            @click="previewEdition = 'teacher'"
+                        >教师版</button>
+                    </div>
+                    <button
+                        data-testid="toggle-preview"
+                        class="button primary"
+                        @click="viewMode = viewMode === 'editor' ? 'preview' : 'editor'"
+                    >{{ viewMode === 'editor' ? '查看预览' : '返回编辑' }}</button>
+                </div>
+            </header>
+
+            <div v-if="startupError" class="fatal-panel" role="alert">
+                <h1>讲义模块没有成功启动</h1>
+                <p>{{ startupError }}</p>
+                <button class="button primary" @click="reloadPage">重新加载</button>
+            </div>
+
+            <template v-else>
+                <div v-if="notice.message" class="notice" :class="notice.kind" role="status">
+                    <span>{{ notice.message }}</span>
+                    <button aria-label="关闭提示" @click="notice.message = ''">×</button>
+                </div>
+
+                <div class="handout-workspace">
+                    <aside class="library-panel">
+                        <section class="panel-section">
+                            <div class="section-heading">
+                                <div>
+                                    <span class="eyebrow">本地文档</span>
+                                    <h2>我的讲义</h2>
+                                </div>
+                                <button data-testid="new-handout" class="round-action" @click="createNewHandout" title="新建讲义">＋</button>
+                            </div>
+                            <div class="handout-list" data-testid="handout-list">
+                                <button
+                                    v-for="item in handouts"
+                                    :key="item.id"
+                                    class="handout-list-item"
+                                    :class="{ active: editor?.handout.id === item.id }"
+                                    :data-handout-id="item.id"
+                                    @click="openHandout(item.id)"
+                                >
+                                    <strong>{{ item.title }}</strong>
+                                    <small>{{ formatTime(item.updatedAt) }} · v{{ item.revision }}</small>
+                                </button>
+                                <p v-if="!handouts.length" class="empty-note">还没有讲义，点击右上角新建。</p>
+                            </div>
+                            <div class="document-actions" v-if="editor">
+                                <button data-testid="duplicate-handout" class="button subtle" @click="duplicateCurrent">复制</button>
+                                <button data-testid="show-revisions" class="button subtle" @click="loadRevisions">恢复版本</button>
+                                <button data-testid="delete-handout" class="button danger-text" @click="requestDeleteHandout">删除</button>
+                            </div>
+                        </section>
+
+                        <section class="panel-section" v-if="editor">
+                            <div class="section-heading compact">
+                                <div>
+                                    <span class="eyebrow">结构</span>
+                                    <h2>内容块</h2>
+                                </div>
+                                <span class="count-pill">{{ editor.handout.blocks.length }}</span>
+                            </div>
+                            <button data-testid="open-question-library" class="button question-bank-button" @click="openQuestionLibrary">
+                                <span>⌕</span> 从题库插入
+                            </button>
+                            <div class="block-palette">
+                                <button data-testid="add-heading" @click="addSimpleBlock('heading')"><b>H</b>标题</button>
+                                <button data-testid="add-body" @click="addSimpleBlock('body')"><b>¶</b>正文</button>
+                                <button data-testid="add-callout" @click="addSimpleBlock('callout')"><b>!</b>提示框</button>
+                                <button data-testid="add-image" @click="chooseStandaloneImage"><b>▧</b>图片</button>
+                                <button data-testid="add-page-break" @click="addSimpleBlock('page-break')"><b>↵</b>分页</button>
+                            </div>
+                            <input
+                                ref="standaloneImageInput"
+                                class="visually-hidden"
+                                type="file"
+                                accept="image/*"
+                                @change="addStandaloneImage"
+                            >
+
+                            <div class="block-outline" data-testid="block-outline">
+                                <button
+                                    v-for="(block, index) in editor.handout.blocks"
+                                    :key="block.id"
+                                    :class="{ active: editor.selectedBlockId === block.id }"
+                                    @click="selectEditorBlock(block.id)"
+                                >
+                                    <span>{{ index + 1 }}</span>
+                                    <strong>{{ blockLabel(block) }}</strong>
+                                </button>
+                            </div>
+                        </section>
+                    </aside>
+
+                    <main class="canvas-panel">
+                        <div v-if="!editor" class="welcome-card">
+                            <div class="welcome-mark">TEX</div>
+                            <h1>把题库内容编成真正可编辑的讲义</h1>
+                            <p>题目以“源题引用 + 快照 + 局部覆盖”插入，讲义修改不会回写正式题库。</p>
+                            <button class="button primary large" @click="createNewHandout">创建第一份讲义</button>
+                        </div>
+
+                        <template v-else-if="viewMode === 'editor'">
+                            <div class="canvas-heading">
+                                <div>
+                                    <span class="eyebrow">结构化编辑</span>
+                                    <h1>{{ editor.handout.title }}</h1>
+                                </div>
+                                <div class="canvas-heading-actions">
+                                    <span>{{ editor.handout.blocks.length }} 个内容块</span>
+                                    <button
+                                        data-testid="open-global-settings"
+                                        class="button subtle compact"
+                                        @click="clearSelection"
+                                    >讲义设置</button>
+                                </div>
+                            </div>
+
+                            <div v-if="!editor.handout.blocks.length" class="empty-canvas">
+                                <div>＋</div>
+                                <h2>添加第一个内容块</h2>
+                                <p>可以从左侧添加标题、正文、提示框、图片，或直接从题库插入题目。</p>
+                            </div>
+
+                            <article
+                                v-for="(block, index) in editor.handout.blocks"
+                                :key="block.id"
+                                class="editor-block"
+                                :class="[{ selected: editor.selectedBlockId === block.id }, `block-${block.type}`]"
+                                :data-block-id="block.id"
+                                @click="selectEditorBlock(block.id)"
+                            >
+                                <div class="block-index">{{ String(index + 1).padStart(2, '0') }}</div>
+                                <div class="block-toolbar">
+                                    <span>{{ blockLabel(block) }}</span>
+                                    <button :disabled="index === 0" @click.stop="moveSelected(block.id, -1)" title="上移">↑</button>
+                                    <button :disabled="index === editor.handout.blocks.length - 1" @click.stop="moveSelected(block.id, 1)" title="下移">↓</button>
+                                    <button @click.stop="copySelected(block.id)" title="复制">⧉</button>
+                                    <button class="danger" @click.stop="requestDeleteBlock(block.id)" title="删除">×</button>
+                                </div>
+
+                                <div class="block-content">
+                                    <template v-if="block.type === 'heading'">
+                                        <select :value="block.level" @change="updateSimpleBlock(block.id, { level: Number($event.target.value) })">
+                                            <option :value="1">一级标题</option>
+                                            <option :value="2">二级标题</option>
+                                            <option :value="3">三级标题</option>
+                                        </select>
+                                        <input
+                                            class="heading-input"
+                                            :value="block.text"
+                                            maxlength="500"
+                                            @change="updateSimpleBlock(block.id, { text: $event.target.value })"
+                                        >
+                                    </template>
+
+                                    <template v-else-if="block.type === 'body'">
+                                        <textarea
+                                            rows="5"
+                                            :value="block.content"
+                                            @change="updateSimpleBlock(block.id, { content: $event.target.value })"
+                                        ></textarea>
+                                        <math-content :content="block.content"></math-content>
+                                    </template>
+
+                                    <template v-else-if="block.type === 'callout'">
+                                        <div class="inline-fields">
+                                            <select :value="block.variant" @change="updateSimpleBlock(block.id, { variant: $event.target.value })">
+                                                <option value="method">方法总结</option>
+                                                <option value="warning">易错提醒</option>
+                                                <option value="note">注意</option>
+                                                <option value="teacher">教师提示</option>
+                                                <option value="conclusion">结论</option>
+                                            </select>
+                                            <input :value="block.title" maxlength="160" @change="updateSimpleBlock(block.id, { title: $event.target.value })">
+                                        </div>
+                                        <textarea rows="4" :value="block.content" @change="updateSimpleBlock(block.id, { content: $event.target.value })"></textarea>
+                                    </template>
+
+                                    <template v-else-if="block.type === 'image'">
+                                        <figure class="editor-image" :class="`align-${block.alignment}`">
+                                            <img v-if="assetUrl(block.assetId)" :src="assetUrl(block.assetId)" :style="imageStyle(block)" alt="">
+                                            <div v-else class="missing-image">图片资产不可用</div>
+                                            <figcaption v-if="block.caption">{{ block.caption }}</figcaption>
+                                        </figure>
+                                    </template>
+
+                                    <template v-else-if="block.type === 'page-break'">
+                                        <div class="page-break-line"><span>从下一页开始</span></div>
+                                    </template>
+
+                                    <template v-else-if="block.type === 'question'">
+                                        <div class="question-editor-preview">
+                                            <div class="question-meta-row">
+                                                <span>{{ effectiveQuestionFor(block).type || '题目' }}</span>
+                                                <span>{{ effectiveQuestionFor(block).grade || '未设年级' }}</span>
+                                                <span>源题 {{ block.sourceQuestionId }}</span>
+                                            </div>
+                                            <math-content class="question-stem" :content="effectiveQuestionFor(block).stem"></math-content>
+                                            <div
+                                                v-if="block.display.showOptions"
+                                                class="option-preview"
+                                                :style="{ '--option-columns': previewColumnsFor(block) }"
+                                            >
+                                                <div v-for="(option, optionIndex) in effectiveQuestionFor(block).options || []" :key="optionIndex">
+                                                    <b>{{ optionLetter(optionIndex) }}.</b>
+                                                    <math-content :content="option"></math-content>
+                                                </div>
+                                            </div>
+                                            <div class="editor-question-images" v-if="block.images.length">
+                                                <figure v-for="image in block.images" :key="image.id">
+                                                    <img v-if="assetUrl(image.assetId)" :src="assetUrl(image.assetId)" :style="imageStyle(image)" alt="">
+                                                    <figcaption>{{ image.caption }}</figcaption>
+                                                </figure>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </article>
+                        </template>
+
+                        <template v-else>
+                            <div class="preview-toolbar">
+                                <div>
+                                    <span class="eyebrow">HTML 快速预览</span>
+                                    <h1>{{ previewEdition === 'student' ? '学生版' : '教师版' }}</h1>
+                                </div>
+                                <p>正式 Typst PDF 属于后续阶段；此处只验证结构与布局决策。</p>
+                            </div>
+                            <section
+                                v-if="previewDocument"
+                                class="a4-preview"
+                                :class="[`orientation-${previewDocument.settings.page.orientation}`, `columns-${previewDocument.settings.page.columns}`]"
+                                data-testid="html-preview"
+                            >
+                                <header v-if="previewDocument.settings.header.enabled" class="preview-header">
+                                    <span>{{ resolvePlaceholder(previewDocument.settings.header.left) }}</span>
+                                    <span>{{ resolvePlaceholder(previewDocument.settings.header.center) }}</span>
+                                    <span>{{ resolvePlaceholder(previewDocument.settings.header.right) }}</span>
+                                </header>
+                                <h1 class="preview-title">{{ previewDocument.title }}</h1>
+                                <p v-if="previewDocument.settings.metadata.subtitle" class="preview-subtitle">{{ previewDocument.settings.metadata.subtitle }}</p>
+
+                                <template v-for="block in previewDocument.blocks" :key="block.id">
+                                    <h2 v-if="block.type === 'heading' && block.level === 1"><math-content :content="block.text"></math-content></h2>
+                                    <h3 v-else-if="block.type === 'heading' && block.level === 2"><math-content :content="block.text"></math-content></h3>
+                                    <h4 v-else-if="block.type === 'heading'"><math-content :content="block.text"></math-content></h4>
+                                    <p v-else-if="block.type === 'body'" class="preview-body"><math-content :content="block.content"></math-content></p>
+                                    <aside v-else-if="block.type === 'callout'" class="preview-callout" :class="`variant-${block.variant}`">
+                                        <strong>{{ block.title }}</strong>
+                                        <math-content :content="block.content"></math-content>
+                                    </aside>
+                                    <figure v-else-if="block.type === 'image'" class="preview-figure" :class="`align-${block.alignment}`">
+                                        <img v-if="assetUrl(block.assetId)" :src="assetUrl(block.assetId)" :style="imageStyle(block)" alt="">
+                                        <figcaption v-if="block.caption">{{ block.caption }}</figcaption>
+                                    </figure>
+                                    <div v-else-if="block.type === 'page-break'" class="preview-page-break"></div>
+                                    <section v-else-if="block.type === 'question'" class="preview-question" :data-preview-question="block.id">
+                                        <div class="question-line">
+                                            <b v-if="block.question.display.showQuestionNumber">{{ questionNumberFor(block) }}.</b>
+                                            <span v-if="block.question.questionLabel.preset !== 'none'" class="question-label">{{ questionLabelText(block.question) }}</span>
+                                            <math-content :content="block.question.stem"></math-content>
+                                            <span
+                                                v-if="block.question.answer && block.question.display.answerPlacement === 'inline'"
+                                                class="teacher-inline"
+                                            ><strong>答案</strong><math-content :content="block.question.answer"></math-content></span>
+                                        </div>
+                                        <div
+                                            v-if="block.question.display.showOptions"
+                                            class="preview-options"
+                                            :style="{ '--option-columns': block.question.optionLayout.columns }"
+                                        >
+                                            <div v-for="(option, optionIndex) in block.question.options || []" :key="optionIndex">
+                                                <b>{{ optionLetter(optionIndex) }}.</b>
+                                                <math-content :content="option"></math-content>
+                                            </div>
+                                        </div>
+                                        <div class="preview-question-images" v-if="block.question.images.length">
+                                            <figure v-for="image in block.question.images" :key="image.id" :class="`placement-${image.placement}`">
+                                                <img v-if="assetUrl(image.assetId)" :src="assetUrl(image.assetId)" :style="imageStyle(image)" alt="">
+                                                <figcaption v-if="image.caption">{{ image.caption }}</figcaption>
+                                            </figure>
+                                        </div>
+                                        <div
+                                            v-if="block.question.answer && !['hidden', 'inline'].includes(block.question.display.answerPlacement)"
+                                            class="teacher-section answer"
+                                            :class="`placement-${block.question.display.answerPlacement}`"
+                                        >
+                                            <strong>答案</strong><math-content :content="block.question.answer"></math-content>
+                                        </div>
+                                        <div
+                                            v-if="block.question.analysis && block.question.display.analysisPlacement !== 'hidden'"
+                                            class="teacher-section"
+                                            :class="`placement-${block.question.display.analysisPlacement}`"
+                                        >
+                                            <strong>分析</strong><math-content :content="block.question.analysis"></math-content>
+                                        </div>
+                                        <div
+                                            v-if="block.question.solution && block.question.display.solutionPlacement !== 'hidden'"
+                                            class="teacher-section"
+                                            :class="`placement-${block.question.display.solutionPlacement}`"
+                                        >
+                                            <strong>解析</strong><math-content :content="block.question.solution"></math-content>
+                                        </div>
+                                        <div v-if="block.question.display.answerSpaceLines" class="answer-space">
+                                            <span v-for="line in block.question.display.answerSpaceLines" :key="line"></span>
+                                        </div>
+                                    </section>
+                                </template>
+
+                                <section v-if="previewDocument.endSections.length" class="preview-end-sections">
+                                    <h2>答案与解析</h2>
+                                    <article v-for="item in previewDocument.endSections" :key="`${item.blockId}-${item.field}`">
+                                        <strong>{{ item.field === 'answer' ? '答案' : item.field === 'analysis' ? '分析' : '解析' }}</strong>
+                                        <math-content :content="item.content"></math-content>
+                                    </article>
+                                </section>
+                                <footer v-if="previewDocument.settings.footer.enabled" class="preview-footer">
+                                    <span>{{ resolvePlaceholder(previewDocument.settings.footer.left) }}</span>
+                                    <span>{{ resolvePlaceholder(previewDocument.settings.footer.center) }}</span>
+                                    <span>{{ resolvePlaceholder(previewDocument.settings.footer.right) }}</span>
+                                </footer>
+                            </section>
+                        </template>
+                    </main>
+
+                    <aside class="inspector-panel" v-if="editor">
+                        <template v-if="selectedQuestion">
+                            <div class="inspector-heading">
+                                <span class="eyebrow">题目属性</span>
+                                <h2>{{ selectedQuestion.sourceQuestionId }}</h2>
+                                <button class="restore-link" @click="restoreAllQuestionContent">恢复插入时内容</button>
+                            </div>
+                            <nav class="inspector-tabs">
+                                <button v-for="tab in questionTabs" :key="tab.id" :data-testid="`tab-${tab.id}`" :class="{ active: inspectorTab === tab.id }" @click="inspectorTab = tab.id">{{ tab.label }}</button>
+                            </nav>
+
+                            <section v-if="inspectorTab === 'content'" class="inspector-form">
+                                <label>题目标题<input :value="effectiveSelectedQuestion.title || ''" @input="updateQuestionField('title', $event.target.value)"></label>
+                                <label>题干<textarea rows="8" :value="effectiveSelectedQuestion.stem || ''" @input="updateQuestionField('stem', $event.target.value)"></textarea></label>
+                                <button class="button subtle" @click="restoreQuestionField('stem')">恢复题干</button>
+                            </section>
+
+                            <section v-else-if="inspectorTab === 'options'" class="inspector-form">
+                                <label v-for="(option, index) in effectiveSelectedQuestion.options || []" :key="index">
+                                    选项 {{ optionLetter(index) }}
+                                    <div class="input-action-row">
+                                        <textarea rows="2" :value="option" @input="updateQuestionOption(index, $event.target.value)"></textarea>
+                                        <button class="mini-danger" @click="removeQuestionOption(index)">删除</button>
+                                    </div>
+                                </label>
+                                <button class="button subtle" @click="addQuestionOption">＋ 添加选项</button>
+                                <label>选项排列
+                                    <select :value="selectedQuestion.optionLayout.mode" @change="updateQuestionSection('optionLayout', { mode: $event.target.value })">
+                                        <option value="auto">自动</option>
+                                        <option value="one-row">一行四项</option>
+                                        <option value="two-columns">两列</option>
+                                        <option value="one-column">单列</option>
+                                    </select>
+                                </label>
+                            </section>
+
+                            <section v-else-if="inspectorTab === 'images'" class="inspector-form">
+                                <article v-for="(image, index) in selectedQuestion.images" :key="image.id" class="image-property-card">
+                                    <img v-if="assetUrl(image.assetId)" :src="assetUrl(image.assetId)" alt="">
+                                    <label>位置
+                                        <select :value="image.placement" @change="updateQuestionImage(index, { placement: $event.target.value })">
+                                            <option value="below-stem">题干下方</option>
+                                            <option value="right-of-stem">题干右侧</option>
+                                            <option value="right-of-options">选项右侧</option>
+                                            <option value="block">独占一行</option>
+                                            <option value="inline">行内</option>
+                                        </select>
+                                    </label>
+                                    <div class="two-field-row">
+                                        <label>宽度<input type="number" min="1" :max="image.width.unit === 'mm' ? 190 : 100" :value="image.width.value" @change="updateQuestionImage(index, { width: { ...image.width, value: Number($event.target.value) } })"></label>
+                                        <label>单位<select :value="image.width.unit" @change="updateQuestionImage(index, { width: { ...image.width, unit: $event.target.value } })"><option value="mm">毫米</option><option value="percent">百分比</option></select></label>
+                                    </div>
+                                    <label>对齐<select :value="image.alignment" @change="updateQuestionImage(index, { alignment: $event.target.value })"><option value="left">左</option><option value="center">中</option><option value="right">右</option><option value="inline">随文</option></select></label>
+                                    <label>图片说明<input :value="image.caption" @input="updateQuestionImage(index, { caption: $event.target.value })"></label>
+                                    <div class="image-card-actions">
+                                        <label class="button subtle file-button">替换<input type="file" accept="image/*" @change="replaceQuestionImage(index, $event)"></label>
+                                        <button class="button subtle" :disabled="index === 0" @click="moveQuestionImage(index, -1)">前移</button>
+                                        <button class="button subtle" :disabled="index === selectedQuestion.images.length - 1" @click="moveQuestionImage(index, 1)">后移</button>
+                                        <button class="button danger-text" @click="removeQuestionImage(index)">移除</button>
+                                    </div>
+                                </article>
+                                <p v-if="!selectedQuestion.images.length" class="empty-note">当前题目没有显示图片。</p>
+                                <button class="button subtle" @click="restoreSelectedQuestionImages">恢复题库原图</button>
+                            </section>
+
+                            <section v-else-if="inspectorTab === 'answers'" class="inspector-form">
+                                <label>答案<textarea rows="3" :value="effectiveSelectedQuestion.answer || ''" @input="updateQuestionField('answer', $event.target.value)"></textarea></label>
+                                <label>答案位置<select :value="selectedQuestion.display.answerPlacement" @change="updateQuestionDisplay({ answerPlacement: $event.target.value })"><option value="inherit">跟随版本</option><option value="inline">题内</option><option value="after-question">题后</option><option value="end">文末</option><option value="hidden">隐藏</option></select></label>
+                                <label>分析<textarea rows="4" :value="effectiveSelectedQuestion.analysis || ''" @input="updateQuestionField('analysis', $event.target.value)"></textarea></label>
+                                <label>分析位置<select :value="selectedQuestion.display.analysisPlacement" @change="updateQuestionDisplay({ analysisPlacement: $event.target.value })"><option value="inherit">跟随版本</option><option value="after-question">题后</option><option value="end">文末</option><option value="hidden">隐藏</option></select></label>
+                                <label>详细解析<textarea rows="7" :value="effectiveSelectedQuestion.solution || ''" @input="updateQuestionField('solution', $event.target.value)"></textarea></label>
+                                <label>解析位置<select :value="selectedQuestion.display.solutionPlacement" @change="updateQuestionDisplay({ solutionPlacement: $event.target.value })"><option value="inherit">跟随版本</option><option value="after-question">题后</option><option value="end">文末</option><option value="hidden">隐藏</option></select></label>
+                            </section>
+
+                            <section v-else-if="inspectorTab === 'labels'" class="inspector-form">
+                                <label>题型<input :value="effectiveSelectedQuestion.type || ''" @input="updateQuestionField('type', $event.target.value)"></label>
+                                <div class="two-field-row">
+                                    <label>年级<input :value="effectiveSelectedQuestion.grade || ''" @input="updateQuestionField('grade', $event.target.value)"></label>
+                                    <label>难度<input :value="effectiveSelectedQuestion.diff || ''" @input="updateQuestionField('diff', $event.target.value)"></label>
+                                </div>
+                                <label>知识点<input :value="effectiveSelectedQuestion.knowledge || ''" @input="updateQuestionField('knowledge', $event.target.value)"></label>
+                                <label>标签（逗号分隔）<input :value="(effectiveSelectedQuestion.tags || []).join(',')" @change="updateQuestionField('tags', splitTags($event.target.value))"></label>
+                                <label>题目标签
+                                    <select :value="selectedQuestion.questionLabel.preset" @change="updateQuestionSection('questionLabel', { preset: $event.target.value })">
+                                        <option value="none">无</option>
+                                        <option value="example">例题</option>
+                                        <option value="exercise">练习</option>
+                                        <option value="thinking">思考</option>
+                                        <option value="custom">自定义</option>
+                                    </select>
+                                </label>
+                                <label v-if="selectedQuestion.questionLabel.preset === 'custom'">自定义文字<input :value="selectedQuestion.questionLabel.customText" @input="updateQuestionSection('questionLabel', { customText: $event.target.value })"></label>
+                            </section>
+
+                            <section v-else-if="inspectorTab === 'display'" class="inspector-form">
+                                <label class="check-row"><input type="checkbox" :checked="selectedQuestion.display.showQuestionNumber" @change="updateQuestionDisplay({ showQuestionNumber: $event.target.checked })">显示题号</label>
+                                <label class="check-row"><input type="checkbox" :checked="selectedQuestion.display.showOptions" @change="updateQuestionDisplay({ showOptions: $event.target.checked })">显示选项</label>
+                                <label>作答空行<input type="number" min="0" max="100" :value="selectedQuestion.display.answerSpaceLines" @change="updateQuestionDisplay({ answerSpaceLines: Number($event.target.value) })"></label>
+                                <label class="check-row"><input type="checkbox" :checked="selectedQuestion.latexNormalization.useDisplayFractions" @change="updateQuestionSection('latexNormalization', { useDisplayFractions: $event.target.checked })">显示分式优化（仅保存设置）</label>
+                            </section>
+
+                            <section v-else class="inspector-form source-panel">
+                                <dl>
+                                    <dt>源题 ID</dt><dd>{{ selectedQuestion.sourceQuestionId }}</dd>
+                                    <dt>插入时版本</dt><dd>{{ selectedQuestion.sourceUpdatedAt || '源题未记录时间' }}</dd>
+                                    <dt>局部覆盖</dt><dd>{{ Object.keys(selectedQuestion.contentOverrides).length }} 个字段</dd>
+                                </dl>
+                                <button data-testid="check-source-update" class="button subtle" @click="checkSelectedSource">检查源题更新</button>
+                                <div v-if="sourceCheck" class="source-result" :class="sourceCheck.status">
+                                    <strong>{{ sourceStatusLabel }}</strong>
+                                    <p v-if="sourceCheck.changedFields?.length">变化字段：{{ sourceCheck.changedFields.join('、') }}</p>
+                                    <p v-if="sourceCheck.conflictFields?.length">与讲义修改冲突：{{ sourceCheck.conflictFields.join('、') }}</p>
+                                    <p>本阶段只展示差异，不会自动覆盖讲义。</p>
+                                </div>
+                            </section>
+                        </template>
+
+                        <template v-else-if="selectedBlock?.type === 'image'">
+                            <div class="inspector-heading"><span class="eyebrow">图片块</span><h2>图片排版</h2></div>
+                            <section class="inspector-form">
+                                <label>位置<select :value="selectedBlock.placement" @change="updateSimpleBlock(selectedBlock.id, { placement: $event.target.value })"><option value="block">独占一行</option><option value="inline">行内</option></select></label>
+                                <div class="two-field-row">
+                                    <label>宽度<input type="number" min="1" :value="selectedBlock.width.value" @change="updateSimpleBlock(selectedBlock.id, { width: { ...selectedBlock.width, value: Number($event.target.value) } })"></label>
+                                    <label>单位<select :value="selectedBlock.width.unit" @change="updateSimpleBlock(selectedBlock.id, { width: { ...selectedBlock.width, unit: $event.target.value } })"><option value="mm">毫米</option><option value="percent">百分比</option></select></label>
+                                </div>
+                                <label>对齐<select :value="selectedBlock.alignment" @change="updateSimpleBlock(selectedBlock.id, { alignment: $event.target.value })"><option value="left">左</option><option value="center">中</option><option value="right">右</option><option value="inline">随文</option></select></label>
+                                <label>图片说明<input :value="selectedBlock.caption" @input="updateSimpleBlock(selectedBlock.id, { caption: $event.target.value })"></label>
+                                <label class="button subtle file-button">替换图片<input type="file" accept="image/*" @change="replaceStandaloneImage($event)"></label>
+                            </section>
+                        </template>
+
+                        <template v-else-if="selectedBlock">
+                            <div class="inspector-heading"><span class="eyebrow">内容块</span><h2>{{ blockLabel(selectedBlock) }}</h2></div>
+                            <p class="inspector-help">主要内容可直接在中间编辑区修改。左侧大纲可快速跳转和重新排序。</p>
+                        </template>
+
+                        <template v-else>
+                            <div class="inspector-heading"><span class="eyebrow">讲义设置</span><h2>页面、页眉与页脚</h2></div>
+                            <nav class="inspector-tabs">
+                                <button :class="{ active: globalTab === 'page' }" @click="globalTab = 'page'">页面</button>
+                                <button :class="{ active: globalTab === 'header' }" @click="globalTab = 'header'">页眉</button>
+                                <button :class="{ active: globalTab === 'footer' }" @click="globalTab = 'footer'">页脚</button>
+                                <button :class="{ active: globalTab === 'metadata' }" @click="globalTab = 'metadata'">信息</button>
+                            </nav>
+                            <section v-if="globalTab === 'page'" class="inspector-form">
+                                <label>方向<select :value="editor.handout.settings.page.orientation" @change="updateGlobal('page', { orientation: $event.target.value })"><option value="portrait">A4 纵向</option><option value="landscape">A4 横向</option></select></label>
+                                <label>栏数<select :value="editor.handout.settings.page.columns" @change="updateGlobal('page', { columns: Number($event.target.value) })"><option :value="1">单栏</option><option :value="2">双栏</option></select></label>
+                                <div class="two-field-row">
+                                    <label>上边距 mm<input type="number" min="8" max="40" :value="editor.handout.settings.page.marginTopMm" @change="updateGlobal('page', { marginTopMm: Number($event.target.value) })"></label>
+                                    <label>下边距 mm<input type="number" min="8" max="40" :value="editor.handout.settings.page.marginBottomMm" @change="updateGlobal('page', { marginBottomMm: Number($event.target.value) })"></label>
+                                    <label>左边距 mm<input type="number" min="8" max="40" :value="editor.handout.settings.page.marginLeftMm" @change="updateGlobal('page', { marginLeftMm: Number($event.target.value) })"></label>
+                                    <label>右边距 mm<input type="number" min="8" max="40" :value="editor.handout.settings.page.marginRightMm" @change="updateGlobal('page', { marginRightMm: Number($event.target.value) })"></label>
+                                </div>
+                                <label>正文字号 pt<input type="number" min="8" max="18" step="0.5" :value="editor.handout.settings.page.fontSizePt" @change="updateGlobal('page', { fontSizePt: Number($event.target.value) })"></label>
+                                <label>行距<input type="number" min="1" max="3" step="0.1" :value="editor.handout.settings.page.lineSpacing" @change="updateGlobal('page', { lineSpacing: Number($event.target.value) })"></label>
+                                <label class="check-row"><input type="checkbox" :checked="editor.handout.settings.page.showPageNumber" @change="updateGlobal('page', { showPageNumber: $event.target.checked })">显示页码</label>
+                            </section>
+                            <section v-else-if="globalTab === 'header' || globalTab === 'footer'" class="inspector-form">
+                                <label class="check-row"><input type="checkbox" :checked="editor.handout.settings[globalTab].enabled" @change="updateGlobal(globalTab, { enabled: $event.target.checked })">启用{{ globalTab === 'header' ? '页眉' : '页脚' }}</label>
+                                <label>页面范围<select :value="editor.handout.settings[globalTab].scope" @change="updateGlobal(globalTab, { scope: $event.target.value })"><option value="all">所有页面</option><option value="except-first">除首页外</option><option value="first-only">仅首页</option></select></label>
+                                <label>左侧<input :value="editor.handout.settings[globalTab].left" @input="updateGlobal(globalTab, { left: $event.target.value })"></label>
+                                <label>中间<input :value="editor.handout.settings[globalTab].center" @input="updateGlobal(globalTab, { center: $event.target.value })"></label>
+                                <label>右侧<input :value="editor.handout.settings[globalTab].right" @input="updateGlobal(globalTab, { right: $event.target.value })"></label>
+                                <p class="field-help">可用：{title} {teacher} {school} {page} {pages}</p>
+                            </section>
+                            <section v-else class="inspector-form">
+                                <label>副标题<input :value="editor.handout.settings.metadata.subtitle" @input="updateGlobal('metadata', { subtitle: $event.target.value })"></label>
+                                <label>学科<input :value="editor.handout.settings.metadata.subject" @input="updateGlobal('metadata', { subject: $event.target.value })"></label>
+                                <label>年级<input :value="editor.handout.settings.metadata.grade" @input="updateGlobal('metadata', { grade: $event.target.value })"></label>
+                                <label>教师<input :value="editor.handout.settings.metadata.teacher" @input="updateGlobal('metadata', { teacher: $event.target.value })"></label>
+                                <label>学校<input :value="editor.handout.settings.metadata.school" @input="updateGlobal('metadata', { school: $event.target.value })"></label>
+                            </section>
+                        </template>
+                    </aside>
+                </div>
+            </template>
+
+            <div v-if="questionModal" class="modal-backdrop" @click.self="questionModal = false">
+                <section class="modal question-modal" role="dialog" aria-modal="true" aria-label="从题库插入">
+                    <header><div><span class="eyebrow">唯一真值来源</span><h2>从正式题库插入</h2></div><button @click="questionModal = false">×</button></header>
+                    <div class="question-search-bar">
+                        <input data-testid="question-search" v-model="questionSearch.query" placeholder="搜索题干、知识点、来源" @keyup.enter="runQuestionSearch">
+                        <select v-model="questionSearch.grade"><option value="">全部年级</option><option>初一</option><option>初二</option><option>初三</option><option>高一</option><option>高二</option><option>高三</option></select>
+                        <select v-model="questionSearch.type"><option value="">全部题型</option><option>单选题</option><option>多选题</option><option>填空题</option><option>解答题</option></select>
+                        <button data-testid="run-question-search" class="button primary" @click="runQuestionSearch">搜索</button>
+                    </div>
+                    <div class="question-results" data-testid="question-results">
+                        <article v-for="item in questionResults" :key="item.id">
+                            <div>
+                                <span>{{ item.type || '题目' }} · {{ item.grade || '未设年级' }} · {{ item.diff || '未设难度' }}</span>
+                                <math-content :content="item.stem"></math-content>
+                                <small>{{ item.knowledge }}<template v-if="item.imageCount"> · {{ item.imageCount }} 张图</template></small>
+                            </div>
+                            <button :data-question-id="item.id" class="button primary" @click="insertQuestion(item.id)">插入</button>
+                        </article>
+                        <p v-if="!questionLoading && !questionResults.length" class="empty-note">没有匹配题目。</p>
+                        <p v-if="questionLoading" class="empty-note">正在读取本地题库……</p>
+                    </div>
+                </section>
+            </div>
+
+            <div v-if="revisionModal" class="modal-backdrop" @click.self="revisionModal = false">
+                <section class="modal compact-modal" role="dialog" aria-modal="true" aria-label="恢复历史版本">
+                    <header><div><span class="eyebrow">本地恢复</span><h2>历史版本</h2></div><button @click="revisionModal = false">×</button></header>
+                    <article v-for="item in revisions" :key="item.id" class="revision-row">
+                        <div><strong>版本 {{ item.revision }}</strong><small>{{ formatTime(item.createdAt) }} · {{ item.reason }}</small></div>
+                        <button class="button subtle" @click="restoreRevision(item.id)">恢复</button>
+                    </article>
+                    <p v-if="!revisions.length" class="empty-note">暂无可恢复版本。</p>
+                </section>
+            </div>
+
+            <div v-if="confirmDialog" class="modal-backdrop">
+                <section class="modal confirm-modal" role="alertdialog" aria-modal="true">
+                    <span class="danger-mark">!</span>
+                    <h2>{{ confirmDialog.title }}</h2>
+                    <p>{{ confirmDialog.message }}</p>
+                    <div><button class="button subtle" @click="confirmDialog = null">取消</button><button data-testid="confirm-danger" class="button danger" @click="runConfirmedAction">确认</button></div>
+                </section>
+            </div>
+        </div>
+    </template>
+
+    <script src="./vendor/katex/0.16.8/katex.min.js"></script>
+    <script src="./vendor/vue/3.5.40/vue.global.prod.js"></script>
+    <script src="./vendor/dexie/3.2.4/dexie.min.js"></script>
+    <script src="./qisi-db.js"></script>
+    <script src="./qisi-handout-model.js"></script>
+    <script src="./qisi-handout-question-instance.js"></script>
+    <script src="./qisi-handout-asset-repository.js"></script>
+    <script src="./qisi-handout-repository.js"></script>
+    <script src="./qisi-handout-question-library.js"></script>
+    <script src="./qisi-handout-editor-state.js"></script>
+    <script src="./qisi-handout-preview.js"></script>
+    <script src="./qisi-handout-app.js"></script>
+</body>
+</html>

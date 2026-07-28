@@ -150,6 +150,84 @@
                 return clone(handout);
             };
 
+            const duplicate = (
+                handoutId,
+                {
+                    title
+                } = {}
+            ) => inWriteTransaction(async () => {
+                const sourceRecord = await handouts.get(
+                    String(handoutId || '')
+                );
+
+                if (!sourceRecord) {
+                    throw createRepositoryError(
+                        'HANDOUT_NOT_FOUND',
+                        `handout ${handoutId} does not exist`
+                    );
+                }
+
+                const source = model.assertValidHandout(sourceRecord);
+                const sourceAssets = await assets
+                    .where('handoutId')
+                    .equals(source.id)
+                    .toArray();
+                const timestamp = now();
+                const targetId = nextId('handout');
+                const assetIdMap = new Map(
+                    sourceAssets.map(asset => [
+                        asset.id,
+                        nextId('asset')
+                    ])
+                );
+                const copiedContent = assetModule.remapHandoutAssetIds(
+                    source,
+                    assetIdMap
+                );
+                const copy = model.assertValidHandout({
+                    ...copiedContent,
+                    id: targetId,
+                    title: title || `${source.title}（副本）`,
+                    status: 'draft',
+                    createdAt: timestamp,
+                    updatedAt: timestamp,
+                    revision: 0
+                });
+                const copiedAssets = sourceAssets.map(asset =>
+                    assetModule.normalizeAssetRecord({
+                        ...asset,
+                        id: assetIdMap.get(asset.id),
+                        handoutId: targetId,
+                        blob: asset.blob,
+                        createdAt: timestamp,
+                        updatedAt: timestamp
+                    })
+                );
+                const graph = assetModule.verifyHandoutAssetGraph(
+                    copy,
+                    copiedAssets
+                );
+
+                if (!graph.ok) {
+                    throw createRepositoryError(
+                        'HANDOUT_ASSET_GRAPH_INVALID',
+                        `copied handout asset graph is invalid: ${[
+                            ...graph.missingIds,
+                            ...graph.invalidBlobIds,
+                            ...graph.ownershipMismatchIds,
+                            ...graph.duplicateIds
+                        ].join(', ')}`
+                    );
+                }
+
+                await handouts.add(copy);
+                if (copiedAssets.length) {
+                    await assets.bulkPut(copiedAssets);
+                }
+
+                return clone(copy);
+            });
+
             const assertConcurrency = (
                 current,
                 expectedUpdatedAt
@@ -405,6 +483,58 @@
                 };
             });
 
+            const importAsset = (
+                handoutId,
+                {
+                    blob,
+                    kind = 'handout-image',
+                    sourceQuestionId = '',
+                    sourceImageId = ''
+                } = {}
+            ) => inWriteTransaction(async () => {
+                const id = String(handoutId || '').trim();
+                const owner = await handouts.get(id);
+
+                if (!owner) {
+                    throw createRepositoryError(
+                        'HANDOUT_NOT_FOUND',
+                        `handout ${handoutId} does not exist`
+                    );
+                }
+
+                const timestamp = now();
+                const record = assetModule.normalizeAssetRecord({
+                    id: nextId('asset'),
+                    handoutId: id,
+                    kind,
+                    sourceQuestionId: String(sourceQuestionId || ''),
+                    sourceImageId: String(sourceImageId || ''),
+                    blob,
+                    createdAt: timestamp,
+                    updatedAt: timestamp
+                });
+
+                await assets.add(record);
+
+                return {
+                    id: record.id,
+                    handoutId: record.handoutId,
+                    kind: record.kind,
+                    mimeType: record.mimeType,
+                    byteSize: record.byteSize,
+                    createdAt: record.createdAt
+                };
+            });
+
+            const getAsset = assetId =>
+                assets.get(String(assetId || ''));
+
+            const listAssets = handoutId =>
+                assets
+                    .where('handoutId')
+                    .equals(String(handoutId || ''))
+                    .toArray();
+
             const remove = handoutId =>
                 inWriteTransaction(async () => {
                     const id = String(handoutId || '');
@@ -417,6 +547,7 @@
 
             return Object.freeze({
                 create,
+                duplicate,
                 get,
                 list,
                 save,
@@ -424,6 +555,9 @@
                 listRevisions,
                 restoreRevision,
                 insertQuestionSnapshot,
+                importAsset,
+                getAsset,
+                listAssets,
                 remove
             });
         };
