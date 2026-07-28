@@ -65,6 +65,12 @@ const categoryFiles = Object.freeze({
     'browser-live': Object.freeze(
         browserScriptOrder.filter(file => /^qisi-[a-z0-9-]+\.js$/.test(file))
     ),
+    'browser-library': Object.freeze([
+        'qisi-handout-asset-repository.js',
+        'qisi-handout-model.js',
+        'qisi-handout-question-instance.js',
+        'qisi-handout-repository.js'
+    ]),
     'node-entry': Object.freeze([
         'qisi-local-server.js'
     ]),
@@ -90,6 +96,7 @@ const categoryFiles = Object.freeze({
 
 const categoryPolicy = Object.freeze({
     'browser-live': Object.freeze({ mustExist: true, production: true, syntaxCheck: true }),
+    'browser-library': Object.freeze({ mustExist: true, production: true, syntaxCheck: true }),
     'node-entry': Object.freeze({ mustExist: true, production: true, syntaxCheck: true }),
     'node-dependency': Object.freeze({ mustExist: true, production: true, syntaxCheck: true }),
     'node-safety': Object.freeze({ mustExist: true, production: true, syntaxCheck: true }),
@@ -99,6 +106,10 @@ const categoryPolicy = Object.freeze({
 });
 
 const classificationEvidence = Object.freeze({
+    'qisi-handout-asset-repository.js': 'H2 handout asset domain library, loaded by the isolated H3 entry',
+    'qisi-handout-model.js': 'H2 handout schema and validation domain library',
+    'qisi-handout-question-instance.js': 'H2 immutable question snapshot domain library',
+    'qisi-handout-repository.js': 'H2 handout persistence domain library, loaded by the isolated H3 entry',
     'qisi-local-server.js': 'package.json main/start entry',
     'qisi-serial-task-queue.js': 'required by qisi-local-server.js',
     'qisi-pdf-answer-extraction-quality.js': 'Node safety dependency of qisi-pdf-support-controlled-write.js',

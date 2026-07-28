@@ -28,8 +28,22 @@
             'draftImportBatches',
             'draftImportFiles',
             'draftQuestions',
-            'draftImages'
+            'draftImages',
+            'handouts',
+            'handoutAssets',
+            'handoutRevisions'
         ];
+
+        const BLOB_TABLES = Object.freeze({
+            images: Object.freeze({
+                directory: 'image-blobs',
+                requireBlob: false
+            }),
+            handoutAssets: Object.freeze({
+                directory: 'handout-asset-blobs',
+                requireBlob: true
+            })
+        });
 
         const REQUIRED_BACKUP_FILES = [
             'manifest.json',
@@ -80,6 +94,187 @@
             }
         };
 
+        const collectHandoutAssetIds = handout => {
+            const ids = new Set();
+            const addImages = images => {
+                for (const image of Array.isArray(images) ? images : []) {
+                    const assetId = String(image?.assetId || '').trim();
+                    if (assetId) ids.add(assetId);
+                }
+            };
+
+            for (const block of handout?.blocks || []) {
+                if (block?.type === 'image') {
+                    const assetId = String(block.assetId || '').trim();
+                    if (assetId) ids.add(assetId);
+                }
+                if (block?.type === 'question') {
+                    addImages(block.snapshot?.images);
+                    addImages(block.images);
+                }
+            }
+
+            return [...ids];
+        };
+
+        const verifyBlobTable = async (
+            zip,
+            tableName,
+            rows,
+            warnings
+        ) => {
+            const policy = BLOB_TABLES[tableName];
+            const missingBlobFiles = [];
+            const invalidBlobFiles = [];
+            let blobCount = 0;
+
+            for (const row of rows || []) {
+                const blobFile = String(row?.blobFile || '').trim();
+
+                if (!blobFile) {
+                    const message = `${tableName} ${row?.id || 'unknown'} has no Blob file`;
+                    if (policy.requireBlob) {
+                        missingBlobFiles.push({
+                            tableName,
+                            recordId: row?.id || '',
+                            blobFile: ''
+                        });
+                    } else {
+                        warnings.push(message);
+                    }
+                    continue;
+                }
+
+                const zipEntry = zip.file(blobFile);
+
+                if (!zipEntry) {
+                    missingBlobFiles.push({
+                        tableName,
+                        recordId: row?.id || '',
+                        blobFile
+                    });
+                    continue;
+                }
+
+                const bytes = await zipEntry.async('uint8array');
+                const expectedSize = Number(row?.blobSize);
+
+                if (
+                    bytes.byteLength < 1
+                    || (
+                        Number.isFinite(expectedSize)
+                        && expectedSize !== bytes.byteLength
+                    )
+                ) {
+                    invalidBlobFiles.push({
+                        tableName,
+                        recordId: row?.id || '',
+                        blobFile,
+                        expectedSize: Number.isFinite(expectedSize)
+                            ? expectedSize
+                            : null,
+                        actualSize: bytes.byteLength
+                    });
+                    continue;
+                }
+
+                blobCount += 1;
+            }
+
+            return {
+                blobCount,
+                missingBlobFiles,
+                invalidBlobFiles
+            };
+        };
+
+        const verifyHandoutReferences = (
+            handouts,
+            revisions,
+            handoutAssets
+        ) => {
+            const assetsById = new Map();
+            const duplicateAssetIds = [];
+            const handoutIds = new Set(
+                (handouts || []).map(handout =>
+                    String(handout?.id || '').trim()
+                ).filter(Boolean)
+            );
+            const missing = [];
+            const ownershipMismatches = [];
+            const missingAssetOwners = [];
+            const revisionOwnershipMismatches = [];
+
+            for (const asset of handoutAssets || []) {
+                const assetId = String(asset?.id || '').trim();
+                const ownerId = String(asset?.handoutId || '').trim();
+
+                if (!assetId) continue;
+                if (assetsById.has(assetId)) {
+                    duplicateAssetIds.push(assetId);
+                }
+                assetsById.set(assetId, asset);
+                if (!handoutIds.has(ownerId)) {
+                    missingAssetOwners.push({
+                        assetId,
+                        handoutId: ownerId
+                    });
+                }
+            }
+
+            const check = (handout, source) => {
+                const handoutId = String(handout?.id || '').trim();
+
+                for (const assetId of collectHandoutAssetIds(handout)) {
+                    const asset = assetsById.get(assetId);
+
+                    if (!asset) {
+                        missing.push({
+                            source,
+                            handoutId,
+                            assetId
+                        });
+                    } else if (String(asset.handoutId || '') !== handoutId) {
+                        ownershipMismatches.push({
+                            source,
+                            handoutId,
+                            assetId,
+                            assetHandoutId: String(asset.handoutId || '')
+                        });
+                    }
+                }
+            };
+
+            for (const handout of handouts || []) {
+                check(handout, 'handouts');
+            }
+            for (const revision of revisions || []) {
+                if (revision?.snapshot) {
+                    if (
+                        String(revision.handoutId || '').trim()
+                        !== String(revision.snapshot.id || '').trim()
+                    ) {
+                        revisionOwnershipMismatches.push({
+                            revisionId: String(revision.id || ''),
+                            handoutId: String(revision.handoutId || ''),
+                            snapshotHandoutId:
+                                String(revision.snapshot.id || '')
+                        });
+                    }
+                    check(revision.snapshot, 'handoutRevisions');
+                }
+            }
+
+            return {
+                missing,
+                ownershipMismatches,
+                duplicateAssetIds:
+                    [...new Set(duplicateAssetIds)].sort(),
+                missingAssetOwners,
+                revisionOwnershipMismatches
+            };
+        };
+
         const verifyFullDatabaseBackupBlob = async blob => {
             if (!(blob instanceof Blob)) {
                 throw new Error('Backup verification target is not a Blob');
@@ -89,7 +284,9 @@
                 throw new Error('JSZip is not loaded; backup cannot be verified');
             }
 
-            const zip = await globalThis.JSZip.loadAsync(blob);
+            const zip = await globalThis.JSZip.loadAsync(
+                await blob.arrayBuffer()
+            );
             const errors = [];
             const warnings = [];
 
@@ -109,13 +306,24 @@
             }
 
             let manifest;
-            let questions;
-            let images;
+            const tableRows = {};
 
             try {
                 manifest = await readZipJson(zip, 'manifest.json');
-                questions = await readZipJson(zip, 'tables/questions.json');
-                images = await readZipJson(zip, 'tables/images.json');
+                const manifestTableNames = Object.keys(
+                    manifest?.tables || {}
+                );
+
+                for (const tableName of new Set([
+                    'questions',
+                    'images',
+                    ...manifestTableNames
+                ])) {
+                    tableRows[tableName] = await readZipJson(
+                        zip,
+                        `tables/${tableName}.json`
+                    );
+                }
             } catch (error) {
                 errors.push(error?.message || String(error));
                 return {
@@ -134,70 +342,98 @@
                 errors.push(`Unsupported backup version: ${manifest?.version}`);
             }
 
-            if (!Array.isArray(questions)) {
-                errors.push('tables/questions.json is not an array');
-            }
-
-            if (!Array.isArray(images)) {
-                errors.push('tables/images.json is not an array');
-            }
-
-            const missingBlobFiles = [];
-
-            for (const image of images || []) {
-                const blobFile = String(image?.blobFile || '').trim();
-
-                if (!blobFile) {
-                    warnings.push(`Image ${image?.id || 'unknown'} has no Blob file`);
+            for (const [tableName, rows] of Object.entries(tableRows)) {
+                if (!Array.isArray(rows)) {
+                    errors.push(`tables/${tableName}.json is not an array`);
                     continue;
                 }
 
-                if (!zip.file(blobFile)) {
-                    missingBlobFiles.push({
-                        imageId: image?.id || '',
-                        blobFile
-                    });
+                const expectedCount = Number(
+                    manifest?.tables?.[tableName]?.count
+                );
+
+                if (
+                    Number.isFinite(expectedCount)
+                    && expectedCount !== rows.length
+                ) {
+                    errors.push(
+                        `${tableName} count mismatch: manifest=${expectedCount}, actual=${rows.length}`
+                    );
+                }
+            }
+
+            const blobReports = {};
+            const missingBlobFiles = [];
+            const invalidBlobFiles = [];
+
+            for (const tableName of Object.keys(BLOB_TABLES)) {
+                const rows = tableRows[tableName];
+                if (!Array.isArray(rows)) continue;
+
+                const report = await verifyBlobTable(
+                    zip,
+                    tableName,
+                    rows,
+                    warnings
+                );
+                blobReports[tableName] = report;
+                missingBlobFiles.push(...report.missingBlobFiles);
+                invalidBlobFiles.push(...report.invalidBlobFiles);
+
+                const expectedBlobCount = Number(
+                    manifest?.tables?.[tableName]?.blobCount
+                );
+
+                if (
+                    Number.isFinite(expectedBlobCount)
+                    && expectedBlobCount !== report.blobCount
+                ) {
+                    errors.push(
+                        `${tableName} Blob count mismatch: manifest=${expectedBlobCount}, actual=${report.blobCount}`
+                    );
                 }
             }
 
             if (missingBlobFiles.length) {
-                errors.push(`${missingBlobFiles.length} image Blob files are missing`);
-            }
-
-            const expectedQuestionCount = Number(manifest?.tables?.questions?.count);
-
-            if (
-                Number.isFinite(expectedQuestionCount) &&
-                expectedQuestionCount !== questions.length
-            ) {
                 errors.push(
-                    `Question count mismatch: manifest=${expectedQuestionCount}, questions.json=${questions.length}`
+                    `${missingBlobFiles.length} referenced Blob files are missing`
+                );
+            }
+            if (invalidBlobFiles.length) {
+                errors.push(
+                    `${invalidBlobFiles.length} referenced Blob files have invalid byte sizes`
                 );
             }
 
-            const expectedImageCount = Number(manifest?.tables?.images?.count);
+            const handoutReferenceReport = verifyHandoutReferences(
+                tableRows.handouts,
+                tableRows.handoutRevisions,
+                tableRows.handoutAssets
+            );
 
-            if (
-                Number.isFinite(expectedImageCount) &&
-                expectedImageCount !== images.length
-            ) {
+            if (handoutReferenceReport.missing.length) {
                 errors.push(
-                    `Image count mismatch: manifest=${expectedImageCount}, images.json=${images.length}`
+                    `${handoutReferenceReport.missing.length} handout asset references are missing`
                 );
             }
-
-            const actualBlobCount = images.filter(
-                image => image?.blobFile && zip.file(image.blobFile)
-            ).length;
-
-            const expectedBlobCount = Number(manifest?.tables?.images?.blobCount);
-
-            if (
-                Number.isFinite(expectedBlobCount) &&
-                expectedBlobCount !== actualBlobCount
-            ) {
+            if (handoutReferenceReport.ownershipMismatches.length) {
                 errors.push(
-                    `Image Blob count mismatch: manifest=${expectedBlobCount}, actual=${actualBlobCount}`
+                    `${handoutReferenceReport.ownershipMismatches.length} handout asset ownership records are invalid`
+                );
+            }
+            if (handoutReferenceReport.duplicateAssetIds.length) {
+                errors.push(
+                    `${handoutReferenceReport.duplicateAssetIds.length} handout asset ids are duplicated`
+                );
+            }
+            if (handoutReferenceReport.missingAssetOwners.length) {
+                errors.push(
+                    `${handoutReferenceReport.missingAssetOwners.length} handout assets have no owning handout`
+                );
+            }
+            if (handoutReferenceReport.revisionOwnershipMismatches.length) {
+                errors.push(
+                    `${handoutReferenceReport.revisionOwnershipMismatches.length} handout revisions have invalid snapshot ownership`
                 );
             }
 
@@ -206,14 +442,28 @@
                 errors,
                 warnings,
                 checkedAt: new Date().toISOString(),
-                questionCount: Array.isArray(questions) ? questions.length : 0,
-                imageCount: Array.isArray(images) ? images.length : 0,
-                blobCount: actualBlobCount,
-                missingBlobFiles
+                questionCount: Array.isArray(tableRows.questions)
+                    ? tableRows.questions.length
+                    : 0,
+                imageCount: Array.isArray(tableRows.images)
+                    ? tableRows.images.length
+                    : 0,
+                blobCount: blobReports.images?.blobCount || 0,
+                handoutCount: Array.isArray(tableRows.handouts)
+                    ? tableRows.handouts.length
+                    : 0,
+                handoutAssetCount: Array.isArray(tableRows.handoutAssets)
+                    ? tableRows.handoutAssets.length
+                    : 0,
+                handoutAssetBlobCount:
+                    blobReports.handoutAssets?.blobCount || 0,
+                missingBlobFiles,
+                invalidBlobFiles,
+                handoutReferenceReport
             };
         };
 
-        const exportFullDatabaseBackup = async db => {
+        const createFullDatabaseBackupBlob = async db => {
             if (!db) {
                 throw new Error('Missing database instance');
             }
@@ -243,7 +493,9 @@
 
                 const rows = await db.table(tableName).toArray();
 
-                if (tableName !== 'images') {
+                const blobPolicy = BLOB_TABLES[tableName];
+
+                if (!blobPolicy) {
                     zip.file(
                         `tables/${tableName}.json`,
                         JSON.stringify(rows, null, 2)
@@ -256,7 +508,7 @@
                     continue;
                 }
 
-                const imageRows = [];
+                const blobRows = [];
 
                 for (const record of rows) {
                     const { blob, ...metadata } = record;
@@ -267,26 +519,26 @@
 
                     if (blob instanceof Blob) {
                         const extension = mimeExtension(blob.type);
-                        const blobFile = `image-blobs/${safeName(record.id)}.${extension}`;
+                        const blobFile = `${blobPolicy.directory}/${safeName(record.id)}.${extension}`;
 
-                        zip.file(blobFile, blob);
+                        zip.file(blobFile, await blob.arrayBuffer());
 
                         next.blobFile = blobFile;
                         next.blobType = blob.type || '';
                         next.blobSize = blob.size || 0;
                     }
 
-                    imageRows.push(next);
+                    blobRows.push(next);
                 }
 
                 zip.file(
-                    'tables/images.json',
-                    JSON.stringify(imageRows, null, 2)
+                    `tables/${tableName}.json`,
+                    JSON.stringify(blobRows, null, 2)
                 );
 
-                manifest.tables.images = {
-                    count: imageRows.length,
-                    blobCount: imageRows.filter(row => row.blobFile).length
+                manifest.tables[tableName] = {
+                    count: blobRows.length,
+                    blobCount: blobRows.filter(row => row.blobFile).length
                 };
             }
 
@@ -303,6 +555,17 @@
                 }
             });
 
+            return {
+                blob,
+                manifest
+            };
+        };
+
+        const exportFullDatabaseBackup = async db => {
+            const {
+                blob,
+                manifest
+            } = await createFullDatabaseBackupBlob(db);
             const verification = await verifyFullDatabaseBackupBlob(blob);
 
             console.log('[QISI_BACKUP][verification]', verification);
@@ -362,6 +625,7 @@
         };
 
         return {
+            createFullDatabaseBackupBlob,
             exportFullDatabaseBackup,
             verifyFullDatabaseBackupBlob,
             getLastFullBackupReport,

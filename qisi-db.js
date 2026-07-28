@@ -97,6 +97,30 @@
             draftImages: 'id, batchId, questionId, status, createdAt'
         });
 
+        db.version(9).stores({
+            questions: 'id, grade, type, diff, knowledge, knowledgeType, systemKnowledge, personalKnowledge, createdAt',
+            images: 'id, createdAt',
+            customTemplates: 'id, name, createdAt',
+            personalKnowledge: 'id, updatedAt',
+            externalQuestions: 'id, batchId, sourceTeacher, importedAt, importOrder, processStatus, detectedStatus',
+            importBatches: 'id, sourceTeacher, importedAt, importStatus',
+            mergeBatches: 'id, createdAt, revertedAt',
+            draftImportBatches: 'id, status, createdAt, updatedAt',
+            draftImportFiles: 'id, batchId, role, fileType, parseStatus, createdAt',
+            draftQuestions: 'id, batchId, order, questionNumber, status, duplicateStatus, selected, createdAt',
+            draftImages: 'id, batchId, questionId, status, createdAt',
+            handouts: 'id, title, status, createdAt, updatedAt',
+            handoutAssets: 'id, handoutId, sourceQuestionId, sourceImageId, createdAt',
+            handoutRevisions: 'id, handoutId, revision, createdAt'
+        });
+
+        globalThis.Qisi = globalThis.Qisi || {};
+        globalThis.Qisi.Database = Object.freeze({
+            name: 'QisiMathVueDB',
+            schemaVersion: 9,
+            getDatabase: () => db
+        });
+
         const getQuestionKnowledge = (q, type) => {
             if (!q) return '';
 
