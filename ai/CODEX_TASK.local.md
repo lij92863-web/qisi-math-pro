@@ -2,159 +2,256 @@
 
 ## Current program
 
-R9 — Final release hardening and exhaustive real-material acceptance.
+H — TEX题库讲义制作与浏览器内 Typst PDF 导出。
 
-The user explicitly requested continuous execution across R9A through R9H with one
-bounded commit per stage. A later stage may start only after the current stage's
-scope gate and required tests pass. Any failing gate stops progression until the
-failure is fixed within scope or reported as an external blocker.
+本任务合并以下两份用户任务书，并以合并后的 51 个章节为同一份产品契约：
+
+- 讲义制作与 Typst PDF 导出主任务书（第 1—30 章）；
+- 题目级编辑、图片排版、答案解析位置、标签、页眉页脚补充任务（第 31—51 章）。
+
+补充任务中的第一优先级能力是第一版核心，不得降级成后续可选项。项目已经统一更名为
+“TEX题库”，实现中不恢复旧品牌名。
 
 ## Objective
 
-Produce a release candidate that is demonstrably safe across every file currently
-in `C:\Users\Administrator\Desktop\题目与答案`, including combined
-question+answer documents such as `高二.docx`, without file-specific branches or
-semantic guessing. Verify recognition, question order, answers, solutions, formulas,
-images, tables, layout, printing, question-bank workflows, and interactive controls.
+建立独立、离线、本地优先的讲义领域，使教师能够：
+
+```text
+新建或打开讲义
+→ 添加结构化内容块
+→ 从正式题库插入带引用的题目快照
+→ 只在讲义实例中编辑内容和排版
+→ 保存并恢复草稿
+→ 生成安全的学生版和完整的教师版
+→ 使用同一 Typst 链进行正式预览和 PDF 导出
+```
 
 ## Global invariants
 
-- Work only on `codex/*`; never modify `main` directly.
-- DOCX+DOCX remains the stable baseline.
-- PDF support remains `full`, safe `prefix`, or `fail-closed` only.
-- Missing support is safer than incorrectly attached support.
-- Preserve raw evidence, source trace, warnings, and unmatched blocks.
-- No filename hashes, exact document titles, exact question text, or fixed expected
-  answer lists may enter production algorithms.
-- New complex logic belongs in focused `qisi-*.js` modules with Node/browser exports.
-- `app.js` changes are limited to explicit module wiring and small UI orchestration.
-- Do not change database schema or user source files.
-- Test question-bank writes must occur only through the normal UI in the isolated
-  in-app-browser profile; never write IndexedDB directly.
-- No real `/api/ai/chat`, `/api/ai/ocr`, DashScope, or paid vision call until a
-  dedicated stage records model, endpoint, maximum calls, cost risk, success and
-  abort criteria. Local DOCX conversion and deterministic parsing are allowed.
-- Every bug fix requires a generalized fixture or invariant proving the class of
-  failure, not the named source document.
-- Every performance change requires before/after timing or complexity evidence.
+- 只在 `codex/*` 分支工作，不修改 `main`。
+- 现有题库是题目内容的唯一真值来源；不得建立第二套正式题库。
+- 讲义题目采用“源题引用 + 插入时快照 + 稀疏局部覆盖”。
+- 讲义局部编辑默认永不回写正式题库。
+- 学生版安全规则优先级最高；答案、分析、解析、教师备注在生成文档模型前删除，
+  不得依赖 CSS 或视觉隐藏。
+- 现有 DOCX+DOCX、PDF fail-closed、录题、题库、试题篮、组卷和 HTML 打印链保持不变。
+- Typst 只服务于讲义；普通页面启动时不得加载 Typst WASM、MiTeX 或讲义字体。
+- 正式预览和 PDF 导出必须共享同一数据、模板、生成器和编译链。
+- 题库原始 LaTeX 不因 Typst 导出而修改；不安全的公式转换必须阻止导出并定位。
+- Typst、MiTeX、模板、字体和图片必须使用本地固定资源，不依赖公共 CDN 或云端编译。
+- 不允许用户输入或执行任意 Typst 源码。
+- 新业务逻辑进入聚焦的 `qisi-handout-*.js` 模块；`app.js` 不接收讲义业务逻辑。
+- 所有存储调用必须经过 repository；UI 不直接散落 Dexie/IndexedDB 调用。
+- 图片尺寸的正式数据使用毫米或页面宽度百分比，不使用绝对屏幕坐标。
+- 每个阶段一个限定变更、一个门禁报告、一个提交；提交后等待下一任务轮次再进入下一阶段。
+- 不得把 failed、timeout、skipped、未人工验证或原型成功写成正式完成。
 
-## R9 stages
+## Architecture direction fixed by H0
 
-### R9A — Release contract and inventory
+- 讲义采用同源独立入口 `handout.html`，与现有单页组合根隔离。
+- 主页面未来只增加进入讲义的轻量链接；不把讲义状态注入 `app.js`。
+- 编辑预览使用 HTML + KaTeX。
+- 正式链路为：
 
-Objective: freeze the material inventory, acceptance schema, stage boundaries, and
-evidence rules. Documentation only.
+```text
+Handout
+→ NormalizedHandout
+→ edition safety projection
+→ TypstDocumentModel
+→ trusted Typst source + virtual files
+→ Web Worker + Typst WASM + MiTeX
+→ PDF bytes
+→ PDF.js preview / local download
+```
+
+- 讲义数据使用现有 `QisiMathVueDB` 的加法式 schema 迁移，并通过独立 repository
+  访问；不修改 `questions`、`images` 等已有 store 的键或语义。
+- 讲义资产保存为 Blob，插入题库题目时复制必要图片到讲义资产域，避免源题删除后旧讲义失效。
+
+## H stages
+
+### H0 — Repository and architecture audit
+
+Objective: audit the real repository before implementation and freeze boundaries.
 
 Allowed files:
 
 - `ai/CODEX_TASK.local.md`
-- `docs/stages/STAGE_R9A_RELEASE_CONTRACT.md`
+- `docs/stages/STAGE_H0_HANDOUT_ARCHITECTURE_AUDIT.md`
 
-Required gate: `npm.cmd run verify:safe`.
+Forbidden:
 
-### R9B — Deterministic real-material audit harness
+- all production code;
+- dependencies and lockfiles;
+- database schema;
+- user data and real question content.
 
-Objective: build a local-only, no-AI harness that runs all current DOCX/PDF files,
-records per-file/per-question structural evidence, timings, warnings, formula/image/
-table counts, and creates an auditable result without modifying source materials.
+Required gates:
 
-Allowed files are limited to focused scripts, tests, fixtures derived from generalized
-minimal cases, package scripts when necessary, the stage document, and this task file.
-Production recognition code is read-only in R9B.
+- `npm.cmd run verify:safe`
+- `$env:QISI_ALLOWED_DIFF='ai/CODEX_TASK.local.md,docs/stages/STAGE_H0_HANDOUT_ARCHITECTURE_AUDIT.md'; npm.cmd run verify:diff-scope`
 
-Required gates: focused harness tests, `verify:batch-safety`, `verify:safe`.
+### H1 — Browser Typst/MiTeX feasibility prototype
 
-### R9C — DOCX recognition integrity
+Objective: independently prove local browser compilation before product integration.
 
-Objective: fix generalized DOCX failures proven by R9B, including answer-at-end
-documents, question skeletons, MathType/OMML/LaTeX preservation, tables, images,
-options, and mixed question/answer/solution sections.
+Required proof:
 
-Forbidden: PDF support modules, AI/OCR endpoints, DB schema, file-specific rules.
+- pinned, locally served Typst WASM;
+- locally served MiTeX;
+- redistributable fixed Chinese and math fonts with recorded licenses;
+- Web Worker compilation;
+- Chinese, inline/display LaTeX, piecewise, matrix, image, 2+ pages, header/footer;
+- PDF bytes, browser preview and download;
+- main page startup does not request any H1 resource;
+- readable block/formula diagnostics and fail-closed behavior.
 
-Required gates: new generalized fixtures, `verify:docx-stable`,
-`verify:batch-safety`, `verify:safe`, then real-material rerun.
+Allowed scope:
 
-### R9D — PDF integrity and safe alignment
+- `prototypes/handout-typst/**`
+- focused H1 tests and fixtures;
+- `vendor/typst/**`, `vendor/mitex/**`, approved fonts and license files;
+- production manifest classification only if needed to classify lazy assets;
+- package files only if the selected pinned dependency cannot be vendored without them;
+- H1 stage document.
 
-Objective: fix generalized PDF failures while preserving fail-closed alignment.
+Forbidden:
 
-Forbidden: DOCX stable behavior changes, semantic answer attachment, DB schema.
+- `app.js`;
+- production navigation or database changes;
+- DOCX/PDF/import/print business logic.
 
-Required gates: full/prefix/missing/duplicate/jump-back/unknown/mismatch/objective
-fixtures, `verify:pdf-known-bad`, `verify:batch-safety`, `verify:safe`, then real PDFs.
+### H2 — Handout domain model and repository
 
-Real-test authorization recorded on 2026-07-22:
+Objective: implement schema, validation, migrations, source-reference snapshots, assets,
+autosave, recovery, CRUD, revision fallback and source-update comparison.
 
-- Purpose: exercise the question-PDF + answer-PDF workflow up to five complete runs.
-- Inputs: `完整版题目.pdf` and `完整版答案.pdf` only.
-- Endpoints: local `/api/ai/chat` and `/api/ai/ocr` proxy routes only; direct
-  DashScope browser requests remain forbidden.
-- Models: the production standard-mode choices currently configured by the app
-  (`qwen-vl-plus`, `qwen-plus`, and `qwen-vl-ocr-latest` only when the structured
-  OCR fallback is actually required).
-- Maximum: five complete dual-PDF runs and at most 60 total upstream calls across
-  those runs. Stop before another run if the observed cumulative count would exceed
-  the cap; never start an accurate-mode fallback.
-- Cost risk: paid DashScope usage proportional to rendered PDF pages; use standard
-  mode and record actual text/vision call counts after every run.
-- Success: expected question sequence is reliable, answers/solutions align without
-  shift, previews contain no raw LaTeX leakage/mojibake, and PDF safety gates pass.
-- Abort: any authentication, balance, quota, rate-limit, model-validation, sequence
-  jump-back/duplicate, answer/solution mismatch, or unexpected model fallback error.
-- Business code may be modified only after the failing evidence is captured and only
-  inside the bounded R9D PDF stage.
+Required boundaries:
 
-### R9E — Review and print visual integrity
+- add stores without changing existing store indexes or records;
+- expose database access explicitly while preserving existing lexical globals;
+- include handout tables/assets in verified backup;
+- test that讲义 overrides never mutate source questions.
 
-Objective: browser-verify every produced draft for readable math, correct image/table
-placement, option layout, page breaking, and source-vs-question image separation.
-Fix only generalized layout policies with visual or DOM evidence.
+Required gates:
 
-Required gates: focused visual/layout tests, zero browser page errors,
-`verify:batch-safety`, `verify:safe`.
+- focused model/migration/repository/backup tests;
+- `verify:docx-stable`;
+- `verify:batch-safety`;
+- `verify:safe`.
 
-### R9F — Interaction and question-bank acceptance
+### H3 — Independent handout editor and HTML preview
 
-Objective: exercise all 117 recorded click expressions and every visible question-bank
-control using isolated test data inserted through the normal reviewed UI. Each action
-must have automated evidence or a captured manual acceptance result; dead controls fail.
+Objective: implement handout list and structured editor without Typst business coupling.
 
-Forbidden: direct IndexedDB writes, weakening the action manifest, production data.
+First-priority scope:
 
-Required gates: UI action contract, browser smoke, `verify:safe`.
+- heading, body, callout, image, page-break and question blocks;
+- create/open/rename/copy/delete/autosave/recovery;
+- insert questions from the existing bank;
+- reorder/copy/delete/undo/redo;
+- selected-question property panel with content, options, images, answers/solutions,
+  labels, display and source-update sections;
+- sparse instance overrides and restore-to-snapshot;
+- option layouts: auto, one row, two columns, one column;
+- image source/replace/remove/restore, position, width, alignment, order and caption;
+- answer/analysis/solution placements;
+- global page, header and footer settings;
+- student/teacher HTML preview using the same normalized layout decisions.
 
-### R9G — Measured performance and architecture hardening
+Forbidden:
 
-Objective: profile DOCX/PDF paths, remove measured bottlenecks and verified redundancy,
-and re-audit the earlier Kimi findings. Changes must be split by subsystem and keep
-stable-chain semantics unchanged.
+- raw Typst editor;
+- direct IndexedDB access in UI;
+- changes to source questions;
+- `app.js` business logic.
 
-Required evidence: before/after timings or complexity proof, architecture manifest,
-focused tests, `verify:batch-safety`, `verify:safe`.
+### H4 — Edition policy and Typst document generation
 
-### R9H — Final release acceptance
+Objective: build the pure formal-document pipeline and trusted default A4 template.
 
-Objective: rerun all current real materials and automated gates, inspect browser logs,
-verify the remote branch, and produce a per-file/per-question/per-action report.
+Required:
 
-Acceptance requires:
+- deterministic inheritance resolution;
+- student safety projection and leakage scanner;
+- Typst escaping and injection resistance;
+- local placeholder resolver for header/footer;
+- option/image layout policy shared with HTML preview;
+- answer/analysis/solution end sections;
+- reversible LaTeX display normalization audit trail;
+- one centrally managed Typst template.
 
-- zero unexplained recognition or rendering error;
-- zero incorrectly attached answer, solution, image, table, or question block;
-- zero raw LaTeX leakage outside explicitly supported raw-source views;
-- zero mojibake or formula syntax error in preview and print;
-- zero dead or misleading button;
-- zero real AI/OCR calls unless separately authorized and budgeted;
-- clean working tree and one scoped commit per completed stage.
+### H5 — Production compiler infrastructure
+
+Objective: integrate lazy Web Worker compilation, virtual filesystem, fonts, MiTeX,
+PDF.js preview, cancellation, diagnostics, cache/version handling and download.
+
+Required:
+
+- no Typst request during normal main-page load;
+- no main-thread compilation;
+- missing asset/font/formula blocks export;
+- formal preview and export use identical PDF bytes;
+- Blob URLs are released on close/unload, not by an arbitrary short timeout.
+
+### H6 — Product integration and first-priority closure
+
+Objective: add the lightweight main navigation entry and complete the first-priority
+browser workflow without changing stable chains.
+
+Required manual path:
+
+```text
+main page → handout page → create → mixed blocks → insert/edit question
+→ image/option/answer/header/footer layout → save → reload
+→ student preview/export → teacher preview/export
+```
+
+### H7 — Second-priority completion
+
+Objective: complete multi-question batch settings, source diff/update conflicts,
+multi-image complex layout, custom labels, header/footer images and backgrounds,
+and local single-question formal preview.
+
+### H8 — Real formula, offline, performance and final acceptance
+
+Objective: produce the final evidence set and documentation.
+
+Required:
+
+- real question-bank formula compatibility report;
+- 5/20/50-page compile measurements;
+- cold/warm initialization, memory and PDF size evidence;
+- cached offline restart and export;
+- complete browser action acceptance;
+- student-PDF text scan for answer leakage;
+- rendered PDF visual inspection;
+- regression of main page, search, cart, exam, print and batch chains;
+- usage, architecture, dependency/license, known-limit and recovery documentation;
+- clean tree and pushed branch.
+
+## Explicitly out of scope
+
+- AI-generated handouts, rewrites, summaries or variants;
+- arbitrary Typst source editing;
+- Word export;
+- cloud sync or cloud compilation;
+- multiplayer/collaboration;
+- template marketplace;
+- arbitrary-coordinate desktop-publishing layout;
+- complex text wrapping;
+- QR-code implementation;
+- changes to recognition or answer-alignment algorithms.
 
 ## Stop conditions
 
-Stop the affected stage, not the whole program, when:
+Stop the affected stage when:
 
-- the working tree is unexpectedly dirty;
-- a required change falls outside the stage allowlist;
-- a real AI/OCR call becomes necessary without the explicit budget contract;
-- answer/solution ownership is uncertain;
-- a test failure is outside scope;
-- a requested claim cannot be supported by actual evidence.
+- the tree becomes unexpectedly dirty;
+- a required file is outside the stage allowlist;
+- selected dependencies cannot be pinned, licensed and served locally;
+- Typst/MiTeX cannot satisfy the H1 proof without cloud or native installation;
+- formula conversion cannot be proved safe;
+- student output contains any protected teacher content;
+- stable DOCX/PDF/import/print gates regress;
+- a browser or PDF claim lacks actual evidence.
