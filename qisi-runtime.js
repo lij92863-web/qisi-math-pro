@@ -123,6 +123,18 @@
 
             console.error('[QISI_RUNTIME][fatal]', error);
 
+            const startupGuard = globalThis.Qisi?.StartupGuard;
+            if (
+                typeof startupGuard?.fail === 'function'
+                && startupGuard.fail(error, {
+                    code: 'RUNTIME_BOOT_FAILED',
+                    title: 'TEX题库初始化失败',
+                    detail: '依赖或功能模块未能完成初始化，请重新加载页面。'
+                })
+            ) {
+                return;
+            }
+
             const appRoot = document.getElementById('app');
             if (!appRoot) return;
 

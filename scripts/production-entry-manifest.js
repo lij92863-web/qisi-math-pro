@@ -4,6 +4,7 @@
 // Keep browserScriptOrder aligned with the normalized local `src` values in
 // main.html. Root qisi-*.js files must belong to exactly one category.
 const browserScriptOrder = Object.freeze([
+    'qisi-startup-guard.js',
     'vendor/katex/0.16.8/katex.min.js',
     'vendor/katex/0.16.8/contrib/auto-render.min.js',
     'vendor/vue/3.5.40/vue.global.prod.js',

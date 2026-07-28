@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TEX题库 | 本地数学题库系统</title>
+    <script src="./qisi-startup-guard.js?v=startup-guard-r1"></script>
     <link rel="stylesheet" href="./vendor/tailwindcss/3.4.17/qisi-tailwind.min.css">
     <link rel="stylesheet" href="./vendor/katex/0.16.8/katex.min.css">
     <script src="./vendor/katex/0.16.8/katex.min.js"></script>
@@ -17,7 +18,26 @@
     <script src="./vendor/lucide/0.378.0/lucide.min.js"></script>
     <link rel="stylesheet" href="./app.css?v=tex-ui-r1">
 </head>
-<body><div id="app"></div>
+<body>
+    <div id="app">
+        <section
+            id="tex-startup-shell"
+            data-startup-state="loading"
+            role="status"
+            aria-live="polite"
+            aria-busy="true"
+            style="min-height:100vh;display:grid;place-items:center;padding:32px;box-sizing:border-box;background:#f6f8fc;font-family:Arial,'Microsoft YaHei',sans-serif;color:#1f2937">
+            <div style="width:min(520px,100%);padding:30px;border:1px solid #dbe3ef;border-radius:18px;background:#fff;box-shadow:0 18px 50px rgba(31,41,55,.10)">
+                <div style="display:inline-flex;align-items:flex-end;gap:2px;margin-bottom:18px;font-family:Georgia,'Times New Roman',serif;font-size:30px;font-style:italic;color:#263238">
+                    <span style="border-top:4px solid #4285f4">T</span><span style="border-right:4px solid #fbbc04">E</span><span style="border-bottom:4px solid #34a853">X</span>
+                </div>
+                <strong id="tex-startup-title" style="display:block;font-size:22px;line-height:1.4">正在启动 TEX题库</strong>
+                <p id="tex-startup-message" style="margin:14px 0 0;font-size:15px;line-height:1.8;color:#475569">正在连接本地服务并加载离线组件，请稍候…</p>
+                <p id="tex-startup-detail" style="margin:10px 0 0;font-size:13px;line-height:1.7;color:#64748b">首次启动或被安全软件扫描时可能需要几秒钟。</p>
+                <button id="tex-startup-retry" type="button" hidden style="display:none;margin-top:20px;padding:10px 18px;border:0;border-radius:10px;background:#1a73e8;color:#fff;font-size:14px;font-weight:700;cursor:pointer">重新加载</button>
+            </div>
+        </section>
+    </div>
 
     <!-- [组件1]: Icon -->
     <template id="icon-tpl">
