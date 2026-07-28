@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "stage": "H1",
+  "policy": {
+    "networkAtRuntime": false,
+    "workerOnlyCompilation": true,
+    "productionMainPageLoadsAssets": false
+  },
+  "packages": [
+    {
+      "name": "@myriaddreamin/typst.ts",
+      "version": "0.7.0",
+      "license": "Apache-2.0",
+      "source": "https://registry.npmjs.org/@myriaddreamin/typst.ts/-/typst.ts-0.7.0.tgz",
+      "npmIntegrity": "sha512-JtO5Td/1QesH1IBKAZtbayFNK8u2sl3iz18Y67uYqBEdcXiu3z+wpZcDDKlmVJvAcCgSjHTnuk6ZLfkYclrGGQ=="
+    },
+    {
+      "name": "@myriaddreamin/typst-ts-web-compiler",
+      "version": "0.7.0",
+      "license": "Apache-2.0",
+      "source": "https://registry.npmjs.org/@myriaddreamin/typst-ts-web-compiler/-/typst-ts-web-compiler-0.7.0.tgz",
+      "npmIntegrity": "sha512-nMwMcfOBy5pABPDuVM7/u8425SxhPUM+OJe6daqqgVOT3+neCTz4JKwx2L8XasfEHTNvd0cUI07LR9q5ADo7Gw=="
+    },
+    {
+      "name": "mitex",
+      "version": "0.2.7",
+      "license": "Apache-2.0",
+      "source": "https://packages.typst.org/preview/mitex-0.2.7.tar.gz",
+      "sha256": "0159e214845e49cbdc332d9d572da112dae5ad248072e0a7680d38c8307c2e15"
+    },
+    {
+      "name": "typst-assets-fonts",
+      "version": "0.13.1",
+      "license": "GUST Font License 1.0",
+      "source": "https://github.com/typst/typst-assets/tree/v0.13.1/files/fonts"
+    },
+    {
+      "name": "Noto Serif CJK SC",
+      "version": "2.003",
+      "license": "SIL Open Font License 1.1",
+      "source": "https://github.com/notofonts/noto-cjk/tree/Serif2.003/Serif/OTF/SimplifiedChinese"
+    }
+  ],
+  "runtimeAssets": [
+    {
+      "path": "vendor/typst/0.7.0/typst-all-in-one-lite.mjs",
+      "bytes": 211268,
+      "sha256": "9999a19a74f27810e8d951849f208a9b556fa36b5c0a726c052f1e5bb8ba9200",
+      "role": "compiler-wrapper"
+    },
+    {
+      "path": "vendor/typst/0.7.0/typst_ts_web_compiler_bg.wasm",
+      "bytes": 28325178,
+      "sha256": "1fc968438a672366dfec39c96c842c26ed29caff4eb1bcaab19a6c60867de5fd",
+      "role": "compiler-wasm"
+    },
+    {
+      "path": "vendor/typst/fonts/typst-assets-v0.13.1/NewCM10-Regular.otf",
+      "bytes": 586328,
+      "sha256": "2f751e3082cee78652f6f07f1614e653d2b395b33a0834b324990e354e31d077",
+      "role": "latin-text-font"
+    },
+    {
+      "path": "vendor/typst/fonts/typst-assets-v0.13.1/NewCMMath-Regular.otf",
+      "bytes": 1150844,
+      "sha256": "bfd2f9b22caacd41b8b29cfe3f6d72f976f221a65362e07eda35cbae863721b7",
+      "role": "math-font"
+    },
+    {
+      "path": "vendor/typst/fonts/noto-serif-cjk-sc-2.003/NotoSerifCJKsc-Regular.otf",
+      "bytes": 24543080,
+      "sha256": "2a2eae2628df83556c54018c41e20fa532c1b862c5256ae8b3f23feb918d12ca",
+      "role": "simplified-chinese-font"
+    },
+    {
+      "path": "vendor/mitex/0.2.7/lib.typ",
+      "bytes": 86,
+      "sha256": "b83008d32114fa6f0b81df7684fc15ad9a0718e952b566564b2b56ae0fc7cd89",
+      "role": "mitex-entry"
+    },
+    {
+      "path": "vendor/mitex/0.2.7/mitex.typ",
+      "bytes": 1016,
+      "sha256": "da42e95fd8e19c734069379f8890ccebf0c48ff3a1a3469b6ec2f01e7fc36871",
+      "role": "mitex-adapter"
+    },
+    {
+      "path": "vendor/mitex/0.2.7/mitex.wasm",
+      "bytes": 280797,
+      "sha256": "f30000cbc2b18a6cdc72c3ce539d3ac443faa9109b4e0272cd274b37c6c1cff7",
+      "role": "mitex-plugin"
+    },
+    {
+      "path": "vendor/mitex/0.2.7/specs/mod.typ",
+      "bytes": 461,
+      "sha256": "2304c350546cef345a6130db236b5359836cfde11f4337636e13ad60a006ebf4",
+      "role": "mitex-spec"
+    },
+    {
+      "path": "vendor/mitex/0.2.7/specs/prelude.typ",
+      "bytes": 7636,
+      "sha256": "3a6de0070bf294167d43d09b4c633029512d9cfdb4eaf7a729ce5fe75e58515d",
+      "role": "mitex-spec"
+    },
+    {
+      "path": "vendor/mitex/0.2.7/specs/latex/standard.typ",
+      "bytes": 42200,
+      "sha256": "6fab6c35ede2e87d090c4ad7d9223d9544f6a3e0815ecf1788a7a0b3393af060",
+      "role": "mitex-spec"
+    }
+  ],
+  "licenseFiles": [
+    "vendor/typst/0.7.0/LICENSE",
+    "vendor/typst/fonts/typst-assets-v0.13.1/typst-assets-LICENSE",
+    "vendor/typst/fonts/typst-assets-v0.13.1/typst-assets-NOTICE",
+    "vendor/typst/fonts/noto-serif-cjk-sc-2.003/OFL-1.1.txt",
+    "vendor/mitex/0.2.7/LICENSE"
+  ]
+}

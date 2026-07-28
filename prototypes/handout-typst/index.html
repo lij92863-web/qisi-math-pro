@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TEX题库 · H1 Typst 浏览器验证</title>
+    <link rel="stylesheet" href="./prototype.css">
+</head>
+<body data-busy="true">
+    <main class="shell">
+        <header class="hero">
+            <div>
+                <p class="eyebrow">STAGE H1 · INDEPENDENT PROTOTYPE</p>
+                <h1>浏览器 Typst / MiTeX 可行性验证</h1>
+                <p class="lede">固定本地资源、Web Worker 编译、同字节 PDF 预览与下载。此页面不接入生产题库。</p>
+            </div>
+            <div class="actions">
+                <button class="button button--primary" type="button" data-action="compile-proof">
+                    重新编译标准样例
+                </button>
+                <button class="button button--danger" type="button" data-action="compile-invalid">
+                    验证错误定位
+                </button>
+                <button class="button" type="button" data-action="download" disabled>
+                    下载同一 PDF
+                </button>
+            </div>
+        </header>
+
+        <section class="status-grid" aria-live="polite">
+            <article class="status-card">
+                <span class="status-dot" aria-hidden="true"></span>
+                <div>
+                    <strong data-role="state" data-state="working">正在初始化</strong>
+                    <p data-role="detail">准备本地编译资源</p>
+                </div>
+            </article>
+            <article class="metric-card">
+                <span>实时证据</span>
+                <strong data-role="metrics">等待首次编译</strong>
+            </article>
+            <article class="boundary-card">
+                <span>边界</span>
+                <strong>无 CDN · 无云编译 · 无主线程编译</strong>
+            </article>
+        </section>
+
+        <section class="workspace">
+            <article class="preview-card">
+                <div class="section-heading">
+                    <div>
+                        <span class="section-kicker">FORMAL PDF</span>
+                        <h2>正式 PDF 预览</h2>
+                    </div>
+                    <span class="page-proof">A4 · 2+ 页 · 页眉页脚</span>
+                </div>
+                <iframe
+                    title="H1 Typst PDF 预览"
+                    data-role="preview"
+                    class="preview-frame"
+                ></iframe>
+            </article>
+
+            <aside class="diagnostic-card">
+                <div class="section-heading">
+                    <div>
+                        <span class="section-kicker">FAIL CLOSED</span>
+                        <h2>编译诊断</h2>
+                    </div>
+                </div>
+                <p class="diagnostic-help">
+                    错误必须定位到内容块与公式编号。失败后清空旧 PDF，并禁用下载。
+                </p>
+                <ul data-role="diagnostics" class="diagnostic-list">
+                    <li class="diagnostic diagnostic--ok">等待编译结果。</li>
+                </ul>
+            </aside>
+        </section>
+    </main>
+
+    <script type="module" src="./prototype-app.mjs"></script>
+</body>
+</html>
