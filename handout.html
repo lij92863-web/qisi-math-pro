@@ -51,12 +51,12 @@
                         <button
                             data-testid="student-preview"
                             :class="{ active: previewEdition === 'student' }"
-                            @click="previewEdition = 'student'"
+                            @click="setPreviewEdition('student')"
                         >学生版</button>
                         <button
                             data-testid="teacher-preview"
                             :class="{ active: previewEdition === 'teacher' }"
-                            @click="previewEdition = 'teacher'"
+                            @click="setPreviewEdition('teacher')"
                         >教师版</button>
                     </div>
                     <button
@@ -283,7 +283,15 @@
                                     <span class="eyebrow">HTML 快速预览</span>
                                     <h1>{{ previewEdition === 'student' ? '学生版' : '教师版' }}</h1>
                                 </div>
-                                <p>正式 Typst PDF 属于后续阶段；此处只验证结构与布局决策。</p>
+                                <div class="preview-toolbar-actions">
+                                    <p>快速预览用于编辑校对；正式输出由本地 Typst 生成。</p>
+                                    <button
+                                        data-testid="formal-preview"
+                                        class="button primary"
+                                        :disabled="!editor || formalBusy"
+                                        @click="openFormalPreview"
+                                    >{{ formalBusy ? '正在生成…' : '正式 PDF 预览' }}</button>
+                                </div>
                             </div>
                             <section
                                 v-if="previewDocument"
@@ -409,7 +417,7 @@
                                 </label>
                                 <button class="button subtle" @click="addQuestionOption">＋ 添加选项</button>
                                 <label>选项排列
-                                    <select :value="selectedQuestion.optionLayout.mode" @change="updateQuestionSection('optionLayout', { mode: $event.target.value })">
+                                    <select data-testid="question-option-layout" :value="selectedQuestion.optionLayout.mode" @change="updateQuestionSection('optionLayout', { mode: $event.target.value })">
                                         <option value="auto">自动</option>
                                         <option value="one-row">一行四项</option>
                                         <option value="two-columns">两列</option>
@@ -422,7 +430,7 @@
                                 <article v-for="(image, index) in selectedQuestion.images" :key="image.id" class="image-property-card">
                                     <img v-if="assetUrl(image.assetId)" :src="assetUrl(image.assetId)" alt="">
                                     <label>位置
-                                        <select :value="image.placement" @change="updateQuestionImage(index, { placement: $event.target.value })">
+                                        <select :data-testid="`question-image-placement-${index}`" :value="image.placement" @change="updateQuestionImage(index, { placement: $event.target.value })">
                                             <option value="below-stem">题干下方</option>
                                             <option value="right-of-stem">题干右侧</option>
                                             <option value="right-of-options">选项右侧</option>
@@ -448,12 +456,12 @@
                             </section>
 
                             <section v-else-if="inspectorTab === 'answers'" class="inspector-form">
-                                <label>答案<textarea rows="3" :value="effectiveSelectedQuestion.answer || ''" @input="updateQuestionField('answer', $event.target.value)"></textarea></label>
-                                <label>答案位置<select :value="selectedQuestion.display.answerPlacement" @change="updateQuestionDisplay({ answerPlacement: $event.target.value })"><option value="inherit">跟随版本</option><option value="inline">题内</option><option value="after-question">题后</option><option value="end">文末</option><option value="hidden">隐藏</option></select></label>
-                                <label>分析<textarea rows="4" :value="effectiveSelectedQuestion.analysis || ''" @input="updateQuestionField('analysis', $event.target.value)"></textarea></label>
-                                <label>分析位置<select :value="selectedQuestion.display.analysisPlacement" @change="updateQuestionDisplay({ analysisPlacement: $event.target.value })"><option value="inherit">跟随版本</option><option value="after-question">题后</option><option value="end">文末</option><option value="hidden">隐藏</option></select></label>
-                                <label>详细解析<textarea rows="7" :value="effectiveSelectedQuestion.solution || ''" @input="updateQuestionField('solution', $event.target.value)"></textarea></label>
-                                <label>解析位置<select :value="selectedQuestion.display.solutionPlacement" @change="updateQuestionDisplay({ solutionPlacement: $event.target.value })"><option value="inherit">跟随版本</option><option value="after-question">题后</option><option value="end">文末</option><option value="hidden">隐藏</option></select></label>
+                                <label>答案<textarea data-testid="question-answer" rows="3" :value="effectiveSelectedQuestion.answer || ''" @input="updateQuestionField('answer', $event.target.value)"></textarea></label>
+                                <label>答案位置<select data-testid="question-answer-placement" :value="selectedQuestion.display.answerPlacement" @change="updateQuestionDisplay({ answerPlacement: $event.target.value })"><option value="inherit">跟随版本</option><option value="inline">题内</option><option value="after-question">题后</option><option value="end">文末</option><option value="hidden">隐藏</option></select></label>
+                                <label>分析<textarea data-testid="question-analysis" rows="4" :value="effectiveSelectedQuestion.analysis || ''" @input="updateQuestionField('analysis', $event.target.value)"></textarea></label>
+                                <label>分析位置<select data-testid="question-analysis-placement" :value="selectedQuestion.display.analysisPlacement" @change="updateQuestionDisplay({ analysisPlacement: $event.target.value })"><option value="inherit">跟随版本</option><option value="after-question">题后</option><option value="end">文末</option><option value="hidden">隐藏</option></select></label>
+                                <label>详细解析<textarea data-testid="question-solution" rows="7" :value="effectiveSelectedQuestion.solution || ''" @input="updateQuestionField('solution', $event.target.value)"></textarea></label>
+                                <label>解析位置<select data-testid="question-solution-placement" :value="selectedQuestion.display.solutionPlacement" @change="updateQuestionDisplay({ solutionPlacement: $event.target.value })"><option value="inherit">跟随版本</option><option value="after-question">题后</option><option value="end">文末</option><option value="hidden">隐藏</option></select></label>
                             </section>
 
                             <section v-else-if="inspectorTab === 'labels'" class="inspector-form">
@@ -521,10 +529,10 @@
                         <template v-else>
                             <div class="inspector-heading"><span class="eyebrow">讲义设置</span><h2>页面、页眉与页脚</h2></div>
                             <nav class="inspector-tabs">
-                                <button :class="{ active: globalTab === 'page' }" @click="globalTab = 'page'">页面</button>
-                                <button :class="{ active: globalTab === 'header' }" @click="globalTab = 'header'">页眉</button>
-                                <button :class="{ active: globalTab === 'footer' }" @click="globalTab = 'footer'">页脚</button>
-                                <button :class="{ active: globalTab === 'metadata' }" @click="globalTab = 'metadata'">信息</button>
+                                <button data-testid="global-page" :class="{ active: globalTab === 'page' }" @click="globalTab = 'page'">页面</button>
+                                <button data-testid="global-header" :class="{ active: globalTab === 'header' }" @click="globalTab = 'header'">页眉</button>
+                                <button data-testid="global-footer" :class="{ active: globalTab === 'footer' }" @click="globalTab = 'footer'">页脚</button>
+                                <button data-testid="global-metadata" :class="{ active: globalTab === 'metadata' }" @click="globalTab = 'metadata'">信息</button>
                             </nav>
                             <section v-if="globalTab === 'page'" class="inspector-form">
                                 <label>方向<select :value="editor.handout.settings.page.orientation" @change="updateGlobal('page', { orientation: $event.target.value })"><option value="portrait">A4 纵向</option><option value="landscape">A4 横向</option></select></label>
@@ -540,11 +548,11 @@
                                 <label class="check-row"><input type="checkbox" :checked="editor.handout.settings.page.showPageNumber" @change="updateGlobal('page', { showPageNumber: $event.target.checked })">显示页码</label>
                             </section>
                             <section v-else-if="globalTab === 'header' || globalTab === 'footer'" class="inspector-form">
-                                <label class="check-row"><input type="checkbox" :checked="editor.handout.settings[globalTab].enabled" @change="updateGlobal(globalTab, { enabled: $event.target.checked })">启用{{ globalTab === 'header' ? '页眉' : '页脚' }}</label>
+                                <label class="check-row"><input :data-testid="`${globalTab}-enabled`" type="checkbox" :checked="editor.handout.settings[globalTab].enabled" @change="updateGlobal(globalTab, { enabled: $event.target.checked })">启用{{ globalTab === 'header' ? '页眉' : '页脚' }}</label>
                                 <label>页面范围<select :value="editor.handout.settings[globalTab].scope" @change="updateGlobal(globalTab, { scope: $event.target.value })"><option value="all">所有页面</option><option value="except-first">除首页外</option><option value="first-only">仅首页</option></select></label>
-                                <label>左侧<input :value="editor.handout.settings[globalTab].left" @input="updateGlobal(globalTab, { left: $event.target.value })"></label>
-                                <label>中间<input :value="editor.handout.settings[globalTab].center" @input="updateGlobal(globalTab, { center: $event.target.value })"></label>
-                                <label>右侧<input :value="editor.handout.settings[globalTab].right" @input="updateGlobal(globalTab, { right: $event.target.value })"></label>
+                                <label>左侧<input :data-testid="`${globalTab}-left`" :value="editor.handout.settings[globalTab].left" @input="updateGlobal(globalTab, { left: $event.target.value })"></label>
+                                <label>中间<input :data-testid="`${globalTab}-center`" :value="editor.handout.settings[globalTab].center" @input="updateGlobal(globalTab, { center: $event.target.value })"></label>
+                                <label>右侧<input :data-testid="`${globalTab}-right`" :value="editor.handout.settings[globalTab].right" @input="updateGlobal(globalTab, { right: $event.target.value })"></label>
                                 <p class="field-help">可用：{title} {teacher} {school} {page} {pages}</p>
                             </section>
                             <section v-else class="inspector-form">
@@ -591,6 +599,84 @@
                         <button class="button subtle" @click="restoreRevision(item.id)">恢复</button>
                     </article>
                     <p v-if="!revisions.length" class="empty-note">暂无可恢复版本。</p>
+                </section>
+            </div>
+
+            <div
+                v-if="formalPreviewOpen"
+                class="modal-backdrop formal-preview-backdrop"
+                @click.self="closeFormalPreview"
+            >
+                <section
+                    class="modal formal-preview-modal"
+                    role="dialog"
+                    aria-modal="true"
+                    :aria-label="`${previewEdition === 'student' ? '学生版' : '教师版'}正式 PDF 预览`"
+                >
+                    <header class="formal-preview-header">
+                        <div>
+                            <span class="eyebrow">本地 Typst 正式输出</span>
+                            <h2>{{ previewEdition === 'student' ? '学生版' : '教师版' }} PDF</h2>
+                        </div>
+                        <div class="formal-preview-header-actions">
+                            <span class="formal-phase" :class="`phase-${formalState.phase}`">{{ formalStatusLabel }}</span>
+                            <button data-testid="close-formal-preview" aria-label="关闭正式预览" @click="closeFormalPreview">×</button>
+                        </div>
+                    </header>
+
+                    <div v-if="formalBusy" class="formal-progress" role="status">
+                        <div class="boot-spinner"></div>
+                        <div>
+                            <strong>{{ formalStatusLabel }}</strong>
+                            <p>首次生成会在本机初始化排版引擎，之后会复用离线缓存。</p>
+                        </div>
+                        <button data-testid="cancel-formal-preview" class="button subtle" @click="cancelFormalPreview">取消</button>
+                    </div>
+
+                    <div v-else-if="formalError" class="formal-error" role="alert">
+                        <strong>暂时无法生成正式 PDF</strong>
+                        <p>{{ formalError }}</p>
+                        <ul v-if="formalDiagnostics.length">
+                            <li v-for="(item, index) in formalDiagnostics" :key="`${item.code}-${item.blockId}-${item.formulaId}-${index}`">
+                                <b>{{ item.code }}</b>
+                                <span>{{ item.message }}</span>
+                                <small v-if="item.blockId">内容块：{{ item.blockId }}<template v-if="item.formulaId"> · 公式：{{ item.formulaId }}</template></small>
+                            </li>
+                        </ul>
+                        <button data-testid="retry-formal-preview" class="button primary" @click="compileFormalPreview">重新生成</button>
+                    </div>
+
+                    <template v-else-if="formalState.phase === 'ready'">
+                        <div class="formal-preview-toolbar">
+                            <div class="formal-page-controls">
+                                <button
+                                    data-testid="formal-page-previous"
+                                    class="button subtle compact"
+                                    :disabled="formalPageNumber <= 1 || formalRendering"
+                                    @click="changeFormalPage(-1)"
+                                >上一页</button>
+                                <span>第 {{ formalPageNumber }} / {{ formalPageCount || 1 }} 页</span>
+                                <button
+                                    data-testid="formal-page-next"
+                                    class="button subtle compact"
+                                    :disabled="formalPageNumber >= formalPageCount || formalRendering"
+                                    @click="changeFormalPage(1)"
+                                >下一页</button>
+                            </div>
+                            <div class="formal-output-actions">
+                                <span v-if="formalState.byteLength">{{ formatFileSize(formalState.byteLength) }}</span>
+                                <button
+                                    data-testid="download-formal-pdf"
+                                    class="button primary"
+                                    @click="downloadFormalPdf"
+                                >下载{{ previewEdition === 'student' ? '学生版' : '教师版' }} PDF</button>
+                            </div>
+                        </div>
+                        <div class="formal-canvas-shell" :class="{ rendering: formalRendering }">
+                            <canvas ref="formalCanvas" data-testid="formal-pdf-canvas"></canvas>
+                            <span v-if="formalRendering" class="formal-rendering">正在绘制页面…</span>
+                        </div>
+                    </template>
                 </section>
             </div>
 

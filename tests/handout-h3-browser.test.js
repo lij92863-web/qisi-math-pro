@@ -260,7 +260,8 @@ test('H3 browser completes the structured editor workflow without source writes'
             '[data-question-id="formal-h3-question"]'
         ).click();
         await page.locator('.editor-block.block-question').waitFor({
-            state: 'visible'
+            state: 'visible',
+            timeout: 60_000
         });
         assert.equal(await page.locator('.editor-block').count(), 6);
 

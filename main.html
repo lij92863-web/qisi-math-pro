@@ -222,6 +222,7 @@
                     <button @click="view = 'batchImport'; openBatchList()" :class="['nav-item', view === 'batchImport' ? 'active' : 'inactive']"><icon name="files" size="16"></icon> 批量录题</button>
                     <button @click="view = 'library'" :class="['nav-item', view === 'library' ? 'active' : 'inactive']"><icon name="layout-grid" size="16"></icon> 题库与检索</button>
                     <button @click="openExamBuilder" :class="['nav-item', view === 'exam' ? 'active' : 'inactive']"><icon name="file-text" size="16"></icon> 智能组卷台</button>
+                    <a href="./handout.html" class="nav-item inactive" data-testid="open-handout"><icon name="book-open-text" size="16"></icon> 讲义制作</a>
                     <button @click="view = 'personal'" :class="['nav-item', view === 'personal' ? 'active' : 'inactive']"><icon name="folder-tree" size="16"></icon> 个人管理</button>
                     <button @click="view = 'template'" :class="['nav-item', view === 'template' ? 'active' : 'inactive']"><icon name="layout-template" size="16"></icon> 极客排版配置</button>
                 </nav>

@@ -10,7 +10,8 @@
         'HandoutRepository',
         'HandoutQuestionLibrary',
         'HandoutEditorState',
-        'HandoutPreview'
+        'HandoutPreview',
+        'HandoutPdfSession'
     ];
 
     const renderFatalBootError = error => {
@@ -127,7 +128,23 @@
                     sourceCheck: null,
                     assetUrls: {},
                     assetRecords: [],
-                    pendingQuestionImageIndex: -1
+                    pendingQuestionImageIndex: -1,
+                    formalSession: null,
+                    formalPreviewOpen: false,
+                    formalPageNumber: 1,
+                    formalPageCount: 0,
+                    formalRendering: false,
+                    formalError: '',
+                    formalDiagnostics: [],
+                    formalState: {
+                        phase: 'idle',
+                        requestId: null,
+                        edition: null,
+                        diagnostics: [],
+                        metrics: null,
+                        byteLength: 0,
+                        pageCount: 0
+                    }
                 };
             },
             computed: {
@@ -178,6 +195,22 @@
                         error: '保存失败'
                     }[this.saveStatus] || this.saveStatus;
                 },
+                formalBusy() {
+                    return [
+                        'preparing',
+                        'compiling'
+                    ].includes(this.formalState.phase);
+                },
+                formalStatusLabel() {
+                    return {
+                        idle: '尚未生成',
+                        preparing: '正在检查内容与图片',
+                        compiling: '正在本地排版',
+                        ready: '正式 PDF 已就绪',
+                        cancelled: '已取消',
+                        failed: '生成失败'
+                    }[this.formalState.phase] || this.formalState.phase;
+                },
                 sourceStatusLabel() {
                     if (!this.sourceCheck) return '';
                     return {
@@ -212,6 +245,7 @@
             },
             beforeUnmount() {
                 root.removeEventListener('beforeunload', this.beforeUnload);
+                this.formalSession?.dispose();
                 this.releaseAssetUrls();
                 clearTimeout(this.saveTimer);
             },
@@ -220,6 +254,7 @@
                     location.reload();
                 },
                 beforeUnload(event) {
+                    this.formalSession?.dispose();
                     this.releaseAssetUrls();
                     if (this.editor?.dirty) {
                         event.preventDefault();
@@ -231,6 +266,141 @@
                         message: String(message || ''),
                         kind
                     };
+                },
+                setPreviewEdition(edition) {
+                    if (
+                        !['student', 'teacher'].includes(edition)
+                        || edition === this.previewEdition
+                    ) return;
+                    this.closeFormalPreview();
+                    this.previewEdition = edition;
+                },
+                ensureFormalSession() {
+                    if (this.formalSession) return this.formalSession;
+                    this.formalSession =
+                        root.Qisi.HandoutPdfSession.createPdfSession({
+                            onStateChange: state => {
+                                this.formalState = state;
+                                this.formalDiagnostics = [
+                                    ...(state.diagnostics || [])
+                                ];
+                                if (state.pageCount) {
+                                    this.formalPageCount =
+                                        state.pageCount;
+                                }
+                            }
+                        });
+                    return this.formalSession;
+                },
+                async openFormalPreview() {
+                    this.formalPreviewOpen = true;
+                    await this.$nextTick();
+                    await this.compileFormalPreview();
+                },
+                async compileFormalPreview() {
+                    if (!this.editor || this.formalBusy) return;
+                    this.formalError = '';
+                    this.formalDiagnostics = [];
+                    this.formalPageNumber = 1;
+                    this.formalPageCount = 0;
+                    try {
+                        await this.flushSave();
+                        const session = this.ensureFormalSession();
+                        await session.compileHandout(
+                            this.editor.handout,
+                            this.previewEdition,
+                            {
+                                assetRecords: this.assetRecords
+                            }
+                        );
+                        await this.$nextTick();
+                        await this.renderFormalPage();
+                    } catch (error) {
+                        if (error?.name === 'AbortError') return;
+                        this.formalError = String(
+                            error?.message || error
+                        );
+                        this.formalDiagnostics = [
+                            ...(error?.diagnostics
+                                || this.formalState.diagnostics
+                                || [])
+                        ];
+                    }
+                },
+                async renderFormalPage() {
+                    if (
+                        !this.formalSession
+                        || this.formalState.phase !== 'ready'
+                    ) return;
+                    this.formalRendering = true;
+                    try {
+                        const result =
+                            await this.formalSession.renderPreview(
+                                this.$refs.formalCanvas,
+                                {
+                                    pageNumber: this.formalPageNumber
+                                }
+                            );
+                        this.formalPageCount = result.pageCount;
+                    } catch (error) {
+                        this.formalError = String(
+                            error?.message || error
+                        );
+                    } finally {
+                        this.formalRendering = false;
+                    }
+                },
+                async changeFormalPage(offset) {
+                    const target = this.formalPageNumber + offset;
+                    if (
+                        target < 1
+                        || target > this.formalPageCount
+                        || this.formalRendering
+                    ) return;
+                    this.formalPageNumber = target;
+                    await this.renderFormalPage();
+                },
+                cancelFormalPreview() {
+                    this.closeFormalPreview();
+                },
+                closeFormalPreview() {
+                    if (this.formalBusy) {
+                        this.formalSession?.cancel(
+                            '正式 PDF 预览已关闭'
+                        );
+                    }
+                    this.formalSession?.closePreview();
+                    this.formalPreviewOpen = false;
+                    this.formalPageNumber = 1;
+                    this.formalPageCount = 0;
+                    this.formalRendering = false;
+                    this.formalError = '';
+                    this.formalDiagnostics = [];
+                },
+                downloadFormalPdf() {
+                    if (
+                        !this.formalSession
+                        || this.formalState.phase !== 'ready'
+                    ) return;
+                    const edition = this.previewEdition === 'student'
+                        ? '学生版'
+                        : '教师版';
+                    const descriptor = this.formalSession.download(
+                        `${this.editor.handout.title}-${edition}.pdf`
+                    );
+                    this.showNotice(
+                        `已导出 ${descriptor.filename}`,
+                        'success'
+                    );
+                },
+                formatFileSize(bytes) {
+                    const value = Number(bytes);
+                    if (!Number.isFinite(value) || value < 1) return '';
+                    if (value < 1024) return `${value} B`;
+                    if (value < 1024 * 1024) {
+                        return `${(value / 1024).toFixed(1)} KB`;
+                    }
+                    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
                 },
                 async reloadHandouts() {
                     this.handouts = await repository.list();
@@ -245,6 +415,7 @@
                     this.showNotice('新讲义已创建并保存在本地。', 'success');
                 },
                 loadEditor(handout) {
+                    this.closeFormalPreview();
                     this.editor = editorState.createEditorState(handout);
                     this.titleDraft = this.editor.handout.title;
                     this.inspectorTab = 'content';

@@ -494,3 +494,73 @@ not started.
 - `npm run verify:batch-safety`: passed;
 - `npm run verify:no-real-ai`: passed;
 - `git diff --check`: passed.
+
+## H6 completion report (2026-07-29)
+
+Status: complete. H6 added only the first-priority product entry and formal-output
+workflow. It did not modify `app.js`, dependencies, formal question-bank records,
+or any DOCX/PDF/batch-recognition production module. H7 work was not started.
+
+### Product workflow and boundaries
+
+- `main.html` now exposes one ordinary same-origin link to the isolated handout
+  page. It does not load any handout module or compiler asset into the main
+  application.
+- The existing student/teacher selector is the single edition control for both
+  HTML quick preview and formal PDF output. Changing edition closes and releases
+  any previous formal artifact so a stale student or teacher PDF cannot be
+  downloaded under the wrong label.
+- Formal output is explicit and lazy: the editor saves first, validates owned
+  image records, invokes the H5 PDF session, then renders the resulting PDF
+  through local PDF.js. Progress, cancellation, clean retry, mapped diagnostics,
+  page navigation, file size, and edition-specific download are visible UI
+  states.
+- Preview and download use the same H5-owned Blob URL and bytes. Closing the
+  formal modal, switching documents/editions, or leaving the page releases the
+  artifact; no arbitrary timer is used.
+- `qisi-handout-app.js` contains only Vue state and event orchestration. Typst
+  generation, edition security, compiler/runtime, virtual assets, diagnostics,
+  PDF artifact ownership, and lifecycle policy remain in the H4/H5 modules.
+
+### Browser acceptance evidence
+
+The real Chromium H6 test executed this complete path:
+
+```text
+main page → handout page → create → heading/body/callout/image
+→ insert a formal question with an owned image
+→ edit stem/options/image placement/answer/analysis/solution/header/footer
+→ save → reload → student HTML/PDF preview and download
+→ teacher PDF preview and download
+```
+
+It proved:
+
+- the main page remains compiler-lazy and the navigation entry is functional;
+- mixed blocks, two-column options, right-of-stem question image placement,
+  answer placements, and header/footer settings survive save/reload;
+- the source question record remains byte-for-byte unchanged in all asserted
+  source fields;
+- student PDF text contains the edited question but no answer, analysis,
+  solution, or teacher note;
+- teacher PDF contains the edited answer, analysis, and solution;
+- both editions render to a non-empty PDF.js canvas;
+- each downloaded edition has the same SHA-256 as its active preview artifact;
+- compiler Worker and PDF.js resources are local and no external HTTP(S)
+  request occurs;
+- the controlled in-app browser showed the new main navigation entry and
+  handout startup page with zero console errors or warnings.
+
+### Verification evidence
+
+- H1-H6 focused suite: 47/47 passed;
+- H3/H5/H6 concurrent browser suite: 3/3 passed;
+- production syntax: 68 files passed;
+- `npm run verify:safe`: 1330 total, 1322 passed, 0 failed, 8 intentionally
+  skipped;
+- `npm run verify:docx-stable`: 20/20 passed;
+- `npm run verify:pdf-known-bad`: 65/65 passed;
+- `npm run verify:batch-safety`: passed;
+- `npm run verify:no-real-ai`: passed;
+- real AI/OCR calls: none;
+- `git diff --check`: passed.
