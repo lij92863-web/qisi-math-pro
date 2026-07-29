@@ -415,7 +415,7 @@ test('H3 browser completes the structured editor workflow without source writes'
         assert.deepEqual(externalRequests, []);
         assert.equal(
             [...requestedPaths].some(pathname =>
-                /typst|mitex|pdf\.worker|handout-typst/i.test(pathname)
+                /\/vendor\/(?:typst|mitex|pdfjs)|pdf\.worker|\/prototypes\/handout-typst\//i.test(pathname)
             ),
             false
         );
@@ -423,8 +423,11 @@ test('H3 browser completes the structured editor workflow without source writes'
             '/handout.html',
             '/handout.css',
             '/qisi-handout-app.js',
+            '/qisi-handout-document.js',
+            '/qisi-handout-edition-policy.js',
             '/qisi-handout-editor-state.js',
-            '/qisi-handout-preview.js'
+            '/qisi-handout-preview.js',
+            '/qisi-handout-typst-template.js'
         ]) {
             assert.equal(requestedPaths.has(requiredPath), true, requiredPath);
         }

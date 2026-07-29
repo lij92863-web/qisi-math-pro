@@ -35,9 +35,11 @@ test('H3 handout entry uses one pinned local script and style manifest', () => {
     assert.equal(new Set(styles).size, styles.length);
     assert.equal(scripts.at(-1), 'qisi-handout-app.js');
     assert.equal(
-        scripts.some(file => /typst|mitex|pdf/i.test(file)),
+        scripts.some(file =>
+            /(?:^|\/)vendor\/(?:typst|mitex|pdfjs)|compiler-worker|compiler-client/i.test(file)
+        ),
         false,
-        'H3 HTML preview must not load the formal compiler'
+        'the isolated entry may load the pure H4 template but not the formal compiler runtime'
     );
     assert.equal(
         scripts.some(file => /^https?:/i.test(file)),

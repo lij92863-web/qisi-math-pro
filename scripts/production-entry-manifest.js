@@ -73,6 +73,9 @@ const handoutBrowserScriptOrder = Object.freeze([
     'qisi-handout-question-library.js',
     'qisi-handout-editor-state.js',
     'qisi-handout-preview.js',
+    'qisi-handout-edition-policy.js',
+    'qisi-handout-typst-template.js',
+    'qisi-handout-document.js',
     'qisi-handout-app.js'
 ]);
 
@@ -93,9 +96,12 @@ const categoryFiles = Object.freeze({
     ]),
     'browser-handout-entry': Object.freeze([
         'qisi-handout-app.js',
+        'qisi-handout-document.js',
+        'qisi-handout-edition-policy.js',
         'qisi-handout-editor-state.js',
         'qisi-handout-preview.js',
-        'qisi-handout-question-library.js'
+        'qisi-handout-question-library.js',
+        'qisi-handout-typst-template.js'
     ]),
     'node-entry': Object.freeze([
         'qisi-local-server.js'
@@ -136,12 +142,15 @@ const categoryPolicy = Object.freeze({
 const classificationEvidence = Object.freeze({
     'qisi-handout-asset-repository.js': 'H2 handout asset domain library, loaded by the isolated H3 entry',
     'qisi-handout-app.js': 'H3 isolated handout browser entry, never loaded by main.html',
+    'qisi-handout-document.js': 'H4 pure edition-to-Typst document pipeline loaded only by the isolated handout entry',
+    'qisi-handout-edition-policy.js': 'H4 deterministic edition inheritance and student leakage boundary',
     'qisi-handout-editor-state.js': 'H3 structured handout editor state and undo/redo policy',
     'qisi-handout-model.js': 'H2 handout schema and validation domain library',
     'qisi-handout-preview.js': 'H3 HTML preview projection with student-content safety',
     'qisi-handout-question-instance.js': 'H2 immutable question snapshot domain library',
     'qisi-handout-question-library.js': 'H3 read-only adapter for formal question-bank insertion',
     'qisi-handout-repository.js': 'H2 handout persistence domain library, loaded by the isolated H3 entry',
+    'qisi-handout-typst-template.js': 'H4 centrally managed trusted A4 Typst template without compiler runtime loading',
     'qisi-local-server.js': 'package.json main/start entry',
     'qisi-serial-task-queue.js': 'required by qisi-local-server.js',
     'qisi-mathtype-native-guard.js': 'fail-closed native MathType fault isolation required by qisi-local-server.js',

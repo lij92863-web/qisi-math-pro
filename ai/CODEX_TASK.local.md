@@ -399,3 +399,42 @@ ceiling. The final real browser results were:
 - `git diff --check`: passed;
 - production diff scan found no fixture filename, school, hash, or fixed-number
   branch.
+
+## H4 completion report (2026-07-29)
+
+Status: complete. The Zhejiang paper remains outside the acceptance scope by the
+user's explicit instruction. H4 did not modify any DOCX, PDF, batch-recognition,
+question-bank persistence, or `app.js` production chain.
+
+### Bounded implementation
+
+- `qisi-handout-edition-policy.js` implements deterministic built-in, document,
+  edition, and question-level inheritance. Student projection physically removes
+  protected answer, analysis, solution, teacher-note, trace, and end-section
+  structures before document rendering.
+- `qisi-handout-typst-template.js` is the single trusted A4 Typst template and the
+  only H4 source containing page setup. It accepts only a trusted generated body.
+- `qisi-handout-document.js` converts the safe edition projection to deterministic
+  Typst, uses local-only header/footer placeholders, delegates option-column
+  decisions to the HTML preview policy, validates local asset paths, and produces
+  source line mappings and blocking diagnostics.
+- LaTeX display normalization is reversible and records an operation-level audit
+  trail. Restoration fails closed when the normalized value no longer matches its
+  audit record.
+- The normal handout page loads only these pure H4 modules. Typst, MiTeX, PDF.js,
+  compiler workers, and prototype runtime files remain absent from the browser
+  entry; compiler infrastructure remains H5 scope.
+
+### Verification evidence
+
+- H4 deterministic document tests: 8/8 passed;
+- isolated local Worker + Typst + MiTeX compilation: student and teacher PDFs
+  both compiled successfully with external network requests blocked;
+- H1-H4 focused suite: 34/34 passed;
+- H3 entry and browser boundary plus H4 suite: 12/12 passed;
+- production syntax: 63 files passed;
+- `npm run verify:safe`: 1322 total, 1314 passed, 0 failed, 8 intentionally
+  skipped;
+- `npm run verify:batch-safety`: passed;
+- `npm run verify:no-real-ai`: passed;
+- `git diff --check`: passed.
