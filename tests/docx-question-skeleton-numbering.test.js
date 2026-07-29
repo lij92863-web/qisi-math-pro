@@ -185,3 +185,88 @@ test('question skeleton ignores decimal values inside Word tables', () => {
     assert.equal(skeleton.authoritative, true, JSON.stringify(skeleton.diagnostics));
     assert.deepEqual(Array.from(skeleton.questionNumbers), ['1', '2', '3']);
 });
+
+test('page-image DOCX is classified for strict vision without inventing a question skeleton', () => {
+    const importer = loadBatchImporter();
+    const pageDrawing = (rid, width, height) => [
+        '<w:drawing><wp:inline>',
+        `<wp:extent cx="${width}" cy="${height}"/>`,
+        '<a:graphic><a:graphicData><pic:pic><pic:blipFill>',
+        `<a:blip r:embed="${rid}"/>`,
+        '</pic:blipFill></pic:pic></a:graphicData></a:graphic>',
+        '</wp:inline></w:drawing>'
+    ].join('');
+    const documentXml = [
+        '<w:document><w:body><w:p>',
+        '<w:r>', pageDrawing('rId1', 6148705, 8778240), '</w:r>',
+        '<w:r>', pageDrawing('rId2', 6211570, 8770620), '</w:r>',
+        '</w:p></w:body></w:document>'
+    ].join('');
+
+    const skeleton = importer.buildDocxQuestionSkeletonFromXml(documentXml, '');
+
+    assert.equal(skeleton.authoritative, false);
+    assert.deepEqual(Array.from(skeleton.questionNumbers), []);
+    assert.equal(skeleton.diagnostics.reason, 'no-explicit-question-markers');
+    assert.equal(skeleton.diagnostics.drawingCount, 2);
+    assert.equal(skeleton.diagnostics.pageLikeDrawingCount, 2);
+    assert.equal(skeleton.diagnostics.visualPageCandidate, true);
+});
+
+test('ordinary image fragments never become a page-image DOCX route signal', () => {
+    const importer = loadBatchImporter();
+    const documentXml = [
+        '<w:document><w:body><w:p>',
+        '<w:r><w:t>题目正文但没有可靠题号</w:t></w:r>',
+        '<w:r><w:drawing><wp:inline>',
+        '<wp:extent cx="5000000" cy="2000000"/>',
+        '</wp:inline></w:drawing></w:r>',
+        '</w:p></w:body></w:document>'
+    ].join('');
+
+    const skeleton = importer.buildDocxQuestionSkeletonFromXml(documentXml, '');
+
+    assert.equal(skeleton.authoritative, false);
+    assert.equal(skeleton.diagnostics.drawingCount, 1);
+    assert.equal(skeleton.diagnostics.pageLikeDrawingCount, 0);
+    assert.equal(skeleton.diagnostics.visualPageCandidate, false);
+});
+
+test('embedded page descriptors follow drawing order even when relationships are reversed', () => {
+    const importer = loadBatchImporter();
+    const drawing = (rid, width, height) => [
+        '<w:drawing><wp:inline>',
+        `<wp:extent cx="${width}" cy="${height}"/>`,
+        `<a:graphic><a:blip r:embed="${rid}"/></a:graphic>`,
+        '</wp:inline></w:drawing>'
+    ].join('');
+    const documentXml = [
+        '<w:document><w:body><w:p>',
+        drawing('rId4', 7000000, 9900000),
+        drawing('rId5', 7000000, 9900000),
+        drawing('rId6', 7000000, 9900000),
+        '</w:p></w:body></w:document>'
+    ].join('');
+    const relsXml = [
+        '<Relationships>',
+        '<Relationship Id="rId6" Target="media/image3.png" Type="image"/>',
+        '<Relationship Id="rId5" Target="media/image2.png" Type="image"/>',
+        '<Relationship Id="rId4" Target="media/image1.png" Type="image"/>',
+        '</Relationships>'
+    ].join('');
+
+    const refs = importer.extractOrderedDocxPageImageRefsFromXml(
+        documentXml,
+        relsXml
+    );
+
+    assert.deepEqual(
+        Array.from(refs, ref => ref.target),
+        [
+            'word/media/image1.png',
+            'word/media/image2.png',
+            'word/media/image3.png'
+        ]
+    );
+    assert.equal(refs.every(ref => ref.pageLike), true);
+});

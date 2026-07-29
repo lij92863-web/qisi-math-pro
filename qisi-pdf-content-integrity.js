@@ -1527,6 +1527,31 @@
             return run.display ? `$$${latex}$$` : `$${latex}$`;
         }).join('');
 
+        const stripUnsupportedGraphicsSource = value => {
+            let source = String(value || '').replace(/\r\n?/g, '\n');
+            const inlineWrappedGraphics =
+                /\$?\s*\\begin\{center\}\s*\$?\s*\$?\s*\\begin\{tikzpicture\}(?:\[[^\]]*\])?\s*\$?[\s\S]*?\$?\s*\\end\{tikzpicture\}\s*\$?\s*\$?\s*\\end\{center\}\s*\$?/gi;
+            const centeredGraphics =
+                /(^|\n)[ \t]*\$?[ \t]*\\begin\{center\}[ \t]*\$?[ \t]*(?:\n|$)[\s\S]*?(?:^|\n)[ \t]*\$?[ \t]*\\end\{center\}[ \t]*\$?[ \t]*(?=\n|$)/gim;
+            const bareTikz =
+                /(^|\n)[ \t]*\$?[ \t]*\\begin\{tikzpicture\}(?:\[[^\]\n]*\])?[ \t]*\$?[ \t]*(?:\n|$)[\s\S]*?(?:^|\n)[ \t]*\$?[ \t]*\\end\{tikzpicture\}[ \t]*\$?[ \t]*(?=\n|$)/gim;
+
+            source = source.replace(inlineWrappedGraphics, '');
+            source = source.replace(
+                centeredGraphics,
+                (block, linePrefix) =>
+                    /\\begin\{tikzpicture\}/i.test(block)
+                        ? linePrefix
+                        : block
+            );
+            source = source.replace(
+                bareTikz,
+                (block, linePrefix) =>
+                    linePrefix
+            );
+            return source.replace(/\n{3,}/g, '\n\n').trim();
+        };
+
         const normalizeMathContent = value => {
             const parsed = tokenizeMathDelimiters(value);
             const richRuns = [];
@@ -1583,8 +1608,16 @@
             const previousOptions = Array.isArray(previousSourceEvidence.options)
                 ? previousSourceEvidence.options
                 : [];
+            const currentStem = String(item.stem || '');
+            const previousStem = String(previousSourceEvidence.stem || '');
+            const currentImageTokens = currentStem.match(/\[\[IMAGE:[^\]]+\]\]/g) || [];
+            const hasNewVerifiedImageToken = currentImageTokens.some(
+                token => !previousStem.includes(token)
+            );
             const sourceEvidence = {
-                stem: String(previousSourceEvidence.stem || item.stem || ''),
+                stem: hasNewVerifiedImageToken
+                    ? currentStem
+                    : String(previousStem || currentStem),
                 options: previousOptions.some(option => String(option || '').trim())
                     ? [...previousOptions]
                     : (Array.isArray(item.options) ? [...item.options] : []),
@@ -1593,7 +1626,9 @@
             };
             const stem = normalizeMathContent(sourceEvidence.stem);
             const answer = normalizeMathContent(sourceEvidence.answer);
-            const solution = normalizeMathContent(sourceEvidence.solution);
+            const solution = normalizeMathContent(
+                stripUnsupportedGraphicsSource(sourceEvidence.solution)
+            );
             const optionResults = [0, 1, 2, 3].map(index => {
                 const stripped = stripDuplicateOptionLabel(
                     sourceEvidence.options[index] || '',
@@ -1908,6 +1943,7 @@
             repairMissingOptionsFromPdfText,
             serializeRichRuns,
             splitBareMathRuns,
+            stripUnsupportedGraphicsSource,
             stripDuplicateOptionLabel,
             toPixelCrop,
             tokenizeMathDelimiters,

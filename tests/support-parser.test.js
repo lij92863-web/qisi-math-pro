@@ -1843,6 +1843,54 @@ test(
 );
 
 test(
+    'strips model-generated tikz lines wrapped in display dollars',
+    () => {
+        const answerLabel = '\u3010\u7b54\u6848\u3011';
+        const detailLabel = '\u3010\u8be6\u89e3\u3011';
+
+        const result =
+            parseExplicitSupportBlocks({
+                expectedQuestionNumbers:
+                    ['2'],
+
+                pages: [{
+                    pageNo:
+                        1,
+
+                    rawText:
+                        [
+                            `2 ${answerLabel}C`,
+                            `${detailLabel}`,
+                            '\u8bbe\u6b63\u56db\u68f1\u53f0\u4fa7\u9762\u7684\u9ad8\u4e3a $h$',
+                            '$\\begin{center}$',
+                            '$\\begin{tikzpicture}[scale=0.8]$',
+                            '$\\draw (0,0) -- (1,1);$',
+                            '$\\node at (0,0) {$A_1$};',
+                            '$\\end{tikzpicture}$',
+                            '$\\end{center}$',
+                            '\u6240\u4ee5\u4fa7\u68f1\u957f\u4e3a $5$'
+                        ].join('\n')
+                }]
+            });
+
+        assert.match(
+            result.blocks[0].solutionRaw,
+            /\u8bbe\u6b63\u56db\u68f1\u53f0\u4fa7\u9762\u7684\u9ad8\u4e3a/
+        );
+
+        assert.match(
+            result.blocks[0].solutionRaw,
+            /\u6240\u4ee5\u4fa7\u68f1\u957f\u4e3a/
+        );
+
+        assert.doesNotMatch(
+            result.blocks[0].solutionRaw,
+            /tikzpicture|\\draw|\\node|\\begin\{center\}|\\end\{center\}/
+        );
+    }
+);
+
+test(
     'keeps normal latex formulas while cleaning support fields',
     () => {
         const answerLabel = '\u3010\u7b54\u6848\u3011';

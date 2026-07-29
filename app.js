@@ -6244,6 +6244,29 @@ ${source}`;
 
                     const source = window.Qisi.Utils.cleanRecognizedText(text).slice(0, 24000);
                     if (!source || source.length < 8) return { answers: [], solutions: [] };
+                    const allowedQuestionNumberHint =
+                        allowedQuestionNumbers.size > 0
+                            ? `\n本批次允许的主题号只有：${[
+                                ...allowedQuestionNumbers
+                            ].join('、')}。`
+                            : '';
+                    const pageHint =
+                        Number(options.sourcePage || 0) > 0
+                            ? `\n当前材料来自答案/解析文件第 ${Number(options.sourcePage)} 页，可能从上一题的续文开始，也可能从中间题号开始。`
+                            : '';
+                    const continuationHint =
+                        normalizeQuestionKey(
+                            options
+                                .continuationQuestionNumber
+                        )
+                            ? `\n当前片段开头是第 ${normalizeQuestionKey(
+                                options
+                                    .continuationQuestionNumber
+                            )} 题的跨页续文；在下一个明确主题号出现前，必须归入第 ${normalizeQuestionKey(
+                                options
+                                    .continuationQuestionNumber
+                            )} 题解析。`
+                            : '';
                     const prompt = `你是高中数学答案解析提取助手。请从材料中提取每道题的答案和解析，并输出严格 JSON。
 
 【输出格式】
@@ -6265,6 +6288,9 @@ ${source}`;
 6. 没有解析则 solution 为空字符串，不要编造。
 7. 输出必须是纯 JSON。
 8. 不要把图片占位符、\\includegraphics 或 OCR 失败提示写入 answer/solution。
+9. question 只能填写当前页明确出现的阿拉伯数字主题号，例如 16；不得填写“16(1)”或把小问号当成主题号。
+10. 看到“16. 解：”“17. 解：”这类评分答案时，即使没有单独的“答案”标签，也必须把从该主题号开始的完整内容写入 solutions。
+11. 页面开头若是上一题续文，只有在提示明确给出续文归属时才可绑定；否则不得猜测题号。${pageHint}${continuationHint}${allowedQuestionNumberHint}
 
 材料：
 ${source}`;
@@ -8339,6 +8365,364 @@ ${rawBlock}
                         };
                     }
 
+                    const recognizeSupportPagesIndividually =
+                        async () => {
+                            const mergePolicy =
+                                globalThis.Qisi
+                                    ?.DocxPipeline;
+
+                            if (
+                                !mergePolicy ||
+                                typeof mergePolicy
+                                    .mergeVisualSupportPageResultsFailClosed !==
+                                    'function'
+                            ) {
+                                const error = new Error(
+                                    '逐页答案/解析安全合并策略未加载。'
+                                );
+
+                                error.code =
+                                    'SUPPORT_PAGE_MERGE_POLICY_MISSING';
+
+                                throw error;
+                            }
+
+                            const normalizedExpected =
+                                [
+                                    ...new Set(
+                                        (
+                                            expectedQuestionNumbers ||
+                                            []
+                                        )
+                                            .map(
+                                                normalizeQuestionKey
+                                            )
+                                            .filter(Boolean)
+                                    )
+                                ];
+
+                            const pageChunks =
+                                typeof mergePolicy
+                                    .partitionVisualSupportPages ===
+                                    'function'
+                                    ? mergePolicy
+                                        .partitionVisualSupportPages({
+                                            pages,
+                                            allowedQuestionNumbers:
+                                                normalizedExpected
+                                        })
+                                    : pages.map(page => ({
+                                        pageNo:
+                                            page.pageNo,
+                                        rawText:
+                                            page.rawText,
+                                        questionNumbers:
+                                            normalizedExpected,
+                                        continuationQuestionNumber:
+                                            '',
+                                        sourcePageImage:
+                                            page.imageUrl ||
+                                            ''
+                                    }));
+
+                            const pageResults = [];
+                            let lastSeenQuestionNumber =
+                                0;
+
+                            for (
+                                const pageChunk of pageChunks
+                            ) {
+                                const chunkQuestionNumbers =
+                                    (
+                                        pageChunk
+                                            .questionNumbers ||
+                                        []
+                                    )
+                                        .map(
+                                            normalizeQuestionKey
+                                        )
+                                        .filter(Boolean);
+
+                                const dynamicVisualQuestionNumbers =
+                                    normalizedExpected
+                                        .filter(
+                                            questionNumber =>
+                                                !lastSeenQuestionNumber ||
+                                                Number(
+                                                    questionNumber
+                                                ) >=
+                                                    lastSeenQuestionNumber
+                                        );
+                                const allowedForChunk =
+                                    chunkQuestionNumbers
+                                        .length >
+                                        0
+                                        ? chunkQuestionNumbers
+                                        : dynamicVisualQuestionNumbers;
+                                const visualFallback =
+                                    pageChunk
+                                        .recognitionSource ===
+                                        'image' &&
+                                    lastSeenQuestionNumber >
+                                        0 &&
+                                    Boolean(
+                                        pageChunk
+                                            .sourcePageImage
+                                    );
+                                const pageResult =
+                                    visualFallback
+                                        ? await recognizeIndexedSupportPageImageWithQwen({
+                                            file,
+                                            imageUrl:
+                                                pageChunk
+                                                    .sourcePageImage,
+                                            sourcePage:
+                                                pageChunk
+                                                    .pageNo,
+                                            allowedQuestionNumbers:
+                                                allowedForChunk,
+                                            lastSeenQuestionNumber,
+                                            indexPolicy:
+                                                mergePolicy
+                                        })
+                                        : await recognizeAnswerSolutionWithQwen(
+                                            pageChunk.rawText,
+                                            file,
+                                            {
+                                                strictProtocol:
+                                                    strict,
+                                                allowedQuestionNumbers:
+                                                    allowedForChunk,
+                                                sourcePage:
+                                                    pageChunk
+                                                        .pageNo,
+                                                continuationQuestionNumber:
+                                                    pageChunk
+                                                        .continuationQuestionNumber
+                                            }
+                                        );
+
+                                const observedQuestionNumbers =
+                                    [
+                                        ...(
+                                            pageResult
+                                                .answers ||
+                                            []
+                                        ),
+                                        ...(
+                                            pageResult
+                                                .solutions ||
+                                            []
+                                        )
+                                    ]
+                                        .map(item =>
+                                            Number(
+                                                normalizeQuestionKey(
+                                                    item.question
+                                                )
+                                            )
+                                        )
+                                        .filter(
+                                            Number.isFinite
+                                        );
+
+                                if (
+                                    observedQuestionNumbers
+                                        .length >
+                                    0
+                                ) {
+                                    lastSeenQuestionNumber =
+                                        Math.max(
+                                            lastSeenQuestionNumber,
+                                            ...observedQuestionNumbers
+                                        );
+                                }
+
+                                const attachPageEvidence =
+                                    item => ({
+                                        ...item,
+                                        sourcePage:
+                                            pageChunk
+                                                .pageNo,
+                                        sourcePages: [
+                                            pageChunk
+                                                .pageNo
+                                        ],
+                                        sourcePageImage:
+                                            pageChunk
+                                                .sourcePageImage ||
+                                            '',
+                                        rawText:
+                                            pageChunk
+                                                .rawText,
+                                        sourceTrace: {
+                                            ...(
+                                                item
+                                                    .sourceTrace ||
+                                                {}
+                                            ),
+                                            source:
+                                                'visual-support-page-ai',
+                                            sourcePage:
+                                                pageChunk
+                                                    .pageNo,
+                                            sourcePageImage:
+                                                pageChunk
+                                                    .sourcePageImage ||
+                                                ''
+                                        }
+                                    });
+
+                                pageResults.push({
+                                    pageNo:
+                                        pageChunk.pageNo,
+                                    allowedQuestionNumbers:
+                                        allowedForChunk,
+                                    recognitionSource:
+                                        visualFallback
+                                            ? 'image'
+                                            : 'text',
+                                    answers:
+                                        (
+                                            pageResult
+                                                .answers ||
+                                            []
+                                        ).map(
+                                            attachPageEvidence
+                                        ),
+                                    solutions:
+                                        (
+                                            pageResult
+                                                .solutions ||
+                                            []
+                                        ).map(
+                                            attachPageEvidence
+                                        )
+                                });
+                            }
+
+                            const merged =
+                                mergePolicy
+                                    .mergeVisualSupportPageResultsFailClosed({
+                                        pageResults,
+                                        allowedQuestionNumbers:
+                                            normalizedExpected
+                                    });
+
+                            if (
+                                strict &&
+                                !merged.authoritative
+                            ) {
+                                const error = new Error(
+                                    '答案/解析逐页安全合并发现冲突或未知题号。'
+                                );
+
+                                error.code =
+                                    'SUPPORT_PAGE_MERGE_CONFLICT';
+
+                                error.diagnostics =
+                                    merged.diagnostics;
+
+                                throw error;
+                            }
+
+                            if (
+                                typeof mergePolicy
+                                    .buildVisualSupportCoverage !==
+                                'function' ||
+                                typeof mergePolicy
+                                    .summarizeVisualSupportPageResults !==
+                                'function'
+                            ) {
+                                const error = new Error(
+                                    '逐页答案/解析覆盖率策略未加载。'
+                                );
+
+                                error.code =
+                                    'SUPPORT_PAGE_COVERAGE_POLICY_MISSING';
+
+                                throw error;
+                            }
+
+                            const coverage =
+                                mergePolicy
+                                    .buildVisualSupportCoverage({
+                                        merged,
+                                        expectedQuestionNumbers:
+                                            normalizedExpected,
+                                        requiredKinds
+                                    });
+                            const pageSummary =
+                                mergePolicy
+                                    .summarizeVisualSupportPageResults(
+                                        pageResults
+                                    );
+
+                            console.log(
+                                '[BATCH_DEBUG][support-page-ai-merge]',
+                                {
+                                    filename:
+                                        file.filename,
+                                    pageCount:
+                                        pages.length,
+                                    pageQuestions:
+                                        pageSummary,
+                                    coverage,
+                                    mergeDiagnostics:
+                                        merged.diagnostics
+                                }
+                            );
+
+                            if (
+                                strict &&
+                                !coverage.ok
+                            ) {
+                                const pageQuestionSummary =
+                                    pageSummary
+                                        .map(
+                                            pageResult =>
+                                                `第${pageResult.pageNo}页` +
+                                                `答案[${pageResult.answerQuestions.join(',')}]` +
+                                                `解析[${pageResult.solutionQuestions.join(',')}]`
+                                        )
+                                        .join('；');
+
+                                const error = new Error(
+                                    '答案/解析逐页结构化不完整：' +
+                                    `缺少答案 ${coverage.unresolvedMissingAnswers.join(',') || '无'}；` +
+                                    `缺少解析 ${coverage.missingSolutions.join(',') || '无'}。` +
+                                    `逐页题号：${pageQuestionSummary || '无'}。`
+                                );
+
+                                error.code =
+                                    'SUPPORT_DOCUMENT_COVERAGE_INCOMPLETE';
+
+                                error.coverage =
+                                    coverage;
+
+                                error.diagnostics = {
+                                    pageResults:
+                                        pageSummary,
+                                    merge:
+                                        merged.diagnostics
+                                };
+
+                                throw error;
+                            }
+
+                            return {
+                                answers:
+                                    merged.answers ||
+                                    [],
+                                solutions:
+                                    merged.solutions ||
+                                    [],
+                                coverage,
+                                blocks: [],
+                                pageResults
+                            };
+                        };
+
                     const parser =
                         globalThis.Qisi
                             ?.SupportParser;
@@ -8910,13 +9294,19 @@ ${rawBlock}
                             };
                         }
 
+                        if (strict) {
+                            return await recognizeSupportPagesIndividually();
+                        }
+
                         const documentResult =
                             await recognizeAnswerSolutionWithQwen(
                                 parsedDocument.documentText,
                                 file,
                                 {
                                     strictProtocol:
-                                        strict
+                                        false,
+                                    allowedQuestionNumbers:
+                                        expectedQuestionNumbers
                                 }
                             );
 
@@ -8926,6 +9316,10 @@ ${rawBlock}
                                 null,
                             blocks: []
                         };
+                    }
+
+                    if (strict) {
+                        return await recognizeSupportPagesIndividually();
                     }
 
                     const documentText =
@@ -8942,7 +9336,9 @@ ${rawBlock}
                         file,
                         {
                             strictProtocol:
-                                strict
+                                false,
+                            allowedQuestionNumbers:
+                                expectedQuestionNumbers
                         }
                     );
                 };
@@ -9518,7 +9914,13 @@ ${rawBlock}
 
                 const docxPageLikeImages = async (file) => {
                     if (file.fileType !== 'docx') return [];
-                    const refs = docxEmbeddedImageCache.get(file.id) || [];
+                    const cachedRefs = docxEmbeddedImageCache.get(file.id) || [];
+                    const refs =
+                        window.Qisi.DocxPipeline
+                            ?.orderDocxMediaRefsByDocumentUsage?.(
+                                draftFileXmlCache.get(file.id) || '',
+                                cachedRefs
+                            ) || cachedRefs;
                     const result = [];
                     const debugRows = [];
                     for (const [idx, ref] of refs.entries()) {
@@ -11405,7 +11807,15 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                         return pageItems;
                     });
 
-                    let items = mergeStrictQuestionItemsByNumber(pageResults.flat().filter(Boolean));
+                    let items =
+                        window.Qisi.DocxPipeline
+                            .foldUnnumberedVisualQuestionFragments(
+                                mergeStrictQuestionItemsByNumber(
+                                    pageResults
+                                        .flat()
+                                        .filter(Boolean)
+                                )
+                            );
 
                     if (file.fileType === 'pdf') {
                         try {
@@ -11868,6 +12278,86 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                     };
                 };
 
+                const resolveEmbeddedDocxVisualPages = async ({
+                    file,
+                    questionSkeleton
+                } = {}) => {
+                    const selector =
+                        window.Qisi.DocxPipeline
+                            ?.selectDocxVisualPageSource;
+
+                    if (
+                        typeof selector !== 'function' ||
+                        questionSkeleton
+                            ?.diagnostics
+                            ?.visualPageCandidate !== true
+                    ) {
+                        return {
+                            decision: {
+                                route: 'converted-pdf',
+                                reason: 'not-visual-page-docx'
+                            },
+                            pages: []
+                        };
+                    }
+
+                    const extractVisualPages =
+                        window.QisiBatchImporter
+                            ?.extractDocxVisualPages;
+
+                    if (
+                        typeof extractVisualPages !==
+                        'function'
+                    ) {
+                        const error = new Error(
+                            'DOCX 整页图片提取器未加载，已停止识别。'
+                        );
+                        error.code =
+                            'DOCX_VISUAL_PAGE_EXTRACTOR_MISSING';
+                        error.stage =
+                            'docx-embedded-page-extraction';
+                        throw error;
+                    }
+
+                    const extraction =
+                        await extractVisualPages(
+                            file
+                        );
+                    const pages =
+                        Array.isArray(extraction?.pages)
+                            ? extraction.pages
+                            : [];
+                    const decision =
+                        selector({
+                            questionSkeleton,
+                            embeddedPageCount:
+                                pages.length
+                        });
+
+                    if (decision.route === 'reject') {
+                        const error = new Error(
+                            'DOCX 被识别为整页图片文档，' +
+                            `但正文绘图数与可读取页图数不一致（预期 ` +
+                            `${decision.expectedPageCount || 0}，实际 ` +
+                            `${decision.pageCount || 0}）。` +
+                            '已停止识别，避免页序错乱或缺页。'
+                        );
+
+                        error.code =
+                            'DOCX_VISUAL_PAGE_COUNT_MISMATCH';
+                        error.stage =
+                            'docx-embedded-page-extraction';
+                        error.decision =
+                            decision;
+                        throw error;
+                    }
+
+                    return {
+                        decision,
+                        pages
+                    };
+                };
+
                 const processDocxByLocalConvertAndStrictVision = async ({
                     file,
                     batch,
@@ -12005,28 +12495,47 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                                 .questionNumbers.length
                             : expected;
 
-                    let pdfRecord;
-
-                    try {
-                        const convertStartedAt = performance.now();
-                        pdfRecord = await convertDocxRecordToPdfRecord(file);
-
-                        console.log('[BATCH_TIME][docx-convert]', {
-                            filename: file.filename,
-                            durationMs: Math.round(performance.now() - convertStartedAt),
-                            pdfFilename: pdfRecord.filename
+                    const embeddedPageSource =
+                        await resolveEmbeddedDocxVisualPages({
+                            file,
+                            questionSkeleton
                         });
-                    } catch (error) {
-                        const wrapped = new Error(`DOCX 转 PDF 失败：${error?.message || String(error)}`);
-                        wrapped.stage = 'docx-convert';
-                        wrapped.cause = error;
-                        throw wrapped;
+                    const usesEmbeddedPages =
+                        embeddedPageSource
+                            .decision
+                            .route ===
+                        'embedded-pages';
+                    let pdfRecord = null;
+
+                    if (!usesEmbeddedPages) {
+                        try {
+                            const convertStartedAt = performance.now();
+                            pdfRecord = await convertDocxRecordToPdfRecord(file);
+
+                            console.log('[BATCH_TIME][docx-convert]', {
+                                filename: file.filename,
+                                durationMs: Math.round(performance.now() - convertStartedAt),
+                                pdfFilename: pdfRecord.filename
+                            });
+                        } catch (error) {
+                            const wrapped = new Error(`DOCX 转 PDF 失败：${error?.message || String(error)}`);
+                            wrapped.stage = 'docx-convert';
+                            wrapped.cause = error;
+                            throw wrapped;
+                        }
                     }
 
                     console.groupCollapsed('[BATCH_DEBUG][docx-local-pdf-then-strict-vision]');
                     console.log({
                         docx: file.filename,
-                        virtualPdf: pdfRecord.filename,
+                        visualSource:
+                            usesEmbeddedPages
+                                ? 'embedded-page-images'
+                                : 'converted-pdf',
+                        virtualPdf: pdfRecord?.filename || '',
+                        embeddedPageCount:
+                            embeddedPageSource
+                                .pages.length,
                         expected,
                         effectiveExpected,
                         questionSkeleton:
@@ -12039,16 +12548,32 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                     let strictResult;
 
                     try {
-                        strictResult = await processStrictVisualQuestionFile({
-                            file: pdfRecord,
-                            batch,
-                            expectedQuestionCount:
-                                effectiveExpected,
-                            onPageProgress
-                        });
+                        strictResult =
+                            usesEmbeddedPages
+                                ? await recognizeStrictQuestionsFromPreparedPages({
+                                    file,
+                                    batch,
+                                    pages:
+                                        embeddedPageSource
+                                            .pages,
+                                    expectedQuestionCount:
+                                        effectiveExpected,
+                                    onPageProgress,
+                                    renderDurationMs:
+                                        0
+                                })
+                                : await processStrictVisualQuestionFile({
+                                    file: pdfRecord,
+                                    batch,
+                                    expectedQuestionCount:
+                                        effectiveExpected,
+                                    onPageProgress
+                                });
                     } catch (error) {
                         const wrapped = new Error(
-                            `DOCX 已成功转为 PDF，但页面视觉识别未完成：${error?.message || String(error)}`
+                            usesEmbeddedPages
+                                ? `DOCX 内嵌页图视觉识别未完成：${error?.message || String(error)}`
+                                : `DOCX 已成功转为 PDF，但页面视觉识别未完成：${error?.message || String(error)}`
                         );
                         wrapped.stage = 'visual-recognition';
                         wrapped.cause = error;
@@ -12215,7 +12740,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
 
                     if (check.fatal) {
                         throw new Error(
-                            `DOCX 已转 PDF，但识别发生致命错误：${(check.fatalReasons || []).join('；') || '未知原因'}`
+                            `DOCX 页面识别发生致命错误：${(check.fatalReasons || []).join('；') || '未知原因'}`
                         );
                     }
 
@@ -12225,13 +12750,16 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                         sourceFileName: file.filename || '',
                         sourceDocxFileId: file.id,
                         sourceDocxFileName: file.filename || '',
-                        convertedPdfFileName: pdfRecord.filename || '',
+                        convertedPdfFileName: pdfRecord?.filename || '',
                         sourceTrace: {
                             ...(q.sourceTrace || {}),
-                            source: 'docx-local-convert-pdf-strict-vision',
+                            source:
+                                usesEmbeddedPages
+                                    ? 'docx-embedded-page-strict-vision'
+                                    : 'docx-local-convert-pdf-strict-vision',
                             sourceFileId: file.id,
                             sourceFileName: file.filename || '',
-                            convertedPdfFileName: pdfRecord.filename || '',
+                            convertedPdfFileName: pdfRecord?.filename || '',
                             sourcePageImage: q.sourcePageImage || q.sourceTrace?.sourcePageImage || ''
                         }
                     }));
@@ -12240,7 +12768,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                         ...img,
                         sourceFileId: file.id,
                         sourceFileName: file.filename || '',
-                        convertedPdfFileName: pdfRecord.filename || ''
+                        convertedPdfFileName: pdfRecord?.filename || ''
                     }));
 
                     return {
@@ -12281,46 +12809,80 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                         throw error;
                     }
 
-                    let pdfRecord;
+                    let supportSkeleton = null;
 
                     try {
-                        const startedAt =
-                            performance.now();
-
-                        pdfRecord =
-                            await convertDocxRecordToPdfRecord(
-                                file
-                            );
-
-                        console.log(
-                            '[BATCH_TIME][docx-support-convert]',
+                        supportSkeleton =
+                            await window.QisiBatchImporter
+                                ?.extractDocxQuestionSkeleton?.(
+                                    file
+                                );
+                    } catch (error) {
+                        console.warn(
+                            '[BATCH_DEBUG][docx-support-page-probe-failed]',
                             {
                                 filename:
                                     file.filename,
-                                pdfFilename:
-                                    pdfRecord.filename,
-                                durationMs:
-                                    Math.round(
-                                        performance.now() -
-                                        startedAt
-                                    )
+                                message:
+                                    error?.message ||
+                                    String(error)
                             }
                         );
-                    } catch (error) {
-                        const wrapped = new Error(
-                            `答案/解析 DOCX 转 PDF 失败：${error?.message || String(error)}`
-                        );
+                    }
 
-                        wrapped.code =
-                            'DOCX_SUPPORT_CONVERT_FAILED';
+                    const embeddedPageSource =
+                        await resolveEmbeddedDocxVisualPages({
+                            file,
+                            questionSkeleton:
+                                supportSkeleton
+                        });
+                    const usesEmbeddedPages =
+                        embeddedPageSource
+                            .decision
+                            .route ===
+                        'embedded-pages';
+                    let pdfRecord = null;
 
-                        wrapped.stage =
-                            'docx-support-convert';
+                    if (!usesEmbeddedPages) {
+                        try {
+                            const startedAt =
+                                performance.now();
 
-                        wrapped.cause =
-                            error;
+                            pdfRecord =
+                                await convertDocxRecordToPdfRecord(
+                                    file
+                                );
 
-                        throw wrapped;
+                            console.log(
+                                '[BATCH_TIME][docx-support-convert]',
+                                {
+                                    filename:
+                                        file.filename,
+                                    pdfFilename:
+                                        pdfRecord.filename,
+                                    durationMs:
+                                        Math.round(
+                                            performance.now() -
+                                            startedAt
+                                        )
+                                }
+                            );
+                        } catch (error) {
+                            const wrapped = new Error(
+                                `答案/解析 DOCX 转 PDF 失败：${error?.message || String(error)}`
+                            );
+
+                            wrapped.code =
+                                'DOCX_SUPPORT_CONVERT_FAILED';
+
+                            wrapped.stage =
+                                'docx-support-convert';
+
+                            wrapped.cause =
+                                error;
+
+                            throw wrapped;
+                        }
                     }
 
                     let pages;
@@ -12330,25 +12892,30 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                             performance.now();
 
                         pages =
-                            await renderPdfFilePages(
-                                pdfRecord,
-                                {
-                                    scale:
-                                        PDF_PROCESS_CONFIG
-                                            .renderScale,
-                                    jpegQuality:
-                                        PDF_PROCESS_CONFIG
-                                            .jpegQuality,
-                                    sequential: true
-                                }
-                            );
+                            usesEmbeddedPages
+                                ? embeddedPageSource
+                                    .pages
+                                : await renderPdfFilePages(
+                                    pdfRecord,
+                                    {
+                                        scale:
+                                            PDF_PROCESS_CONFIG
+                                                .renderScale,
+                                        jpegQuality:
+                                            PDF_PROCESS_CONFIG
+                                                .jpegQuality,
+                                        sequential: true
+                                    }
+                                );
 
                         if (
                             !Array.isArray(pages) ||
                             pages.length === 0
                         ) {
                             throw new Error(
-                                '转换后的 PDF 没有渲染出页面图。'
+                                usesEmbeddedPages
+                                    ? 'DOCX 没有提取出完整的内嵌页图。'
+                                    : '转换后的 PDF 没有渲染出页面图。'
                             );
                         }
 
@@ -12358,7 +12925,12 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                                 filename:
                                     file.filename,
                                 pdfFilename:
-                                    pdfRecord.filename,
+                                    pdfRecord?.filename ||
+                                    '',
+                                visualSource:
+                                    usesEmbeddedPages
+                                        ? 'embedded-page-images'
+                                        : 'converted-pdf',
                                 pageCount:
                                     pages.length,
                                 durationMs:
@@ -12370,7 +12942,11 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                         );
                     } catch (error) {
                         const wrapped = new Error(
-                            '答案/解析 DOCX 已转为 PDF，' +
+                            (
+                                usesEmbeddedPages
+                                    ? '答案/解析 DOCX 内嵌页图'
+                                    : '答案/解析 DOCX 已转为 PDF，'
+                            ) +
                             `但页面渲染失败：${error?.message || String(error)}`
                         );
 
@@ -12443,7 +13019,7 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                         solutions.length === 0
                     ) {
                         const error = new Error(
-                            '答案/解析 DOCX 已成功转为 PDF 并完成页面 OCR，' +
+                            '答案/解析 DOCX 已完成页面 OCR，' +
                             '但没有识别到任何答案或解析。' +
                             '已禁止回退到公式缺失的 Word 文本层。'
                         );
@@ -12487,13 +13063,15 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                             sourceTrace: {
                                 ...(item.sourceTrace || {}),
                                 source:
-                                    'docx-converted-pdf-visual-support',
+                                    usesEmbeddedPages
+                                        ? 'docx-embedded-page-visual-support'
+                                        : 'docx-converted-pdf-visual-support',
                                 sourceFileId:
                                     file.id,
                                 sourceFileName:
                                     file.filename || '',
                                 convertedPdfFileName:
-                                    pdfRecord.filename || ''
+                                    pdfRecord?.filename || ''
                             }
                         });
 
@@ -12520,7 +13098,12 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                         filename:
                             file.filename,
                         convertedPdf:
-                            pdfRecord.filename,
+                            pdfRecord?.filename ||
+                            '',
+                        visualSource:
+                            usesEmbeddedPages
+                                ? 'embedded-page-images'
+                                : 'converted-pdf',
                         renderedPageCount:
                             pages.length,
                         answerCount:
@@ -12591,8 +13174,216 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                     return items;
                 };
 
-                const recognizeAnswerSolutionImageWithQwen = async (file, imageUrl) => {
-                    try {
+                const recognizeSupportPageIndexWithQwen =
+                    async ({
+                        file,
+                        imageUrl,
+                        allowedQuestionNumbers = [],
+                        sourcePage = 0,
+                        lastSeenQuestionNumber = 0,
+                        requiredFirstQuestionNumber = '',
+                        previousAttemptNumbers = []
+                    }) => {
+                        const allowed =
+                            [
+                                ...new Set(
+                                    (
+                                        allowedQuestionNumbers ||
+                                        []
+                                    )
+                                        .map(
+                                            normalizeQuestionKey
+                                        )
+                                        .filter(Boolean)
+                                )
+                            ];
+                        const previousQuestionNumber =
+                            normalizeQuestionKey(
+                                lastSeenQuestionNumber
+                            );
+                        const requiredFirst =
+                            normalizeQuestionKey(
+                                requiredFirstQuestionNumber
+                            );
+                        const previousAttempt =
+                            (
+                                previousAttemptNumbers ||
+                                []
+                            )
+                                .map(
+                                    normalizeQuestionKey
+                                )
+                                .filter(Boolean);
+                        const anchoredRetryHint =
+                            requiredFirst
+                                ? `
+6. 这是一次合同锚定复核：上一页最后确认的主题号是 ${previousQuestionNumber || '无'}，本页第一个“新主题号”必须是 ${requiredFirst}。
+7. 若页首是上一题续文，可以先列 ${previousQuestionNumber} 并令 continuesPrevious=true；之后第一个新主题号仍必须是 ${requiredFirst}。
+8. 上次把 [${previousAttempt.join('、') || '空'}] 当作本页索引但未通过连续性校验。必须重新从页面顶部向下检查，不得直接沿用上次结果。
+9. 如果本页看不到 ${requiredFirst}，返回 {"questionNumbers":[],"continuesPrevious":false}，禁止跳过它输出更大的题号。`
+                                : '';
+                        const prompt = `只识别这张高中数学答案/解析页的“主题号索引”，不要抄写答案或解析正文。
+
+严格返回纯 JSON：
+{"questionNumbers":["16","17"],"continuesPrevious":false}
+
+规则：
+1. questionNumbers 只包含本页行首明确印刷且后接“.”“、”或“解”的主题号，按页面顺序排列。
+2. 括号小问号如“(1)(2)”、行末分值如“5分/10分”、公式中的指数/系数如“16^a”都不是主题号。
+3. 如果本页开头在第一个主题号之前明显承接上一页未完解析，continuesPrevious=true；否则为 false。
+4. 允许的主题号范围：${allowed.join('、') || '未提供'}。
+5. 不得输出范围外题号，不得解释。${anchoredRetryHint}`;
+                        const models =
+                            getVisionModelsForMode(
+                                activeRecognitionMode
+                            );
+                        let lastError = null;
+
+                        for (
+                            const model of models
+                        ) {
+                            try {
+                                const resp =
+                                    await fetchWithTimeout(
+                                        DASHSCOPE_CHAT_URL,
+                                        {
+                                            method:
+                                                'POST',
+                                            headers:
+                                                buildAiRequestHeaders(),
+                                            body:
+                                                JSON.stringify({
+                                                    model,
+                                                    messages: [
+                                                        {
+                                                            role:
+                                                                'user',
+                                                            content: [
+                                                                {
+                                                                    type:
+                                                                        'image_url',
+                                                                    image_url: {
+                                                                        url:
+                                                                            imageUrl,
+                                                                        ...OCR_IMAGE_LIMITS
+                                                                    }
+                                                                },
+                                                                {
+                                                                    type:
+                                                                        'text',
+                                                                    text:
+                                                                        prompt
+                                                                }
+                                                            ]
+                                                        }
+                                                    ],
+                                                    temperature:
+                                                        0,
+                                                    top_p:
+                                                        0.001,
+                                                    max_tokens:
+                                                        512
+                                                })
+                                        },
+                                        90000,
+                                        'Qwen 答案页题号索引请求'
+                                    );
+
+                                await assertQwenResponseOk(
+                                    resp,
+                                    'Qwen 答案页题号索引请求'
+                                );
+
+                                const data =
+                                    await resp.json();
+                                const parsed =
+                                    parseJsonFromAiText(
+                                        extractAssistantText(
+                                            data
+                                        )
+                                    );
+
+                                if (
+                                    !parsed ||
+                                    typeof parsed !==
+                                        'object' ||
+                                    !Array.isArray(
+                                        parsed
+                                            .questionNumbers
+                                    )
+                                ) {
+                                    const error =
+                                        new Error(
+                                            '答案页题号索引不符合 JSON 协议。'
+                                        );
+
+                                    error.code =
+                                        'SUPPORT_PAGE_INDEX_PROTOCOL_ERROR';
+
+                                    throw error;
+                                }
+
+                                return {
+                                    questionNumbers:
+                                        parsed
+                                            .questionNumbers
+                                            .map(
+                                                normalizeQuestionKey
+                                            )
+                                            .filter(Boolean),
+                                    continuesPrevious:
+                                        parsed
+                                            .continuesPrevious ===
+                                        true,
+                                    sourcePage:
+                                        Number(
+                                            sourcePage ||
+                                            0
+                                        ) || 0
+                                };
+                            } catch (error) {
+                                lastError =
+                                    error;
+
+                                if (
+                                    window.Qisi.Utils
+                                        .isFatalQwenServiceError(
+                                            error
+                                        )
+                                ) {
+                                    throw error;
+                                }
+                            }
+                        }
+
+                        throw lastError ||
+                            new Error(
+                                '答案页题号索引识别失败。'
+                            );
+                    };
+
+                const recognizeAnswerSolutionImageWithQwen = async (
+                    file,
+                    imageUrl,
+                    options = {}
+                ) => {
+                    const forceVisual =
+                        options.forceVisual === true;
+                    const strictProtocol =
+                        options.strictProtocol === true;
+                    const allowedQuestionNumbers =
+                        new Set(
+                            (
+                                options.allowedQuestionNumbers ||
+                                []
+                            )
+                                .map(
+                                    normalizeQuestionKey
+                                )
+                                .filter(Boolean)
+                        );
+
+                    if (!forceVisual) try {
                         const ocrText = await recognizePageAsDocumentText(imageUrl);
                         let parsed = parseAnswerAndSolutionItemsFromText(ocrText, file);
                         try {
@@ -12616,6 +13407,30 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                         console.warn('OCR 文档解析识别答案详解失败，回退视觉 JSON 识别', error);
                     }
 
+                    const allowedQuestionNumberHint =
+                        allowedQuestionNumbers.size > 0
+                            ? `\n本页只允许出现这些主题号：${[
+                                ...allowedQuestionNumbers
+                            ].join('、')}。其他数字可能是小问号、分值或公式，禁止当作主题号。`
+                            : '';
+                    const continuationQuestionNumber =
+                        normalizeQuestionKey(
+                            options
+                                .continuationQuestionNumber
+                        );
+                    const continuationHint =
+                        continuationQuestionNumber
+                            ? `\n本页开头在第一个明确主题号之前的内容，是第 ${continuationQuestionNumber} 题的跨页续文，必须并入第 ${continuationQuestionNumber} 题解析。`
+                            : '';
+                    const targetQuestionNumber =
+                        normalizeQuestionKey(
+                            options
+                                .targetQuestionNumber
+                        );
+                    const targetQuestionHint =
+                        targetQuestionNumber
+                            ? `\n本次只提取第 ${targetQuestionNumber} 题。图片中其他题一律忽略；若第 ${targetQuestionNumber} 题在本页不可见，则返回空 answers 和空 solutions。`
+                            : '';
                     const prompt = `你是高中数学答案解析提取助手。请从图片材料中提取每道题的答案和解析，并输出严格 JSON。
 
 【输出格式】
@@ -12636,7 +13451,9 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
 5. 数学公式必须使用 LaTeX。
 6. 没有解析则 solution 为空字符串，不要编造。
 7. 输出必须是纯 JSON。
-8. 忽略标题、页眉页脚、分值说明；解析配图 bbox 只框图形区域，不要框文字。`;
+8. 忽略标题、页眉页脚、分值说明；解析配图 bbox 只框图形区域，不要框文字。
+9. question 只能填写图片中行首明确印刷的阿拉伯数字主题号；括号小问号、行末“5分/10分”、公式中的指数或系数都不是主题号。
+10. 看到“16. 解：”“17. 解：”这类评分答案时，即使没有单独的“答案”标签，也必须把该主题号下的完整内容写入 solutions。${continuationHint}${targetQuestionHint}${allowedQuestionNumberHint}`;
                     const models = getVisionModelsForMode(activeRecognitionMode);
                     let lastError = null;
                     for (const model of models) {
@@ -12653,6 +13470,26 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                             await assertQwenResponseOk(resp, 'Qwen 答案解析图片识别请求');
                             const data = await resp.json();
                             const parsed = parseJsonFromAiText(extractAssistantText(data));
+
+                            if (
+                                strictProtocol &&
+                                (
+                                    !parsed ||
+                                    typeof parsed !==
+                                        'object'
+                                )
+                            ) {
+                                const error =
+                                    new Error(
+                                        '答案解析视觉模型返回的内容不符合 JSON 协议。'
+                                    );
+
+                                error.code =
+                                    'SUPPORT_IMAGE_JSON_PROTOCOL_ERROR';
+
+                                throw error;
+                            }
+
                             const rawAnswers = extractAnswerArray(parsed);
                             const rawSolutions = extractSolutionArray(parsed);
                             const answers = Array.isArray(rawAnswers) ? rawAnswers.map(item => ({
@@ -12661,7 +13498,13 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                                 confidence: Number(item.confidence || 0.82),
                                 warnings: [],
                                 sourceFileId: file.id,
-                                sourceFileName: file.filename
+                                sourceFileName: file.filename,
+                                sourcePage:
+                                    Number(
+                                        options
+                                            .sourcePage ||
+                                        0
+                                    ) || 0
                             })).filter(item => item.question && item.answer) : [];
                             const solutions = Array.isArray(rawSolutions) ? rawSolutions.map(item => ({
                                 question: window.Qisi.Utils.cleanRecognizedText(item.question ?? item.题号 ?? item.no ?? item.index),
@@ -12680,8 +13523,62 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                                 confidence: Number(item.confidence || 0.82),
                                 warnings: [],
                                 sourceFileId: file.id,
-                                sourceFileName: file.filename
+                                sourceFileName: file.filename,
+                                sourcePage:
+                                    Number(
+                                        options
+                                            .sourcePage ||
+                                        0
+                                    ) || 0
                             })).filter(item => item.question && item.solution) : [];
+
+                            if (
+                                strictProtocol &&
+                                allowedQuestionNumbers
+                                    .size >
+                                    0
+                            ) {
+                                const unknownQuestions =
+                                    [
+                                        ...answers,
+                                        ...solutions
+                                    ]
+                                        .map(item =>
+                                            normalizeQuestionKey(
+                                                item.question
+                                            )
+                                        )
+                                        .filter(
+                                            questionNumber =>
+                                                questionNumber &&
+                                                !allowedQuestionNumbers
+                                                    .has(
+                                                        questionNumber
+                                                    )
+                                        );
+
+                                if (
+                                    unknownQuestions
+                                        .length >
+                                    0
+                                ) {
+                                    const error =
+                                        new Error(
+                                            '答案解析视觉模型返回了未允许的主题号：' +
+                                            [
+                                                ...new Set(
+                                                    unknownQuestions
+                                                )
+                                            ].join(',')
+                                        );
+
+                                    error.code =
+                                        'SUPPORT_IMAGE_UNKNOWN_QUESTION';
+
+                                    throw error;
+                                }
+                            }
+
                             if (answers.length || solutions.length || model === models.at(-1)) return { answers, solutions };
                         } catch (error) {
                             lastError = error;
@@ -12691,6 +13588,224 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                     }
                     throw lastError || new Error('答案解析图片识别失败');
                 };
+
+                const recognizeIndexedSupportPageImageWithQwen =
+                    async ({
+                        file,
+                        imageUrl,
+                        sourcePage,
+                        allowedQuestionNumbers,
+                        lastSeenQuestionNumber,
+                        indexPolicy
+                    }) => {
+                        if (
+                            !indexPolicy ||
+                            typeof indexPolicy
+                                .validateVisualSupportPageIndex !==
+                                'function'
+                        ) {
+                            const error = new Error(
+                                '答案页视觉题号索引校验策略未加载。'
+                            );
+
+                            error.code =
+                                'SUPPORT_PAGE_INDEX_POLICY_MISSING';
+
+                            throw error;
+                        }
+
+                        let pageIndex =
+                            await recognizeSupportPageIndexWithQwen({
+                                file,
+                                imageUrl,
+                                allowedQuestionNumbers,
+                                sourcePage,
+                                lastSeenQuestionNumber
+                            });
+                        let validatedIndex =
+                            indexPolicy
+                                .validateVisualSupportPageIndex({
+                                    observedQuestionNumbers:
+                                        pageIndex
+                                            .questionNumbers,
+                                    allowedQuestionNumbers,
+                                    lastSeenQuestionNumber,
+                                    continuesPrevious:
+                                        pageIndex
+                                            .continuesPrevious
+                                });
+                        const retryPlan =
+                            typeof indexPolicy
+                                .buildVisualSupportIndexRetryPlan ===
+                            'function'
+                                ? indexPolicy
+                                    .buildVisualSupportIndexRetryPlan({
+                                        validation:
+                                            validatedIndex,
+                                        allowedQuestionNumbers,
+                                        lastSeenQuestionNumber,
+                                        previousAttemptNumbers:
+                                            pageIndex
+                                                .questionNumbers
+                                    })
+                                : {
+                                    shouldRetry:
+                                        false
+                                };
+
+                        if (
+                            !validatedIndex
+                                .authoritative &&
+                            retryPlan
+                                .shouldRetry
+                        ) {
+                            const firstAttempt =
+                                pageIndex;
+
+                            pageIndex =
+                                await recognizeSupportPageIndexWithQwen({
+                                    file,
+                                    imageUrl,
+                                    allowedQuestionNumbers:
+                                        retryPlan
+                                            .allowedQuestionNumbers,
+                                    sourcePage,
+                                    lastSeenQuestionNumber,
+                                    requiredFirstQuestionNumber:
+                                        retryPlan
+                                            .requiredFirstQuestionNumber,
+                                    previousAttemptNumbers:
+                                        retryPlan
+                                            .previousAttemptNumbers
+                                });
+
+                            validatedIndex =
+                                indexPolicy
+                                    .validateVisualSupportPageIndex({
+                                        observedQuestionNumbers:
+                                            pageIndex
+                                                .questionNumbers,
+                                        allowedQuestionNumbers,
+                                        lastSeenQuestionNumber,
+                                        continuesPrevious:
+                                            pageIndex
+                                                .continuesPrevious
+                                    });
+
+                            console.warn(
+                                '[BATCH_DEBUG][support-page-index-retry]',
+                                {
+                                    sourcePage,
+                                    lastSeenQuestionNumber,
+                                    requiredFirstQuestionNumber:
+                                        retryPlan
+                                            .requiredFirstQuestionNumber,
+                                    firstAttempt:
+                                        firstAttempt
+                                            .questionNumbers,
+                                    retryAttempt:
+                                        pageIndex
+                                            .questionNumbers,
+                                    authoritative:
+                                        validatedIndex
+                                            .authoritative,
+                                    reasons:
+                                        validatedIndex
+                                            .diagnostics
+                                            ?.reasons ||
+                                        []
+                                }
+                            );
+                        }
+
+                        if (
+                            !validatedIndex
+                                .authoritative
+                        ) {
+                            const error = new Error(
+                                '答案页视觉题号索引不连续或不可信：' +
+                                `第 ${sourcePage} 页返回 [` +
+                                `${(pageIndex.questionNumbers || []).join(',')}]，` +
+                                `承接上一页=${pageIndex.continuesPrevious ? '是' : '否'}，` +
+                                `上一主题号=${lastSeenQuestionNumber || '无'}，` +
+                                `原因=${(
+                                    validatedIndex
+                                        .diagnostics
+                                        ?.reasons ||
+                                    []
+                                ).join(',') || '未知'}。`
+                            );
+
+                            error.code =
+                                'SUPPORT_PAGE_INDEX_UNRELIABLE';
+
+                            error.pageIndex =
+                                pageIndex;
+
+                            error.diagnostics =
+                                validatedIndex
+                                    .diagnostics;
+
+                            throw error;
+                        }
+
+                        const answers = [];
+                        const solutions = [];
+
+                        for (
+                            const targetQuestionNumber of validatedIndex
+                                .targetQuestionNumbers
+                        ) {
+                            const targetResult =
+                                await recognizeAnswerSolutionImageWithQwen(
+                                    file,
+                                    imageUrl,
+                                    {
+                                        forceVisual:
+                                            true,
+                                        strictProtocol:
+                                            true,
+                                        allowedQuestionNumbers: [
+                                            targetQuestionNumber
+                                        ],
+                                        targetQuestionNumber,
+                                        sourcePage,
+                                        continuationQuestionNumber:
+                                            Number(
+                                                targetQuestionNumber
+                                            ) ===
+                                            Number(
+                                                lastSeenQuestionNumber
+                                            )
+                                                ? targetQuestionNumber
+                                                : ''
+                                    }
+                                );
+
+                            answers.push(
+                                ...(
+                                    targetResult
+                                        .answers ||
+                                    []
+                                )
+                            );
+
+                            solutions.push(
+                                ...(
+                                    targetResult
+                                        .solutions ||
+                                    []
+                                )
+                            );
+                        }
+
+                        return {
+                            answers,
+                            solutions,
+                            pageIndex:
+                                validatedIndex
+                        };
+                    };
 
                 const recognizePdfAnswerPagesWithQwen = async (file, onProgress = null) => {
                     const pages = await renderPdfFilePages(file);
@@ -16922,22 +18037,19 @@ ${source}`;
                             return draft;
                         };
 
-                        const registerAuthoritativeQuestionContract = ({
+                        const registerQuestionNumberContract = ({
                             file,
-                            skeleton
+                            questionNumbers: rawQuestionNumbers = [],
+                            evidence = ''
                         }) => {
-                            if (!skeleton?.authoritative) {
-                                return;
-                            }
-
                             const questionNumbers =
                                 normalizeQuestionContractNumbers(
-                                    skeleton.questionNumbers
+                                    rawQuestionNumbers
                                 );
 
                             if (!questionNumbers.length) {
                                 const error = new Error(
-                                    'DOCX skeleton 标记为 authoritative，但没有提供有效题号。'
+                                    '题号契约没有提供有效题号。'
                                 );
 
                                 error.code =
@@ -16950,7 +18062,8 @@ ${source}`;
                                 authoritativeQuestionContract = {
                                     authoritative: true,
                                     evidence:
-                                        'docx-explicit-question-skeleton',
+                                        evidence ||
+                                        'validated-question-sequence',
                                     questionNumbers,
                                     sourceFileId:
                                         file.id,
@@ -16994,6 +18107,23 @@ ${source}`;
 
                                 throw error;
                             }
+                        };
+
+                        const registerAuthoritativeQuestionContract = ({
+                            file,
+                            skeleton
+                        }) => {
+                            if (!skeleton?.authoritative) {
+                                return;
+                            }
+
+                            registerQuestionNumberContract({
+                                file,
+                                questionNumbers:
+                                    skeleton.questionNumbers,
+                                evidence:
+                                    'docx-explicit-question-skeleton'
+                            });
                         };
                         const draftImages = [];
                         const pdfPageImageMap = new Map();
@@ -17058,7 +18188,15 @@ ${source}`;
                                 const hasQuestionRole = batchHasQuestionRole(file);
                                 const hasAnswerOrSolutionRole = batchHasAnswerRole(file) || batchHasSolutionRole(file);
                                 const docxSourceRoute = file.fileType === 'docx'
-                                    ? window.Qisi.DocxPipeline.selectDocxSourceRoute(file, processFiles)
+                                    ? await window.Qisi.DocxPipeline.resolveDocxSourceRoute(
+                                        file,
+                                        processFiles,
+                                        {
+                                            extractQuestionSkeleton:
+                                                window.QisiBatchImporter
+                                                    ?.extractDocxQuestionSkeleton
+                                        }
+                                    )
                                     : null;
                                 const allowDocxTextAi = file.fileType !== 'docx' || docxSourceRoute?.allowAutomaticVision === true;
                                 let pdfVisualAttempted = false;
@@ -17135,6 +18273,66 @@ ${source}`;
                                             skeleton:
                                                 strictResult.questionSkeleton
                                         });
+
+                                        if (
+                                            !authoritativeQuestionContract &&
+                                            strictResult
+                                                .questionSkeleton
+                                                ?.diagnostics
+                                                ?.visualPageCandidate ===
+                                                true
+                                        ) {
+                                            const visualContract =
+                                                window.Qisi.DocxPipeline
+                                                    ?.buildValidatedVisualQuestionContract?.({
+                                                        items:
+                                                            strictResult.questions ||
+                                                            [],
+                                                        expectedQuestionCount:
+                                                            expected,
+                                                        expectedSourcePageCount:
+                                                            (
+                                                                strictResult
+                                                                    .pageImages ||
+                                                                []
+                                                            ).length ||
+                                                            (
+                                                                strictResult
+                                                                    .pageRecognitionSummary ||
+                                                                []
+                                                            ).length,
+                                                        check:
+                                                            strictResult.check ||
+                                                            null
+                                                    });
+
+                                            if (
+                                                visualContract
+                                                    ?.authoritative
+                                            ) {
+                                                registerQuestionNumberContract({
+                                                    file,
+                                                    questionNumbers:
+                                                        visualContract
+                                                            .questionNumbers,
+                                                    evidence:
+                                                        visualContract
+                                                            .evidence
+                                                });
+                                            } else {
+                                                console.warn(
+                                                    '[BATCH_DEBUG][visual-question-contract-not-authoritative] ' +
+                                                    JSON.stringify({
+                                                        filename:
+                                                            file.filename,
+                                                        diagnostics:
+                                                            visualContract
+                                                                ?.diagnostics ||
+                                                            null
+                                                    })
+                                                );
+                                            }
+                                        }
 
                                         if (isFullRole) {
                                             fullItems.push(...strictResult.questions);
@@ -19720,6 +20918,12 @@ ${source}`;
 
                     // 2. 只清理显示字段中的污染，不动原始依据
                     window.Qisi.Utils.cleanDisplayFieldsOnly(q);
+                    if (q.contentIntegrity?.version === 'pdf-math-region-r1') {
+                        Object.assign(
+                            q,
+                            window.Qisi.PdfContentIntegrity.normalizeQuestionItem(q)
+                        );
+                    }
 
                     // DOCX 新导入器已经从原始 document.xml 建立选项；用户编辑后也不能再从 rawBlock 恢复旧内容。
                     if (!q.userEdited && q.sourceTrace?.source !== 'docx-importer') {
@@ -20030,6 +21234,12 @@ ${source}`;
 
                         window.Qisi.Utils.preserveRawEvidence(q);
                         window.Qisi.Utils.cleanDisplayFieldsOnly(q);
+                        if (q.contentIntegrity?.version === 'pdf-math-region-r1') {
+                            Object.assign(
+                                q,
+                                window.Qisi.PdfContentIntegrity.normalizeQuestionItem(q)
+                            );
+                        }
 
                         const after = JSON.stringify({
                             stem: q.stem,

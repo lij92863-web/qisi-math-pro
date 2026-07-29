@@ -243,6 +243,80 @@ Required:
 - QR-code implementation;
 - changes to recognition or answer-alignment algorithms.
 
+## Interposed stage H3R — DOCX/PDF real-material recovery gate
+
+This user-authorized hotfix stage must finish before H4. It is a separate bounded
+change from the handout program and temporarily permits focused recognition fixes.
+
+Objective:
+
+- isolate MathType native-helper crashes so one malformed equation cannot abort a
+  complete DOCX batch or expose a raw PowerShell/.NET stack in the UI;
+- correct general DOCX question-skeleton false rejections without weakening
+  duplicate, jump-back, source-order, answer/solution, or fail-closed safeguards;
+- run every file under `C:\Users\Administrator\Desktop\题目与答案` through the
+  applicable local structure/import acceptance path;
+- run the real dual-PDF pair at most five times and keep all unsafe support
+  alignment fail closed;
+- do not start H4 until the H3R gates pass and the hotfix is committed.
+
+Allowed production files:
+
+- `qisi-local-server.js`;
+- `tools/translate-mathtype-mtef.ps1`;
+- focused DOCX modules named `qisi-docx-*.js`;
+- `qisi-batch-importer.js`;
+- focused PDF safety modules named `qisi-pdf-*.js` or `qisi-support-*.js`, but only
+  when a reproduced real-material failure proves a change is necessary.
+
+Allowed supporting files:
+
+- focused tests and local-only real-material harnesses;
+- `ai/CODEX_TASK.local.md`;
+- one H3R stage report.
+
+Read-only unless a separately documented blocker proves otherwise:
+
+- `app.js`;
+- `main.html`;
+- `app.css`.
+
+Forbidden:
+
+- formal question-bank writes or direct IndexedDB mutation;
+- filename, document hash, fixed question number, or school-specific special cases;
+- semantic answer attachment;
+- weakened PDF fail-closed rules;
+- dependency or lockfile changes;
+- H4 implementation.
+
+Real AI/OCR test authorization:
+
+```text
+Purpose: real dual-PDF question/support acceptance before H4
+Models: existing production-selected qwen-vl-plus, qwen3-vl-plus,
+        qwen-vl-max-latest, qwen-vl-ocr-latest, and qwen-plus only
+Input: 完整版题目.pdf + 完整版答案.pdf from the authorized desktop folder
+Endpoints: local /api/ai/chat and /api/ai/ocr proxies only
+Expected maximum: five complete dual-PDF attempts
+Cost risk: paid DashScope requests; bounded by the five-attempt ceiling
+Success: ordered question drafts, reliable support sequence, no wrong attachment,
+         no formula/image/layout corruption, and reviewable diagnostics
+Abort: unexpected model/endpoint, repeated upstream/auth failure, sequence
+       conflict, duplicate/jump-back, or five attempts consumed
+Business changes: allowed only in the focused files above, followed by all gates
+```
+
+Required gates:
+
+- focused regression tests for every reproduced failure;
+- `npm.cmd run verify:docx-stable`;
+- `npm.cmd run verify:pdf-known-bad`;
+- `npm.cmd run verify:batch-safety`;
+- `npm.cmd run verify:safe`;
+- diff-scope verification;
+- clean staged diff, one H3R commit, and push.
+
 ## Stop conditions
 
 Stop the affected stage when:
@@ -255,3 +329,73 @@ Stop the affected stage when:
 - student output contains any protected teacher content;
 - stable DOCX/PDF/import/print gates regress;
 - a browser or PDF claim lacks actual evidence.
+
+## H3R completion report (2026-07-29)
+
+Status: complete. H4 remained blocked until every gate below passed.
+
+### Documented production-boundary exception
+
+`app.js` and `scripts/production-entry-manifest.js` had to change during H3R.
+This is the explicit blocker record required by the H3R read-only rule:
+
+- the live DOCX visual-support page loop, retry scheduling, draft merge, and review
+  save coordinator still exist only in `app.js`; reproductions proved that changing
+  only the pure DOCX modules could not affect the production route;
+- all new sequence, partition, retry-plan, evidence, and fail-closed decisions live
+  in `qisi-docx-pipeline.js`; `app.js` contains orchestration and calls those
+  policies rather than duplicating their business rules;
+- the PDF review save/cleanup path required two narrow calls to the existing
+  `Qisi.PdfContentIntegrity.normalizeQuestionItem` boundary so persisted drafts use
+  the same sanitizer as initial recognition;
+- `scripts/production-entry-manifest.js` changed only to register and audit the new
+  independent `qisi-mathtype-native-guard.js` production module.
+
+No filename, school, document hash, or fixed question-number special case was
+added. No dependency or lockfile changed. No formal question-bank write or direct
+IndexedDB mutation was used for acceptance.
+
+### Real-material scope and evidence
+
+The user explicitly removed the Zhejiang scan from scope. H3R acceptance used all
+16 files under `C:\Users\Administrator\Desktop\题目与答案`: 13 DOCX files and the
+three authorized PDFs.
+
+- dual DOCX normal browser flow: 14 questions, 14 answers, 14 solutions;
+- combined question/answer/solution DOCX: 14/14/14;
+- `周二晚测.docx`: 12 questions; question images only on 5, 9, and 11;
+- `高二.docx`: continuous 1-56 skeleton, 56 drafts, trailing answer section kept
+  fail-closed where support was absent;
+- five 19-question school papers: tables, 1/2/4-column choices, formulas, and the
+  Wuhan two-image horizontal row survived the normal browser route;
+- real MathType WMF/MTEF translation, brief six-question DOCX, and full twelve-
+  question dual DOCX all passed without AI/OCR.
+
+Four complete authorized dual-PDF attempts were consumed, within the five-attempt
+ceiling. The final real browser results were:
+
+- brief pair: 6 questions; answers `B,C,B,C,D,C`; zero render errors on every
+  question; question image on 4; solution images on 2 and 6;
+- full pair: 12 questions; answers
+  `B,C,B,C,D,C,ABD,AC,ABD,-19/13,6,(sqrt(2)+1)/2`; zero render errors on every
+  question; question images on 4, 8, and 11; solution images on 2, 6, and 8;
+- repeated display cleanup preserved all answers, formulas, and image anchors;
+- generated TikZ source was removed only from display fields, while verified crop
+  tokens and raw source evidence remained available;
+- PDF answer/solution ownership stayed sequence-based and fail-closed.
+
+### Final gates
+
+- production syntax: 60 files passed;
+- real DOCX general browser test: passed;
+- real DOCX layout browser test: five files passed;
+- real DOCX rich-content and native MathType tests: three tests passed;
+- `npm run verify:docx-stable`: 20/20 passed;
+- `npm run verify:pdf-known-bad`: 65/65 passed;
+- `npm run verify:batch-safety`: passed;
+- `npm run verify:safe`: 1313 total, 1305 passed, 0 failed, 8 intentionally
+  skipped;
+- `npm run verify:no-real-ai`: passed;
+- `git diff --check`: passed;
+- production diff scan found no fixture filename, school, hash, or fixed-number
+  branch.

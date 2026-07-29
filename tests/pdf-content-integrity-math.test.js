@@ -97,6 +97,87 @@ test('already wrapped math survives the persistence shape without duplicate deli
     assert.doesNotMatch(second.stem, /\$\$/);
 });
 
+test('PDF persistence removes unsupported TikZ while preserving raw source evidence', () => {
+    const rawSolution = [
+        '设正四棱台侧面的高为 $h$，所以侧棱长为 $5$。',
+        '$\\begin{center}$',
+        '$\\begin{tikzpicture}[x=0.5cm,y=0.5cm]$',
+        '$\\draw (0,0) -- (1,1);$',
+        '$\\node at (0,0) {$A_1$};',
+        '$\\end{tikzpicture}$',
+        '$\\end{center}$',
+        '\\begin{center}[[IMAGE:verified-crop]]\\end{center}'
+    ].join('\n');
+
+    const normalized = integrity.normalizeQuestionItem({
+        stem: '题干',
+        options: ['A', 'B', 'C', 'D'],
+        answer: 'C',
+        solution: rawSolution
+    });
+
+    assert.doesNotMatch(
+        normalized.solution,
+        /tikzpicture|\\draw|\\node/
+    );
+    assert.match(
+        normalized.solution,
+        /\[\[IMAGE:verified-crop\]\]/
+    );
+    assert.equal(
+        normalized.contentIntegrity.sourceEvidence.solution,
+        rawSolution
+    );
+});
+
+test('PDF persistence removes single-line dollar-wrapped TikZ commands', () => {
+    const rawSolution = [
+        '设侧面高为 $h$，计算得 $h=4$。',
+        '$\\begin{center}$',
+        '$\\begin{tikzpicture}[x=1cm,y=1cm]$',
+        '$\\draw (0,0) -- (4,0);$',
+        '$\\node at (2,0) {A};$',
+        '$\\end{tikzpicture}$',
+        '$\\end{center}$',
+        '\\begin{center}[[IMAGE:verified-crop]]\\end{center}'
+    ].join(' ');
+
+    const normalized = integrity.normalizeQuestionItem({
+        stem: '正四棱台的侧棱长为（ ）',
+        options: ['3', '4', '5', '6'],
+        answer: 'C',
+        solution: rawSolution
+    });
+
+    assert.doesNotMatch(normalized.solution, /tikzpicture|\\draw|\\node/);
+    assert.match(normalized.solution, /\[\[IMAGE:verified-crop\]\]/);
+    assert.equal(
+        normalized.contentIntegrity.sourceEvidence.solution,
+        rawSolution
+    );
+});
+
+test('a later verified image anchor survives repeated PDF normalization', () => {
+    const first = integrity.normalizeQuestionItem({
+        stem: '如图，求扇形面积（ ）',
+        options: ['A', 'B', 'C', 'D'],
+        answer: 'C',
+        solution: '由扇形面积公式可得。'
+    });
+    const withVerifiedImage = {
+        ...first,
+        stem: `${first.stem}\n\\begin{center}[[IMAGE:verified-question-crop]]\\end{center}`
+    };
+
+    const second = integrity.normalizeQuestionItem(withVerifiedImage);
+
+    assert.match(second.stem, /\[\[IMAGE:verified-question-crop\]\]/);
+    assert.match(
+        second.contentIntegrity.sourceEvidence.stem,
+        /\[\[IMAGE:verified-question-crop\]\]/
+    );
+});
+
 test('legacy PDF math fragments are conservatively collapsed into one complete formula', () => {
     const fragmented = String.raw`\frac{1330$\sqrt{2}$}{3}$\pi$`;
     const normalized = integrity.normalizeMathContent(fragmented);

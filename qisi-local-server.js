@@ -7,6 +7,7 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const { spawn } = require('child_process');
 const { createSerialTaskQueue } = require('./qisi-serial-task-queue.js');
+const { translateWithFaultIsolation } = require('./qisi-mathtype-native-guard.js');
 
 const ROOT = __dirname;
 const TMP_DIR = path.join(ROOT, 'tmp');
@@ -96,6 +97,9 @@ const DEFAULT_RUNTIME = {
   host: normalizeServerHost(HOST),
   dashscopeApiKey: DASHSCOPE_API_KEY,
   aiRequestTimeoutMs: AI_REQUEST_TIMEOUT_MS,
+  aiFetchRetryLimit: 2,
+  aiFetchRetryDelayMs: 300,
+  mathTypeBatchInvoker: null,
   fetchImpl: (...args) => globalThis.fetch(...args)
 };
 
@@ -142,6 +146,40 @@ function validateAiRequestBody(body) {
   return { ok: true, model };
 }
 
+function waitForAiRetry(delayMs) {
+  return new Promise(resolve => setTimeout(resolve, Math.max(0, Number(delayMs) || 0)));
+}
+
+async function fetchDashScopeWithRetry(runtime, upstreamUrl, options, context = {}) {
+  const retryLimit = Math.max(0, Math.min(2, Number(runtime.aiFetchRetryLimit) || 0));
+  const retryDelayMs = Math.max(0, Number(runtime.aiFetchRetryDelayMs) || 0);
+
+  for (let attempt = 0; attempt <= retryLimit; attempt += 1) {
+    try {
+      const upstream = await runtime.fetchImpl(upstreamUrl, options);
+      const responseBuffer = Buffer.from(await upstream.arrayBuffer());
+      return { upstream, responseBuffer, attempt };
+    } catch (error) {
+      const aborted = error?.name === 'AbortError' || options.signal?.aborted;
+      const retryable = !aborted && attempt < retryLimit;
+      if (!retryable) throw error;
+
+      const delayMs = retryDelayMs * (attempt + 1);
+      console.warn('[AI_PROXY][retry]', {
+        route: context.route,
+        model: context.model,
+        attempt: attempt + 2,
+        maxAttempts: retryLimit + 1,
+        delayMs,
+        reason: 'transient-fetch-failure'
+      });
+      await waitForAiRetry(delayMs);
+    }
+  }
+
+  throw new Error('AI proxy retry loop exited unexpectedly.');
+}
+
 async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
   const runtime = res.locals.qisiRuntime || DEFAULT_RUNTIME;
   const apiKey = String(runtime.dashscopeApiKey || '').trim();
@@ -177,7 +215,7 @@ async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
       bytes: aiRequestBodySize(req.body)
     });
 
-    const upstream = await runtime.fetchImpl(upstreamUrl, {
+    const { upstream, responseBuffer, attempt } = await fetchDashScopeWithRetry(runtime, upstreamUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -185,9 +223,11 @@ async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
       },
       body: bodyText,
       signal: controller.signal
+    }, {
+      route: routeName,
+      model
     });
 
-    const responseBuffer = Buffer.from(await upstream.arrayBuffer());
     const responseText = responseBuffer.toString('utf8');
     const contentType = upstream.headers.get('content-type') || 'application/json; charset=utf-8';
     let upstreamErrorSummary = '';
@@ -210,6 +250,7 @@ async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
       route: routeName,
       model,
       status: upstream.status,
+      attempts: attempt + 1,
       durationMs: Date.now() - startedAt,
       responseBytes: responseBuffer.length,
       upstreamError: upstream.ok ? '' : upstreamErrorSummary
@@ -299,7 +340,7 @@ function validateMtefBatch(body) {
   return { ok: true, code: 'MTEF_BATCH_OK', equations: normalized };
 }
 
-async function translateMtefBatch(equations) {
+async function invokeMathTypeNativeBatch(equations) {
   const jobDir = await fsp.mkdtemp(path.join(TMP_DIR, 'mathtype-'));
   const inputPath = path.join(jobDir, 'input.json');
   const outputPath = path.join(jobDir, 'output.json');
@@ -319,20 +360,46 @@ async function translateMtefBatch(equations) {
     });
 
     if (!result.ok) {
-      throw new Error(
-        `MathType helper failed (${result.code}): ${String(result.stderr || result.stdout || '').trim()}`
-      );
+      let payload = null;
+      try {
+        payload = JSON.parse(await fsp.readFile(outputPath, 'utf8'));
+      } catch (_) {
+        payload = null;
+      }
+
+      const error = new Error('MathType native helper failed.');
+      error.code = String(payload?.code || (
+        result.error?.code === 'ETIMEDOUT'
+          ? 'MATHTYPE_NATIVE_TIMEOUT'
+          : 'MATHTYPE_NATIVE_PROCESS_FAILED'
+      ));
+      error.processCode = result.code;
+      error.isolatable = [
+        'MATHTYPE_HELPER_FAILED',
+        'MATHTYPE_NATIVE_PROCESS_FAILED'
+      ].includes(error.code);
+      throw error;
     }
 
     const payload = JSON.parse(await fsp.readFile(outputPath, 'utf8'));
     if (!Array.isArray(payload?.equations)) {
       const code = payload?.code || 'MATHTYPE_INVALID_RESPONSE';
-      throw new Error(`MathType helper returned ${code}.`);
+      const error = new Error('MathType helper returned an invalid response.');
+      error.code = code;
+      error.isolatable = true;
+      throw error;
     }
     return payload;
   } finally {
     await fsp.rm(jobDir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+async function translateMtefBatch(equations, options = {}) {
+  const invokeBatch = typeof options.invokeBatch === 'function'
+    ? options.invokeBatch
+    : invokeMathTypeNativeBatch;
+  return translateWithFaultIsolation(equations, invokeBatch);
 }
 
 function killProcessTree(child) {
@@ -738,23 +805,28 @@ app.post('/api/convert/mathtype-mtef', async (req, res) => {
   }
 
   try {
+    const runtime = res.locals.qisiRuntime || DEFAULT_RUNTIME;
     const result = await enqueueMathTypeTranslation(
-      () => translateMtefBatch(validation.equations)
+      () => translateMtefBatch(validation.equations, {
+        invokeBatch: runtime.mathTypeBatchInvoker
+      })
     );
     console.log('[MATHTYPE_TRANSLATE][complete]', {
       requested: validation.equations.length,
-      translated: result.equations.filter(row => row.ok).length
+      translated: result.equations.filter(row => row.ok).length,
+      isolatedFailures: result.equations.filter(row => !row.ok).length,
+      code: result.code
     });
     return res.json(result);
   } catch (error) {
     console.error('[MATHTYPE_TRANSLATE][error]', {
       requested: validation.equations.length,
-      message: error?.message || String(error)
+      code: String(error?.code || 'MATHTYPE_TRANSLATION_FAILED')
     });
     return res.status(500).json({
       ok: false,
       code: 'MATHTYPE_TRANSLATION_FAILED',
-      error: error?.message || String(error),
+      error: 'MathType translation could not be completed. The original formula evidence was preserved.',
       equations: []
     });
   }
@@ -844,6 +916,11 @@ function createQisiLocalServer(options = {}) {
     host: normalizeServerHost(options.host ?? HOST),
     dashscopeApiKey: String(options.dashscopeApiKey ?? DASHSCOPE_API_KEY).trim(),
     aiRequestTimeoutMs: Math.max(10000, Number(options.aiRequestTimeoutMs ?? AI_REQUEST_TIMEOUT_MS)),
+    aiFetchRetryLimit: Math.max(0, Math.min(2, Number(options.aiFetchRetryLimit ?? 2) || 0)),
+    aiFetchRetryDelayMs: Math.max(0, Number(options.aiFetchRetryDelayMs ?? 300) || 0),
+    mathTypeBatchInvoker: typeof options.mathTypeBatchInvoker === 'function'
+      ? options.mathTypeBatchInvoker
+      : null,
     fetchImpl: typeof options.fetchImpl === 'function'
       ? options.fetchImpl
       : (...args) => globalThis.fetch(...args)
@@ -939,7 +1016,8 @@ module.exports = {
   buildConverterOrder,
   isAllowedLocalOrigin,
   normalizeServerHost,
-  normalizeServerPort
+  normalizeServerPort,
+  translateMtefBatch
 };
 
 if (require.main === module) {

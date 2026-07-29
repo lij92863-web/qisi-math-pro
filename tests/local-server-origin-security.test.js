@@ -130,6 +130,56 @@ test('no-Origin clients remain valid and use only an injected test upstream', as
   assert.match(upstreamCalls[0].url, /^https:\/\/dashscope\.aliyuncs\.com\//);
 });
 
+test('AI proxy retries transient fetch failures within a strict bound', async t => {
+  const upstreamCalls = [];
+  const service = await startTestService(t, {
+    dashscopeApiKey: 'test-only-key',
+    aiFetchRetryDelayMs: 0,
+    fetchImpl: async (url, options) => {
+      upstreamCalls.push({ url, options });
+      if (upstreamCalls.length === 1) throw new TypeError('fetch failed');
+      return new Response(JSON.stringify({ ok: true, recovered: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  });
+
+  const response = await fetch(serviceUrl(service, ['/api', 'ai', 'chat'].join('/')), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'qwen-test', messages: [] })
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true, recovered: true });
+  assert.equal(upstreamCalls.length, 2);
+});
+
+test('AI proxy never retries an upstream HTTP rejection', async t => {
+  const upstreamCalls = [];
+  const service = await startTestService(t, {
+    dashscopeApiKey: 'test-only-key',
+    aiFetchRetryDelayMs: 0,
+    fetchImpl: async (url, options) => {
+      upstreamCalls.push({ url, options });
+      return new Response(JSON.stringify({ code: 'Throttling', message: 'slow down' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  });
+
+  const response = await fetch(serviceUrl(service, ['/api', 'ai', 'chat'].join('/')), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'qwen-test', messages: [] })
+  });
+
+  assert.equal(response.status, 429);
+  assert.equal(upstreamCalls.length, 1);
+});
+
 test('CORS preflight is explicit for local origins and fail-closed for others', async t => {
   const service = await startTestService(t);
   const localOrigin = `http://localhost:${service.port}`;

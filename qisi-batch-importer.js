@@ -524,10 +524,219 @@
     };
 
     const buildDocxQuestionSkeletonFromXml = (documentXml = '', numberingXml = '') => (
-        buildQuestionSkeletonFromBlocks(
-            buildQuestionBlocksFromDocumentXml(documentXml, numberingXml)
-        )
+        (() => {
+            const skeleton = buildQuestionSkeletonFromBlocks(
+                buildQuestionBlocksFromDocumentXml(documentXml, numberingXml)
+            );
+            const paragraphs = splitDocxParagraphs(documentXml);
+            const plainTextLength = paragraphs.reduce(
+                (sum, paragraph) => sum + normalizeDocxText(paragraph?.text || '').length,
+                0
+            );
+            const drawingCount = (String(documentXml || '').match(/<w:drawing\b/g) || []).length;
+            const legacyObjectCount = (String(documentXml || '').match(/<w:object\b/g) || []).length;
+            const pageLikeDrawingCount = [...String(documentXml || '').matchAll(
+                /<wp:extent\b[^>]*\bcx=["'](\d+)["'][^>]*\bcy=["'](\d+)["'][^>]*\/?>/g
+            )].filter(match => {
+                const width = Number(match[1]);
+                const height = Number(match[2]);
+                const ratio = height > 0 ? width / height : 0;
+                return width > 0 && height > 0 && ratio >= 0.62 && ratio <= 0.82;
+            }).length;
+            const visualPageCandidate =
+                skeleton.entries.length === 0 &&
+                drawingCount > 0 &&
+                pageLikeDrawingCount === drawingCount &&
+                legacyObjectCount === 0 &&
+                plainTextLength <= 160 &&
+                paragraphs.length <= drawingCount * 2 + 3;
+
+            return {
+                ...skeleton,
+                diagnostics: {
+                    ...skeleton.diagnostics,
+                    paragraphCount: paragraphs.length,
+                    plainTextLength,
+                    drawingCount,
+                    pageLikeDrawingCount,
+                    legacyObjectCount,
+                    visualPageCandidate
+                }
+            };
+        })()
     );
+
+    const extractOrderedDocxPageImageRefsFromXml = (
+        documentXml = '',
+        relsXml = ''
+    ) => {
+        const relMap = parseRelationships(relsXml);
+        const drawingBlocks =
+            String(documentXml || '').match(
+                /<w:drawing\b[\s\S]*?<\/w:drawing>/g
+            ) || [];
+
+        return drawingBlocks.map((block, index) => {
+            const rid = String(
+                block.match(
+                    /<a:blip\b[^>]*\br:embed=["']([^"']+)["']/
+                )?.[1] || ''
+            ).trim();
+            const extent = block.match(
+                /<wp:extent\b[^>]*\bcx=["'](\d+)["'][^>]*\bcy=["'](\d+)["'][^>]*\/?>/
+            );
+            const widthEmu = Number(extent?.[1] || 0);
+            const heightEmu = Number(extent?.[2] || 0);
+            const ratio =
+                heightEmu > 0
+                    ? widthEmu / heightEmu
+                    : 0;
+            const rel = rid
+                ? relMap.get(rid)
+                : null;
+            const target =
+                String(rel?.target || '');
+            const ext =
+                getExt(target);
+
+            return {
+                pageNo: index + 1,
+                rid,
+                target,
+                ext,
+                mime: getMime(target),
+                displayable:
+                    isDisplayableImage(ext),
+                widthEmu,
+                heightEmu,
+                ratio,
+                pageLike:
+                    widthEmu > 0 &&
+                    heightEmu > 0 &&
+                    ratio >= 0.62 &&
+                    ratio <= 0.82
+            };
+        });
+    };
+
+    const extractDocxVisualPages = async (
+        fileRecord
+    ) => {
+        if (!fileRecord?.uploadPath) {
+            throw new Error(
+                'DOCX visual page extraction missing uploadPath.'
+            );
+        }
+
+        const zip =
+            await loadDocxZip(fileRecord);
+        const {
+            documentXml,
+            relsXml,
+            numberingXml
+        } = await readDocxCoreXml(zip);
+
+        if (!documentXml) {
+            throw new Error(
+                'DOCX missing word/document.xml.'
+            );
+        }
+
+        const questionSkeleton =
+            buildDocxQuestionSkeletonFromXml(
+                documentXml,
+                numberingXml
+            );
+
+        if (
+            questionSkeleton
+                ?.diagnostics
+                ?.visualPageCandidate !== true
+        ) {
+            return {
+                pages: [],
+                questionSkeleton,
+                diagnostics: {
+                    reason:
+                        'not-visual-page-docx'
+                }
+            };
+        }
+
+        const refs =
+            extractOrderedDocxPageImageRefsFromXml(
+                documentXml,
+                relsXml
+            );
+        const expectedPageCount =
+            Number(
+                questionSkeleton
+                    ?.diagnostics
+                    ?.drawingCount || 0
+            ) || 0;
+
+        if (
+            refs.length !== expectedPageCount ||
+            refs.some(
+                ref =>
+                    !ref.rid ||
+                    !ref.target ||
+                    !ref.displayable ||
+                    !ref.pageLike
+            )
+        ) {
+            const error = new Error(
+                'DOCX visual page relationships are incomplete or unsafe.'
+            );
+            error.code =
+                'DOCX_VISUAL_PAGE_RELATIONSHIP_MISMATCH';
+            error.expectedPageCount =
+                expectedPageCount;
+            error.actualPageCount =
+                refs.length;
+            throw error;
+        }
+
+        const pages = [];
+
+        for (const ref of refs) {
+            const url =
+                await readMediaAsDataUrl(
+                    zip,
+                    ref.target
+                );
+
+            if (!url) {
+                const error = new Error(
+                    `DOCX visual page ${ref.pageNo} is unreadable.`
+                );
+                error.code =
+                    'DOCX_VISUAL_PAGE_MEDIA_UNREADABLE';
+                error.pageNo =
+                    ref.pageNo;
+                throw error;
+            }
+
+            pages.push({
+                ...ref,
+                filename:
+                    ref.target.split('/').at(-1) ||
+                    `page-${ref.pageNo}.${ref.ext}`,
+                url
+            });
+        }
+
+        return {
+            pages,
+            questionSkeleton,
+            diagnostics: {
+                reason:
+                    'ordered-embedded-page-images',
+                pageCount:
+                    pages.length
+            }
+        };
+    };
 
     const prepareDocxQuestionRichBlocks = (richBlocks = []) => (
         questionSectionBody(richBlocks).map(block => {
@@ -1301,6 +1510,8 @@
         parseDocxSupportFile,
         parsePdfFile,
         extractDocxQuestionSkeleton,
+        extractDocxVisualPages,
+        extractOrderedDocxPageImageRefsFromXml,
         buildDocxQuestionSkeletonFromXml,
         prepareDocxQuestionRichBlocks,
         hasUndisplayableFormulaPlaceholder

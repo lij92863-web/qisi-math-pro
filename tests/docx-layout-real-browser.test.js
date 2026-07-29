@@ -129,10 +129,27 @@ test('real DOCX layout evidence survives the normal UI without AI/OCR', {
                         };
                         const horizontalRows = [...panel.querySelectorAll('.qisi-image-row')].map(row => {
                             const items = [...row.querySelectorAll('.qisi-image-row-item')].map(item => item.getBoundingClientRect());
+                            const style = getComputedStyle(row);
+                            const rowRect = row.getBoundingClientRect();
+                            const verticallyOverlaps = items.length > 1 && items.every((item, index) => {
+                                if (index === 0) return true;
+                                const previous = items[index - 1];
+                                const overlap = Math.min(previous.bottom, item.bottom) - Math.max(previous.top, item.top);
+                                return overlap >= Math.min(previous.height, item.height) * 0.75;
+                            });
                             return {
                                 count: items.length,
-                                sameLine: items.length > 1 && Math.max(...items.map(item => item.top)) - Math.min(...items.map(item => item.top)) < 4,
-                                increasingX: items.every((item, itemIndex) => itemIndex === 0 || item.left > items[itemIndex - 1].left)
+                                sameLine: verticallyOverlaps,
+                                increasingX: items.every((item, itemIndex) => itemIndex === 0 || item.left > items[itemIndex - 1].left),
+                                display: style.display,
+                                flexWrap: style.flexWrap,
+                                rowWidth: Math.round(rowRect.width),
+                                items: items.map(item => ({
+                                    left: Math.round(item.left),
+                                    top: Math.round(item.top),
+                                    width: Math.round(item.width),
+                                    height: Math.round(item.height)
+                                }))
                             };
                         });
                         const mediaRows = [...panel.querySelectorAll('.qisi-media-text')].map(row => {
@@ -172,8 +189,27 @@ test('real DOCX layout evidence survives the normal UI without AI/OCR', {
 
                 assert.equal(checks.some(check => check.rawStructure), false, `${file}: raw structural source`);
                 assert.equal(checks.some(check => check.renderErrors || check.imagePlaceholders), false, `${file}: ${JSON.stringify(checks)}`);
-                assert.equal(checks.every(check => check.horizontalRows.every(row => row.sameLine && row.increasingX)), true, file);
-                assert.equal(checks.every(check => check.mediaRows.every(row => row.sideBySide)), true, file);
+                assert.equal(
+                    checks.every(check =>
+                        check.horizontalRows.every(
+                            row =>
+                                row.sameLine &&
+                                row.increasingX
+                        )
+                    ),
+                    true,
+                    `${file}: horizontal rows ${JSON.stringify(checks)}`
+                );
+                assert.equal(
+                    checks.every(check =>
+                        check.mediaRows.every(
+                            row =>
+                                row.sideBySide
+                        )
+                    ),
+                    true,
+                    `${file}: media rows ${JSON.stringify(checks)}`
+                );
                 assert.equal(errors.filter(message => /pageerror|LATEX_RENDER|公式语法错误/.test(message)).length, 0, `${file}: ${errors.join(' | ')}`);
                 assert.equal(apiFailures.length, 0, `${file}: ${JSON.stringify(apiFailures)}`);
 
@@ -320,9 +356,15 @@ test('normal UI print preserves tables, option columns, image rows, and A4 pagin
         const result = await popup.evaluate(() => {
             const rows = [...document.querySelectorAll('.qisi-image-row')].map(row => {
                 const items = [...row.querySelectorAll('.qisi-image-row-item')].map(item => item.getBoundingClientRect());
+                const verticallyOverlaps = items.length > 1 && items.every((item, index) => {
+                    if (index === 0) return true;
+                    const previous = items[index - 1];
+                    const overlap = Math.min(previous.bottom, item.bottom) - Math.max(previous.top, item.top);
+                    return overlap >= Math.min(previous.height, item.height) * 0.75;
+                });
                 return {
                     count: items.length,
-                    sameLine: items.length > 1 && Math.max(...items.map(item => item.top)) - Math.min(...items.map(item => item.top)) < 4,
+                    sameLine: verticallyOverlaps,
                     increasingX: items.every((item, index) => index === 0 || item.left > items[index - 1].left)
                 };
             });

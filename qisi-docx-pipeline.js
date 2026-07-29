@@ -488,6 +488,1518 @@
             };
         };
 
+        const resolveDocxSourceRoute = async (
+            file,
+            allFiles = [],
+            options = {}
+        ) => {
+            const route = selectDocxSourceRoute(file, allFiles);
+            const supportsVisualPageProbe = [
+                'deterministic-docx-primary',
+                'deterministic-docx-support'
+            ].includes(route.routePolicyDecision);
+            if (
+                !supportsVisualPageProbe ||
+                typeof options.extractQuestionSkeleton !== 'function'
+            ) {
+                return route;
+            }
+
+            const skeleton = await options.extractQuestionSkeleton(file);
+            if (
+                skeleton?.diagnostics?.reason !== 'no-explicit-question-markers' ||
+                skeleton?.diagnostics?.visualPageCandidate !== true
+            ) {
+                return {
+                    ...route,
+                    questionSkeleton: skeleton || null
+                };
+            }
+
+            const isSupportRoute =
+                route.routePolicyDecision ===
+                'deterministic-docx-support';
+
+            return {
+                producerIdentity:
+                    isSupportRoute
+                        ? 'docx-visual-page-support-importer'
+                        : 'docx-visual-page-importer',
+                routePolicyDecision:
+                    isSupportRoute
+                        ? 'visual-page-docx-support'
+                        : 'visual-page-docx',
+                selectedSourcePort: 'docx-convert-strict-vision',
+                visualCompanionFileId: '',
+                allowAutomaticVision: true,
+                questionSkeleton: skeleton
+            };
+        };
+
+        const selectDocxVisualPageSource = ({
+            questionSkeleton = null,
+            embeddedPageCount = 0
+        } = {}) => {
+            const diagnostics = questionSkeleton?.diagnostics || {};
+            const visualPageCandidate =
+                diagnostics.visualPageCandidate === true;
+            const drawingCount =
+                Math.max(0, Number(diagnostics.drawingCount || 0)) || 0;
+            const pageLikeDrawingCount =
+                Math.max(
+                    0,
+                    Number(diagnostics.pageLikeDrawingCount || 0)
+                ) || 0;
+            const pageCount =
+                Math.max(0, Number(embeddedPageCount || 0)) || 0;
+
+            if (!visualPageCandidate) {
+                return {
+                    route: 'converted-pdf',
+                    pageCount: 0,
+                    reason: 'not-visual-page-docx'
+                };
+            }
+
+            if (
+                pageCount <= 0 ||
+                drawingCount <= 0 ||
+                pageLikeDrawingCount !== drawingCount ||
+                pageCount !== drawingCount
+            ) {
+                return {
+                    route: 'reject',
+                    pageCount,
+                    reason: 'visual-page-count-mismatch',
+                    expectedPageCount: drawingCount
+                };
+            }
+
+            return {
+                route: 'embedded-pages',
+                pageCount,
+                reason: 'all-drawings-are-ordered-page-images'
+            };
+        };
+
+        const orderDocxMediaRefsByDocumentUsage = (
+            documentXml = '',
+            mediaRefs = []
+        ) => {
+            const refs = Array.isArray(mediaRefs)
+                ? mediaRefs.filter(Boolean)
+                : [];
+            const byRid = new Map(
+                refs
+                    .filter(ref => String(ref?.rid || '').trim())
+                    .map(ref => [String(ref.rid).trim(), ref])
+            );
+            const ordered = [];
+            const referencedRids = new Set();
+            const drawingBlocks =
+                String(documentXml || '').match(
+                    /<w:(?:drawing|pict)\b[\s\S]*?<\/w:(?:drawing|pict)>/g
+                ) || [];
+
+            for (const block of drawingBlocks) {
+                const rid = String(
+                    block.match(
+                        /\br:(?:embed|id)=["']([^"']+)["']/
+                    )?.[1] || ''
+                ).trim();
+                const ref = rid ? byRid.get(rid) : null;
+                if (!ref) continue;
+                ordered.push(ref);
+                referencedRids.add(rid);
+            }
+
+            for (const ref of refs) {
+                const rid = String(ref?.rid || '').trim();
+                if (rid && referencedRids.has(rid)) continue;
+                ordered.push(ref);
+            }
+
+            return ordered;
+        };
+
+        const foldUnnumberedVisualQuestionFragments = (items = []) => {
+            const rows =
+                Array.isArray(items)
+                    ? items
+                    : [];
+            const output = [];
+            const normalizePage = item =>
+                Math.max(
+                    0,
+                    Number(
+                        item?.sourcePage ??
+                        item?.pageIndex ??
+                        item?.sourceTrace?.sourcePage ??
+                        item?.sourceTrace?.pageIndex ??
+                        0
+                    )
+                ) || 0;
+            const questionNumberOf = item => {
+                const raw =
+                    String(
+                    item?.questionNumber ??
+                    item?.question ??
+                    item?.no ??
+                    ''
+                    ).trim();
+
+                return /^\d{1,3}$/.test(raw)
+                    ? String(Number(raw))
+                    : '';
+            };
+            const joinUniqueText = (left, right) => {
+                const first =
+                    String(left || '').trim();
+                const second =
+                    String(right || '').trim();
+
+                if (!first) return second;
+                if (!second || first === second) return first;
+                if (first.includes(second)) return first;
+                if (second.includes(first)) return second;
+                return `${first}\n${second}`;
+            };
+            const mergeOptions = (left = [], right = []) =>
+                Array.from(
+                    {
+                        length:
+                            Math.max(
+                                4,
+                                left.length || 0,
+                                right.length || 0
+                            )
+                    },
+                    (_, index) =>
+                        joinUniqueText(
+                            left[index],
+                            right[index]
+                        )
+                );
+
+            for (const row of rows) {
+                if (!row) continue;
+
+                const questionNumber =
+                    questionNumberOf(row);
+
+                if (questionNumber) {
+                    output.push({
+                        ...row
+                    });
+                    continue;
+                }
+
+                const anchor =
+                    output[output.length - 1];
+                const fragmentPage =
+                    normalizePage(row);
+                const anchorPage =
+                    normalizePage(anchor);
+                const canFold =
+                    Boolean(anchor) &&
+                    Boolean(
+                        questionNumberOf(anchor)
+                    ) &&
+                    fragmentPage > 0 &&
+                    anchorPage === fragmentPage;
+
+                if (!canFold) {
+                    output.push({
+                        ...row
+                    });
+                    continue;
+                }
+
+                anchor.stem =
+                    joinUniqueText(
+                        anchor.stem,
+                        row.stem
+                    );
+                anchor.rawBlock =
+                    joinUniqueText(
+                        anchor.rawBlock,
+                        row.rawBlock
+                    );
+                anchor.rawText =
+                    joinUniqueText(
+                        anchor.rawText,
+                        row.rawText
+                    );
+                anchor.options =
+                    mergeOptions(
+                        Array.isArray(anchor.options)
+                            ? anchor.options
+                            : [],
+                        Array.isArray(row.options)
+                            ? row.options
+                            : []
+                    );
+                anchor.sourcePages =
+                    [
+                        ...new Set(
+                            [
+                                ...(anchor.sourcePages || []),
+                                ...(row.sourcePages || []),
+                                anchorPage,
+                                fragmentPage
+                            ].filter(Boolean)
+                        )
+                    ].sort(
+                        (left, right) =>
+                            left - right
+                    );
+                anchor.recognizedImages =
+                    [
+                        ...(
+                            Array.isArray(
+                                anchor.recognizedImages
+                            )
+                                ? anchor.recognizedImages
+                                : []
+                        ),
+                        ...(
+                            Array.isArray(
+                                row.recognizedImages
+                            )
+                                ? row.recognizedImages
+                                : []
+                        )
+                    ];
+                anchor.warnings =
+                    [
+                        ...new Set([
+                            ...(
+                                Array.isArray(anchor.warnings)
+                                    ? anchor.warnings
+                                    : []
+                            ),
+                            ...(
+                                Array.isArray(row.warnings)
+                                    ? row.warnings
+                                    : []
+                            )
+                        ])
+                    ];
+                anchor.sourceTrace = {
+                    ...(anchor.sourceTrace || {}),
+                    foldedVisualFragmentCount:
+                        Number(
+                            anchor
+                                .sourceTrace
+                                ?.foldedVisualFragmentCount ||
+                            0
+                        ) + 1
+                };
+            }
+
+            return output;
+        };
+
+        const mergeVisualSupportPageResultsFailClosed = ({
+            pageResults = [],
+            allowedQuestionNumbers = []
+        } = {}) => {
+            const allowed =
+                new Set(
+                    (allowedQuestionNumbers || [])
+                        .map(normalizeQuestionKey)
+                        .filter(Boolean)
+                );
+            const answerByQuestion =
+                new Map();
+            const solutionByQuestion =
+                new Map();
+            const conflicts = [];
+            const unknownQuestionNumbers =
+                new Set();
+            const joinSolution = (
+                left,
+                right
+            ) => {
+                const first =
+                    String(left || '').trim();
+                const second =
+                    String(right || '').trim();
+
+                if (!first) return second;
+                if (!second || first === second) return first;
+                if (first.includes(second)) return first;
+                if (second.includes(first)) return second;
+                return `${first}\n${second}`;
+            };
+            const mergeSourcePages = (
+                current,
+                item,
+                pageNo
+            ) =>
+                [
+                    ...new Set(
+                        [
+                            ...(current?.sourcePages || []),
+                            ...(item?.sourcePages || []),
+                            current?.sourcePage,
+                            item?.sourcePage,
+                            pageNo
+                        ]
+                            .map(page =>
+                                Math.max(
+                                    0,
+                                    Number(page || 0)
+                                ) || 0
+                            )
+                            .filter(Boolean)
+                    )
+                ].sort(
+                    (left, right) =>
+                        left - right
+                );
+
+            for (
+                const pageResult of pageResults || []
+            ) {
+                const pageNo =
+                    Math.max(
+                        0,
+                        Number(pageResult?.pageNo || 0)
+                    ) || 0;
+
+                for (
+                    const item of pageResult?.answers || []
+                ) {
+                    const questionNumber =
+                        normalizeQuestionKey(
+                            item?.question ??
+                            item?.questionNumber
+                        );
+                    const answer =
+                        String(item?.answer || '')
+                            .trim();
+
+                    if (
+                        !questionNumber ||
+                        (
+                            allowed.size > 0 &&
+                            !allowed.has(
+                                questionNumber
+                            )
+                        )
+                    ) {
+                        if (questionNumber) {
+                            unknownQuestionNumbers
+                                .add(questionNumber);
+                        }
+                        continue;
+                    }
+
+                    if (!answer) continue;
+
+                    const existing =
+                        answerByQuestion.get(
+                            questionNumber
+                        );
+
+                    if (
+                        existing &&
+                        String(existing.answer || '')
+                            .replace(/\s+/g, '') !==
+                        answer.replace(/\s+/g, '')
+                    ) {
+                        conflicts.push({
+                            questionNumber,
+                            kind: 'answer',
+                            left:
+                                existing.answer,
+                            right:
+                                answer,
+                            sourcePages:
+                                mergeSourcePages(
+                                    existing,
+                                    item,
+                                    pageNo
+                                )
+                        });
+                        continue;
+                    }
+
+                    answerByQuestion.set(
+                        questionNumber,
+                        {
+                            ...(existing || {}),
+                            ...item,
+                            question:
+                                questionNumber,
+                            sourcePage:
+                                existing?.sourcePage ||
+                                item?.sourcePage ||
+                                pageNo,
+                            sourcePages:
+                                mergeSourcePages(
+                                    existing,
+                                    item,
+                                    pageNo
+                                )
+                        }
+                    );
+                }
+
+                for (
+                    const item of pageResult?.solutions || []
+                ) {
+                    const questionNumber =
+                        normalizeQuestionKey(
+                            item?.question ??
+                            item?.questionNumber
+                        );
+                    const solution =
+                        String(item?.solution || '')
+                            .trim();
+
+                    if (
+                        !questionNumber ||
+                        (
+                            allowed.size > 0 &&
+                            !allowed.has(
+                                questionNumber
+                            )
+                        )
+                    ) {
+                        if (questionNumber) {
+                            unknownQuestionNumbers
+                                .add(questionNumber);
+                        }
+                        continue;
+                    }
+
+                    if (!solution) continue;
+
+                    const existing =
+                        solutionByQuestion.get(
+                            questionNumber
+                        );
+
+                    solutionByQuestion.set(
+                        questionNumber,
+                        {
+                            ...(existing || {}),
+                            ...item,
+                            question:
+                                questionNumber,
+                            solution:
+                                joinSolution(
+                                    existing?.solution,
+                                    solution
+                                ),
+                            sourcePage:
+                                existing?.sourcePage ||
+                                item?.sourcePage ||
+                                pageNo,
+                            sourcePages:
+                                mergeSourcePages(
+                                    existing,
+                                    item,
+                                    pageNo
+                                )
+                        }
+                    );
+                }
+            }
+
+            const unknown =
+                [...unknownQuestionNumbers]
+                    .sort(
+                        (left, right) =>
+                            Number(left) -
+                            Number(right)
+                    );
+
+            return {
+                authoritative:
+                    conflicts.length === 0 &&
+                    unknown.length === 0,
+                answers:
+                    [...answerByQuestion.values()],
+                solutions:
+                    [...solutionByQuestion.values()],
+                diagnostics: {
+                    conflicts,
+                    unknownQuestionNumbers:
+                        unknown
+                }
+            };
+        };
+
+        const buildVisualSupportCoverage = ({
+            merged = {},
+            expectedQuestionNumbers = [],
+            requiredKinds = {}
+        } = {}) => {
+            const expected =
+                [
+                    ...new Set(
+                        (expectedQuestionNumbers || [])
+                            .map(normalizeQuestionKey)
+                            .filter(Boolean)
+                    )
+                ];
+            const answerNumbers =
+                new Set(
+                    (merged.answers || [])
+                        .map(item =>
+                            normalizeQuestionKey(
+                                item?.question ??
+                                item?.questionNumber
+                            )
+                        )
+                        .filter(Boolean)
+                );
+            const solutionNumbers =
+                new Set(
+                    (merged.solutions || [])
+                        .map(item =>
+                            normalizeQuestionKey(
+                                item?.question ??
+                                item?.questionNumber
+                            )
+                        )
+                        .filter(Boolean)
+                );
+            const missingAnswers =
+                requiredKinds.answers === true
+                    ? expected.filter(
+                        questionNumber =>
+                            !answerNumbers.has(
+                                questionNumber
+                            )
+                    )
+                    : [];
+            const unresolvedMissingAnswers =
+                missingAnswers.filter(
+                    questionNumber =>
+                        !solutionNumbers.has(
+                            questionNumber
+                        )
+                );
+            const acceptedMissingAnswersWithSolution =
+                missingAnswers.filter(
+                    questionNumber =>
+                        solutionNumbers.has(
+                            questionNumber
+                        )
+                );
+            const missingSolutions =
+                requiredKinds.solutions === true
+                    ? expected.filter(
+                        questionNumber =>
+                            !solutionNumbers.has(
+                                questionNumber
+                            )
+                    )
+                    : [];
+            const missingBlocks =
+                expected.filter(
+                    questionNumber =>
+                        !answerNumbers.has(
+                            questionNumber
+                        ) &&
+                        !solutionNumbers.has(
+                            questionNumber
+                        )
+                );
+
+            return {
+                ok:
+                    unresolvedMissingAnswers.length === 0 &&
+                    missingSolutions.length === 0 &&
+                    missingBlocks.length === 0 &&
+                    merged.authoritative === true,
+                expectedQuestionNumbers:
+                    expected,
+                expectedAnswers:
+                    requiredKinds.answers === true
+                        ? expected
+                        : [],
+                expectedSolutions:
+                    requiredKinds.solutions === true
+                        ? expected
+                        : [],
+                missingBlocks,
+                missingAnswers,
+                unresolvedMissingAnswers,
+                acceptedMissingAnswersWithSolution,
+                missingSolutions,
+                unknownBlocks:
+                    merged.diagnostics
+                        ?.unknownQuestionNumbers ||
+                    [],
+                duplicateQuestionNumbers: [],
+                conflicts:
+                    merged.diagnostics
+                        ?.conflicts ||
+                    []
+            };
+        };
+
+        const summarizeVisualSupportPageResults = (
+            pageResults = []
+        ) =>
+            (pageResults || []).map(
+                pageResult => ({
+                    pageNo:
+                        Math.max(
+                            0,
+                            Number(
+                                pageResult?.pageNo ||
+                                0
+                            )
+                        ) || 0,
+                    answerQuestions:
+                        (
+                            pageResult?.answers ||
+                            []
+                        )
+                            .map(item =>
+                                normalizeQuestionKey(
+                                    item?.question ??
+                                    item?.questionNumber
+                                )
+                            )
+                            .filter(Boolean),
+                    solutionQuestions:
+                        (
+                            pageResult?.solutions ||
+                            []
+                        )
+                            .map(item =>
+                                normalizeQuestionKey(
+                                    item?.question ??
+                                    item?.questionNumber
+                                )
+                            )
+                            .filter(Boolean)
+                })
+            );
+
+        const partitionVisualSupportPages = ({
+            pages = [],
+            allowedQuestionNumbers = [],
+            maxQuestionsPerChunk = 4,
+            maxCharactersPerChunk = 6500
+        } = {}) => {
+            const allowed =
+                new Set(
+                    (allowedQuestionNumbers || [])
+                        .map(normalizeQuestionKey)
+                        .filter(Boolean)
+                );
+            const normalizedPages =
+                (pages || [])
+                    .map((page, index) => ({
+                        ...page,
+                        pageNo:
+                            Math.max(
+                                1,
+                                Number(
+                                    page?.pageNo ||
+                                    index + 1
+                                )
+                            ),
+                        rawText:
+                            String(
+                                page?.rawText || ''
+                            )
+                    }))
+                    .sort(
+                        (left, right) =>
+                            left.pageNo -
+                            right.pageNo
+                    );
+            const chunks = [];
+            let previousExplicitQuestion =
+                '';
+            const markerPattern =
+                /(^|\n)[ \t]*(?:第[ \t]*)?([1-9]\d{0,2})[ \t]*[.．、][ \t]*(?=\S)/g;
+            const normalizeLimit = (
+                value,
+                fallback
+            ) =>
+                Math.max(
+                    1,
+                    Number(value || fallback)
+                );
+            const questionLimit =
+                normalizeLimit(
+                    maxQuestionsPerChunk,
+                    4
+                );
+            const characterLimit =
+                normalizeLimit(
+                    maxCharactersPerChunk,
+                    6500
+                );
+
+            for (
+                const page of normalizedPages
+            ) {
+                const markers = [];
+                let match;
+
+                markerPattern.lastIndex = 0;
+
+                while (
+                    (
+                        match =
+                            markerPattern.exec(
+                                page.rawText
+                            )
+                    )
+                ) {
+                    const questionNumber =
+                        normalizeQuestionKey(
+                            match[2]
+                        );
+
+                    if (
+                        !questionNumber ||
+                        (
+                            allowed.size > 0 &&
+                            !allowed.has(
+                                questionNumber
+                            )
+                        )
+                    ) {
+                        continue;
+                    }
+
+                    markers.push({
+                        questionNumber,
+                        index:
+                            match.index +
+                            String(
+                                match[1] || ''
+                            ).length
+                    });
+                }
+
+                const firstAllowedNumber =
+                    [...allowed]
+                        .map(Number)
+                        .filter(
+                            Number.isFinite
+                        )
+                        .sort(
+                            (left, right) =>
+                                left - right
+                        )[0] || 1;
+                let markerCursor =
+                    Number(
+                        previousExplicitQuestion
+                    ) ||
+                    firstAllowedNumber - 1;
+                let markerGapDetected =
+                    false;
+                const deduplicatedMarkers =
+                    [];
+
+                for (
+                    const marker of markers
+                ) {
+                    const markerNumber =
+                        Number(
+                            marker.questionNumber
+                        );
+
+                    if (
+                        !Number.isFinite(
+                            markerNumber
+                        ) ||
+                        markerNumber <=
+                            markerCursor
+                    ) {
+                        continue;
+                    }
+
+                    if (
+                        markerNumber !==
+                        markerCursor + 1
+                    ) {
+                        markerGapDetected =
+                            true;
+                        break;
+                    }
+
+                    deduplicatedMarkers
+                        .push(marker);
+
+                    markerCursor =
+                        markerNumber;
+                }
+
+                if (
+                    deduplicatedMarkers.length ===
+                        0 ||
+                    markerGapDetected
+                ) {
+                    chunks.push({
+                        pageNo:
+                            page.pageNo,
+                        rawText:
+                            page.rawText,
+                        questionNumbers: [],
+                        continuationQuestionNumber:
+                            previousExplicitQuestion,
+                        sourcePageImage:
+                            page.imageUrl ||
+                            page.sourcePageImage ||
+                            '',
+                        recognitionSource:
+                            'image',
+                        diagnostics: {
+                            reason:
+                                markerGapDetected
+                                    ? 'question-marker-gap'
+                                    : 'question-markers-missing',
+                            observedQuestionNumbers:
+                                markers.map(
+                                    marker =>
+                                        marker
+                                            .questionNumber
+                                ),
+                            previousExplicitQuestion
+                        }
+                    });
+                    continue;
+                }
+
+                const segments = [];
+                const firstMarker =
+                    deduplicatedMarkers[0];
+                const prefix =
+                    page.rawText
+                        .slice(
+                            0,
+                            firstMarker.index
+                        )
+                        .trim();
+                const firstQuestionNumber =
+                    Number(
+                        firstMarker.questionNumber
+                    );
+                const previousQuestionNumber =
+                    Number(
+                        previousExplicitQuestion
+                    );
+                const hasContinuationPrefix =
+                    Boolean(
+                        prefix &&
+                        prefix.length >= 24 &&
+                        previousExplicitQuestion &&
+                        Number.isFinite(
+                            firstQuestionNumber
+                        ) &&
+                        Number.isFinite(
+                            previousQuestionNumber
+                        ) &&
+                        firstQuestionNumber >
+                            previousQuestionNumber
+                    );
+
+                if (hasContinuationPrefix) {
+                    segments.push({
+                        questionNumber:
+                            previousExplicitQuestion,
+                        rawText:
+                            prefix,
+                        isContinuation:
+                            true
+                    });
+                }
+
+                for (
+                    let index = 0;
+                    index <
+                        deduplicatedMarkers
+                            .length;
+                    index += 1
+                ) {
+                    const marker =
+                        deduplicatedMarkers[
+                            index
+                        ];
+                    const nextMarker =
+                        deduplicatedMarkers[
+                            index + 1
+                        ];
+
+                    segments.push({
+                        questionNumber:
+                            marker.questionNumber,
+                        rawText:
+                            page.rawText
+                                .slice(
+                                    marker.index,
+                                    nextMarker
+                                        ?.index ??
+                                        page.rawText
+                                            .length
+                                )
+                                .trim(),
+                        isContinuation:
+                            false
+                    });
+                }
+
+                let current = null;
+
+                const flushCurrent =
+                    () => {
+                        if (
+                            !current ||
+                            !current.rawText.trim()
+                        ) {
+                            current = null;
+                            return;
+                        }
+
+                        chunks.push({
+                            ...current,
+                            questionNumbers: [
+                                ...new Set(
+                                    current
+                                        .questionNumbers
+                                )
+                            ]
+                        });
+
+                        current = null;
+                    };
+
+                for (
+                    const segment of segments
+                ) {
+                    const nextQuestionNumbers =
+                        [
+                            ...new Set([
+                                ...(
+                                    current
+                                        ?.questionNumbers ||
+                                    []
+                                ),
+                                segment
+                                    .questionNumber
+                            ])
+                        ];
+                    const nextRawText =
+                        [
+                            current?.rawText ||
+                                '',
+                            segment.rawText
+                        ]
+                            .filter(Boolean)
+                            .join('\n');
+                    const exceedsLimit =
+                        Boolean(current) &&
+                        (
+                            nextQuestionNumbers
+                                .length >
+                                questionLimit ||
+                            nextRawText.length >
+                                characterLimit
+                        );
+
+                    if (exceedsLimit) {
+                        flushCurrent();
+                    }
+
+                    if (!current) {
+                        current = {
+                            pageNo:
+                                page.pageNo,
+                            rawText:
+                                segment.rawText,
+                            questionNumbers: [
+                                segment
+                                    .questionNumber
+                            ],
+                            continuationQuestionNumber:
+                                segment
+                                    .isContinuation
+                                    ? segment
+                                        .questionNumber
+                                    : '',
+                            sourcePageImage:
+                                page.imageUrl ||
+                                page.sourcePageImage ||
+                                '',
+                            recognitionSource:
+                                'text'
+                        };
+                    } else {
+                        current.rawText =
+                            [
+                                current.rawText,
+                                segment.rawText
+                            ]
+                                .filter(Boolean)
+                                .join('\n');
+                        current.questionNumbers =
+                            nextQuestionNumbers;
+
+                        if (
+                            segment
+                                .isContinuation
+                        ) {
+                            current
+                                .continuationQuestionNumber =
+                                segment
+                                    .questionNumber;
+                        }
+                    }
+                }
+
+                flushCurrent();
+
+                previousExplicitQuestion =
+                    deduplicatedMarkers[
+                        deduplicatedMarkers
+                            .length - 1
+                    ]
+                        .questionNumber;
+            }
+
+            return chunks;
+        };
+
+        const validateVisualSupportPageIndex = ({
+            observedQuestionNumbers = [],
+            allowedQuestionNumbers = [],
+            lastSeenQuestionNumber = 0,
+            continuesPrevious = false
+        } = {}) => {
+            const allowed =
+                new Set(
+                    (allowedQuestionNumbers || [])
+                        .map(normalizeQuestionKey)
+                        .filter(Boolean)
+                );
+            const observed =
+                [
+                    ...new Set(
+                        (
+                            observedQuestionNumbers ||
+                            []
+                        )
+                            .map(
+                                normalizeQuestionKey
+                            )
+                            .filter(Boolean)
+                        )
+                ];
+            const lastSeen =
+                Math.max(
+                    0,
+                    Number(
+                        lastSeenQuestionNumber ||
+                        0
+                    )
+                ) || 0;
+            const sequenceObserved =
+                (
+                    continuesPrevious &&
+                    lastSeen > 0 &&
+                    Number(
+                        observed[0]
+                    ) === lastSeen
+                )
+                    ? observed.slice(1)
+                    : observed;
+            const reasons = [];
+
+            if (
+                observed.some(
+                    questionNumber =>
+                        allowed.size > 0 &&
+                        !allowed.has(
+                            questionNumber
+                        )
+                )
+            ) {
+                reasons.push(
+                    'unknown-question-number'
+                );
+            }
+
+            const numericObserved =
+                sequenceObserved
+                    .map(Number);
+
+            if (
+                numericObserved.some(
+                    (
+                        questionNumber,
+                        index
+                    ) =>
+                        !Number.isFinite(
+                            questionNumber
+                        ) ||
+                        (
+                            index > 0 &&
+                            questionNumber !==
+                                numericObserved[
+                                    index - 1
+                                ] + 1
+                        )
+                )
+            ) {
+                reasons.push(
+                    'non-contiguous-page-sequence'
+                );
+            }
+
+            const firstExpected =
+                lastSeen > 0
+                    ? lastSeen + 1
+                    : Math.min(
+                        ...(
+                            [...allowed]
+                                .map(Number)
+                                .filter(
+                                    Number
+                                        .isFinite
+                                )
+                        )
+                    );
+
+            if (
+                sequenceObserved.length >
+                    0 &&
+                Number.isFinite(
+                    firstExpected
+                ) &&
+                Number(
+                    sequenceObserved[0]
+                ) !==
+                    firstExpected
+            ) {
+                reasons.push(
+                    'page-sequence-does-not-follow-contract'
+                );
+            }
+
+            if (
+                sequenceObserved.length ===
+                    0 &&
+                !(
+                    continuesPrevious &&
+                    lastSeen > 0
+                )
+            ) {
+                reasons.push(
+                    'page-index-empty'
+                );
+            }
+
+            const targetQuestionNumbers =
+                [
+                    ...new Set([
+                        ...(
+                            continuesPrevious &&
+                            lastSeen > 0
+                                ? [
+                                    String(
+                                        lastSeen
+                                    )
+                                ]
+                                : []
+                        ),
+                        ...sequenceObserved
+                    ])
+                ];
+
+            return {
+                authoritative:
+                    reasons.length === 0,
+                questionNumbers:
+                    sequenceObserved,
+                targetQuestionNumbers,
+                continuesPrevious:
+                    continuesPrevious ===
+                        true,
+                diagnostics: {
+                    reasons,
+                    lastSeenQuestionNumber:
+                        lastSeen,
+                    allowedQuestionNumbers: [
+                        ...allowed
+                    ]
+                }
+            };
+        };
+
+        const buildVisualSupportIndexRetryPlan = ({
+            validation = {},
+            allowedQuestionNumbers = [],
+            lastSeenQuestionNumber = 0,
+            previousAttemptNumbers = []
+        } = {}) => {
+            const allowed =
+                [
+                    ...new Set(
+                        (allowedQuestionNumbers || [])
+                            .map(normalizeQuestionKey)
+                            .filter(Boolean)
+                    )
+                ];
+            const lastSeen =
+                Math.max(
+                    0,
+                    Number(
+                        lastSeenQuestionNumber ||
+                        0
+                    )
+                ) || 0;
+            const requiredFirstQuestionNumber =
+                String(
+                    lastSeen > 0
+                        ? lastSeen + 1
+                        : Math.min(
+                            ...allowed
+                                .map(Number)
+                                .filter(
+                                    Number.isFinite
+                                )
+                        )
+                );
+            const reasons =
+                new Set(
+                    validation
+                        ?.diagnostics
+                        ?.reasons ||
+                    []
+                );
+            const retryableReasons =
+                new Set([
+                    'page-sequence-does-not-follow-contract',
+                    'non-contiguous-page-sequence',
+                    'page-index-empty'
+                ]);
+            const hasRetryableReason =
+                [...reasons].some(
+                    reason =>
+                        retryableReasons.has(
+                            reason
+                        )
+                );
+            const requiredFirstIsAllowed =
+                requiredFirstQuestionNumber &&
+                requiredFirstQuestionNumber !==
+                    'Infinity' &&
+                allowed.includes(
+                    requiredFirstQuestionNumber
+                );
+
+            return {
+                shouldRetry:
+                    validation.authoritative !== true &&
+                    lastSeen > 0 &&
+                    requiredFirstIsAllowed &&
+                    hasRetryableReason &&
+                    !reasons.has(
+                        'unknown-question-number'
+                    ),
+                requiredFirstQuestionNumber:
+                    requiredFirstIsAllowed
+                        ? requiredFirstQuestionNumber
+                        : '',
+                previousAttemptNumbers:
+                    [
+                        ...new Set(
+                            (previousAttemptNumbers || [])
+                                .map(normalizeQuestionKey)
+                                .filter(Boolean)
+                        )
+                    ],
+                allowedQuestionNumbers:
+                    allowed,
+                reasons:
+                    [...reasons]
+            };
+        };
+
+        const buildValidatedVisualQuestionContract = ({
+            items = [],
+            expectedQuestionCount = 0,
+            expectedSourcePageCount = 0,
+            check = null
+        } = {}) => {
+            const expected =
+                Math.max(
+                    0,
+                    Number(expectedQuestionCount || 0)
+                ) || 0;
+            const expectedPages =
+                Math.max(
+                    0,
+                    Number(expectedSourcePageCount || 0)
+                ) || 0;
+            const rows =
+                Array.isArray(items)
+                    ? items
+                    : [];
+            const questionNumbers =
+                rows.map(item => {
+                    const raw = String(
+                        item?.questionNumber ??
+                        item?.question ??
+                        item?.no ??
+                        ''
+                    ).trim();
+                    return /^\d{1,3}$/.test(raw)
+                        ? String(Number(raw))
+                        : '';
+                });
+            const numericNumbers =
+                questionNumbers.map(Number);
+            const sourcePageSets =
+                rows.map(item => {
+                    const pages =
+                        [
+                            ...(
+                                Array.isArray(item?.sourcePages)
+                                    ? item.sourcePages
+                                    : []
+                            ),
+                            item?.sourcePage,
+                            item?.pageIndex,
+                            item?.sourceTrace?.sourcePage,
+                            item?.sourceTrace?.pageIndex
+                        ]
+                            .map(page =>
+                                Math.max(
+                                    0,
+                                    Number(page || 0)
+                                ) || 0
+                            )
+                            .filter(page => page > 0);
+
+                    return [
+                        ...new Set(pages)
+                    ].sort(
+                        (left, right) =>
+                            left - right
+                    );
+                });
+            const sourcePages =
+                sourcePageSets.map(
+                    pages =>
+                        pages[0] || 0
+                );
+            const inferredExpected =
+                expected ||
+                rows.length;
+            const exactSequence =
+                inferredExpected > 0 &&
+                rows.length === inferredExpected &&
+                questionNumbers.every(Boolean) &&
+                numericNumbers.every(
+                    (value, index) =>
+                        value === index + 1
+                );
+            const observedPages =
+                [
+                    ...new Set(
+                        sourcePages.filter(
+                            page => page > 0
+                        )
+                            .concat(
+                                sourcePageSets.flat()
+                            )
+                    )
+                ];
+            const completePageCoverage =
+                expectedPages > 0 &&
+                observedPages.length === expectedPages &&
+                observedPages.every(
+                    (page, index) =>
+                        page === index + 1
+                );
+            const sourcePagesProven =
+                sourcePages.every(
+                    page => page > 0
+                ) &&
+                sourcePages.every(
+                    (page, index) =>
+                        index === 0 ||
+                        page >=
+                            sourcePages[index - 1]
+                );
+            const qualityPassed =
+                check &&
+                check.fatal === false;
+            const authoritative =
+                exactSequence &&
+                sourcePagesProven &&
+                completePageCoverage &&
+                qualityPassed;
+
+            let reason =
+                'ok';
+
+            if (!exactSequence) {
+                reason =
+                    'question-sequence-invalid';
+            } else if (!sourcePagesProven) {
+                reason =
+                    'source-page-order-invalid';
+            } else if (!completePageCoverage) {
+                reason =
+                    'source-page-coverage-incomplete';
+            } else if (!qualityPassed) {
+                reason =
+                    'quality-check-not-passed';
+            }
+
+            return {
+                authoritative,
+                evidence:
+                    authoritative
+                        ? (
+                            expected
+                                ? 'strict-visual-explicit-count-and-page-coverage'
+                                : 'strict-visual-contiguous-sequence-and-page-coverage'
+                        )
+                        : '',
+                questionNumbers:
+                    authoritative
+                        ? questionNumbers
+                        : [],
+                diagnostics: {
+                    reason,
+                    expectedQuestionCount:
+                        expected,
+                    inferredQuestionCount:
+                        inferredExpected,
+                    expectedSourcePageCount:
+                        expectedPages,
+                    actualQuestionCount:
+                        rows.length,
+                    observedQuestionNumbers:
+                        questionNumbers,
+                    sourcePages,
+                    sourcePageSets,
+                    observedPages,
+                    exactSequence,
+                    sourcePagesProven,
+                    completePageCoverage,
+                    qualityPassed
+                }
+            };
+        };
+
         const partitionDocxSupportByQuestionContract = (items = [], allowedQuestionNumbers = []) => {
             const allowed = new Set(
                 (allowedQuestionNumbers || [])
@@ -933,6 +2445,17 @@
             splitDocxParagraphsForOptionMap,
             findUploadedVisualCompanionForDocx,
             selectDocxSourceRoute,
+            resolveDocxSourceRoute,
+            selectDocxVisualPageSource,
+            orderDocxMediaRefsByDocumentUsage,
+            foldUnnumberedVisualQuestionFragments,
+            mergeVisualSupportPageResultsFailClosed,
+            buildVisualSupportCoverage,
+            summarizeVisualSupportPageResults,
+            partitionVisualSupportPages,
+            validateVisualSupportPageIndex,
+            buildVisualSupportIndexRetryPlan,
+            buildValidatedVisualQuestionContract,
             partitionDocxSupportByQuestionContract,
             repairDocxSupportQuestionMarkerArtifacts,
             docxVisualTextIsBetterForV2,

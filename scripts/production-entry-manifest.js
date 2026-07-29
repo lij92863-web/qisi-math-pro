@@ -104,6 +104,7 @@ const categoryFiles = Object.freeze({
         'qisi-serial-task-queue.js'
     ]),
     'node-safety': Object.freeze([
+        'qisi-mathtype-native-guard.js',
         'qisi-pdf-answer-extraction-quality.js'
     ]),
     'frozen-research': Object.freeze([
@@ -143,6 +144,7 @@ const classificationEvidence = Object.freeze({
     'qisi-handout-repository.js': 'H2 handout persistence domain library, loaded by the isolated H3 entry',
     'qisi-local-server.js': 'package.json main/start entry',
     'qisi-serial-task-queue.js': 'required by qisi-local-server.js',
+    'qisi-mathtype-native-guard.js': 'fail-closed native MathType fault isolation required by qisi-local-server.js',
     'qisi-pdf-answer-extraction-quality.js': 'Node safety dependency of qisi-pdf-support-controlled-write.js',
     'qisi-batch-engine-v2.js': 'feature-flag research path referenced by app.js but not loaded by main.html',
     'qisi-pdf-answer-only-extraction.js': 'fail-closed research shadow used by the PDF master runner, not main.html',

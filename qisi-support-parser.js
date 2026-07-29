@@ -417,16 +417,17 @@
 
             if (stripUnsupportedGraphics) {
                 text = text.replace(
-                    /\\begin\{center\}[\s\S]*?\\end\{center\}/gi,
-                    block =>
+                    /(^|\n)[ \t]*\$?[ \t]*\\begin\{center\}[ \t]*\$?[ \t]*(?:\n|$)[\s\S]*?(?:^|\n)[ \t]*\$?[ \t]*\\end\{center\}[ \t]*\$?[ \t]*(?=\n|$)/gim,
+                    (block, linePrefix) =>
                         /\\begin\{tikzpicture\}/i.test(block)
-                            ? ''
+                            ? linePrefix
                             : block
                 );
 
                 text = text.replace(
-                    /\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/gi,
-                    ''
+                    /(^|\n)[ \t]*\$?[ \t]*\\begin\{tikzpicture\}(?:\[[^\]\n]*\])?[ \t]*\$?[ \t]*(?:\n|$)[\s\S]*?(?:^|\n)[ \t]*\$?[ \t]*\\end\{tikzpicture\}[ \t]*\$?[ \t]*(?=\n|$)/gim,
+                    (block, linePrefix) =>
+                        linePrefix
                 );
             }
 

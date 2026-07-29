@@ -16,12 +16,607 @@ const {
     docxVisualTextIsBetterForV2,
     mergeDocxVisualOptionsForV2,
     selectDocxSourceRoute,
+    resolveDocxSourceRoute,
+    selectDocxVisualPageSource,
+    orderDocxMediaRefsByDocumentUsage,
+    foldUnnumberedVisualQuestionFragments,
+    mergeVisualSupportPageResultsFailClosed,
+    buildVisualSupportCoverage,
+    summarizeVisualSupportPageResults,
+    partitionVisualSupportPages,
+    validateVisualSupportPageIndex,
+    buildVisualSupportIndexRetryPlan,
+    buildValidatedVisualQuestionContract,
     partitionDocxSupportByQuestionContract,
     repairDocxSupportQuestionMarkerArtifacts,
     mergeDocxVisualSupplementByQuestionContract,
     finalizeDocxVisualSupplementForReview,
     partitionDocxMissingAnswersForReview
 } = require('../qisi-docx-pipeline.js');
+
+test('H3R: page-image DOCX uses embedded pages only when every drawing is accounted for', () => {
+    const questionSkeleton = {
+        diagnostics: {
+            visualPageCandidate: true,
+            drawingCount: 6,
+            pageLikeDrawingCount: 6
+        }
+    };
+
+    assert.deepEqual(
+        selectDocxVisualPageSource({
+            questionSkeleton,
+            embeddedPageCount: 6
+        }),
+        {
+            route: 'embedded-pages',
+            pageCount: 6,
+            reason: 'all-drawings-are-ordered-page-images'
+        }
+    );
+
+    assert.deepEqual(
+        selectDocxVisualPageSource({
+            questionSkeleton,
+            embeddedPageCount: 5
+        }),
+        {
+            route: 'reject',
+            pageCount: 5,
+            reason: 'visual-page-count-mismatch',
+            expectedPageCount: 6
+        }
+    );
+});
+
+test('H3R: ordinary DOCX keeps the converted-PDF visual fallback', () => {
+    assert.deepEqual(
+        selectDocxVisualPageSource({
+            questionSkeleton: {
+                diagnostics: {
+                    visualPageCandidate: false,
+                    drawingCount: 2,
+                    pageLikeDrawingCount: 1
+                }
+            },
+            embeddedPageCount: 1
+        }),
+        {
+            route: 'converted-pdf',
+            pageCount: 0,
+            reason: 'not-visual-page-docx'
+        }
+    );
+});
+
+test('H3R: embedded DOCX pages follow document usage order, not relationship order', () => {
+    const refs = [
+        { rid: 'rId9', filename: 'image6.png' },
+        { rid: 'rId8', filename: 'image5.png' },
+        { rid: 'rId4', filename: 'image1.png' }
+    ];
+    const xml = [
+        '<w:drawing><a:blip r:embed="rId4"/></w:drawing>',
+        '<w:drawing><a:blip r:embed="rId8"/></w:drawing>',
+        '<w:drawing><a:blip r:embed="rId9"/></w:drawing>'
+    ].join('');
+
+    assert.deepEqual(
+        orderDocxMediaRefsByDocumentUsage(xml, refs)
+            .map(ref => ref.filename),
+        ['image1.png', 'image5.png', 'image6.png']
+    );
+});
+
+test('H3R: strict visual questions become a contract only with exact sequence and page order', () => {
+    const items = [
+        { questionNumber: '1', sourcePage: 1 },
+        { questionNumber: '2', sourcePage: 1 },
+        { questionNumber: '3', sourcePage: 2 }
+    ];
+    const contract = buildValidatedVisualQuestionContract({
+        items,
+        expectedQuestionCount: 3,
+        expectedSourcePageCount: 2,
+        check: { fatal: false }
+    });
+
+    assert.equal(contract.authoritative, true);
+    assert.deepEqual(contract.questionNumbers, ['1', '2', '3']);
+    assert.equal(
+        contract.evidence,
+        'strict-visual-explicit-count-and-page-coverage'
+    );
+
+    const inferredContract = buildValidatedVisualQuestionContract({
+        items: [
+            { questionNumber: '1', sourceTrace: { sourcePage: 1 } },
+            { questionNumber: '2', sourcePage: 1 },
+            {
+                questionNumber: '3',
+                sourcePage: 2,
+                sourcePages: [2, 3]
+            }
+        ],
+        expectedSourcePageCount: 3,
+        check: { fatal: false }
+    });
+
+    assert.equal(inferredContract.authoritative, true);
+    assert.equal(
+        inferredContract.evidence,
+        'strict-visual-contiguous-sequence-and-page-coverage'
+    );
+    assert.deepEqual(
+        inferredContract.diagnostics.observedPages,
+        [1, 2, 3]
+    );
+
+    assert.equal(
+        buildValidatedVisualQuestionContract({
+            items: [
+                { questionNumber: '1', sourcePage: 2 },
+                { questionNumber: '3', sourcePage: 1 },
+                { questionNumber: '2', sourcePage: 1 }
+            ],
+            expectedQuestionCount: 3,
+            expectedSourcePageCount: 2,
+            check: { fatal: false }
+        }).authoritative,
+        false
+    );
+    assert.equal(
+        buildValidatedVisualQuestionContract({
+            items,
+            expectedQuestionCount: 3,
+            expectedSourcePageCount: 2,
+            check: { fatal: true }
+        }).authoritative,
+        false
+    );
+    assert.equal(
+        buildValidatedVisualQuestionContract({
+            items: items.slice(0, 2),
+            expectedSourcePageCount: 2,
+            check: { fatal: false }
+        }).diagnostics.reason,
+        'source-page-coverage-incomplete'
+    );
+});
+
+test('H3R: same-page unnumbered visual fragments fold into their numbered parent only', () => {
+    const folded = foldUnnumberedVisualQuestionFragments([
+        {
+            questionNumber: '15',
+            sourcePage: 3,
+            stem: '已知数列',
+            options: []
+        },
+        {
+            questionNumber: '（1）',
+            sourcePage: 3,
+            stem: '（1）求首项'
+        },
+        {
+            questionNumber: '(2)',
+            sourcePage: 3,
+            stem: '（2）求和'
+        },
+        {
+            questionNumber: '16',
+            sourcePage: 3,
+            stem: '信息安全问题'
+        },
+        {
+            questionNumber: '',
+            sourcePage: 4,
+            stem: '无法证明归属的跨页片段'
+        },
+        {
+            questionNumber: '17',
+            sourcePage: 4,
+            stem: '下一题'
+        }
+    ]);
+
+    assert.equal(folded.length, 4);
+    assert.match(
+        folded[0].stem,
+        /已知数列\n（1）求首项\n（2）求和/
+    );
+    assert.equal(
+        folded[0].sourceTrace.foldedVisualFragmentCount,
+        2
+    );
+    assert.equal(
+        folded[2].questionNumber,
+        ''
+    );
+    assert.equal(
+        folded[3].questionNumber,
+        '17'
+    );
+});
+
+test('H3R: multi-page visual support joins solution continuations and rejects answer conflicts', () => {
+    const merged = mergeVisualSupportPageResultsFailClosed({
+        allowedQuestionNumbers: ['8', '9'],
+        pageResults: [
+            {
+                pageNo: 1,
+                answers: [
+                    {
+                        question: '8',
+                        answer: 'B'
+                    }
+                ],
+                solutions: [
+                    {
+                        question: '8',
+                        solution: '第一页解析'
+                    }
+                ]
+            },
+            {
+                pageNo: 2,
+                answers: [
+                    {
+                        question: '8',
+                        answer: 'B'
+                    },
+                    {
+                        question: '9',
+                        answer: 'AC'
+                    }
+                ],
+                solutions: [
+                    {
+                        question: '8',
+                        solution: '第二页续文'
+                    },
+                    {
+                        question: '9',
+                        solution: '第九题解析'
+                    }
+                ]
+            }
+        ]
+    });
+
+    assert.equal(merged.authoritative, true);
+    assert.equal(merged.answers.length, 2);
+    assert.equal(
+        merged.solutions[0].solution,
+        '第一页解析\n第二页续文'
+    );
+    assert.deepEqual(
+        merged.solutions[0].sourcePages,
+        [1, 2]
+    );
+
+    const conflict = mergeVisualSupportPageResultsFailClosed({
+        allowedQuestionNumbers: ['8'],
+        pageResults: [
+            {
+                pageNo: 1,
+                answers: [
+                    {
+                        question: '8',
+                        answer: 'B'
+                    }
+                ]
+            },
+            {
+                pageNo: 2,
+                answers: [
+                    {
+                        question: '8',
+                        answer: 'C'
+                    }
+                ]
+            }
+        ]
+    });
+
+    assert.equal(conflict.authoritative, false);
+    assert.equal(
+        conflict.diagnostics.conflicts[0]
+            .questionNumber,
+        '8'
+    );
+});
+
+test('H3R: visual support coverage accepts a solution-only subjective response but not an empty block', () => {
+    const merged = {
+        authoritative: true,
+        answers: [
+            {
+                question: '1',
+                answer: 'B'
+            }
+        ],
+        solutions: [
+            {
+                question: '1',
+                solution: 'choice explanation'
+            },
+            {
+                question: '2',
+                solution: 'subjective derivation'
+            }
+        ],
+        diagnostics: {
+            conflicts: [],
+            unknownQuestionNumbers: []
+        }
+    };
+    const coverage =
+        buildVisualSupportCoverage({
+            merged,
+            expectedQuestionNumbers: [
+                '1',
+                '2',
+                '3'
+            ],
+            requiredKinds: {
+                answers: true,
+                solutions: false
+            }
+        });
+
+    assert.equal(coverage.ok, false);
+    assert.deepEqual(
+        coverage.missingAnswers,
+        ['2', '3']
+    );
+    assert.deepEqual(
+        coverage.acceptedMissingAnswersWithSolution,
+        ['2']
+    );
+    assert.deepEqual(
+        coverage.unresolvedMissingAnswers,
+        ['3']
+    );
+    assert.deepEqual(
+        coverage.missingBlocks,
+        ['3']
+    );
+
+    assert.deepEqual(
+        summarizeVisualSupportPageResults([
+            {
+                pageNo: 2,
+                answers: [
+                    {
+                        question: '第1题'
+                    }
+                ],
+                solutions: [
+                    {
+                        questionNumber: 2
+                    }
+                ]
+            }
+        ]),
+        [
+            {
+                pageNo: 2,
+                answerQuestions: ['1'],
+                solutionQuestions: ['2']
+            }
+        ]
+    );
+});
+
+test('H3R: visual support partitions by line-start markers and preserves cross-page continuations', () => {
+    const chunks =
+        partitionVisualSupportPages({
+            pages: [
+                {
+                    pageNo: 2,
+                    rawText: [
+                        'header',
+                        '9. BCD solution',
+                        '10. AD solution',
+                        '11. ABD solution',
+                        '12. fill solution',
+                        '13. fill solution',
+                        '14. fill solution',
+                        '15. subjective solution'
+                    ].join('\n')
+                },
+                {
+                    pageNo: 3,
+                    rawText: [
+                        '16. solution with 5 points',
+                        '17. proof solution',
+                        '18. function solution'
+                    ].join('\n')
+                },
+                {
+                    pageNo: 4,
+                    rawText: [
+                        'question 18 continuation containing 16^a, not a marker.',
+                        'more continuation text for question 18.',
+                        '19. conic solution'
+                    ].join('\n')
+                }
+            ],
+            allowedQuestionNumbers:
+                Array.from(
+                    { length: 11 },
+                    (_, index) =>
+                        String(index + 9)
+                ),
+            maxQuestionsPerChunk: 4,
+            maxCharactersPerChunk: 6500
+        });
+
+    assert.deepEqual(
+        chunks.map(
+            chunk =>
+                chunk.questionNumbers
+        ),
+        [
+            ['9', '10', '11', '12'],
+            ['13', '14', '15'],
+            ['16', '17', '18'],
+            ['18', '19']
+        ]
+    );
+    assert.equal(
+        chunks[3]
+            .continuationQuestionNumber,
+        '18'
+    );
+    assert.match(
+        chunks[3].rawText,
+        /16\^a/
+    );
+});
+
+test('H3R: visual page index accepts only the next contiguous question sequence', () => {
+    const pageThree =
+        validateVisualSupportPageIndex({
+            observedQuestionNumbers: [
+                '16',
+                '17',
+                '18'
+            ],
+            allowedQuestionNumbers:
+                Array.from(
+                    { length: 5 },
+                    (_, index) =>
+                        String(index + 15)
+                ),
+            lastSeenQuestionNumber:
+                15,
+            continuesPrevious:
+                false
+        });
+
+    assert.equal(
+        pageThree.authoritative,
+        true
+    );
+    assert.deepEqual(
+        pageThree.targetQuestionNumbers,
+        ['16', '17', '18']
+    );
+
+    const pageFour =
+        validateVisualSupportPageIndex({
+            observedQuestionNumbers: [
+                '18',
+                '19'
+            ],
+            allowedQuestionNumbers: [
+                '18',
+                '19'
+            ],
+            lastSeenQuestionNumber:
+                18,
+            continuesPrevious:
+                true
+        });
+
+    assert.equal(
+        pageFour.authoritative,
+        true
+    );
+    assert.deepEqual(
+        pageFour.targetQuestionNumbers,
+        ['18', '19']
+    );
+
+    assert.equal(
+        validateVisualSupportPageIndex({
+            observedQuestionNumbers: [
+                '16',
+                '19'
+            ],
+            allowedQuestionNumbers: [
+                '16',
+                '17',
+                '18',
+                '19'
+            ],
+            lastSeenQuestionNumber:
+                15
+        }).authoritative,
+        false
+    );
+});
+
+test('H3R: visual page index retries only a bounded contract mismatch with the next required question', () => {
+    const invalid =
+        validateVisualSupportPageIndex({
+            observedQuestionNumbers: [
+                '16',
+                '17'
+            ],
+            allowedQuestionNumbers:
+                Array.from(
+                    { length: 12 },
+                    (_, index) =>
+                        String(index + 8)
+                ),
+            lastSeenQuestionNumber:
+                8,
+            continuesPrevious:
+                false
+        });
+    const retry =
+        buildVisualSupportIndexRetryPlan({
+            validation:
+                invalid,
+            allowedQuestionNumbers:
+                Array.from(
+                    { length: 12 },
+                    (_, index) =>
+                        String(index + 8)
+                ),
+            lastSeenQuestionNumber:
+                8,
+            previousAttemptNumbers: [
+                '16',
+                '17'
+            ]
+        });
+
+    assert.equal(
+        retry.shouldRetry,
+        true
+    );
+    assert.equal(
+        retry.requiredFirstQuestionNumber,
+        '9'
+    );
+    assert.deepEqual(
+        retry.previousAttemptNumbers,
+        ['16', '17']
+    );
+
+    assert.equal(
+        buildVisualSupportIndexRetryPlan({
+            validation: {
+                authoritative: false,
+                diagnostics: {
+                    reasons: [
+                        'unknown-question-number'
+                    ]
+                }
+            },
+            allowedQuestionNumbers: [
+                '9',
+                '10'
+            ],
+            lastSeenQuestionNumber:
+                8
+        }).shouldRetry,
+        false
+    );
+});
 
 test('BM11: full mode', () => {
     const r = normalizeDocxPipelineResult(
@@ -191,6 +786,99 @@ test('dual DOCX route keeps deterministic importer primary without an explicit v
             allowAutomaticVision: false
         }
     );
+});
+
+test('image-page DOCX routes to strict vision only with explicit page-image evidence', async () => {
+    const question = {
+        id: 'visual-page-docx',
+        filename: 'scanned-paper.docx',
+        fileType: 'docx',
+        roles: ['question']
+    };
+    const route = await resolveDocxSourceRoute(question, [question], {
+        extractQuestionSkeleton: async () => ({
+            authoritative: false,
+            questionNumbers: [],
+            entries: [],
+            diagnostics: {
+                reason: 'no-explicit-question-markers',
+                visualPageCandidate: true
+            }
+        })
+    });
+
+    assert.deepEqual(route, {
+        producerIdentity: 'docx-visual-page-importer',
+        routePolicyDecision: 'visual-page-docx',
+        selectedSourcePort: 'docx-convert-strict-vision',
+        visualCompanionFileId: '',
+        allowAutomaticVision: true,
+        questionSkeleton: {
+            authoritative: false,
+            questionNumbers: [],
+            entries: [],
+            diagnostics: {
+                reason: 'no-explicit-question-markers',
+                visualPageCandidate: true
+            }
+        }
+    });
+});
+
+test('image-page answer DOCX routes to visual support under the same evidence gate', async () => {
+    const support = {
+        id: 'visual-page-answer-docx',
+        filename: 'scanned-answer.docx',
+        fileType: 'docx',
+        roles: ['answer']
+    };
+    const skeleton = {
+        authoritative: false,
+        questionNumbers: [],
+        entries: [],
+        diagnostics: {
+            reason: 'no-explicit-question-markers',
+            visualPageCandidate: true
+        }
+    };
+    const route = await resolveDocxSourceRoute(support, [support], {
+        extractQuestionSkeleton: async () => skeleton
+    });
+
+    assert.deepEqual(route, {
+        producerIdentity: 'docx-visual-page-support-importer',
+        routePolicyDecision: 'visual-page-docx-support',
+        selectedSourcePort: 'docx-convert-strict-vision',
+        visualCompanionFileId: '',
+        allowAutomaticVision: true,
+        questionSkeleton: skeleton
+    });
+});
+
+test('DOCX without page-image evidence stays on the deterministic fail-closed route', async () => {
+    const question = {
+        id: 'ambiguous-docx',
+        filename: 'ambiguous.docx',
+        fileType: 'docx',
+        roles: ['question']
+    };
+    const skeleton = {
+        authoritative: false,
+        questionNumbers: [],
+        entries: [],
+        diagnostics: {
+            reason: 'no-explicit-question-markers',
+            visualPageCandidate: false
+        }
+    };
+    const route = await resolveDocxSourceRoute(question, [question], {
+        extractQuestionSkeleton: async () => skeleton
+    });
+
+    assert.equal(route.routePolicyDecision, 'deterministic-docx-primary');
+    assert.equal(route.selectedSourcePort, 'docx-importer');
+    assert.equal(route.allowAutomaticVision, false);
+    assert.equal(route.questionSkeleton, skeleton);
 });
 
 test('dual DOCX support keeps only contract questions and preserves the remainder as unmatched', () => {
