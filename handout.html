@@ -141,6 +141,7 @@
                                     v-for="(block, index) in editor.handout.blocks"
                                     :key="block.id"
                                     :class="{ active: editor.selectedBlockId === block.id }"
+                                    :aria-label="`选择内容块 ${index + 1}：${blockLabel(block)}`"
                                     @click="selectEditorBlock(block.id)"
                                 >
                                     <span>{{ index + 1 }}</span>
@@ -244,7 +245,7 @@
                                             class="heading-input"
                                             :value="block.text"
                                             maxlength="500"
-                                            @change="updateSimpleBlock(block.id, { text: $event.target.value })"
+                                            @input="updateSimpleBlock(block.id, { text: $event.target.value })"
                                         >
                                     </template>
 
@@ -252,7 +253,7 @@
                                         <textarea
                                             rows="5"
                                             :value="block.content"
-                                            @change="updateSimpleBlock(block.id, { content: $event.target.value })"
+                                            @input="updateSimpleBlock(block.id, { content: $event.target.value })"
                                         ></textarea>
                                         <math-content :content="block.content"></math-content>
                                     </template>
@@ -266,9 +267,9 @@
                                                 <option value="teacher">教师提示</option>
                                                 <option value="conclusion">结论</option>
                                             </select>
-                                            <input :value="block.title" maxlength="160" @change="updateSimpleBlock(block.id, { title: $event.target.value })">
+                                            <input :value="block.title" maxlength="160" @input="updateSimpleBlock(block.id, { title: $event.target.value })">
                                         </div>
-                                        <textarea rows="4" :value="block.content" @change="updateSimpleBlock(block.id, { content: $event.target.value })"></textarea>
+                                        <textarea rows="4" :value="block.content" @input="updateSimpleBlock(block.id, { content: $event.target.value })"></textarea>
                                     </template>
 
                                     <template v-else-if="block.type === 'image'">

@@ -648,3 +648,82 @@ It proved:
 - `npm run verify:safe`: 1336 total, 1328 passed, 0 failed, 8 intentionally
   skipped;
 - `git diff --check`: passed.
+
+## H8 completion report (2026-07-29)
+
+Status: complete. H8 closed the handout program with real browser use,
+rendered-PDF inspection, offline/cache evidence, performance measurements,
+documentation and full stable-chain regression. It did not modify `app.js`,
+`main.html`, dependencies, question recognition or answer alignment.
+
+### Product defects found by real use
+
+- Main-entry question rows use numeric millisecond timestamps. The handout
+  snapshot boundary now accepts Date values, ISO strings, 10-digit seconds,
+  13-digit milliseconds and finite numeric milliseconds while continuing to
+  reject malformed values.
+- Heading, body and callout text previously committed only on `change`, so
+  quick preview/save actions could miss the latest input. Those text controls
+  now update on `input`; the existing 500ms autosave debounce and same-field
+  history coalescing retain bounded persistence and undo behavior.
+- End-section numbering previously used the position of each answer/analysis
+  row, causing one question's solution to be numbered `2`. The Typst generator
+  now maps every end field back to the owning question's document-order number
+  and groups each field under one heading.
+- Dynamic outline buttons now have a stable accessible name derived from block
+  order and label.
+
+### Real browser and PDF evidence
+
+Normal UI operation in an isolated local origin completed:
+
+```text
+manual question entry -> save -> library search/filter -> reveal solution
+-> select -> exam builder and template/edition/answer-position controls
+-> create handout -> mixed blocks -> insert the formal question
+-> reorder -> batch settings -> undo/redo -> save -> reload
+-> student and teacher HTML preview -> formal PDF -> previous/next page
+```
+
+The in-app page console was empty. Student formal output contained no answer or
+solution; teacher output showed answer and solution with the same question
+number. A second edit/save/reload cycle proved that the repaired simple-block
+inputs persist. System print-popup automation remained blocked by the in-app
+browser security boundary and was not bypassed; the existing isolated print
+browser tests and generated PDFs supplied the print evidence.
+
+The H8 corpus contains 32 production-format formulas from real-material
+regression cases and teacher screenshots. The production bank was empty during
+the read-only acceptance check, so the report records that fact rather than
+claiming a database sample. All 32 compiled. The three formula pages, one
+student page and two teacher pages were rendered to PNG and inspected without
+formula errors, clipping, overflow, mojibake or leakage.
+
+### Performance and offline evidence
+
+`artifacts/acceptance/handout-h8/h8-metrics.json` records:
+
+- exact 5/20/50-page output;
+- 715.9ms cold five-page total and 131.4ms warm five-page total;
+- 179.7ms for 20 warm pages and 257.2ms for 50 warm pages;
+- 10 cache hits and zero misses after browser restart;
+- no external request, page error, console error or bad local response;
+- zero student leakage sentinels and zero missing teacher sentinels;
+- UI heartbeats during every measured compile.
+
+### Final verification evidence
+
+- H1-H8 handout suite, sequential real-browser gate: 59/59 passed;
+- main navigation, UI actions, library/search/cart, exam/print and batch focused
+  regression: 107/107 passed;
+- production syntax: 70 files passed;
+- `npm run verify:docx-stable`: 20/20 passed;
+- `npm run verify:pdf-known-bad`: 65/65 passed;
+- `npm run verify:batch-safety`: passed;
+- `npm run verify:no-real-ai`: passed;
+- `npm run verify:safe`: 1342 total, 1334 passed, 0 failed, 8 intentionally
+  skipped;
+- real AI/OCR calls: none;
+- rendered evidence and operator documentation are under
+  `artifacts/acceptance/handout-h8`, `docs/handout`, and
+  `docs/stages/STAGE_H8_FINAL_ACCEPTANCE.md`.

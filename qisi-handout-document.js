@@ -892,24 +892,46 @@
                 analysis: '分析',
                 solution: '解析'
             };
+            const questionNumbers = new Map();
+            let nextQuestionNumber = 1;
+            for (const block of projection.blocks || []) {
+                if (block.type !== 'question') continue;
+                questionNumbers.set(block.id, nextQuestionNumber);
+                nextQuestionNumber += 1;
+            }
 
-            return sections.map((section, index) => {
-                const blockId = section.blockId;
-                const content = richTextToTypst(
-                    section.content,
-                    {
-                        blockId,
-                        field: section.field,
-                        normalization: {},
-                        audit: state.normalizationAudit
+            return ['answer', 'analysis', 'solution']
+                .map(field => {
+                    const fieldSections = sections.filter(
+                        section => section.field === field
+                    );
+                    if (!fieldSections.length) return '';
+
+                    const lines = [
+                        `#heading(level: 2)[${textSource(titles[field])}]`
+                    ];
+                    for (const section of fieldSections) {
+                        const content = richTextToTypst(
+                            section.content,
+                            {
+                                blockId: section.blockId,
+                                field: section.field,
+                                normalization: {},
+                                audit: state.normalizationAudit
+                            }
+                        );
+                        const questionNumber = questionNumbers.get(
+                            section.blockId
+                        );
+                        lines.push(
+                            `${textSource(`${questionNumber}. `)}${content}`,
+                            '#v(5pt)'
+                        );
                     }
-                );
-                return [
-                    `#heading(level: 2)[${textSource(titles[section.field] || section.field)}]`,
-                    `${textSource(`${index + 1}. `)}${content}`,
-                    '#v(5pt)'
-                ].join('\n');
-            }).join('\n');
+                    return lines.join('\n');
+                })
+                .filter(Boolean)
+                .join('\n');
         };
 
         const buildLineMap = source => {

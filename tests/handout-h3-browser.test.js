@@ -321,6 +321,40 @@ test('H3 browser completes the structured editor workflow without source writes'
         assert.equal(sourceAfterEdits.stem, 'FORMAL_STEM $x^2=4$');
         assert.equal(sourceAfterEdits.answer, 'SECRET_BROWSER_ANSWER');
 
+        const persistedSimpleContent = {
+            heading: 'H8 持久化标题 $x^2$',
+            body: 'H8 持久化正文 $f(x)=x+1$',
+            calloutTitle: 'H8 课堂提示',
+            calloutContent: 'H8 持久化提示内容'
+        };
+        await page.locator('.editor-block.block-heading input')
+            .fill(persistedSimpleContent.heading);
+        await page.locator('.editor-block.block-body textarea')
+            .fill(persistedSimpleContent.body);
+        await page.locator('.editor-block.block-callout input')
+            .fill(persistedSimpleContent.calloutTitle);
+        await page.locator('.editor-block.block-callout textarea')
+            .fill(persistedSimpleContent.calloutContent);
+        assert.deepEqual(
+            await page.evaluate(() => window.__TEX_HANDOUT_APP__
+                .editor.handout.blocks
+                .filter(block => [
+                    'heading',
+                    'body',
+                    'callout'
+                ].includes(block.type))
+                .map(block => block.type === 'heading'
+                    ? block.text
+                    : block.type === 'body'
+                        ? block.content
+                        : `${block.title}\n${block.content}`)),
+            [
+                persistedSimpleContent.heading,
+                persistedSimpleContent.body,
+                `${persistedSimpleContent.calloutTitle}\n${persistedSimpleContent.calloutContent}`
+            ]
+        );
+
         await page.getByTestId('student-preview').click();
         await page.getByTestId('toggle-preview').click();
         await page.getByTestId('html-preview').waitFor({
@@ -347,6 +381,10 @@ test('H3 browser completes the structured editor workflow without source writes'
 
         await page.getByTestId('toggle-preview').click();
         await page.getByTestId('save-now').click();
+        await page.locator('.save-state.saved').waitFor({
+            state: 'visible',
+            timeout: 15_000
+        });
         const countBeforeReload = await page.locator('.editor-block').count();
         await page.reload({
             waitUntil: 'domcontentloaded'
@@ -362,6 +400,26 @@ test('H3 browser completes the structured editor workflow without source writes'
         assert.equal(
             await page.locator('.editor-block').count(),
             countBeforeReload
+        );
+        assert.equal(
+            await page.locator('.editor-block.block-heading input')
+                .inputValue(),
+            persistedSimpleContent.heading
+        );
+        assert.equal(
+            await page.locator('.editor-block.block-body textarea')
+                .inputValue(),
+            persistedSimpleContent.body
+        );
+        assert.equal(
+            await page.locator('.editor-block.block-callout input')
+                .inputValue(),
+            persistedSimpleContent.calloutTitle
+        );
+        assert.equal(
+            await page.locator('.editor-block.block-callout textarea')
+                .inputValue(),
+            persistedSimpleContent.calloutContent
         );
 
         await page.getByTestId('show-revisions').click();

@@ -344,6 +344,18 @@ test('H4 student and teacher Typst documents share layout policy but not protect
     assert.match(teacher.source, /SECRET_SOLUTION_42/);
     assert.match(teacher.source, /SECRET_TEACHER_CALLOUT_42/);
     assert.equal(teacher.projection.endSections.length, 2);
+    assert.match(
+        teacher.source,
+        /#text\("1\. "\)#text\("SECRET_ANSWER_42"\)/
+    );
+    assert.match(
+        teacher.source,
+        /#text\("1\. "\)#text\("SECRET_SOLUTION_42"\)/
+    );
+    assert.doesNotMatch(
+        teacher.source,
+        /#text\("2\. "\)#text\("SECRET_SOLUTION_42"\)/
+    );
     assert.deepEqual(handout, before);
 });
 

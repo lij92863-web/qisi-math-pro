@@ -49,12 +49,39 @@
 
         const clone = model.cloneValue;
         const normalizeTimestamp = (value, label, { optional = false } = {}) => {
-            const source = String(value || '').trim();
+            const source = value instanceof Date
+                ? value
+                : String(value ?? '').trim();
 
-            if (!source && optional) return '';
+            if (
+                (
+                    source === ''
+                    || source == null
+                )
+                && optional
+            ) {
+                return '';
+            }
 
-            const parsed = Date.parse(source);
-            if (!source || !Number.isFinite(parsed)) {
+            let parsed;
+            if (source instanceof Date) {
+                parsed = source.getTime();
+            } else if (
+                typeof value === 'number'
+                && Number.isFinite(value)
+            ) {
+                parsed = value;
+            } else if (/^\d{10}$/.test(source)) {
+                parsed = Number(source) * 1_000;
+            } else if (/^\d{13}$/.test(source)) {
+                parsed = Number(source);
+            } else {
+                parsed = Date.parse(source);
+            }
+            if (
+                !Number.isFinite(parsed)
+                || !Number.isFinite(new Date(parsed).getTime())
+            ) {
                 throw new TypeError(`${label} is invalid`);
             }
 

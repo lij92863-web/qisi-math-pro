@@ -404,6 +404,11 @@ test('H7 completes batch, conflict, layout, region asset and single-question pre
             state: 'visible',
             timeout: 90_000
         });
+        await page.waitForFunction(
+            () => typeof globalThis.pdfjsLib?.getDocument === 'function',
+            null,
+            { timeout: 30_000 }
+        );
         const singlePdfText = await extractPdfText(page);
         const compactPdfText = singlePdfText.replace(/\s+/g, '');
         assert.match(compactPdfText, /H7_SOURCE_REFRESHED/);

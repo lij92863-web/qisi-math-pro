@@ -118,6 +118,7 @@ async function removeStaleRuntimeCaches() {
 }
 
 async function initializeRuntime(requestId) {
+    const runtimeStartedAt = now();
     installWorkerCompatibility();
     reportProgress(
         requestId,
@@ -129,8 +130,11 @@ async function initializeRuntime(requestId) {
         RUNTIME_ASSETS.compilerModule.url,
         self.location.origin
     );
+    const moduleStartedAt = now();
     const typst = await import(moduleUrl);
+    const moduleLoadedAt = now();
     const cacheStats = { hits: 0, misses: 0 };
+    const assetLoadStartedAt = now();
     const [
         wasmBytes,
         fontBytes,
@@ -145,6 +149,7 @@ async function initializeRuntime(requestId) {
             content: await fetchStaticAsset(descriptor, cacheStats)
         })))
     ]);
+    const assetsLoadedAt = now();
 
     reportProgress(
         requestId,
@@ -152,13 +157,29 @@ async function initializeRuntime(requestId) {
         'Mounting local MiTeX packages and the document file system.'
     );
     const compiler = typst.createTypstCompiler();
+    let fontLoadMs = 0;
+    const loadFonts = typst.loadFonts(fontBytes, { assets: false });
+    const measuredFontLoader = async (...args) => {
+        const startedAt = now();
+        try {
+            return await loadFonts(...args);
+        } finally {
+            fontLoadMs += now() - startedAt;
+        }
+    };
+    measuredFontLoader._kind = loadFonts._kind;
+    measuredFontLoader._preloadRemoteFontOptions =
+        loadFonts._preloadRemoteFontOptions;
+    const compilerInitStartedAt = now();
     await compiler.init({
         getModule: () => wasmBytes,
         beforeBuild: [
-            typst.loadFonts(fontBytes, { assets: false })
+            measuredFontLoader
         ]
     });
+    const compilerInitializedAt = now();
 
+    const virtualFileMountStartedAt = now();
     const decoder = new TextDecoder();
     for (const file of virtualFiles) {
         if (file.kind === 'source') {
@@ -171,6 +192,7 @@ async function initializeRuntime(requestId) {
         }
     }
     await removeStaleRuntimeCaches();
+    const runtimeFinishedAt = now();
 
     return Object.freeze({
         compiler,
@@ -178,6 +200,24 @@ async function initializeRuntime(requestId) {
             cacheName: CACHE_NAME,
             cacheHits: cacheStats.hits,
             cacheMisses: cacheStats.misses
+        }),
+        runtimeMetrics: Object.freeze({
+            moduleLoadMs: Math.round(
+                moduleLoadedAt - moduleStartedAt
+            ),
+            assetLoadMs: Math.round(
+                assetsLoadedAt - assetLoadStartedAt
+            ),
+            fontLoadMs: Math.round(fontLoadMs),
+            compilerInitMs: Math.round(
+                compilerInitializedAt - compilerInitStartedAt
+            ),
+            virtualFileMountMs: Math.round(
+                runtimeFinishedAt - virtualFileMountStartedAt
+            ),
+            runtimeTotalMs: Math.round(
+                runtimeFinishedAt - runtimeStartedAt
+            )
         })
     });
 }
@@ -214,6 +254,7 @@ function extractPdfBytes(result) {
 
 async function compileDocument(message) {
     const request = validateCompileRequest(message);
+    const runtimeCold = !runtimePromise;
     const initStartedAt = now();
     const runtime = await getRuntime(request.requestId);
     const initializedAt = now();
@@ -226,10 +267,13 @@ async function compileDocument(message) {
     mountDocumentAssets(runtime.compiler, request.assets);
     runtime.compiler.addSource('/main.typ', request.source);
 
+    const preflightStartedAt = now();
     const preflight = await runtime.compiler.runWithWorld({
         mainFilePath: '/main.typ',
         inputs: {}
     }, world => world.compile({ diagnostics: 'full' }));
+    const preflightFinishedAt = now();
+    const pdfGenerationStartedAt = now();
     const result = preflight.hasError
         ? preflight
         : await runtime.compiler.compile({
@@ -239,6 +283,20 @@ async function compileDocument(message) {
             inputs: {}
         });
     const finishedAt = now();
+    const commonMetrics = {
+        runtimeVersion: RUNTIME_VERSION,
+        ...runtime.cacheMetrics,
+        ...runtime.runtimeMetrics,
+        runtimeCold,
+        initMs: Math.round(initializedAt - initStartedAt),
+        preflightMs: Math.round(
+            preflightFinishedAt - preflightStartedAt
+        ),
+        pdfGenerationMs: preflight.hasError
+            ? 0
+            : Math.round(finishedAt - pdfGenerationStartedAt),
+        compileMs: Math.round(finishedAt - initializedAt)
+    };
     const rawDiagnostics = preflight?.diagnostics
         ?? result?.diagnostics
         ?? result?.messages
@@ -265,10 +323,7 @@ async function compileDocument(message) {
             error: failureDiagnostics[0].display,
             diagnostics: failureDiagnostics,
             metrics: {
-                runtimeVersion: RUNTIME_VERSION,
-                ...runtime.cacheMetrics,
-                initMs: Math.round(initializedAt - initStartedAt),
-                compileMs: Math.round(finishedAt - initializedAt),
+                ...commonMetrics,
                 pdfBytes: 0
             }
         });
@@ -285,10 +340,7 @@ async function compileDocument(message) {
         pdfBytes: transferable,
         diagnostics,
         metrics: {
-            runtimeVersion: RUNTIME_VERSION,
-            ...runtime.cacheMetrics,
-            initMs: Math.round(initializedAt - initStartedAt),
-            compileMs: Math.round(finishedAt - initializedAt),
+            ...commonMetrics,
             pdfBytes: transferable.byteLength
         }
     }, [transferable]);
@@ -311,7 +363,16 @@ self.addEventListener('message', event => {
             metrics: {
                 runtimeVersion: RUNTIME_VERSION,
                 cacheName: CACHE_NAME,
+                runtimeCold: false,
                 initMs: 0,
+                moduleLoadMs: 0,
+                assetLoadMs: 0,
+                fontLoadMs: 0,
+                compilerInitMs: 0,
+                virtualFileMountMs: 0,
+                runtimeTotalMs: 0,
+                preflightMs: 0,
+                pdfGenerationMs: 0,
                 compileMs: 0,
                 pdfBytes: 0
             }
