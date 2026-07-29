@@ -10,6 +10,7 @@
         'HandoutRepository',
         'HandoutQuestionLibrary',
         'HandoutEditorState',
+        'HandoutBatchSettings',
         'HandoutPreview',
         'HandoutPdfSession'
     ];
@@ -77,6 +78,7 @@
             model,
             questionInstance,
             editorState,
+            batchSettings,
             preview
         } = modules;
 
@@ -126,6 +128,25 @@
                     revisions: [],
                     confirmDialog: null,
                     sourceCheck: null,
+                    sourceUpdateBundle: null,
+                    sourceUpdateFields: [],
+                    acceptedSourceConflicts: [],
+                    sourceUpdateSummary: {},
+                    newDisplayLabel: '',
+                    selectedQuestionIds: [],
+                    batchPanelOpen: false,
+                    batchDraft: {
+                        optionLayoutMode: '',
+                        answerPlacement: '',
+                        analysisPlacement: '',
+                        questionLabelPreset: '',
+                        customLabel: '',
+                        imageLayoutMode: '',
+                        imageColumns: '',
+                        imageWidthPercent: '',
+                        showKnowledgePoints: '',
+                        answerSpaceLines: ''
+                    },
                     assetUrls: {},
                     assetRecords: [],
                     pendingQuestionImageIndex: -1,
@@ -136,6 +157,7 @@
                     formalRendering: false,
                     formalError: '',
                     formalDiagnostics: [],
+                    formalScopeBlockId: '',
                     formalState: {
                         phase: 'idle',
                         requestId: null,
@@ -157,6 +179,19 @@
                     return this.selectedBlock?.type === 'question'
                         ? this.selectedBlock
                         : null;
+                },
+                questionBlocks() {
+                    return this.editor?.handout.blocks.filter(
+                        block => block.type === 'question'
+                    ) || [];
+                },
+                selectedQuestionCount() {
+                    return this.selectedQuestionIds.length;
+                },
+                formalScopeLabel() {
+                    return this.formalScopeBlockId
+                        ? '单题'
+                        : '整份讲义';
                 },
                 effectiveSelectedQuestion() {
                     if (!this.selectedQuestion) return {};
@@ -292,10 +327,20 @@
                         });
                     return this.formalSession;
                 },
-                async openFormalPreview() {
+                async openFormalPreview(blockId = '') {
+                    this.formalScopeBlockId =
+                        typeof blockId === 'string'
+                            ? blockId
+                            : '';
                     this.formalPreviewOpen = true;
                     await this.$nextTick();
                     await this.compileFormalPreview();
+                },
+                async openSingleQuestionFormalPreview() {
+                    if (!this.selectedQuestion) return;
+                    await this.openFormalPreview(
+                        this.selectedQuestion.id
+                    );
                 },
                 async compileFormalPreview() {
                     if (!this.editor || this.formalBusy) return;
@@ -306,8 +351,19 @@
                     try {
                         await this.flushSave();
                         const session = this.ensureFormalSession();
+                        const scopedHandout = this.formalScopeBlockId
+                            ? model.assertValidHandout({
+                                ...this.editor.handout,
+                                blocks:
+                                    this.editor.handout.blocks.filter(
+                                        block =>
+                                            block.id
+                                            === this.formalScopeBlockId
+                                    )
+                            })
+                            : this.editor.handout;
                         await session.compileHandout(
-                            this.editor.handout,
+                            scopedHandout,
                             this.previewEdition,
                             {
                                 assetRecords: this.assetRecords
@@ -376,6 +432,7 @@
                     this.formalRendering = false;
                     this.formalError = '';
                     this.formalDiagnostics = [];
+                    this.formalScopeBlockId = '';
                 },
                 downloadFormalPdf() {
                     if (
@@ -386,7 +443,7 @@
                         ? '学生版'
                         : '教师版';
                     const descriptor = this.formalSession.download(
-                        `${this.editor.handout.title}-${edition}.pdf`
+                        `${this.editor.handout.title}-${this.formalScopeBlockId ? '单题-' : ''}${edition}.pdf`
                     );
                     this.showNotice(
                         `已导出 ${descriptor.filename}`,
@@ -421,9 +478,16 @@
                     this.inspectorTab = 'content';
                     this.globalTab = 'page';
                     this.sourceCheck = null;
+                    this.sourceUpdateBundle = null;
+                    this.sourceUpdateFields = [];
+                    this.acceptedSourceConflicts = [];
+                    this.sourceUpdateSummary = {};
+                    this.selectedQuestionIds = [];
+                    this.batchPanelOpen = false;
                     this.saveStatus = 'idle';
                     this.viewMode = 'editor';
                     this.refreshAssetUrls();
+                    this.scanSourceUpdates();
                 },
                 async openHandout(id, { skipFlush = false } = {}) {
                     if (
@@ -519,17 +583,30 @@
                 safeMutation(callback) {
                     try {
                         this.applyEditor(callback());
+                        return true;
                     } catch (error) {
                         this.showNotice(
                             error?.message || error,
                             'error'
                         );
+                        return false;
                     }
                 },
                 applyEditor(next, { autosave = true } = {}) {
                     this.editor = next;
                     this.titleDraft = next.handout.title;
                     this.sourceCheck = null;
+                    const questionIds = new Set(
+                        next.handout.blocks
+                            .filter(
+                                block => block.type === 'question'
+                            )
+                            .map(block => block.id)
+                    );
+                    this.selectedQuestionIds =
+                        this.selectedQuestionIds.filter(
+                            blockId => questionIds.has(blockId)
+                        );
                     if (autosave && next.dirty) {
                         this.scheduleSave();
                     }
@@ -612,7 +689,11 @@
                         this.editor,
                         id
                     );
-                    this.sourceCheck = null;
+                    this.sourceCheck =
+                        this.sourceUpdateSummary[id] || null;
+                    this.sourceUpdateBundle = null;
+                    this.sourceUpdateFields = [];
+                    this.acceptedSourceConflicts = [];
                     if (this.selectedQuestion) {
                         this.inspectorTab = 'content';
                     }
@@ -878,6 +959,61 @@
                 updateQuestionDisplay(patch) {
                     this.updateQuestionSection('display', patch);
                 },
+                addQuestionDisplayLabel(type, value) {
+                    const text = String(value || '').trim();
+                    if (!text) return;
+                    if (
+                        this.selectedQuestion.displayLabels.some(
+                            label =>
+                                label.type === type
+                                && label.value === text
+                        )
+                    ) {
+                        this.newDisplayLabel = '';
+                        return;
+                    }
+                    this.safeMutation(() =>
+                        editorState.updateBlock(
+                            this.editor,
+                            this.selectedQuestion.id,
+                            block => ({
+                                ...block,
+                                displayLabels: [
+                                    ...(block.displayLabels || []),
+                                    {
+                                        type,
+                                        value: text
+                                    }
+                                ]
+                            }),
+                            {
+                                mutationKey:
+                                    `question:${this.selectedQuestion.id}:display-label`
+                            }
+                        )
+                    );
+                    this.newDisplayLabel = '';
+                },
+                removeQuestionDisplayLabel(index) {
+                    this.safeMutation(() =>
+                        editorState.updateBlock(
+                            this.editor,
+                            this.selectedQuestion.id,
+                            block => ({
+                                ...block,
+                                displayLabels:
+                                    block.displayLabels.filter(
+                                        (_, labelIndex) =>
+                                            labelIndex !== index
+                                    )
+                            }),
+                            {
+                                mutationKey:
+                                    `question:${this.selectedQuestion.id}:display-label-remove`
+                            }
+                        )
+                    );
+                },
                 updateQuestionImage(index, patch) {
                     this.safeMutation(() =>
                         editorState.updateBlock(
@@ -982,18 +1118,370 @@
                     );
                     this.refreshAssetUrls();
                 },
+                async scanSourceUpdates() {
+                    if (!this.editor) return;
+                    const handoutId = this.editor.handout.id;
+                    const entries = await Promise.all(
+                        this.questionBlocks.map(async block => {
+                            try {
+                                return [
+                                    block.id,
+                                    await questionLibrary
+                                        .compareBlockSource(block)
+                                ];
+                            } catch (error) {
+                                return [
+                                    block.id,
+                                    {
+                                        status: 'error',
+                                        changedFields: [],
+                                        conflictFields: [],
+                                        message: String(
+                                            error?.message || error
+                                        )
+                                    }
+                                ];
+                            }
+                        })
+                    );
+                    if (
+                        this.editor?.handout.id !== handoutId
+                    ) return;
+
+                    this.sourceUpdateSummary =
+                        Object.fromEntries(entries);
+                    const updatedCount = entries.filter(
+                        ([, comparison]) =>
+                            comparison.status === 'updated'
+                    ).length;
+                    if (updatedCount) {
+                        this.showNotice(
+                            `${updatedCount} 道题的题库源题已有更新；请逐题查看差异并明确选择要更新的字段。`,
+                            'info'
+                        );
+                    }
+                },
                 async checkSelectedSource() {
+                    if (!this.selectedQuestion) return;
                     try {
-                        this.sourceCheck =
+                        const comparison =
                             await questionLibrary.compareBlockSource(
                                 this.selectedQuestion
                             );
+                        this.sourceCheck = comparison;
+                        this.sourceUpdateSummary = {
+                            ...this.sourceUpdateSummary,
+                            [this.selectedQuestion.id]: comparison
+                        };
+                        this.sourceUpdateFields = (
+                            comparison.changedFields || []
+                        ).filter(field =>
+                            !comparison.conflictFields.includes(field)
+                        );
+                        this.acceptedSourceConflicts = [];
+                        this.sourceUpdateBundle =
+                            comparison.status === 'missing'
+                                ? null
+                                : await questionLibrary.getQuestionBundle(
+                                    this.selectedQuestion.sourceQuestionId
+                                );
                     } catch (error) {
                         this.showNotice(
                             `源题比较失败：${error?.message || error}`,
                             'error'
                         );
                     }
+                },
+                setSourceUpdateField(field, checked) {
+                    const fields = new Set(this.sourceUpdateFields);
+                    if (checked) fields.add(field);
+                    else fields.delete(field);
+                    this.sourceUpdateFields = [...fields];
+                    if (!checked) {
+                        this.acceptedSourceConflicts =
+                            this.acceptedSourceConflicts.filter(
+                                value => value !== field
+                            );
+                    }
+                },
+                setSourceConflictAccepted(field, checked) {
+                    const accepted = new Set(
+                        this.acceptedSourceConflicts
+                    );
+                    if (checked) accepted.add(field);
+                    else accepted.delete(field);
+                    this.acceptedSourceConflicts = [...accepted];
+                },
+                async applySelectedSourceUpdate() {
+                    if (
+                        !this.selectedQuestion
+                        || !this.sourceUpdateBundle
+                    ) return;
+                    try {
+                        await this.flushSave();
+                        if (
+                            this.sourceUpdateFields.includes('images')
+                            && this.sourceUpdateBundle.missingImageIds.length
+                        ) {
+                            throw new Error(
+                                `源题图片缺失：${this.sourceUpdateBundle.missingImageIds.join(', ')}`
+                            );
+                        }
+                        const updated =
+                            await repository
+                                .updateQuestionSnapshotFields(
+                                    this.editor.handout.id,
+                                    this.selectedQuestion.id,
+                                    {
+                                        question:
+                                            this.sourceUpdateBundle
+                                                .question,
+                                        sourceImages:
+                                            this.sourceUpdateBundle
+                                                .sourceImages,
+                                        selectedFields:
+                                            this.sourceUpdateFields,
+                                        acceptedConflictFields:
+                                            this
+                                                .acceptedSourceConflicts,
+                                        expectedUpdatedAt:
+                                            this.editor.handout.updatedAt
+                                    }
+                                );
+                        this.editor =
+                            editorState.acceptPersistedChange(
+                                this.editor,
+                                updated.handout,
+                                updated.blockId
+                            );
+                        this.saveStatus = 'saved';
+                        this.sourceCheck = null;
+                        this.sourceUpdateBundle = null;
+                        this.sourceUpdateFields = [];
+                        this.acceptedSourceConflicts = [];
+                        await Promise.all([
+                            this.reloadHandouts(),
+                            this.refreshAssetUrls(),
+                            this.scanSourceUpdates()
+                        ]);
+                        this.showNotice(
+                            `已明确更新 ${updated.updatedFields.length} 个源题字段；正式题库未被修改。`,
+                            'success'
+                        );
+                    } catch (error) {
+                        this.showNotice(
+                            error?.code === 'HANDOUT_SOURCE_CONFLICT'
+                                ? `冲突字段必须逐项确认：${error.conflictFields.join('、')}`
+                                : `源题更新失败：${error?.message || error}`,
+                            'error'
+                        );
+                    }
+                },
+                isQuestionBatchSelected(blockId) {
+                    return this.selectedQuestionIds.includes(blockId);
+                },
+                toggleQuestionBatchSelection(blockId, checked) {
+                    const ids = new Set(this.selectedQuestionIds);
+                    if (checked) ids.add(blockId);
+                    else ids.delete(blockId);
+                    this.selectedQuestionIds = [...ids];
+                },
+                selectAllQuestionsForBatch() {
+                    this.selectedQuestionIds =
+                        this.questionBlocks.map(block => block.id);
+                },
+                clearBatchSelection() {
+                    this.selectedQuestionIds = [];
+                    this.batchPanelOpen = false;
+                },
+                applyBatchSettings() {
+                    const draft = this.batchDraft;
+                    const patch = {};
+
+                    if (draft.optionLayoutMode) {
+                        patch.optionLayout = {
+                            mode: draft.optionLayoutMode
+                        };
+                    }
+                    const display = {};
+                    if (draft.answerPlacement) {
+                        display.answerPlacement =
+                            draft.answerPlacement;
+                    }
+                    if (draft.analysisPlacement) {
+                        display.analysisPlacement =
+                            draft.analysisPlacement;
+                    }
+                    if (draft.showKnowledgePoints) {
+                        display.showKnowledgePoints =
+                            draft.showKnowledgePoints === 'true'
+                                ? true
+                                : draft.showKnowledgePoints === 'false'
+                                    ? false
+                                    : 'inherit';
+                    }
+                    if (draft.answerSpaceLines !== '') {
+                        display.answerSpaceLines = Number(
+                            draft.answerSpaceLines
+                        );
+                    }
+                    if (Object.keys(display).length) {
+                        patch.display = display;
+                    }
+                    if (draft.questionLabelPreset) {
+                        patch.questionLabel = {
+                            preset: draft.questionLabelPreset,
+                            customText: ''
+                        };
+                    }
+                    const customLabels = String(
+                        draft.customLabel || ''
+                    ).split(/[,，]/)
+                        .map(value => value.trim())
+                        .filter(Boolean);
+                    if (customLabels.length) {
+                        patch.displayLabels = customLabels.map(
+                            value => ({
+                                type: 'custom',
+                                value
+                            })
+                        );
+                    }
+                    if (
+                        draft.imageLayoutMode
+                        || draft.imageColumns !== ''
+                    ) {
+                        patch.imageLayout = {};
+                        if (draft.imageLayoutMode) {
+                            patch.imageLayout.mode =
+                                draft.imageLayoutMode;
+                        }
+                        if (draft.imageColumns !== '') {
+                            patch.imageLayout.columns = Number(
+                                draft.imageColumns
+                            );
+                        }
+                    }
+                    if (draft.imageWidthPercent !== '') {
+                        patch.images = {
+                            width: {
+                                value: Number(
+                                    draft.imageWidthPercent
+                                ),
+                                unit: 'percent'
+                            }
+                        };
+                    }
+                    if (!this.selectedQuestionIds.length) {
+                        this.showNotice(
+                            '请先选择至少一道题。',
+                            'error'
+                        );
+                        return;
+                    }
+                    if (!Object.keys(patch).length) {
+                        this.showNotice(
+                            '请至少选择一项批量设置。',
+                            'error'
+                        );
+                        return;
+                    }
+
+                    const applied = this.safeMutation(() => {
+                        const handout =
+                            batchSettings
+                                .applyBatchQuestionSettings(
+                                    this.editor.handout,
+                                    this.selectedQuestionIds,
+                                    patch
+                                );
+                        return editorState.commitHandout(
+                            this.editor,
+                            handout,
+                            {
+                                mutationKey:
+                                    `batch:${Date.now()}`
+                            }
+                        );
+                    });
+                    if (!applied) return;
+                    this.batchPanelOpen = false;
+                    this.showNotice(
+                        `已批量更新 ${this.selectedQuestionCount} 道题；可使用撤销恢复。`,
+                        'success'
+                    );
+                },
+                updateRegionSlot(regionName, slotName, patch) {
+                    const region =
+                        this.editor.handout.settings[regionName];
+                    const slots = {
+                        ...region.slots,
+                        [slotName]: {
+                            ...region.slots[slotName],
+                            ...patch
+                        }
+                    };
+                    const regionPatch = {
+                        slots
+                    };
+                    if (
+                        Object.prototype.hasOwnProperty.call(
+                            patch,
+                            'text'
+                        )
+                    ) {
+                        regionPatch[slotName] = patch.text;
+                    }
+                    this.updateGlobal(regionName, regionPatch);
+                },
+                async uploadRegionSlotImage(
+                    regionName,
+                    slotName,
+                    event
+                ) {
+                    const file = event.target.files?.[0];
+                    event.target.value = '';
+                    if (!file) return;
+                    try {
+                        const asset = await this.storeUploadedImage(
+                            file,
+                            `${regionName}-slot-image`
+                        );
+                        await this.refreshAssetUrls();
+                        this.updateRegionSlot(
+                            regionName,
+                            slotName,
+                            {
+                                enabled: true,
+                                assetId: asset.id
+                            }
+                        );
+                    } catch (error) {
+                        this.showNotice(
+                            error?.message || error,
+                            'error'
+                        );
+                    }
+                },
+                removeRegionSlotImage(regionName, slotName) {
+                    this.updateRegionSlot(
+                        regionName,
+                        slotName,
+                        { assetId: '' }
+                    );
+                },
+                updateRegionBackground(regionName, patch) {
+                    const region =
+                        this.editor.handout.settings[regionName];
+                    this.updateGlobal(
+                        regionName,
+                        {
+                            background: {
+                                ...region.background,
+                                ...patch
+                            }
+                        }
+                    );
                 },
                 updateGlobal(section, patch) {
                     this.safeMutation(() =>
@@ -1074,6 +1562,37 @@
                         maxWidth: '100%'
                     };
                 },
+                questionImageGroupStyle(question) {
+                    const layout = question.imageLayout || {};
+                    if (
+                        !['row', 'grid'].includes(layout.mode)
+                    ) return {};
+                    const columns = layout.mode === 'row'
+                        ? Math.min(
+                            4,
+                            Math.max(1, question.images.length)
+                        )
+                        : Number(layout.columns || 2);
+                    return {
+                        display: 'grid',
+                        gridTemplateColumns:
+                            `repeat(${columns}, minmax(0, 1fr))`,
+                        gap: `${Number(layout.gapMm || 0)}mm`
+                    };
+                },
+                regionPreviewStyle(region) {
+                    if (!region?.background?.enabled) return {};
+                    const opacity = Math.round(
+                        Number(region.background.opacity || 0)
+                        * 255
+                    ).toString(16).padStart(2, '0');
+                    return {
+                        backgroundColor:
+                            `${region.background.color}${opacity}`,
+                        minHeight:
+                            `${region.background.heightMm}mm`
+                    };
+                },
                 blockLabel(block) {
                     if (block.type === 'heading') {
                         return block.text || '标题';
@@ -1124,12 +1643,34 @@
                         thinking: '思考'
                     }[question.questionLabel.preset] || '';
                 },
+                questionDisplayLabels(question) {
+                    const presets = {
+                        authentic: '真题',
+                        theorem: '定理',
+                        example: '例题',
+                        variant: '变式',
+                        practice: '课堂练习',
+                        homework: '课后作业',
+                        error: '易错题'
+                    };
+                    const labels = (
+                        question.displayLabels || []
+                    ).map(label =>
+                        label.type === 'preset'
+                            ? presets[label.value] || label.value
+                            : label.value
+                    ).filter(Boolean);
+                    if (labels.length) return labels;
+                    const legacy = this.questionLabelText(question);
+                    return legacy ? [legacy] : [];
+                },
                 resolvePlaceholder(value) {
                     if (!this.previewDocument) return '';
                     const metadata =
                         this.previewDocument.settings.metadata;
                     return String(value || '')
                         .replaceAll('{title}', this.previewDocument.title)
+                        .replaceAll('{filename}', this.previewDocument.title)
                         .replaceAll('{teacher}', metadata.teacher || '')
                         .replaceAll('{school}', metadata.school || '')
                         .replaceAll('{page}', '1')
@@ -1174,6 +1715,8 @@
                             root.Qisi.HandoutQuestionInstance,
                         editorState:
                             root.Qisi.HandoutEditorState,
+                        batchSettings:
+                            root.Qisi.HandoutBatchSettings,
                         preview: root.Qisi.HandoutPreview
                     }
                 })

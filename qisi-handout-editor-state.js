@@ -51,7 +51,34 @@
                 center: '',
                 right: '{teacher}',
                 distanceMm: 9,
-                heightMm: 8
+                heightMm: 8,
+                slots: Object.freeze({
+                    left: Object.freeze({
+                        enabled: true,
+                        text: '{title}',
+                        assetId: '',
+                        imageWidthMm: 10
+                    }),
+                    center: Object.freeze({
+                        enabled: false,
+                        text: '',
+                        assetId: '',
+                        imageWidthMm: 10
+                    }),
+                    right: Object.freeze({
+                        enabled: true,
+                        text: '{teacher}',
+                        assetId: '',
+                        imageWidthMm: 10
+                    })
+                }),
+                background: Object.freeze({
+                    enabled: false,
+                    color: '#f1f5f9',
+                    opacity: 0.12,
+                    heightMm: 8,
+                    bleed: false
+                })
             }),
             footer: Object.freeze({
                 enabled: true,
@@ -60,7 +87,34 @@
                 center: '',
                 right: '第 {page} 页',
                 distanceMm: 9,
-                heightMm: 8
+                heightMm: 8,
+                slots: Object.freeze({
+                    left: Object.freeze({
+                        enabled: true,
+                        text: '{school}',
+                        assetId: '',
+                        imageWidthMm: 10
+                    }),
+                    center: Object.freeze({
+                        enabled: false,
+                        text: '',
+                        assetId: '',
+                        imageWidthMm: 10
+                    }),
+                    right: Object.freeze({
+                        enabled: true,
+                        text: '第 {page} 页',
+                        assetId: '',
+                        imageWidthMm: 10
+                    })
+                }),
+                background: Object.freeze({
+                    enabled: false,
+                    color: '#f1f5f9',
+                    opacity: 0.12,
+                    heightMm: 8,
+                    bleed: false
+                })
             }),
             editions: Object.freeze({
                 student: Object.freeze({
@@ -112,14 +166,77 @@
             return result;
         };
 
-        const normalizeForEditing = handout =>
-            model.assertValidHandout({
-                ...handout,
-                settings: mergeRecord(
-                    DEFAULT_SETTINGS,
-                    handout?.settings
+        const migrateLegacyRegionForEditing = (
+            mergedRegion,
+            sourceRegion
+        ) => {
+            if (
+                !sourceRegion
+                || typeof sourceRegion !== 'object'
+                || Array.isArray(sourceRegion)
+                || (
+                    sourceRegion.slots
+                    && typeof sourceRegion.slots === 'object'
+                    && !Array.isArray(sourceRegion.slots)
                 )
+            ) {
+                return mergedRegion;
+            }
+
+            const alignment = [
+                'left',
+                'center',
+                'right'
+            ].includes(sourceRegion.alignment)
+                ? sourceRegion.alignment
+                : 'center';
+            const slots = clone(mergedRegion.slots);
+
+            for (const slotName of [
+                'left',
+                'center',
+                'right'
+            ]) {
+                const legacyText = sourceRegion[slotName]
+                    ?? (
+                        slotName === alignment
+                        && sourceRegion.text != null
+                            ? sourceRegion.text
+                            : undefined
+                    );
+                if (legacyText == null) continue;
+                slots[slotName] = {
+                    ...slots[slotName],
+                    enabled: Boolean(legacyText),
+                    text: String(legacyText)
+                };
+            }
+
+            return {
+                ...mergedRegion,
+                slots
+            };
+        };
+
+        const normalizeForEditing = handout => {
+            const settings = mergeRecord(
+                DEFAULT_SETTINGS,
+                handout?.settings
+            );
+            settings.header = migrateLegacyRegionForEditing(
+                settings.header,
+                handout?.settings?.header
+            );
+            settings.footer = migrateLegacyRegionForEditing(
+                settings.footer,
+                handout?.settings?.footer
+            );
+
+            return model.assertValidHandout({
+                ...handout,
+                settings
             });
+        };
 
         const persistentContent = handout => {
             const {

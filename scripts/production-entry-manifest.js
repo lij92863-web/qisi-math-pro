@@ -68,10 +68,12 @@ const handoutBrowserScriptOrder = Object.freeze([
     'qisi-db.js',
     'qisi-handout-model.js',
     'qisi-handout-question-instance.js',
+    'qisi-handout-source-update.js',
     'qisi-handout-asset-repository.js',
     'qisi-handout-repository.js',
     'qisi-handout-question-library.js',
     'qisi-handout-editor-state.js',
+    'qisi-handout-batch-settings.js',
     'qisi-handout-preview.js',
     'qisi-handout-edition-policy.js',
     'qisi-handout-typst-template.js',
@@ -98,9 +100,11 @@ const categoryFiles = Object.freeze({
     ),
     'browser-library': Object.freeze([
         'qisi-handout-asset-repository.js',
+        'qisi-handout-batch-settings.js',
         'qisi-handout-model.js',
         'qisi-handout-question-instance.js',
-        'qisi-handout-repository.js'
+        'qisi-handout-repository.js',
+        'qisi-handout-source-update.js'
     ]),
     'browser-handout-entry': Object.freeze([
         'qisi-handout-app.js',
@@ -153,6 +157,7 @@ const classificationEvidence = Object.freeze({
     'qisi-handout-asset-repository.js': 'H2 handout asset domain library, loaded by the isolated H3 entry',
     'qisi-handout-app.js': 'H3 isolated handout browser entry, never loaded by main.html',
     'qisi-handout-compiler-client.js': 'H5 lazy Worker lifecycle and cancellation client; it loads no compiler assets until compile',
+    'qisi-handout-batch-settings.js': 'H7 bounded, undoable multi-question presentation settings policy',
     'qisi-handout-document.js': 'H4 pure edition-to-Typst document pipeline loaded only by the isolated handout entry',
     'qisi-handout-edition-policy.js': 'H4 deterministic edition inheritance and student leakage boundary',
     'qisi-handout-editor-state.js': 'H3 structured handout editor state and undo/redo policy',
@@ -160,6 +165,7 @@ const classificationEvidence = Object.freeze({
     'qisi-handout-pdf-session.js': 'H5 formal PDF artifact, local PDF.js preview, download and Blob lifecycle boundary',
     'qisi-handout-preview.js': 'H3 HTML preview projection with student-content safety',
     'qisi-handout-question-instance.js': 'H2 immutable question snapshot domain library',
+    'qisi-handout-source-update.js': 'H7 explicit field-level source refresh and conflict acceptance policy',
     'qisi-handout-question-library.js': 'H3 read-only adapter for formal question-bank insertion',
     'qisi-handout-repository.js': 'H2 handout persistence domain library, loaded by the isolated H3 entry',
     'qisi-handout-typst-template.js': 'H4 centrally managed trusted A4 Typst template without compiler runtime loading',

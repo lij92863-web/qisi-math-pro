@@ -59,21 +59,29 @@
 
         const collectHandoutAssetIds = handout => {
             const ids = new Set();
+            const addAssetId = value => {
+                const assetId = String(value || '').trim();
+                if (assetId) ids.add(assetId);
+            };
             const addImages = images => {
                 for (const image of Array.isArray(images) ? images : []) {
-                    const assetId = String(image?.assetId || '').trim();
-                    if (assetId) ids.add(assetId);
+                    addAssetId(image?.assetId);
                 }
             };
 
             for (const block of handout?.blocks || []) {
                 if (block?.type === 'image') {
-                    const assetId = String(block.assetId || '').trim();
-                    if (assetId) ids.add(assetId);
+                    addAssetId(block.assetId);
                 }
                 if (block?.type === 'question') {
                     addImages(block.snapshot?.images);
                     addImages(block.images);
+                }
+            }
+            for (const regionName of ['header', 'footer']) {
+                const region = handout?.settings?.[regionName];
+                for (const slotName of ['left', 'center', 'right']) {
+                    addAssetId(region?.slots?.[slotName]?.assetId);
                 }
             }
 
@@ -138,9 +146,42 @@
                         assetId: idMap.get(current) || current
                     };
                 });
+            const remapRegion = region => {
+                if (!region?.slots) return region;
+
+                return {
+                    ...region,
+                    slots: Object.fromEntries(
+                        Object.entries(region.slots).map(
+                            ([slotName, slot]) => {
+                                const current = String(
+                                    slot?.assetId || ''
+                                );
+                                return [
+                                    slotName,
+                                    {
+                                        ...slot,
+                                        assetId:
+                                            idMap.get(current) || current
+                                    }
+                                ];
+                            }
+                        )
+                    )
+                };
+            };
 
             return {
                 ...handout,
+                settings: {
+                    ...(handout?.settings || {}),
+                    header: remapRegion(
+                        handout?.settings?.header
+                    ),
+                    footer: remapRegion(
+                        handout?.settings?.footer
+                    )
+                },
                 blocks: (handout?.blocks || []).map(block => {
                     if (block?.type === 'image') {
                         const current = String(block.assetId || '');

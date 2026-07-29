@@ -564,3 +564,87 @@ It proved:
 - `npm run verify:no-real-ai`: passed;
 - real AI/OCR calls: none;
 - `git diff --check`: passed.
+
+## H7 completion report (2026-07-29)
+
+Status: complete. H7 added only advanced handout editing and local formal-preview
+capabilities. It did not modify `app.js`, `main.html`, dependencies, production
+question records, or any DOCX/PDF/batch-recognition module. H8 was not started.
+
+### Advanced editing boundaries
+
+- `qisi-handout-batch-settings.js` is a pure allowlisted policy for applying
+  presentation settings to exact selected question-block IDs. It cannot batch
+  rewrite stems, answers, analyses, solutions, source IDs, or snapshots, and one
+  application creates one undo step.
+- `qisi-handout-source-update.js` compares the immutable question snapshot with
+  the exact current source record at field level. The editor exposes changed
+  fields separately, requires explicit acceptance for each local-override
+  conflict, updates only selected snapshot fields, and never writes back to the
+  formal question bank.
+- `qisi-handout-repository.js` applies a source update in one optimistic,
+  transactional handout write. Newly selected source images are copied to
+  handout-owned Blob assets before commit; missing sources, stale handouts,
+  unaccepted conflicts, and invalid asset graphs fail closed. The optional H7
+  policy is checked only when that operation is invoked, preserving H2 entry
+  compatibility.
+- Question blocks now support bounded multiple display labels and deterministic
+  `flow`, `vertical`, `row`, or `grid` multi-image layout. The HTML preview and
+  formal Typst projection consume the same normalized layout decision.
+- Header and footer regions have independent left, center, and right text/image
+  slots, local owned image assets, page scope, bounded dimensions, safe
+  background color/opacity, and optional page-edge bleed. Legacy H3/H4 settings
+  migrate deterministically; explicit modern slots remain authoritative, and
+  edition-specific overrides deep-merge without dropping sibling slots.
+- Formal preview can target the whole handout or one selected question. The
+  single-question path reuses the exact H4/H5 document, asset, compiler,
+  diagnostic, PDF Blob, download, and cleanup boundaries rather than creating a
+  second renderer.
+- `qisi-handout-app.js` remains orchestration and UI state. Batch policy, source
+  conflict planning, storage transactions, asset ownership, edition security,
+  Typst generation, Worker compilation, and PDF lifecycle stay in dedicated
+  modules.
+
+### Browser acceptance evidence
+
+Real Chromium executed and passed:
+
+```text
+create handout → insert two formal questions with owned images
+→ select both and batch-apply option/image layout plus a custom label
+→ create a local stem override → change the exact source record in the fixture
+→ select changed fields → explicitly accept the stem conflict → update
+→ configure two-image row layout and a second custom label
+→ upload a local header image → enable background, page-edge bleed and first-page scope
+→ save → reload → compile and inspect a teacher single-question PDF
+```
+
+It proved:
+
+- only selected question blocks receive allowlisted batch presentation changes;
+- source differences and conflicts are explicit, selected-field only, and the
+  application performs no unexpected source-question write;
+- multiple labels, multi-image row layout, header Blob image, background,
+  bleed, and page scope survive save/reload;
+- first-page-scoped bleed/header Typst compiles locally;
+- single-question PDF contains the refreshed selected question and label but
+  excludes the other question;
+- H3, H5, H6, and H7 real-browser workflows all pass independently;
+- the controlled in-app browser rendered the H7 editor and three-slot header
+  controls correctly with zero console errors or warnings;
+- all browser tests block external HTTP(S), and no real AI/OCR call was made.
+
+### Final verification evidence
+
+- H1-H7 focused suite: 49/49 passed;
+- H3/H5/H6/H7 real Chromium workflows: 4/4 passed;
+- H7 policy/document tests: 5/5 passed;
+- production syntax: 70 files passed;
+- `npm run verify:docx-stable`: 20/20 passed;
+- `npm run verify:pdf-known-bad`: 65/65 passed;
+- `npm run verify:batch-safety`: passed;
+- `npm run verify:no-real-ai`: passed;
+- `npm run verify:diff-scope`: passed for the exact 17-file H7 allowlist;
+- `npm run verify:safe`: 1336 total, 1328 passed, 0 failed, 8 intentionally
+  skipped;
+- `git diff --check`: passed.

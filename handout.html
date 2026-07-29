@@ -167,12 +167,40 @@
                                 <div class="canvas-heading-actions">
                                     <span>{{ editor.handout.blocks.length }} 个内容块</span>
                                     <button
+                                        v-if="questionBlocks.length"
+                                        data-testid="open-batch-settings"
+                                        class="button subtle compact"
+                                        @click="batchPanelOpen = !batchPanelOpen"
+                                    >批量设置（{{ selectedQuestionCount }}）</button>
+                                    <button
                                         data-testid="open-global-settings"
                                         class="button subtle compact"
                                         @click="clearSelection"
                                     >讲义设置</button>
                                 </div>
                             </div>
+
+                            <section v-if="batchPanelOpen" class="batch-settings-panel" data-testid="batch-settings-panel">
+                                <div class="batch-settings-heading">
+                                    <strong>多题批量设置</strong>
+                                    <span>只提供排版与显示字段；题干、答案不会批量改写。</span>
+                                    <button class="button subtle compact" @click="selectAllQuestionsForBatch">全选题目</button>
+                                    <button class="button subtle compact" @click="clearBatchSelection">清空</button>
+                                </div>
+                                <div class="batch-settings-grid">
+                                    <label>选项排列<select data-testid="batch-option-layout" v-model="batchDraft.optionLayoutMode"><option value="">不修改</option><option value="auto">自动</option><option value="one-row">一行</option><option value="two-columns">两列</option><option value="one-column">单列</option></select></label>
+                                    <label>答案位置<select v-model="batchDraft.answerPlacement"><option value="">不修改</option><option value="inherit">跟随版本</option><option value="after-question">题后</option><option value="end">讲义末尾</option><option value="hidden">隐藏</option></select></label>
+                                    <label>解析位置<select v-model="batchDraft.analysisPlacement"><option value="">不修改</option><option value="inherit">跟随版本</option><option value="after-question">题后</option><option value="end">讲义末尾</option><option value="hidden">隐藏</option></select></label>
+                                    <label>显示标签<select v-model="batchDraft.questionLabelPreset"><option value="">不修改</option><option value="none">无</option><option value="example">例题</option><option value="exercise">练习</option></select></label>
+                                    <label>自定义标签<input v-model="batchDraft.customLabel" placeholder="逗号分隔，可添加多个"></label>
+                                    <label>多图排列<select data-testid="batch-image-layout" v-model="batchDraft.imageLayoutMode"><option value="">不修改</option><option value="flow">按原位置</option><option value="vertical">纵向</option><option value="row">并排</option><option value="grid">网格</option></select></label>
+                                    <label>图片列数<input v-model="batchDraft.imageColumns" type="number" min="1" max="4" placeholder="不修改"></label>
+                                    <label>图片宽度 %<input v-model="batchDraft.imageWidthPercent" type="number" min="1" max="100" placeholder="不修改"></label>
+                                    <label>知识点<select v-model="batchDraft.showKnowledgePoints"><option value="">不修改</option><option value="inherit">继承</option><option value="true">显示</option><option value="false">隐藏</option></select></label>
+                                    <label>作答空间<input v-model="batchDraft.answerSpaceLines" type="number" min="0" max="100" placeholder="不修改"></label>
+                                </div>
+                                <button data-testid="apply-batch-settings" class="button primary" :disabled="!selectedQuestionCount" @click="applyBatchSettings">应用到 {{ selectedQuestionCount }} 道题</button>
+                            </section>
 
                             <div v-if="!editor.handout.blocks.length" class="empty-canvas">
                                 <div>＋</div>
@@ -191,6 +219,14 @@
                                 <div class="block-index">{{ String(index + 1).padStart(2, '0') }}</div>
                                 <div class="block-toolbar">
                                     <span>{{ blockLabel(block) }}</span>
+                                    <label v-if="block.type === 'question'" class="batch-select" @click.stop>
+                                        <input
+                                            :data-testid="`batch-select-${block.id}`"
+                                            type="checkbox"
+                                            :checked="isQuestionBatchSelected(block.id)"
+                                            @change="toggleQuestionBatchSelection(block.id, $event.target.checked)"
+                                        >批量
+                                    </label>
                                     <button :disabled="index === 0" @click.stop="moveSelected(block.id, -1)" title="上移">↑</button>
                                     <button :disabled="index === editor.handout.blocks.length - 1" @click.stop="moveSelected(block.id, 1)" title="下移">↓</button>
                                     <button @click.stop="copySelected(block.id)" title="复制">⧉</button>
@@ -299,10 +335,20 @@
                                 :class="[`orientation-${previewDocument.settings.page.orientation}`, `columns-${previewDocument.settings.page.columns}`]"
                                 data-testid="html-preview"
                             >
-                                <header v-if="previewDocument.settings.header.enabled" class="preview-header">
-                                    <span>{{ resolvePlaceholder(previewDocument.settings.header.left) }}</span>
-                                    <span>{{ resolvePlaceholder(previewDocument.settings.header.center) }}</span>
-                                    <span>{{ resolvePlaceholder(previewDocument.settings.header.right) }}</span>
+                                <header
+                                    v-if="previewDocument.settings.header.enabled"
+                                    class="preview-header"
+                                    :style="regionPreviewStyle(previewDocument.settings.header)"
+                                >
+                                    <span v-for="slotName in ['left', 'center', 'right']" :key="slotName">
+                                        <img
+                                            v-if="assetUrl(previewDocument.settings.header.slots?.[slotName]?.assetId)"
+                                            :src="assetUrl(previewDocument.settings.header.slots[slotName].assetId)"
+                                            :style="{ width: `${previewDocument.settings.header.slots[slotName].imageWidthMm}mm` }"
+                                            alt=""
+                                        >
+                                        {{ resolvePlaceholder(previewDocument.settings.header.slots?.[slotName]?.text || previewDocument.settings.header[slotName]) }}
+                                    </span>
                                 </header>
                                 <h1 class="preview-title">{{ previewDocument.title }}</h1>
                                 <p v-if="previewDocument.settings.metadata.subtitle" class="preview-subtitle">{{ previewDocument.settings.metadata.subtitle }}</p>
@@ -324,7 +370,11 @@
                                     <section v-else-if="block.type === 'question'" class="preview-question" :data-preview-question="block.id">
                                         <div class="question-line">
                                             <b v-if="block.question.display.showQuestionNumber">{{ questionNumberFor(block) }}.</b>
-                                            <span v-if="block.question.questionLabel.preset !== 'none'" class="question-label">{{ questionLabelText(block.question) }}</span>
+                                            <span
+                                                v-for="label in questionDisplayLabels(block.question)"
+                                                :key="label"
+                                                class="question-label"
+                                            >{{ label }}</span>
                                             <math-content :content="block.question.stem"></math-content>
                                             <span
                                                 v-if="block.question.answer && block.question.display.answerPlacement === 'inline'"
@@ -341,7 +391,12 @@
                                                 <math-content :content="option"></math-content>
                                             </div>
                                         </div>
-                                        <div class="preview-question-images" v-if="block.question.images.length">
+                                        <div
+                                            class="preview-question-images"
+                                            v-if="block.question.images.length"
+                                            :class="`layout-${block.question.imageLayout.mode}`"
+                                            :style="questionImageGroupStyle(block.question)"
+                                        >
                                             <figure v-for="image in block.question.images" :key="image.id" :class="`placement-${image.placement}`">
                                                 <img v-if="assetUrl(image.assetId)" :src="assetUrl(image.assetId)" :style="imageStyle(image)" alt="">
                                                 <figcaption v-if="image.caption">{{ image.caption }}</figcaption>
@@ -381,10 +436,20 @@
                                         <math-content :content="item.content"></math-content>
                                     </article>
                                 </section>
-                                <footer v-if="previewDocument.settings.footer.enabled" class="preview-footer">
-                                    <span>{{ resolvePlaceholder(previewDocument.settings.footer.left) }}</span>
-                                    <span>{{ resolvePlaceholder(previewDocument.settings.footer.center) }}</span>
-                                    <span>{{ resolvePlaceholder(previewDocument.settings.footer.right) }}</span>
+                                <footer
+                                    v-if="previewDocument.settings.footer.enabled"
+                                    class="preview-footer"
+                                    :style="regionPreviewStyle(previewDocument.settings.footer)"
+                                >
+                                    <span v-for="slotName in ['left', 'center', 'right']" :key="slotName">
+                                        <img
+                                            v-if="assetUrl(previewDocument.settings.footer.slots?.[slotName]?.assetId)"
+                                            :src="assetUrl(previewDocument.settings.footer.slots[slotName].assetId)"
+                                            :style="{ width: `${previewDocument.settings.footer.slots[slotName].imageWidthMm}mm` }"
+                                            alt=""
+                                        >
+                                        {{ resolvePlaceholder(previewDocument.settings.footer.slots?.[slotName]?.text || previewDocument.settings.footer[slotName]) }}
+                                    </span>
                                 </footer>
                             </section>
                         </template>
@@ -427,6 +492,18 @@
                             </section>
 
                             <section v-else-if="inspectorTab === 'images'" class="inspector-form">
+                                <div class="two-field-row">
+                                    <label>多图排列
+                                        <select data-testid="question-image-layout" :value="selectedQuestion.imageLayout.mode" @change="updateQuestionSection('imageLayout', { mode: $event.target.value })">
+                                            <option value="flow">按每张图片位置</option>
+                                            <option value="vertical">纵向排列</option>
+                                            <option value="row">并排排列</option>
+                                            <option value="grid">网格排列</option>
+                                        </select>
+                                    </label>
+                                    <label v-if="selectedQuestion.imageLayout.mode === 'grid'">列数<input type="number" min="1" max="4" :value="selectedQuestion.imageLayout.columns" @change="updateQuestionSection('imageLayout', { columns: Number($event.target.value) })"></label>
+                                    <label v-if="['row', 'grid'].includes(selectedQuestion.imageLayout.mode)">间距 mm<input type="number" min="0" max="20" :value="selectedQuestion.imageLayout.gapMm" @change="updateQuestionSection('imageLayout', { gapMm: Number($event.target.value) })"></label>
+                                </div>
                                 <article v-for="(image, index) in selectedQuestion.images" :key="image.id" class="image-property-card">
                                     <img v-if="assetUrl(image.assetId)" :src="assetUrl(image.assetId)" alt="">
                                     <label>位置
@@ -482,6 +559,25 @@
                                     </select>
                                 </label>
                                 <label v-if="selectedQuestion.questionLabel.preset === 'custom'">自定义文字<input :value="selectedQuestion.questionLabel.customText" @input="updateQuestionSection('questionLabel', { customText: $event.target.value })"></label>
+                                <div class="display-label-editor">
+                                    <strong>讲义显示标签（可多个）</strong>
+                                    <div class="display-label-presets">
+                                        <button class="button subtle compact" @click="addQuestionDisplayLabel('preset', 'authentic')">真题</button>
+                                        <button class="button subtle compact" @click="addQuestionDisplayLabel('preset', 'theorem')">定理</button>
+                                        <button class="button subtle compact" @click="addQuestionDisplayLabel('preset', 'example')">例题</button>
+                                        <button class="button subtle compact" @click="addQuestionDisplayLabel('preset', 'variant')">变式</button>
+                                        <button class="button subtle compact" @click="addQuestionDisplayLabel('preset', 'practice')">课堂练习</button>
+                                        <button class="button subtle compact" @click="addQuestionDisplayLabel('preset', 'homework')">课后作业</button>
+                                        <button class="button subtle compact" @click="addQuestionDisplayLabel('preset', 'error')">易错题</button>
+                                    </div>
+                                    <div class="inline-fields">
+                                        <input data-testid="custom-display-label" v-model="newDisplayLabel" maxlength="80" placeholder="输入自定义标签">
+                                        <button class="button primary compact" @click="addQuestionDisplayLabel('custom', newDisplayLabel)">添加</button>
+                                    </div>
+                                    <div class="display-label-list">
+                                        <button v-for="(label, index) in selectedQuestion.displayLabels" :key="`${label.type}-${label.value}-${index}`" class="label-chip" @click="removeQuestionDisplayLabel(index)">{{ questionDisplayLabels({ ...selectedQuestion, displayLabels: [label] })[0] }} ×</button>
+                                    </div>
+                                </div>
                             </section>
 
                             <section v-else-if="inspectorTab === 'display'" class="inspector-form">
@@ -502,8 +598,33 @@
                                     <strong>{{ sourceStatusLabel }}</strong>
                                     <p v-if="sourceCheck.changedFields?.length">变化字段：{{ sourceCheck.changedFields.join('、') }}</p>
                                     <p v-if="sourceCheck.conflictFields?.length">与讲义修改冲突：{{ sourceCheck.conflictFields.join('、') }}</p>
-                                    <p>本阶段只展示差异，不会自动覆盖讲义。</p>
+                                    <div v-if="sourceCheck.status === 'updated'" class="source-update-fields">
+                                        <label v-for="field in sourceCheck.changedFields" :key="field" class="source-field-row">
+                                            <input
+                                                type="checkbox"
+                                                :checked="sourceUpdateFields.includes(field)"
+                                                @change="setSourceUpdateField(field, $event.target.checked)"
+                                            >
+                                            <span>{{ field }}</span>
+                                            <em v-if="sourceCheck.conflictFields.includes(field)">讲义已局部修改</em>
+                                            <input
+                                                v-if="sourceCheck.conflictFields.includes(field) && sourceUpdateFields.includes(field)"
+                                                type="checkbox"
+                                                :checked="acceptedSourceConflicts.includes(field)"
+                                                @change="setSourceConflictAccepted(field, $event.target.checked)"
+                                            >
+                                            <small v-if="sourceCheck.conflictFields.includes(field) && sourceUpdateFields.includes(field)">明确以题库版本覆盖该字段</small>
+                                        </label>
+                                        <button
+                                            data-testid="apply-source-update"
+                                            class="button primary"
+                                            :disabled="!sourceUpdateFields.length"
+                                            @click="applySelectedSourceUpdate"
+                                        >更新所选字段</button>
+                                    </div>
+                                    <p>未勾选字段与未确认冲突始终保留当前讲义版本，不会静默覆盖。</p>
                                 </div>
+                                <button data-testid="single-question-formal-preview" class="button subtle" @click="openSingleQuestionFormalPreview">单题正式预览</button>
                             </section>
                         </template>
 
@@ -549,11 +670,35 @@
                             </section>
                             <section v-else-if="globalTab === 'header' || globalTab === 'footer'" class="inspector-form">
                                 <label class="check-row"><input :data-testid="`${globalTab}-enabled`" type="checkbox" :checked="editor.handout.settings[globalTab].enabled" @change="updateGlobal(globalTab, { enabled: $event.target.checked })">启用{{ globalTab === 'header' ? '页眉' : '页脚' }}</label>
-                                <label>页面范围<select :value="editor.handout.settings[globalTab].scope" @change="updateGlobal(globalTab, { scope: $event.target.value })"><option value="all">所有页面</option><option value="except-first">除首页外</option><option value="first-only">仅首页</option></select></label>
-                                <label>左侧<input :data-testid="`${globalTab}-left`" :value="editor.handout.settings[globalTab].left" @input="updateGlobal(globalTab, { left: $event.target.value })"></label>
-                                <label>中间<input :data-testid="`${globalTab}-center`" :value="editor.handout.settings[globalTab].center" @input="updateGlobal(globalTab, { center: $event.target.value })"></label>
-                                <label>右侧<input :data-testid="`${globalTab}-right`" :value="editor.handout.settings[globalTab].right" @input="updateGlobal(globalTab, { right: $event.target.value })"></label>
-                                <p class="field-help">可用：{title} {teacher} {school} {page} {pages}</p>
+                                <label>页面范围<select :data-testid="`${globalTab}-scope`" :value="editor.handout.settings[globalTab].scope" @change="updateGlobal(globalTab, { scope: $event.target.value })"><option value="all">所有页面</option><option value="except-first">除首页外</option><option value="first-only">仅首页</option></select></label>
+                                <div v-for="slotName in ['left', 'center', 'right']" :key="slotName" class="region-slot-card">
+                                    <strong>{{ slotName === 'left' ? '左侧' : slotName === 'center' ? '中间' : '右侧' }}内容槽</strong>
+                                    <label class="check-row"><input type="checkbox" :checked="editor.handout.settings[globalTab].slots[slotName].enabled" @change="updateRegionSlot(globalTab, slotName, { enabled: $event.target.checked })">启用内容槽</label>
+                                    <label>文字<input :data-testid="`${globalTab}-${slotName}`" :value="editor.handout.settings[globalTab].slots[slotName].text" @input="updateRegionSlot(globalTab, slotName, { text: $event.target.value })"></label>
+                                    <div class="two-field-row">
+                                        <label>字号 pt<input type="number" min="6" max="14" step="0.5" :value="editor.handout.settings[globalTab].slots[slotName].fontSizePt || 8.5" @change="updateRegionSlot(globalTab, slotName, { fontSizePt: Number($event.target.value) })"></label>
+                                        <label>图片宽度 mm<input type="number" min="3" max="50" :value="editor.handout.settings[globalTab].slots[slotName].imageWidthMm" @change="updateRegionSlot(globalTab, slotName, { imageWidthMm: Number($event.target.value) })"></label>
+                                    </div>
+                                    <img v-if="assetUrl(editor.handout.settings[globalTab].slots[slotName].assetId)" class="region-slot-thumbnail" :src="assetUrl(editor.handout.settings[globalTab].slots[slotName].assetId)" alt="">
+                                    <div class="inline-fields">
+                                        <label class="button subtle file-button">选择本地图片<input type="file" accept="image/*" @change="uploadRegionSlotImage(globalTab, slotName, $event)"></label>
+                                        <button v-if="editor.handout.settings[globalTab].slots[slotName].assetId" class="button danger-text" @click="removeRegionSlotImage(globalTab, slotName)">移除图片</button>
+                                    </div>
+                                </div>
+                                <div class="region-background-card">
+                                    <label class="check-row"><input :data-testid="`${globalTab}-background-enabled`" type="checkbox" :checked="editor.handout.settings[globalTab].background.enabled" @change="updateRegionBackground(globalTab, { enabled: $event.target.checked })">启用通栏背景</label>
+                                    <div class="two-field-row">
+                                        <label>颜色<input type="color" :value="editor.handout.settings[globalTab].background.color" @input="updateRegionBackground(globalTab, { color: $event.target.value })"></label>
+                                        <label>透明度<input type="number" min="0" max="1" step="0.05" :value="editor.handout.settings[globalTab].background.opacity" @change="updateRegionBackground(globalTab, { opacity: Number($event.target.value) })"></label>
+                                        <label>高度 mm<input type="number" min="4" max="30" :value="editor.handout.settings[globalTab].background.heightMm" @change="updateRegionBackground(globalTab, { heightMm: Number($event.target.value) })"></label>
+                                    </div>
+                                    <label class="check-row"><input :data-testid="`${globalTab}-background-bleed`" type="checkbox" :checked="editor.handout.settings[globalTab].background.bleed" @change="updateRegionBackground(globalTab, { bleed: $event.target.checked })">背景延伸到页面边缘</label>
+                                </div>
+                                <div class="two-field-row">
+                                    <label>距页面边缘 mm<input type="number" min="0" max="30" :value="editor.handout.settings[globalTab].distanceMm" @change="updateGlobal(globalTab, { distanceMm: Number($event.target.value) })"></label>
+                                    <label>内容高度 mm<input type="number" min="4" max="30" :value="editor.handout.settings[globalTab].heightMm" @change="updateGlobal(globalTab, { heightMm: Number($event.target.value) })"></label>
+                                </div>
+                                <p class="field-help">可用：{title} {filename} {teacher} {school} {page} {pages}</p>
                             </section>
                             <section v-else class="inspector-form">
                                 <label>副标题<input :value="editor.handout.settings.metadata.subtitle" @input="updateGlobal('metadata', { subtitle: $event.target.value })"></label>
@@ -616,7 +761,7 @@
                     <header class="formal-preview-header">
                         <div>
                             <span class="eyebrow">本地 Typst 正式输出</span>
-                            <h2>{{ previewEdition === 'student' ? '学生版' : '教师版' }} PDF</h2>
+                            <h2>{{ formalScopeLabel }} · {{ previewEdition === 'student' ? '学生版' : '教师版' }} PDF</h2>
                         </div>
                         <div class="formal-preview-header-actions">
                             <span class="formal-phase" :class="`phase-${formalState.phase}`">{{ formalStatusLabel }}</span>
@@ -697,10 +842,12 @@
     <script src="./qisi-db.js"></script>
     <script src="./qisi-handout-model.js"></script>
     <script src="./qisi-handout-question-instance.js"></script>
+    <script src="./qisi-handout-source-update.js"></script>
     <script src="./qisi-handout-asset-repository.js"></script>
     <script src="./qisi-handout-repository.js"></script>
     <script src="./qisi-handout-question-library.js"></script>
     <script src="./qisi-handout-editor-state.js"></script>
+    <script src="./qisi-handout-batch-settings.js"></script>
     <script src="./qisi-handout-preview.js"></script>
     <script src="./qisi-handout-edition-policy.js"></script>
     <script src="./qisi-handout-typst-template.js"></script>

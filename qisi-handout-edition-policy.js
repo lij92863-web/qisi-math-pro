@@ -72,6 +72,11 @@
             'center',
             'right'
         ]);
+        const REGION_SCOPES = Object.freeze([
+            'all',
+            'except-first',
+            'first-only'
+        ]);
         const BUILTIN_QUESTION_DEFAULTS = Object.freeze({
             student: Object.freeze({
                 showKnowledgePoints: false,
@@ -105,7 +110,9 @@
             enabled: false,
             text: '',
             alignment: 'center',
-            fontSizePt: 8.5
+            fontSizePt: 8.5,
+            assetId: '',
+            imageWidthMm: 10
         });
 
         const isPlainObject = value =>
@@ -113,6 +120,8 @@
             && typeof value === 'object'
             && !Array.isArray(value)
             && Object.getPrototypeOf(value) === Object.prototype;
+        const ASSET_ID_PATTERN =
+            /^[a-z0-9][a-z0-9._:-]{0,127}$/i;
 
         const assertEdition = edition => {
             if (!EDITIONS.includes(edition)) {
@@ -210,7 +219,7 @@
                 paper: 'a4',
                 margin: {
                     leftMm: boundedNumber(
-                        margin.leftMm,
+                        margin.leftMm ?? source.marginLeftMm,
                         DEFAULT_PAGE_SETTINGS.margin.leftMm,
                         {
                             label: 'page.margin.leftMm',
@@ -219,7 +228,7 @@
                         }
                     ),
                     rightMm: boundedNumber(
-                        margin.rightMm,
+                        margin.rightMm ?? source.marginRightMm,
                         DEFAULT_PAGE_SETTINGS.margin.rightMm,
                         {
                             label: 'page.margin.rightMm',
@@ -228,7 +237,7 @@
                         }
                     ),
                     topMm: boundedNumber(
-                        margin.topMm,
+                        margin.topMm ?? source.marginTopMm,
                         DEFAULT_PAGE_SETTINGS.margin.topMm,
                         {
                             label: 'page.margin.topMm',
@@ -237,7 +246,7 @@
                         }
                     ),
                     bottomMm: boundedNumber(
-                        margin.bottomMm,
+                        margin.bottomMm ?? source.marginBottomMm,
                         DEFAULT_PAGE_SETTINGS.margin.bottomMm,
                         {
                             label: 'page.margin.bottomMm',
@@ -247,7 +256,7 @@
                     )
                 },
                 bodyFontPt: boundedNumber(
-                    source.bodyFontPt,
+                    source.bodyFontPt ?? source.fontSizePt,
                     DEFAULT_PAGE_SETTINGS.bodyFontPt,
                     {
                         label: 'page.bodyFontPt',
@@ -256,7 +265,11 @@
                     }
                 ),
                 lineHeightEm: boundedNumber(
-                    source.lineHeightEm,
+                    source.lineHeightEm ?? (
+                        source.lineSpacing == null
+                            ? undefined
+                            : Number(source.lineSpacing) * 0.55
+                    ),
                     DEFAULT_PAGE_SETTINGS.lineHeightEm,
                     {
                         label: 'page.lineHeightEm',
@@ -280,6 +293,10 @@
             if (!ALIGNMENTS.includes(alignment)) {
                 throw new TypeError(`${label}.alignment is invalid`);
             }
+            const assetId = String(source.assetId || '').trim();
+            if (assetId && !ASSET_ID_PATTERN.test(assetId)) {
+                throw new TypeError(`${label}.assetId is invalid`);
+            }
 
             return {
                 enabled: source.enabled == null
@@ -299,22 +316,183 @@
                         minimum: 6,
                         maximum: 14
                     }
+                ),
+                assetId,
+                imageWidthMm: boundedNumber(
+                    source.imageWidthMm,
+                    DEFAULT_SLOT_SETTINGS.imageWidthMm,
+                    {
+                        label: `${label}.imageWidthMm`,
+                        minimum: 3,
+                        maximum: 50
+                    }
                 )
             };
         };
 
-        const mergeSlot = (base, override) => {
-            if (override == null) return normalizeSlotSettings(base, 'slot');
-            const merged = {
-                ...(typeof base === 'string' ? { text: base } : base || {}),
-                ...(typeof override === 'string'
-                    ? {
-                        enabled: Boolean(override),
-                        text: override
+        const normalizeRegionSettings = (value, label) => {
+            const source = typeof value === 'string'
+                ? {
+                    enabled: Boolean(value),
+                    text: value
+                }
+                : (isPlainObject(value) ? value : {});
+            const legacyAlignment = ALIGNMENTS.includes(source.alignment)
+                ? source.alignment
+                : 'center';
+            const slots = {};
+
+            for (const alignment of ALIGNMENTS) {
+                const configured = source.slots?.[alignment];
+                const legacyText = source[alignment]
+                    ?? (
+                        source.text != null
+                        && legacyAlignment === alignment
+                            ? source.text
+                            : ''
+                    );
+                slots[alignment] = normalizeSlotSettings(
+                    configured && isPlainObject(configured)
+                        ? {
+                            ...configured,
+                            alignment
+                        }
+                        : {
+                            enabled: Boolean(legacyText),
+                            text: legacyText || '',
+                            alignment
+                        },
+                    `${label}.slots.${alignment}`
+                );
+                slots[alignment].alignment = alignment;
+            }
+
+            const scope = String(source.scope || 'all');
+            if (!REGION_SCOPES.includes(scope)) {
+                throw new TypeError(`${label}.scope is invalid`);
+            }
+            const background = isPlainObject(source.background)
+                ? source.background
+                : {};
+            const color = String(
+                background.color || '#f1f5f9'
+            ).trim();
+            if (!/^#[0-9a-f]{6}$/i.test(color)) {
+                throw new TypeError(
+                    `${label}.background.color is invalid`
+                );
+            }
+
+            return {
+                enabled: source.enabled == null
+                    ? Object.values(slots).some(
+                        slot => slot.enabled
+                    )
+                    : readBoolean(
+                        source.enabled,
+                        false,
+                        `${label}.enabled`
+                    ),
+                scope,
+                distanceMm: boundedNumber(
+                    source.distanceMm,
+                    9,
+                    {
+                        label: `${label}.distanceMm`,
+                        minimum: 0,
+                        maximum: 30
                     }
-                    : override)
+                ),
+                heightMm: boundedNumber(
+                    source.heightMm,
+                    8,
+                    {
+                        label: `${label}.heightMm`,
+                        minimum: 4,
+                        maximum: 30
+                    }
+                ),
+                slots,
+                background: {
+                    enabled: readBoolean(
+                        background.enabled,
+                        false,
+                        `${label}.background.enabled`
+                    ),
+                    color,
+                    opacity: boundedNumber(
+                        background.opacity,
+                        0.12,
+                        {
+                            label: `${label}.background.opacity`,
+                            minimum: 0,
+                            maximum: 1
+                        }
+                    ),
+                    heightMm: boundedNumber(
+                        background.heightMm,
+                        source.heightMm ?? 8,
+                        {
+                            label: `${label}.background.heightMm`,
+                            minimum: 4,
+                            maximum: 30
+                        }
+                    ),
+                    bleed: readBoolean(
+                        background.bleed,
+                        false,
+                        `${label}.background.bleed`
+                    )
+                }
             };
-            return normalizeSlotSettings(merged, 'slot');
+        };
+
+        const mergeRegionSettings = (baseValue, overrideValue) => {
+            const asRecord = value => typeof value === 'string'
+                ? {
+                    enabled: Boolean(value),
+                    text: value
+                }
+                : (isPlainObject(value) ? value : {});
+            const base = asRecord(baseValue);
+            const override = asRecord(overrideValue);
+            const mergedSlots = {};
+
+            for (const alignment of ALIGNMENTS) {
+                const baseSlot = base.slots?.[alignment];
+                const overrideSlot = override.slots?.[alignment];
+                if (
+                    !isPlainObject(baseSlot)
+                    && !isPlainObject(overrideSlot)
+                ) {
+                    continue;
+                }
+                mergedSlots[alignment] = {
+                    ...(isPlainObject(baseSlot) ? baseSlot : {}),
+                    ...(isPlainObject(overrideSlot)
+                        ? overrideSlot
+                        : {})
+                };
+            }
+
+            const merged = {
+                ...base,
+                ...override,
+                background: {
+                    ...(isPlainObject(base.background)
+                        ? base.background
+                        : {}),
+                    ...(isPlainObject(override.background)
+                        ? override.background
+                        : {})
+                }
+            };
+            if (Object.keys(mergedSlots).length) {
+                merged.slots = mergedSlots;
+            } else {
+                delete merged.slots;
+            }
+            return merged;
         };
 
         const resolveEditionSettings = (settingsValue, editionValue) => {
@@ -354,13 +532,24 @@
                         ? editionSettings.page
                         : {})
                 }),
-                header: mergeSlot(
-                    settings.header,
-                    editionSettings.header
+                header: normalizeRegionSettings(
+                    mergeRegionSettings(
+                        settings.header,
+                        editionSettings.header
+                    ),
+                    `settings.${edition}.header`
                 ),
-                footer: mergeSlot(
-                    settings.footer,
-                    editionSettings.footer
+                footer: normalizeRegionSettings(
+                    mergeRegionSettings(
+                        settings.footer,
+                        editionSettings.footer
+                    ),
+                    `settings.${edition}.footer`
+                ),
+                metadata: model.cloneValue(
+                    isPlainObject(settings.metadata)
+                        ? settings.metadata
+                        : {}
                 ),
                 documentDate: String(
                     editionSettings.documentDate
@@ -580,6 +769,8 @@
             FORBIDDEN_STUDENT_KEYS,
             BUILTIN_QUESTION_DEFAULTS,
             DEFAULT_PAGE_SETTINGS,
+            REGION_SCOPES,
+            normalizeRegionSettings,
             resolveEditionSettings,
             resolveQuestionDisplay,
             resolveHandoutForEdition,

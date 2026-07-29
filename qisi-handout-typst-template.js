@@ -51,6 +51,8 @@
             page,
             header,
             footer,
+            headerSettings,
+            footerSettings,
             body,
             endSections
         }) => {
@@ -76,6 +78,14 @@
                 page?.lineHeightEm,
                 'line height'
             );
+            const headerAscentMm = finite(
+                headerSettings?.distanceMm ?? 9,
+                'header distance'
+            );
+            const footerDescentMm = finite(
+                footerSettings?.distanceMm ?? 9,
+                'footer distance'
+            );
             const lines = [
                 `// ${TEMPLATE_ID}@${TEMPLATE_VERSION}`,
                 '#import "/mitex/lib.typ": mi, mitex',
@@ -85,6 +95,8 @@
                 `  margin: (left: ${leftMm}mm, right: ${rightMm}mm, top: ${topMm}mm, bottom: ${bottomMm}mm),`,
                 `  header: context ${headerSource},`,
                 `  footer: context ${footerSource},`,
+                `  header-ascent: ${headerAscentMm}mm,`,
+                `  footer-descent: ${footerDescentMm}mm,`,
                 ')',
                 `#set text(font: ("New Computer Modern", "Noto Serif CJK SC"), size: ${bodyFontPt}pt, lang: "zh")`,
                 `#set par(justify: true, leading: ${lineHeightEm}em)`,

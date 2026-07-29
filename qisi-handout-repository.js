@@ -17,7 +17,18 @@
                 ? require('./qisi-handout-asset-repository.js')
                 : null
         );
-    const api = factory(model, questionInstance, assetModule);
+    const sourceUpdate = root.Qisi?.HandoutSourceUpdate
+        || (
+            typeof require === 'function'
+                ? require('./qisi-handout-source-update.js')
+                : null
+        );
+    const api = factory(
+        model,
+        questionInstance,
+        assetModule,
+        sourceUpdate
+    );
 
     root.Qisi = root.Qisi || {};
     root.Qisi.HandoutRepository = api;
@@ -32,7 +43,7 @@
     typeof globalThis !== 'undefined'
         ? globalThis
         : this,
-    function (model, questionInstance, assetModule) {
+    function (model, questionInstance, assetModule, sourceUpdate) {
         'use strict';
 
         if (!model || !questionInstance || !assetModule) {
@@ -79,6 +90,16 @@
             const error = new Error(message);
             error.code = code;
             return error;
+        };
+
+        const requireSourceUpdate = () => {
+            if (!sourceUpdate) {
+                throw createRepositoryError(
+                    'HANDOUT_SOURCE_UPDATE_UNAVAILABLE',
+                    'source update policy is unavailable'
+                );
+            }
+            return sourceUpdate;
         };
 
         const createHandoutRepository = ({
@@ -483,6 +504,148 @@
                 };
             });
 
+            const updateQuestionSnapshotFields = (
+                handoutId,
+                blockId,
+                {
+                    question,
+                    sourceImages = [],
+                    selectedFields,
+                    acceptedConflictFields = [],
+                    expectedUpdatedAt
+                } = {}
+            ) => inWriteTransaction(async () => {
+                const id = String(handoutId || '').trim();
+                const targetBlockId = String(blockId || '').trim();
+                const currentRecord = await handouts.get(id);
+
+                if (!currentRecord) {
+                    throw createRepositoryError(
+                        'HANDOUT_NOT_FOUND',
+                        `handout ${id} does not exist`
+                    );
+                }
+
+                const current = model.assertValidHandout(currentRecord);
+                assertConcurrency(current, expectedUpdatedAt);
+                const block = current.blocks.find(
+                    item => item.id === targetBlockId
+                );
+
+                if (block?.type !== 'question') {
+                    throw createRepositoryError(
+                        'HANDOUT_BLOCK_NOT_FOUND',
+                        `question block ${targetBlockId} does not exist`
+                    );
+                }
+
+                const updatePolicy = requireSourceUpdate();
+                const plan = updatePolicy.createSourceUpdatePlan(
+                    block,
+                    question,
+                    {
+                        selectedFields,
+                        acceptedConflictFields
+                    }
+                );
+                const timestamp = now();
+                let copiedAssets = [];
+                let refreshedImages;
+
+                if (plan.requiresImages) {
+                    const copied =
+                        questionInstance.createQuestionAssetCopies({
+                            handoutId: current.id,
+                            question,
+                            sourceImages,
+                            createAssetId: () => nextId('asset'),
+                            now: timestamp
+                        });
+                    copiedAssets = copied.assets;
+                    refreshedImages =
+                        questionInstance.createQuestionSnapshot(
+                            question,
+                            {
+                                capturedAt: timestamp,
+                                assetIdBySourceImageId:
+                                    copied.assetIdBySourceImageId
+                            }
+                        ).images;
+                }
+
+                const nextBlock = updatePolicy.applySourceUpdatePlan(
+                    block,
+                    question,
+                    plan,
+                    {
+                        refreshedImages,
+                        now: timestamp
+                    }
+                );
+                const nextCandidate = {
+                    ...current,
+                    blocks: current.blocks.map(item =>
+                        item.id === targetBlockId
+                            ? nextBlock
+                            : item
+                    )
+                };
+                const existingAssets = await assets
+                    .where('handoutId')
+                    .equals(current.id)
+                    .toArray();
+                const graph = assetModule.verifyHandoutAssetGraph(
+                    nextCandidate,
+                    [
+                        ...existingAssets,
+                        ...copiedAssets
+                    ]
+                );
+
+                if (!graph.ok) {
+                    throw createRepositoryError(
+                        'HANDOUT_ASSET_GRAPH_INVALID',
+                        `updated handout asset graph is invalid: ${[
+                            ...graph.missingIds,
+                            ...graph.invalidBlobIds,
+                            ...graph.ownershipMismatchIds,
+                            ...graph.duplicateIds
+                        ].join(', ')}`
+                    );
+                }
+
+                await writeRevision(
+                    current,
+                    'source-update',
+                    timestamp
+                );
+                if (copiedAssets.length) {
+                    await assets.bulkPut(
+                        copiedAssets.map(
+                            assetModule.normalizeAssetRecord
+                        )
+                    );
+                }
+
+                const next = model.assertValidHandout({
+                    ...nextCandidate,
+                    updatedAt: timestamp,
+                    revision: current.revision + 1
+                });
+                await handouts.put(next);
+                await trimRevisions(next.id);
+
+                return {
+                    handout: clone(next),
+                    blockId: targetBlockId,
+                    updatedFields: [...plan.selectedFields],
+                    conflictFields: [
+                        ...plan.acceptedConflictFields
+                    ],
+                    assetIds: copiedAssets.map(asset => asset.id)
+                };
+            });
+
             const importAsset = (
                 handoutId,
                 {
@@ -555,6 +718,7 @@
                 listRevisions,
                 restoreRevision,
                 insertQuestionSnapshot,
+                updateQuestionSnapshotFields,
                 importAsset,
                 getAsset,
                 listAssets,

@@ -46,6 +46,9 @@
             'title',
             'edition',
             'date',
+            'filename',
+            'teacher',
+            'school',
             'page',
             'pages'
         ]);
@@ -55,7 +58,12 @@
             example: '例题',
             practice: '练习',
             method: '方法',
-            conclusion: '结论'
+            conclusion: '结论',
+            authentic: '真题',
+            theorem: '定理',
+            variant: '变式',
+            homework: '课后作业',
+            error: '易错题'
         });
         const CALLOUT_COLORS = Object.freeze({
             method: Object.freeze({
@@ -290,22 +298,6 @@
             return fragments.join('');
         };
 
-        const renderSlotSource = (
-            slot,
-            context
-        ) => {
-            if (!slot?.enabled) {
-                return template.trustedSource('none');
-            }
-            const content = resolveLocalPlaceholderSource(
-                slot.text,
-                context
-            );
-            return template.trustedSource(
-                `align(${slot.alignment}, text(size: ${slot.fontSizePt}pt, fill: rgb("#64748b"))[${content}])`
-            );
-        };
-
         const normalizeAssetPath = value => {
             const path = String(value || '');
             if (
@@ -316,6 +308,162 @@
                 throw new TypeError('handout asset path is invalid');
             }
             return path;
+        };
+
+        const renderRegionAsset = (
+            assetId,
+            widthMm,
+            state,
+            regionName,
+            slotName
+        ) => {
+            const configured = state.assetPathById[assetId];
+            const rawPath = typeof configured === 'string'
+                ? configured
+                : configured?.path;
+            state.assetRequests.push({
+                assetId,
+                blockId: `settings-${regionName}-${slotName}`,
+                path: rawPath || ''
+            });
+
+            if (!rawPath) {
+                state.diagnostics.push({
+                    code: 'missing-asset-path',
+                    blockId: `settings-${regionName}-${slotName}`,
+                    assetId
+                });
+                return '';
+            }
+
+            try {
+                const path = normalizeAssetPath(rawPath);
+                return `image(${typstStringLiteral(path)}, width: ${Number(widthMm)}mm)`;
+            } catch (error) {
+                state.diagnostics.push({
+                    code: 'invalid-asset-path',
+                    blockId: `settings-${regionName}-${slotName}`,
+                    assetId,
+                    message: error.message
+                });
+                return '';
+            }
+        };
+
+        const renderRegionSlot = (
+            slot,
+            context,
+            state,
+            regionName,
+            slotName
+        ) => {
+            if (!slot?.enabled) return 'none';
+
+            const expressions = [];
+            if (slot.assetId) {
+                const image = renderRegionAsset(
+                    slot.assetId,
+                    slot.imageWidthMm,
+                    state,
+                    regionName,
+                    slotName
+                );
+                if (image) expressions.push(image);
+            }
+            if (String(slot.text || '')) {
+                const content = resolveLocalPlaceholderSource(
+                    slot.text,
+                    context
+                );
+                expressions.push(
+                    `text(size: ${slot.fontSizePt}pt, fill: rgb("#334155"))[${content}]`
+                );
+            }
+            if (!expressions.length) return 'none';
+
+            const content = expressions.length === 1
+                ? expressions[0]
+                : `box[${expressions
+                    .map((expression, index) =>
+                        `${index ? '#h(3pt) ' : ''}#${expression}`
+                    )
+                    .join('')}]`;
+            return `align(${slotName}, ${content})`;
+        };
+
+        const withAlpha = (color, opacity) => {
+            const alpha = Math.round(
+                Math.max(0, Math.min(1, Number(opacity))) * 255
+            ).toString(16).padStart(2, '0');
+            return `${String(color).slice(0, 7)}${alpha}`;
+        };
+
+        const renderRegionSource = (
+            region,
+            context,
+            state,
+            regionName,
+            page
+        ) => {
+            if (!region?.enabled) {
+                return template.trustedSource('none');
+            }
+
+            const cells = ['left', 'center', 'right'].map(slotName =>
+                `[#${renderRegionSlot(
+                    region.slots?.[slotName],
+                    context,
+                    state,
+                    regionName,
+                    slotName
+                )}]`
+            );
+            const grid = [
+                'grid(',
+                '  columns: (1fr, 1fr, 1fr),',
+                '  column-gutter: 5pt,',
+                `  ${cells.join(',\n  ')},`,
+                ')'
+            ].join('\n');
+            let content = grid;
+
+            if (region.background?.enabled) {
+                const fill = withAlpha(
+                    region.background.color,
+                    region.background.opacity
+                );
+                content = [
+                    'rect(',
+                    '  width: 100%,',
+                    `  height: ${region.background.heightMm}mm,`,
+                    `  fill: rgb("${fill}"),`,
+                    '  stroke: none,',
+                    '  inset: (x: 4pt, y: 2pt),',
+                    `  [#${grid}],`,
+                    ')'
+                ].join('\n');
+                if (region.background.bleed) {
+                    const margin = page?.margin || {};
+                    const offset = Number(margin.leftMm || 0);
+                    const extension = offset
+                        + Number(margin.rightMm || 0);
+                    content = (
+                        `move(dx: -${offset}mm, box(width: 100% + ${extension}mm)[#${content}])`
+                    );
+                }
+            }
+
+            if (region.scope === 'first-only') {
+                content = (
+                    `if counter(page).get().first() == 1 { ${content} } else { none }`
+                );
+            } else if (region.scope === 'except-first') {
+                content = (
+                    `if counter(page).get().first() == 1 { none } else { ${content} }`
+                );
+            }
+
+            return template.trustedSource(content);
         };
 
         const widthSource = width => width?.unit === 'mm'
@@ -379,14 +527,51 @@
         const renderImageGroup = (
             images,
             state,
-            blockId
-        ) => (images || [])
-            .slice()
-            .sort((left, right) =>
-                Number(left.order || 0) - Number(right.order || 0)
-            )
-            .map(image => renderImage(image, state, blockId))
-            .join('\n#v(4pt)\n');
+            blockId,
+            layout = {}
+        ) => {
+            const ordered = (images || [])
+                .slice()
+                .sort((left, right) =>
+                    Number(left.order || 0) - Number(right.order || 0)
+                );
+            const mode = layout.mode || 'flow';
+
+            if (
+                ordered.length < 2
+                || ['flow', 'vertical'].includes(mode)
+            ) {
+                return ordered
+                    .map(image => renderImage(image, state, blockId))
+                    .join('\n#v(4pt)\n');
+            }
+
+            const columns = mode === 'row'
+                ? Math.min(4, ordered.length)
+                : Math.max(
+                    1,
+                    Math.min(4, Number(layout.columns || 2))
+                );
+            const gapMm = Math.max(
+                0,
+                Math.min(20, Number(layout.gapMm || 0))
+            );
+            const cells = ordered.map(image =>
+                `[${renderImage(image, state, blockId)}]`
+            );
+
+            return [
+                '#grid(',
+                `  columns: (${Array.from(
+                    { length: columns },
+                    () => '1fr'
+                ).join(', ')}),`,
+                `  column-gutter: ${gapMm}mm,`,
+                `  row-gutter: ${gapMm}mm,`,
+                `  ${cells.join(',\n  ')},`,
+                ')'
+            ].join('\n');
+        };
 
         const renderOptions = (
             question,
@@ -432,6 +617,17 @@
         };
 
         const renderQuestionLabel = question => {
+            const labels = (question.displayLabels || [])
+                .map(label => {
+                    const value = String(
+                        label?.value || ''
+                    ).trim();
+                    return label?.type === 'preset'
+                        ? QUESTION_LABELS[value] || value
+                        : value;
+                })
+                .filter(Boolean);
+            if (labels.length) return labels.join(' · ');
             const custom = String(
                 question.questionLabel?.customText || ''
             ).trim();
@@ -536,7 +732,7 @@
                     '  columns: (1.55fr, 1fr),',
                     '  column-gutter: 10pt,',
                     `  [${stemSource}],`,
-                    `  [${renderImageGroup(rightOfStem, state, blockId)}],`,
+                    `  [${renderImageGroup(rightOfStem, state, blockId, question.imageLayout)}],`,
                     ')'
                 ].join('\n')
                 : stemSource;
@@ -547,7 +743,7 @@
                     '  columns: (1.55fr, 1fr),',
                     '  column-gutter: 10pt,',
                     `  [${options}],`,
-                    `  [${renderImageGroup(rightOfOptions, state, blockId)}],`,
+                    `  [${renderImageGroup(rightOfOptions, state, blockId, question.imageLayout)}],`,
                     ')'
                 ].join('\n')
                 : options;
@@ -592,7 +788,12 @@
             if (afterImages.length) {
                 lines.push(
                     '#v(5pt)',
-                    renderImageGroup(afterImages, state, blockId)
+                    renderImageGroup(
+                        afterImages,
+                        state,
+                        blockId,
+                        question.imageLayout
+                    )
                 );
             }
             if (question.display.answerSpaceLines > 0) {
@@ -846,10 +1047,13 @@
 
             const placeholderContext = {
                 title: projection.title,
+                filename: projection.title,
                 edition: edition === 'student'
                     ? '学生版'
                     : '教师版',
-                date: projection.settings.documentDate || ''
+                date: projection.settings.documentDate || '',
+                teacher: projection.settings.metadata?.teacher || '',
+                school: projection.settings.metadata?.school || ''
             };
             const rendered = template.renderDefaultA4Template({
                 title: template.trustedSource(
@@ -857,14 +1061,22 @@
                 ),
                 edition,
                 page: projection.settings.page,
-                header: renderSlotSource(
+                header: renderRegionSource(
                     projection.settings.header,
-                    placeholderContext
+                    placeholderContext,
+                    state,
+                    'header',
+                    projection.settings.page
                 ),
-                footer: renderSlotSource(
+                footer: renderRegionSource(
                     projection.settings.footer,
-                    placeholderContext
+                    placeholderContext,
+                    state,
+                    'footer',
+                    projection.settings.page
                 ),
+                headerSettings: projection.settings.header,
+                footerSettings: projection.settings.footer,
                 body: template.trustedSource(
                     state.bodyLines.join('\n')
                 ),

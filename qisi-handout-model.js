@@ -96,6 +96,16 @@
             'two-columns',
             'one-column'
         ]);
+        const MULTI_IMAGE_LAYOUT_MODES = Object.freeze([
+            'flow',
+            'vertical',
+            'row',
+            'grid'
+        ]);
+        const DISPLAY_LABEL_TYPES = Object.freeze([
+            'preset',
+            'custom'
+        ]);
         const INHERITED_VISIBILITY = Object.freeze([
             true,
             false,
@@ -583,6 +593,9 @@
             const optionLayout = isPlainObject(block.optionLayout || {})
                 ? block.optionLayout || {}
                 : null;
+            const imageLayout = isPlainObject(block.imageLayout || {})
+                ? block.imageLayout || {}
+                : null;
             const latexNormalization = isPlainObject(
                 block.latexNormalization || {}
             )
@@ -593,10 +606,22 @@
                 !display
                 || !questionLabel
                 || !optionLayout
+                || !imageLayout
                 || !latexNormalization
             ) {
                 throw new TypeError(
                     `question block ${block.id} layout settings must be objects`
+                );
+            }
+            if (
+                block.displayLabels != null
+                && (
+                    !Array.isArray(block.displayLabels)
+                    || block.displayLabels.length > 12
+                )
+            ) {
+                throw new TypeError(
+                    `question block ${block.id} display labels must be a bounded array`
                 );
             }
 
@@ -682,12 +707,65 @@
                         { maxLength: 80 }
                     )
                 },
+                displayLabels: (
+                    block.displayLabels == null
+                        ? []
+                        : block.displayLabels
+                ).map((label, index) => {
+                    if (!isPlainObject(label)) {
+                        throw new TypeError(
+                            `question block ${block.id} display label ${index} must be an object`
+                        );
+                    }
+                    return {
+                        type: normalizeEnum(
+                            label.type,
+                            DISPLAY_LABEL_TYPES,
+                            `question block ${block.id} display label ${index} type`,
+                            'preset'
+                        ),
+                        value: normalizeText(
+                            label.value,
+                            `question block ${block.id} display label ${index} value`,
+                            {
+                                required: true,
+                                maxLength: 80
+                            }
+                        )
+                    };
+                }),
                 optionLayout: {
                     mode: normalizeEnum(
                         optionLayout.mode,
                         OPTION_LAYOUT_MODES,
                         `question block ${block.id} option layout`,
                         'auto'
+                    )
+                },
+                imageLayout: {
+                    mode: normalizeEnum(
+                        imageLayout.mode,
+                        MULTI_IMAGE_LAYOUT_MODES,
+                        `question block ${block.id} image layout`,
+                        'flow'
+                    ),
+                    columns: normalizeInteger(
+                        imageLayout.columns,
+                        `question block ${block.id} image columns`,
+                        {
+                            fallback: 2,
+                            minimum: 1,
+                            maximum: 4
+                        }
+                    ),
+                    gapMm: normalizeInteger(
+                        imageLayout.gapMm,
+                        `question block ${block.id} image gap`,
+                        {
+                            fallback: 4,
+                            minimum: 0,
+                            maximum: 20
+                        }
                     )
                 },
                 images: normalizedImages,
@@ -976,6 +1054,8 @@
             IMAGE_ALIGNMENTS,
             IMAGE_WIDTH_UNITS,
             OPTION_LAYOUT_MODES,
+            MULTI_IMAGE_LAYOUT_MODES,
+            DISPLAY_LABEL_TYPES,
             cloneValue,
             deepEqual,
             migrateHandout,

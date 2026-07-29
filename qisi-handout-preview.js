@@ -178,10 +178,20 @@
                 sourceQuestionId: block.sourceQuestionId,
                 display,
                 questionLabel: model.cloneValue(block.questionLabel || {}),
+                displayLabels: model.cloneValue(
+                    block.displayLabels || []
+                ),
                 optionLayout: {
                     mode: block.optionLayout?.mode || 'auto',
                     columns: optionColumns
                 },
+                imageLayout: model.cloneValue(
+                    block.imageLayout || {
+                        mode: 'flow',
+                        columns: 2,
+                        gapMm: 4
+                    }
+                ),
                 images: model.cloneValue(block.images || [])
             };
 
