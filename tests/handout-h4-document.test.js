@@ -363,7 +363,9 @@ test('H4 document output is deterministic, maps every emitted block, and records
     assert.equal(first.source, second.source);
     assert.deepEqual(first.lineMap, second.lineMap);
     assert.deepEqual(
-        first.lineMap.map(item => item.blockId),
+        first.lineMap
+            .filter(item => !item.formulaId)
+            .map(item => item.blockId),
         [
             'heading-1',
             'body-1',
@@ -373,6 +375,12 @@ test('H4 document output is deterministic, maps every emitted block, and records
     );
     assert.ok(first.lineMap.every(
         item => item.endLine >= item.startLine
+    ));
+    assert.ok(first.lineMap.some(
+        item => item.formulaId === 'question-1:stem:1'
+    ));
+    assert.ok(first.lineMap.some(
+        item => item.formulaId === 'question-1:option0:1'
     ));
     assert.ok(first.normalizationAudit.length >= 5);
     const stemFormula = first.normalizationAudit.find(

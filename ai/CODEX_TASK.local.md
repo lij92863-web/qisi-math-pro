@@ -438,3 +438,59 @@ question-bank persistence, or `app.js` production chain.
 - `npm run verify:batch-safety`: passed;
 - `npm run verify:no-real-ai`: passed;
 - `git diff --check`: passed.
+
+## H5 completion report (2026-07-29)
+
+Status: complete. H5 productionized the already licensed and pinned H1 browser
+runtime without changing `app.js`, `main.html`, dependencies, question-bank data,
+or any DOCX/PDF/batch-recognition module. H6 product actions and navigation were
+not started.
+
+### Compiler and artifact boundaries
+
+- `qisi-handout-compiler-client.js` owns lazy module-Worker creation, one active
+  request, bounded timeout, explicit cancellation by Worker termination, clean
+  retry, progress, and disposal. Loading the normal main or handout page does not
+  create a Worker or request Typst, MiTeX, fonts, or PDF.js.
+- `workers/qisi-handout-typst-worker.mjs` is the sole Typst/WASM execution
+  boundary. It mounts fixed MiTeX sources plus validated per-document image
+  assets, removes previous document shadows, and transfers one PDF buffer back.
+- `workers/qisi-handout-compiler-contract.mjs` fixes runtime versions, same-origin
+  assets, source/asset limits, safe virtual paths, and a versioned CacheStorage
+  namespace. Static WASM, fonts, and MiTeX payloads are size-validated; stale
+  compiler caches are removed only after successful initialization.
+- `workers/qisi-handout-compiler-diagnostics.mjs` maps Typst lines to the most
+  specific question block and formula. H4 source generation now emits inert
+  formula markers and formula-level line-map entries without changing rendered
+  content.
+- `qisi-handout-pdf-session.js` blocks unready documents, missing/invalid assets,
+  unsupported media, and SVG external references before Worker use. It owns one
+  PDF Blob and Blob URL shared by formal preview and download, lazy-loads local
+  PDF.js only on preview, and revokes URLs on explicit close, replacement,
+  page hide, unload, or disposal—never on an arbitrary short timer.
+
+### Verification evidence
+
+- H5 infrastructure unit tests: 6/6 passed;
+- H5 real Chromium production test: passed, including:
+  - zero H5 compiler-runtime requests during normal main and handout startup;
+  - cold compile, versioned cache creation and stale-cache cleanup;
+  - warm compile with at least ten cache hits and zero cache misses;
+  - main-thread heartbeat during Worker compilation;
+  - dynamic local SVG virtual-file compilation;
+  - explicit cancellation followed by successful clean retry;
+  - PDF.js canvas rendering from the same Blob URL used for download;
+  - byte-for-byte preview/download SHA-256 equality;
+  - formula-level diagnostic mapping;
+  - missing local font, missing image, unsafe SVG, and invalid formula all
+    fail closed with no downloadable artifact;
+  - Blob URL release on explicit preview close;
+  - zero external HTTP(S) requests.
+- H1-H5 focused suite: 43/43 passed;
+- production syntax: 68 files passed;
+- `npm run verify:diff-scope`: passed for the H5 allowlist;
+- `npm run verify:safe`: 1329 total, 1321 passed, 0 failed, 8 intentionally
+  skipped;
+- `npm run verify:batch-safety`: passed;
+- `npm run verify:no-real-ai`: passed;
+- `git diff --check`: passed.

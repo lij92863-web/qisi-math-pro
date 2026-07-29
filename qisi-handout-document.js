@@ -233,11 +233,15 @@
                     normalized: normalized.normalized,
                     operations: normalized.operations
                 }));
-                fragments.push(
-                    formula.displayMode
-                        ? `#block(width: 100%)[#mitex(${typstStringLiteral(normalized.normalized)})]`
-                        : `#mi(${typstStringLiteral(normalized.normalized)})`
-                );
+                const formulaSource = formula.displayMode
+                    ? `#block(width: 100%)[#mitex(${typstStringLiteral(normalized.normalized)})]`
+                    : `#mi(${typstStringLiteral(normalized.normalized)})`;
+                fragments.push([
+                    `/* TEX-HANDOUT-FORMULA-BEGIN ${formulaId} */`,
+                    formulaSource,
+                    `/* TEX-HANDOUT-FORMULA-END ${formulaId} */`,
+                    ''
+                ].join('\n'));
                 cursor = match.index + match[0].length;
             }
 
@@ -709,22 +713,52 @@
 
         const buildLineMap = source => {
             const lines = source.split('\n');
-            const open = new Map();
+            const openBlocks = new Map();
+            const openFormulas = new Map();
             const result = [];
+            let currentBlockId = '';
 
             lines.forEach((line, index) => {
                 const begin = line.match(
                     /^\/\/ TEX-HANDOUT-BLOCK-BEGIN (.+)$/
                 );
                 if (begin) {
-                    open.set(begin[1], index + 1);
+                    currentBlockId = begin[1];
+                    openBlocks.set(begin[1], index + 1);
+                    return;
+                }
+                const formulaBegin = line.match(
+                    /\/\* TEX-HANDOUT-FORMULA-BEGIN (.+?) \*\//
+                );
+                if (formulaBegin) {
+                    openFormulas.set(formulaBegin[1], {
+                        blockId: currentBlockId || 'document',
+                        startLine: index + 1
+                    });
+                    return;
+                }
+                const formulaEnd = line.match(
+                    /\/\* TEX-HANDOUT-FORMULA-END (.+?) \*\//
+                );
+                if (formulaEnd) {
+                    const opened = openFormulas.get(formulaEnd[1]);
+                    if (opened) {
+                        result.push(Object.freeze({
+                            path: template.MAIN_FILE_PATH,
+                            blockId: opened.blockId,
+                            formulaId: formulaEnd[1],
+                            startLine: opened.startLine,
+                            endLine: index + 1
+                        }));
+                        openFormulas.delete(formulaEnd[1]);
+                    }
                     return;
                 }
                 const end = line.match(
                     /^\/\/ TEX-HANDOUT-BLOCK-END (.+)$/
                 );
                 if (!end) return;
-                const startLine = open.get(end[1]);
+                const startLine = openBlocks.get(end[1]);
                 if (startLine) {
                     result.push(Object.freeze({
                         path: template.MAIN_FILE_PATH,
@@ -733,11 +767,16 @@
                         startLine,
                         endLine: index + 1
                     }));
-                    open.delete(end[1]);
+                    openBlocks.delete(end[1]);
                 }
+                if (currentBlockId === end[1]) currentBlockId = '';
             });
 
-            return Object.freeze(result);
+            return Object.freeze(result.sort((left, right) =>
+                left.startLine - right.startLine
+                || Number(Boolean(right.formulaId))
+                    - Number(Boolean(left.formulaId))
+            ));
         };
 
         const scanSourceForProtectedContent = (

@@ -36,10 +36,10 @@ test('H3 handout entry uses one pinned local script and style manifest', () => {
     assert.equal(scripts.at(-1), 'qisi-handout-app.js');
     assert.equal(
         scripts.some(file =>
-            /(?:^|\/)vendor\/(?:typst|mitex|pdfjs)|compiler-worker|compiler-client/i.test(file)
+            /(?:^|\/)vendor\/(?:typst|mitex|pdfjs)|typst-worker/i.test(file)
         ),
         false,
-        'the isolated entry may load the pure H4 template but not the formal compiler runtime'
+        'the isolated entry may load the lightweight H5 client but not Worker or compiler runtime assets'
     );
     assert.equal(
         scripts.some(file => /^https?:/i.test(file)),
