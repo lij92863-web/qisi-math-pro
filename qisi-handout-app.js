@@ -11,6 +11,9 @@
         'HandoutQuestionLibrary',
         'HandoutEditorState',
         'HandoutBatchSettings',
+        'HandoutImageInteraction',
+        'HandoutTable',
+        'HandoutQr',
         'HandoutPreview',
         'HandoutPdfSession'
     ];
@@ -51,6 +54,22 @@
         return `${prefix}-${suffix}`;
     };
 
+    const createEmptyImageManipulation = () => ({
+        active: false,
+        mode: '',
+        blockId: '',
+        imageIndex: -1,
+        pointerId: null,
+        startX: 0,
+        startY: 0,
+        deltaX: 0,
+        deltaY: 0,
+        previewWidthPx: 0,
+        previewHeightPx: 0,
+        dropKey: '',
+        resizeSession: null
+    });
+
     const createMathComponent = preview => ({
         props: {
             content: {
@@ -69,6 +88,123 @@
         template: '<span class="math-content" v-html="html"></span>'
     });
 
+    const createQuestionImageZoneComponent = () => ({
+        props: {
+            blockId: {
+                type: String,
+                required: true
+            },
+            entries: {
+                type: Array,
+                default: () => []
+            },
+            zone: {
+                type: String,
+                required: true
+            },
+            manipulation: {
+                type: Object,
+                required: true
+            },
+            assetUrlFor: {
+                type: Function,
+                required: true
+            },
+            imageStyleFor: {
+                type: Function,
+                required: true
+            },
+            isSelected: {
+                type: Function,
+                required: true
+            }
+        },
+        emits: [
+            'select',
+            'move-start',
+            'resize-start'
+        ],
+        template: `
+            <div
+                v-if="entries.length"
+                class="editor-question-images"
+                :class="[
+                    'image-zone-' + zone,
+                    {
+                        'is-moving-image':
+                            manipulation.active
+                            && manipulation.mode === 'move'
+                            && manipulation.blockId === blockId
+                    }
+                ]"
+            >
+                <figure
+                    v-for="entry in entries"
+                    :key="entry.image.id"
+                    class="direct-image-figure"
+                    :class="[
+                        'placement-' + entry.image.placement,
+                        'align-' + entry.image.alignment,
+                        {
+                            selected: isSelected(blockId, entry.index),
+                            manipulating:
+                                manipulation.active
+                                && manipulation.blockId === blockId
+                                && manipulation.imageIndex === entry.index
+                        }
+                    ]"
+                    @click.stop="$emit('select', blockId, entry.index)"
+                >
+                    <div
+                        class="direct-image-frame"
+                        :class="{
+                            'is-dragging':
+                                manipulation.active
+                                && manipulation.mode === 'move'
+                                && manipulation.blockId === blockId
+                                && manipulation.imageIndex === entry.index
+                        }"
+                        @pointerdown="$emit('move-start', $event, blockId, entry.index)"
+                    >
+                        <img
+                            v-if="assetUrlFor(entry.image.assetId)"
+                            :src="assetUrlFor(entry.image.assetId)"
+                            :style="imageStyleFor(blockId, entry.index, entry.image)"
+                            draggable="false"
+                            alt=""
+                        >
+                        <div v-else class="missing-image">图片资产不可用</div>
+                        <template v-if="isSelected(blockId, entry.index)">
+                            <button
+                                v-for="handle in ['north-west', 'north-east', 'south-east', 'south-west']"
+                                :key="handle"
+                                type="button"
+                                class="image-resize-handle"
+                                :class="'handle-' + handle"
+                                :aria-label="'拖动' + handle + '角调整图片大小'"
+                                @pointerdown.stop.prevent="$emit('resize-start', $event, blockId, entry.index, handle)"
+                            ></button>
+                            <span class="image-size-badge">
+                                {{
+                                    manipulation.active
+                                    && manipulation.mode === 'resize'
+                                    && manipulation.blockId === blockId
+                                    && manipulation.imageIndex === entry.index
+                                        ? Math.round(manipulation.previewWidthPx) + ' px'
+                                        : entry.image.width.value
+                                            + (entry.image.width.unit === 'mm' ? ' mm' : '%')
+                                }}
+                            </span>
+                        </template>
+                    </div>
+                    <figcaption v-if="entry.image.caption">
+                        {{ entry.image.caption }}
+                    </figcaption>
+                </figure>
+            </div>
+        `
+    });
+
     const createAppOptions = ({
         repository,
         questionLibrary,
@@ -79,13 +215,18 @@
             questionInstance,
             editorState,
             batchSettings,
+            imageInteraction: imageControls,
+            table: tableTools,
+            qr: qrTools,
             preview
         } = modules;
 
         return {
             template: '#handout-app-template',
             components: {
-                MathContent: createMathComponent(preview)
+                MathContent: createMathComponent(preview),
+                QuestionImageZone:
+                    createQuestionImageZoneComponent()
             },
             data() {
                 return {
@@ -110,6 +251,7 @@
                         { id: 'content', label: '内容' },
                         { id: 'options', label: '选项' },
                         { id: 'images', label: '图片' },
+                        { id: 'tables', label: '表格' },
                         { id: 'answers', label: '答案解析' },
                         { id: 'labels', label: '标签' },
                         { id: 'display', label: '显示' },
@@ -133,6 +275,8 @@
                     acceptedSourceConflicts: [],
                     sourceUpdateSummary: {},
                     newDisplayLabel: '',
+                    selectedTableId: '',
+                    selectedTableCells: [],
                     selectedQuestionIds: [],
                     batchPanelOpen: false,
                     batchDraft: {
@@ -150,6 +294,13 @@
                     assetUrls: {},
                     assetRecords: [],
                     pendingQuestionImageIndex: -1,
+                    selectedImage: {
+                        blockId: '',
+                        imageIndex: -1
+                    },
+                    selectedResourceAssetId: '',
+                    imageManipulation:
+                        createEmptyImageManipulation(),
                     formalSession: null,
                     formalPreviewOpen: false,
                     formalPageNumber: 1,
@@ -187,6 +338,11 @@
                 },
                 selectedQuestionCount() {
                     return this.selectedQuestionIds.length;
+                },
+                selectedQuestionTable() {
+                    return this.selectedQuestion?.tables?.find(
+                        table => table.id === this.selectedTableId
+                    ) || this.selectedQuestion?.tables?.[0] || null;
                 },
                 formalScopeLabel() {
                     return this.formalScopeBlockId
@@ -259,6 +415,28 @@
             },
             async mounted() {
                 root.addEventListener('beforeunload', this.beforeUnload);
+                root.addEventListener(
+                    'pointermove',
+                    this.onImagePointerMove,
+                    { passive: false }
+                );
+                root.addEventListener(
+                    'pointerup',
+                    this.onImagePointerEnd
+                );
+                root.addEventListener(
+                    'pointercancel',
+                    this.onImagePointerCancel
+                );
+                this.imageFrameThrottler =
+                    imageControls.createFrameThrottler({
+                        requestFrame: callback =>
+                            root.requestAnimationFrame(callback),
+                        cancelFrame: frameId =>
+                            root.cancelAnimationFrame(frameId),
+                        render: value =>
+                            this.applyImageManipulationPreview(value)
+                    });
                 try {
                     await this.reloadHandouts();
                     if (this.handouts.length) {
@@ -280,6 +458,19 @@
             },
             beforeUnmount() {
                 root.removeEventListener('beforeunload', this.beforeUnload);
+                root.removeEventListener(
+                    'pointermove',
+                    this.onImagePointerMove
+                );
+                root.removeEventListener(
+                    'pointerup',
+                    this.onImagePointerEnd
+                );
+                root.removeEventListener(
+                    'pointercancel',
+                    this.onImagePointerCancel
+                );
+                this.imageFrameThrottler?.cancel();
                 this.formalSession?.dispose();
                 this.releaseAssetUrls();
                 clearTimeout(this.saveTimer);
@@ -669,6 +860,60 @@
                         this.saving = false;
                     }
                 },
+                async saveAndReturnToBank() {
+                    await this.flushSave();
+                    if (this.saveStatus === 'error') return;
+                    root.location.href = './main.html';
+                },
+                openQuestionTool(tool) {
+                    if (!this.selectedQuestion) return;
+                    if (tool === 'optimize') {
+                        this.inspectorTab = 'display';
+                        this.showNotice(
+                            '已打开公式规范化设置；所有修改均可撤销。',
+                            'info'
+                        );
+                        return;
+                    }
+                    if (tool === 'ocr') {
+                        this.inspectorTab = 'images';
+                        this.showNotice(
+                            '讲义页不会静默调用 OCR。请先上传图片；OCR 识别仍由“新题目录入”页面在用户确认后执行。',
+                            'info'
+                        );
+                        return;
+                    }
+                    if (tool === 'image') {
+                        this.inspectorTab = 'images';
+                        this.$nextTick(() =>
+                            this.$refs.questionImageInput?.click()
+                        );
+                        return;
+                    }
+                    if (tool === 'extract-images') {
+                        this.inspectorTab = 'images';
+                        this.restoreSelectedQuestionImages();
+                        this.showNotice(
+                            '已从题库快照恢复这道题的原始配图。',
+                            'success'
+                        );
+                        return;
+                    }
+                    if (tool === 'table') {
+                        this.inspectorTab = 'tables';
+                        if (!this.selectedQuestion.tables.length) {
+                            this.addQuestionTable();
+                        }
+                        return;
+                    }
+                    if (tool === 'sync') {
+                        this.inspectorTab = 'source';
+                        this.showNotice(
+                            '为防止讲义改动污染正式题库，本页不直接覆盖题库；请先检查源题变化，再按字段确认更新。',
+                            'warning'
+                        );
+                    }
+                },
                 performUndo() {
                     if (!this.editor) return;
                     this.applyEditor(editorState.undo(this.editor));
@@ -1040,6 +1285,576 @@
                         )
                     );
                 },
+                selectQuestionImage(blockId, imageIndex) {
+                    if (
+                        this.selectedQuestion?.id !== blockId
+                    ) {
+                        this.selectEditorBlock(blockId);
+                    }
+                    this.inspectorTab = 'images';
+                    this.selectedImage = {
+                        blockId,
+                        imageIndex
+                    };
+                },
+                isSelectedQuestionImage(blockId, imageIndex) {
+                    return (
+                        this.selectedImage.blockId === blockId
+                        && this.selectedImage.imageIndex === imageIndex
+                    );
+                },
+                questionImagesAt(block, placement) {
+                    return (block?.images || [])
+                        .map((image, index) => ({
+                            image,
+                            index
+                        }))
+                        .filter(entry =>
+                            entry.image.placement === placement
+                        );
+                },
+                questionTablesAt(block, placement) {
+                    return (block?.tables || []).filter(
+                        table => table.placement === placement
+                    );
+                },
+                previewQuestionImagesAt(question, placement) {
+                    return (question?.images || []).filter(
+                        image => image.placement === placement
+                    );
+                },
+                previewQuestionTablesAt(question, placement) {
+                    return (question?.tables || []).filter(
+                        table => table.placement === placement
+                    );
+                },
+                questionQrContent(question) {
+                    if (!question?.qr?.enabled) return '';
+                    return question.qr.contentMode === 'question-id'
+                        ? question.sourceQuestionId
+                        : question.qr.customContent;
+                },
+                questionQrDataUri(question) {
+                    const content =
+                        this.questionQrContent(question);
+                    if (!content) return '';
+                    try {
+                        return qrTools.toDataUri(content);
+                    } catch {
+                        return '';
+                    }
+                },
+                questionQrByteLength(question) {
+                    return qrTools.utf8Bytes(
+                        this.questionQrContent(question)
+                    ).length;
+                },
+                questionQrCapacity() {
+                    return qrTools.MAX_BYTES;
+                },
+                toggleHiddenOption(optionIndex, hidden) {
+                    if (!this.selectedQuestion) return;
+                    const current = new Set(
+                        this.selectedQuestion.visibility
+                            .hiddenOptionIndexes || []
+                    );
+                    if (hidden) current.add(optionIndex);
+                    else current.delete(optionIndex);
+                    this.updateQuestionSection(
+                        'visibility',
+                        {
+                            hiddenOptionIndexes:
+                                [...current].sort((a, b) => a - b)
+                        }
+                    );
+                },
+                toggleHiddenImage(imageId, hidden) {
+                    if (!this.selectedQuestion) return;
+                    const current = new Set(
+                        this.selectedQuestion.visibility
+                            .hiddenImageIds || []
+                    );
+                    if (hidden) current.add(imageId);
+                    else current.delete(imageId);
+                    this.updateQuestionSection(
+                        'visibility',
+                        {
+                            hiddenImageIds: [...current]
+                        }
+                    );
+                },
+                pageUsableWidthMm() {
+                    const page = this.editor?.handout.settings.page || {};
+                    const paperWidth =
+                        page.orientation === 'landscape'
+                            ? 297
+                            : 210;
+                    const usable = Math.max(
+                        40,
+                        paperWidth
+                        - Number(page.marginLeftMm || 0)
+                        - Number(page.marginRightMm || 0)
+                    );
+                    if (Number(page.columns || 1) !== 2) return usable;
+                    return Math.max(30, (usable - 12) / 2);
+                },
+                beginQuestionImageResize(
+                    event,
+                    blockId,
+                    imageIndex,
+                    handle
+                ) {
+                    if (
+                        event.button !== 0
+                        || this.imageManipulation.active
+                    ) return;
+                    const frame = event.currentTarget.closest(
+                        '.direct-image-frame'
+                    );
+                    const imageElement = frame?.querySelector('img');
+                    const question = frame?.closest(
+                        '.question-editor-preview'
+                    );
+                    if (!frame || !imageElement || !question) return;
+                    const imageRect =
+                        imageElement.getBoundingClientRect();
+                    const questionRect =
+                        question.getBoundingClientRect();
+                    const block = this.editor.handout.blocks.find(
+                        item => item.id === blockId
+                    );
+                    const image = block?.images?.[imageIndex];
+                    if (!image) return;
+
+                    this.selectQuestionImage(blockId, imageIndex);
+                    const resizeSession =
+                        imageControls.createResizeSession({
+                            handle,
+                            pointerX: event.clientX,
+                            pointerY: event.clientY,
+                            renderedWidthPx: imageRect.width,
+                            renderedHeightPx: imageRect.height,
+                            availableWidthPx: questionRect.width,
+                            availableWidthMm:
+                                this.pageUsableWidthMm(),
+                            widthValue: image.width?.value,
+                            widthUnit: image.width?.unit || 'percent'
+                        });
+                    this.imageManipulation = {
+                        ...createEmptyImageManipulation(),
+                        active: true,
+                        mode: 'resize',
+                        blockId,
+                        imageIndex,
+                        pointerId: event.pointerId,
+                        startX: event.clientX,
+                        startY: event.clientY,
+                        previewWidthPx: imageRect.width,
+                        previewHeightPx: imageRect.height,
+                        resizeSession
+                    };
+                    root.document.body.classList.add(
+                        'is-image-manipulating'
+                    );
+                    event.preventDefault();
+                    event.stopPropagation();
+                },
+                beginQuestionImageMove(event, blockId, imageIndex) {
+                    if (
+                        event.button !== 0
+                        || this.imageManipulation.active
+                    ) return;
+                    this.selectQuestionImage(blockId, imageIndex);
+                    this.imageManipulation = {
+                        ...createEmptyImageManipulation(),
+                        active: true,
+                        mode: 'move',
+                        blockId,
+                        imageIndex,
+                        pointerId: event.pointerId,
+                        startX: event.clientX,
+                        startY: event.clientY
+                    };
+                    root.document.body.classList.add(
+                        'is-image-manipulating'
+                    );
+                    event.preventDefault();
+                    event.stopPropagation();
+                },
+                applyImageManipulationPreview(value) {
+                    if (
+                        !value
+                        || !this.imageManipulation.active
+                    ) return;
+                    this.imageManipulation = {
+                        ...this.imageManipulation,
+                        ...value
+                    };
+                },
+                resolvePointerDropTarget(event) {
+                    const target = root.document
+                        .elementFromPoint(
+                            event.clientX,
+                            event.clientY
+                        )
+                        ?.closest?.('[data-image-drop]');
+                    return imageControls.resolveDropTarget(
+                        target?.dataset?.imageDrop
+                    );
+                },
+                onImagePointerMove(event) {
+                    const interaction = this.imageManipulation;
+                    if (
+                        !interaction.active
+                        || event.pointerId !== interaction.pointerId
+                    ) return;
+                    event.preventDefault();
+                    if (interaction.mode === 'resize') {
+                        const result = imageControls.projectResize(
+                            interaction.resizeSession,
+                            {
+                                pointerX: event.clientX,
+                                pointerY: event.clientY
+                            }
+                        );
+                        this.imageFrameThrottler.push({
+                            previewWidthPx: result.widthPx,
+                            previewHeightPx: result.heightPx,
+                            deltaX: 0,
+                            deltaY: 0
+                        });
+                        return;
+                    }
+                    const drop = this.resolvePointerDropTarget(event);
+                    this.imageFrameThrottler.push({
+                        deltaX:
+                            event.clientX - interaction.startX,
+                        deltaY:
+                            event.clientY - interaction.startY,
+                        dropKey: drop?.key || ''
+                    });
+                },
+                onImagePointerEnd(event) {
+                    const interaction = this.imageManipulation;
+                    if (
+                        !interaction.active
+                        || event.pointerId !== interaction.pointerId
+                    ) return;
+                    this.imageFrameThrottler.cancel();
+                    if (interaction.mode === 'resize') {
+                        const result = imageControls.projectResize(
+                            interaction.resizeSession,
+                            {
+                                pointerX: event.clientX,
+                                pointerY: event.clientY
+                            }
+                        );
+                        this.updateQuestionImage(
+                            interaction.imageIndex,
+                            {
+                                width: result.persistedWidth
+                            }
+                        );
+                    } else {
+                        const drop =
+                            this.resolvePointerDropTarget(event)
+                            || imageControls.resolveDropTarget(
+                                interaction.dropKey
+                            );
+                        if (drop) {
+                            this.updateQuestionImage(
+                                interaction.imageIndex,
+                                {
+                                    placement: drop.placement,
+                                    alignment: drop.alignment
+                                }
+                            );
+                        }
+                    }
+                    this.finishImageManipulation();
+                },
+                onImagePointerCancel(event) {
+                    if (
+                        !this.imageManipulation.active
+                        || event.pointerId
+                            !== this.imageManipulation.pointerId
+                    ) return;
+                    this.finishImageManipulation();
+                },
+                finishImageManipulation() {
+                    this.imageFrameThrottler?.cancel();
+                    this.imageManipulation =
+                        createEmptyImageManipulation();
+                    root.document.body.classList.remove(
+                        'is-image-manipulating'
+                    );
+                },
+                interactiveImageStyle(blockId, imageIndex, image) {
+                    const style = this.imageStyle(image);
+                    const interaction = this.imageManipulation;
+                    if (
+                        !interaction.active
+                        || interaction.blockId !== blockId
+                        || interaction.imageIndex !== imageIndex
+                    ) return style;
+                    if (
+                        interaction.mode === 'resize'
+                        && interaction.previewWidthPx > 0
+                    ) {
+                        return {
+                            ...style,
+                            width:
+                                `${interaction.previewWidthPx}px`,
+                            height: 'auto'
+                        };
+                    }
+                    if (interaction.mode === 'move') {
+                        return {
+                            ...style,
+                            transform:
+                                `translate3d(${interaction.deltaX}px, ${interaction.deltaY}px, 0)`
+                        };
+                    }
+                    return style;
+                },
+                updateQuestionTable(tableId, update) {
+                    if (!this.selectedQuestion) return;
+                    try {
+                        this.safeMutation(() =>
+                            editorState.updateBlock(
+                                this.editor,
+                                this.selectedQuestion.id,
+                                block => ({
+                                    ...block,
+                                    tables: block.tables.map(table =>
+                                        table.id === tableId
+                                            ? update(table)
+                                            : table
+                                    )
+                                }),
+                                {
+                                    mutationKey:
+                                        `question:${this.selectedQuestion.id}:table:${tableId}`
+                                }
+                            )
+                        );
+                    } catch (error) {
+                        this.showNotice(
+                            error?.message || error,
+                            'error'
+                        );
+                    }
+                },
+                addQuestionTable() {
+                    if (!this.selectedQuestion) return;
+                    const table = tableTools.createTable({
+                        id: createId('table'),
+                        rows: 2,
+                        columns: 3
+                    });
+                    this.safeMutation(() =>
+                        editorState.updateBlock(
+                            this.editor,
+                            this.selectedQuestion.id,
+                            block => ({
+                                ...block,
+                                tables: [
+                                    ...(block.tables || []),
+                                    table
+                                ]
+                            }),
+                            {
+                                mutationKey:
+                                    `question:${this.selectedQuestion.id}:add-table`
+                            }
+                        )
+                    );
+                    this.selectedTableId = table.id;
+                    this.selectedTableCells = [];
+                },
+                removeQuestionTable(tableId) {
+                    if (!this.selectedQuestion) return;
+                    this.safeMutation(() =>
+                        editorState.updateBlock(
+                            this.editor,
+                            this.selectedQuestion.id,
+                            block => ({
+                                ...block,
+                                tables: block.tables.filter(
+                                    table => table.id !== tableId
+                                )
+                            }),
+                            {
+                                mutationKey:
+                                    `question:${this.selectedQuestion.id}:remove-table`
+                            }
+                        )
+                    );
+                    this.selectedTableId =
+                        this.selectedQuestion.tables.find(
+                            table => table.id !== tableId
+                        )?.id || '';
+                    this.selectedTableCells = [];
+                },
+                selectQuestionTable(tableId) {
+                    this.selectedTableId = tableId;
+                    this.selectedTableCells = [];
+                    this.inspectorTab = 'tables';
+                },
+                toggleTableCellSelection(
+                    tableId,
+                    row,
+                    column
+                ) {
+                    this.selectedTableId = tableId;
+                    const key = `${row}:${column}`;
+                    const existing =
+                        this.selectedTableCells.findIndex(
+                            cell => cell.key === key
+                        );
+                    if (existing >= 0) {
+                        this.selectedTableCells =
+                            this.selectedTableCells.filter(
+                                (_, index) => index !== existing
+                            );
+                        return;
+                    }
+                    const next = [
+                        ...this.selectedTableCells,
+                        { key, row, column }
+                    ];
+                    this.selectedTableCells =
+                        next.length > 2
+                            ? [next[next.length - 1]]
+                            : next;
+                },
+                isTableCellSelected(row, column) {
+                    return this.selectedTableCells.some(
+                        cell =>
+                            cell.row === row
+                            && cell.column === column
+                    );
+                },
+                updateTableCell(row, column, patch) {
+                    const table = this.selectedQuestionTable;
+                    if (!table) return;
+                    this.updateQuestionTable(
+                        table.id,
+                        current =>
+                            tableTools.updateCell(
+                                current,
+                                row,
+                                column,
+                                patch
+                            )
+                    );
+                },
+                tableSelectionAnchor() {
+                    return this.selectedTableCells[0] || {
+                        row: 0,
+                        column: 0
+                    };
+                },
+                insertTableRow() {
+                    const table = this.selectedQuestionTable;
+                    if (!table) return;
+                    const anchor = this.tableSelectionAnchor();
+                    this.updateQuestionTable(
+                        table.id,
+                        current =>
+                            tableTools.insertRow(
+                                current,
+                                anchor.row
+                            )
+                    );
+                },
+                deleteTableRow() {
+                    const table = this.selectedQuestionTable;
+                    if (!table) return;
+                    const anchor = this.tableSelectionAnchor();
+                    this.updateQuestionTable(
+                        table.id,
+                        current =>
+                            tableTools.deleteRow(
+                                current,
+                                anchor.row
+                            )
+                    );
+                    this.selectedTableCells = [];
+                },
+                insertTableColumn() {
+                    const table = this.selectedQuestionTable;
+                    if (!table) return;
+                    const anchor = this.tableSelectionAnchor();
+                    this.updateQuestionTable(
+                        table.id,
+                        current =>
+                            tableTools.insertColumn(
+                                current,
+                                anchor.column
+                            )
+                    );
+                },
+                deleteTableColumn() {
+                    const table = this.selectedQuestionTable;
+                    if (!table) return;
+                    const anchor = this.tableSelectionAnchor();
+                    this.updateQuestionTable(
+                        table.id,
+                        current =>
+                            tableTools.deleteColumn(
+                                current,
+                                anchor.column
+                            )
+                    );
+                    this.selectedTableCells = [];
+                },
+                mergeSelectedTableCells() {
+                    const table = this.selectedQuestionTable;
+                    if (
+                        !table
+                        || this.selectedTableCells.length !== 2
+                    ) return;
+                    this.updateQuestionTable(
+                        table.id,
+                        current =>
+                            tableTools.mergeCells(
+                                current,
+                                this.selectedTableCells[0],
+                                this.selectedTableCells[1]
+                            )
+                    );
+                    this.selectedTableCells = [
+                        this.selectedTableCells[0]
+                    ];
+                },
+                splitSelectedTableCell() {
+                    const table = this.selectedQuestionTable;
+                    const anchor = this.selectedTableCells[0];
+                    if (!table || !anchor) return;
+                    this.updateQuestionTable(
+                        table.id,
+                        current =>
+                            tableTools.splitCell(
+                                current,
+                                anchor.row,
+                                anchor.column
+                            )
+                    );
+                },
+                setTableColumnWidth(column, value) {
+                    const table = this.selectedQuestionTable;
+                    if (!table) return;
+                    this.updateQuestionTable(
+                        table.id,
+                        current =>
+                            tableTools.setColumnWidth(
+                                current,
+                                column,
+                                value
+                            )
+                    );
+                },
                 async replaceQuestionImage(index, event) {
                     const file = event.target.files?.[0];
                     event.target.value = '';
@@ -1058,6 +1873,82 @@
                     } catch (error) {
                         this.showNotice(error?.message || error, 'error');
                     }
+                },
+                createQuestionImageFromAsset(assetId) {
+                    return {
+                        id: createId('question-image'),
+                        assetId,
+                        source: 'handout',
+                        sourceImageId: '',
+                        placement: 'below-stem',
+                        alignment: 'center',
+                        width: {
+                            value: 45,
+                            unit: 'percent'
+                        },
+                        caption: '',
+                        order:
+                            this.selectedQuestion?.images?.length || 0,
+                        keepAspectRatio: true,
+                        captionMode: 'none'
+                    };
+                },
+                appendQuestionImage(assetId) {
+                    if (!this.selectedQuestion || !assetId) return;
+                    const image =
+                        this.createQuestionImageFromAsset(assetId);
+                    this.safeMutation(() =>
+                        editorState.updateBlock(
+                            this.editor,
+                            this.selectedQuestion.id,
+                            block => ({
+                                ...block,
+                                images: [
+                                    ...(block.images || []),
+                                    image
+                                ]
+                            }),
+                            {
+                                mutationKey:
+                                    `question:${this.selectedQuestion.id}:add-image`
+                            }
+                        )
+                    );
+                    this.selectedImage = {
+                        blockId: this.selectedQuestion.id,
+                        imageIndex:
+                            this.selectedQuestion.images.length - 1
+                    };
+                },
+                async addQuestionImage(event) {
+                    const file = event.target.files?.[0];
+                    event.target.value = '';
+                    if (!file || !this.selectedQuestion) return;
+                    try {
+                        const asset = await this.storeUploadedImage(
+                            file,
+                            'question-image'
+                        );
+                        await this.refreshAssetUrls();
+                        this.appendQuestionImage(asset.id);
+                    } catch (error) {
+                        this.showNotice(
+                            error?.message || error,
+                            'error'
+                        );
+                    }
+                },
+                addQuestionImageFromResource() {
+                    if (!this.selectedResourceAssetId) {
+                        this.showNotice(
+                            '请先选择一项当前讲义图片资源。',
+                            'warning'
+                        );
+                        return;
+                    }
+                    this.appendQuestionImage(
+                        this.selectedResourceAssetId
+                    );
                 },
                 removeQuestionImage(index) {
                     this.safeMutation(() =>
@@ -1581,16 +2472,38 @@
                     };
                 },
                 regionPreviewStyle(region) {
-                    if (!region?.background?.enabled) return {};
+                    const style = {
+                        paddingLeft:
+                            `${Number(region?.offsetLeftMm || 0)}mm`,
+                        paddingRight:
+                            `${Number(region?.offsetRightMm || 0)}mm`
+                    };
+                    if (!region?.background?.enabled) return style;
                     const opacity = Math.round(
                         Number(region.background.opacity || 0)
                         * 255
                     ).toString(16).padStart(2, '0');
                     return {
+                        ...style,
                         backgroundColor:
                             `${region.background.color}${opacity}`,
                         minHeight:
                             `${region.background.heightMm}mm`
+                    };
+                },
+                regionSlotPreviewStyle(slot) {
+                    return {
+                        color: slot?.color || '#334155',
+                        fontFamily:
+                            slot?.fontFamily === 'sans'
+                                ? '"Noto Sans SC", "Microsoft YaHei UI", sans-serif'
+                                : '"Noto Serif SC", SimSun, serif',
+                        fontSize:
+                            `${Number(slot?.fontSizePt || 8.5)}pt`,
+                        fontWeight:
+                            String(Number(slot?.fontWeight || 400)),
+                        lineHeight:
+                            String(Number(slot?.lineHeight || 1.2))
                     };
                 },
                 blockLabel(block) {
@@ -1717,6 +2630,12 @@
                             root.Qisi.HandoutEditorState,
                         batchSettings:
                             root.Qisi.HandoutBatchSettings,
+                        imageInteraction:
+                            root.Qisi.HandoutImageInteraction,
+                        table:
+                            root.Qisi.HandoutTable,
+                        qr:
+                            root.Qisi.HandoutQr,
                         preview: root.Qisi.HandoutPreview
                     }
                 })

@@ -291,22 +291,144 @@
                                                 <span>{{ effectiveQuestionFor(block).grade || '未设年级' }}</span>
                                                 <span>源题 {{ block.sourceQuestionId }}</span>
                                             </div>
-                                            <math-content class="question-stem" :content="effectiveQuestionFor(block).stem"></math-content>
-                                            <div
-                                                v-if="block.display.showOptions"
-                                                class="option-preview"
-                                                :style="{ '--option-columns': previewColumnsFor(block) }"
-                                            >
-                                                <div v-for="(option, optionIndex) in effectiveQuestionFor(block).options || []" :key="optionIndex">
-                                                    <b>{{ optionLetter(optionIndex) }}.</b>
-                                                    <math-content :content="option"></math-content>
-                                                </div>
+                                            <div class="question-stem-layout">
+                                                <math-content class="question-stem" :content="effectiveQuestionFor(block).stem"></math-content>
+                                                <question-image-zone
+                                                    :block-id="block.id"
+                                                    :entries="questionImagesAt(block, 'right-of-stem')"
+                                                    zone="stem-right"
+                                                    :manipulation="imageManipulation"
+                                                    :asset-url-for="assetUrl"
+                                                    :image-style-for="interactiveImageStyle"
+                                                    :is-selected="isSelectedQuestionImage"
+                                                    @select="selectQuestionImage"
+                                                    @move-start="beginQuestionImageMove"
+                                                    @resize-start="beginQuestionImageResize"
+                                                ></question-image-zone>
                                             </div>
-                                            <div class="editor-question-images" v-if="block.images.length">
-                                                <figure v-for="image in block.images" :key="image.id">
-                                                    <img v-if="assetUrl(image.assetId)" :src="assetUrl(image.assetId)" :style="imageStyle(image)" alt="">
-                                                    <figcaption>{{ image.caption }}</figcaption>
-                                                </figure>
+                                            <question-image-zone
+                                                :block-id="block.id"
+                                                :entries="questionImagesAt(block, 'below-stem')"
+                                                zone="below"
+                                                :manipulation="imageManipulation"
+                                                :asset-url-for="assetUrl"
+                                                :image-style-for="interactiveImageStyle"
+                                                :is-selected="isSelectedQuestionImage"
+                                                @select="selectQuestionImage"
+                                                @move-start="beginQuestionImageMove"
+                                                @resize-start="beginQuestionImageResize"
+                                            ></question-image-zone>
+                                            <figure
+                                                v-for="table in questionTablesAt(block, 'after-stem')"
+                                                :key="table.id"
+                                                class="structured-question-table"
+                                                :class="{ selected: selectedTableId === table.id }"
+                                                @click.stop="selectQuestionTable(table.id)"
+                                            >
+                                                <table>
+                                                    <colgroup>
+                                                        <col v-for="(width, columnIndex) in table.columnWidths" :key="columnIndex" :style="{ width: `${width}%` }">
+                                                    </colgroup>
+                                                    <tbody>
+                                                        <tr v-for="(row, rowIndex) in table.rows" :key="rowIndex">
+                                                            <td
+                                                                v-for="(cell, columnIndex) in row"
+                                                                v-show="!cell.coveredBy"
+                                                                :key="cell.id"
+                                                                :rowspan="cell.rowSpan"
+                                                                :colspan="cell.colSpan"
+                                                                :class="`align-${cell.align}`"
+                                                            ><math-content :content="cell.content"></math-content></td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                                <figcaption v-if="table.caption">{{ table.caption }}</figcaption>
+                                            </figure>
+                                            <div class="question-options-layout">
+                                                <div
+                                                    v-if="block.display.showOptions"
+                                                    class="option-preview"
+                                                    :style="{ '--option-columns': previewColumnsFor(block) }"
+                                                >
+                                                    <div v-for="(option, optionIndex) in effectiveQuestionFor(block).options || []" :key="optionIndex">
+                                                        <b>{{ optionLetter(optionIndex) }}.</b>
+                                                        <math-content :content="option"></math-content>
+                                                    </div>
+                                                </div>
+                                                <question-image-zone
+                                                    :block-id="block.id"
+                                                    :entries="questionImagesAt(block, 'right-of-options')"
+                                                    zone="options-right"
+                                                    :manipulation="imageManipulation"
+                                                    :asset-url-for="assetUrl"
+                                                    :image-style-for="interactiveImageStyle"
+                                                    :is-selected="isSelectedQuestionImage"
+                                                    @select="selectQuestionImage"
+                                                    @move-start="beginQuestionImageMove"
+                                                    @resize-start="beginQuestionImageResize"
+                                                ></question-image-zone>
+                                            </div>
+                                            <figure
+                                                v-for="table in questionTablesAt(block, 'after-options')"
+                                                :key="table.id"
+                                                class="structured-question-table"
+                                                :class="{ selected: selectedTableId === table.id }"
+                                                @click.stop="selectQuestionTable(table.id)"
+                                            >
+                                                <table>
+                                                    <colgroup>
+                                                        <col v-for="(width, columnIndex) in table.columnWidths" :key="columnIndex" :style="{ width: `${width}%` }">
+                                                    </colgroup>
+                                                    <tbody>
+                                                        <tr v-for="(row, rowIndex) in table.rows" :key="rowIndex">
+                                                            <td
+                                                                v-for="(cell, columnIndex) in row"
+                                                                v-show="!cell.coveredBy"
+                                                                :key="cell.id"
+                                                                :rowspan="cell.rowSpan"
+                                                                :colspan="cell.colSpan"
+                                                                :class="`align-${cell.align}`"
+                                                            ><math-content :content="cell.content"></math-content></td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                                <figcaption v-if="table.caption">{{ table.caption }}</figcaption>
+                                            </figure>
+                                            <question-image-zone
+                                                :block-id="block.id"
+                                                :entries="[
+                                                    ...questionImagesAt(block, 'block'),
+                                                    ...questionImagesAt(block, 'inline')
+                                                ]"
+                                                zone="block"
+                                                :manipulation="imageManipulation"
+                                                :asset-url-for="assetUrl"
+                                                :image-style-for="interactiveImageStyle"
+                                                :is-selected="isSelectedQuestionImage"
+                                                @select="selectQuestionImage"
+                                                @move-start="beginQuestionImageMove"
+                                                @resize-start="beginQuestionImageResize"
+                                            ></question-image-zone>
+                                            <div
+                                                v-if="imageManipulation.active && imageManipulation.mode === 'move' && imageManipulation.blockId === block.id"
+                                                class="image-drop-map"
+                                                aria-label="图片结构化放置区域"
+                                            >
+                                                <div
+                                                    v-for="target in [
+                                                        ['below-left', '题目下方·左'],
+                                                        ['below-center', '题目下方·中'],
+                                                        ['below-right', '题目下方·右'],
+                                                        ['stem-right', '题干右侧'],
+                                                        ['options-right', '选项右侧'],
+                                                        ['block-center', '独占一行'],
+                                                        ['inline', '行内随文']
+                                                    ]"
+                                                    :key="target[0]"
+                                                    class="image-drop-target"
+                                                    :class="{ active: imageManipulation.dropKey === target[0] }"
+                                                    :data-image-drop="target[0]"
+                                                >{{ target[1] }}</div>
                                             </div>
                                         </div>
                                     </template>
@@ -341,7 +463,7 @@
                                     class="preview-header"
                                     :style="regionPreviewStyle(previewDocument.settings.header)"
                                 >
-                                    <span v-for="slotName in ['left', 'center', 'right']" :key="slotName">
+                                    <span v-for="slotName in ['left', 'center', 'right']" :key="slotName" :style="regionSlotPreviewStyle(previewDocument.settings.header.slots?.[slotName])">
                                         <img
                                             v-if="assetUrl(previewDocument.settings.header.slots?.[slotName]?.assetId)"
                                             :src="assetUrl(previewDocument.settings.header.slots[slotName].assetId)"
@@ -369,36 +491,127 @@
                                     </figure>
                                     <div v-else-if="block.type === 'page-break'" class="preview-page-break"></div>
                                     <section v-else-if="block.type === 'question'" class="preview-question" :data-preview-question="block.id">
-                                        <div class="question-line">
-                                            <b v-if="block.question.display.showQuestionNumber">{{ questionNumberFor(block) }}.</b>
-                                            <span
-                                                v-for="label in questionDisplayLabels(block.question)"
-                                                :key="label"
-                                                class="question-label"
-                                            >{{ label }}</span>
-                                            <math-content :content="block.question.stem"></math-content>
-                                            <span
-                                                v-if="block.question.answer && block.question.display.answerPlacement === 'inline'"
-                                                class="teacher-inline"
-                                            ><strong>答案</strong><math-content :content="block.question.answer"></math-content></span>
-                                        </div>
-                                        <div
-                                            v-if="block.question.display.showOptions"
-                                            class="preview-options"
-                                            :style="{ '--option-columns': block.question.optionLayout.columns }"
-                                        >
-                                            <div v-for="(option, optionIndex) in block.question.options || []" :key="optionIndex">
-                                                <b>{{ optionLetter(optionIndex) }}.</b>
-                                                <math-content :content="option"></math-content>
+                                        <div class="preview-question-stem-layout">
+                                            <div class="question-line">
+                                                <b v-if="block.question.display.showQuestionNumber">{{ questionNumberFor(block) }}.</b>
+                                                <span
+                                                    v-for="label in questionDisplayLabels(block.question)"
+                                                    :key="label"
+                                                    class="question-label"
+                                                >{{ label }}</span>
+                                                <math-content :content="block.question.stem"></math-content>
+                                                <span
+                                                    v-if="block.question.answer && block.question.display.answerPlacement === 'inline'"
+                                                    class="teacher-inline"
+                                                ><strong>答案</strong><math-content :content="block.question.answer"></math-content></span>
+                                            </div>
+                                            <div
+                                                v-if="previewQuestionImagesAt(block.question, 'right-of-stem').length"
+                                                class="preview-question-images image-zone-stem-right"
+                                                :class="`layout-${block.question.imageLayout.mode}`"
+                                                :style="questionImageGroupStyle(block.question)"
+                                            >
+                                                <figure v-for="image in previewQuestionImagesAt(block.question, 'right-of-stem')" :key="image.id" :class="[`placement-${image.placement}`, `align-${image.alignment}`]">
+                                                    <img v-if="assetUrl(image.assetId)" :src="assetUrl(image.assetId)" :style="imageStyle(image)" alt="">
+                                                    <figcaption v-if="image.caption">{{ image.caption }}</figcaption>
+                                                </figure>
                                             </div>
                                         </div>
                                         <div
-                                            class="preview-question-images"
-                                            v-if="block.question.images.length"
+                                            v-if="previewQuestionImagesAt(block.question, 'below-stem').length"
+                                            class="preview-question-images image-zone-below"
                                             :class="`layout-${block.question.imageLayout.mode}`"
                                             :style="questionImageGroupStyle(block.question)"
                                         >
-                                            <figure v-for="image in block.question.images" :key="image.id" :class="`placement-${image.placement}`">
+                                            <figure v-for="image in previewQuestionImagesAt(block.question, 'below-stem')" :key="image.id" :class="[`placement-${image.placement}`, `align-${image.alignment}`]">
+                                                <img v-if="assetUrl(image.assetId)" :src="assetUrl(image.assetId)" :style="imageStyle(image)" alt="">
+                                                <figcaption v-if="image.caption">{{ image.caption }}</figcaption>
+                                            </figure>
+                                        </div>
+                                        <figure
+                                            v-for="table in previewQuestionTablesAt(block.question, 'after-stem')"
+                                            :key="table.id"
+                                            class="structured-question-table preview-structured-table"
+                                        >
+                                            <table>
+                                                <colgroup>
+                                                    <col v-for="(width, columnIndex) in table.columnWidths" :key="columnIndex" :style="{ width: `${width}%` }">
+                                                </colgroup>
+                                                <tbody>
+                                                    <tr v-for="(row, rowIndex) in table.rows" :key="rowIndex">
+                                                        <td
+                                                            v-for="cell in row"
+                                                            v-show="!cell.coveredBy"
+                                                            :key="cell.id"
+                                                            :rowspan="cell.rowSpan"
+                                                            :colspan="cell.colSpan"
+                                                            :class="`align-${cell.align}`"
+                                                        ><math-content :content="cell.content"></math-content></td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                            <figcaption v-if="table.caption">{{ table.caption }}</figcaption>
+                                        </figure>
+                                        <div class="preview-question-options-layout">
+                                            <div
+                                                v-if="block.question.display.showOptions"
+                                                class="preview-options"
+                                                :style="{ '--option-columns': block.question.optionLayout.columns }"
+                                            >
+                                                <div v-for="option in block.question.optionItems || []" :key="option.index">
+                                                    <b>{{ optionLetter(option.index) }}.</b>
+                                                    <math-content :content="option.content"></math-content>
+                                                </div>
+                                            </div>
+                                            <div
+                                                v-if="previewQuestionImagesAt(block.question, 'right-of-options').length"
+                                                class="preview-question-images image-zone-options-right"
+                                                :class="`layout-${block.question.imageLayout.mode}`"
+                                                :style="questionImageGroupStyle(block.question)"
+                                            >
+                                                <figure v-for="image in previewQuestionImagesAt(block.question, 'right-of-options')" :key="image.id" :class="[`placement-${image.placement}`, `align-${image.alignment}`]">
+                                                    <img v-if="assetUrl(image.assetId)" :src="assetUrl(image.assetId)" :style="imageStyle(image)" alt="">
+                                                    <figcaption v-if="image.caption">{{ image.caption }}</figcaption>
+                                                </figure>
+                                            </div>
+                                        </div>
+                                        <figure
+                                            v-for="table in previewQuestionTablesAt(block.question, 'after-options')"
+                                            :key="table.id"
+                                            class="structured-question-table preview-structured-table"
+                                        >
+                                            <table>
+                                                <colgroup>
+                                                    <col v-for="(width, columnIndex) in table.columnWidths" :key="columnIndex" :style="{ width: `${width}%` }">
+                                                </colgroup>
+                                                <tbody>
+                                                    <tr v-for="(row, rowIndex) in table.rows" :key="rowIndex">
+                                                        <td
+                                                            v-for="cell in row"
+                                                            v-show="!cell.coveredBy"
+                                                            :key="cell.id"
+                                                            :rowspan="cell.rowSpan"
+                                                            :colspan="cell.colSpan"
+                                                            :class="`align-${cell.align}`"
+                                                        ><math-content :content="cell.content"></math-content></td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                            <figcaption v-if="table.caption">{{ table.caption }}</figcaption>
+                                        </figure>
+                                        <div
+                                            class="preview-question-images"
+                                            v-if="[
+                                                ...previewQuestionImagesAt(block.question, 'block'),
+                                                ...previewQuestionImagesAt(block.question, 'inline')
+                                            ].length"
+                                            :class="`layout-${block.question.imageLayout.mode}`"
+                                            :style="questionImageGroupStyle(block.question)"
+                                        >
+                                            <figure v-for="image in [
+                                                ...previewQuestionImagesAt(block.question, 'block'),
+                                                ...previewQuestionImagesAt(block.question, 'inline')
+                                            ]" :key="image.id" :class="[`placement-${image.placement}`, `align-${image.alignment}`]">
                                                 <img v-if="assetUrl(image.assetId)" :src="assetUrl(image.assetId)" :style="imageStyle(image)" alt="">
                                                 <figcaption v-if="image.caption">{{ image.caption }}</figcaption>
                                             </figure>
@@ -427,12 +640,26 @@
                                         <div v-if="block.question.display.answerSpaceLines" class="answer-space">
                                             <span v-for="line in block.question.display.answerSpaceLines" :key="line"></span>
                                         </div>
+                                        <figure v-if="block.question.qr?.enabled" class="question-qr">
+                                            <img
+                                                v-if="questionQrDataUri(block.question)"
+                                                :src="questionQrDataUri(block.question)"
+                                                :style="{ width: `${block.question.qr.sizeMm}mm` }"
+                                                alt="题目二维码"
+                                            >
+                                            <div v-else class="qr-error">二维码内容为空或超过本地容量</div>
+                                            <figcaption v-if="block.question.qr.label">{{ block.question.qr.label }}</figcaption>
+                                        </figure>
                                     </section>
                                 </template>
 
                                 <section v-if="previewDocument.endSections.length" class="preview-end-sections">
                                     <h2>答案与解析</h2>
                                     <article v-for="item in previewDocument.endSections" :key="`${item.blockId}-${item.field}`">
+                                        <p v-if="item.mode === 'end-with-summary'" class="end-question-summary">
+                                            <b>{{ item.questionNumber }}.</b>
+                                            <math-content :content="item.summary"></math-content>
+                                        </p>
                                         <strong>{{ item.field === 'answer' ? '答案' : item.field === 'analysis' ? '分析' : '解析' }}</strong>
                                         <math-content :content="item.content"></math-content>
                                     </article>
@@ -442,7 +669,7 @@
                                     class="preview-footer"
                                     :style="regionPreviewStyle(previewDocument.settings.footer)"
                                 >
-                                    <span v-for="slotName in ['left', 'center', 'right']" :key="slotName">
+                                    <span v-for="slotName in ['left', 'center', 'right']" :key="slotName" :style="regionSlotPreviewStyle(previewDocument.settings.footer.slots?.[slotName])">
                                         <img
                                             v-if="assetUrl(previewDocument.settings.footer.slots?.[slotName]?.assetId)"
                                             :src="assetUrl(previewDocument.settings.footer.slots[slotName].assetId)"
@@ -462,6 +689,16 @@
                                 <span class="eyebrow">题目属性</span>
                                 <h2>{{ selectedQuestion.sourceQuestionId }}</h2>
                                 <button class="restore-link" @click="restoreAllQuestionContent">恢复插入时内容</button>
+                            </div>
+                            <div class="question-command-bar" role="toolbar" aria-label="题目编辑工具">
+                                <button class="button subtle compact" @click="openQuestionTool('optimize')">优化</button>
+                                <button class="button subtle compact" @click="openQuestionTool('ocr')">OCR 识别</button>
+                                <button class="button subtle compact" @click="openQuestionTool('image')">配图</button>
+                                <button class="button subtle compact" @click="openQuestionTool('extract-images')">提取配图</button>
+                                <button class="button subtle compact" @click="openQuestionTool('table')">表格编辑</button>
+                                <button class="button subtle compact" @click="openQuestionTool('sync')">同步到题库</button>
+                                <button class="button primary compact" :disabled="saving" @click="flushSave">保存</button>
+                                <button class="button primary compact" :disabled="saving" @click="saveAndReturnToBank">保存并返回</button>
                             </div>
                             <nav class="inspector-tabs">
                                 <button v-for="tab in questionTabs" :key="tab.id" :data-testid="`tab-${tab.id}`" :class="{ active: inspectorTab === tab.id }" @click="inspectorTab = tab.id">{{ tab.label }}</button>
@@ -493,6 +730,20 @@
                             </section>
 
                             <section v-else-if="inspectorTab === 'images'" class="inspector-form">
+                                <div class="image-add-toolbar">
+                                    <label class="button primary compact file-button">
+                                        ＋ 上传并插入
+                                        <input ref="questionImageInput" type="file" accept="image/*" @change="addQuestionImage">
+                                    </label>
+                                    <select v-model="selectedResourceAssetId" aria-label="当前讲义图片资源">
+                                        <option value="">选择已有图片资源</option>
+                                        <option v-for="asset in assetRecords" :key="asset.id" :value="asset.id">
+                                            {{ asset.kind }} · {{ Math.max(1, Math.round(asset.byteSize / 1024)) }} KB · {{ asset.id.slice(-8) }}
+                                        </option>
+                                    </select>
+                                    <button class="button subtle compact" :disabled="!selectedResourceAssetId" @click="addQuestionImageFromResource">插入所选资源</button>
+                                </div>
+                                <p class="interaction-hint">在左侧编辑区单击图片后，拖住图片可换位置；拖住任意蓝色角点可等比缩放。</p>
                                 <div class="two-field-row">
                                     <label>多图排列
                                         <select data-testid="question-image-layout" :value="selectedQuestion.imageLayout.mode" @change="updateQuestionSection('imageLayout', { mode: $event.target.value })">
@@ -516,10 +767,7 @@
                                             <option value="inline">行内</option>
                                         </select>
                                     </label>
-                                    <div class="two-field-row">
-                                        <label>宽度<input type="number" min="1" :max="image.width.unit === 'mm' ? 190 : 100" :value="image.width.value" @change="updateQuestionImage(index, { width: { ...image.width, value: Number($event.target.value) } })"></label>
-                                        <label>单位<select :value="image.width.unit" @change="updateQuestionImage(index, { width: { ...image.width, unit: $event.target.value } })"><option value="mm">毫米</option><option value="percent">百分比</option></select></label>
-                                    </div>
+                                    <p class="image-size-readout">当前宽度：{{ image.width.value }}{{ image.width.unit === 'mm' ? ' mm' : '%' }}（在编辑区拖动角点调整）</p>
                                     <label>对齐<select :value="image.alignment" @change="updateQuestionImage(index, { alignment: $event.target.value })"><option value="left">左</option><option value="center">中</option><option value="right">右</option><option value="inline">随文</option></select></label>
                                     <label>图片说明<input :value="image.caption" @input="updateQuestionImage(index, { caption: $event.target.value })"></label>
                                     <div class="image-card-actions">
@@ -533,13 +781,105 @@
                                 <button class="button subtle" @click="restoreSelectedQuestionImages">恢复题库原图</button>
                             </section>
 
+                            <section v-else-if="inspectorTab === 'tables'" class="inspector-form table-inspector">
+                                <div class="inspector-section-heading">
+                                    <div>
+                                        <strong>结构化表格</strong>
+                                        <small>单元格保留文本与 LaTeX，不转成图片。</small>
+                                    </div>
+                                    <button data-testid="add-question-table" class="button primary compact" @click="addQuestionTable">＋ 新建表格</button>
+                                </div>
+                                <div v-if="selectedQuestion.tables.length" class="table-picker">
+                                    <button
+                                        v-for="(table, tableIndex) in selectedQuestion.tables"
+                                        :key="table.id"
+                                        class="button compact"
+                                        :class="selectedQuestionTable?.id === table.id ? 'primary' : 'subtle'"
+                                        @click="selectQuestionTable(table.id)"
+                                    >表格 {{ tableIndex + 1 }}</button>
+                                </div>
+                                <template v-if="selectedQuestionTable">
+                                    <div class="two-field-row">
+                                        <label>位置
+                                            <select
+                                                :value="selectedQuestionTable.placement"
+                                                @change="updateQuestionTable(selectedQuestionTable.id, table => ({ ...table, placement: $event.target.value }))"
+                                            >
+                                                <option value="after-stem">题干后</option>
+                                                <option value="after-options">选项后</option>
+                                            </select>
+                                        </label>
+                                        <label>题注
+                                            <input
+                                                :value="selectedQuestionTable.caption"
+                                                @input="updateQuestionTable(selectedQuestionTable.id, table => ({ ...table, caption: $event.target.value }))"
+                                            >
+                                        </label>
+                                    </div>
+                                    <div class="table-editor-grid">
+                                        <table>
+                                            <colgroup>
+                                                <col v-for="(width, columnIndex) in selectedQuestionTable.columnWidths" :key="columnIndex" :style="{ width: `${width}%` }">
+                                            </colgroup>
+                                            <tbody>
+                                                <tr v-for="(row, rowIndex) in selectedQuestionTable.rows" :key="rowIndex">
+                                                    <td
+                                                        v-for="(cell, columnIndex) in row"
+                                                        v-show="!cell.coveredBy"
+                                                        :key="cell.id"
+                                                        :rowspan="cell.rowSpan"
+                                                        :colspan="cell.colSpan"
+                                                        :class="{ selected: isTableCellSelected(rowIndex, columnIndex) }"
+                                                        @click="toggleTableCellSelection(selectedQuestionTable.id, rowIndex, columnIndex)"
+                                                    >
+                                                        <textarea
+                                                            :data-table-cell="`${rowIndex}-${columnIndex}`"
+                                                            rows="2"
+                                                            :value="cell.content"
+                                                            :placeholder="`R${rowIndex + 1}C${columnIndex + 1}`"
+                                                            @click.stop="toggleTableCellSelection(selectedQuestionTable.id, rowIndex, columnIndex)"
+                                                            @input="updateTableCell(rowIndex, columnIndex, { content: $event.target.value })"
+                                                        ></textarea>
+                                                        <select
+                                                            :value="cell.align"
+                                                            @click.stop
+                                                            @change="updateTableCell(rowIndex, columnIndex, { align: $event.target.value })"
+                                                        >
+                                                            <option value="left">左对齐</option>
+                                                            <option value="center">居中</option>
+                                                            <option value="right">右对齐</option>
+                                                        </select>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div class="table-operation-bar">
+                                        <button class="button subtle compact" @click="insertTableRow">下方插行</button>
+                                        <button class="button subtle compact" @click="deleteTableRow">删除所在行</button>
+                                        <button class="button subtle compact" @click="insertTableColumn">右侧插列</button>
+                                        <button class="button subtle compact" @click="deleteTableColumn">删除所在列</button>
+                                        <button class="button subtle compact" :disabled="selectedTableCells.length !== 2" @click="mergeSelectedTableCells">合并选区</button>
+                                        <button class="button subtle compact" :disabled="!selectedTableCells.length" @click="splitSelectedTableCell">拆分单元格</button>
+                                    </div>
+                                    <div class="table-column-widths">
+                                        <label v-for="(width, columnIndex) in selectedQuestionTable.columnWidths" :key="columnIndex">
+                                            第 {{ columnIndex + 1 }} 列 {{ Math.round(width) }}%
+                                            <input type="range" min="5" max="90" step="1" :value="width" @input="setTableColumnWidth(columnIndex, Number($event.target.value))">
+                                        </label>
+                                    </div>
+                                    <button class="button danger-text" @click="removeQuestionTable(selectedQuestionTable.id)">删除当前表格</button>
+                                </template>
+                                <p v-else class="empty-note">还没有表格。点击“新建表格”后直接编辑单元格。</p>
+                            </section>
+
                             <section v-else-if="inspectorTab === 'answers'" class="inspector-form">
                                 <label>答案<textarea data-testid="question-answer" rows="3" :value="effectiveSelectedQuestion.answer || ''" @input="updateQuestionField('answer', $event.target.value)"></textarea></label>
-                                <label>答案位置<select data-testid="question-answer-placement" :value="selectedQuestion.display.answerPlacement" @change="updateQuestionDisplay({ answerPlacement: $event.target.value })"><option value="inherit">跟随版本</option><option value="inline">题内</option><option value="after-question">题后</option><option value="end">文末</option><option value="hidden">隐藏</option></select></label>
+                                <label>答案位置<select data-testid="question-answer-placement" :value="selectedQuestion.display.answerPlacement" @change="updateQuestionDisplay({ answerPlacement: $event.target.value })"><option value="inherit">跟随版本</option><option value="inline">题内</option><option value="after-question">题后</option><option value="end">讲义末尾</option><option value="end-with-summary">讲义末尾（附题干）</option><option value="end-hide-question">讲义末尾（并隐藏题目）</option><option value="hidden">隐藏</option></select></label>
                                 <label>分析<textarea data-testid="question-analysis" rows="4" :value="effectiveSelectedQuestion.analysis || ''" @input="updateQuestionField('analysis', $event.target.value)"></textarea></label>
-                                <label>分析位置<select data-testid="question-analysis-placement" :value="selectedQuestion.display.analysisPlacement" @change="updateQuestionDisplay({ analysisPlacement: $event.target.value })"><option value="inherit">跟随版本</option><option value="after-question">题后</option><option value="end">文末</option><option value="hidden">隐藏</option></select></label>
+                                <label>分析位置<select data-testid="question-analysis-placement" :value="selectedQuestion.display.analysisPlacement" @change="updateQuestionDisplay({ analysisPlacement: $event.target.value })"><option value="inherit">跟随版本</option><option value="after-question">题后</option><option value="end">讲义末尾</option><option value="end-with-summary">讲义末尾（附题干）</option><option value="end-hide-question">讲义末尾（并隐藏题目）</option><option value="hidden">隐藏</option></select></label>
                                 <label>详细解析<textarea data-testid="question-solution" rows="7" :value="effectiveSelectedQuestion.solution || ''" @input="updateQuestionField('solution', $event.target.value)"></textarea></label>
-                                <label>解析位置<select data-testid="question-solution-placement" :value="selectedQuestion.display.solutionPlacement" @change="updateQuestionDisplay({ solutionPlacement: $event.target.value })"><option value="inherit">跟随版本</option><option value="after-question">题后</option><option value="end">文末</option><option value="hidden">隐藏</option></select></label>
+                                <label>解析位置<select data-testid="question-solution-placement" :value="selectedQuestion.display.solutionPlacement" @change="updateQuestionDisplay({ solutionPlacement: $event.target.value })"><option value="inherit">跟随版本</option><option value="after-question">题后</option><option value="end">讲义末尾</option><option value="end-with-summary">讲义末尾（附题干）</option><option value="end-hide-question">讲义末尾（并隐藏题目）</option><option value="hidden">隐藏</option></select></label>
                             </section>
 
                             <section v-else-if="inspectorTab === 'labels'" class="inspector-form">
@@ -584,8 +924,51 @@
                             <section v-else-if="inspectorTab === 'display'" class="inspector-form">
                                 <label class="check-row"><input type="checkbox" :checked="selectedQuestion.display.showQuestionNumber" @change="updateQuestionDisplay({ showQuestionNumber: $event.target.checked })">显示题号</label>
                                 <label class="check-row"><input type="checkbox" :checked="selectedQuestion.display.showOptions" @change="updateQuestionDisplay({ showOptions: $event.target.checked })">显示选项</label>
+                                <div class="visibility-grid">
+                                    <label>年份<select :value="String(selectedQuestion.display.showYear)" @change="updateQuestionDisplay({ showYear: $event.target.value === 'inherit' ? 'inherit' : $event.target.value === 'true' })"><option value="inherit">跟随版本</option><option value="true">显示</option><option value="false">隐藏</option></select></label>
+                                    <label>难度<select :value="String(selectedQuestion.display.showDifficulty)" @change="updateQuestionDisplay({ showDifficulty: $event.target.value === 'inherit' ? 'inherit' : $event.target.value === 'true' })"><option value="inherit">跟随版本</option><option value="true">显示</option><option value="false">隐藏</option></select></label>
+                                    <label>教师备注<select :value="String(selectedQuestion.display.showTeacherNote)" @change="updateQuestionDisplay({ showTeacherNote: $event.target.value === 'inherit' ? 'inherit' : $event.target.value === 'true' })"><option value="inherit">跟随版本</option><option value="true">显示</option><option value="false">隐藏</option></select></label>
+                                </div>
+                                <fieldset class="visibility-fieldset">
+                                    <legend>内容可见性</legend>
+                                    <label class="check-row"><input type="checkbox" :checked="selectedQuestion.visibility.question" @change="updateQuestionSection('visibility', { question: $event.target.checked })">显示整道题</label>
+                                    <label class="check-row"><input type="checkbox" :checked="selectedQuestion.visibility.answer" @change="updateQuestionSection('visibility', { answer: $event.target.checked })">允许教师版显示答案</label>
+                                    <label class="check-row"><input type="checkbox" :checked="selectedQuestion.visibility.analysis" @change="updateQuestionSection('visibility', { analysis: $event.target.checked })">允许教师版显示分析</label>
+                                    <label class="check-row"><input type="checkbox" :checked="selectedQuestion.visibility.solution" @change="updateQuestionSection('visibility', { solution: $event.target.checked })">允许教师版显示解析</label>
+                                    <label class="check-row"><input type="checkbox" :checked="selectedQuestion.visibility.teacherNote" @change="updateQuestionSection('visibility', { teacherNote: $event.target.checked })">允许教师版显示备注</label>
+                                </fieldset>
+                                <fieldset v-if="effectiveSelectedQuestion.options?.length" class="visibility-fieldset">
+                                    <legend>单独隐藏选项</legend>
+                                    <label v-for="(option, optionIndex) in effectiveSelectedQuestion.options" :key="optionIndex" class="check-row">
+                                        <input type="checkbox" :checked="selectedQuestion.visibility.hiddenOptionIndexes.includes(optionIndex)" @change="toggleHiddenOption(optionIndex, $event.target.checked)">
+                                        隐藏选项 {{ optionLetter(optionIndex) }}
+                                    </label>
+                                </fieldset>
+                                <fieldset v-if="selectedQuestion.images.length" class="visibility-fieldset">
+                                    <legend>单独隐藏图片</legend>
+                                    <label v-for="(image, imageIndex) in selectedQuestion.images" :key="image.id" class="check-row">
+                                        <input type="checkbox" :checked="selectedQuestion.visibility.hiddenImageIds.includes(image.id)" @change="toggleHiddenImage(image.id, $event.target.checked)">
+                                        隐藏图片 {{ imageIndex + 1 }}
+                                    </label>
+                                </fieldset>
                                 <label>作答空行<input type="number" min="0" max="100" :value="selectedQuestion.display.answerSpaceLines" @change="updateQuestionDisplay({ answerSpaceLines: Number($event.target.value) })"></label>
-                                <label class="check-row"><input type="checkbox" :checked="selectedQuestion.latexNormalization.useDisplayFractions" @change="updateQuestionSection('latexNormalization', { useDisplayFractions: $event.target.checked })">显示分式优化（仅保存设置）</label>
+                                <fieldset class="visibility-fieldset">
+                                    <legend>LaTeX 输出优化（保留原文，可审计、可撤销）</legend>
+                                    <label class="check-row"><input type="checkbox" :checked="selectedQuestion.latexNormalization.useDisplayFractions" @change="updateQuestionSection('latexNormalization', { useDisplayFractions: $event.target.checked })">行内 \frac 输出为 \dfrac</label>
+                                    <label class="check-row"><input type="checkbox" :checked="selectedQuestion.latexNormalization.normalizePunctuation" @change="updateQuestionSection('latexNormalization', { normalizePunctuation: $event.target.checked })">数学内容标点规范化</label>
+                                    <label class="check-row"><input type="checkbox" :checked="selectedQuestion.latexNormalization.normalizeSpacing" @change="updateQuestionSection('latexNormalization', { normalizeSpacing: $event.target.checked })">重复空格规范化</label>
+                                </fieldset>
+                                <fieldset class="visibility-fieldset">
+                                    <legend>题目二维码</legend>
+                                    <label class="check-row"><input type="checkbox" :checked="selectedQuestion.qr.enabled" @change="updateQuestionSection('qr', { enabled: $event.target.checked })">显示二维码</label>
+                                    <template v-if="selectedQuestion.qr.enabled">
+                                        <label>内容<select :value="selectedQuestion.qr.contentMode" @change="updateQuestionSection('qr', { contentMode: $event.target.value })"><option value="question-id">题目 ID</option><option value="custom">自定义文本</option><option value="url">链接</option></select></label>
+                                        <label v-if="selectedQuestion.qr.contentMode !== 'question-id'">内容值<textarea rows="2" :value="selectedQuestion.qr.customContent" @input="updateQuestionSection('qr', { customContent: $event.target.value })"></textarea></label>
+                                        <label>说明文字<input :value="selectedQuestion.qr.label" @input="updateQuestionSection('qr', { label: $event.target.value })"></label>
+                                        <label>边长 {{ selectedQuestion.qr.sizeMm }} mm<input type="range" min="10" max="40" step="1" :value="selectedQuestion.qr.sizeMm" @input="updateQuestionSection('qr', { sizeMm: Number($event.target.value) })"></label>
+                                        <p :class="questionQrByteLength(selectedQuestion) > questionQrCapacity() ? 'field-error' : 'field-help'">本地二维码容量：{{ questionQrByteLength(selectedQuestion) }} / {{ questionQrCapacity() }} UTF-8 字节</p>
+                                    </template>
+                                </fieldset>
                             </section>
 
                             <section v-else class="inspector-form source-panel">
@@ -680,6 +1063,24 @@
                                         <label>字号 pt<input type="number" min="6" max="14" step="0.5" :value="editor.handout.settings[globalTab].slots[slotName].fontSizePt || 8.5" @change="updateRegionSlot(globalTab, slotName, { fontSizePt: Number($event.target.value) })"></label>
                                         <label>图片宽度 mm<input type="number" min="3" max="50" :value="editor.handout.settings[globalTab].slots[slotName].imageWidthMm" @change="updateRegionSlot(globalTab, slotName, { imageWidthMm: Number($event.target.value) })"></label>
                                     </div>
+                                    <div class="two-field-row">
+                                        <label>字体
+                                            <select :value="editor.handout.settings[globalTab].slots[slotName].fontFamily || 'serif'" @change="updateRegionSlot(globalTab, slotName, { fontFamily: $event.target.value })">
+                                                <option value="serif">思源宋体风格</option>
+                                                <option value="sans">思源黑体风格</option>
+                                            </select>
+                                        </label>
+                                        <label>字重
+                                            <select :value="editor.handout.settings[globalTab].slots[slotName].fontWeight || 400" @change="updateRegionSlot(globalTab, slotName, { fontWeight: Number($event.target.value) })">
+                                                <option :value="400">正常</option>
+                                                <option :value="500">中等</option>
+                                                <option :value="600">半粗</option>
+                                                <option :value="700">粗体</option>
+                                            </select>
+                                        </label>
+                                        <label>颜色<input type="color" :value="editor.handout.settings[globalTab].slots[slotName].color || '#334155'" @input="updateRegionSlot(globalTab, slotName, { color: $event.target.value })"></label>
+                                        <label>行高<input type="number" min="0.8" max="2" step="0.1" :value="editor.handout.settings[globalTab].slots[slotName].lineHeight || 1.2" @change="updateRegionSlot(globalTab, slotName, { lineHeight: Number($event.target.value) })"></label>
+                                    </div>
                                     <img v-if="assetUrl(editor.handout.settings[globalTab].slots[slotName].assetId)" class="region-slot-thumbnail" :src="assetUrl(editor.handout.settings[globalTab].slots[slotName].assetId)" alt="">
                                     <div class="inline-fields">
                                         <label class="button subtle file-button">选择本地图片<input type="file" accept="image/*" @change="uploadRegionSlotImage(globalTab, slotName, $event)"></label>
@@ -698,6 +1099,8 @@
                                 <div class="two-field-row">
                                     <label>距页面边缘 mm<input type="number" min="0" max="30" :value="editor.handout.settings[globalTab].distanceMm" @change="updateGlobal(globalTab, { distanceMm: Number($event.target.value) })"></label>
                                     <label>内容高度 mm<input type="number" min="4" max="30" :value="editor.handout.settings[globalTab].heightMm" @change="updateGlobal(globalTab, { heightMm: Number($event.target.value) })"></label>
+                                    <label>左侧微调 mm<input type="number" min="-20" max="40" step="0.5" :value="editor.handout.settings[globalTab].offsetLeftMm || 0" @change="updateGlobal(globalTab, { offsetLeftMm: Number($event.target.value) })"></label>
+                                    <label>右侧微调 mm<input type="number" min="-20" max="40" step="0.5" :value="editor.handout.settings[globalTab].offsetRightMm || 0" @change="updateGlobal(globalTab, { offsetRightMm: Number($event.target.value) })"></label>
                                 </div>
                                 <p class="field-help">可用：{title} {filename} {teacher} {school} {page} {pages}</p>
                             </section>
@@ -849,6 +1252,9 @@
     <script src="./qisi-handout-question-library.js"></script>
     <script src="./qisi-handout-editor-state.js"></script>
     <script src="./qisi-handout-batch-settings.js"></script>
+    <script src="./qisi-handout-image-interaction.js"></script>
+    <script src="./qisi-handout-table.js"></script>
+    <script src="./qisi-handout-qr.js"></script>
     <script src="./qisi-handout-preview.js"></script>
     <script src="./qisi-handout-edition-policy.js"></script>
     <script src="./qisi-handout-typst-template.js"></script>

@@ -17,7 +17,7 @@
     function () {
         'use strict';
 
-        const HANDOUT_SCHEMA_VERSION = 1;
+        const HANDOUT_SCHEMA_VERSION = 2;
         const HANDOUT_STATUS = Object.freeze([
             'draft',
             'archived'
@@ -116,13 +116,32 @@
             'hidden',
             'inline',
             'after-question',
-            'end'
+            'end',
+            'end-with-summary',
+            'end-hide-question'
+        ]);
+        const QUESTION_TABLE_PLACEMENTS = Object.freeze([
+            'after-stem',
+            'after-options'
+        ]);
+        const TABLE_CELL_ALIGNMENTS = Object.freeze([
+            'left',
+            'center',
+            'right'
+        ]);
+        const QR_CONTENT_MODES = Object.freeze([
+            'question-id',
+            'custom',
+            'url'
         ]);
         const ID_PATTERN = /^[a-z0-9][a-z0-9._:-]{0,127}$/i;
         const MAX_TITLE_LENGTH = 160;
         const MAX_BLOCKS = 2000;
         const MAX_TEXT_LENGTH = 1_000_000;
         const MAX_IMAGES_PER_BLOCK = 100;
+        const MAX_TABLES_PER_QUESTION = 12;
+        const MAX_TABLE_ROWS = 40;
+        const MAX_TABLE_COLUMNS = 16;
 
         const isPlainObject = value =>
             Boolean(value)
@@ -270,6 +289,19 @@
 
             return selected;
         };
+
+        const normalizeContentPlacement = (
+            value,
+            label,
+            fallback = 'inherit'
+        ) => normalizeEnum(
+            value === 'end-answer-only'
+                ? 'end-hide-question'
+                : value,
+            CONTENT_PLACEMENTS,
+            label,
+            fallback
+        );
 
         const normalizeBoolean = (value, label, fallback) => {
             if (value == null) return fallback;
@@ -488,7 +520,169 @@
                     value.keepAspectRatio,
                     `image ${index} keepAspectRatio`,
                     true
+                ),
+                captionMode: normalizeEnum(
+                    value.captionMode,
+                    ['none', 'custom', 'auto'],
+                    `image ${index} captionMode`,
+                    value.caption ? 'custom' : 'none'
                 )
+            };
+        };
+
+        const normalizeQuestionTable = (
+            value,
+            tableIndex,
+            blockId
+        ) => {
+            if (!isPlainObject(value)) {
+                throw new TypeError(
+                    `question block ${blockId} table ${tableIndex} must be an object`
+                );
+            }
+            if (
+                !Array.isArray(value.rows)
+                || value.rows.length < 1
+                || value.rows.length > MAX_TABLE_ROWS
+            ) {
+                throw new RangeError(
+                    `question block ${blockId} table ${tableIndex} rows are invalid`
+                );
+            }
+            const columnCount = value.rows[0]?.length || 0;
+            if (
+                columnCount < 1
+                || columnCount > MAX_TABLE_COLUMNS
+                || value.rows.some(
+                    row =>
+                        !Array.isArray(row)
+                        || row.length !== columnCount
+                )
+            ) {
+                throw new RangeError(
+                    `question block ${blockId} table ${tableIndex} must be rectangular`
+                );
+            }
+
+            const tableId = normalizeIdentifier(
+                value.id || `${blockId}-table-${tableIndex + 1}`,
+                `question block ${blockId} table ${tableIndex} id`
+            );
+            const cells = value.rows.map(
+                (row, rowIndex) => row.map(
+                    (cellValue, columnIndex) => {
+                        const cell = isPlainObject(cellValue)
+                            ? cellValue
+                            : { content: cellValue };
+                        return {
+                            id: normalizeIdentifier(
+                                cell.id
+                                || `${tableId}-r${rowIndex + 1}c${columnIndex + 1}`,
+                                `table ${tableId} cell id`
+                            ),
+                            content: normalizeText(
+                                cell.content,
+                                `table ${tableId} cell content`
+                            ),
+                            align: normalizeEnum(
+                                cell.align,
+                                TABLE_CELL_ALIGNMENTS,
+                                `table ${tableId} cell alignment`,
+                                'center'
+                            ),
+                            rowSpan: normalizeInteger(
+                                cell.rowSpan,
+                                `table ${tableId} row span`,
+                                {
+                                    fallback: 1,
+                                    minimum: 1,
+                                    maximum:
+                                        value.rows.length - rowIndex
+                                }
+                            ),
+                            colSpan: normalizeInteger(
+                                cell.colSpan,
+                                `table ${tableId} column span`,
+                                {
+                                    fallback: 1,
+                                    minimum: 1,
+                                    maximum:
+                                        columnCount - columnIndex
+                                }
+                            ),
+                            coveredBy: cell.coveredBy
+                                ? normalizeIdentifier(
+                                    cell.coveredBy,
+                                    `table ${tableId} coveredBy`
+                                )
+                                : ''
+                        };
+                    }
+                )
+            );
+            const cellIds = cells.flat().map(cell => cell.id);
+            if (new Set(cellIds).size !== cellIds.length) {
+                throw new Error(`table ${tableId} contains duplicate cell ids`);
+            }
+            const cellIdSet = new Set(cellIds);
+            for (const cell of cells.flat()) {
+                if (
+                    cell.coveredBy
+                    && !cellIdSet.has(cell.coveredBy)
+                ) {
+                    throw new Error(
+                        `table ${tableId} references an unknown merged cell`
+                    );
+                }
+            }
+
+            const suppliedWidths = Array.isArray(value.columnWidths)
+                ? value.columnWidths
+                : [];
+            const columnWidths = (
+                suppliedWidths.length === columnCount
+                    ? suppliedWidths
+                    : Array.from(
+                        { length: columnCount },
+                        () => 100 / columnCount
+                    )
+            ).map((width, columnIndex) => {
+                const numeric = Number(width);
+                if (
+                    !Number.isFinite(numeric)
+                    || numeric <= 0
+                    || numeric > 100
+                ) {
+                    throw new RangeError(
+                        `table ${tableId} column ${columnIndex} width is invalid`
+                    );
+                }
+                return numeric;
+            });
+            const widthTotal = columnWidths.reduce(
+                (sum, width) => sum + width,
+                0
+            );
+
+            return {
+                id: tableId,
+                placement: normalizeEnum(
+                    value.placement,
+                    QUESTION_TABLE_PLACEMENTS,
+                    `table ${tableId} placement`,
+                    'after-stem'
+                ),
+                caption: normalizeText(
+                    value.caption,
+                    `table ${tableId} caption`,
+                    { maxLength: 500 }
+                ),
+                columnWidths: columnWidths.map(
+                    width => Number(
+                        (width / widthTotal * 100).toFixed(4)
+                    )
+                ),
+                rows: cells
             };
         };
 
@@ -601,6 +795,12 @@
             )
                 ? block.latexNormalization || {}
                 : null;
+            const visibility = isPlainObject(block.visibility || {})
+                ? block.visibility || {}
+                : null;
+            const qr = isPlainObject(block.qr || {})
+                ? block.qr || {}
+                : null;
 
             if (
                 !display
@@ -608,6 +808,8 @@
                 || !optionLayout
                 || !imageLayout
                 || !latexNormalization
+                || !visibility
+                || !qr
             ) {
                 throw new TypeError(
                     `question block ${block.id} layout settings must be objects`
@@ -622,6 +824,18 @@
             ) {
                 throw new TypeError(
                     `question block ${block.id} display labels must be a bounded array`
+                );
+            }
+            if (
+                block.tables != null
+                && (
+                    !Array.isArray(block.tables)
+                    || block.tables.length
+                        > MAX_TABLES_PER_QUESTION
+                )
+            ) {
+                throw new TypeError(
+                    `question block ${block.id} tables must be a bounded array`
                 );
             }
 
@@ -664,21 +878,36 @@
                         `question block ${block.id} showTags`,
                         'inherit'
                     ),
-                    answerPlacement: normalizeEnum(
+                    showYear: normalizeEnum(
+                        display.showYear,
+                        INHERITED_VISIBILITY,
+                        `question block ${block.id} showYear`,
+                        'inherit'
+                    ),
+                    showDifficulty: normalizeEnum(
+                        display.showDifficulty,
+                        INHERITED_VISIBILITY,
+                        `question block ${block.id} showDifficulty`,
+                        'inherit'
+                    ),
+                    showTeacherNote: normalizeEnum(
+                        display.showTeacherNote,
+                        INHERITED_VISIBILITY,
+                        `question block ${block.id} showTeacherNote`,
+                        'inherit'
+                    ),
+                    answerPlacement: normalizeContentPlacement(
                         display.answerPlacement,
-                        CONTENT_PLACEMENTS,
                         `question block ${block.id} answerPlacement`,
                         'inherit'
                     ),
-                    analysisPlacement: normalizeEnum(
+                    analysisPlacement: normalizeContentPlacement(
                         display.analysisPlacement,
-                        CONTENT_PLACEMENTS,
                         `question block ${block.id} analysisPlacement`,
                         'inherit'
                     ),
-                    solutionPlacement: normalizeEnum(
+                    solutionPlacement: normalizeContentPlacement(
                         display.solutionPlacement,
-                        CONTENT_PLACEMENTS,
                         `question block ${block.id} solutionPlacement`,
                         'inherit'
                     ),
@@ -769,6 +998,99 @@
                     )
                 },
                 images: normalizedImages,
+                tables: (
+                    block.tables == null
+                        ? []
+                        : block.tables
+                ).map((table, tableIndex) =>
+                    normalizeQuestionTable(
+                        table,
+                        tableIndex,
+                        block.id
+                    )
+                ),
+                visibility: {
+                    question: normalizeBoolean(
+                        visibility.question,
+                        `question block ${block.id} visibility question`,
+                        true
+                    ),
+                    answer: normalizeBoolean(
+                        visibility.answer,
+                        `question block ${block.id} visibility answer`,
+                        true
+                    ),
+                    analysis: normalizeBoolean(
+                        visibility.analysis,
+                        `question block ${block.id} visibility analysis`,
+                        true
+                    ),
+                    solution: normalizeBoolean(
+                        visibility.solution,
+                        `question block ${block.id} visibility solution`,
+                        true
+                    ),
+                    teacherNote: normalizeBoolean(
+                        visibility.teacherNote,
+                        `question block ${block.id} visibility teacherNote`,
+                        true
+                    ),
+                    hiddenOptionIndexes: (
+                        Array.isArray(
+                            visibility.hiddenOptionIndexes
+                        )
+                            ? visibility.hiddenOptionIndexes
+                            : []
+                    ).map((index, itemIndex) =>
+                        normalizeInteger(
+                            index,
+                            `question block ${block.id} hidden option ${itemIndex}`,
+                            {
+                                minimum: 0,
+                                maximum: 99
+                            }
+                        )
+                    ),
+                    hiddenImageIds: (
+                        Array.isArray(visibility.hiddenImageIds)
+                            ? visibility.hiddenImageIds
+                            : []
+                    ).map((imageId, itemIndex) =>
+                        normalizeIdentifier(
+                            imageId,
+                            `question block ${block.id} hidden image ${itemIndex}`
+                        )
+                    )
+                },
+                qr: {
+                    enabled: normalizeBoolean(
+                        qr.enabled,
+                        `question block ${block.id} qr enabled`,
+                        false
+                    ),
+                    contentMode: normalizeEnum(
+                        qr.contentMode,
+                        QR_CONTENT_MODES,
+                        `question block ${block.id} qr content mode`,
+                        'question-id'
+                    ),
+                    customContent: normalizeText(
+                        qr.customContent,
+                        `question block ${block.id} qr content`,
+                        { maxLength: 2048 }
+                    ),
+                    label: normalizeText(
+                        qr.label,
+                        `question block ${block.id} qr label`,
+                        { maxLength: 120 }
+                    ),
+                    sizeMm: Number.isFinite(Number(qr.sizeMm))
+                        ? Math.min(
+                            40,
+                            Math.max(10, Number(qr.sizeMm))
+                        )
+                        : 18
+                },
                 latexNormalization: {
                     useDisplayFractions: normalizeBoolean(
                         latexNormalization.useDisplayFractions,
@@ -948,9 +1270,13 @@
                 );
             }
 
-            return version === 0
-                ? migrateLegacyRecord(value)
-                : cloneValue(value);
+            if (version === 0) {
+                return migrateLegacyRecord(value);
+            }
+            return {
+                ...cloneValue(value),
+                schemaVersion: HANDOUT_SCHEMA_VERSION
+            };
         };
 
         const normalizeHandout = value => {
@@ -1056,6 +1382,10 @@
             OPTION_LAYOUT_MODES,
             MULTI_IMAGE_LAYOUT_MODES,
             DISPLAY_LABEL_TYPES,
+            CONTENT_PLACEMENTS,
+            QUESTION_TABLE_PLACEMENTS,
+            TABLE_CELL_ALIGNMENTS,
+            QR_CONTENT_MODES,
             cloneValue,
             deepEqual,
             migrateHandout,

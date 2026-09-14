@@ -230,6 +230,83 @@ Required:
 - usage, architecture, dependency/license, known-limit and recovery documentation;
 - clean tree and pushed branch.
 
+### H9 — Reference editor parity and direct image manipulation
+
+Objective: complete the user-approved reference-editor controls without changing the
+question-bank, recognition, DOCX/PDF alignment, or ordinary print chains.
+
+Required product behavior:
+
+- selecting a question image exposes direct manipulation in the HTML editor;
+- dragging the image moves it between supported structured regions and alignments;
+- dragging any corner resizes with the original aspect ratio preserved;
+- transient drag state is rendered at animation-frame cadence, while only pointer
+  release creates one bounded history mutation and one autosave;
+- persisted image geometry remains millimetres or usable-width percentage, never
+  absolute browser coordinates;
+- image replacement, upload, asset selection, restore, deletion, ordering, caption
+  mode and multi-image layout remain available without requiring size step buttons;
+- structured tables remain editable text/LaTeX data and render through the same HTML
+  and Typst document model rather than being converted to screenshots;
+- answer/analysis/solution placement, non-destructive visibility, display metadata,
+  reversible LaTeX normalization, local QR content, header/footer typography and
+  region offsets are exposed by working UI controls;
+- the reference toolbar actions have real handlers or an explicit unavailable reason;
+  no decorative dead buttons are permitted;
+- “同步到题库” may create a reviewable revision draft, but must never silently
+  overwrite a formal source question;
+- user-triggered OCR may reuse the existing controlled boundary, but H9 tests and
+  acceptance must not call real AI/OCR endpoints.
+
+Allowed production files:
+
+- `handout.html`;
+- `handout.css`;
+- focused `qisi-handout-*.js` modules;
+- `scripts/production-entry-manifest.js` only when registering new handout modules.
+
+Allowed supporting files:
+
+- focused `tests/handout-h9-*.test.js` and handout fixtures;
+- handout stage/user/architecture documentation;
+- this task file.
+
+Read-only:
+
+- `main.html`;
+- all existing DOCX/PDF/batch/import/support modules;
+- `qisi-local-server.js`;
+- database schemas and formal question/image stores.
+
+Forbidden:
+
+- `app.js`;
+- dependency and lockfile changes;
+- real AI/OCR calls during development or acceptance;
+- direct writes to formal question records;
+- raw Typst editing;
+- absolute-coordinate PDF layout;
+- weakening student answer-leakage projection;
+- complex free-form text wrapping that can overlap content.
+
+Required gates:
+
+- focused H9 pure-model and browser tests;
+- real browser pointer-drag, corner-resize, save/reload, undo/redo and button audit;
+- HTML/Typst image, table, visibility, answer and header/footer parity;
+- rendered multi-page student/teacher PDF inspection and leakage scan;
+- 50-question drag performance evidence with no full PDF compile during pointer move;
+- `npm.cmd run verify:docx-stable`;
+- `npm.cmd run verify:pdf-known-bad`;
+- `npm.cmd run verify:batch-safety`;
+- `npm.cmd run verify:no-real-ai`;
+- `npm.cmd run verify:safe`;
+- exact diff-scope verification, one H9 commit and push.
+
+The user explicitly expanded the previous known limits for local QR content and the
+reference toolbar. This authorization does not expand the real-AI/OCR, direct
+question-bank-write, cloud, or arbitrary-layout boundaries.
+
 ## Explicitly out of scope
 
 - AI-generated handouts, rewrites, summaries or variants;
@@ -240,7 +317,7 @@ Required:
 - template marketplace;
 - arbitrary-coordinate desktop-publishing layout;
 - complex text wrapping;
-- QR-code implementation;
+- cloud-backed QR links or QR analytics;
 - changes to recognition or answer-alignment algorithms.
 
 ## Interposed stage H3R — DOCX/PDF real-material recovery gate
@@ -727,3 +804,25 @@ formula errors, clipping, overflow, mojibake or leakage.
 - rendered evidence and operator documentation are under
   `artifacts/acceptance/handout-h8`, `docs/handout`, and
   `docs/stages/STAGE_H8_FINAL_ACCEPTANCE.md`.
+
+## H9 completion report (2026-09-14)
+
+Status: complete. H9 implements the approved reference-editor parity controls,
+including direct structured image dragging and four-corner aspect-ratio resize.
+
+- Transient pointer motion is frame-throttled; pointer release produces one
+  history mutation and one autosave.
+- Persisted geometry remains millimetres or usable-width percentage plus a
+  structured placement/alignment. No absolute browser coordinates are stored.
+- Tables, local QR, visibility, answer/analysis/solution placement, display
+  metadata, reversible LaTeX normalization, and header/footer typography and
+  offsets share the HTML/Typst document model.
+- Student projection physically removes protected teacher content before formal
+  document generation.
+- No `app.js`, `main.html`, question schema, formal question data, DOCX/PDF,
+  batch-recognition, dependency or lockfile change was made.
+- Full `verify:safe` passed with 1360 total, 1352 passed, 0 failed and 8
+  intentionally skipped. DOCX stable, PDF known-bad, batch safety and no-real-AI
+  gates also passed.
+- The detailed evidence and explicit limitations are recorded in
+  `docs/stages/STAGE_H9_REFERENCE_EDITOR_PARITY.md`.

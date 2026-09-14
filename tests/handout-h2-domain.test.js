@@ -53,7 +53,10 @@ test('H2 handout model migrates legacy records without accepting future schemas'
         createdAt: NOW
     });
 
-    assert.equal(migrated.schemaVersion, 1);
+    assert.equal(
+        migrated.schemaVersion,
+        model.HANDOUT_SCHEMA_VERSION
+    );
     assert.equal(migrated.title, '函数 专题');
     assert.equal(migrated.status, 'draft');
     assert.equal(migrated.blocks.length, 1);
@@ -61,7 +64,7 @@ test('H2 handout model migrates legacy records without accepting future schemas'
     assert.equal(migrated.updatedAt, NOW);
     assert.throws(() => model.normalizeHandout({
         ...migrated,
-        schemaVersion: 2
+        schemaVersion: model.HANDOUT_SCHEMA_VERSION + 1
     }), /newer than supported/i);
 });
 

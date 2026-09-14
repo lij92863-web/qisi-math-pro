@@ -69,7 +69,7 @@ const tinyPng = Buffer.from(
 );
 
 test('H3 browser completes the structured editor workflow without source writes', {
-    timeout: 120_000
+    timeout: 180_000
 }, async () => {
     const port = await reserveLoopbackPort();
     const origin = `http://127.0.0.1:${port}`;
@@ -261,7 +261,10 @@ test('H3 browser completes the structured editor workflow without source writes'
         ).click();
         await page.locator('.editor-block.block-question').waitFor({
             state: 'visible',
-            timeout: 60_000
+            // The full Node suite launches several isolated browser/compiler
+            // workflows concurrently. Keep the functional assertion strict,
+            // but allow the same operation to survive transient CI contention.
+            timeout: 120_000
         });
         assert.equal(await page.locator('.editor-block').count(), 6);
 

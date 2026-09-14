@@ -17,7 +17,13 @@
                 ? require('./qisi-handout-typst-template.js')
                 : null
         );
-    const api = factory(editionPolicy, preview, template);
+    const qr = root.Qisi?.HandoutQr
+        || (
+            typeof require === 'function'
+                ? require('./qisi-handout-qr.js')
+                : null
+        );
+    const api = factory(editionPolicy, preview, template, qr);
 
     root.Qisi = root.Qisi || {};
     root.Qisi.HandoutDocument = api;
@@ -32,10 +38,10 @@
     typeof globalThis !== 'undefined'
         ? globalThis
         : this,
-    function (editionPolicy, preview, template) {
+    function (editionPolicy, preview, template, qr) {
         'use strict';
 
-        if (!editionPolicy || !preview || !template) {
+        if (!editionPolicy || !preview || !template || !qr) {
             throw new Error('handout document dependencies are unavailable');
         }
 
@@ -376,7 +382,18 @@
                     context
                 );
                 expressions.push(
-                    `text(size: ${slot.fontSizePt}pt, fill: rgb("#334155"))[${content}]`
+                    [
+                        'text(',
+                        `  font: ${typstStringLiteral(
+                            slot.fontFamily === 'sans'
+                                ? 'Noto Sans CJK SC'
+                                : 'Noto Serif CJK SC'
+                        )},`,
+                        `  size: ${slot.fontSizePt}pt,`,
+                        `  weight: ${slot.fontWeight},`,
+                        `  fill: rgb("${slot.color}"),`,
+                        `)[#set par(leading: ${slot.lineHeight}em)\n${content}]`
+                    ].join('\n')
                 );
             }
             if (!expressions.length) return 'none';
@@ -425,7 +442,12 @@
                 `  ${cells.join(',\n  ')},`,
                 ')'
             ].join('\n');
-            let content = grid;
+            let content = (
+                region.offsetLeftMm
+                || region.offsetRightMm
+            )
+                ? `pad(left: ${region.offsetLeftMm}mm, right: ${region.offsetRightMm}mm, [#${grid}])`
+                : grid;
 
             if (region.background?.enabled) {
                 const fill = withAlpha(
@@ -439,7 +461,7 @@
                     `  fill: rgb("${fill}"),`,
                     '  stroke: none,',
                     '  inset: (x: 4pt, y: 2pt),',
-                    `  [#${grid}],`,
+                    `  [#${content}],`,
                     ')'
                 ].join('\n');
                 if (region.background.bleed) {
@@ -579,23 +601,34 @@
             blockId
         ) => {
             if (!question.display.showOptions) return '';
-            const options = (Array.isArray(question.options)
-                ? question.options
-                : [])
-                .map(value => String(value || ''))
-                .filter(value => value.trim());
-            if (!options.length) return '';
+            const optionItems = (
+                Array.isArray(question.optionItems)
+                    ? question.optionItems
+                    : (Array.isArray(question.options)
+                        ? question.options
+                        : []
+                    ).map((content, index) => ({
+                        index,
+                        content
+                    }))
+            ).map(item => ({
+                index: Number(item.index),
+                content: String(item.content || '')
+            })).filter(item => item.content.trim());
+            if (!optionItems.length) return '';
             const columns = preview.resolveOptionColumns(
                 question.optionLayout?.mode || 'auto',
-                options
+                optionItems.map(item => item.content)
             );
-            const cells = options.map((option, index) => {
-                const label = String.fromCharCode(65 + index);
+            const cells = optionItems.map(item => {
+                const label = String.fromCharCode(
+                    65 + item.index
+                );
                 const content = richTextToTypst(
-                    option,
+                    item.content,
                     {
                         blockId,
-                        field: `option${index}`,
+                        field: `option${item.index}`,
                         normalization: question.latexNormalization || {},
                         audit: state.normalizationAudit
                     }
@@ -614,6 +647,130 @@
                 `  ${cells.join(',\n  ')},`,
                 ')'
             ].join('\n');
+        };
+
+        const renderQuestionTable = (
+            table,
+            state,
+            blockId
+        ) => {
+            const columns = (
+                table.columnWidths || []
+            ).map(width =>
+                `${Math.max(1, Number(width || 0))}%`
+            ).join(', ');
+            const cells = [];
+            for (
+                let rowIndex = 0;
+                rowIndex < table.rows.length;
+                rowIndex += 1
+            ) {
+                for (
+                    let columnIndex = 0;
+                    columnIndex < table.rows[rowIndex].length;
+                    columnIndex += 1
+                ) {
+                    const cell =
+                        table.rows[rowIndex][columnIndex];
+                    if (cell.coveredBy) continue;
+                    const content = richTextToTypst(
+                        cell.content,
+                        {
+                            blockId,
+                            field:
+                                `table-${table.id}-r${rowIndex}c${columnIndex}`,
+                            normalization: {},
+                            audit: state.normalizationAudit
+                        }
+                    );
+                    const options = [
+                        `align: ${cell.align || 'center'}`
+                    ];
+                    if (cell.rowSpan > 1) {
+                        options.push(
+                            `rowspan: ${cell.rowSpan}`
+                        );
+                    }
+                    if (cell.colSpan > 1) {
+                        options.push(
+                            `colspan: ${cell.colSpan}`
+                        );
+                    }
+                    cells.push(
+                        `table.cell(${options.join(', ')})[${content}]`
+                    );
+                }
+            }
+            const lines = [
+                '#table(',
+                `  columns: (${columns}),`,
+                '  stroke: 0.5pt + rgb("#64748b"),',
+                '  inset: (x: 5pt, y: 4pt),',
+                `  ${cells.join(',\n  ')},`,
+                ')'
+            ];
+            if (String(table.caption || '').trim()) {
+                lines.push(
+                    `#align(center)[#text(size: 8.5pt, fill: rgb("#64748b"))[${textSource(table.caption)}]]`
+                );
+            }
+            return lines.join('\n');
+        };
+
+        const renderQuestionTables = (
+            question,
+            placement,
+            state,
+            blockId
+        ) => (question.tables || [])
+            .filter(table => table.placement === placement)
+            .map(table =>
+                renderQuestionTable(table, state, blockId)
+            )
+            .join('\n#v(5pt)\n');
+
+        const renderQuestionQr = (
+            question,
+            state,
+            blockId
+        ) => {
+            if (!question.qr?.enabled) return '';
+            const content =
+                question.qr.contentMode === 'question-id'
+                    ? question.sourceQuestionId
+                    : question.qr.customContent;
+            if (!String(content || '').trim()) {
+                state.diagnostics.push({
+                    code: 'qr-content-empty',
+                    blockId,
+                    message: '题目二维码内容为空'
+                });
+                return '';
+            }
+            try {
+                const svg = qr.toSvg(content);
+                const image = (
+                    `#image.decode(bytes(${typstStringLiteral(svg)}), format: "svg", width: ${question.qr.sizeMm}mm)`
+                );
+                const label = String(
+                    question.qr.label || ''
+                ).trim();
+                return label
+                    ? [
+                        '#align(right)[',
+                        `  ${image}`,
+                        `  #linebreak()#text(size: 8pt, fill: rgb("#64748b"))[${textSource(label)}]`,
+                        ']'
+                    ].join('\n')
+                    : `#align(right)[${image}]`;
+            } catch (error) {
+                state.diagnostics.push({
+                    code: 'qr-content-too-long',
+                    blockId,
+                    message: error?.message || String(error)
+                });
+                return '';
+            }
         };
 
         const renderQuestionLabel = question => {
@@ -653,6 +810,15 @@
                 && Array.isArray(question.tags)
             ) {
                 items.push(...question.tags);
+            }
+            if (question.display.showYear && question.year) {
+                items.push(question.year);
+            }
+            if (
+                question.display.showDifficulty
+                && question.diff
+            ) {
+                items.push(question.diff);
             }
             const unique = [...new Set(
                 items.map(value => String(value || '').trim())
@@ -719,10 +885,14 @@
             const rightOfOptions = images.filter(
                 image => image.placement === 'right-of-options'
             );
-            const afterImages = images.filter(
+            const belowStem = images.filter(
+                image => image.placement === 'below-stem'
+            );
+            const afterOptions = images.filter(
                 image => ![
                     'right-of-stem',
-                    'right-of-options'
+                    'right-of-options',
+                    'below-stem'
                 ].includes(image.placement)
             );
             const stemSource = `${prefix ? `${textSource(`${prefix} `)}` : ''}${stem}`;
@@ -737,6 +907,18 @@
                 ].join('\n')
                 : stemSource;
             const options = renderOptions(question, state, blockId);
+            const tablesAfterStem = renderQuestionTables(
+                question,
+                'after-stem',
+                state,
+                blockId
+            );
+            const tablesAfterOptions = renderQuestionTables(
+                question,
+                'after-options',
+                state,
+                blockId
+            );
             const optionLayout = rightOfOptions.length
                 ? [
                     '#grid(',
@@ -778,6 +960,20 @@
                 stemLayout
             ];
             if (metadata) lines.push('#v(2pt)', metadata);
+            if (belowStem.length) {
+                lines.push(
+                    '#v(5pt)',
+                    renderImageGroup(
+                        belowStem,
+                        state,
+                        blockId,
+                        question.imageLayout
+                    )
+                );
+            }
+            if (tablesAfterStem) {
+                lines.push('#v(5pt)', tablesAfterStem);
+            }
             if (inlineFields.length) {
                 lines.push(
                     '#h(6pt)',
@@ -785,11 +981,14 @@
                 );
             }
             if (optionLayout) lines.push('#v(5pt)', optionLayout);
-            if (afterImages.length) {
+            if (tablesAfterOptions) {
+                lines.push('#v(5pt)', tablesAfterOptions);
+            }
+            if (afterOptions.length) {
                 lines.push(
                     '#v(5pt)',
                     renderImageGroup(
-                        afterImages,
+                        afterOptions,
                         state,
                         blockId,
                         question.imageLayout
@@ -807,6 +1006,27 @@
                     afterFields.join('\n#v(4pt)\n')
                 );
             }
+            if (
+                question.display.showTeacherNote
+                && question.teacherNote
+            ) {
+                lines.push(
+                    '#v(5pt)',
+                    renderField(
+                        question,
+                        'teacherNote',
+                        '备注',
+                        state,
+                        blockId
+                    )
+                );
+            }
+            const qrSource = renderQuestionQr(
+                question,
+                state,
+                blockId
+            );
+            if (qrSource) lines.push('#v(4pt)', qrSource);
             lines.push(']', '#v(7pt)');
             return lines.join('\n');
         };
@@ -922,7 +1142,24 @@
                         );
                         const questionNumber = questionNumbers.get(
                             section.blockId
-                        );
+                        ) || section.questionNumber || '';
+                        if (
+                            section.mode === 'end-with-summary'
+                            && String(section.summary || '').trim()
+                        ) {
+                            lines.push(
+                                `${textSource(`${questionNumber}. `)}${richTextToTypst(
+                                    section.summary,
+                                    {
+                                        blockId: section.blockId,
+                                        field: 'stem-summary',
+                                        normalization: {},
+                                        audit: state.normalizationAudit
+                                    }
+                                )}`,
+                                '#v(2pt)'
+                            );
+                        }
                         lines.push(
                             `${textSource(`${questionNumber}. `)}${content}`,
                             '#v(5pt)'

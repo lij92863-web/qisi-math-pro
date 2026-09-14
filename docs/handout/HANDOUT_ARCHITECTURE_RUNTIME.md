@@ -28,6 +28,9 @@
 | `qisi-handout-source-update.js` | 源题差异、字段选择和冲突显式接受 |
 | `qisi-handout-preview.js` | 学生/教师投影和受保护内容剔除 |
 | `qisi-handout-document.js` | 可信 Typst 源码、公式映射、答案索引和资产白名单 |
+| `qisi-handout-image-interaction.js` | 四角等比缩放、结构化拖放区域和逐帧预览调度 |
+| `qisi-handout-table.js` | 可编辑表格、行列增删、合并拆分和列宽归一化 |
+| `qisi-handout-qr.js` | 固定容量、无网络请求的本地二维码矩阵与 SVG |
 | `qisi-handout-compiler-client.js` | Worker 消息、取消、进度和错误协议 |
 | `workers/qisi-handout-typst-worker.mjs` | 唯一允许加载编译器、MiTeX、字体并生成 PDF 的边界 |
 | `qisi-handout-pdf-session.js` | PDF 字节、预览、下载和 Blob URL 生命周期 |
@@ -40,6 +43,8 @@
 - Worker 内复用已初始化运行时；本地固定资产使用版本化 Cache Storage。
 - 旧缓存按运行时版本清理，浏览器重启后允许从本地缓存恢复。
 - 文本输入按相同字段和时间窗口合并撤销记录；自动保存采用 500ms 防抖。
+- 图片拖动期间只在 `requestAnimationFrame` 中更新临时视觉状态；松开鼠标后才产生一次结构化修改和自动保存。
+- 图片位置只保存为允许的题干/选项相对区域，尺寸只保存为毫米或可用宽度百分比，不保存屏幕坐标。
 - PDF 预览与下载使用同一份内存字节，关闭预览或页面卸载时释放 Blob URL。
 
 ## 4. 安全边界
@@ -49,6 +54,7 @@
 - 学生版在文档生成前删除教师字段，并对最终投影和 PDF 文本做泄漏检查。
 - 缺失图片、未知资产、公式转换失败或编译诊断会阻止导出，不静默降级。
 - 源题更新只读取正式题库；讲义修改不能写回题库。
+- 表格保持结构化文本/LaTeX 数据，二维码在本机生成；两者都不上传到第三方服务。
 
 ## 5. 固定本地依赖与许可证
 

@@ -123,6 +123,34 @@ const makeCompileHandout = () => model.createHandout({
             mode: 'auto'
         },
         images: [],
+        tables: [{
+            id: 'question-table',
+            placement: 'after-stem',
+            caption: '函数值表',
+            columnWidths: [50, 50],
+            rows: [[{
+                id: 'cell-1',
+                content: '$x$',
+                align: 'center',
+                rowSpan: 1,
+                colSpan: 1,
+                coveredBy: ''
+            }, {
+                id: 'cell-2',
+                content: '$f(x)$',
+                align: 'center',
+                rowSpan: 1,
+                colSpan: 1,
+                coveredBy: ''
+            }]]
+        }],
+        qr: {
+            enabled: true,
+            contentMode: 'question-id',
+            customContent: '',
+            label: '扫码查看题号',
+            sizeMm: 18
+        },
         latexNormalization: {
             useDisplayFractions: false,
             normalizePunctuation: false,

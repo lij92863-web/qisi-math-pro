@@ -192,7 +192,15 @@
                         gapMm: 4
                     }
                 ),
-                images: model.cloneValue(block.images || [])
+                images: model.cloneValue(block.images || []),
+                tables: model.cloneValue(block.tables || []),
+                visibility: model.cloneValue(
+                    block.visibility || {}
+                ),
+                qr: model.cloneValue(block.qr || {}),
+                latexNormalization: model.cloneValue(
+                    block.latexNormalization || {}
+                )
             };
 
             for (const field of PRESENTATION_FIELDS) {
@@ -210,6 +218,39 @@
                 question.display.solutionPlacement = 'hidden';
             }
 
+            const hiddenOptionIndexes = new Set(
+                question.visibility.hiddenOptionIndexes || []
+            );
+            question.optionItems = (
+                Array.isArray(question.options)
+                    ? question.options
+                    : []
+            ).map((content, index) => ({
+                index,
+                content
+            })).filter(item =>
+                !hiddenOptionIndexes.has(item.index)
+            );
+            question.images = question.images.filter(
+                image =>
+                    !(
+                        question.visibility.hiddenImageIds || []
+                    ).includes(image.id)
+            );
+            for (const field of PROTECTED_FIELDS) {
+                if (
+                    edition === 'student'
+                    || question.visibility[field] === false
+                ) {
+                    delete question[field];
+                }
+            }
+            if (edition === 'student') {
+                for (const field of PROTECTED_FIELDS) {
+                    delete question.visibility[field];
+                }
+            }
+
             return question;
         };
 
@@ -224,6 +265,7 @@
             const normalized = model.assertValidHandout(handout);
             const projectedBlocks = [];
             const endSections = [];
+            let questionSequence = 0;
 
             for (const block of normalized.blocks) {
                 if (block.type !== 'question') {
@@ -239,6 +281,10 @@
                 }
 
                 const question = resolveQuestion(block, edition);
+                questionSequence += 1;
+                if (block.visibility?.question === false) {
+                    continue;
+                }
                 const placements = {
                     answer: question.display.answerPlacement,
                     analysis: question.display.analysisPlacement,
@@ -248,18 +294,39 @@
                 if (edition === 'teacher') {
                     for (const [field, placement] of Object.entries(placements)) {
                         if (
-                            placement === 'end'
+                            [
+                                'end',
+                                'end-with-summary',
+                                'end-hide-question'
+                            ].includes(placement)
                             && String(question[field] || '').trim()
                         ) {
                             endSections.push({
                                 blockId: block.id,
                                 sourceQuestionId: block.sourceQuestionId,
                                 field,
-                                content: question[field]
+                                content: question[field],
+                                mode: placement,
+                                questionNumber:
+                                    question.questionNumber
+                                    || String(questionSequence),
+                                summary:
+                                    placement === 'end-with-summary'
+                                        ? question.stem
+                                        : ''
                             });
                             delete question[field];
                         }
                     }
+                }
+
+                if (
+                    edition === 'teacher'
+                    && Object.values(placements).includes(
+                        'end-hide-question'
+                    )
+                ) {
+                    continue;
                 }
 
                 projectedBlocks.push({

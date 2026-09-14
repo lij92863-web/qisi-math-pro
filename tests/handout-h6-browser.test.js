@@ -123,7 +123,13 @@ test('H6 completes main-to-handout student and teacher PDF workflow', {
 
     try {
         await waitForServer(origin, server);
-        browser = await chromium.launch({ headless: true });
+        browser = await chromium.launch({
+            headless: true,
+            args: [
+                '--disable-background-timer-throttling',
+                '--disable-renderer-backgrounding'
+            ]
+        });
         context = await browser.newContext({
             acceptDownloads: true,
             viewport: {
@@ -268,6 +274,217 @@ test('H6 completes main-to-handout student and teacher PDF workflow', {
         });
         assert.equal(await page.locator('.editor-block').count(), 6);
 
+        const directFrame = page.locator(
+            '.block-question .direct-image-frame'
+        ).first();
+        await directFrame.click();
+        const beforeResize = await page.evaluate(() => {
+            const app = globalThis.__TEX_HANDOUT_APP__;
+            return app.selectedQuestion.images[0].width.value;
+        });
+        const resizeHandle = page.locator(
+            '.block-question .image-resize-handle.handle-south-east'
+        );
+        const handleBox = await resizeHandle.boundingBox();
+        assert.ok(handleBox);
+        await resizeHandle.hover();
+        await page.mouse.move(
+            handleBox.x + handleBox.width / 2,
+            handleBox.y + handleBox.height / 2
+        );
+        await page.mouse.down();
+        await page.waitForFunction(() => {
+            const interaction =
+                globalThis.__TEX_HANDOUT_APP__?.imageManipulation;
+            return interaction?.active
+                && interaction.mode === 'resize';
+        });
+        await page.mouse.move(
+            handleBox.x + handleBox.width / 2 + 48,
+            handleBox.y + handleBox.height / 2 + 48,
+            { steps: 4 }
+        );
+        await page.waitForFunction(() => {
+            const interaction =
+                globalThis.__TEX_HANDOUT_APP__?.imageManipulation;
+            return (
+                interaction?.active
+                && interaction.previewWidthPx
+                    > interaction.resizeSession.startWidthPx
+            );
+        });
+        await page.mouse.up();
+        const afterResize = await page.evaluate(() => {
+            const app = globalThis.__TEX_HANDOUT_APP__;
+            return app.selectedQuestion.images[0].width.value;
+        });
+        assert.ok(
+            afterResize > beforeResize,
+            `corner drag must persist a larger structured width (${beforeResize} -> ${afterResize})`
+        );
+
+        const moveFrameBox = await directFrame.boundingBox();
+        assert.ok(moveFrameBox);
+        await page.mouse.move(
+            moveFrameBox.x + moveFrameBox.width / 2,
+            moveFrameBox.y + moveFrameBox.height / 2
+        );
+        await page.mouse.down();
+        const dropTarget = page.locator(
+            '[data-image-drop="options-right"]'
+        );
+        await dropTarget.waitFor({ state: 'visible' });
+        const dropBox = await dropTarget.boundingBox();
+        assert.ok(dropBox);
+        await page.mouse.move(
+            dropBox.x + dropBox.width / 2,
+            dropBox.y + dropBox.height / 2,
+            { steps: 4 }
+        );
+        await page.mouse.up();
+        assert.equal(
+            await page.evaluate(() =>
+                globalThis.__TEX_HANDOUT_APP__
+                    .selectedQuestion.images[0].placement
+            ),
+            'right-of-options'
+        );
+
+        const performanceFixture = await page.evaluate(async () => {
+            const app = globalThis.__TEX_HANDOUT_APP__;
+            const model = globalThis.Qisi.HandoutModel;
+            const stateTools = globalThis.Qisi.HandoutEditorState;
+            const originalEditor = app.editor;
+            const sourceBlock = originalEditor.handout.blocks.find(
+                block => block.type === 'question'
+            );
+            const cleanSourceBlock = model.cloneValue(sourceBlock);
+            globalThis.__H9_PERF_EDITOR__ = originalEditor;
+            const clones = Array.from(
+                { length: 49 },
+                (_, index) => ({
+                    ...model.cloneValue(cleanSourceBlock),
+                    id: `h9-performance-question-${index + 2}`,
+                    images: cleanSourceBlock.images.map(image => ({
+                        ...model.cloneValue(image),
+                        id:
+                            `${image.id}-performance-${index + 2}`
+                    }))
+                })
+            );
+            const handout = model.assertValidHandout({
+                ...originalEditor.handout,
+                blocks: [
+                    ...originalEditor.handout.blocks,
+                    ...clones
+                ]
+            });
+            app.editor = stateTools.createEditorState(handout);
+            app.selectEditorBlock(sourceBlock.id);
+            await app.$nextTick();
+            return {
+                sourceBlockId: sourceBlock.id,
+                formalPhase: app.formalState.phase
+            };
+        });
+        assert.equal(
+            await page.locator('.block-question').count(),
+            50
+        );
+        const performanceFrame = page.locator(
+            '.block-question .direct-image-frame'
+        ).first();
+        await performanceFrame.click();
+        const performanceHandle = page.locator(
+            '.block-question .image-resize-handle.handle-south-east'
+        ).first();
+        const performanceHandleBox =
+            await performanceHandle.boundingBox();
+        assert.ok(performanceHandleBox);
+        const dragStartedAt = Date.now();
+        const performanceStart = {
+            x: performanceHandleBox.x
+                + performanceHandleBox.width / 2,
+            y: performanceHandleBox.y
+                + performanceHandleBox.height / 2
+        };
+        await performanceHandle.dispatchEvent('pointerdown', {
+            pointerId: 901,
+            pointerType: 'mouse',
+            button: 0,
+            buttons: 1,
+            clientX: performanceStart.x,
+            clientY: performanceStart.y
+        });
+        await page.waitForFunction(() => {
+            const interaction =
+                globalThis.__TEX_HANDOUT_APP__?.imageManipulation;
+            return interaction?.active
+                && interaction.mode === 'resize';
+        });
+        await page.evaluate(start => {
+            window.dispatchEvent(new PointerEvent('pointermove', {
+                bubbles: true,
+                pointerId: 901,
+                pointerType: 'mouse',
+                buttons: 1,
+                clientX: start.x + 32,
+                clientY: start.y + 24
+            }));
+        }, performanceStart);
+        await page.waitForFunction(() => {
+            const interaction =
+                globalThis.__TEX_HANDOUT_APP__?.imageManipulation;
+            return (
+                interaction?.active
+                && interaction.previewWidthPx
+                    > interaction.resizeSession.startWidthPx
+            );
+        });
+        await page.evaluate(start => {
+            window.dispatchEvent(new PointerEvent('pointerup', {
+                bubbles: true,
+                pointerId: 901,
+                pointerType: 'mouse',
+                button: 0,
+                buttons: 0,
+                clientX: start.x + 32,
+                clientY: start.y + 24
+            }));
+        }, performanceStart);
+        const dragElapsedMs = Date.now() - dragStartedAt;
+        assert.ok(
+            dragElapsedMs < 2500,
+            `50-question corner drag took ${dragElapsedMs} ms`
+        );
+        assert.equal(
+            await page.evaluate(() =>
+                globalThis.__TEX_HANDOUT_APP__.formalState.phase
+            ),
+            performanceFixture.formalPhase,
+            'pointer drag must not start formal PDF compilation'
+        );
+        await page.evaluate(async blockId => {
+            const app = globalThis.__TEX_HANDOUT_APP__;
+            app.editor = globalThis.__H9_PERF_EDITOR__;
+            delete globalThis.__H9_PERF_EDITOR__;
+            app.selectEditorBlock(blockId);
+            await app.$nextTick();
+        }, performanceFixture.sourceBlockId);
+
+        await page.getByTestId('tab-tables').click();
+        await page.getByTestId('add-question-table').click();
+        await page.locator('[data-table-cell="0-0"]')
+            .fill('$x$');
+        await page.locator('[data-table-cell="0-1"]')
+            .fill('$f(x)$');
+        assert.equal(
+            await page.locator(
+                '.block-question .structured-question-table'
+            ).count(),
+            1
+        );
+
         await page.getByTestId('tab-content').click();
         await page.locator(
             '.inspector-form textarea'
@@ -291,6 +508,10 @@ test('H6 completes main-to-handout student and teacher PDF workflow', {
             .selectOption('end');
         await page.getByTestId('question-solution-placement')
             .selectOption('after-question');
+        await page.getByTestId('tab-display').click();
+        await page.getByLabel('显示二维码').setChecked(true);
+        await page.getByLabel('允许教师版显示备注')
+            .setChecked(true);
 
         await page.getByTestId('open-global-settings').click();
         await page.getByTestId('global-header').click();
@@ -306,10 +527,32 @@ test('H6 completes main-to-handout student and teacher PDF workflow', {
             return (
                 app
                 && !app.saving
-                && !app.editor?.dirty
-                && app.saveStatus === 'saved'
+                && (
+                    (
+                        !app.editor?.dirty
+                        && app.saveStatus === 'saved'
+                    )
+                    || app.saveStatus === 'error'
+                )
             );
+        }, null, {
+            timeout: 60_000
         });
+        const saveOutcome = await page.evaluate(() => {
+            const app = globalThis.__TEX_HANDOUT_APP__;
+            return {
+                status: app.saveStatus,
+                dirty: app.editor?.dirty,
+                notice: app.notice,
+                revision: app.editor?.handout?.revision,
+                updatedAt: app.editor?.handout?.updatedAt
+            };
+        });
+        assert.equal(
+            saveOutcome.status,
+            'saved',
+            JSON.stringify(saveOutcome)
+        );
         const beforeReload = await page.evaluate(() => {
             const app = globalThis.__TEX_HANDOUT_APP__;
             return {
@@ -331,6 +574,19 @@ test('H6 completes main-to-handout student and teacher PDF workflow', {
         assert.equal(
             await page.locator('.editor-block').count(),
             beforeReload.blockCount
+        );
+        assert.ok(
+            await page.evaluate(() =>
+                globalThis.__TEX_HANDOUT_APP__
+                    .questionBlocks[0].images[0].width.value
+            ) > beforeResize
+        );
+        assert.equal(
+            await page.evaluate(() =>
+                globalThis.__TEX_HANDOUT_APP__
+                    .questionBlocks[0].tables.length
+            ),
+            1
         );
 
         await page.getByTestId('student-preview').click();

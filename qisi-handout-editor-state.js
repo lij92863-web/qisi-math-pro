@@ -57,21 +57,38 @@
                         enabled: true,
                         text: '{title}',
                         assetId: '',
-                        imageWidthMm: 10
+                        imageWidthMm: 10,
+                        fontFamily: 'serif',
+                        fontSizePt: 8.5,
+                        fontWeight: 400,
+                        color: '#334155',
+                        lineHeight: 1.2
                     }),
                     center: Object.freeze({
                         enabled: false,
                         text: '',
                         assetId: '',
-                        imageWidthMm: 10
+                        imageWidthMm: 10,
+                        fontFamily: 'serif',
+                        fontSizePt: 8.5,
+                        fontWeight: 400,
+                        color: '#334155',
+                        lineHeight: 1.2
                     }),
                     right: Object.freeze({
                         enabled: true,
                         text: '{teacher}',
                         assetId: '',
-                        imageWidthMm: 10
+                        imageWidthMm: 10,
+                        fontFamily: 'serif',
+                        fontSizePt: 8.5,
+                        fontWeight: 400,
+                        color: '#334155',
+                        lineHeight: 1.2
                     })
                 }),
+                offsetLeftMm: 0,
+                offsetRightMm: 0,
                 background: Object.freeze({
                     enabled: false,
                     color: '#f1f5f9',
@@ -93,21 +110,38 @@
                         enabled: true,
                         text: '{school}',
                         assetId: '',
-                        imageWidthMm: 10
+                        imageWidthMm: 10,
+                        fontFamily: 'serif',
+                        fontSizePt: 8.5,
+                        fontWeight: 400,
+                        color: '#334155',
+                        lineHeight: 1.2
                     }),
                     center: Object.freeze({
                         enabled: false,
                         text: '',
                         assetId: '',
-                        imageWidthMm: 10
+                        imageWidthMm: 10,
+                        fontFamily: 'serif',
+                        fontSizePt: 8.5,
+                        fontWeight: 400,
+                        color: '#334155',
+                        lineHeight: 1.2
                     }),
                     right: Object.freeze({
                         enabled: true,
                         text: '第 {page} 页',
                         assetId: '',
-                        imageWidthMm: 10
+                        imageWidthMm: 10,
+                        fontFamily: 'serif',
+                        fontSizePt: 8.5,
+                        fontWeight: 400,
+                        color: '#334155',
+                        lineHeight: 1.2
                     })
                 }),
+                offsetLeftMm: 0,
+                offsetRightMm: 0,
                 background: Object.freeze({
                     enabled: false,
                     color: '#f1f5f9',

@@ -46,7 +46,10 @@
         const VISIBILITY_FIELDS = Object.freeze([
             'showKnowledgePoints',
             'showSource',
-            'showTags'
+            'showTags',
+            'showYear',
+            'showDifficulty',
+            'showTeacherNote'
         ]);
         const PLACEMENT_FIELDS = Object.freeze([
             'answerPlacement',
@@ -82,6 +85,9 @@
                 showKnowledgePoints: false,
                 showSource: false,
                 showTags: false,
+                showYear: false,
+                showDifficulty: false,
+                showTeacherNote: false,
                 answerPlacement: 'hidden',
                 analysisPlacement: 'hidden',
                 solutionPlacement: 'hidden'
@@ -90,6 +96,9 @@
                 showKnowledgePoints: false,
                 showSource: false,
                 showTags: false,
+                showYear: false,
+                showDifficulty: false,
+                showTeacherNote: false,
                 answerPlacement: 'end',
                 analysisPlacement: 'after-question',
                 solutionPlacement: 'end'
@@ -111,6 +120,10 @@
             text: '',
             alignment: 'center',
             fontSizePt: 8.5,
+            fontFamily: 'serif',
+            fontWeight: 400,
+            color: '#334155',
+            lineHeight: 1.2,
             assetId: '',
             imageWidthMm: 10
         });
@@ -122,6 +135,10 @@
             && Object.getPrototypeOf(value) === Object.prototype;
         const ASSET_ID_PATTERN =
             /^[a-z0-9][a-z0-9._:-]{0,127}$/i;
+        const SLOT_FONT_FAMILIES = Object.freeze([
+            'serif',
+            'sans'
+        ]);
 
         const assertEdition = edition => {
             if (!EDITIONS.includes(edition)) {
@@ -145,7 +162,9 @@
                     'hidden',
                     'inline',
                     'after-question',
-                    'end'
+                    'end',
+                    'end-with-summary',
+                    'end-hide-question'
                 ].includes(value)
             ) {
                 throw new TypeError(`${label} has an invalid placement`);
@@ -297,6 +316,21 @@
             if (assetId && !ASSET_ID_PATTERN.test(assetId)) {
                 throw new TypeError(`${label}.assetId is invalid`);
             }
+            const fontFamily = String(
+                source.fontFamily
+                || DEFAULT_SLOT_SETTINGS.fontFamily
+            );
+            if (!SLOT_FONT_FAMILIES.includes(fontFamily)) {
+                throw new TypeError(
+                    `${label}.fontFamily is invalid`
+                );
+            }
+            const color = String(
+                source.color || DEFAULT_SLOT_SETTINGS.color
+            ).trim();
+            if (!/^#[0-9a-f]{6}$/i.test(color)) {
+                throw new TypeError(`${label}.color is invalid`);
+            }
 
             return {
                 enabled: source.enabled == null
@@ -315,6 +349,26 @@
                         label: `${label}.fontSizePt`,
                         minimum: 6,
                         maximum: 14
+                    }
+                ),
+                fontFamily,
+                fontWeight: boundedNumber(
+                    source.fontWeight,
+                    DEFAULT_SLOT_SETTINGS.fontWeight,
+                    {
+                        label: `${label}.fontWeight`,
+                        minimum: 300,
+                        maximum: 800
+                    }
+                ),
+                color,
+                lineHeight: boundedNumber(
+                    source.lineHeight,
+                    DEFAULT_SLOT_SETTINGS.lineHeight,
+                    {
+                        label: `${label}.lineHeight`,
+                        minimum: 0.8,
+                        maximum: 2
                     }
                 ),
                 assetId,
@@ -410,6 +464,24 @@
                         label: `${label}.heightMm`,
                         minimum: 4,
                         maximum: 30
+                    }
+                ),
+                offsetLeftMm: boundedNumber(
+                    source.offsetLeftMm,
+                    0,
+                    {
+                        label: `${label}.offsetLeftMm`,
+                        minimum: -20,
+                        maximum: 40
+                    }
+                ),
+                offsetRightMm: boundedNumber(
+                    source.offsetRightMm,
+                    0,
+                    {
+                        label: `${label}.offsetRightMm`,
+                        minimum: -20,
+                        maximum: 40
                     }
                 ),
                 slots,
