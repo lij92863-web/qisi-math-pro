@@ -11544,7 +11544,8 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                         });
                     } catch (error) {
                         const wrapped = new Error(
-                            `DOCX 已成功转为 PDF，但页面视觉识别未完成：${error?.message || String(error)}`
+                            'DOCX 已成功转为 PDF，但页面视觉识别未完成。'
+                            + window.Qisi.Utils.describeVisualServiceFailure(error, '页面视觉识别')
                         );
                         wrapped.stage = 'visual-recognition';
                         wrapped.cause = error;
@@ -17530,6 +17531,7 @@ ${source}`;
                                 if (file.fileType === 'pdf' && hasQuestionRole && pdfVisualAttempted && pdfPageImageCount <= 0) {
                                     const message =
                                         `PDF 视觉链路失败且没有任何页图：${file.filename}。` +
+                                        `${window.Qisi.Utils.describeVisualServiceFailure(pdfVisualError, 'PDF 视觉识别')} ` +
                                         `已禁止文本层回退，避免生成无原图、无选项、无 LaTeX 的垃圾草稿。`;
 
                                     console.error('[BATCH_DEBUG][pdf-hard-stop]', {

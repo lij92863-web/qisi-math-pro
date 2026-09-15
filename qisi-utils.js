@@ -579,6 +579,89 @@
             );
         };
 
+        // A visual-recognition failure has to say *which hop* failed. Without this the teacher sees
+        // "识别失败" for problems that are not recognition at all - a stopped local service, a refused
+        // origin, a missing key or an unreachable upstream - and every one of those needs a different
+        // action. The local server answers every upstream outcome with a structured code, so a
+        // fetch-level failure can only come from the browser -> local service hop.
+        const VISUAL_FAILURE_CODES = {
+            LOCAL_SERVER_UNREACHABLE: '本机识别服务没有响应请求（可能没有启动、端口不对或已经退出）。',
+            ORIGIN_NOT_ALLOWED: '本机识别服务拒绝了当前页面来源，请从 http://127.0.0.1:<端口>/main.html 打开。',
+            UPSTREAM_UNREACHABLE: '本机服务无法访问上游视觉服务（网络或代理问题）。',
+            API_AUTH_ERROR: '上游视觉服务鉴权失败（API Key 缺失、无效或余额/权限问题）。',
+            API_RESPONSE_ERROR: '上游视觉服务返回了错误响应。'
+        };
+
+        const classifyVisualServiceFailure = (error) => {
+            const raw = String(error?.message || error || '').trim();
+            const message = raw.toLowerCase();
+            const bodyCode = String(
+                error?.code || error?.cause?.code || error?.responseCode || ''
+            ).toUpperCase();
+            const status = Number(error?.status || error?.statusCode || 0);
+
+            const code = (() => {
+                if (bodyCode === 'ORIGIN_NOT_ALLOWED' || message.includes('origin_not_allowed')) {
+                    return 'ORIGIN_NOT_ALLOWED';
+                }
+                // fetch() rejects with a TypeError when the request never produced a response; the
+                // local server always answers with JSON, so this is the local hop.
+                if (
+                    error?.name === 'TypeError'
+                    || message.includes('failed to fetch')
+                    || message.includes('networkerror')
+                    || message.includes('load failed')
+                    || message.includes('err_connection_refused')
+                ) {
+                    return 'LOCAL_SERVER_UNREACHABLE';
+                }
+                if (
+                    bodyCode === 'DASHSCOPE_NOT_CONFIGURED'
+                    || bodyCode === 'AI_PROXY_AUTH_FAILED'
+                    || status === 401
+                    || status === 403
+                    || status === 503
+                    || message.includes('鉴权')
+                    || message.includes('unauthorized')
+                    || message.includes('forbidden')
+                    || message.includes('api key')
+                    || message.includes('balance')
+                    || message.includes('quota')
+                ) {
+                    return 'API_AUTH_ERROR';
+                }
+                if (
+                    bodyCode === 'AI_PROXY_TIMEOUT'
+                    || bodyCode === 'AI_PROXY_FETCH_FAILED'
+                    || status === 502
+                    || status === 504
+                    // A message-only timeout has no HTTP status, which means the browser never got a
+                    // response; a rate limit or other upstream *answer* keeps its own code above.
+                    || (!status && (message.includes('timed out') || message.includes('timeout')))
+                ) {
+                    return 'UPSTREAM_UNREACHABLE';
+                }
+                if (status >= 400 || bodyCode) return 'API_RESPONSE_ERROR';
+                return 'LOCAL_SERVER_UNREACHABLE';
+            })();
+
+            return {
+                code,
+                message: VISUAL_FAILURE_CODES[code],
+                detail: raw.slice(0, 300),
+                rawCode: bodyCode,
+                status: status || null
+            };
+        };
+
+        // The teacher-facing wording for a failed visual step. It keeps the classification visible
+        // instead of collapsing every transport problem into "识别失败".
+        const describeVisualServiceFailure = (error, action = '视觉识别') => {
+            const classified = classifyVisualServiceFailure(error);
+            if (!classified.detail) return `${action}失败（${classified.code}）`;
+            return `${action}失败（${classified.code}）：${classified.message} 详情：${classified.detail}`;
+        };
+
         const stripAnswerSolution = (text) => {
             let stem = String(text || '');
             let answer = '';
@@ -979,6 +1062,8 @@
             hasUnconvertedImagePlaceholder,
             hasUnconvertedOptionPlaceholder,
             isFatalQwenServiceError,
+            classifyVisualServiceFailure,
+            describeVisualServiceFailure,
             isRawJsonPayloadText,
             itemHasUnconvertedImagePlaceholder,
             mathSignalCount,
