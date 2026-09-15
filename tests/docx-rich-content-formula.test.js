@@ -288,6 +288,16 @@ test('MTEF fallback deterministically preserves triangle and arc constructs reje
     assert.equal(mtefReader.mtefToLatex(arcs).latex, '\\widehat{DE},\\widehat{AC}');
 });
 
+test('MTEF interval template preserves mixed open and closed endpoints locally', () => {
+    const interval = Buffer.from('BQEABglEU01UNgAAE1dpbkFsbEJhc2ljQ29kZVBhZ2VzABEFVGltZXMgTmV3IFJvbWFuABEDU3ltYm9sABEFQ291cmllciBOZXcAEQRNVCBFeHRyYQATV2luQWxsQ29kZVBhZ2VzABEGutrM5QASAAghL0WPRC9BUPQQD0dfQVDyHx5BUPQVD0EA9EX0JfSPQl9BAPQQD0NfQQD0j0X0Kl9I8h9BAPQQD0D0j0F/SPQQD0EqX0RfRfRfRfRfQQ8MAQEBAQECAgICAAIAAQEBAAMAAQAEAAUBChAEAAAAAAAAutoADwEBAAIAg2sAAgSGCCLOAwAJMAABAAIEhhIiLQIAiDQAAgCCLAACBIYSIi0CAIgzAAACAJYoAAIAll0AAAAA', 'base64');
+    assert.deepEqual(mtefReader.mtefToLatex(interval), {
+        ok: true,
+        code: 'MTEF_LATEX_OK',
+        latex: 'k\\in \\left(-4,-3\\right]',
+        diagnostics: []
+    });
+});
+
 test('accepts half-open interval notation with intentionally mixed boundary delimiters', () => {
     assert.deepEqual(rich.normalizeLatexFragment('$x \\in [0,+\\infty)$'), {
         ok: true,

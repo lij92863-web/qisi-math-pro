@@ -97,7 +97,7 @@ const normalizeSuccessfulPayload = (rows, payload) => {
   };
 };
 
-const translateWithFaultIsolation = async (rows, invokeBatch) => {
+const translateWithFaultIsolation = async (rows, invokeBatch, budget = { remaining: 15 }) => {
   const equations = Array.isArray(rows) ? rows : [];
   if (!equations.length) {
     return {
@@ -111,6 +111,12 @@ const translateWithFaultIsolation = async (rows, invokeBatch) => {
   }
 
   try {
+    if (budget.remaining <= 0) {
+      const error = new Error('MathType recovery attempt limit reached.');
+      error.code = 'MATHTYPE_RECOVERY_LIMIT';
+      throw error;
+    }
+    budget.remaining -= 1;
     return normalizeSuccessfulPayload(equations, await invokeBatch(equations));
   } catch (error) {
     const failure = normalizeFailure(error);
@@ -125,11 +131,13 @@ const translateWithFaultIsolation = async (rows, invokeBatch) => {
     const splitAt = Math.ceil(equations.length / 2);
     const left = await translateWithFaultIsolation(
       equations.slice(0, splitAt),
-      invokeBatch
+      invokeBatch,
+      budget
     );
     const right = await translateWithFaultIsolation(
       equations.slice(splitAt),
-      invokeBatch
+      invokeBatch,
+      budget
     );
     const isolated = [...left.equations, ...right.equations];
 

@@ -251,21 +251,45 @@
 
             for (let offset = 0; offset < rows.length; offset += batchSize) {
                 const batch = rows.slice(offset, offset + batchSize);
-                const response = await fetchImpl(options.endpoint || '/api/convert/mathtype-mtef', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ equations: batch })
-                });
-                const payload = await response.json().catch(() => ({}));
-                if (!response.ok || !Array.isArray(payload?.equations)) {
-                    const error = new Error(payload?.error || payload?.code || `MathType translation failed (${response.status}).`);
-                    error.code = payload?.code || 'MATHTYPE_TRANSLATION_FAILED';
-                    error.batchIndex = Math.floor(offset / batchSize);
-                    error.batchOffset = offset;
-                    error.batchLength = batch.length;
-                    throw error;
+                let payload;
+                const controller = new AbortController();
+                const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 120000;
+                const timer = setTimeout(() => controller.abort(), timeoutMs);
+                try {
+                    const response = await fetchImpl(options.endpoint || '/api/convert/mathtype-mtef', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ equations: batch }),
+                        signal: controller.signal
+                    });
+                    payload = await response.json().catch(() => ({}));
+                    if (!response.ok || !Array.isArray(payload?.equations)) {
+                        const error = new Error('MathType translation failed.');
+                        error.code = payload?.code || 'MATHTYPE_TRANSLATION_FAILED';
+                        throw error;
+                    }
+                    const expected = new Set(batch.map(row => String(row.id)));
+                    const seen = new Set();
+                    for (const row of payload.equations) {
+                        const id = String(row?.id || '');
+                        if (!expected.has(id) || seen.has(id)) {
+                            const error = new Error('MathType returned inconsistent equation IDs.');
+                            error.code = 'MATHTYPE_INVALID_RESPONSE';
+                            throw error;
+                        }
+                        seen.add(id);
+                    }
+                } catch (error) {
+                    payload = { equations: [], failureCode: controller.signal.aborted
+                        ? 'MATHTYPE_NATIVE_TIMEOUT' : (error?.code || 'MATHTYPE_TRANSLATION_FAILED') };
+                } finally {
+                    clearTimeout(timer);
                 }
-                translated.push(...payload.equations);
+                const byId = new Map(payload.equations.map(row => [String(row.id), row]));
+                translated.push(...batch.map(row => byId.get(String(row.id)) || {
+                    id: String(row.id), ok: false, latex: '',
+                    code: payload.failureCode || 'MATHTYPE_MISSING_RESPONSE'
+                }));
             }
 
             return translated;
@@ -274,39 +298,59 @@
         const translateMathTypeMedia = async (mediaMap, options = {}) => {
             const collected = collectMathTypeMtef(mediaMap, options);
             const mathByRid = new Map();
-            if (!collected.equations.length) {
-                return { mathByRid, diagnostics: collected.diagnostics, requested: 0, translated: 0 };
-            }
-
-            const fetchImpl = options.fetchImpl || globalThis.fetch;
-            if (typeof fetchImpl !== 'function') {
-                return {
-                    mathByRid,
-                    diagnostics: [...collected.diagnostics, { code: 'MATHTYPE_FETCH_UNAVAILABLE' }],
-                    requested: collected.equations.length,
-                    translated: 0
-                };
-            }
-
-            const translatedRows = await requestMathTypeTranslations(collected.equations, {
-                ...options,
-                fetchImpl
-            });
-
             const diagnostics = [...collected.diagnostics];
-            const equationById = new Map(collected.equations.map(row => [String(row.id), row]));
+            if (!collected.equations.length) {
+                return { mathByRid, diagnostics, requested: 0, translated: 0 };
+            }
+
+            const localById = new Map();
+            const nativeCandidates = [];
+            for (const source of collected.equations) {
+                const mtef = dataUrlToBytes(`data:application/octet-stream;base64,${source.mtefBase64}`);
+                const local = mtefReader?.mtefToLatex?.(mtef) || { ok: false, code: 'MTEF_FALLBACK_UNAVAILABLE' };
+                const normalized = local.ok ? normalizeLatexFragment(local.latex) : local;
+                localById.set(String(source.id), {
+                    result: local,
+                    normalized
+                });
+                if (local.ok && normalized.ok && /\\triangle\b|[△Δ]/u.test(normalized.latex)) {
+                    mathByRid.set(String(source.id), normalized.latex);
+                    diagnostics.push({
+                        rid: String(source.id),
+                        code: 'MATHTYPE_MTEF_FALLBACK_USED',
+                        nativeCode: 'MATHTYPE_UNSUPPORTED_TRIANGLE'
+                    });
+                } else {
+                    nativeCandidates.push(source);
+                }
+            }
+            const translatedRows = options.disableNative === true
+                ? nativeCandidates.map(row => ({
+                    id: String(row.id),
+                    ok: false,
+                    latex: '',
+                    code: 'MATHTYPE_NATIVE_DISABLED'
+                }))
+                : await requestMathTypeTranslations(nativeCandidates, {
+                    ...options,
+                    fetchImpl: options.fetchImpl || globalThis.fetch
+                });
+
             for (const row of translatedRows) {
                 const normalized = normalizeLatexFragment(row?.latex || '');
                 if (row?.ok && normalized.ok) {
                     mathByRid.set(String(row.id), normalized.latex);
                 } else {
-                    const source = equationById.get(String(row?.id || ''));
-                    const mtef = source ? dataUrlToBytes(`data:application/octet-stream;base64,${source.mtefBase64}`) : new Uint8Array();
-                    const fallback = mtefReader?.mtefToLatex?.(mtef) || { ok: false, code: 'MTEF_FALLBACK_UNAVAILABLE' };
-                    const fallbackNormalized = fallback.ok ? normalizeLatexFragment(fallback.latex) : fallback;
+                    const cached = localById.get(String(row?.id || ''));
+                    const fallback = cached?.result || { ok: false, code: 'MTEF_FALLBACK_UNAVAILABLE' };
+                    const fallbackNormalized = cached?.normalized || fallback;
                     if (fallback.ok && fallbackNormalized.ok) {
                         mathByRid.set(String(row.id), fallbackNormalized.latex);
-                        diagnostics.push({ rid: String(row.id), code: 'MATHTYPE_MTEF_FALLBACK_USED' });
+                        diagnostics.push({
+                            rid: String(row.id),
+                            code: 'MATHTYPE_MTEF_FALLBACK_USED',
+                            nativeCode: row?.code || 'MATHTYPE_TRANSLATION_FAILED'
+                        });
                         continue;
                     }
                     diagnostics.push({

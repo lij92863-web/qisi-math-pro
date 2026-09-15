@@ -100,7 +100,18 @@ public static class QisiMathTypeNative
 }
 '@
 
+$nativeMutex = [System.Threading.Mutex]::new($false, 'Local\QisiMathTypeTranslation')
+$ownsNativeMutex = $false
 try {
+    try {
+        $ownsNativeMutex = $nativeMutex.WaitOne(10000)
+    } catch [System.Threading.AbandonedMutexException] {
+        $ownsNativeMutex = $true
+    }
+    if (-not $ownsNativeMutex) {
+        Write-Result @{ ok = $false; code = 'MATHTYPE_BUSY'; equations = @() }
+        exit 4
+    }
     Add-Type -TypeDefinition $nativeCode -Language CSharp
     $payload = Get-Content -LiteralPath $InputPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $rows = @($payload.equations)
@@ -121,9 +132,10 @@ try {
     }
 
     try {
-        $results = foreach ($row in $rows) {
+        $results = @()
+        foreach ($row in $rows) {
             $id = [string]$row.id
-            try {
+            $result = try {
                 $mtef = [Convert]::FromBase64String([string]$row.mtefBase64)
                 if (-not $mtef.Length) {
                     throw 'MTEF payload is empty.'
@@ -170,6 +182,16 @@ try {
                     message = $_.Exception.Message
                 }
             }
+            $results += $result
+            # Keep completed native results even if the external DDE server dies on a
+            # later equation. The Node boundary fills missing rows from local evidence.
+            Write-Result @{
+                ok = $false
+                code = 'MATHTYPE_BATCH_IN_PROGRESS'
+                translator = $Translator
+                equations = @($results)
+            }
+            Start-Sleep -Milliseconds 20
         }
 
         Write-Result @{
@@ -189,4 +211,7 @@ try {
         equations = @()
     }
     exit 1
+} finally {
+    if ($ownsNativeMutex) { $nativeMutex.ReleaseMutex() }
+    $nativeMutex.Dispose()
 }

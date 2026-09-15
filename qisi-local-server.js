@@ -4,8 +4,8 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const crypto = require('crypto');
 const fsp = require('fs/promises');
+const crypto = require('crypto');
 const { spawn } = require('child_process');
 const { createSerialTaskQueue } = require('./qisi-serial-task-queue.js');
 const { translateWithFaultIsolation } = require('./qisi-mathtype-native-guard.js');
@@ -18,11 +18,11 @@ const TOOLS_DIR = path.join(ROOT, 'tools');
 const PS_CONVERTER = path.join(TOOLS_DIR, 'convert-docx-to-pdf.ps1');
 const PS_MATHTYPE_TRANSLATOR = path.join(TOOLS_DIR, 'translate-mathtype-mtef.ps1');
 const PORT = Number(process.env.PORT || 3000);
+const HOST = String(process.env.QISI_HOST || '127.0.0.1').trim() || '127.0.0.1';
 const SERVER_BUILD_ID = crypto.createHash('sha256')
   .update(fs.readFileSync(__filename))
   .digest('hex')
   .slice(0, 16);
-const HOST = String(process.env.QISI_HOST || '127.0.0.1').trim() || '127.0.0.1';
 const CONVERT_TIMEOUT_MS = Number(process.env.DOCX_CONVERT_TIMEOUT_MS || 120000);
 const MATHTYPE_TIMEOUT_MS = Number(process.env.MATHTYPE_TRANSLATE_TIMEOUT_MS || 60000);
 const CONVERTER_MODE = String(process.env.QISI_DOCX_CONVERTER || 'word-first').toLowerCase();
@@ -115,6 +115,7 @@ for (const dir of [TMP_DIR, UPLOAD_DIR, CONVERTED_DIR, TOOLS_DIR]) {
 const app = express();
 const aiJsonParser = express.json({ limit: AI_BODY_LIMIT, type: 'application/json' });
 const enqueueMathTypeTranslation = createSerialTaskQueue();
+let nativeMathTypeCircuitCode = '';
 
 app.get('/api/ai/health', (req, res) => {
   const runtime = res.locals.qisiRuntime || DEFAULT_RUNTIME;
@@ -163,6 +164,10 @@ async function fetchDashScopeWithRetry(runtime, upstreamUrl, options, context = 
     try {
       const upstream = await runtime.fetchImpl(upstreamUrl, options);
       const responseBuffer = Buffer.from(await upstream.arrayBuffer());
+      if ([502, 503, 504].includes(upstream.status) && attempt < retryLimit && !options.signal?.aborted) {
+        await waitForAiRetry(retryDelayMs * (attempt + 1));
+        continue;
+      }
       return { upstream, responseBuffer, attempt };
     } catch (error) {
       const aborted = error?.name === 'AbortError' || options.signal?.aborted;
@@ -265,20 +270,28 @@ async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
     res.set('content-type', contentType);
     return res.send(responseBuffer);
   } catch (error) {
-    const aborted = error?.name === 'AbortError';
+    const causeCode = String(error?.cause?.code || error?.code || '');
+    const aborted = controller.signal.aborted || error?.name === 'AbortError'
+      || /^(UND_ERR_CONNECT_TIMEOUT|UND_ERR_HEADERS_TIMEOUT|UND_ERR_BODY_TIMEOUT|ETIMEDOUT)$/.test(causeCode);
+    const networkHint = /^(ENOTFOUND|EAI_AGAIN)$/.test(causeCode)
+      ? '无法解析识别服务地址，请检查网络或 DNS。'
+      : /^(ECONNRESET|ECONNREFUSED|UND_ERR_SOCKET)$/.test(causeCode)
+        ? '与识别服务的连接中断，请检查网络后重试。'
+        : '识别服务连接失败，请检查网络后重试。';
     console.error('[AI_PROXY][error]', {
       route: routeName,
       model,
       code: aborted ? 'AI_PROXY_TIMEOUT' : 'AI_PROXY_FETCH_FAILED',
-      message: error?.message || String(error)
+      causeCode: /^[A-Z0-9_]+$/.test(causeCode) ? causeCode : 'UNKNOWN'
     });
 
     return res.status(aborted ? 504 : 502).json({
       ok: false,
       code: aborted ? 'AI_PROXY_TIMEOUT' : 'AI_PROXY_FETCH_FAILED',
+      message: aborted ? '识别服务连接或响应超时，请稍后重试。' : networkHint,
       error: aborted
-        ? `DashScope upstream request timed out after ${timeoutMs}ms.`
-        : 'DashScope upstream request failed.'
+        ? '识别服务连接或响应超时，请稍后重试。'
+        : networkHint
     });
   } finally {
     clearTimeout(timer);
@@ -346,6 +359,13 @@ function validateMtefBatch(body) {
 }
 
 async function invokeMathTypeNativeBatch(equations) {
+  if (nativeMathTypeCircuitCode) {
+    const error = new Error('MathType native conversion is disabled until the local service restarts.');
+    error.code = nativeMathTypeCircuitCode;
+    error.isolatable = false;
+    throw error;
+  }
+
   const jobDir = await fsp.mkdtemp(path.join(TMP_DIR, 'mathtype-'));
   const inputPath = path.join(jobDir, 'input.json');
   const outputPath = path.join(jobDir, 'output.json');
@@ -372,17 +392,30 @@ async function invokeMathTypeNativeBatch(equations) {
         payload = null;
       }
 
+      const processCode = Number(result.code);
+      const accessViolation = processCode === 3221225477 || processCode === -1073741819;
       const error = new Error('MathType native helper failed.');
-      error.code = String(payload?.code || (
+      error.code = accessViolation ? 'MATHTYPE_NATIVE_ACCESS_VIOLATION' : String(payload?.code || (
         result.error?.code === 'ETIMEDOUT'
           ? 'MATHTYPE_NATIVE_TIMEOUT'
           : 'MATHTYPE_NATIVE_PROCESS_FAILED'
       ));
-      error.processCode = result.code;
-      error.isolatable = [
-        'MATHTYPE_HELPER_FAILED',
-        'MATHTYPE_NATIVE_PROCESS_FAILED'
-      ].includes(error.code);
+      error.processCode = processCode;
+      error.isolatable = false;
+      if (error.code !== 'MATHTYPE_BUSY') nativeMathTypeCircuitCode = error.code;
+      if (Array.isArray(payload?.equations) && payload.equations.length) {
+        const completed = new Map(payload.equations.map(row => [String(row?.id || ''), row]));
+        return {
+          ok: false,
+          code: error.code,
+          equations: equations.map(row => completed.get(String(row.id)) || {
+            id: String(row.id),
+            ok: false,
+            code: error.code,
+            latex: ''
+          })
+        };
+      }
       throw error;
     }
 
@@ -821,6 +854,7 @@ app.post('/api/convert/mathtype-mtef', async (req, res) => {
       requested: validation.equations.length,
       translated: result.equations.filter(row => row.ok).length,
       isolatedFailures: result.equations.filter(row => !row.ok).length,
+      firstFailureId: result.equations.find(row => !row.ok)?.id || '',
       code: result.code
     });
     return res.json(result);

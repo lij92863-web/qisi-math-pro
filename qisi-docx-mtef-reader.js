@@ -39,6 +39,11 @@
             return this.byte() | (this.byte() << 8);
         }
 
+        skip(count) {
+            if (this.index + count > this.bytes.length) throw new Error('Truncated MTEF record.');
+            this.index += count;
+        }
+
         unsigned() {
             const first = this.byte();
             return first === 255 ? this.uint16() : first;
@@ -53,17 +58,17 @@
             const values = [];
             while (this.index < this.bytes.length) {
                 const value = this.byte();
-                if (!value) break;
+                if (!value) return String.fromCharCode(...values);
                 values.push(value);
             }
-            return String.fromCharCode(...values);
+            throw new Error('Unterminated MTEF string.');
         }
 
         nudge(options) {
             if (!(options & 0x08)) return;
             const x = this.byte();
             const y = this.byte();
-            if (x === 128 && y === 128) this.index += 4;
+            if (x === 128 && y === 128) this.skip(4);
         }
     }
 
@@ -72,6 +77,7 @@
         let completed = 0;
         let high = true;
         while (completed < count) {
+            if (cursor.index >= cursor.bytes.length) throw new Error('Truncated MTEF dimensions.');
             const value = cursor.bytes[cursor.index];
             const nibble = high ? value >> 4 : value & 0x0f;
             high = !high;
@@ -107,11 +113,11 @@
         while (cursor.index < cursor.bytes.length) {
             if (cursor.bytes[cursor.index] === 0) {
                 cursor.index += 1;
-                break;
+                return rows;
             }
             rows.push(readRecord(cursor));
         }
-        return rows;
+        throw new Error('Unterminated MTEF record list.');
     };
 
     const visible = rows => rows.filter(row => row?.latex || row?.kind === 'line');
@@ -136,6 +142,12 @@
             ][selector];
             const left = variation & 1 ? fences[0] : '.';
             const right = variation & 2 ? fences[1] : '.';
+            return `\\left${left}${slots[0] || ''}\\right${right}`;
+        }
+        if (selector === 9) {
+            const fences = ['(', ')', '[', ']'];
+            const left = fences[variation & 0x03];
+            const right = fences[(variation >> 4) & 0x03];
             return `\\left${left}${slots[0] || ''}\\right${right}`;
         }
         if (selector === 10) return variation & 1 ? `\\sqrt[${slots[0] || ''}]{${slots[1] || ''}}` : `\\sqrt{${slots[0] || ''}}`;
@@ -171,6 +183,9 @@
         let latex = charLatex(mtCode);
         if (options & 0x01) {
             const embellishments = readList(cursor).map(row => row.embell);
+            if (embellishments.some(value => ![9, 11, 17].includes(value))) {
+                throw new Error('Unsupported MTEF embellishment.');
+            }
             if (embellishments.includes(9)) latex = `\\hat{${latex}}`;
             if (embellishments.includes(11)) latex = `\\vec{${latex}}`;
             if (embellishments.includes(17)) latex = `\\bar{${latex}}`;
@@ -184,7 +199,7 @@
         if (type >= 100) {
             const length = cursor.unsigned();
             const payload = cursor.bytes.slice(cursor.index, cursor.index + length);
-            cursor.index += length;
+            cursor.skip(length);
             return { kind: 'future', latex: decodeFutureLatex(type, payload) };
         }
         if (type >= 10 && type <= 14) return { kind: 'size', latex: '' };
@@ -194,21 +209,21 @@
         if (type === 15) { cursor.unsigned(); return { kind: 'color', latex: '' }; }
         if (type === 16) {
             const options = cursor.byte();
-            cursor.index += (options & 1 ? 8 : 6);
+            cursor.skip(options & 1 ? 8 : 6);
             if (options & 4) cursor.cString();
             return { kind: 'color-definition', latex: '' };
         }
         if (type === 8) { cursor.unsigned(); cursor.byte(); return { kind: 'font-style', latex: '' }; }
         if (type === 9) {
             const kind = cursor.byte();
-            cursor.index += kind === 100 || kind === 101 ? 2 : 1;
+            cursor.skip(kind === 100 || kind === 101 ? 2 : 1);
             return { kind: 'size', latex: '' };
         }
 
         const options = cursor.byte();
         if (type === 1) {
             cursor.nudge(options);
-            if (options & 4) cursor.index += 2;
+            if (options & 4) cursor.skip(2);
             if (options & 2) readRecord(cursor);
             if (options & 1) return { kind: 'line', latex: '' };
             return { kind: 'line', latex: visible(readList(cursor)).map(row => row.latex).join('') };
@@ -224,17 +239,18 @@
         }
         if (type === 4) {
             cursor.nudge(options);
-            cursor.index += 2;
+            cursor.skip(2);
             if (options & 2) readRecord(cursor);
             return { kind: 'pile', latex: visible(readList(cursor)).map(row => row.latex).join('\\\\') };
         }
         if (type === 5) {
             cursor.nudge(options);
-            cursor.index += 3;
+            cursor.skip(3);
             const rows = cursor.byte();
             const columns = cursor.byte();
-            cursor.index += Math.ceil((rows + 1) / 4) + Math.ceil((columns + 1) / 4);
+            cursor.skip(Math.ceil((rows + 1) / 4) + Math.ceil((columns + 1) / 4));
             const cells = visible(readList(cursor)).filter(row => row.kind === 'line').map(row => row.latex);
+            if (cells.length !== rows * columns) throw new Error('Incomplete MTEF matrix.');
             const matrixRows = Array.from({ length: rows }, (_, rowIndex) => (
                 Array.from({ length: columns }, (_, columnIndex) => cells[rowIndex * columns + columnIndex] || '').join('&')
             ));
@@ -249,7 +265,7 @@
         const cursor = new Cursor(value);
         try {
             if (cursor.byte() !== 5) throw new Error('Only MTEF version 5 is supported.');
-            cursor.index += 4;
+            cursor.skip(4);
             cursor.cString();
             cursor.byte();
             const rows = readList(cursor);
