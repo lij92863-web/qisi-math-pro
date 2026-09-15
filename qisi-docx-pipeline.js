@@ -142,6 +142,44 @@
             return fallback;
         };
 
+        /**
+         * Paragraph-driven question locating.
+         *
+         * The flat-text locator has to guess where a paragraph starts after the text has been cleaned,
+         * which is why a mark sheet's bare number line or an answer-table label such as "9 答案" can
+         * win over the real question. The importer already holds the paragraph list, so a question is
+         * located by the paragraph whose own leading marker is the question form, and the block ends
+         * at the next paragraph that starts a later question. No length heuristic is involved: a
+         * paragraph that is not a question marker simply cannot start a question.
+         */
+        const locateQuestionBlockFromParagraphs = (paragraphs = [], questionNo = '') => {
+            const list = (Array.isArray(paragraphs) ? paragraphs : [])
+                .map(entry => String(entry?.text ?? entry ?? '').replace(/\s+/g, ' ').trim());
+            const qno = normalizeQuestionKey(questionNo);
+            if (!qno || !list.length) return '';
+
+            const markerOf = text => {
+                const match = /^(?:第\s*)?(\d{1,3})\s*(?:题)?\s*[.．、:：\)）]/.exec(text)
+                    || /^[（(]\s*(\d{1,3})\s*[）)]/.exec(text);
+                return match ? normalizeQuestionKey(match[1]) : '';
+            };
+
+            const startIndex = list.findIndex(text => Boolean(text) && markerOf(text) === qno);
+            if (startIndex < 0) return '';
+
+            const cur = Number(qno);
+            let endIndex = list.length;
+            for (let index = startIndex + 1; index < list.length; index += 1) {
+                const next = markerOf(list[index]);
+                if (next && Number(next) > cur) {
+                    endIndex = index;
+                    break;
+                }
+            }
+
+            return list.slice(startIndex, endIndex).join('\n').trim();
+        };
+
         const decodeXmlEntitiesSafe = (value = '') => String(value || '')
             .replace(/&lt;/g, '<')
             .replace(/&gt;/g, '>')
@@ -790,6 +828,7 @@
             expandDocxMathTypeFormulasForV2,
             formulaRecordsForText,
             extractDocxQuestionBlockByNumber,
+            locateQuestionBlockFromParagraphs,
             extractDocxTableTextFallback,
             parseDocxRelationshipMap,
             mimeFromDocxMediaPath,
