@@ -142,6 +142,11 @@
 
         const stripXmlTagsForDocxText = (value = '') => {
             return decodeXmlEntitiesSafe(String(value || ''))
+                // An embedded OLE object contributes no readable text: its visible form is the
+                // preview image (`<v:imagedata>`). Without this, the Word control flag inside
+                // `<o:LockedField>` leaks into the text once per equation, so a MathType formula
+                // shows up as the bare word "false" in stems, options, answers and solutions.
+                .replace(/<w:object\b[\s\S]*?<\/w:object>/g, ' ')
                 .replace(/<w:tab\s*\/>/g, ' ')
                 .replace(/<w:br\s*\/>/g, '\n')
                 .replace(/<[^>]+>/g, '')
