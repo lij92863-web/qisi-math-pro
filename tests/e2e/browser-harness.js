@@ -29,7 +29,11 @@ const cachedExternalAsset = async url => {
     if (fs.existsSync(bodyPath)) {
         return fs.readFileSync(bodyPath);
     }
-    throw new Error(`uncached external browser asset blocked: ${url}`);
+    throw new Error(
+        `uncached external browser asset blocked: ${url}\n`
+        + 'The offline cache this suite runs against is missing or incomplete. Build it once with:\n'
+        + '  node scripts/populate-e2e-cdn-cache.js'
+    );
 };
 
 const requestOk = url => new Promise(resolve => {

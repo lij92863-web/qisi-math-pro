@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "qisi.post-seal-approved-blobs.v1",
+  "programASeal": "1361d7e7f81d2f23819a995a0f9d1808adf19982",
+  "note": "Program A sealed four files against 1361d7e: qisi-pdf-support-controlled-write.js, qisi-formal-admission-policy.js, qisi-answer-only-ai-pass.js and app.js (docs/audit/OCR_QUALITY_ARCHITECTURE_AUDIT_R1.md). A sealed file may only differ from the seal when it appears here with the exact content that was reviewed. To authorise a further change: review it, update this file and docs/integration/HARDENING_INTEGRATION_LEDGER_2026_09_15.md in the same commit. A sealed file that is not listed here must still be byte-identical to the seal.",
+  "blobHashAlgorithm": "sha256 of the file with line endings normalised to LF",
+  "approvedFiles": {
+    "app.js": {
+      "gitBlob": "44386704ffe3338e190ca051a368012d37bef0ca",
+      "contentSha256": "78baaf06c8540215087242fe82e626c048d44f768522c30fca54e76df7b9ccc8",
+      "authorisedAt": "2026-09-15",
+      "reason": "Fail-closed candidate merge (answer/solution conflicts become sticky and block formal admission) plus two teacher-facing reliability fixes: the remembered view is restored before the first await, and a failed card edit is reported and rolled back to the stored truth.",
+      "ledger": "docs/integration/HARDENING_INTEGRATION_LEDGER_2026_09_15.md"
+    },
+    "qisi-pdf-support-controlled-write.js": {
+      "gitBlob": "f3a88c8efd042cca6d74adbb7321fbedf24de5ab",
+      "contentSha256": "19ba2fbe66ed921557c5f5780a34092d88ac5a062f3542ac6892aa2247c1a8df",
+      "authorisedAt": "2026-09-15",
+      "reason": "Question-number normalisation treats fullwidth digits as their ASCII form and rejects zero, so a phantom marker cannot own an answer. The controlled-write decision rules themselves are unchanged.",
+      "ledger": "docs/integration/HARDENING_INTEGRATION_LEDGER_2026_09_15.md"
+    }
+  }
+}

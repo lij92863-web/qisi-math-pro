@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
@@ -16,17 +17,28 @@ const SEALED_FILES = [
     'qisi-answer-only-ai-pass.js',
     'app.js'
 ];
-// Sealed files may only differ from the seal when the repository owner authorised that exact
-// change, and every exception has to name the ledger entry that records it. A file that is not
-// listed here is still byte-identical to the seal.
-const AUTHORIZED_POST_SEAL_CHANGES = Object.freeze({
-    'app.js':
-        'fail-closed candidate merge (answer/solution conflicts) plus two teacher-facing ' +
-        'reliability fixes; see docs/integration/HARDENING_INTEGRATION_LEDGER_2026_09_15.md',
-    'qisi-pdf-support-controlled-write.js':
-        'fullwidth and zero question-number normalisation; see ' +
-        'docs/integration/HARDENING_INTEGRATION_LEDGER_2026_09_15.md'
-});
+
+// A file-level allow-list is not enough: it would keep waving through every later edit. The
+// register pins the exact reviewed content, so any change to a sealed file is red until the owner
+// reviews it and updates architecture/post-seal-approved-blobs.json.
+const APPROVAL_REGISTER_PATH = 'architecture/post-seal-approved-blobs.json';
+const gitBlobOf = (revision, file) => {
+    try {
+        return execFileSync('git', ['rev-parse', `${revision}:${file}`], {
+            cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']
+        }).trim();
+    } catch (_) {
+        // The file does not exist in that revision (qisi-answer-only-ai-pass.js never was tracked).
+        return '';
+    }
+};
+// Line endings are normalised so the hash means "this content", not "this checkout's autocrlf".
+const contentSha256 = file => {
+    const full = path.join(root, file);
+    if (!fs.existsSync(full)) return '';
+    const normalised = fs.readFileSync(full, 'utf8').replace(/\r\n/g, '\n');
+    return crypto.createHash('sha256').update(normalised).digest('hex');
+};
 
 test('architecture audit reports every required invariant and honest limitation', () => {
     const report = read('docs/audit/OCR_QUALITY_ARCHITECTURE_AUDIT_R1.md');
@@ -72,24 +84,47 @@ test('adapter registry enforces the five-method pluggable contract', () => {
 });
 
 test('Program A controlled-write, FormalAdmission, Route B, and app stay unchanged from seal', () => {
-    const diff = execFileSync('git', [
-        'diff', '--name-only',
-        `${PROGRAM_A_SEAL}..HEAD`, '--',
-        ...SEALED_FILES
-    ], { cwd: root, encoding: 'utf8' });
-    const changed = diff.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-    const unauthorized = changed.filter(file => !AUTHORIZED_POST_SEAL_CHANGES[file]);
-    assert.deepEqual(
-        unauthorized,
-        [],
-        `sealed files changed without an authorising ledger entry: ${unauthorized.join(', ')}`
-    );
-    for (const [file, ledgerEntry] of Object.entries(AUTHORIZED_POST_SEAL_CHANGES)) {
+    const register = json(APPROVAL_REGISTER_PATH);
+    assert.equal(register.programASeal, PROGRAM_A_SEAL, 'the register must name the Program A seal');
+    const approved = register.approvedFiles || {};
+
+    for (const file of Object.keys(approved)) {
+        assert.ok(SEALED_FILES.includes(file), `${file} is approved but is not a sealed file`);
+    }
+
+    for (const file of SEALED_FILES) {
+        const entry = approved[file];
+        if (!entry) {
+            assert.equal(
+                gitBlobOf('HEAD', file),
+                gitBlobOf(PROGRAM_A_SEAL, file),
+                `${file} changed without an entry in ${APPROVAL_REGISTER_PATH}`
+            );
+            continue;
+        }
+
         assert.ok(
-            SEALED_FILES.includes(file),
-            `${file} is registered as a post-seal change but is not a sealed file`
+            /^[0-9a-f]{40}$/.test(entry.gitBlob || ''),
+            `${file} needs a 40 character git blob hash`
         );
-        assert.match(ledgerEntry, /HARDENING_INTEGRATION_LEDGER_2026_09_15\.md/, file);
+        assert.ok(
+            /^[0-9a-f]{64}$/.test(entry.contentSha256 || ''),
+            `${file} needs a sha256 content hash`
+        );
+        assert.ok(entry.reason && entry.authorisedAt, `${file} needs a reason and an authorisation date`);
+        assert.ok(entry.ledger && fs.existsSync(path.join(root, entry.ledger)), `${file} needs a ledger document`);
+        assert.match(read(entry.ledger), new RegExp(file.replace(/[.]/g, '\\.')), entry.ledger);
+
+        assert.equal(
+            gitBlobOf('HEAD', file),
+            entry.gitBlob,
+            `${file} differs from the approved blob; review the change and update ${APPROVAL_REGISTER_PATH}`
+        );
+        assert.equal(
+            contentSha256(file),
+            entry.contentSha256,
+            `${file} differs from the approved content; review the change and update ${APPROVAL_REGISTER_PATH}`
+        );
     }
 });
 
