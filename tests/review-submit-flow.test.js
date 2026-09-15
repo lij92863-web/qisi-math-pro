@@ -370,21 +370,35 @@ test('submitting the same draft twice cannot create a second formal question', {
         // A second click lands while the first submission is still settling. A button that is
         // already disabled, or a handler that is idempotent, is what keeps the bank clean.
         await submitButton.click({ timeout: 2_000 }).catch(() => {});
-        await page.waitForTimeout(1_500);
 
-        const outcome = await page.evaluate(async () => {
+        const readOutcome = () => page.evaluate(async () => {
             const database = window.Qisi.Database.getDatabase();
             const formal = await database.questions.toArray();
             const batch = await database.draftImportBatches.get('double-submit-batch');
             return {
                 formalCount: formal.length,
-                stems: formal.map(row => String(row.stem || '')).join('|'),
                 submittedCount: batch?.submittedCount || 0
             };
         });
+        const timeline = [];
+        const deadline = Date.now() + 20_000;
+        let outcome = await readOutcome();
+        while ((outcome.formalCount !== 1 || outcome.submittedCount !== 1) && Date.now() < deadline) {
+            timeline.push(outcome);
+            await page.waitForTimeout(250);
+            outcome = await readOutcome();
+        }
 
-        assert.equal(outcome.formalCount, 1, `a double click must not duplicate the question: ${JSON.stringify(outcome)}`);
-        assert.equal(outcome.submittedCount, 1, 'the batch must count exactly one submission');
+        assert.equal(
+            outcome.formalCount,
+            1,
+            `a double click must not duplicate the question; timeline: ${JSON.stringify(timeline.slice(-6))}`
+        );
+        assert.equal(
+            outcome.submittedCount,
+            1,
+            `the batch must count exactly one submission; timeline: ${JSON.stringify(timeline.slice(-6))}`
+        );
     } finally {
         if (browser) await browser.close();
         server.kill();
