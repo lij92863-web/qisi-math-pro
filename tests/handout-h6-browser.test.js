@@ -466,6 +466,12 @@ test('H6 completes main-to-handout student and teacher PDF workflow', {
             );
             const cleanSourceBlock = model.cloneValue(sourceBlock);
             globalThis.__H9_PERF_EDITOR__ = originalEditor;
+            // The 50-question fixture is a measuring device, not document content. Autosave is
+            // suspended so it is never stored; otherwise restoring the pre-fixture editor below
+            // would hand the application a state whose revision is older than the stored record,
+            // and the next real save would be rejected as a conflict (which it should be).
+            globalThis.__H9_PERF_SCHEDULE_SAVE__ = app.scheduleSave;
+            app.scheduleSave = () => {};
             const clones = Array.from(
                 { length: 49 },
                 (_, index) => ({
@@ -572,8 +578,30 @@ test('H6 completes main-to-handout student and teacher PDF workflow', {
         );
         await page.evaluate(async blockId => {
             const app = globalThis.__TEX_HANDOUT_APP__;
+            if (globalThis.__H9_PERF_SCHEDULE_SAVE__) {
+                app.scheduleSave = globalThis.__H9_PERF_SCHEDULE_SAVE__;
+                delete globalThis.__H9_PERF_SCHEDULE_SAVE__;
+            }
             app.editor = globalThis.__H9_PERF_EDITOR__;
             delete globalThis.__H9_PERF_EDITOR__;
+            // Adopt the stored revision so the restored snapshot lines up with the store even if a
+            // write slipped through while the fixture was installed.
+            try {
+                const database = window.Qisi.Database.getDatabase();
+                const stored = await database.handouts.get(app.editor.handout.id);
+                if (stored && stored.revision !== app.editor.handout.revision) {
+                    app.editor = {
+                        ...app.editor,
+                        handout: {
+                            ...app.editor.handout,
+                            updatedAt: stored.updatedAt,
+                            revision: stored.revision
+                        }
+                    };
+                }
+            } catch (_) {
+                // best effort: the following flow reports any conflict itself
+            }
             app.selectEditorBlock(blockId);
             await app.$nextTick();
         }, performanceFixture.sourceBlockId);
