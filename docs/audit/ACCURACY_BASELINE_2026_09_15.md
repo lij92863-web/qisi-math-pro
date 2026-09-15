@@ -70,7 +70,7 @@ was made: without a verified target, a change there would be guessing.
 
 ## 5. What is still not measured
 
-- PDF+PDF accuracy against `tests/fixtures/pdf-golden/*.json` (next measurement).
+- PDF+PDF accuracy against `tests/fixtures/pdf-golden/*.json` (see section 7).
 - Image binding accuracy against the key's `stemImageCount` / `analysisImageCount`.
 - Formula preservation rate per paper (only the brief paper is measured so far).
 - Solution/analysis text similarity beyond presence.
@@ -84,3 +84,33 @@ node scripts/measure-mtef-fidelity.js
 
 Both read local material only. They never call a paid endpoint and never write to the
 formal question bank.
+
+## 7. PDF+PDF baseline — plan and first evidence
+
+The PDF question side needs the paid vision stage, so it cannot be measured without an
+explicitly authorized real run. The support side — the part where wrong attachment would
+happen — can be measured from the recorded replay without any paid call.
+
+Available pieces:
+
+```text
+tests/fixtures/pdf-golden/brief-pdf-truth.json      confirmed key: answers B C B C D C,
+                                                   formula fragments and figure expectations
+tests/fixtures/pdf-replay/brief-engine-replay.json  recorded question response plus recorded
+                                                   support pages and structured support response
+tests/pdf-math-region-browser.test.js               already replays the fixture in a browser
+scripts/pdf-master-browser-runner.js dry-run        reports without calling the real API
+```
+
+First evidence from reading the replay against the confirmed key:
+
+**The replay encodes answer 6 as `B` while the confirmed key says `C`.** Its own solution for
+question 6 ends with `1:26`, which matches option C, so the recorded answer contradicts the
+recorded solution. That makes this fixture a ready-made wrong-attachment probe: the support
+chain must either withhold the answer or flag the conflict, and must never attach `B` while
+claiming a complete result. That measurement is the next step.
+
+Also observed while preparing this: `pdf-master-browser-runner.js dry-run` writes its report
+correctly (`ok: true`, `realApiCalled: false`, zero underlying API calls) but the process does
+not exit afterwards, so it has to be stopped by hand. That is a tooling defect to fix before
+the PDF measurement can run unattended.
