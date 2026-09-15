@@ -182,7 +182,10 @@
         const restoreLatexMathSegments = (source = '', chunks = []) => {
             let output = String(source || '');
             chunks.forEach((chunk, index) => {
-                output = output.replace(`@@QISI_MATH_SEGMENT_${index}@@`, chunk);
+                // A function replacer keeps the restored LaTeX literal. Passing the chunk as a
+                // replacement string made `$$...$$` collapse to `$...$`, because `$$` is a
+                // replacement pattern rather than literal text.
+                output = output.replace(`@@QISI_MATH_SEGMENT_${index}@@`, () => chunk);
             });
             return output;
         };
@@ -366,8 +369,27 @@
                     let body = run.slice(leading.length, run.length - trailing.length);
                     if (!body) return run;
 
-                    const trailingPunctuation = body.match(/[，。；：！？,.!?;:]+$/)?.[0] || '';
-                    if (trailingPunctuation) body = body.slice(0, -trailingPunctuation.length);
+                    const trailingPunctuationMatch = body.match(/[，。；：！？,.!?;:]+$/);
+                    let trailingPunctuation = trailingPunctuationMatch?.[0] || '';
+                    if (trailingPunctuation) {
+                        const withoutPunctuation = body.slice(0, -trailingPunctuation.length);
+                        // `\left.` and `\right.` end with a delimiter that belongs to the command.
+                        // Moving it outside the math island produced unbalanced LaTeX such as
+                        // `$\right$`.
+                        const punctuationIsLatexDelimiter = trailingPunctuation.startsWith('.')
+                            && /\\(?:left|right|middle|big|Big|bigg|Bigg|bigl|bigr|Bigl|Bigr|biggl|biggr|Biggl|Biggr)$/
+                                .test(withoutPunctuation);
+                        // A legacy encoded square root (`鈭?`) ends with a question mark that is part
+                        // of the repair token, not sentence punctuation. Stripping it defeated the
+                        // `鈭?` -> `\sqrt{2}` repair and left the raw glyph on screen.
+                        const punctuationIsMathToken = trailingPunctuation.startsWith('?')
+                            && /鈭$/.test(withoutPunctuation);
+                        if (punctuationIsLatexDelimiter || punctuationIsMathToken) {
+                            trailingPunctuation = '';
+                        } else {
+                            body = withoutPunctuation;
+                        }
+                    }
 
                     if (!BARE_LATEX_DISPLAY_SIGNAL_RE.test(body)) return run;
 
