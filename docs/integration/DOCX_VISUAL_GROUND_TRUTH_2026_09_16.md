@@ -75,6 +75,25 @@ unlabelled answer value), both of which are now fixed and regression-tested.
 
 ## 6. Survey of the remaining groups (batch level only)
 
+**Update (same day, after the archive and MTEF fixes):** the local LibreOffice conversion works when
+it is allowed to spawn outside the sandbox, so the papers can be rendered. The first page of
+`题目.docx` was rendered and looked at, and its title is **2026年7月9日高中数学作业** — that is the
+paper the handoff lists as a separate, "missing" file, so the material list is complete after all
+(`题目.docx` + `答案.docx` *is* the 2026-07-09 homework).
+
+Verified against that page for group 3, question 1-5:
+
+```text
+q1  递增数列 a(n), a(a(n))=2n+1, 求 a4        options 4/6/7/8      draft: answer B (6)      ✓
+q2  全集 U=R, (C_A)∩B                    options 四个区间组    draft: answer B           ✓
+q3  数列 a(n+1)=2a(n)+1, 求 c1+…+c20      options 599/569/554/568  draft: answer D (568)  ✓
+q4  z 在 (1,-2)，z̄/(z+i) 对应点            options 四组坐标      draft: answer C           ✓
+q5  a=4√2, b=5, cosA=-3/5, BA 在 BC 上投影                      draft: answer B           ✓
+```
+
+The stems and option sets on the page match the drafts; questions 1, 7, 10, 13 of this paper are the
+ones withheld for unresolved formulas (§16.2, §18.1).
+
 After the archive-policy fix of ledger §17 every remaining real file runs; none of them has been
 compared page by page yet, so nothing here is marked `VISUALLY_VERIFIED_*` except groups 1 and 2.
 
