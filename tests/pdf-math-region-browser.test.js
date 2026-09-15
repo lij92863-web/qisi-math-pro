@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const { chromium } = require('playwright');
 
 const { auditIssueCount, auditPdfImportContent } = require('../scripts/audit-pdf-import-content.js');
+const { waitForPageCondition } = require('./helpers/page-waits.js');
 const {
     buildReplayMetadata,
     collectImagePayloads,
@@ -491,13 +492,13 @@ test('dual PDF normal UI uses local answer evidence and preserves renderable con
         assert.equal(await questionImageCard.count(), 1);
         await questionImageCard.getByRole('button', { name: '\u56fe\u7247\u4f4d\u7f6e', exact: true }).click();
         await questionImageCard.getByRole('button', { name: '\u9760\u53f3', exact: true }).click();
-        await page.waitForFunction(async questionId => {
+        await waitForPageCondition(page, async questionId => {
             const probe = new window.Dexie('QisiMathVueDB');
             await probe.open();
             const images = await probe.table('draftImages').where('questionId').equals(questionId).toArray();
             probe.close();
             return images.some(image => image.align === 'right');
-        }, state.questions[3].id);
+        }, state.questions[3].id, { label: 'the right-aligned draft image' });
         const propertyCard = page.locator('.batch-editor-card').filter({
             has: page.getByRole('heading', { name: '\u9898\u76ee\u5c5e\u6027', exact: true })
         });
@@ -523,13 +524,13 @@ test('dual PDF normal UI uses local answer evidence and preserves renderable con
             }, state.questions[3].id);
             assert.fail(JSON.stringify({ diagnostic, browserErrors, structuredConsoleErrors, cause: error.message }));
         }
-        await page.waitForFunction(async questionId => {
+        await waitForPageCondition(page, async questionId => {
             const probe = new window.Dexie('QisiMathVueDB');
             await probe.open();
             const question = await probe.table('draftQuestions').get(questionId);
             probe.close();
             return question?.year === '2026';
-        }, state.questions[3].id);
+        }, state.questions[3].id, { label: 'the saved draft year' });
 
         const interactionState = await page.evaluate(async questionId => {
             const probe = new window.Dexie('QisiMathVueDB');

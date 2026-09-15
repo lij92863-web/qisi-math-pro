@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { chromium } = require('playwright');
 const { auditDocxImportContent, auditIssueCount } = require('../scripts/audit-docx-import-content.js');
+const { waitForPageCondition } = require('./helpers/page-waits.js');
 
 const enabled = process.env.QISI_REAL_BROWSER === '1';
 const useRealAi = process.env.QISI_REAL_AI === '1';
@@ -492,7 +493,7 @@ test('real dual-format import reaches review with rendered content and without u
                     document.querySelector('.batch-question-nav-item.active > span')?.textContent?.trim() === expectedLabel,
                 `\u7b2c ${questionNumber} \u9898`, { timeout: 10_000 });
                 await page.getByRole('button', { name: '\u4e00\u952e\u63d0\u4ea4\u672c\u9898', exact: true }).click();
-                await page.waitForFunction(async ({ expected, draftId }) => {
+                await waitForPageCondition(page, async ({ expected, draftId }) => {
                     const probe = new window.Dexie('QisiMathVueDB');
                     await probe.open();
                     const count = await probe.table('questions').count();
@@ -502,7 +503,7 @@ test('real dual-format import reaches review with rendered content and without u
                 }, {
                     expected: submittedQuestionNumbers.indexOf(questionNumber) + 1,
                     draftId: state.questions[Number(questionNumber) - 1].id
-                }, { timeout: 30_000 });
+                }, { timeoutMs: 30_000, label: 'the submitted draft and formal row' });
                 await page.waitForTimeout(300);
                 const stableFormalCount = await page.evaluate(async () => {
                     const probe = new window.Dexie('QisiMathVueDB');
