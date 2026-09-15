@@ -80,6 +80,8 @@
                 const isCartOpen = ref(false);
                 const objectUrls = new Set();
                 const docxEmbeddedImageCache = new Map();
+                // Per file: the MathType formulas read deterministically out of that DOCX.
+                const docxFormulaEvidenceCache = new Map();
                 const draftFileTextCache = new Map();
                 const draftFileXmlCache = new Map();
                 const draftFileRidImageUrlMapCache = new Map();
@@ -3799,6 +3801,31 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 const isBrowserDisplayableImageExt = (ext = '') =>
                     /^(png|jpg|jpeg|gif|webp|svg)$/i.test(String(ext || ''));
 
+                // A MathType equation is stored as an OLE container under word/embeddings. This only
+                // collects those bytes per relationship; interpreting them is the MTEF reader's job.
+                const buildDocxOleBytesMap = async (zip, relsXml = '') => {
+                    const map = new Map();
+                    const relMap = window.Qisi.DocxPipeline.parseDocxRelationshipMap(relsXml);
+
+                    for (const [rid, rel] of relMap.entries()) {
+                        if (!rel?.target || !/embeddings\//i.test(rel.target)) continue;
+                        const file = zip.file(String(rel.target).replace(/^\/+/, ''));
+                        if (!file) continue;
+
+                        try {
+                            map.set(rid, new Uint8Array(await file.async('arraybuffer')));
+                        } catch (error) {
+                            console.warn('[BATCH_DEBUG][docx-ole-read-failed]', {
+                                rid,
+                                target: rel.target,
+                                message: error?.message || String(error)
+                            });
+                        }
+                    }
+
+                    return map;
+                };
+
                 const readDocxMediaAsDataUrl = async (zip, targetPath = '') => {
                     const normalized = String(targetPath || '').replace(/^\/+/, '');
                     const file = zip.file(normalized);
@@ -3966,12 +3993,18 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     return tokens;
                 };
 
-                const extractDocxTextWithMath = (xml, imageRefsByRid = {}) => {
+                const extractDocxTextWithMath = (
+                    xml,
+                    imageRefsByRid = {},
+                    oleBytesByRid = null,
+                    formulaSink = null
+                ) => {
                     const source = String(xml || '');
                     if (!source) return '';
 
                     const body = source.match(/<w:body[\s\S]*?>([\s\S]*?)<\/w:body>/)?.[1] || source;
                     const paragraphs = [];
+                    const docxFormulas = [];
 
                     body.replace(/<w:p[\s\S]*?>([\s\S]*?)<\/w:p>/g, (_, paragraph) => {
                         const mathTokens = [];
@@ -3999,6 +4032,18 @@ ${JSON.stringify(questionSummaries, null, 2)}
                                 } else if (mathChar) {
                                     parts.push(mathChar);
                                 } else if (m.startsWith('<w:drawing') || m.startsWith('<w:pict') || m.startsWith('<w:object')) {
+                                    // A MathType equation is one formula, read deterministically from
+                                    // the DOCX itself; its preview picture must not be added as well.
+                                    const equation = m.startsWith('<w:object') && oleBytesByRid
+                                        ? window.Qisi.DocxPipeline.resolveDocxMathTypeObjectForV2(m, oleBytesByRid)
+                                        : null;
+
+                                    if (equation?.handled) {
+                                        parts.push(equation.text);
+                                        if (equation.formula) docxFormulas.push(equation.formula);
+                                        return '';
+                                    }
+
                                     if (/<w:txbxContent[\s\S]*?>/.test(m)) {
                                         const textBoxText = extractDocxTextWithMath(m, imageRefsByRid);
                                         if (textBoxText) parts.push(`\n${textBoxText}\n`);
@@ -4022,6 +4067,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         return '';
                     });
 
+                    if (formulaSink) formulaSink.push(...docxFormulas);
                     return normalizeDocxExtractedText(paragraphs.join('\n'));
                 };
 
@@ -4230,7 +4276,14 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         draftFileRidImageMetaMapCache.set(file.id, ridImageMetaMap);
 
                         try {
-                            let text = extractDocxTextWithMath(doc || '', imageRefsByRid);
+                            const oleBytesByRid = await buildDocxOleBytesMap(zip, relsXml);
+                            const docxFormulas = [];
+                            let text = extractDocxTextWithMath(
+                                doc || '', imageRefsByRid, oleBytesByRid, docxFormulas
+                            );
+                            // Formula evidence stays available for provenance and for telling a
+                            // deterministic MTEF result apart from a visual one.
+                            docxFormulaEvidenceCache.set(file.id, docxFormulas);
                             text = await resolveFormulaImageTokens(text, docxEmbeddedImageCache.get(file.id) || []);
 
                             const docxTableText = window.Qisi.DocxPipeline.extractDocxTableTextFallback(doc || '');
@@ -21694,6 +21747,7 @@ Promise.all([imageReady, fontReady]).then(() => {
                     personalL1Name, personalL2Name, personalL3Name, selectedPersonalL1Id, selectedPersonalL2Id,
                     createPersonalL1, createPersonalL2, createPersonalL3, togglePersonalExpanded, addPersonalChild, deletePersonalRow, renamePersonalNode, deletePersonalNode,
                     handleDrop, handleFileChange, handleEntryPaste, handleOcrDrop, handleOcrChange, submitQuestion, toggleCart, clearCart, deleteQuestion, saveEditedQuestion, printExam,
+                    docxFormulaEvidenceCache,
                     assignOcr: (f) => { 
                         const area = document.querySelector('textarea[placeholder="识别文本结果..."]');
                         let selected = ocrDraftStore.rawText;

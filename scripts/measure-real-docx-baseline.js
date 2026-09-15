@@ -273,6 +273,36 @@ const main = async () => {
         report.pageErrors = [...harness.pageErrors];
         report.consoleErrors = [...harness.consoleErrors];
 
+        // The application keeps the deterministic MathType formulas it read from each DOCX, which
+        // shows whether the product's own DOCX path used the MTEF reader (the batch itself cannot
+        // finish here because the question file also needs the vision model).
+        try {
+            const evidence = await page.evaluate(() => {
+                const proxy = window.Qisi?.Runtime?.getRuntimeDependency('AppProxy');
+                const cache = proxy?.docxFormulaEvidenceCache;
+                if (!cache?.forEach) return null;
+                const files = [];
+                cache.forEach((formulas, fileId) => {
+                    files.push({
+                        fileId,
+                        total: (formulas || []).length,
+                        extracted: (formulas || []).filter(row => row.status === 'extracted').length,
+                        unresolved: (formulas || []).filter(row => row.status !== 'extracted').length,
+                        origins: [...new Set((formulas || []).map(row => row.origin || 'unresolved'))],
+                        sample: (formulas || []).slice(0, 3).map(row => ({
+                            rid: row.rid,
+                            status: row.status,
+                            latex: row.latex
+                        }))
+                    });
+                });
+                return files;
+            });
+            report.docxFormulaEvidence = evidence;
+        } catch (error) {
+            report.docxFormulaEvidence = { error: error?.message || String(error) };
+        }
+
         fs.mkdirSync(path.dirname(outPath), { recursive: true });
         fs.writeFileSync(outPath, JSON.stringify(report, null, 2));
 
