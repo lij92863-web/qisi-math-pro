@@ -1447,15 +1447,21 @@ const startLocalServer = () => {
     return child;
 };
 
-const stopLocalServer = child => {
+// Awaits the kill so an unattended run cannot leave a server child behind holding the runner
+// open after the report has been written.
+const stopLocalServer = async child => {
     if (!child?.pid) return;
 
     if (process.platform === 'win32') {
-        spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
-            windowsHide:
-                true,
-            stdio:
-                'ignore'
+        await new Promise(resolve => {
+            const killer = spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
+                windowsHide:
+                    true,
+                stdio:
+                    'ignore'
+            });
+            killer.once('exit', resolve);
+            killer.once('error', resolve);
         });
         return;
     }
@@ -1830,7 +1836,7 @@ const runDryRun = async () => {
         };
 
     await writeArtifacts(report, ledgerEntry);
-    stopLocalServer(serverProcess);
+    await stopLocalServer(serverProcess);
     return report;
 };
 
@@ -2486,7 +2492,7 @@ const runRealRun = async () => {
         if (browser) {
             await browser.close().catch(() => {});
         }
-        stopLocalServer(serverProcess);
+        await stopLocalServer(serverProcess);
     }
 };
 
@@ -2506,6 +2512,11 @@ const main = async () => {
     if (!report.ok) {
         process.exitCode = 2;
     }
+
+    // The report and ledger are already on disk. Exit explicitly so a lingering child or browser
+    // handle can never keep an unattended run alive after its work is finished.
+    await new Promise(resolve => process.stdout.write('', resolve));
+    process.exit(process.exitCode || 0);
 };
 
 if (require.main === module) {
