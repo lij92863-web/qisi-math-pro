@@ -121,6 +121,37 @@ test('H3 browser completes the structured editor workflow without source writes'
         });
 
         const page = await context.newPage();
+        // Record every write to the handout stores so a rare conflict can be attributed to the
+        // call that actually moved the stored revision. Test-side instrumentation only.
+        await page.addInitScript(() => {
+            window.__qisiWriteLog = [];
+            window.__qisiInstallWriteLog = () => {
+                const db = window.Qisi?.Database?.getDatabase?.();
+                if (!db) return false;
+                for (const name of ['handouts', 'handoutAssets', 'handoutRevisions']) {
+                    const table = db[name];
+                    if (!table || table.__qisiWriteLogHooked) continue;
+                    table.__qisiWriteLogHooked = true;
+                    table.hook('creating', (primKey, obj) => {
+                        window.__qisiWriteLog.push({
+                            table: name, kind: 'creating',
+                            id: String(obj?.id || primKey || '').slice(0, 40),
+                            updatedAt: String(obj?.updatedAt || ''),
+                            revision: obj?.revision
+                        });
+                    });
+                    table.hook('updating', (mods, primKey, obj) => {
+                        window.__qisiWriteLog.push({
+                            table: name, kind: 'updating',
+                            id: String(obj?.id || primKey || '').slice(0, 40),
+                            updatedAt: String(mods?.updatedAt || obj?.updatedAt || ''),
+                            revision: mods?.revision ?? obj?.revision
+                        });
+                    });
+                }
+                return true;
+            };
+        });
         page.on('pageerror', error => pageErrors.push(error.message));
         page.on('console', message => {
             if (message.type() === 'error') {
@@ -150,6 +181,11 @@ test('H3 browser completes the structured editor workflow without source writes'
             true
         );
         assert.equal(await page.locator('.fatal-panel').count(), 0);
+        assert.equal(
+            await page.evaluate(() => window.__qisiInstallWriteLog()),
+            true,
+            'write logging must be installed before the flow starts'
+        );
 
         await page.evaluate(async () => {
             const database = window.Qisi.Database.getDatabase();
@@ -274,7 +310,9 @@ test('H3 browser completes the structured editor workflow without source writes'
                 saveState: document.querySelector('.save-state')?.className || '',
                 blocks: document.querySelectorAll('.editor-block').length,
                 questionBlocks: document.querySelectorAll('.editor-block.block-question').length,
-                libraryRows: document.querySelectorAll('[data-question-id]').length
+                libraryRows: document.querySelectorAll('[data-question-id]').length,
+                diag: (window.__qisiDiag || []).slice(-6),
+                writes: (window.__qisiWriteLog || []).slice(-12)
             })).catch(error => ({ diagnosticsUnavailable: String(error?.message || error) }));
             console.error('H3_INSERT_DIAGNOSTICS=' + JSON.stringify(diagnostics));
             try {

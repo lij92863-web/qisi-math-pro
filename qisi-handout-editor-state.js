@@ -573,13 +573,27 @@
             );
         };
 
+        // History keeps content, not storage state. Restoring a snapshot must not move the
+        // handout back to an older stored revision, because the next autosave would then be
+        // rejected as a conflict with the record that is already stored.
+        const restoreHistoryContent = (state, snapshot) => {
+            const restored = normalizeForEditing(snapshot);
+
+            return {
+                ...restored,
+                createdAt: state.handout.createdAt,
+                updatedAt: state.handout.updatedAt,
+                revision: state.handout.revision
+            };
+        };
+
         const undo = state => {
             const previous = state.undoStack.at(-1);
             if (!previous) return state;
 
             return {
                 ...state,
-                handout: normalizeForEditing(previous),
+                handout: restoreHistoryContent(state, previous),
                 undoStack: state.undoStack.slice(0, -1),
                 redoStack: [
                     ...state.redoStack,
@@ -602,7 +616,7 @@
 
             return {
                 ...state,
-                handout: normalizeForEditing(next),
+                handout: restoreHistoryContent(state, next),
                 undoStack: [
                     ...state.undoStack,
                     clone(state.handout)
