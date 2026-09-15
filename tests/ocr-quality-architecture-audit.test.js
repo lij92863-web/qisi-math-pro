@@ -8,6 +8,26 @@ const root = path.resolve(__dirname, '..');
 const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8');
 const json = relativePath => JSON.parse(read(relativePath));
 
+// Program A seal (docs/audit/OCR_QUALITY_ARCHITECTURE_AUDIT_R1.md).
+const PROGRAM_A_SEAL = '1361d7e7f81d2f23819a995a0f9d1808adf19982';
+const SEALED_FILES = [
+    'qisi-pdf-support-controlled-write.js',
+    'qisi-formal-admission-policy.js',
+    'qisi-answer-only-ai-pass.js',
+    'app.js'
+];
+// Sealed files may only differ from the seal when the repository owner authorised that exact
+// change, and every exception has to name the ledger entry that records it. A file that is not
+// listed here is still byte-identical to the seal.
+const AUTHORIZED_POST_SEAL_CHANGES = Object.freeze({
+    'app.js':
+        'fail-closed candidate merge (answer/solution conflicts) plus two teacher-facing ' +
+        'reliability fixes; see docs/integration/HARDENING_INTEGRATION_LEDGER_2026_09_15.md',
+    'qisi-pdf-support-controlled-write.js':
+        'fullwidth and zero question-number normalisation; see ' +
+        'docs/integration/HARDENING_INTEGRATION_LEDGER_2026_09_15.md'
+});
+
 test('architecture audit reports every required invariant and honest limitation', () => {
     const report = read('docs/audit/OCR_QUALITY_ARCHITECTURE_AUDIT_R1.md');
     for (const topic of [
@@ -54,13 +74,23 @@ test('adapter registry enforces the five-method pluggable contract', () => {
 test('Program A controlled-write, FormalAdmission, Route B, and app stay unchanged from seal', () => {
     const diff = execFileSync('git', [
         'diff', '--name-only',
-        '1361d7e7f81d2f23819a995a0f9d1808adf19982..HEAD', '--',
-        'qisi-pdf-support-controlled-write.js',
-        'qisi-formal-admission-policy.js',
-        'qisi-answer-only-ai-pass.js',
-        'app.js'
+        `${PROGRAM_A_SEAL}..HEAD`, '--',
+        ...SEALED_FILES
     ], { cwd: root, encoding: 'utf8' });
-    assert.equal(diff.trim(), '');
+    const changed = diff.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    const unauthorized = changed.filter(file => !AUTHORIZED_POST_SEAL_CHANGES[file]);
+    assert.deepEqual(
+        unauthorized,
+        [],
+        `sealed files changed without an authorising ledger entry: ${unauthorized.join(', ')}`
+    );
+    for (const [file, ledgerEntry] of Object.entries(AUTHORIZED_POST_SEAL_CHANGES)) {
+        assert.ok(
+            SEALED_FILES.includes(file),
+            `${file} is registered as a post-seal change but is not a sealed file`
+        );
+        assert.match(ledgerEntry, /HARDENING_INTEGRATION_LEDGER_2026_09_15\.md/, file);
+    }
 });
 
 test('production and benchmark OCR configuration are traceable without false promotion', () => {

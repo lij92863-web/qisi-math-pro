@@ -9,6 +9,7 @@ const {
     clearE2eData,
     assertNoRuntimeErrors
 } = require('./browser-harness.js');
+const { waitForPageCondition } = require('../helpers/page-waits.js');
 
 test('seeded-export-delete: export and task deletion preserve formal questions', {
     timeout: 90000
@@ -60,13 +61,15 @@ test('seeded-export-delete: export and task deletion preserve formal questions',
             .filter({ hasText: 'E2E export delete task' });
         await row.getByRole('button', { name: '删除' }).click();
 
-        await page.waitForFunction(async id => {
+        // Playwright does not await an async predicate (a Promise is truthy), so this used to
+        // resolve immediately; waitForPageCondition polls page.evaluate, which does await.
+        await waitForPageCondition(page, async id => {
             const db = new Dexie('QisiMathVueDB');
             await db.open();
             const batch = await db.table('draftImportBatches').get(id);
             db.close();
             return !batch;
-        }, batchId);
+        }, batchId, { label: 'the deleted import task' });
 
         const snapshot = await getDbSnapshot(page);
         assert.equal(snapshot.batches.length, 0);

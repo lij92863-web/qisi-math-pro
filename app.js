@@ -20494,6 +20494,13 @@ ${source}`;
                 };
 
                 onMounted(async () => {
+                    // Restore the remembered view synchronously, before the first await. A late
+                    // restore used to overwrite a navigation the teacher had already clicked while
+                    // the data was still loading.
+                    {
+                        const savedView = safeStorage.get('qisi_last_view');
+                        if (['entry', 'batchImport', 'library', 'exam', 'personal', 'template'].includes(savedView)) view.value = savedView;
+                    }
                     try {
                         if (navigator.storage?.persist) await navigator.storage.persist();
                     } catch (error) {
@@ -20538,8 +20545,6 @@ ${source}`;
                         else { editMode.value = 'new'; currentPresetKey.value = ''; editTplName.value = '我的修改模板'; }
                     }
                     syncExamGroups();
-                    const savedView = safeStorage.get('qisi_last_view');
-                    if (['entry', 'batchImport', 'library', 'exam', 'personal', 'template'].includes(savedView)) view.value = savedView;
                 });
 
                 watch(examConfig, (val) => {
@@ -20944,6 +20949,7 @@ ${source}`;
                 
                 const saveEditedQuestion = async (id, stem, imgs, g, t, d, ans, sol, tagsStr, opts, knowledge, systemKnowledgeArg = '', personalKnowledgeArg = '') => {
                     const q = questions.value.find(q => q.id === id);
+                    try {
                     if(q) {
                         const expectedUpdatedAt = q.updatedAt;
                         const now = Date.now();
@@ -20981,6 +20987,14 @@ ${source}`;
                             expectedUpdatedAt,
                             imageRecords
                         });
+                    }
+                    } catch (error) {
+                        // The card already shows the edit, so a silent failure would leave the page
+                        // and the database disagreeing. Say so and reload the stored truth.
+                        console.error('[LIBRARY][edit-save-failed]', error);
+                        alert(`修改未保存：${error?.message || error}`);
+                        await loadData();
+                        return;
                     }
                     await loadData();
                 };

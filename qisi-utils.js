@@ -172,7 +172,10 @@
         const restoreLatexMathSegments = (source = '', chunks = []) => {
             let output = String(source || '');
             chunks.forEach((chunk, index) => {
-                output = output.replace(`@@QISI_MATH_SEGMENT_${index}@@`, chunk);
+                // A function replacer keeps the restored LaTeX literal: passing the chunk as a
+                // replacement string collapses `$$...$$` to `$...$`, because `$$` is a replacement
+                // pattern rather than literal text.
+                output = output.replace(`@@QISI_MATH_SEGMENT_${index}@@`, () => chunk);
             });
             return output;
         };

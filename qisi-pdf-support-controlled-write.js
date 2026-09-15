@@ -197,8 +197,14 @@
 
     const normalizeQuestionNumber = value => {
         const match =
-            String(value ?? '').match(/\d{1,3}/);
-        return match ? String(Number(match[0])) : '';
+            String(value ?? '')
+                .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+                .match(/\d{1,3}/);
+        if (!match) return '';
+        // Zero is not a question number: accepting it let a phantom "0" own an answer while the
+        // other modules that normalise question numbers already rejected it.
+        const number = Number(match[0]);
+        return Number.isInteger(number) && number > 0 ? String(number) : '';
     };
 
     const getQuestionNumber = item =>
