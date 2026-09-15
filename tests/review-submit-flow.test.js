@@ -292,3 +292,101 @@ test('a draft can be reviewed, edited and only then reach the formal bank', {
         server.kill();
     }
 });
+
+test('submitting the same draft twice cannot create a second formal question', {
+    timeout: 120_000
+}, async () => {
+    const port = await reserveLoopbackPort();
+    const origin = 'http://127.0.0.1:' + port;
+    const server = spawn(process.execPath, ['qisi-local-server.js'], {
+        cwd: ROOT,
+        env: { ...process.env, PORT: String(port) },
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true
+    });
+    server.stdout.on('data', () => {});
+    server.stderr.on('data', () => {});
+
+    let browser;
+    try {
+        await waitForServer(origin, server);
+        browser = await chromium.launch({ headless: true });
+        const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+        await context.route('**/*', route => {
+            const url = new URL(route.request().url());
+            if (['http:', 'https:'].includes(url.protocol) && url.origin !== origin) {
+                return route.abort('blockedbyclient');
+            }
+            return route.continue();
+        });
+        const page = await context.newPage();
+
+        await page.goto(origin + '/main.html', { waitUntil: 'domcontentloaded' });
+        const navigation = page.locator('aside.sidebar nav');
+        await navigation.waitFor({ state: 'visible' });
+        await page.evaluate(async () => {
+            const database = window.Qisi.Database.getDatabase();
+            await Promise.all(database.tables.map(table => table.clear()));
+            const now = Date.now();
+            await database.draftImportBatches.put({
+                id: 'double-submit-batch',
+                status: 'review',
+                progress: 100,
+                title: '\u91cd\u590d\u63d0\u4ea4\u9a8c\u6536',
+                fileNames: ['\u9898\u76ee.docx'],
+                totalCount: 1,
+                submittedCount: 0,
+                createdAt: now,
+                updatedAt: now
+            });
+            await database.draftQuestions.put({
+                id: 'double-submit-draft',
+                batchId: 'double-submit-batch',
+                order: 1,
+                questionNumber: '1',
+                status: 'draft',
+                duplicateStatus: 'new',
+                selected: true,
+                grade: '\u9ad8\u4e8c',
+                type: '\u5355\u9009\u9898',
+                diff: '\u4e2d\u7b49',
+                stem: '\u91cd\u590d\u63d0\u4ea4\u9a8c\u6536 $z=3$',
+                options: ['$1$', '$2$', '$3$', '$4$'],
+                answer: 'C',
+                solution: '\u91cd\u590d\u63d0\u4ea4\u89e3\u6790',
+                images: [],
+                createdAt: now,
+                updatedAt: now
+            });
+        });
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await navigation.waitFor({ state: 'visible' });
+        await navigation.getByRole('button', { name: NAV_BATCH, exact: true }).click();
+        await page.getByRole('button', { name: CONTINUE_REVIEW }).first().click();
+        await page.locator('.batch-question-nav-item').first().waitFor({ state: 'visible', timeout: 20_000 });
+
+        const submitButton = page.getByRole('button', { name: SUBMIT_ONE, exact: true });
+        await submitButton.click();
+        // A second click lands while the first submission is still settling. A button that is
+        // already disabled, or a handler that is idempotent, is what keeps the bank clean.
+        await submitButton.click({ timeout: 2_000 }).catch(() => {});
+        await page.waitForTimeout(1_500);
+
+        const outcome = await page.evaluate(async () => {
+            const database = window.Qisi.Database.getDatabase();
+            const formal = await database.questions.toArray();
+            const batch = await database.draftImportBatches.get('double-submit-batch');
+            return {
+                formalCount: formal.length,
+                stems: formal.map(row => String(row.stem || '')).join('|'),
+                submittedCount: batch?.submittedCount || 0
+            };
+        });
+
+        assert.equal(outcome.formalCount, 1, `a double click must not duplicate the question: ${JSON.stringify(outcome)}`);
+        assert.equal(outcome.submittedCount, 1, 'the batch must count exactly one submission');
+    } finally {
+        if (browser) await browser.close();
+        server.kill();
+    }
+});
