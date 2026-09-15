@@ -8,7 +8,7 @@
     "start": "node qisi-local-server.js",
     "build:css": "tailwindcss -c tailwind.config.cjs -i styles/tailwind.css -o vendor/tailwindcss/3.4.17/qisi-tailwind.min.css --minify",
     "check": "node scripts/check-production-syntax.js",
-    "test": "node --test",
+    "test": "node --test \"tests/**/*.test.js\"",
     "smoke:batch:mock": "node --test tests/batch-smoke-mock.test.js",
     "verify:personal-stable": "npm run verify:docx-stable",
     "verify:docx-stable": "node scripts/verify-docx-stable.js",
