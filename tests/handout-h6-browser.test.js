@@ -257,6 +257,33 @@ test('H6 completes main-to-handout student and teacher PDF workflow', {
 
             // A revision timeline shows whether the editor ever adopted what the store holds.
             window.__qisiH6Revisions = [];
+
+            // Wrap the editor-state module so a revision that moves backwards can be attributed to
+            // the exact transition that produced it.
+            window.__qisiH6StateCalls = [];
+            const editorState = window.Qisi.HandoutEditorState;
+            if (editorState) {
+                for (const name of Object.keys(editorState)) {
+                    const original = editorState[name];
+                    if (typeof original !== 'function') continue;
+                    editorState[name] = (...args) => {
+                        const before = args[0]?.handout?.revision;
+                        const result = original(...args);
+                        const after = result?.handout?.revision;
+                        if (before !== after) {
+                            window.__qisiH6StateCalls.push({
+                                name,
+                                at: Date.now(),
+                                from: before,
+                                to: after,
+                                stack: String(new Error('state').stack || '')
+                                    .split('\n').slice(1, 6).map(line => line.trim()).join(' | ')
+                            });
+                        }
+                        return result;
+                    };
+                }
+            }
             let lastRevision = null;
             window.__qisiH6Sampler = setInterval(async () => {
                 const revision = app?.editor?.handout?.revision;
@@ -645,7 +672,8 @@ test('H6 completes main-to-handout student and teacher PDF workflow', {
                     storedUpdatedAt: stored?.updatedAt,
                     writes: (window.__qisiH6Writes || []).slice(-8),
                     calls: (window.__qisiH6Calls || []).slice(-40),
-                    revisions: (window.__qisiH6Revisions || []).slice(-20)
+                    revisions: (window.__qisiH6Revisions || []).slice(-20),
+                    stateCalls: (window.__qisiH6StateCalls || []).slice(-20)
                 };
             })();
         });
