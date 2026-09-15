@@ -49,6 +49,10 @@ git log --oneline -10
 
 If the working tree is not clean, stop and report.
 
+Exception: when the task owner has explicitly handed over a dirty tree (for example
+"finish and commit the previous session's work"), take ownership of it under the
+attribution, snapshot and safety rules in the execution mode section below.
+
 ## Standard safe verification
 
 For ordinary code changes, run:
@@ -71,11 +75,46 @@ Never do these without an explicit task file that allows it:
 - Do not use semantic guessing to attach PDF answers or solutions.
 - Do not trust AI-provided `question` fields without sequence validation.
 - Do not change test expectations just to make failing tests pass.
-- Do not enter the next stage after finishing the current task.
+
+## Execution mode
+
+### CONTINUOUS EXECUTION MODE
+
+Inside one explicitly authorized task, work continuously:
+
+```text
+audit → reproduce → fix → verify → commit a checkpoint → next phase
+```
+
+- Do not stop after each phase to wait for confirmation.
+- Do not leave a reproduced, safely fixable defect as a report-only finding.
+- Commit each self-consistent checkpoint once its own gates are green.
+- Keep the safety invariants below intact; they are not negotiable in this mode.
+
+The project owner does not read code. Asking for per-step human code review does not
+add safety; it blocks whole-system work. Ordinary development problems are yours to
+resolve: failing tests, conflicts, regressions introduced by your own change, and
+unclear call chains.
+
+Stop and ask the owner only when:
+
+1. real data loss is possible (formal question bank, user IndexedDB, source documents);
+2. an irreversible database or schema migration is required;
+3. the working tree contains user-authored changes that cannot be attributed or handled safely;
+4. a paid external API call is required;
+5. private student or exam data must be obtained;
+6. two mutually exclusive product decisions cannot be resolved from code or evidence;
+7. correctness still cannot be restored after a rollback and a bounded retry.
+
+Preserved in this mode: fail-closed behavior, never attaching a wrong answer or
+solution, the DOCX+DOCX stable chain, the controlled-write / formal-admission gate,
+never weakening a correct test to make it pass, no secrets or private data in the
+repository, no unauthorized paid API calls, git safety, data safety and scope safety.
 
 ## Default work style
 
-- One task, one bounded change, one verification report, one commit.
+- One task, one bounded change, one verification report, one commit; continue to the
+  next phase without waiting, except for the stop conditions above.
 - Prefer new `qisi-*.js` modules over growing `app.js`.
 - Prefer pure functions and fixture-driven tests.
 - Prefer fail-closed behavior over silent data pollution.
@@ -84,11 +123,11 @@ Never do these without an explicit task file that allows it:
 
 ## Stop conditions
 
-Stop immediately when:
+Stop immediately, even inside continuous execution, when:
 
 - A forbidden file must be edited.
 - A real AI/OCR call appears necessary.
 - `git diff` contains files outside the task scope.
 - `verify:safe` fails and the cause is not clearly within scope.
 - PDF support sequence is discontinuous, duplicate, jump-back, or answer/solution inconsistent.
-- The current task objective is complete.
+- One of the seven owner-escalation conditions in the execution mode section applies.

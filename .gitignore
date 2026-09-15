@@ -50,3 +50,7 @@ local-run-artifacts/
 # test reports
 playwright-report/
 test-results/
+
+# local import/audit evidence (may contain real material content)
+artifacts/import-reliability/
+artifacts/audit-baseline/

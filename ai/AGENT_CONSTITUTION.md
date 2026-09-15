@@ -134,7 +134,7 @@ Do not:
 - rename unrelated symbols
 - migrate architecture during a bugfix
 - change tests to fit broken behavior
-- continue to the next stage automatically
+- bundle unrelated stages into one commit
 
 ## 9. Evidence preservation
 
@@ -171,4 +171,8 @@ Stop instead of guessing when:
 - sequence reliability cannot be established
 - answer/solution alignment conflicts
 - a test failure is outside task scope
-- the task objective has already been achieved
+
+Stage boundaries are not stop conditions. Under the CONTINUOUS EXECUTION MODE defined in
+`AGENTS.md`, an authorized task continues through audit, fix, verification and committed
+checkpoints without waiting for per-step confirmation, and only stops for the owner
+escalation conditions listed there.

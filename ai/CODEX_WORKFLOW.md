@@ -126,11 +126,14 @@ Codex may not automatically:
 
 - call real AI/OCR
 - modify forbidden files
-- proceed to next stage
 - rewrite `app.js`
 - change dependency graph
 - submit real question bank data
 - hide test failures
+
+Proceeding from one phase to the next inside the same authorized task is allowed and
+expected. See CONTINUOUS EXECUTION MODE in `AGENTS.md`; the stop conditions there, not
+stage boundaries, decide when to hand control back to the owner.
 
 ## 4. Stage document format
 
