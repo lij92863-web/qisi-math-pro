@@ -647,8 +647,118 @@
             });
         };
 
+        // ---------------------------------------------------------------- MATHTYPE / MTEF ----
+        // A MathType equation arrives as <w:object> wrapping an OLE/CFB container. Everything the
+        // container can tell us that is *not* the equation (the Word control flag, the preview
+        // picture) must stay out of the question text.
+        const MATH_TYPE_OBJECT_RE = /<w:object\b[\s\S]*?<\/w:object>/g;
+
+        const mathTypeObjectRid = objectXml => {
+            const ole = String(objectXml || '').match(/<o:OLEObject\b[^>]*>/i)?.[0] || '';
+            if (!ole) return '';
+            const progId = ole.match(/ProgID="([^"]+)"/i)?.[1] || '';
+            // Equation.DSMT4 / Equation.3 are the MathType equation classes.
+            if (!/^Equation(\.|$)/i.test(progId)) return '';
+            return ole.match(/r:id="([^"]+)"/i)?.[1] || '';
+        };
+
+        const unresolvedFormulaToken = rid => `[[MTEF_UNRESOLVED:${rid}]]`;
+
+        /**
+         * Resolves one <w:object> that holds a MathType equation.
+         *
+         * - at most one formula comes out of one object (rule 1);
+         * - the reader consumes either the TeX source or the typeset line, never both (rule 2/3/4);
+         * - an object that cannot be read yields an explicit unresolved token, never a guess (rule 5),
+         *   and the token is per objection, so one bad equation cannot invalidate another question;
+         * - `handled: false` means "not a MathType equation / no bytes", so the caller keeps its
+         *   existing picture handling.
+         */
+        const resolveDocxMathTypeObjectForV2 = (objectXml = '', oleBytesByRid) => {
+            const rid = mathTypeObjectRid(objectXml);
+            if (!rid) return { handled: false, text: '', formula: null };
+
+            const reader = root.Qisi?.DocxMtefReader;
+            const bytes = typeof oleBytesByRid === 'function'
+                ? oleBytesByRid(rid)
+                : oleBytesByRid?.get?.(rid) || oleBytesByRid?.[rid];
+
+            const base = {
+                rid,
+                evidenceRef: `ole:${rid}`,
+                source: 'docx-mtef'
+            };
+
+            if (!bytes || !bytes.length) {
+                const formula = {
+                    ...base,
+                    status: 'unresolved',
+                    origin: '',
+                    latex: '',
+                    code: 'MTEF_MISSING_PAYLOAD',
+                    provenance: { status: 'unresolved', source: 'docx-mtef', reasonCode: 'MTEF_MISSING_PAYLOAD' }
+                };
+                return { handled: true, text: ` ${unresolvedFormulaToken(rid)} `, formula };
+            }
+
+            const result = reader?.readFormulaFromOle
+                ? reader.readFormulaFromOle(bytes)
+                : {
+                    status: 'unresolved',
+                    origin: '',
+                    latex: '',
+                    code: 'MTEF_READER_UNAVAILABLE',
+                    provenance: {
+                        status: 'unresolved',
+                        source: 'docx-mtef',
+                        reasonCode: 'MTEF_READER_UNAVAILABLE'
+                    }
+                };
+
+            const formula = {
+                ...base,
+                status: result.status,
+                origin: result.origin || '',
+                latex: result.latex || '',
+                code: result.code || '',
+                provenance: { ...(result.provenance || {}), evidenceRef: `ole:${rid}` }
+            };
+
+            if (result.status === 'extracted' && result.latex) {
+                return { handled: true, text: ` $${result.latex}$ `, formula };
+            }
+            return { handled: true, text: ` ${unresolvedFormulaToken(rid)} `, formula };
+        };
+
+        /**
+         * Replaces every MathType <w:object> in a document with its formula (or its unresolved
+         * token) so the normal text extraction can see it. Non-equation objects are left untouched.
+         */
+        const expandDocxMathTypeFormulasForV2 = (documentXml = '', oleBytesByRid) => {
+            const formulas = [];
+            const text = String(documentXml || '').replace(MATH_TYPE_OBJECT_RE, objectXml => {
+                const resolved = resolveDocxMathTypeObjectForV2(objectXml, oleBytesByRid);
+                if (!resolved.handled) return objectXml;
+                formulas.push(resolved.formula);
+                return `<w:t xml:space="preserve">${resolved.text}</w:t>`;
+            });
+            return { text, formulas };
+        };
+
+        const formulaRecordsForText = (text = '', formulas = []) => {
+            const source = String(text || '');
+            return (formulas || []).map(formula => (
+                source.includes(unresolvedFormulaToken(formula.rid))
+                    ? { ...formula, status: 'unresolved' }
+                    : formula
+            ));
+        };
+
         return {
             normalizeDocxPipelineResult,
+            resolveDocxMathTypeObjectForV2,
+            expandDocxMathTypeFormulasForV2,
+            formulaRecordsForText,
             extractDocxQuestionBlockByNumber,
             extractDocxTableTextFallback,
             parseDocxRelationshipMap,
