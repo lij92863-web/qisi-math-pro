@@ -453,3 +453,68 @@ and let vision add only layout, figures and question order — is the natural ne
 import order of the stable DOCX chain, which this round was told not to touch, so it is deliberately
 left as a design step: the deterministic question set already passes acceptance, so the change is
 about *when* it is preferred, not about whether it is correct.
+
+## 13. DOCX wrong content on the wrong question (2026-09-16, fourth pass)
+
+This closes section 4 of `docs/integration/HANDOFF_2026_09_16.md`: the
+`DOCX SILENT WRONG CONTENT > 0` defect on the real `周二晚测.docx`, where question 7's option set was
+attached to seven other questions and questions 1 and 9 were missing from an authoritative 12
+question contract. `app.js` was changed only inside the DOCX text path and the two evidence checks it
+feeds; the seal register moved with it (§4).
+
+### 13.1 The three mechanisms, each measured
+
+| mechanism | evidence on the real file | fix |
+| --- | --- | --- |
+| the paragraph reader mistook structural elements for text elements | `<w:tabs>`, `<w:tab w:val=…/>`, `<w:textAlignment …/>` and `<w:tcW …/>` all start with `w:t`, so the unanchored `[^>]*>` alternative matched them and swallowed everything up to the next real `</w:t>` — including a drawing's `<wp:posOffset>` values, which reached the paper text as 13–15 digit runs (`4071620147320A.外心`, `409130527749511. 在正方体`) and swallowed option labels such as `A. ` | the text alternative is anchored (`w:t(?=[\s/>])`) in `extractDocxTextWithMath` and in the option-map reader, which is the same rule `qisi-docx-pipeline.js` already applied in §11.5 |
+| the flat splitter trusted a mark-sheet numbering row as a question | the text layer starts with `11. 12.` (the mark sheet's numbering row before the section header), so the splitter produced a bogus question 11 whose stem was the section header, and the following `1.` was dropped by its "no jump-back" filter | `splitFlatTextIntoQuestionBlocks` (now in `qisi-utils.js`) skips a marker whose line is nothing but question numbers, and accepts a marker that sits behind an inline image token (`[[IMAGE:…]] 9. 如图…`), which is how questions 1 and 9 were lost |
+| options were extracted from the whole document as "current question" evidence | every draft's `pageText` is the whole file, so `extractOptionsFromCurrentBlockOnly` parsed it and took the first A.–D. run of the paper for whichever question had no options of its own | `isQuestionScopedEvidenceText` rejects any evidence text that carries another question's marker; it is applied in `extractOptionsFromCurrentBlockOnly`, in `getCurrentQuestionBlockFromPageText` and in the review page's `draftRawOptionSourceCandidates` |
+
+One further defect surfaced by the fixes above: `splitOptionsFromStem` treated the `A` of
+`$\triangle ABC$` as option A, so question 3's stem was cut inside the formula and the rest of the
+question was filed as option A. Option labels must now be a standalone letter
+(`([A-D])(?=[^A-Za-z0-9_])`), in `qisi-utils.js` and in both `app.js` option readers.
+
+The file-wide DOCX table text (`【DOCX表格文本兜底】`) is appended to the text layer as one blob and
+used to land in the last question's stem. Per-question blocks now end at that marker; the blob stays
+in `pageText` as evidence.
+
+### 13.2 Measured result on the same real file
+
+`node artifacts/audit-baseline/docx-run-trace.js "<周二晚测.docx>"` (local evidence, not committed):
+
+| metric | at HEAD (`0038d6e`) | this round |
+| --- | --- | --- |
+| batch status | `review` | `review` |
+| drafts | 10 | 12 |
+| question numbers | 2,3,4,5,6,7,8,10,11,12 (question 11 = the section header) | 1,2,3,4,5,6,7,8,9,10,11,12 |
+| drafts sharing one option set | 7 (question 7's options) | 0 (only the empty set is shared — missing, not wrong) |
+| stems that are the whole document | 7 × 1260 characters | 0 |
+| leaked `<wp:posOffset>` digit runs | present (`4071620147320`, `37611055556259`, `409130527749511`) | none |
+| questions with their own 4 options | 3 | 6 (1, 2, 3, 5, 7, 8) |
+| questions with no options (fail closed, manual review) | 0 recorded | 6 (4, 6, 9, 10, 11, 12) — the paper keeps those labels inside its MathType equations, so nothing is guessed |
+| paid API calls / MathType launches | 0 / 0 | 0 / 0 |
+
+### 13.3 Regressions
+
+| behaviour | inherited failure | test |
+| --- | --- | --- |
+| a mark-sheet numbering row is not a question, and an image-token-prefixed marker still is | `openBatchReview` on the fixture paper produced 2 drafts instead of 3 (question 1 lost) | `tests/qisi-utils-question-evidence-scope.test.js` |
+| a whole document is never one question's evidence | `isQuestionScopedEvidenceText(wholePage, '1')` was not even expressible before; the real run attached question 7's options to seven questions | `tests/qisi-utils-question-evidence-scope.test.js` |
+| every draft keeps its own stem and options through the real create flow | the same fixture DOCX through the real UI failed with `expected the paper's three questions, saw 2` | `tests/e2e/docx-question-scope.test.js` |
+| a letter inside a formula is not an option label | not expressible before: `$\triangle ABC$` became stem + option A | `tests/qisi-utils-question-evidence-scope.test.js` |
+
+The inherited run was produced by `artifacts/audit-baseline/run-test-against-inherited-app.js`, which
+swaps in `git show HEAD:app.js`, runs the test file, restores the working copy and verifies the
+restore by hash.
+
+### 13.4 Gates for this round
+
+```text
+npm test                    1336 tests, 1335 passed, 1 failed before the seal register was moved
+                            (the seal entry is expected to fail until the change is committed)
+npm run check               passed
+```
+
+`app.js` shrank (the flat splitter moved into `qisi-utils.js`), so the bloat ceilings in
+`tests/code-quality-boundaries.test.js` did not need to move.

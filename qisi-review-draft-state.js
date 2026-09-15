@@ -108,7 +108,16 @@
             ].map(cleanText).filter(Boolean);
             const pageSources = [q?.sourceText, q?.pageText, q?.sourceTrace?.pageText]
                 .map(cleanText)
-                .filter(Boolean);
+                .filter(Boolean)
+                // A whole page / whole document text is not this question's own evidence: it carries
+                // other questions' markers, and its first A.-D. run belongs to whichever question
+                // happens to hold it. Without this the page text was offered as this question's
+                // options, which is how one option set spread across several drafts.
+                .filter(source => {
+                    const scoped = utils().isQuestionScopedEvidenceText;
+                    if (typeof scoped !== 'function') return true;
+                    return scoped(source, q?.questionNumber || q?.question || q?.order || '');
+                });
             const qKey = normalizeQuestionKey(q?.questionNumber || q?.question || q?.order);
             pageSources.forEach(source => {
                 const block = splitQuestionBlocksByNumber(source).find(item =>

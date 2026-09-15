@@ -1352,6 +1352,10 @@
                 };
                 const DOCX_TEXT_ONLY_WARNING =
                     '当前 Word 文件未能通过本地服务转成 PDF，只能使用文本层兜底，复杂公式和选项可能不完整。请确认已运行 npm start，并从 http://localhost:3000/main.html 打开软件。';
+                // The DOCX table text is appended to the text layer as one blob. It is evidence for the
+                // whole file, never for a single question: without this marker the blob lands in the
+                // last question's block and shows the paper's mark sheet as that question's stem.
+                const DOCX_TABLE_TEXT_FALLBACK_MARKER = '【DOCX表格文本兜底】';
                 let activeRecognitionMode = 'standard';
                 let activeBatchCostStats = null;
 
@@ -2672,7 +2676,9 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         return { stem: '', options: ['', '', '', ''] };
                     }
 
-                    const labelRegex = /(^|[\n\r\s　]|[（(])([A-D])\s*(?:[\.．、:：\)）]|(?=\s*[$\\\u4e00-\u9fa5A-Za-z0-9（(]))/g;
+                    // A standalone option letter only: otherwise the "A" of "$\triangle ABC$" is read
+                    // as option A and the question text is filed as an option.
+                    const labelRegex = /(^|[\n\r\s　]|[（(])([A-D])(?=[^A-Za-z0-9_])\s*(?:[\.．、:：\)）]|(?=\s*[$\\\u4e00-\u9fa5A-Za-z0-9（(]))/g;
 
                     const hits = [];
                     let match;
@@ -2800,7 +2806,9 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                     // 方案 1：常规 A. B. C. D.，支持横排和换行。
                     {
-                        const labelRegex = /(^|[\n\r\s　]|[（(])([A-D])\s*(?:[\.．、:：\)）]|(?=\s*[$\\\u4e00-\u9fa5A-Za-z0-9（(]))/g;
+                        // Same standalone-letter rule as parseOptionsFromBlock: "ABC" is a triangle,
+                        // not options A, B and C.
+                        const labelRegex = /(^|[\n\r\s　]|[（(])([A-D])(?=[^A-Za-z0-9_])\s*(?:[\.．、:：\)）]|(?=\s*[$\\\u4e00-\u9fa5A-Za-z0-9（(]))/g;
                         const hits = [];
                         let match;
 
@@ -3562,7 +3570,10 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         candidates.push(normalized);
                     }
 
-                    const unique = [...new Set(candidates.map(cleanRecognizedText).filter(Boolean))];
+                    // A whole page / whole document text is not evidence for *this* question: on the
+                    // real 周二晚测.docx its first option run belongs to question 7.
+                    const unique = [...new Set(candidates.map(cleanRecognizedText).filter(Boolean))]
+                        .filter(block => window.Qisi.Utils.isQuestionScopedEvidenceText(block, qno));
 
                     if (!unique.length) return '';
 
@@ -3610,7 +3621,16 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         q.sourceTrace?.pdfTextLayer,
                         q.sourceTrace?.textLayer,
                         getCurrentQuestionBlockFromPageText(q)
-                    ].map(cleanRecognizedText).filter(Boolean);
+                    ]
+                        .map(cleanRecognizedText)
+                        .filter(Boolean)
+                        // A whole page / whole document text carries other questions' markers, so it is
+                        // not evidence for this question. Without this filter the first A.-D. run of the
+                        // paper was copied onto every question that had no options of its own.
+                        .filter(source => window.Qisi.Utils.isQuestionScopedEvidenceText(
+                            source,
+                            q.questionNumber || q.question || q.order || ''
+                        ));
 
                     const answerLooksChoice = /^[A-D]{1,4}$/.test(
                         window.Qisi.Utils.cleanRecognizedText(q.answer)
@@ -4021,7 +4041,12 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         const parts = [];
 
                         withMathTokens.replace(
-                            /__MATH_TOKEN_(\d+)__|<w:drawing[\s\S]*?<\/w:drawing>|<w:pict[\s\S]*?<\/w:pict>|<w:object[\s\S]*?<\/w:object>|<(?:w:t|m:t|w:instrText|w:delText)[^>]*>([\s\S]*?)<\/(?:w:t|m:t|w:instrText|w:delText)>|<w:tab\/>|<w:br\/>|<m:chr[^>]*m:val="([^"]+)"[^>]*\/>/g,
+                            // Only the real text elements may match: without the anchor a structural
+                            // element such as <w:tabs>, <w:textAlignment> or <w:tcW> starts a "text
+                            // node" that swallows everything up to the next </w:t>. On the real
+                            // 周二晚测.docx that leaked a drawing's <wp:posOffset> values into the paper
+                            // text as 13-15 digit runs and swallowed option labels such as "A. ".
+                            /__MATH_TOKEN_(\d+)__|<w:drawing[\s\S]*?<\/w:drawing>|<w:pict[\s\S]*?<\/w:pict>|<w:object[\s\S]*?<\/w:object>|<(?:w:t|m:t|w:instrText|w:delText)(?=[\s/>])[^>]*>([\s\S]*?)<\/(?:w:t|m:t|w:instrText|w:delText)>|<w:tab\/>|<w:br\/>|<m:chr[^>]*m:val="([^"]+)"[^>]*\/>/g,
                             (m, tokenIndex, textNode, mathChar) => {
                                 if (m.startsWith('<w:tab')) {
                                     parts.push(' ');
@@ -4291,7 +4316,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             if (window.Qisi.Utils.cleanRecognizedText(docxTableText)) {
                                 text = [
                                     text,
-                                    '\n\n【DOCX表格文本兜底】\n',
+                                    `\n\n${DOCX_TABLE_TEXT_FALLBACK_MARKER}\n`,
                                     docxTableText
                                 ].filter(Boolean).join('\n');
                             }
@@ -4422,55 +4447,11 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     return source;
                 };
 
-                const splitQuestionBlocksByNumber = (text) => {
-                    const source = window.Qisi.Utils.cleanRecognizedText(text)
-                        .replace(/\r/g, '\n')
-                        .replace(/\u3000/g, ' ')
-                        .replace(/\n{3,}/g, '\n\n');
-
-                    const markerRegex = /(^|\n)\s*(?:第\s*)?([1-9１-９][0-9０-９]{0,2})(?:\s*题)?\s*[\.．、:：\)）]\s*/g;
-
-                    const marks = [];
-                    let match;
-
-                    while ((match = markerRegex.exec(source)) !== null) {
-                        const questionNo = Number(
-                            String(match[2]).replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
-                        );
-
-                        if (questionNo >= 1900 && questionNo <= 2100) continue;
-
-                        marks.push({
-                            question: String(questionNo),
-                            start: match.index + match[1].length,
-                            contentStart: markerRegex.lastIndex
-                        });
-                    }
-
-                    if (!marks.length) return [];
-
-                    const blocks = [];
-
-                    marks.forEach((mark, idx) => {
-                        const next = marks[idx + 1];
-                        const content = source.slice(mark.contentStart, next ? next.start : source.length).trim();
-
-                        if (!content) return;
-
-                        blocks.push({
-                            question: mark.question,
-                            block: content,
-                            start: mark.start
-                        });
-                    });
-
-                    return blocks.filter((item, idx, arr) => {
-                        if (idx === 0) return true;
-                        const prev = Number(arr[idx - 1].question);
-                        const curr = Number(item.question);
-                        return curr > prev || Math.abs(curr - prev) <= 1;
-                    });
-                };
+                // The flat splitter lives in qisi-utils so its marker rules are testable on their own:
+                // a mark-sheet numbering row ("11. 12.") is not a question, and an inline image token
+                // may sit in front of a marker ("[[IMAGE:…]] 9. 如图…").
+                const splitQuestionBlocksByNumber = (text) =>
+                    window.Qisi.Utils.splitFlatTextIntoQuestionBlocks(text);
 
                 const parseQuestionItemsFromText = (text, sourceFile, includeInlineAnswer = false) => {
                     const source = prepareQuestionRecognitionText(text);
@@ -4488,7 +4469,12 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     const segments = blocks.length ? blocks.map(block => ({
                         question: block.question,
                         type: typeAt(block.start),
-                        text: block.block.split(/\[\[TYPE:[^\]]+\]\]/)[0].trim()
+                        // The file-wide DOCX table text is appended after the body, so without this
+                        // cut the last question would carry the whole mark sheet as its stem.
+                        text: block.block
+                            .split(/\[\[TYPE:[^\]]+\]\]/)[0]
+                            .split(DOCX_TABLE_TEXT_FALLBACK_MARKER)[0]
+                            .trim()
                     })) : [{ question: '1', text: source }];
 
                     const result = segments.filter(seg => seg.text && !/^(一|二|三|四)[、.．]/.test(seg.text)).map((seg, idx) => {
@@ -4691,7 +4677,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                         const textParts = [];
 
-                        segment.replace(/<(?:w:t|m:t|w:instrText|w:delText)[^>]*>([\s\S]*?)<\/(?:w:t|m:t|w:instrText|w:delText)>/g, (_, textNode) => {
+                        segment.replace(/<(?:w:t|m:t|w:instrText|w:delText)(?=[\s/>])[^>]*>([\s\S]*?)<\/(?:w:t|m:t|w:instrText|w:delText)>/g, (_, textNode) => {
                             const text = window.Qisi.DocxPipeline.decodeXmlEntitiesSafe(textNode || '')
                                 .replace(/\s+/g, ' ')
                                 .trim();

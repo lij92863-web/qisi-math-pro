@@ -421,7 +421,10 @@
                 .replace(/\r/g, '\n')
                 .replace(/([A-D])\s*[．.、:：]\s*/g, '$1. ');
 
-            const labelRegex = /(^|[\n\r\s　]|[（(])([A-D])\s*(?:[\.．、:：\)）]|(?=\s*[$\\\u4e00-\u9fa5A-Za-z0-9（(]))/g;
+            // The label must be a standalone letter: without the negative lookahead the "A" of
+            // "$\\triangle ABC$" counts as option A, so the stem is cut in the middle of a formula
+            // and the rest of the question is filed as option A.
+            const labelRegex = /(^|[\n\r\s　]|[（(])([A-D])(?=[^A-Za-z0-9_])\s*(?:[\.．、:：\)）]|(?=\s*[$\\\u4e00-\u9fa5A-Za-z0-9（(]))/g;
 
             const hits = [];
             let match;
@@ -1037,11 +1040,140 @@
             q.warnings = [...new Set([...(q.warnings || []), message])];
         };
 
+        // ---------------------------------------------------------------------------------------
+        // Question evidence scope
+        //
+        // A question's stem and options may only come from evidence that belongs to that question.
+        // On the real 周二晚测.docx the whole document text was offered as "current question"
+        // evidence, so the first A.-D. run of the paper (question 7's options) was copied onto seven
+        // different questions - DOCX SILENT WRONG CONTENT, the worst outcome this project has.
+        //
+        // Two details of that document decide whether a marker really starts a question:
+        //
+        //   * a paragraph that is nothing but question numbers ("11. 12.", "12、13") is the paper's
+        //     mark-sheet numbering row, not a question;
+        //   * an inline image token may sit in front of the marker ("[[IMAGE:...]] 9. 如图…"), which
+        //     is exactly where questions 1 and 9 were lost.
+        const QUESTION_EVIDENCE_MARKER_RE =
+            /(?:^|\n)[\s\u3000]*(?:\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\][\s\u3000]*)*(?:第[\s\u3000]*)?([1-9][0-9]{0,2})[\s\u3000]*(?:题)?[\s\u3000]*[.．、:：\)）][\s\u3000]*/g;
+
+        // Everything left on the marker's line is a bare number (optionally with 题 or a separator).
+        const QUESTION_NUMBERING_ROW_REST_RE =
+            /^\s*(?:(?:\d{1,3}|第)[\s\u3000]*(?:题)?[\s\u3000]*[.．、:：\)）]?[\s\u3000]*)+$/;
+
+        const isQuestionNumberingRowHit = (text = '', endIndex = 0) => {
+            const lineEnd = String(text).indexOf('\n', endIndex);
+            const rest = String(text)
+                .slice(endIndex, lineEnd === -1 ? String(text).length : lineEnd)
+                .trim();
+
+            if (!rest) return false;
+            if (!/\d/.test(rest)) return false;
+
+            return QUESTION_NUMBERING_ROW_REST_RE.test(rest);
+        };
+
+        const normalizeEvidenceQuestionNumber = (value) => {
+            const digits = String(value ?? '').replace(/[^\d]/g, '');
+            return digits ? String(Number(digits)) : '';
+        };
+
+        const collectQuestionEvidenceMarkers = (rawText = '') => {
+            const text = String(rawText || '')
+                .replace(/\r/g, '\n')
+                .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248));
+            const markers = [];
+            const re = new RegExp(QUESTION_EVIDENCE_MARKER_RE.source, 'g');
+
+            let hit;
+            while ((hit = re.exec(text)) !== null) {
+                if (isQuestionNumberingRowHit(text, re.lastIndex)) continue;
+                markers.push(normalizeEvidenceQuestionNumber(hit[1]));
+            }
+
+            return markers;
+        };
+
+        // True when the text carries no other question's start marker. A text with no marker at all
+        // (a single question's own block drops its marker) is scoped by definition; a text that
+        // carries another question's marker is a page / whole-document text and must never be used
+        // as this question's own evidence.
+        const isQuestionScopedEvidenceText = (rawText = '', questionNumber = '') => {
+            const markers = collectQuestionEvidenceMarkers(rawText);
+            if (markers.length !== 1) return markers.length === 0;
+
+            const qno = normalizeEvidenceQuestionNumber(questionNumber);
+            return !qno || markers[0] === qno;
+        };
+
+        // Splits flat recognition text into one block per question. The same two marker rules above
+        // apply, so a mark-sheet numbering row can never become a question and an image-token
+        // prefixed marker still counts.
+        const splitFlatTextIntoQuestionBlocks = (rawText = '') => {
+            const source = cleanRecognizedText(rawText)
+                .replace(/\r/g, '\n')
+                .replace(/\u3000/g, ' ')
+                .replace(/\n{3,}/g, '\n\n');
+
+            if (!source) return [];
+
+            const marks = [];
+            const re = new RegExp(QUESTION_EVIDENCE_MARKER_RE.source, 'g');
+
+            let hit;
+            while ((hit = re.exec(source)) !== null) {
+                if (isQuestionNumberingRowHit(source, re.lastIndex)) continue;
+
+                const questionNo = Number(
+                    String(hit[1]).replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
+                );
+
+                if (!Number.isFinite(questionNo) || questionNo <= 0) continue;
+                // A body number that looks like a year is not a question marker.
+                if (questionNo >= 1900 && questionNo <= 2100) continue;
+
+                // The tail has to carry something: a bare marker owns no question.
+                const tail = source.slice(re.lastIndex, re.lastIndex + 60);
+                if (!tail.trim()) continue;
+
+                marks.push({
+                    question: String(questionNo),
+                    start: hit.index + (hit[0].startsWith('\n') ? 1 : 0),
+                    contentStart: re.lastIndex
+                });
+            }
+
+            if (!marks.length) return [];
+
+            const blocks = [];
+
+            marks.forEach((mark, idx) => {
+                const next = marks[idx + 1];
+                const content = source.slice(mark.contentStart, next ? next.start : source.length).trim();
+
+                if (!content) return;
+
+                blocks.push({
+                    question: mark.question,
+                    block: content,
+                    start: mark.start
+                });
+            });
+
+            return blocks.filter((item, idx, arr) => {
+                if (idx === 0) return true;
+                const prev = Number(arr[idx - 1].question);
+                const curr = Number(item.question);
+                return curr > prev || Math.abs(curr - prev) <= 1;
+            });
+        };
+
         const api = {
             BATCH_BAD_PLACEHOLDER_RE,
             BATCH_MEDIA_TOKEN_RE,
             addWarningOnce,
             bboxIntersectionArea,
+            collectQuestionEvidenceMarkers,
             cleanDisplayFieldsOnly,
             cleanDisplayOptionsForBatchSave,
             cleanDisplayTextForBatchSave,
@@ -1062,6 +1194,7 @@
             hasUnconvertedImagePlaceholder,
             hasUnconvertedOptionPlaceholder,
             isFatalQwenServiceError,
+            isQuestionScopedEvidenceText,
             classifyVisualServiceFailure,
             describeVisualServiceFailure,
             isRawJsonPayloadText,
@@ -1077,6 +1210,7 @@
             restoreLatexMathSegments,
             sanitizeLatexWrapperArtifacts,
             splitAnswerSolutionSections,
+            splitFlatTextIntoQuestionBlocks,
             stripBatchImagePlaceholders,
             splitQuestionForStorage,
             stripAnswerSolution,
