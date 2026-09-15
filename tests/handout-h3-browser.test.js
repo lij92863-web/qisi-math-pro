@@ -276,7 +276,12 @@ test('H3 browser completes the structured editor workflow without source writes'
                 questionBlocks: document.querySelectorAll('.editor-block.block-question').length,
                 libraryRows: document.querySelectorAll('[data-question-id]').length
             })).catch(error => ({ diagnosticsUnavailable: String(error?.message || error) }));
-            insertError.message += ' | handout insert diagnostics: ' + JSON.stringify(diagnostics);
+            console.error('H3_INSERT_DIAGNOSTICS=' + JSON.stringify(diagnostics));
+            try {
+                insertError.message += ' | handout insert diagnostics: ' + JSON.stringify(diagnostics);
+            } catch (appendError) {
+                console.error('H3_INSERT_DIAGNOSTICS_APPEND_FAILED=' + String(appendError?.message || appendError));
+            }
             throw insertError;
         }
         assert.equal(await page.locator('.editor-block').count(), 6);
