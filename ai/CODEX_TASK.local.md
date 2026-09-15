@@ -1,5 +1,28 @@
 # CODEX_TASK.local.md
 
+## Active override — import reliability (2026-09-15)
+
+User authorized continuing on the dirty working tree and repairing dual DOCX/PDF
+imports. Preserve all existing H10 changes; do not bundle or revert them.
+This override supersedes H10's recognition-edit prohibition for this task only.
+
+Objective: reproduce and repair bounded import failures without broad refactoring.
+Allowed: existing DOCX rich-content/MTEF reader, native guard/translator, local
+AI proxy, focused regression tests, this task record and an import repair report.
+No app.js edits planned. No dependency changes or formal question-bank writes.
+Verification: focused fault fixtures, verify:safe and verify:batch-safety.
+Real local materials may be read for offline checks; native conversion and paid
+AI/OCR are not part of the default test run. Preserve source documents unchanged.
+Record remaining real-service and recognition-accuracy limits explicitly.
+
+Explicit local native check: read the two case01 DOCX files, extract MTEF to
+artifacts/import-reliability, invoke the existing native helper at most twice
+with a 60-second process timeout each, combine failed rows with the deterministic
+reader and report unresolved IDs. No Word, paid model calls, or bank writes.
+Observed native AccessViolation in MTXFormSetTranslator before equation conversion.
+Allow two additional 32-bit helper invocations (60 seconds each) to compare the
+installed 32/64-bit runtimes; do not retry further after this bounded comparison.
+
 ## Current program
 
 H — TEX题库讲义制作与浏览器内 Typst PDF 导出。
@@ -826,3 +849,80 @@ including direct structured image dragging and four-corner aspect-ratio resize.
   gates also passed.
 - The detailed evidence and explicit limitations are recorded in
   `docs/stages/STAGE_H9_REFERENCE_EDITOR_PARITY.md`.
+
+## H10 — Fast startup recovery and exhaustive UI action acceptance
+
+Objective:
+
+- make the Windows one-click entry start or reuse the local service quickly;
+- avoid a 30-second wait when port 3000 is occupied or an old service is unhealthy;
+- provide one stable launcher name that other local automation can discover;
+- execute every inventoried main-page click action in an isolated real browser,
+  proving an observable state/effect instead of accepting the presence of a
+  Vue binding as evidence.
+
+Measured baseline on 2026-09-14:
+
+- local service cold readiness: about 201 ms;
+- uncached isolated Chromium DOM ready: about 381 ms;
+- Vue application mounted: about 410 ms;
+- 0 page errors and 0 error-level console messages;
+- largest startup resources are the local Noto Sans files and `app.js`, but the
+  page itself is not the reported multi-second/30-second bottleneck.
+
+Required boundaries:
+
+- launcher recovery must never terminate an unknown process merely because it
+  owns port 3000; an unhealthy/foreign port is skipped for another loopback port;
+- only an exact `/api/health` response identifying `qisi-local-server` may be
+  reused as an existing service;
+- all URLs remain loopback-only and all browser assets remain local;
+- button acceptance uses a fresh isolated browser profile and disposable
+  IndexedDB data; no user question-bank records are read or modified;
+- AI/OCR endpoints are blocked or locally mocked and no paid endpoint is called;
+- destructive buttons must prove both cancellation and confirmed behavior on
+  disposable fixtures;
+- disabled or context-inapplicable controls must have an explicit reason and
+  must not be reported as successfully executed;
+- DOCX+DOCX, PDF fail-closed, batch import, print and handout chains must not
+  regress.
+
+Allowed production files:
+
+- `open-app.cmd`, `start-app.vbs`, `qisi-server.cmd`;
+- focused launcher modules under `scripts/`;
+- `scripts/start-qisi.ps1` as a compatibility wrapper;
+- `README.md` and focused startup/user documentation;
+- `main.html` and focused `qisi-*.js` UI/composable modules only for a reproduced
+  button defect;
+- `app.js` only for minimal event wiring after the app-js boundary statement and
+  only when a reproduced browser defect cannot be fixed in a focused module.
+
+Allowed supporting files:
+
+- `ai/CODEX_TASK.local.md`;
+- focused launcher, startup-performance and UI-action browser tests;
+- H10 acceptance documentation and local generated evidence.
+
+Forbidden:
+
+- recognition/parser/alignment changes;
+- dependency or lockfile changes;
+- real AI/OCR calls;
+- testing against or mutating the user's existing IndexedDB;
+- weakening an action assertion merely to make a button pass;
+- killing an unknown port owner;
+- broad `app.js` refactoring or new business logic in `app.js`.
+
+Required gates:
+
+- cold/reuse/foreign-port launcher integration tests;
+- real isolated-browser startup timing with console/network checks;
+- all 117 inventoried click expressions receive real-browser or focused
+  state-machine behavior evidence, with destructive actions isolated;
+- `npm.cmd run verify:docx-stable`;
+- `npm.cmd run verify:pdf-known-bad`;
+- `npm.cmd run verify:batch-safety`;
+- `npm.cmd run verify:no-real-ai`;
+- `npm.cmd run verify:safe`;
+- exact diff-scope verification, one H10 commit and push.

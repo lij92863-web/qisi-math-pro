@@ -4,6 +4,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const fsp = require('fs/promises');
 const { spawn } = require('child_process');
 const { createSerialTaskQueue } = require('./qisi-serial-task-queue.js');
@@ -17,6 +18,10 @@ const TOOLS_DIR = path.join(ROOT, 'tools');
 const PS_CONVERTER = path.join(TOOLS_DIR, 'convert-docx-to-pdf.ps1');
 const PS_MATHTYPE_TRANSLATOR = path.join(TOOLS_DIR, 'translate-mathtype-mtef.ps1');
 const PORT = Number(process.env.PORT || 3000);
+const SERVER_BUILD_ID = crypto.createHash('sha256')
+  .update(fs.readFileSync(__filename))
+  .digest('hex')
+  .slice(0, 16);
 const HOST = String(process.env.QISI_HOST || '127.0.0.1').trim() || '127.0.0.1';
 const CONVERT_TIMEOUT_MS = Number(process.env.DOCX_CONVERT_TIMEOUT_MS || 120000);
 const MATHTYPE_TIMEOUT_MS = Number(process.env.MATHTYPE_TRANSLATE_TIMEOUT_MS || 60000);
@@ -677,6 +682,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
     service: 'qisi-local-server',
+    buildId: SERVER_BUILD_ID,
     platform: process.platform,
     port: runtime.port
   });
@@ -1017,6 +1023,7 @@ module.exports = {
   isAllowedLocalOrigin,
   normalizeServerHost,
   normalizeServerPort,
+  SERVER_BUILD_ID,
   translateMtefBatch
 };
 

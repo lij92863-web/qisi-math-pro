@@ -15,7 +15,7 @@
                 const batchPersonalKnowledge = ref('');
                 const batchSystemKnowledge = ref('');
                 const importBankInput = ref(null);
-                const pendingImportPreview = ref(null);
+                const pendingImportPreview = Vue.shallowRef(null);
                 const externalOnlyUnprocessed = ref(false);
                 const selectedExamTemplate = ref(DEFAULT_PRESET_KEY);
                 const ocrLoading = ref(false);
@@ -193,7 +193,7 @@
                         validateStrictLatex: code => window.Qisi.A4ExamTemplate.validateStrictLatex(code),
                         persistPersonalTree: (nodes, updatedAt) => db.personalKnowledge.put({
                             id: 'tree',
-                            nodes: toRaw(nodes),
+                            nodes: reviewRecordForStorage(nodes),
                             updatedAt
                         }),
                         persistTemplateOverrides: overrides => safeStorage.set(
@@ -22220,6 +22220,10 @@ ${source}`;
 
                 onMounted(async () => {
                     window.addEventListener('beforeunload', releasePrintObjectUrls, { once: true });
+                    // Restore the remembered view synchronously, before the first await. A late
+                    // restore used to overwrite a navigation the teacher had already clicked.
+                    const savedView = safeStorage.get('qisi_last_view');
+                    if (['entry', 'batchImport', 'library', 'exam', 'personal', 'template'].includes(savedView)) view.value = savedView;
                     try {
                         if (navigator.storage?.persist) await navigator.storage.persist();
                     } catch (error) {
@@ -22262,8 +22266,6 @@ ${source}`;
                     editTplName.value = isSystem.name;
                     latexTemplate.value = isSystem.code;
                     syncExamGroups();
-                    const savedView = safeStorage.get('qisi_last_view');
-                    if (['entry', 'batchImport', 'library', 'exam', 'personal', 'template'].includes(savedView)) view.value = savedView;
                 });
 
                 watch(examConfig, (val) => {

@@ -32,8 +32,14 @@ npm start
 
 ```bat
 open-app.cmd
+qisi-server.cmd
 start-app.vbs
 ```
+
+`open-app.cmd` 与 `qisi-server.cmd` 会复用已经健康的本地服务。若 3000
+端口被其他程序占用或旧服务没有响应，启动器不会结束未知进程，而会自动选择
+3001–3010 中的可用端口，并打开正确页面。正常冷启动通常不到 1 秒；启动失败时
+窗口会保留明确诊断信息。
 
 ## 安全测试命令
 

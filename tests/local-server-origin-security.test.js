@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 
 const {
   createQisiLocalServer,
-  isAllowedLocalOrigin
+  isAllowedLocalOrigin,
+  SERVER_BUILD_ID
 } = require('../qisi-local-server.js');
 
 function serviceUrl(service, pathname) {
@@ -48,6 +49,7 @@ test('server factory is inert until start and binds to loopback by default', asy
   assert.deepEqual(await response.json(), {
     ok: true,
     service: 'qisi-local-server',
+    buildId: SERVER_BUILD_ID,
     platform: process.platform,
     port: service.port
   });
