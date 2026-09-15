@@ -118,7 +118,50 @@ recorded solution. That makes this fixture a ready-made wrong-attachment probe: 
 chain must either withhold the answer or flag the conflict, and must never attach `B` while
 claiming a complete result. That measurement is the next step.
 
-Also observed while preparing this: `pdf-master-browser-runner.js dry-run` writes its report
-correctly (`ok: true`, `realApiCalled: false`, zero underlying API calls) but the process does
-not exit afterwards, so it has to be stopped by hand. That is a tooling defect to fix before
-the PDF measurement can run unattended.
+Also observed while preparing this: `pdf-master-browser-runner.js dry-run` wrote its report
+correctly (`ok: true`, `realApiCalled: false`, zero underlying API calls) but the process could
+stay alive afterwards. Fixed: server shutdown is now awaited and the runner exits explicitly
+after flushing its output; four consecutive dry-runs exit on their own with code 0 and leave no
+server process behind.
+
+### 7.1 Measured PDF support baseline (no paid call)
+
+`scripts/measure-pdf-support-accuracy.js` runs the recorded replay through the real support
+chain (`qisi-pdf-support-aligner.js` then
+`qisi-pdf-support-controlled-write.js`) and compares what would be attached with the confirmed
+key.
+
+```text
+aligner mode        full, reliable
+safe answers        1,2,3,4,5,6
+safe solutions      1,2,3,4,5,6
+fused questions     none
+classification      COMPLETE 5, WRONG MATCH 1
+WRONG MATCH         question 6: key C, recorded evidence says B
+```
+
+The wrong question number count is **zero**: answers 1–6 attach to questions 1–6. The single
+wrong match is a wrong *value*, and the recorded evidence says it itself:
+
+```text
+replay support page 2 text: "6【答案】B" then "上、下体积之比为 1:26"
+key:                        question 6 answer C, option C is 1:26
+```
+
+So the recorded answer contradicts the recorded explanation, and the pipeline attaches the
+answer exactly as recorded, with no warning.
+
+Why this is not fixed mechanically: the application already reconciles an answer with an
+explanation when the explanation names a choice ("故选C" and similar) and warns when they
+disagree. This explanation names no choice; it only states a value. Deciding that "1:26" is
+option C would be semantic matching between an answer and free text, which this project
+explicitly forbids for answer attachment. The honest classification is therefore:
+
+**residual risk — a wrong recorded answer whose explanation names no choice cannot be
+detected mechanically and reaches the draft unflagged.** It stays visible in review, where the
+answer and the analysis are shown together.
+
+Two directions were checked and are clean:
+
+- no answer is attached to the wrong question number (no misattachment);
+- no answer is invented when the evidence is missing.
