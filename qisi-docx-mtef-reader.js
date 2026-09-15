@@ -335,7 +335,28 @@
             cursor.skip(4);
             cursor.cString();
             cursor.byte();
-            const rows = readList(cursor);
+            let rows = readList(cursor);
+
+            // A stream may carry more than one section. An equation written this way leaves its
+            // content in a later section, and stopping at the first terminator reported the equation
+            // as empty even though the bytes were right there. Reading on is only a *continuation*:
+            // the second section is used only when the first one produced no content at all, so a
+            // formula that already resolved can never change, and a section that fails to walk still
+            // leaves the object unresolved instead of guessed.
+            if (!structural(rows).some(row => row.latex)) {
+                const start = cursor.index;
+
+                while (cursor.index < cursor.bytes.length && cursor.bytes[cursor.index] === 0) {
+                    cursor.index += 1;
+                }
+
+                if (cursor.index < cursor.bytes.length) {
+                    const extra = readList(cursor);
+                    if (structural(extra).some(row => row.latex)) rows = [...rows, ...extra];
+                } else {
+                    cursor.index = start;
+                }
+            }
             return {
                 ok: true,
                 texSource: texSourceRows(rows)

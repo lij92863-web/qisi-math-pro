@@ -698,6 +698,68 @@ unresolved formulas in one question of 佛山一模).
 - The exam papers have not been compared page by page yet; only the batch-level survey above is
   recorded, so nothing of theirs is marked `VISUALLY_VERIFIED_*`.
 
+## 18. Two class-level rules: later MTEF sections, and answer-key streams (2026-09-16, ninth pass)
+
+Both fixes here were derived from the *shape* of the data, not from one file: the corpus of 1048 real
+OLE equations under `artifacts/` was used to prove that the change moves only what it should.
+
+### 18.1 MTEF: an empty section is not an empty equation
+
+`parseMtef` stopped at the first terminator, so a stream that carries its content in a *later* section
+was reported as `MTEF_EMPTY_EQUATION` even though the bytes were present. The rule is now: if the
+first section produced no content, skip the terminators and read on; the extra section is used only
+when the first one was empty, so an equation that already resolved can never change, and a section
+that fails to walk still leaves the object unresolved.
+
+Proof, corpus-wide (`artifacts/audit-baseline/mtef-corpus-scan.js` over all 1048 real streams):
+
+```text
+before sha256 0b5b45887dafa72668354360bdfaabe474d87aca6410122a383ef16e8893197b
+after  sha256 2505f445de9f62559f3fbf1d2e97f63d3486e3c69c1dd99e4aa14004914af626
+diff: exactly 3 lines, all the same equation in three copies of the file
+      1:27  (简略版题目（只有一页）.docx / 完整版题目.docx option D of question 6)
+      unresolved MTEF_EMPTY_EQUATION  ->  extracted reconstruction "1:27"
+```
+
+1045 of 1048 results are byte-identical, and the three that changed match the value on the page
+(`1:27`, verified visually in the group 1/2 ground truth). On the real group 2 pair this removes the
+withheld question: question 6 now has `$1:27$` in option D and is no longer withheld (withheld 2 → 1;
+question 7 still carries the unresolvable `rId75`).
+
+The remaining 20 `MTEF_UNREADABLE` streams are a *different* class and are deliberately not patched:
+the record walk desynchronises inside their row section (traced byte by byte for `rId75`: the walk
+reads a nested LINE/CHAR/FUTURE sequence where the content sits), so they need the row-layout work
+described in §16.1, not another special case.
+
+### 18.2 Answer key: a stream of entries, located by its heading
+
+`高二.docx` writes its key as `1．2 2．3 3．2 …` with several answers per line, wrapped lines whose
+*first* fragment is the previous entry's value, and (in one place) a lost marker. A line-shaped rule
+cannot read that. The rule now lives in `qisi-utils.js` as `extractInlineAnswerKey`:
+
+- the key starts at a heading line that is `答案` / `参考答案` (optionally with a short title in front,
+  e.g. `高二答案`), so question text is never read as a key;
+- the key is read as one sequence: each `number` + separator starts an entry that runs to the next
+  marker, the fragment before the first marker belongs to no question;
+- a value must be non-empty, at most 80 characters and on **one** line - a value that would continue
+  on the next line is dropped instead of swallowing an orphan fragment whose marker the file lost, so
+  no answer is ever attached to the wrong question;
+- an unusable entry is skipped; its neighbours keep their own values.
+
+Measured on `高二.docx`: answers 0 → 43 of 51 drafts (question 6 stays empty because its marker is
+missing from the key text), 5 questions still withheld, batch still `review` with no contract failure.
+Groups 1, 2 and the exam papers are unchanged (their keys use the labelled `【答案】` form).
+
+### 18.3 Regressions
+
+| behaviour | test |
+| --- | --- |
+| content in a later MTEF section is read; an empty stream stays unresolved | `tests/docx-mtef-reader.test.js` |
+| the corpus-wide comparison above | `artifacts/audit-baseline/mtef-corpus-scan.js` (local evidence) |
+| a key stream with several entries per line, wrapped lines and a heading | `tests/qisi-utils-inline-answer-key.test.js` |
+
+`app.js` grew by 6 lines (the key stream is read in one call); the two bloat ceilings moved with it.
+
 ## 15. Group 1 closed: the withheld question (2026-09-16, sixth pass)
 
 This closes item 2 of section 5 in `docs/integration/HANDOFF_2026_09_16.md`.

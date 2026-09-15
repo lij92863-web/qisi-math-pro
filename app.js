@@ -4952,6 +4952,12 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                         return '';
                     });
 
+                    // An answer key is a stream of entries that may wrap across lines; the rule lives in
+                    // qisi-utils so it can be tested on its own shapes. The existing answers of a
+                    // question always win, because the list keeps the first value for a number.
+                    window.Qisi.Utils.extractInlineAnswerKey(answerPart)
+                        .forEach(entry => addAnswer(entry.questionNumber, entry.answer, 0.8));
+
                     return answers;
                 };
 

@@ -122,3 +122,45 @@ test('a malformed container is unresolved rather than throwing', () => {
     assert.equal(result.status, 'unresolved');
     assert.equal(result.code, 'MTEF_CONTAINER_INVALID');
 });
+
+// Real MathType streams may carry more than one section: the structural terms end first and the
+// equation's content follows after the terminators. Stopping at the first terminator reported such
+// an equation as empty even though its bytes were right there (this is the shape of the 1:27
+// equation of 简略版题目（只有一页）.docx, question 6 option D).
+test('content in a later MTEF section is read instead of reporting an empty equation', () => {
+    const twoSections = Buffer.concat([
+        Buffer.from([5, 1, 0, 6, 9]),
+        Buffer.from('DSMT6\0', 'latin1'),
+        Buffer.from([0]),
+        Buffer.from([0]),                   // the first section ends immediately: no content
+        Buffer.from([2, 0, 0x88, 0x31, 0]), // character '1'
+        Buffer.from([2, 0, 0x82, 0x3a, 0]), // character ':'
+        Buffer.from([2, 0, 0x88, 0x32, 0]), // character '2'
+        Buffer.from([2, 0, 0x88, 0x37, 0]), // character '7'
+        Buffer.from([0])                    // end of the second section
+    ]);
+
+    const result = reader.readFormulaFromOle(
+        buildOleContainer('Equation Native', equationNativeStream(twoSections))
+    );
+
+    assert.equal(result.status, 'extracted');
+    assert.equal(result.origin, 'reconstruction');
+    assert.equal(result.latex, '1:27');
+});
+
+test('a stream whose only section is empty stays unresolved', () => {
+    const empty = Buffer.concat([
+        Buffer.from([5, 1, 0, 6, 9]),
+        Buffer.from('DSMT6\0', 'latin1'),
+        Buffer.from([0]),
+        Buffer.from([0])
+    ]);
+
+    const result = reader.readFormulaFromOle(
+        buildOleContainer('Equation Native', equationNativeStream(empty))
+    );
+
+    assert.equal(result.status, 'unresolved');
+    assert.equal(result.code, 'MTEF_EMPTY_EQUATION');
+});

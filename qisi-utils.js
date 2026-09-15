@@ -1111,6 +1111,46 @@
         // Splits flat recognition text into one block per question. The same two marker rules above
         // apply, so a mark-sheet numbering row can never become a question and an image-token
         // prefixed marker still counts.
+        // An answer key is a *stream* of "number separator value" entries: several answers sit on one
+        // line, and a line may begin with the tail of the previous entry, so neither a line-anchored
+        // marker nor a line-shaped rule can read it. The key is therefore located by its heading
+        // ("答案" / "参考答案" on its own or as the tail of a title line) and read as one sequence:
+        // each marker starts an entry that runs to the next marker, the fragment before the first
+        // marker belongs to no question, and an unusable value is skipped rather than trusted.
+        const ANSWER_KEY_HEADING_RE = /^(?:.{0,12}?)?(?:参考答案|答案)$/;
+
+        const extractInlineAnswerKey = (rawText = '') => {
+            const lines = String(rawText || '').split(/\r?\n/);
+            const headingIndex = lines.findIndex(line => ANSWER_KEY_HEADING_RE.test(line.trim()));
+
+            if (headingIndex < 0) return [];
+
+            const keyText = lines.slice(headingIndex + 1).join('\n')
+                .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248));
+            const markers = [...keyText.matchAll(/(?:^|[\s\u3000])(\d{1,3})\s*[.．、:：\)）]/g)];
+
+            if (markers.length < 2) return [];
+
+            const entries = [];
+
+            markers.forEach((marker, index) => {
+                const valueStart = marker.index + marker[0].length;
+                const valueEnd = index + 1 < markers.length ? markers[index + 1].index : keyText.length;
+                const value = keyText.slice(valueStart, valueEnd).trim();
+                const questionNumber = String(Number(marker[1]));
+
+                if (!questionNumber || questionNumber === '0') return;
+                if (!value || value.length > 80) return;
+                // A value must stay inside its own line. A fragment that continues on the next line
+                // belongs to an entry whose marker the file lost; merging it into this entry would
+                // attach another question's answer, and dropping it only leaves that answer empty.
+                if (/\n/.test(value)) return;
+                entries.push({ questionNumber, answer: value });
+            });
+
+            return entries;
+        };
+
         const splitFlatTextIntoQuestionBlocks = (rawText = '') => {
             const source = cleanRecognizedText(rawText)
                 .replace(/\r/g, '\n')
@@ -1213,6 +1253,7 @@
             sanitizeLatexWrapperArtifacts,
             splitAnswerSolutionSections,
             splitFlatTextIntoQuestionBlocks,
+            extractInlineAnswerKey,
             stripBatchImagePlaceholders,
             splitQuestionForStorage,
             stripAnswerSolution,

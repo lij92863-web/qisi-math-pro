@@ -38,5 +38,5 @@ test('migrated module scripts load before app and app remains below baseline', (
     // the deterministic-first DOCX orchestration added the enrichment-gap handling, the skeleton
     // contract and the deterministic support parsing; the 2026-09-16 rounds added the withheld
     // question rule and the active-anchor/no-promotion support rules.
-    assert.ok(app.split(/\r?\n/).length < 22139);
+    assert.ok(app.split(/\r?\n/).length < 22145);
 });
