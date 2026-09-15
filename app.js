@@ -13701,12 +13701,6 @@ ${source}`;
                             .length ||
                         diagnostics
                             .conflictingSupportNumbers
-                            .length ||
-                        diagnostics
-                            .missingAnswerNumbers
-                            .length ||
-                        diagnostics
-                            .missingSolutionNumbers
                             .length
                     ) {
                         return fail(
@@ -13714,6 +13708,11 @@ ${source}`;
                         );
                     }
 
+                    // Missing answers or solutions are an evidence gap, not a contradiction: the
+                    // questions stay in review with the fields empty and marked for manual/visual
+                    // review, instead of failing the whole batch. A support item that belongs to the
+                    // wrong question, appears twice or has no number is still fatal above, because
+                    // that is what could attach an answer to the wrong question.
                     return {
                         ok: true,
                         allowedQuestionNumbers,
@@ -17062,6 +17061,76 @@ ${source}`;
                                                 code: docxVisualEnrichmentGap.code,
                                                 message: docxVisualEnrichmentGap.message
                                             });
+
+                                            // Deterministic-first for the answer/solution file: the DOCX text
+                                            // is parsed with the same parser the rest of the batch uses, so
+                                            // the answers and solutions are attached with their own source
+                                            // provenance. Nothing is guessed: a question whose answer is not
+                                            // stated in the file simply stays empty for manual review.
+                                            try {
+                                                const supportText = await extractTextFromDraftFile(file);
+                                                if (supportText) draftFileTextCache.set(file.id, supportText);
+
+                                                const parsedSupport = supportText
+                                                    ? parseAnswerAndSolutionItemsFromText(supportText, file)
+                                                    : { answers: [], solutions: [] };
+
+                                                // Scope the support file to the questions this batch owns.
+                                                // The answer file may cover more questions (it is shared with
+                                                // another paper); items outside the contract are reported as
+                                                // unmatched instead of being attached to the wrong question.
+                                                const contractNumbers = new Set(
+                                                    (
+                                                        authoritativeQuestionContract
+                                                            ?.questionNumbers || []
+                                                    )
+                                                        .map(value => normalizeQuestionKey(value))
+                                                        .filter(Boolean)
+                                                );
+                                                const belongsToContract = item => {
+                                                    const number = normalizeQuestionKey(
+                                                        item?.questionNumber ||
+                                                        item?.question ||
+                                                        item?.order ||
+                                                        ''
+                                                    );
+                                                    return Boolean(number) && contractNumbers.has(number);
+                                                };
+                                                const supportAnswers = (parsedSupport.answers || [])
+                                                    .filter(belongsToContract);
+                                                const supportSolutions = (parsedSupport.solutions || [])
+                                                    .filter(belongsToContract);
+                                                const outsideContract = (parsedSupport.answers || []).length
+                                                    - supportAnswers.length
+                                                    + ((parsedSupport.solutions || []).length
+                                                        - supportSolutions.length);
+
+                                                answerItems.push(...supportAnswers);
+                                                solutionItems.push(...supportSolutions);
+                                                if (outsideContract > 0) {
+                                                    unmatchedAnswers.value = [
+                                                        ...(unmatchedAnswers.value || []),
+                                                        {
+                                                            fileId: file.id,
+                                                            filename: file.filename,
+                                                            count: outsideContract,
+                                                            reason: 'outside-question-contract'
+                                                        }
+                                                    ];
+                                                }
+
+                                                console.log('[BATCH_DEBUG][docx-support-deterministic-parsed]', {
+                                                    filename: file.filename,
+                                                    answerCount: supportAnswers.length,
+                                                    solutionCount: supportSolutions.length,
+                                                    outsideContract
+                                                });
+                                            } catch (supportParseError) {
+                                                console.warn('[BATCH_DEBUG][docx-support-deterministic-parse-failed]', {
+                                                    filename: file.filename,
+                                                    message: supportParseError?.message || String(supportParseError)
+                                                });
+                                            }
                                         }
 
                                         if (!supportVisualUnavailable) {
