@@ -4302,7 +4302,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             console.log('textHead =', String(text || '').slice(0, 2000));
                             console.groupEnd();
 
-                            const hasDocxXmlLeak = /<\/?w:[a-zA-Z]+|<\/?m:[a-zA-Z]+|<\/?wp:[a-zA-Z]+|<\/?a:[a-zA-Z]+/.test(String(text || ''));
+                            const hasDocxXmlLeak = window.Qisi.DocxPipeline.hasOfficeXmlMarkup(text);
 
                             if (hasDocxXmlLeak) {
                                 const stripped = xmlText(text || '');

@@ -653,6 +653,14 @@
             });
         };
 
+        // Namespace-generic Office XML markup detector. The previous inline check enumerated only
+        // w:/m:/wp:/a:, so a leaked <o:OLEObject ...> or <v:shape ...> fragment (Office OLE / VML
+        // namespaces) never tripped the leak guard and its tag names and attribute values
+        // (ObjectID="...", r:id="...") reached the question text. A tag name must contain a
+        // namespace prefix, which keeps ordinary prose and maths such as "a<b" or "$a<b$" untouched.
+        const hasOfficeXmlMarkup = (value = '') =>
+            /<\/?[A-Za-z][A-Za-z0-9]*:[A-Za-z][A-Za-z0-9]*(?:\s[^<>]*)?\/?>/.test(String(value || ''));
+
         // ---------------------------------------------------------------- MATHTYPE / MTEF ----
         // A MathType equation arrives as <w:object> wrapping an OLE/CFB container. Everything the
         // container can tell us that is *not* the equation (the Word control flag, the preview
@@ -772,6 +780,7 @@
             debugDocxXmlStructure,
             decodeXmlEntitiesSafe,
             stripXmlTagsForDocxText,
+            hasOfficeXmlMarkup,
             extractPlainTextFromDocxOptionXmlFragment,
             splitDocxParagraphsForOptionMap,
             findUploadedVisualCompanionForDocx,
