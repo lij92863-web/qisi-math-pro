@@ -5,8 +5,8 @@
   "blobHashAlgorithm": "sha256 of the file with line endings normalised to LF",
   "approvedFiles": {
     "app.js": {
-      "gitBlob": "4d1a743295980d577e0966402e74e329bfd9fd46",
-      "contentSha256": "06d6069cbd8188da9505a1688f276d81f85c2628ea30d50ab1db094a9267ae55",
+      "gitBlob": "6c684441f6895ae979188737f0186a57a51f06f8",
+      "contentSha256": "408bb3f0df94ca1cb0cc695e9ab2eff87f6db1081497439c49b75f7d10a3672d",
       "authorisedAt": "2026-09-15",
       "reason": "Fail-closed candidate merge (answer/solution conflicts become sticky and block formal admission) plus teacher-facing reliability fixes: the remembered view is restored before the first await, and a failed card edit is reported and rolled back to the stored truth. Then the deterministic MathType/MTEF restoration: the app's existing DOCX extraction path resolves each MathType OLE object through Qisi.DocxPipeline, keeps the formula evidence per file, and never reads the OLE control text.",
       "ledger": "docs/integration/HARDENING_INTEGRATION_LEDGER_2026_09_15.md"

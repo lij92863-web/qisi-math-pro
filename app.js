@@ -16733,6 +16733,10 @@ ${source}`;
                             await db.draftImportFiles.update(file.id, { parseStatus: 'processing', updatedAt: Date.now() });
                             try {
                                 let usedVisualRecognition = false;
+                                // Set when the visual step could not run: the DOCX deterministic evidence
+                                // still has to produce a safe draft set, with the gap recorded.
+                                let needsVisualEnrichment = false;
+                                let docxVisualEnrichmentGap = null;
                                 const isFullRole = batchIsFullRole(file);
                                 const hasQuestionRole = batchHasQuestionRole(file);
                                 const hasAnswerOrSolutionRole = batchHasAnswerRole(file) || batchHasSolutionRole(file);
@@ -16861,7 +16865,35 @@ ${source}`;
                                             );
                                         }
 
-                                        throw error;
+                                        // Deterministic-first: the visual step is enrichment, not a gate.
+                                        // The DOCX itself already carries the text, the paragraph and
+                                        // table structure, the MathType/MTEF formulas and the media, so a
+                                        // transport or API failure must not throw the whole batch away.
+                                        // The gap is recorded and the deterministic DOCX importer below
+                                        // produces the drafts; only items that really lack visual evidence
+                                        // are marked for visual enrichment.
+                                        const failure = window.Qisi.Utils.describeVisualServiceFailure(error, 'DOCX 视觉增强');
+
+                                        needsVisualEnrichment = true;
+                                        docxVisualEnrichmentGap = {
+                                            stage: error?.stage || 'visual-recognition',
+                                            code: window.Qisi.Utils.classifyVisualServiceFailure(error).code,
+                                            message: failure
+                                        };
+
+                                        console.warn('[BATCH_DEBUG][docx-visual-enrichment-gap]', {
+                                            filename: file.filename,
+                                            stage: docxVisualEnrichmentGap.stage,
+                                            code: docxVisualEnrichmentGap.code,
+                                            message: failure
+                                        });
+
+                                        await db.draftImportFiles.update(file.id, {
+                                            parseStatus: 'partial',
+                                            errorMessage:
+                                                `${failure} 已改用 DOCX 确定性证据继续（题号/题干/选项/公式/图片/答案/解析均来自 DOCX 本身）。`,
+                                            updatedAt: Date.now()
+                                        });
                                     }
                                 }
 
@@ -16958,7 +16990,14 @@ ${source}`;
                                             }
                                         );
 
-                                        const supportResult =
+                                        // Deterministic-first: the answers and solutions were already parsed
+                                        // from the support DOCX text, so the page-image upgrade is optional.
+                                        // A transport or API failure here records a gap instead of ending the
+                                        // batch, and only items that really lack evidence ask for enrichment.
+                                        let supportResult = null;
+                                        let supportVisualUnavailable = false;
+                                        try {
+                                            supportResult =
                                             await processStandaloneDocxSupportByVision({
                                                 file,
                                                 expectedQuestionNumbers,
@@ -17008,34 +17047,65 @@ ${source}`;
                                                         );
                                                     }
                                             });
+                                        } catch (supportError) {
+                                            supportVisualUnavailable = true;
+                                            needsVisualEnrichment = true;
+                                            docxVisualEnrichmentGap = docxVisualEnrichmentGap || {
+                                                stage: 'docx-support-vision',
+                                                code: window.Qisi.Utils.classifyVisualServiceFailure(supportError).code,
+                                                message: window.Qisi.Utils.describeVisualServiceFailure(supportError, '答案/解析视觉增强')
+                                            };
 
-                                        answerItems.push(
-                                            ...(supportResult.answers || [])
-                                        );
+                                            console.warn('[BATCH_DEBUG][docx-support-visual-enrichment-gap]', {
+                                                filename: file.filename,
+                                                stage: docxVisualEnrichmentGap.stage,
+                                                code: docxVisualEnrichmentGap.code,
+                                                message: docxVisualEnrichmentGap.message
+                                            });
+                                        }
 
-                                        solutionItems.push(
-                                            ...(supportResult.solutions || [])
-                                        );
+                                        if (!supportVisualUnavailable) {
+                                            answerItems.push(
+                                                ...(supportResult.answers || [])
+                                            );
 
-                                        rememberPageImages(
-                                            supportResult.pageImages || [],
-                                            file
-                                        );
+                                            solutionItems.push(
+                                                ...(supportResult.solutions || [])
+                                            );
 
-                                        usedVisualRecognition = true;
+                                            rememberPageImages(
+                                                supportResult.pageImages || [],
+                                                file
+                                            );
 
-                                        await db.draftImportFiles.update(
-                                            file.id,
-                                            {
-                                                parseStatus:
-                                                    'success',
-                                                errorMessage:
-                                                    '答案/解析 DOCX 已转 PDF 并完成视觉识别：' +
-                                                    `${supportResult.pdfRecord?.filename || ''}`,
-                                                updatedAt:
-                                                    Date.now()
-                                            }
-                                        );
+                                            usedVisualRecognition = true;
+
+                                            await db.draftImportFiles.update(
+                                                file.id,
+                                                {
+                                                    parseStatus:
+                                                        'success',
+                                                    errorMessage:
+                                                        '答案/解析 DOCX 已转 PDF 并完成视觉识别：' +
+                                                        `${supportResult.pdfRecord?.filename || ''}`,
+                                                    updatedAt:
+                                                        Date.now()
+                                                }
+                                            );
+                                        } else {
+                                            await db.draftImportFiles.update(
+                                                file.id,
+                                                {
+                                                    parseStatus:
+                                                        'partial',
+                                                    errorMessage:
+                                                        `${docxVisualEnrichmentGap.message} ` +
+                                                        '已改用 DOCX 确定性答案/解析继续。',
+                                                    updatedAt:
+                                                        Date.now()
+                                                }
+                                            );
+                                        }
 
                                         await updateBatchProgress(
                                             batchId,
@@ -17577,6 +17647,45 @@ ${source}`;
                                     const expectedDocxQuestionCount = 0;
                                     const companionVisualFile = window.Qisi.DocxPipeline.findUploadedVisualCompanionForDocx(file, processFiles);
 
+                                    // The answer/solution file needs a question-number contract, which the
+                                    // visual path used to be the only source of. The DOCX skeleton is the
+                                    // same evidence without vision, so it becomes the contract whenever it
+                                    // is authoritative; otherwise the gap is recorded instead of guessing.
+                                    if (!authoritativeQuestionContract) {
+                                        try {
+                                            const skeleton = await window.QisiBatchImporter
+                                                .extractDocxQuestionSkeleton(file);
+
+                                            if (skeleton?.authoritative) {
+                                                registerAuthoritativeQuestionContract({ file, skeleton });
+
+                                                console.log('[BATCH_DEBUG][docx-skeleton-contract]', {
+                                                    filename: file.filename,
+                                                    questionNumbers: skeleton.questionNumbers
+                                                });
+                                            } else {
+                                                needsVisualEnrichment = true;
+                                                docxVisualEnrichmentGap = docxVisualEnrichmentGap || {
+                                                    stage: 'docx-question-skeleton',
+                                                    code: `SKELETON_${String(skeleton?.diagnostics?.reason || 'not-authoritative').toUpperCase()}`,
+                                                    message:
+                                                        `DOCX 题号骨架不可靠（${skeleton?.diagnostics?.reason || 'unknown'}），` +
+                                                        '答案/解析对位需要人工或视觉确认。'
+                                                };
+
+                                                console.warn('[BATCH_DEBUG][docx-skeleton-not-authoritative]', {
+                                                    filename: file.filename,
+                                                    diagnostics: skeleton?.diagnostics || null
+                                                });
+                                            }
+                                        } catch (skeletonError) {
+                                            console.warn('[BATCH_DEBUG][docx-skeleton-failed]', {
+                                                filename: file.filename,
+                                                message: skeletonError?.message || String(skeletonError)
+                                            });
+                                        }
+                                    }
+
                                     if (companionVisualFile) {
                                         const expected = batchExpectedCount || expectedDocxQuestionCount || 0;
 
@@ -17706,6 +17815,42 @@ ${source}`;
                                     }
 
                                     if (docxImporterItems.length > 0) {
+                                        if (needsVisualEnrichment) {
+                                            // The gap belongs to the whole file, but only the items whose
+                                            // own evidence is incomplete need a human/visual look; the
+                                            // rest stay usable on DOCX evidence alone.
+                                            docxImporterItems = docxImporterItems.map(item => {
+                                                const evidence = JSON.stringify({
+                                                    stem: item?.stem || '',
+                                                    options: item?.options || [],
+                                                    solution: item?.solution || ''
+                                                });
+                                                const incomplete = /\[\[MTEF_UNRESOLVED:/.test(evidence)
+                                                    || /公式图片|待识别|待转换/.test(evidence);
+                                                const gapNote =
+                                                    `NEEDS_VISUAL_ENRICHMENT：${docxVisualEnrichmentGap.message}`;
+
+                                                return {
+                                                    ...item,
+                                                    visualEnrichmentGap: docxVisualEnrichmentGap,
+                                                    ...(incomplete
+                                                        ? {
+                                                            needsVisualEnrichment: true,
+                                                            warnings: [
+                                                                ...(Array.isArray(item.warnings) ? item.warnings : []),
+                                                                gapNote
+                                                            ]
+                                                        }
+                                                        : {})
+                                                };
+                                            });
+
+                                            await db.draftImportBatches.update(batchId, {
+                                                recognitionEnrichmentGap: docxVisualEnrichmentGap,
+                                                updatedAt: Date.now()
+                                            });
+                                        }
+
                                         if (isFullRole) {
                                             fullItems.push(...docxImporterItems);
                                         } else {
