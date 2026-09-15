@@ -107,6 +107,52 @@ covered in `handout-h3/h5/h6/h7` tests.
 
 ## 7. Test suite assessment (first pass)
 
+### 7.0 Inventory
+
+`scripts/audit-test-suite-inventory.js` writes `docs/audit/TEST_SUITE_INVENTORY.md`: 142 test
+files, 1376 declared tests, 21 browser-based, 5 server-based, 0 files that only check that a
+function exists. New real-path coverage added during this work:
+`tests/teacher-daily-flow.test.js` (enter → save → search → edit → reload → exam → print),
+`tests/latex-render-surfaces.test.js`, `tests/startup-view-restore.test.js`,
+`tests/handout-insert-autosave-race.test.js`,
+`tests/handout-undo-keeps-storage-revision.test.js`,
+`tests/question-number-normalization-contract.test.js`,
+`tests/docx-math-integrity-partition.test.js`, `tests/latex-display-corpus.test.js`.
+
+### 7.0.1 One structural test hazard, recorded not deleted
+
+`tests/qisi-app-display-cleaners-fixtures.test.js` (144 tests, about a tenth of the suite)
+does not load the application. `scripts/bm-a4-helper-extract.js` finds the helpers in
+`app.js` **by text pattern** (`const name = ... => { ... }`), extracts their source and runs
+the copies in a VM with a stubbed `window.Qisi.Utils`. The logic is genuinely covered, but the
+coverage is decoupled from the real page: how the application registers or calls those helpers
+is not exercised. The same behaviour is reachable through `qisi-utils`, which is where the
+helpers delegate. Recommendation recorded for the next pass: move the cases to a
+`qisi-utils`-level table and cover the real path through the browser flows already added, then
+retire the extraction suite. It is **not deleted now**, because removal has to be proven safe
+first.
+
+### 7.1 Duplicate-rule sweep
+
+`scripts/audit-duplicate-and-dead-code.js` reports every name defined in more than one
+file (117 at the time of writing) and every export nothing else references. The risky area
+— question numbers, options, answers, solutions, roles, images — was reviewed name by name:
+
+| Candidate | Finding |
+| --- | --- |
+| `normalizeQuestionNumber` in six modules | **real divergence**, see below |
+| `cleanOptions` in the batch engine and the final gate | delegate-first: the engine calls the injected `cleanDisplayOptionsForBatchSave` with a local fallback, the gate requires the policy and throws if it is missing. One rule, two call styles. |
+| `batchHasQuestionRole` / `batchIsFullRole` in the pipeline and the file dispatcher | delegate-first: the pipeline calls the dispatcher when it is loaded and keeps a local fallback otherwise |
+| `cleanDisplayTextForBatchSave`, `cleanDisplayOptionsForBatchSave` in `app.js` | thin delegates to `qisi-utils`, which owns the rule |
+| the `*ForV2` helpers in `app.js` | thin delegates to `qisi-docx-pipeline` |
+
+The one real divergence was in the PDF ownership gate: it did not normalise fullwidth
+digits, so an answer read from fullwidth PDF text was silently not attached, and it accepted
+`0` as a question number while the other implementations reject it. Both are fixed and pinned
+by `tests/question-number-normalization-contract.test.js`. A probe also confirmed the parser
+already handled fullwidth digits, so the parser was deliberately left unchanged rather than
+carrying a redundant edit.
+
 Kept as high-value contracts: `import-failure-recovery`, `handout-insert-autosave-race`,
 `startup-view-restore`, `latex-display-corpus`, PDF known-bad suite, DOCX stable suite,
 `handout-h3/h5/h6/h7` real-browser flows, `app-ui-navigation-browser`.
