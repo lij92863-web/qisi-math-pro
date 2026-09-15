@@ -790,7 +790,14 @@ test('top-level application views remain navigable in an isolated browser contex
             hasText: '按钮验收外部题库'
         });
         await externalBatch.click();
-        await externalBatch.getByText('重新计算', { exact: true }).click();
+        // This action ends with an alert. Leaving it unconsumed let a stray modal be picked up
+        // by the next clickWithDialog() call, so the delete confirmation below could be
+        // dismissed or accepted by the wrong dialog and the assertion lost its meaning.
+        await clickWithDialog(
+            page,
+            externalBatch.getByText('重新计算', { exact: true }),
+            'accept'
+        );
 
         const failedBatch = seededLibraryRoot.locator('.external-batch-item.failed', {
             hasText: '可删除失败批次'

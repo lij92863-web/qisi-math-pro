@@ -259,13 +259,26 @@ test('H3 browser completes the structured editor workflow without source writes'
         await page.locator(
             '[data-question-id="formal-h3-question"]'
         ).click();
-        await page.locator('.editor-block.block-question').waitFor({
-            state: 'visible',
-            // The full Node suite launches several isolated browser/compiler
-            // workflows concurrently. Keep the functional assertion strict,
-            // but allow the same operation to survive transient CI contention.
-            timeout: 120_000
-        });
+        try {
+            await page.locator('.editor-block.block-question').waitFor({
+                state: 'visible',
+                // The full Node suite launches several isolated browser/compiler
+                // workflows concurrently, so the wait stays generous. On failure the
+                // handout page's own reason is reported instead of a bare locator
+                // timeout, because "the block did not appear" alone is not diagnosable.
+                timeout: 60_000
+            });
+        } catch (insertError) {
+            const diagnostics = await page.evaluate(() => ({
+                notice: (document.querySelector('.notice')?.textContent || '').trim(),
+                saveState: document.querySelector('.save-state')?.className || '',
+                blocks: document.querySelectorAll('.editor-block').length,
+                questionBlocks: document.querySelectorAll('.editor-block.block-question').length,
+                libraryRows: document.querySelectorAll('[data-question-id]').length
+            })).catch(error => ({ diagnosticsUnavailable: String(error?.message || error) }));
+            insertError.message += ' | handout insert diagnostics: ' + JSON.stringify(diagnostics);
+            throw insertError;
+        }
         assert.equal(await page.locator('.editor-block').count(), 6);
 
         for (const tabId of [
