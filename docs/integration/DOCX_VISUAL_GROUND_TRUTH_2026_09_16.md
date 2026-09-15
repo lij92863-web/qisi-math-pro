@@ -73,6 +73,25 @@ unlabelled answer value), both of which are now fixed and regression-tested.
 
 ## 5. What this round does **not** claim
 
+## 6. Survey of the remaining groups (batch level only)
+
+After the archive-policy fix of ledger §17 every remaining real file runs; none of them has been
+compared page by page yet, so nothing here is marked `VISUALLY_VERIFIED_*` except groups 1 and 2.
+
+```text
+高二.docx (full)                        review   51 questions   0 answers   5 withheld
+河北昌黎第一中学…数学试卷.docx           review   19            19          4
+广东佛山市第一中学…数学试题.docx         review   19            19          7
+广东深圳高级中学…数学试卷 (1).docx       review   19            18          4
+广东省十二所重点中学校…数学试题.docx     review   19            18          10
+湖北省武汉市…数学试题.docx               review   19            18          5
+题目+答案.docx                          review   14            14          4
+2026年7月9日高中数学作业.docx           not present in the materials folder
+```
+
+Two things to look at next for these groups: the answer key of `高二.docx` (several answers per line)
+and the unresolved formulas that keep 4-10 questions per exam paper withheld.
+
 - No other group has been looked at yet (the handoff's items 4 and 5), so nothing outside group 1 may
   be marked `VISUALLY_VERIFIED_*`.
 - Two image facts are recorded as gaps, not as verified content:

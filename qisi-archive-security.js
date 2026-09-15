@@ -47,7 +47,11 @@
                 'application/x-zip-compressed'
             ],
             allowedEntry: path =>
-                /^(?:\[Content_Types\]\.xml|_rels\/\.rels|(?:word|xl|docProps)\/[a-zA-Z0-9._/-]+\.(?:xml|rels|png|jpe?g|gif|webp|svg|bmp|emf|wmf|bin|vml))$/i.test(path)
+                // customXml is a standard Word part (custom XML data plus its own rels). Word and the
+                // exam-paper exporters both write it, and rejecting it made the whole DOCX refuse to
+                // open, so a paper that carries it produced no drafts at all. Traversal, nested
+                // archives, entry counts and the size/ratio ceilings are unchanged.
+                /^(?:\[Content_Types\]\.xml|_rels\/\.rels|customXml\/[a-zA-Z0-9._/-]+\.(?:xml|rels|bin|txt)|(?:word|xl|docProps)\/[a-zA-Z0-9._/-]+\.(?:xml|rels|png|jpe?g|gif|webp|svg|bmp|emf|wmf|bin|vml))$/i.test(path)
         }
     };
 

@@ -633,13 +633,70 @@ afterwards and are unchanged.
 
 ### 16.4 Still open
 
-- The remaining groups of item 4 (`高二.docx`, `2026年7月9日高中数学作业.docx`, the five exam papers)
-  have not been run yet.
+- The remaining groups of item 4 are covered in §17.
 - Group 3's pages have not been looked at yet (that material ships no PDF and the local LibreOffice
   conversion timed out during this session), so group 3 is batch-verified but not visually verified.
 - The reader gap above: `MTEF_EMPTY_EQUATION` / `MTEF_UNREADABLE` on real equations whose payload is
   present (rId71 and rId75 of group 2, and 13 more formulas in group 3). Until it is closed, those
   questions stay withheld, which is fail-closed but costs the teacher manual work.
+
+## 17. The archive policy blocked seven real papers (2026-09-16, eighth pass)
+
+### 17.1 The defect
+
+Running the rest of item 4 showed that seven of the thirteen real DOCX files produced **zero drafts**
+with no AI request at all: `高二.docx`, `题目+答案.docx`, all five exam papers
+(`广东佛山市第一中学…`, `广东深圳高级中学…`, `广东省十二所重点中学校…`, `河北昌黎第一中学…`,
+`湖北省武汉市…`) and, as it turned out, every file written by the same exporter.
+
+The cause is in the archive policy: Word and those exporters write the standard OOXML
+`customXml/item1.xml`, `customXml/itemProps1.xml` and `customXml/_rels/item1.xml.rels` parts, and
+`office-document`'s entry allow-list only knew `[Content_Types].xml`, `_rels/.rels` and
+`word|xl|docProps/…`. The whole document was therefore rejected (`ARCHIVE_ENTRY_NOT_ALLOWED`), the
+text layer came back empty, the DOCX importer had the same rejection, and the batch ended in
+`识别流程最终没有生成题目` after 85 ms.
+
+Evidence: a scan of the real files' zip entries (431-1288 entries each, all within the 5000 entry
+ceiling) found the three `customXml` parts in exactly the seven files that failed; the batch log of
+`高二.docx` showed `questionItems=0, fullItems=0, answerItems=0, solutionItems=0` and
+`totalDurationMs=83`.
+
+### 17.2 The fix
+
+`qisi-archive-security.js` `office-document` now allows `customXml/…` (xml, rels, bin, txt). Nothing
+else moved: traversal, nested archives, the entry-count ceiling, the size ceilings and the
+compression-ratio ceiling are untouched, and the new `ARCHIVE_PATH_TRAVERSAL` /
+`ARCHIVE_NESTED_ARCHIVE` / `ARCHIVE_ENTRY_NOT_ALLOWED` cases are asserted again in
+`tests/archive-security.test.js` so the allowance cannot widen the other rules.
+
+### 17.3 Measured result
+
+```text
+file                                   status   drafts  answers  withheld
+高二.docx (full)                        review   51      0        5
+河北昌黎第一中学…数学试卷.docx           review   19      19       4
+广东佛山市第一中学…数学试题.docx         review   19      19       7
+广东深圳高级中学…数学试卷 (1).docx       review   19      18       4
+广东省十二所重点中学校…数学试题.docx     review   19      18       10
+湖北省武汉市…数学试题.docx               review   19      18       5
+题目+答案.docx                          review   14      14       4
+```
+
+Every one of these produced 0 drafts before the fix. The questions, types and options now come from
+the papers themselves; the `withheld` questions are the MTEF reader gap of §16.1 (up to 16
+unresolved formulas in one question of 佛山一模).
+
+### 17.4 Findings that are not fixed here
+
+- `高二.docx` gives 51 questions and **no answers**: its answer key is written several answers per
+  line (`34．6 35．… 36．45 …`), and the answer marker rule requires a line start. Reading that shape
+  safely (an answer key is the one place where a mid-line marker really is a marker) is its own task
+  with its own regressions - it must never attach an answer to the wrong question.
+- `2026年7月9日高中数学作业.docx`, which the handoff lists for this item, is **not in the materials
+  folder** (`题目与答案`). The only similarly named file on disk is a 2025 paper from another folder.
+  It has to be located by the owner or dropped from the list.
+- The exam papers have not been compared page by page yet; only the batch-level survey above is
+  recorded, so nothing of theirs is marked `VISUALLY_VERIFIED_*`.
 
 ## 15. Group 1 closed: the withheld question (2026-09-16, sixth pass)
 

@@ -93,6 +93,43 @@ test('archive policy validates input extension and MIME allowlists', () => {
     'ARCHIVE_INPUT_MIME_NOT_ALLOWED');
 });
 
+// Word and the exam-paper exporters write a standard customXml part; rejecting it made the whole
+// document refuse to open, so every paper that carries it produced no drafts at all.
+test('a Word document that carries the standard customXml part is accepted', () => {
+    const policy = createArchivePolicy('office-document');
+    const result = validateArchive(zip([
+        entry('[Content_Types].xml', 20, 200),
+        entry('_rels/.rels', 20, 200),
+        entry('customXml/item1.xml', 20, 200),
+        entry('customXml/itemProps1.xml', 20, 200),
+        entry('customXml/_rels/item1.xml.rels', 20, 200),
+        entry('word/document.xml', 20, 200),
+        entry('word/embeddings/oleObject1.bin', 20, 200)
+    ]), policy, {
+        name: 'paper.docx',
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.entryCount, 7);
+});
+
+test('the customXml allowance does not widen the other archive rules', () => {
+    const policy = createArchivePolicy('office-document');
+
+    assert.equal(validateArchive(zip([
+        entry('customXml/../evil.xml', 10, 10)
+    ]), policy).code, 'ARCHIVE_PATH_TRAVERSAL');
+
+    assert.equal(validateArchive(zip([
+        entry('customXml/payload.zip', 10, 10)
+    ]), policy).code, 'ARCHIVE_NESTED_ARCHIVE');
+
+    assert.equal(validateArchive(zip([
+        entry('customXml/script.js', 10, 10)
+    ]), policy).code, 'ARCHIVE_ENTRY_NOT_ALLOWED');
+});
+
 test('all production archive readers are wired through the security owner', () => {
     const root = path.resolve(__dirname, '..');
     for (const file of ['app.js', 'qisi-backup.js', 'qisi-batch-importer.js']) {
