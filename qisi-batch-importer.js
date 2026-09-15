@@ -429,9 +429,53 @@
         return paragraphs;
     };
 
+    // A line made only of question numbers ("11. 12.", "11. 12. 13.") is the paper's number strip or
+    // a section title, not the start of a question: exam papers print the numbers of the section
+    // next to its heading. Reading it as a question invented a duplicate "11" for a real paper whose
+    // questions are 1..12, and the duplicate then failed the whole skeleton.
+    //
+    // A single marker alone on a line is left alone, because some papers write "3." on one line and
+    // the stem on the next; only a list of two or more numbers with nothing else is a strip.
+    const isQuestionNumberListLine = (
+        value = ''
+    ) => {
+        const firstLine =
+            String(normalizeDocxText(value))
+                .split('\n')[0]
+                .trim();
+
+        if (!firstLine) return false;
+
+        let rest = firstLine;
+        let markers = 0;
+
+        while (markers < 6) {
+            const parsed =
+                parseLeadingQuestionMarker(rest);
+
+            if (
+                !parsed.questionNumber ||
+                parsed.markerLength <= 0
+            ) {
+                break;
+            }
+
+            rest = rest
+                .slice(parsed.markerLength)
+                .trim();
+            markers += 1;
+        }
+
+        return markers >= 2 && !rest;
+    };
+
     const getQuestionNoFromLine = (
         line = ''
     ) => {
+        if (isQuestionNumberListLine(line)) {
+            return '';
+        }
+
         return parseLeadingQuestionMarker(
             line
         ).questionNumber;
