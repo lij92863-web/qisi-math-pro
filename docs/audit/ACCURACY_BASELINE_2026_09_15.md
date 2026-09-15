@@ -37,9 +37,17 @@ drafts produced     5 (questions 1,2,3,4,5)
 classification      COMPLETE 4, SAFE PARTIAL 1, FAILED 1 (question 6 withheld on purpose)
 WRONG MATCH         0
 answers             1=B, 2=C, 3=B, 4=C, 5=D  — every produced answer matches the key
-options             19 of 20 rendered-equal to the key
+options             19 of 20 rendered-equal to the key (option D of question 3 read `-1-1`)
 MathType launches   0
 AI/OCR calls        0
+```
+
+After the TeX-input record fix (finding 3 below) the same measurement reads:
+
+```text
+classification      COMPLETE 5, FAILED 1 (question 6 withheld on purpose)
+WRONG MATCH         0
+options             20 of 20 rendered-equal to the key
 ```
 
 Question 6 contains a formula that neither the native runtime nor the deterministic MTEF
@@ -52,7 +60,7 @@ diagnostics instead of blocking questions 1–5. Nothing incomplete or wrong rea
 | --- | --- | --- | --- |
 | 1 | One unconvertible formula aborted the whole DOCX paper | batch status `failed`, 0 drafts, `missingPreviewRids: ["rId72"]` | fixed: affected question is withheld and reported; limits are unchanged for conflicting evidence |
 | 2 | Every import launched a crashing native MathType runtime, raising desktop dialogs | `MathType.exe` application error dialog; helper fails at `MTXFormSetTranslator` | fixed: the native runtime is off unless `QISI_MATHTYPE_NATIVE=1`; the deterministic reader answers every equation |
-| 3 | Question 3 option D is produced as `-1-1` while the key says `-1` | `optionsActualTexts` vs `optionsExpectedTexts` in `artifacts/audit-baseline/docx-accuracy-final.json` | open: recorded, not yet root-caused |
+| 3 | Question 3 option D was produced as `-1-1` while the key says `-1` | the raw object `word/embeddings/oleObject19.bin` converted to `-1-1` by itself | fixed: MathType stored a "TeX Input Language" record carrying `-1` *and* the rendered line for the same equation, and the reader concatenated both; that record is now a fallback for empty structural content, locked by a regression fixture using the real bytes |
 | 4 | Question 6 is unrecoverable | `scripts/measure-mtef-fidelity.js`: 59/61 equations readable, `rId72` and `rId76` unresolved | open: two real equations need either a working MathType runtime or verified parser work; not guessed |
 
 ## 4. MTEF fallback fidelity (same corpus)

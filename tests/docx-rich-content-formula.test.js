@@ -327,3 +327,27 @@ test('recovers exact TeX source stored in a MathType future record', () => {
     });
     assert.equal(rich.normalizeLatexFragment(source).ok, true);
 });
+
+// Real material from 简略版题目（只有一页）.docx, question 3 option D. MathType stored both a
+// "TeX Input Language" record carrying `-1` and the rendered line for the same equation, and the
+// reader used to concatenate them, producing the option `-1-1` instead of `-1`.
+test('MTEF TeX-input record does not duplicate the rendered equation', () => {
+    const optionD = Buffer.from(
+        '050100060944534d54360001661654655820496e707574204c616e6775616765002d3100'
+        + '1357696e416c6c4261736963436f6465506167657300110554696d6573204e657720526f6d'
+        + '616e00110353796d626f6c001105436f7572696572204e65770011044d5420457874726100'
+        + '1357696e416c6c436f64655061676573001106cbcecce500120008210a5f458f442f4150f4'
+        + '100f475f4150f21f1e4150f4150f4100f445f425f48f425f4100f4100f435f4100f48f45f4'
+        + '2a5f48f48f4100f4100f40f48f417f48f4100f412a5f445f45f45f45f45f410f0c01000100'
+        + '01020202020002000101010003000100040005000a010010000000000000000f0102048612'
+        + '222d02008831000000',
+        'hex'
+    );
+
+    assert.deepEqual(mtefReader.mtefToLatex(optionD), {
+        ok: true,
+        code: 'MTEF_LATEX_OK',
+        latex: '-1',
+        diagnostics: []
+    });
+});

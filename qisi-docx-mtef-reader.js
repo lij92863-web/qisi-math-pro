@@ -120,7 +120,18 @@
         throw new Error('Unterminated MTEF record list.');
     };
 
-    const visible = rows => rows.filter(row => row?.latex || row?.kind === 'line');
+    // A "future"/TeX-input record carries the equation's original TeX source. It is an
+    // alternate representation of the same equation, not an extra symbol: a formula saved
+    // from TeX input stores both this record and the rendered line, so treating it as visible
+    // content duplicated the formula (an option `-1` became `-1-1`). It is used only as a
+    // fallback when the structural content produces nothing.
+    const visible = rows => rows.filter(
+        row => row?.kind !== 'future' && (row?.latex || row?.kind === 'line')
+    );
+    const futureLatex = rows => rows
+        .filter(row => row?.kind === 'future')
+        .map(row => row?.latex || '')
+        .join('');
 
     const decodeFutureLatex = (type, payload) => {
         if (type !== 102 || !payload?.length) return '';
@@ -269,7 +280,10 @@
             cursor.cString();
             cursor.byte();
             const rows = readList(cursor);
-            const latex = visible(rows).map(row => row.latex).join('').replace(/\s+/g, ' ').trim();
+            const structuralLatex = visible(rows).map(row => row.latex).join('');
+            const latex = (structuralLatex || futureLatex(rows))
+                .replace(/\s+/g, ' ')
+                .trim();
             if (!latex || cursor.diagnostics.length) throw new Error(cursor.diagnostics.join(',') || 'MTEF produced empty LaTeX.');
             return { ok: true, code: 'MTEF_LATEX_OK', latex, diagnostics: [] };
         } catch (error) {
