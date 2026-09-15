@@ -4434,10 +4434,15 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         .replace(/\r/g, '\n')
                         .replace(/\u3000/g, ' ')
                         .replace(/[ \t]+/g, ' ')
-                        .replace(/(?:^|\n|\s)(?:[一二三四五六七八九十]+[、.．]\s*)?(单项选择题|单选题)\s*[：:][^0-9\n]{0,120}/g, '\n[[TYPE:单选题]]\n')
-                        .replace(/(?:^|\n|\s)(?:[一二三四五六七八九十]+[、.．]\s*)?(多项选择题|多选题)\s*[：:][^0-9\n]{0,160}/g, '\n[[TYPE:多选题]]\n')
-                        .replace(/(?:^|\n|\s)(?:[一二三四五六七八九十]+[、.．]\s*)?(填空题)\s*[：:][^0-9\n]{0,120}/g, '\n[[TYPE:填空题]]\n')
-                        .replace(/(?:^|\n|\s)(?:[一二三四五六七八九十]+[、.．]\s*)?(解答题|证明题)\s*[：:][^0-9\n]{0,120}/g, '\n[[TYPE:解答题]]\n')
+                        // A section header names its section with or without a colon: the teacher's
+                        // files write both "二、多项选择题：本题共…" and a bare "二、多选题" line.
+                        // Only a line that really is a header (label at the line start, followed by a
+                        // colon, an opening bracket or the line end) is replaced, so a stem that
+                        // merely starts with such a word is left alone.
+                        .replace(/(?:^|\n)[ \t　]*(?:[一二三四五六七八九十]+[、.．]\s*)?(单项选择题|单选题)\s*(?:[：:]|(?=[（(])|(?=\n|$))[^\n]{0,200}/g, '\n[[TYPE:单选题]]\n')
+                        .replace(/(?:^|\n)[ \t　]*(?:[一二三四五六七八九十]+[、.．]\s*)?(多项选择题|多选题)\s*(?:[：:]|(?=[（(])|(?=\n|$))[^\n]{0,200}/g, '\n[[TYPE:多选题]]\n')
+                        .replace(/(?:^|\n)[ \t　]*(?:[一二三四五六七八九十]+[、.．]\s*)?(填空题)\s*(?:[：:]|(?=[（(])|(?=\n|$))[^\n]{0,200}/g, '\n[[TYPE:填空题]]\n')
+                        .replace(/(?:^|\n)[ \t　]*(?:[一二三四五六七八九十]+[、.．]\s*)?(解答题|证明题)\s*(?:[：:]|(?=[（(])|(?=\n|$))[^\n]{0,200}/g, '\n[[TYPE:解答题]]\n')
                         .replace(/_{3,}[^。\n]{0,30}(姓名|评分|班别)[^。\n]*/g, '')
                         .replace(/(姓名|评分|班别)\s*_{2,}/g, '')
                         .replace(/\n{3,}/g, '\n\n')
@@ -5049,7 +5054,24 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                         const answerMatch = answerBlock.match(new RegExp(`${answerSolutionLabelPattern}\\s*([\\s\\S]*?)$`, 'i'));
                         const bareAnswerMatch = answerBlock.match(/^\s*([A-DＡ-Ｄ]{1,4})\b/);
 
-                        const answer = normalizeAnswerValue(answerMatch?.[1] || bareAnswerMatch?.[1] || '');
+                        // An answer file may write the answer without any label ("12．$…$" followed by
+                        // 【分析】/【详解】). The part before the solution label is the answer slot, so a
+                        // short value there is the file's own answer - never a conclusion taken out of
+                        // the 详解. Without a solution label nothing is promoted, so a label-less
+                        // solution list cannot turn its first line into an answer.
+                        const bareValue = solutionMatch
+                            ? answerBlock.split(/\n/)[0].trim()
+                            : '';
+                        const bareValueAnswer = bareValue
+                            && bareValue.length <= 80
+                            && !/^[【\[]/.test(bareValue)
+                            && !/^(?:分析|详解|解析|解答|答案|点评)/.test(bareValue)
+                            ? bareValue
+                            : '';
+
+                        const answer = normalizeAnswerValue(
+                            answerMatch?.[1] || bareAnswerMatch?.[1] || bareValueAnswer || ''
+                        );
 
                         if (answer) {
                             pushUniqueQuestionItem(answers, {

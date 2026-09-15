@@ -578,6 +578,69 @@ npm run verify:pdf-known-bad passed
 npm run verify:batch-safety passed
 ```
 
+## 16. Group 2 verified, two group 3 defects closed (2026-09-16, seventh pass)
+
+Part of item 4 of section 5 in `docs/integration/HANDOFF_2026_09_16.md`: the remaining real groups are
+being run through the real batch and compared with the original pages.
+
+### 16.1 Group 2 (`完整版题目.docx` + `完整版答案.docx`): verified
+
+```text
+drafts        12, order 1..12, types 单选 1-6 / 多选 7-9 / 填空 10-12
+answers       1B 2空 3B 4C 5D 6C 7ABD 8AC 9ABD 10 -19/13 11 6 12 (√2+1)/2
+withheld      6 (option D = the unresolvable rId71) and 7 (stem = the unresolvable rId75)
+pages         question pages 1-2 and answer pages 1-4 were rendered and looked at
+```
+
+Every stem, option set and solution matches the rendered page. Question 2's answer is empty because
+the answer page prints `2【答案】` with no letter. The two withheld questions are correct behaviour,
+and the pages show what the missing formulas are: question 6 option D is `1:27` and question 7's stem
+is `已知复数 z，w 均不为 0`. The record is
+`docs/integration/DOCX_VISUAL_GROUND_TRUTH_2026_09_16.md`.
+
+The same pass found that both values **are** present in the DOCX: the OLE objects (rId71 → 258 MTEF
+bytes, rId75 → 216 bytes) extract fine but the reader reports `MTEF_EMPTY_EQUATION` and
+`MTEF_UNREADABLE` (`Unterminated MTEF record list`). That is a reader gap, not a data gap, and it is
+recorded below as the next capability task rather than guessed at.
+
+### 16.2 Group 3 (`题目.docx` + `答案.docx`): two defects found and closed
+
+| mechanism | evidence | fix |
+| --- | --- | --- |
+| a section header without a colon did not type its questions | the question file writes `一、单选题` / `二、多选题` / `三、填空题` as bare lines. The type rule required a colon, so questions 9-11 (answers BD, BD, BC) came out as 单选题/… and the fill-in questions as 解答题 | the header rule is anchored to a line and accepts a colon, an opening bracket **or** the line end, so `二、多选题` names its section; the whole header line is consumed so it cannot leak into a stem |
+| an answer written without a label was dropped | the answer file writes `12．$…$` and `13．$…$` with no `【答案】` label, then `【分析】`/`【详解】`. The reader only accepted a bare A-D letter or a labelled value, so the answers of questions 12-14 arrived empty | the text before the solution label **is** the answer slot, so a short value there is taken as the file's own answer. The rule only fires when the block really has a solution label, so a label-less solution list can never turn its first line into an answer, and a block whose answer slot holds only a label (`2【答案】`) still yields an empty answer |
+
+Measured on the real pair after the fix:
+
+```text
+types   9/10/11 = 多选题, 12/13/14 = 填空题   (before: 单选题 and 解答题)
+answers 12 = √2/2, 13 = -49/16, 14 = (-∞,0)∪(0,1]   (before: all empty)
+other   answers 1-11 unchanged, order 1..14, 14 drafts
+```
+
+Question 3 of group 1 (`2=空`), the withheld question of group 1 and the group 2 results were re-run
+afterwards and are unchanged.
+
+### 16.3 Regressions
+
+| behaviour | inherited failure | test |
+| --- | --- | --- |
+| a colon-less section header types its questions | `the colon-less 多选题 header must still type question 2` (`单选题 !== 多选题`) | `tests/e2e/docx-header-and-answer-value.test.js` |
+| an unlabelled answer value is kept | the same run also fails `an unlabelled answer value must be kept` | `tests/e2e/docx-header-and-answer-value.test.js` |
+
+`app.js` grew by 22 lines for this round; the ceilings moved with it (22109 → 22131, and the
+`app-shell-boundary` ceiling with it).
+
+### 16.4 Still open
+
+- The remaining groups of item 4 (`高二.docx`, `2026年7月9日高中数学作业.docx`, the five exam papers)
+  have not been run yet.
+- Group 3's pages have not been looked at yet (that material ships no PDF and the local LibreOffice
+  conversion timed out during this session), so group 3 is batch-verified but not visually verified.
+- The reader gap above: `MTEF_EMPTY_EQUATION` / `MTEF_UNREADABLE` on real equations whose payload is
+  present (rId71 and rId75 of group 2, and 13 more formulas in group 3). Until it is closed, those
+  questions stay withheld, which is fail-closed but costs the teacher manual work.
+
 ## 15. Group 1 closed: the withheld question (2026-09-16, sixth pass)
 
 This closes item 2 of section 5 in `docs/integration/HANDOFF_2026_09_16.md`.

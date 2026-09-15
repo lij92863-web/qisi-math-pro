@@ -45,7 +45,33 @@ Answer page (page 1 and the top of page 2) against the drafts' answers and solut
 page 1 belong to the question they claim, and question 2 is the only one the file leaves without a
 letter.
 
-## 3. What this round does **not** claim
+## 3. Group 2 — `完整版题目.docx` + `完整版答案.docx`
+
+Question pages 1–2 and answer pages 1–4 were rendered and looked at (same method as group 1: the
+material's own PDF export, rasterised by pdf.js).
+
+| # | original page | draft | verdict |
+| --- | --- | --- | --- |
+| 1–5 | identical to group 1's page 1 | identical stems, options, answers and 详解 | `VISUALLY_VERIFIED_GROUP_2_Q1_Q5` |
+| 6 | 圆锥内切球，选项 `1:8` / `1:9` / `1:26` / **`1:27`** | options A–C and answer C identical; option D is the unresolvable `rId71`, so the draft keeps the token and is withheld | `VISUALLY_VERIFIED_GROUP_2_Q6` except option D (known reader gap) |
+| 7 | 已知复数 $z$，$w$ 均不为 0，则（ ） | options, answer ABD and 详解 identical; the stem's `w` is the unresolvable `rId75`, so the draft shows the token and is withheld | `VISUALLY_VERIFIED_GROUP_2_Q7` except the stem variable (known reader gap) |
+| 8 | 圆形铁片 + 正三棱锥，含图形 | stem, options, answer AC and 详解 identical; the figure is a WMF in the DOCX and is **not** attached | `VISUALLY_VERIFIED_GROUP_2_Q8` with the image gap |
+| 9 | 三角形三边与正弦，选项含 `ab≤4`、`(1/sinA+1/sinB)²≥32sinC` | stem, options, answer ABD and 详解 identical | `VISUALLY_VERIFIED_GROUP_2_Q9` |
+| 10 | 点 $P(2,5)$ 在角 $\alpha$ 终边上… | stem, answer `−19/13` and 详解 identical | `VISUALLY_VERIFIED_GROUP_2_Q10` |
+| 11 | 四边形 $ABCD$，含图形 | stem, answer `6` and 详解 identical; the figure is a WMF and is not attached | `VISUALLY_VERIFIED_GROUP_2_Q11` with the image gap |
+| 12 | 已知 $\triangle ABC$ 的边 $AC=2$… | stem, answer $\frac{\sqrt2+1}{2}$ and 详解 identical | `VISUALLY_VERIFIED_GROUP_2_Q12` |
+
+`VISUALLY_VERIFIED_ANSWERS_AND_SOLUTIONS_GROUP_2` — all twelve answers and solution mappings on the
+answer pages belong to the question they claim.
+
+## 4. Group 3 — `题目.docx` + `答案.docx` (batch verified only)
+
+This pair ships no PDF and the local LibreOffice conversion timed out during the session, so no page
+has been looked at: **nothing of group 3 is marked `VISUALLY_VERIFIED_*` yet.** The batch run is
+recorded in ledger §16.2 together with the two defects it exposed (a colon-less section header and an
+unlabelled answer value), both of which are now fixed and regression-tested.
+
+## 5. What this round does **not** claim
 
 - No other group has been looked at yet (the handoff's items 4 and 5), so nothing outside group 1 may
   be marked `VISUALLY_VERIFIED_*`.

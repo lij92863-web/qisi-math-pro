@@ -12,10 +12,10 @@ test('app shell does not grow a new oversized business function', () => {
     // The budget is a bloat guard, not a feature freeze. It moves only with reviewed work recorded in
     // docs/integration/HARDENING_INTEGRATION_LEDGER_2026_09_15.md: 13 lines of reliability fixes in
     // the integration round, then 54 lines that hook the deterministic MathType/MTEF reader into the
-    // app's existing DOCX extraction path, then the 2026-09-16 wrong-content, support-anchor and
-    // unresolved-formula rounds (the last one adds 39 lines: the withheld-question rule and the
-    // standalone option-label rule that keeps a placeholder token intact).
-    assert.ok(inventory.appJsLines <= 22109, `app.js grew to ${inventory.appJsLines} lines`);
+    // app's existing DOCX extraction path, then the 2026-09-16 wrong-content, support-anchor,
+    // unresolved-formula and section-header rounds (the last one adds 22 lines: a header without a
+    // colon still types its section, and an answer written without a label keeps its value).
+    assert.ok(inventory.appJsLines <= 22131, `app.js grew to ${inventory.appJsLines} lines`);
     const oversized = inventory.functions
         .filter(item => item.lineCount > 250)
         .map(item => item.name);
