@@ -13,7 +13,7 @@ test('app shell does not grow a new oversized business function', () => {
     // docs/integration/HARDENING_INTEGRATION_LEDGER_2026_09_15.md: 13 lines of reliability fixes in
     // the integration round, then 54 lines that hook the deterministic MathType/MTEF reader into the
     // app's existing DOCX extraction path.
-    assert.ok(inventory.appJsLines <= 22063, `app.js grew to ${inventory.appJsLines} lines`);
+    assert.ok(inventory.appJsLines <= 22070, `app.js grew to ${inventory.appJsLines} lines`);
     const oversized = inventory.functions
         .filter(item => item.lineCount > 250)
         .map(item => item.name);

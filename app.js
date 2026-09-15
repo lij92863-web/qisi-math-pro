@@ -13671,13 +13671,12 @@ ${source}`;
                                 .conflictingSupportNumbers
                         )];
 
-                    if (
-                        diagnostics.missingQuestions.length
-                    ) {
-                        return fail(
-                            'question-items-do-not-cover-contract'
-                        );
-                    }
+                    // A question the recogniser could not produce is a COVERAGE GAP, not a
+                    // contradiction. The safely recognised questions stay usable and the gap is
+                    // reported explicitly, so a partial paper becomes "review with withheld items"
+                    // instead of "batch failed with zero drafts". Everything that could attach
+                    // evidence to the wrong question - unknown numbers, duplicated identity,
+                    // conflicting identity - stays fatal below.
 
                     if (
                         diagnostics
@@ -13719,6 +13718,14 @@ ${source}`;
                         questionMap,
                         answerMap,
                         solutionMap,
+                        // Explicit coverage metadata so a partial paper is reviewable: the missing
+                        // numbers are withheld for manual review, never turned into empty questions.
+                        missingQuestionNumbers: [...diagnostics.missingQuestions],
+                        withheldItems: diagnostics.missingQuestions.map(questionNumber => ({
+                            questionNumber: String(questionNumber),
+                            status: 'withheld',
+                            reason: 'missing-question-item'
+                        })),
                         diagnostics
                     };
                 };
