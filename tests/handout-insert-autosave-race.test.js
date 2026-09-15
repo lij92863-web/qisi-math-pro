@@ -132,7 +132,10 @@ test('inserting a bank question during an autosave keeps both the insert and the
         page.on('pageerror', error => pageErrors.push(error.message));
 
         await page.goto(`${origin}/handout.html`, { waitUntil: 'domcontentloaded' });
-        await page.locator('.welcome-card').waitFor({ state: 'visible', timeout: 20_000 });
+        // The handout page loads KaTeX, Vue and thirteen modules before it can boot. Under the
+        // full suite's parallel browser workflows that consistently takes longer than twenty
+        // seconds, so the readiness bound is generous rather than tight.
+        await page.locator('.welcome-card').waitFor({ state: 'visible', timeout: 60_000 });
         assert.equal(
             await page.evaluate(() => window.__TEX_HANDOUT_READY__),
             true,

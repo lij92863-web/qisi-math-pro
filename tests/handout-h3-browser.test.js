@@ -174,7 +174,9 @@ test('H3 browser completes the structured editor workflow without source writes'
         });
         await page.locator('.welcome-card').waitFor({
             state: 'visible',
-            timeout: 15_000
+            // The handout page boots KaTeX, Vue and thirteen modules; under the full suite's
+            // parallel browser workflows that takes longer than fifteen seconds.
+            timeout: 60_000
         });
         assert.equal(
             await page.evaluate(() => window.__TEX_HANDOUT_READY__),

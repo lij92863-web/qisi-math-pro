@@ -22619,6 +22619,7 @@ ${source}`;
                 
                 const saveEditedQuestion = async (id, stem, imgs, g, t, d, ans, sol, tagsStr, opts, knowledge, systemKnowledgeArg = '', personalKnowledgeArg = '') => {
                     const q = questions.value.find(q => q.id === id);
+                    try {
                     if(q) {
                         const now = Date.now();
                         for (const img of imgs || []) {
@@ -22646,6 +22647,14 @@ ${source}`;
                         q.userEdited = true;
                         q.updatedAt = now;
                         await db.questions.put(toRaw(q));
+                    }
+                    } catch (error) {
+                        // The card already shows the edit, so a silent failure would leave the
+                        // page and the database disagreeing. Say so and reload the stored truth.
+                        console.error('[LIBRARY][edit-save-failed]', error);
+                        alert(`修改未保存：${error?.message || error}`);
+                        await loadData();
+                        return;
                     }
                     await loadData();
                 };
