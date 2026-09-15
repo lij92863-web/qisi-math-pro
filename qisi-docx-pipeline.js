@@ -350,7 +350,13 @@
         };
 
         const extractPlainTextFromDocxOptionXmlFragment = (xml = '') => {
-            const source = String(xml || '');
+            // An embedded OLE object contributes no readable text - its visible form is the preview
+            // image - so the whole subtree is removed before any text node is collected. Without this
+            // the Word control flag inside <o:LockedField> leaks into the question as the word "false",
+            // which is exactly the rule stripXmlTagsForDocxText already applies; keeping both in step
+            // avoids the two paths drifting apart again. Assets (media / OLE / MathType) are unaffected:
+            // they are carried by the relationship, embedding and formula channels, not by this text.
+            const source = String(xml || '').replace(/<w:object\b[\s\S]*?<\/w:object>/g, ' ');
             const parts = [];
 
             source.replace(/<(?:w:t|m:t|w:instrText|w:delText)[^>]*>([\s\S]*?)<\/(?:w:t|m:t|w:instrText|w:delText)>/g, (_, textNode) => {
