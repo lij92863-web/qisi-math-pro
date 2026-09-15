@@ -239,6 +239,7 @@
                     saving: false,
                     saveRequested: false,
                     saveTimer: null,
+                    saveInFlight: null,
                     notice: {
                         kind: 'info',
                         message: ''
@@ -812,52 +813,64 @@
                 },
                 async flushSave() {
                     clearTimeout(this.saveTimer);
-                    if (!this.editor?.dirty) return;
-                    if (this.saving) {
-                        this.saveRequested = true;
-                        return;
+                    // A save that is already running must finish before this call returns.
+                    // Returning early used to let callers act on a document whose stored
+                    // revision was still changing, which turned a normal question insertion
+                    // into a false conflict with the handout's own autosave.
+                    while (this.saveInFlight) {
+                        await this.saveInFlight;
                     }
+                    if (!this.editor?.dirty) return;
 
-                    this.saving = true;
+                    const cycle = (async () => {
+                        this.saving = true;
+                        try {
+                            do {
+                                this.saveRequested = false;
+                                if (!this.editor?.dirty) break;
+                                const submitted = model.cloneValue(
+                                    this.editor.handout
+                                );
+                                this.saveStatus = 'saving';
+                                const saved = await repository.autosave(
+                                    submitted,
+                                    {
+                                        expectedUpdatedAt:
+                                            submitted.updatedAt
+                                    }
+                                );
+                                this.editor = editorState.acknowledgeSave(
+                                    this.editor,
+                                    submitted,
+                                    saved
+                                );
+                                this.titleDraft =
+                                    this.editor.handout.title;
+                            } while (
+                                this.saveRequested
+                                || this.editor?.dirty
+                            );
+
+                            this.saveStatus = 'saved';
+                            await this.reloadHandouts();
+                        } catch (error) {
+                            this.saveStatus = 'error';
+                            this.showNotice(
+                                error?.code === 'HANDOUT_CONFLICT'
+                                    ? '讲义在另一个页面被修改，请重新打开后决定保留哪个版本。'
+                                    : `保存失败：${error?.message || error}`,
+                                'error'
+                            );
+                        } finally {
+                            this.saving = false;
+                        }
+                    })();
+
+                    this.saveInFlight = cycle;
                     try {
-                        do {
-                            this.saveRequested = false;
-                            if (!this.editor?.dirty) break;
-                            const submitted = model.cloneValue(
-                                this.editor.handout
-                            );
-                            this.saveStatus = 'saving';
-                            const saved = await repository.autosave(
-                                submitted,
-                                {
-                                    expectedUpdatedAt:
-                                        submitted.updatedAt
-                                }
-                            );
-                            this.editor = editorState.acknowledgeSave(
-                                this.editor,
-                                submitted,
-                                saved
-                            );
-                            this.titleDraft =
-                                this.editor.handout.title;
-                        } while (
-                            this.saveRequested
-                            || this.editor?.dirty
-                        );
-
-                        this.saveStatus = 'saved';
-                        await this.reloadHandouts();
-                    } catch (error) {
-                        this.saveStatus = 'error';
-                        this.showNotice(
-                            error?.code === 'HANDOUT_CONFLICT'
-                                ? '讲义在另一个页面被修改，请重新打开后决定保留哪个版本。'
-                                : `保存失败：${error?.message || error}`,
-                            'error'
-                        );
+                        await cycle;
                     } finally {
-                        this.saving = false;
+                        this.saveInFlight = null;
                     }
                 },
                 async saveAndReturnToBank() {
