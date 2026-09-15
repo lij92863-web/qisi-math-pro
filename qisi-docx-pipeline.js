@@ -88,6 +88,17 @@
         };
 
         const extractDocxQuestionBlockByNumber = (fullText = '', questionNo = '') => {
+            // Paragraph-aware first: the caller hands over text whose newlines are the paragraph
+            // boundaries, and a question can only start at a paragraph whose own leading marker is the
+            // question form. A mark sheet cell or an answer label ("9 答案") can therefore never win
+            // over the real question. The flat-text path stays as the fallback for callers that pass
+            // text without paragraph structure.
+            const byParagraph = locateQuestionBlockFromParagraphs(
+                String(fullText || '').split('\n'),
+                questionNo
+            );
+            if (byParagraph) return byParagraph;
+
             const source = normalizeDocxOptionEvidenceText(fullText);
             const qno = normalizeQuestionKey(questionNo);
 
