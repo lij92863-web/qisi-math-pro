@@ -634,7 +634,16 @@
                 const updateBatchProgress = async (batchId, progress, status = 'processing') => {
                     const safeProgress = Math.max(0, Math.min(100, Math.round(progress || 0)));
                     const patch = { progress: safeProgress, status, updatedAt: Date.now() };
-                    await db.draftImportBatches.update(batchId, patch);
+                    try {
+                        await db.draftImportBatches.update(batchId, patch);
+                    } catch (error) {
+                        // Progress is cosmetic. A failed progress write must not abort the running
+                        // recognition, which is what an unhandled rejection here would do.
+                        console.warn('[BATCH_DEBUG][progress-write-failed]', {
+                            batchId,
+                            message: error?.message || String(error)
+                        });
+                    }
                     const applyLocal = (batch) => batch && Object.assign(batch, patch);
                     applyLocal(batchImportBatches.value.find(batch => batch.id === batchId));
                 };
@@ -921,10 +930,19 @@
                             : file.uploadPath,
                         updatedAt: now
                     }));
-                    await db.transaction('rw', db.draftImportBatches, db.draftImportFiles, async () => {
-                        await db.draftImportBatches.put(batch);
-                        await db.draftImportFiles.bulkPut(files);
-                    });
+                    try {
+                        await db.transaction('rw', db.draftImportBatches, db.draftImportFiles, async () => {
+                            await db.draftImportBatches.put(batch);
+                            await db.draftImportFiles.bulkPut(files);
+                        });
+                    } catch (error) {
+                        // The transaction is atomic, so nothing was written. Say so instead of
+                        // leaving the create screen looking as if the task had been created.
+                        console.error('[BATCH_DEBUG][batch-create-failed]', error);
+                        batchCreateWarning.value = `创建任务失败：${error?.message || error}`;
+                        await loadBatchImportData().catch(() => {});
+                        return;
+                    }
                     batchCreateFiles.value = [];
                     batchImportMode.value = 'list';
                     await loadBatchImportData();

@@ -373,6 +373,10 @@ button:focus-visible {
     border: 1px solid #bed5f4;
     border-radius: 13px;
     color: var(--blue-strong);
+    /* The notice floats over the top bar, where undo, redo, save and settings live. Without this
+       an error notice made those buttons unclickable until it disappeared, which reads as "the
+       button does nothing". Only the close button stays clickable. */
+    pointer-events: none;
     background: #edf5ff;
     box-shadow: var(--shadow-lg);
 }
@@ -393,6 +397,7 @@ button:focus-visible {
     color: currentColor;
     background: transparent;
     font-size: 18px;
+    pointer-events: auto;
 }
 
 .fatal-panel {

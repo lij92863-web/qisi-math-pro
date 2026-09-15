@@ -163,6 +163,53 @@ removal is proven safe first.
 
 ## 8. Open items and known limits
 
+### 8.1 Write-safety and resource-handle audits (this pass)
+
+`scripts/audit-app-write-safety.js` lists every async handler in `app.js` that awaits a
+database write and reports the ones without `try`/`catch`. It started at two, and both are
+now guarded:
+
+- `updateBatchProgress` — a failed progress write used to reject inside the running
+  recognition loop; progress is cosmetic, so a failure now logs and continues.
+- `createDraftImportBatch` — the batch creation writes are already one Dexie transaction (so
+  no partial batch is possible), but a rejection was silent; it now reports through the create
+  screen's own warning line and reloads the list.
+
+`scripts/audit-resource-handles.js` scans 109 files for timers, object URLs, listeners and
+child processes without a matching release. It flags three files, all benign on inspection:
+the handout compiler client attaches `message`/`error` listeners to the Worker it creates and
+terminates, `qisi-ui-events.js` exposes a `bindClick` helper that nothing calls, and the Typst
+worker attaches one module-level listener. No unrevoked object URL and no unreleased interval
+exists in the codebase.
+
+The suite gained two product tests for the areas this pass targeted:
+
+- `tests/review-submit-flow.test.js` — review, edit, submit one draft, and field-by-field
+  comparison of the formal row against the draft (options, answer, solution, grade, type,
+  difficulty), plus a second test proving a double click cannot create two formal questions.
+- `tests/library-edit-failure.test.js` — fault injection: the next `questions.put` rejects, and
+  the test asserts the teacher is told, the store keeps the original, and the card returns to
+  the stored value instead of showing an edit that was never saved.
+
+### 8.2 One UI defect fixed this pass
+
+The handout notice is `position: fixed; top: 86px; right: 24px`, which puts an error notice
+directly over the top bar and the inspector header. In a full-suite run the H6 test could not
+click 讲义设置 because "`<div role=\"status\" class=\"notice error\">` intercepts pointer
+events" — the same thing a teacher would experience as "the button does nothing". The notice
+container now has `pointer-events: none` with `pointer-events: auto` on its close button, so it
+stays dismissable without blocking anything behind it.
+
+### 8.3 H6 open item
+
+`handout-h6-browser.test.js` fails roughly once in four full-suite runs with a handout save
+conflict (`HANDOUT_CONFLICT`, editor one revision behind the stored record). It is the same
+*class* as the H3 conflict that was root-caused and fixed, through a path not yet identified.
+The test now records, for the next occurrence: every write to the handout store through Dexie
+hooks, every tracked application call with the revision before and after it, and a 100 ms
+revision timeline for both the editor and the store. No production behaviour was changed on
+speculation.
+
 1. **MathType native runtime still crashes** (`AccessViolation` in
    `MTXFormSetTranslator`) on this machine. Recovery is now bounded and per-formula,
    and the deterministic MTEF reader covers most equations, but full fidelity for the

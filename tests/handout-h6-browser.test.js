@@ -196,6 +196,81 @@ test('H6 completes main-to-handout student and teacher PDF workflow', {
             await page.evaluate(() => globalThis.__TEX_HANDOUT_READY__),
             true
         );
+        // Record every write to the handout store with the calling stack, so a revision the editor
+        // never adopts can be attributed to the code path that wrote it.
+        await page.evaluate(() => {
+            const database = window.Qisi.Database.getDatabase();
+            window.__qisiH6Writes = [];
+            const shorten = () => String(new Error('write').stack || '')
+                .split('\n')
+                .slice(1, 7)
+                .map(line => line.trim().replace(/^at\s+/, ''))
+                .join(' | ');
+            database.handouts.hook('creating', (primKey, obj) => {
+                window.__qisiH6Writes.push({
+                    kind: 'creating', revision: obj?.revision, stack: shorten()
+                });
+            });
+            database.handouts.hook('updating', (mods, primKey, obj) => {
+                window.__qisiH6Writes.push({
+                    kind: 'updating',
+                    revision: mods?.revision ?? obj?.revision,
+                    updatedAt: String(mods?.updatedAt || obj?.updatedAt || ''),
+                    stack: shorten()
+                });
+            });
+
+            // Attribute a write to the application action that caused it.
+            window.__qisiH6Calls = [];
+            const app = globalThis.__TEX_HANDOUT_APP__;
+            const track = name => {
+                const original = app?.[name];
+                if (typeof original !== 'function') return;
+                app[name] = async (...args) => {
+                    const entry = {
+                        name,
+                        at: Date.now(),
+                        beforeRevision: app.editor?.handout?.revision,
+                        dirty: Boolean(app.editor?.dirty)
+                    };
+                    try {
+                        const result = await original.apply(app, args);
+                        entry.afterRevision = app.editor?.handout?.revision;
+                        entry.afterStatus = app.saveStatus;
+                        entry.ok = true;
+                        window.__qisiH6Calls.push(entry);
+                        return result;
+                    } catch (error) {
+                        entry.afterRevision = app.editor?.handout?.revision;
+                        entry.error = String(error?.message || error);
+                        entry.ok = false;
+                        window.__qisiH6Calls.push(entry);
+                        throw error;
+                    }
+                };
+            };
+            [
+                'flushSave', 'insertQuestion', 'applyEditor', 'loadEditor',
+                'duplicateCurrent', 'deleteCurrentHandout', 'saveAndReturnToBank',
+                'storeUploadedImage', 'refreshAssetUrls'
+            ].forEach(track);
+
+            // A revision timeline shows whether the editor ever adopted what the store holds.
+            window.__qisiH6Revisions = [];
+            let lastRevision = null;
+            window.__qisiH6Sampler = setInterval(async () => {
+                const revision = app?.editor?.handout?.revision;
+                if (revision === lastRevision) return;
+                lastRevision = revision;
+                let storedRevision = null;
+                try {
+                    storedRevision = (await database.handouts.get(app?.editor?.handout?.id))?.revision ?? null;
+                } catch (_) {
+                    storedRevision = null;
+                }
+                window.__qisiH6Revisions.push({ at: Date.now(), revision, storedRevision });
+            }, 100);
+        });
 
         await page.evaluate(async imageBytes => {
             const database = globalThis.Qisi.Database.getDatabase();
@@ -513,7 +588,17 @@ test('H6 completes main-to-handout student and teacher PDF workflow', {
         await page.getByLabel('允许教师版显示备注')
             .setChecked(true);
 
-        await page.getByTestId('open-global-settings').click();
+        try {
+            await page.getByTestId('open-global-settings').click();
+        } catch (clickError) {
+            const diagnostics = await page.evaluate(() => ({
+                notice: (document.querySelector('.notice')?.textContent || '').trim(),
+                saveState: document.querySelector('.save-state')?.className || '',
+                fatal: (document.querySelector('.fatal-panel')?.textContent || '').trim().slice(0, 200)
+            })).catch(error => ({ diagnosticsUnavailable: String(error?.message || error) }));
+            console.error('H6_SETTINGS_CLICK_DIAGNOSTICS=' + JSON.stringify(diagnostics));
+            throw clickError;
+        }
         await page.getByTestId('global-header').click();
         await page.getByTestId('header-enabled').setChecked(true);
         await page.getByTestId('header-left').fill('H6_HEADER {title}');
@@ -539,14 +624,30 @@ test('H6 completes main-to-handout student and teacher PDF workflow', {
             timeout: 60_000
         });
         const saveOutcome = await page.evaluate(() => {
-            const app = globalThis.__TEX_HANDOUT_APP__;
-            return {
-                status: app.saveStatus,
-                dirty: app.editor?.dirty,
-                notice: app.notice,
-                revision: app.editor?.handout?.revision,
-                updatedAt: app.editor?.handout?.updatedAt
-            };
+            return (async () => {
+                const app = globalThis.__TEX_HANDOUT_APP__;
+                let stored = null;
+                try {
+                    const database = window.Qisi.Database.getDatabase();
+                    stored = await database.handouts.get(app.editor?.handout?.id);
+                } catch (error) {
+                    stored = { readError: String(error?.message || error) };
+                }
+                return {
+                    status: app.saveStatus,
+                    dirty: app.editor?.dirty,
+                    notice: app.notice,
+                    revision: app.editor?.handout?.revision,
+                    updatedAt: app.editor?.handout?.updatedAt,
+                    // A conflict means the stored revision moved ahead of the editor, so both sides
+                    // are reported to make the cause visible instead of only the symptom.
+                    storedRevision: stored?.revision,
+                    storedUpdatedAt: stored?.updatedAt,
+                    writes: (window.__qisiH6Writes || []).slice(-8),
+                    calls: (window.__qisiH6Calls || []).slice(-40),
+                    revisions: (window.__qisiH6Revisions || []).slice(-20)
+                };
+            })();
         });
         assert.equal(
             saveOutcome.status,
