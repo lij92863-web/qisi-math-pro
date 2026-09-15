@@ -93,44 +93,53 @@
 
             if (!source || !qno) return '';
 
+            const cur = Number(qno);
             const startPatterns = [
+                // Marker form first: the punctuation is required, so a bare digit line from a mark
+                // sheet or a cell such as "9 答案" cannot win. The relaxed pattern is the fallback.
+                new RegExp(`(?:^|\\n)\\s*(?:第\\s*)?${qno}\\s*(?:题)?\\s*[\\.．、:：\\)）]\\s*`, 'g'),
                 new RegExp(`(?:^|\\n)\\s*(?:第\\s*)?${qno}\\s*(?:题)?\\s*[\\.．、:：\\)）]?\\s*`, 'g'),
                 new RegExp(`(?:^|\\n)\\s*[（(]\\s*${qno}\\s*[）)]\\s*`, 'g')
             ];
 
-            let startMatch = null;
-            let startRe = null;
+            const blockFrom = startMatch => {
+                const start = startMatch.index + (startMatch[0].startsWith('\n') ? 1 : 0);
+                const afterStart = startMatch.index + startMatch[0].length;
+
+                const nextQuestionRe = /(?:^|\n)\s*(?:第\s*)?[（(]?\s*(\d{1,3})\s*[）)]?\s*(?:题)?\s*[\.．、:：\)）]?\s*/g;
+                nextQuestionRe.lastIndex = afterStart;
+
+                let end = source.length;
+                let m;
+
+                while ((m = nextQuestionRe.exec(source)) !== null) {
+                    const n = Number(m[1]);
+                    if (Number.isFinite(n) && Number.isFinite(cur) && n > cur) {
+                        end = m.index;
+                        break;
+                    }
+                }
+
+                return source.slice(start, end).trim();
+            };
+
+            let fallback = '';
 
             for (const re of startPatterns) {
-                const m = re.exec(source);
-                if (m) {
-                    startMatch = m;
-                    startRe = re;
-                    break;
+                let match;
+
+                while ((match = re.exec(source)) !== null) {
+                    const block = blockFrom(match);
+                    if (!fallback) fallback = block;
+
+                    // A real question body wins; a two to four character fragment (a mark-sheet cell
+                    // or an answer-table label that happens to start like the number) does not, so the
+                    // search keeps looking instead of returning the fragment.
+                    if (block.replace(/\s+/g, '').length >= 12) return block;
                 }
             }
 
-            if (!startMatch || !startRe) return '';
-
-            const cur = Number(qno);
-            const start = startMatch.index + (startMatch[0].startsWith('\n') ? 1 : 0);
-            const afterStart = startRe.lastIndex;
-
-            const nextQuestionRe = /(?:^|\n)\s*(?:第\s*)?[（(]?\s*(\d{1,3})\s*[）)]?\s*(?:题)?\s*[\.．、:：\)）]?\s*/g;
-            nextQuestionRe.lastIndex = afterStart;
-
-            let end = source.length;
-            let m;
-
-            while ((m = nextQuestionRe.exec(source)) !== null) {
-                const n = Number(m[1]);
-                if (Number.isFinite(n) && Number.isFinite(cur) && n > cur) {
-                    end = m.index;
-                    break;
-                }
-            }
-
-            return source.slice(start, end).trim();
+            return fallback;
         };
 
         const decodeXmlEntitiesSafe = (value = '') => String(value || '')
