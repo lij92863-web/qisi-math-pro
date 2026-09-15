@@ -76,6 +76,32 @@ unresolved ids       rId76 (truncated record list), rId72 (structure the reader 
 Neither unresolved equation could be matched against the verified key, so no parser change
 was made: without a verified target, a change there would be guessing.
 
+### 4.1 Sharper diagnosis of the blocking equation
+
+The equation that blocks a real paper is the same bytes in two different real files
+(`01-question.docx` and `简略版题目（只有一页）.docx`, OLE stream hash `5e74c40ab88461df`,
+258 MTEF bytes), so fixing it would unblock both papers. What was established:
+
+```text
+Equation Native stream        286 bytes, 28-byte header, MTEF starts at offset 28
+top-level walk                 consumes 231 of 258 bytes and stops on a 0x00 at offset 230
+content after that 0x00        0f 01 02 00 88 31 00 02 00 82 3a 00 02 00 88 32 00 02 00 88 37 00 00 00
+decoded by hand                four character records with a leading font byte:
+                               '1' (0x31), ':' (0x3a), '2' (0x32), '7' (0x37)  ->  "1:27"
+```
+
+So the equation reads **1:27** and the reader loses it because its character/font record
+handling mis-sizes those records: the walk runs past the real structure, meets a `0x00` early
+and the remaining content is never visited. The reader reports an empty formula and fails
+closed, which is why the question is withheld instead of being imported with wrong math.
+
+Why it is not fixed here: correcting it means implementing the MTEF 5 character/font record
+encoding (a high-bit font prefix plus a two-byte code) from a format that has no local
+specification, and the only verification available would be the hand-decoded `1:27` above.
+A wrong byte layout would silently produce a *different* formula, which is worse than the
+current honest failure. The decoded value is recorded here so a future fix can be checked
+against it instead of against a guess.
+
 ## 5. What is still not measured
 
 - PDF+PDF accuracy against `tests/fixtures/pdf-golden/*.json` (see section 7).
