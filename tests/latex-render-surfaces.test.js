@@ -14,6 +14,7 @@ const TAB_STEM = '\u9898\u5e72';
 const SEARCH_PLACEHOLDER = '\u641c\u7d22\u9898\u5e72\u3001\u7b54\u6848\u3001\u89e3\u6790';
 const REVEAL_ANSWER = '\u89e3\u6790';
 const PICK_QUESTION = '\u9009\u9898';
+const PRINT_BUTTON = '\u6253\u5370 PDF';
 
 const STEM = [
     '\u8bbe\u96c6\u5408 $A=\\{x\\mid x^2-3x+2\\le 0\\}$\uff0c\u5219',
@@ -187,6 +188,52 @@ test('every main-page surface renders math instead of showing LaTeX source', {
         await examRoot.locator('.katex').first().waitFor({ state: 'attached', timeout: 20_000 });
         const examReport = await inspectSurface(page, '.exam-builder');
 
+        // Surface 3: the print document. It is produced by a second renderer
+        // (renderLatexForPrint + A4ExamTemplate), so it is checked separately from the
+        // in-page preview surfaces.
+        await page.evaluate(() => {
+            window.__qisiPrintHtml = [];
+            const original = URL.createObjectURL.bind(URL);
+            URL.createObjectURL = blob => {
+                try {
+                    if (String(blob?.type || '').includes('html')) {
+                        blob.text().then(text => window.__qisiPrintHtml.push(text));
+                    }
+                } catch (_) {
+                    // capture is best effort
+                }
+                return original(blob);
+            };
+        });
+        await page.locator('.exam-builder')
+            .getByRole('button', { name: PRINT_BUTTON, exact: true }).click();
+        await page.waitForFunction(
+            () => (window.__qisiPrintHtml || []).some(text => /<html|<!DOCTYPE/i.test(text)),
+            null,
+            { timeout: 30_000 }
+        );
+        const printReport = await page.evaluate(() => {
+            const html = (window.__qisiPrintHtml || []).find(text => /<html|<!DOCTYPE/i.test(text)) || '';
+            const document_ = new DOMParser().parseFromString(html, 'text/html');
+            document_.querySelectorAll('.katex-mathml, annotation').forEach(node => node.remove());
+            const suspect = /\\(?:frac|sqrt|left|right|begin\{|\$)|鈭|蟺|\$\$/u;
+            const leaks = [];
+            const walker = document_.createTreeWalker(document_.body, NodeFilter.SHOW_TEXT);
+            let node = walker.nextNode();
+            while (node) {
+                const value = String(node.nodeValue || '').trim();
+                if (value && suspect.test(value)) leaks.push(value.slice(0, 100));
+                node = walker.nextNode();
+            }
+            return {
+                katex: document_.querySelectorAll('.katex').length,
+                displayMath: document_.querySelectorAll('.katex-display').length,
+                katexErrors: document_.querySelectorAll('.katex-error').length,
+                leaks,
+                bytes: html.length
+            };
+        });
+
         // Control: the detector must be able to see raw LaTeX, otherwise a passing result
         // would prove nothing.
         await page.evaluate(() => {
@@ -202,12 +249,19 @@ test('every main-page surface renders math instead of showing LaTeX source', {
             'the raw-LaTeX detector cannot see raw LaTeX: ' + JSON.stringify(controlReport)
         );
 
-        const report = { entry: entryReport, library: libraryReport, exam: examReport, pageErrors };
+        const report = {
+            entry: entryReport,
+            library: libraryReport,
+            exam: examReport,
+            print: printReport,
+            pageErrors
+        };
         const problems = [];
         for (const [name, surface] of Object.entries({
             entry: entryReport,
             library: libraryReport,
-            exam: examReport
+            exam: examReport,
+            print: printReport
         })) {
             if (surface.missingRoot) problems.push(`${name}: surface missing`);
             if (!surface.katex) problems.push(`${name}: no formula was rendered at all`);
@@ -228,6 +282,12 @@ test('every main-page surface renders math instead of showing LaTeX source', {
         }
         if ((entryReport.displayMath || 0) < 1) {
             problems.push('entry preview: display math did not render as display math');
+        }
+        if ((printReport.katex || 0) < 4) {
+            problems.push(`print document: only ${printReport.katex} formula(s) rendered`);
+        }
+        if ((printReport.displayMath || 0) < 1) {
+            problems.push('print document: display math did not render as display math');
         }
 
         assert.deepEqual(problems, [], JSON.stringify(report, null, 2));
