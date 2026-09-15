@@ -2668,7 +2668,9 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     const source = window.Qisi.Utils.cleanRecognizedText(block)
                         .replace(/\r/g, '\n')
                         .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
-                        .replace(/([A-D])\s*[．.、:：]\s*/g, '$1. ')
+                        // A standalone option letter only, so the "D:" tail of a placeholder such as
+                        // [[MTEF_UNRESOLVED:rId71]] keeps its own text.
+                        .replace(/(?<![A-Za-z])([A-D])\s*[．.、:：]\s*/g, '$1. ')
                         .replace(/[ \t]{2,}/g, ' ')
                         .trim();
 
@@ -2790,7 +2792,10 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         .replace(/\r/g, '\n')
                         .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
                         .replace(/[①②③④]/g, m => ({ '①': 'A.', '②': 'B.', '③': 'C.', '④': 'D.' }[m] || m))
-                        .replace(/([A-D])\s*[．.、:：]\s*/g, '$1. ')
+                        // Only a standalone option letter is a label: without the lookbehind the "D:"
+                        // at the end of [[MTEF_UNRESOLVED:rId71]] became "D. " and the unresolved
+                        // formula turned into unrecognisable text.
+                        .replace(/(?<![A-Za-z])([A-D])\s*[．.、:：]\s*/g, '$1. ')
                         .replace(/\n{3,}/g, '\n\n')
                         .trim();
                 };
@@ -13883,6 +13888,24 @@ ${source}`;
                             warnings.push(optionIssue);
                             mergeWarnings.push('missing_options');
                         }
+
+                        // A formula the DOCX reader could not read is an explicit coverage gap of this
+                        // question: the token stays visible, the question is withheld from formal
+                        // admission until a teacher fills it in, and no other question is affected.
+                        const unresolvedFormulaFields = window.Qisi.DocxPipeline.collectUnresolvedFormulaFields({
+                            stem: cleanStem,
+                            options: cleanOptions,
+                            answer: cleanAnswer,
+                            solution: cleanSolution
+                        });
+                        const unresolvedFormulaIds = [...new Set(Object.values(unresolvedFormulaFields).flat())];
+                        if (unresolvedFormulaIds.length) {
+                            warnings.push(
+                                `本题有 ${unresolvedFormulaIds.length} 个公式未能从 DOCX 中读出（${unresolvedFormulaIds.join('、')}），已暂缓入库，请对照原图人工补全。`
+                            );
+                            mergeWarnings.push('unresolved_formula');
+                        }
+
                         const sourceTrace = item.sourceTrace || {};
                         const itemSourcePageImage = item.sourcePageImage || sourceTrace.sourcePageImage || '';
                         const inlineImages = mergeImageListsById(item.images || [], item.recognizedImages || []);
@@ -13987,6 +14010,22 @@ ${source}`;
                             solutionSource: solution?.sourceFileName || '',
                             mergeWarnings,
                             answerConflicts: answerConflicts.get(mergeKey) || [],
+                            // A field that still carries an unresolved formula cannot be admitted; a
+                            // teacher's own edit of that field replaces this with manual provenance and
+                            // releases it, exactly like the candidate-conflict rule.
+                            ...(unresolvedFormulaIds.length
+                                ? {
+                                    fieldProvenance: {
+                                        ...(item.fieldProvenance || {}),
+                                        ...Object.fromEntries(Object.keys(unresolvedFormulaFields).map(field => [
+                                            field,
+                                            { field, status: 'rejected', reasonCode: 'unresolved-formula' }
+                                        ]))
+                                    },
+                                    withheld: true,
+                                    withheldReason: 'unresolved-formula'
+                                }
+                                : {}),
                             sourceTrace: {
                                 ...sourceTrace,
                                 sourceFileId: itemSourceFileId,

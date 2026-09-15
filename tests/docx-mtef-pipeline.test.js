@@ -134,3 +134,35 @@ test('formula records stay aligned with the text they produced', () => {
 
     assert.deepEqual(records.map(row => row.status), ['extracted', 'unresolved']);
 });
+
+test('an unresolved formula is still recognised after option-evidence normalization', () => {
+    // The tail of the token ("…UNRESOLVED:") looks exactly like the option label "D.", and the
+    // option normalizer used to rewrite it into "D. ", which made the gap invisible.
+    const block = pipeline.extractDocxQuestionBlockByNumber(
+        '1. 已知圆锥 （ ）\nA. 甲 B. 乙 C. 丙 D. [[MTEF_UNRESOLVED:rId71]]',
+        '1'
+    );
+
+    assert.match(block, /\[\[MTEF_UNRESOLVED:rId71\]\]/, 'the token keeps its own text');
+    assert.doesNotMatch(block, /UNRESOLVED\. /, 'the label rule may not rewrite the token');
+    assert.deepEqual(pipeline.collectUnresolvedFormulaTokens(block), ['rId71']);
+});
+
+test('the unresolved formula collector accepts the historical mangled form', () => {
+    assert.deepEqual(
+        pipeline.collectUnresolvedFormulaTokens('D. [[MTEF_UNRESOLVED:rId71]]'),
+        ['rId71']
+    );
+    assert.deepEqual(
+        pipeline.collectUnresolvedFormulaTokens('D. [[MTEF_UNRESOLVED. rId71]]'),
+        ['rId71'],
+        'a token a display cleaner already mangled must still be reported'
+    );
+    assert.deepEqual(
+        pipeline.collectUnresolvedFormulaTokens('D. [[MTEF_UNRESOLVED:rId71]] 和 [[MTEF_UNRESOLVED:rId71]]'),
+        ['rId71'],
+        'the same formula is reported once'
+    );
+    assert.deepEqual(pipeline.collectUnresolvedFormulaTokens('A. 甲 B. 乙 C. 丙 D. 丁'), []);
+    assert.deepEqual(pipeline.collectUnresolvedFormulaTokens(''), []);
+});

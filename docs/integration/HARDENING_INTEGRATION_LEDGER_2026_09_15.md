@@ -577,3 +577,59 @@ npm run verify:docx-stable  passed
 npm run verify:pdf-known-bad passed
 npm run verify:batch-safety passed
 ```
+
+## 15. Group 1 closed: the withheld question (2026-09-16, sixth pass)
+
+This closes item 2 of section 5 in `docs/integration/HANDOFF_2026_09_16.md`.
+
+### 15.1 What was wrong
+
+Question 6 of `简略版题目（只有一页）.docx` has a MathType equation the reader cannot resolve
+(`rId71`, in option D). §12.2 rule 6 promises that such a question is withheld instead of being
+offered as a complete draft, but three things were missing:
+
+| mechanism | evidence | fix |
+| --- | --- | --- |
+| nobody looked for the unresolved token | the token reached the draft as ordinary option text; `draftQuestionProblems` could not see it, and `app.js` only checked the token on the docx-importer path | `Qisi.DocxPipeline.collectUnresolvedFormulaFields()` reports which formal field still carries a token; the draft is marked `withheld: true`, `withheldReason: 'unresolved-formula'`, gets the `unresolved_formula` merge warning and a warning naming the formula |
+| nothing blocked admission | the option value is not empty, so the admission policy saw a value | the affected field's provenance is `{ status: 'rejected', reasonCode: 'unresolved-formula' }`, the same rule the candidate-conflict path uses: `admission-field-rejected` blocks the question, and a teacher's own edit of that field replaces the provenance with `manual` and releases it |
+| the token itself was rewritten | the option-label normalizer matched the "D:" at the end of `UNRESOLVED:` and rewrote it into "D. ", so the stored option was `[[MTEF_UNRESOLVED. rId71]]` and the collector could not recognise it | the label rule now requires a standalone letter (`(?<![A-Za-z])([A-D])…`) in all four places that rewrite option labels (`qisi-utils.js` stem splitter, both `app.js` option readers, the pipeline's own option-evidence normalizer). The collector still accepts the mangled form so an older draft is not silently trusted |
+
+### 15.2 Measured result on group 1
+
+`node artifacts/audit-baseline/docx-batch-acceptance.js --id G1 …` (local evidence, not committed):
+
+```text
+order        1..6 (the draft order field, not the storage row order)
+answers      1=B  2=空  3=B  4=C  5=D  6=C
+question 2   详解 kept, answer empty, missing_explicit_answer + warning naming 故选C
+question 3   option D = -1, still never -1-1
+question 6   withheld: true, reason unresolved-formula, options provenance rejected,
+             option D = [[MTEF_UNRESOLVED:rId71]] (its own token, no longer rewritten),
+             warning 本题有 1 个公式未能从 DOCX 中读出（rId71），已暂缓入库
+other five   unchanged — one bad formula withholds its own question only
+```
+
+### 15.3 Regressions
+
+| behaviour | inherited failure | test |
+| --- | --- | --- |
+| a question with an unreadable formula is withheld | `the question must be withheld` (`false !== true`); the inherited run also stored the mangled token | `tests/e2e/docx-unresolved-formula-withheld.test.js` |
+| the collector still recognises a token a display cleaner already mangled | not expressible before | `tests/docx-mtef-pipeline.test.js` |
+| the option-label rule cannot rewrite the token | not expressible before | `tests/docx-mtef-pipeline.test.js` |
+
+The `app.js` bloat ceilings moved by exactly this round's growth (22070 → 22109 lines in
+`tests/code-quality-boundaries.test.js`, 22078 → 22117 in `tests/app-shell-boundary.test.js`); the
+`processDraftImportBatch` region is unchanged at 5362. The detection and the field mapping live in
+`qisi-docx-pipeline.js`, so `app.js` only carries the warning text and the provenance entry.
+
+### 15.4 Gates for this round
+
+```text
+npm test                    1341 tests, 1338 passed, 3 failed before the seal register and the two
+                            bloat ceilings were moved (all three are expected to fail until the
+                            change is committed)
+npm run verify:safe         passed after the commit
+npm run verify:docx-stable  passed
+npm run verify:pdf-known-bad passed
+npm run verify:batch-safety passed
+```

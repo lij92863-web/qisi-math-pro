@@ -419,7 +419,9 @@
             const source = String(text)
                 .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
                 .replace(/\r/g, '\n')
-                .replace(/([A-D])\s*[．.、:：]\s*/g, '$1. ');
+                // A standalone option letter only: the "D:" tail of a placeholder such as
+                // [[MTEF_UNRESOLVED:rId71]] must keep its own text.
+                .replace(/(?<![A-Za-z])([A-D])\s*[．.、:：]\s*/g, '$1. ');
 
             // The label must be a standalone letter: without the negative lookahead the "A" of
             // "$\\triangle ABC$" counts as option A, so the stem is cut in the middle of a formula

@@ -82,7 +82,9 @@
                 .replace(/\r/g, '\n')
                 .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
                 .replace(/[①②③④]/g, m => ({ '①': 'A.', '②': 'B.', '③': 'C.', '④': 'D.' }[m] || m))
-                .replace(/([A-D])\s*[．.、:：]\s*/g, '$1. ')
+                // A standalone option letter only: the "D:" tail of [[MTEF_UNRESOLVED:rId71]] must
+                // survive, otherwise the unresolved formula cannot be recognised any more.
+                .replace(/(?<![A-Za-z])([A-D])\s*[．.、:：]\s*/g, '$1. ')
                 .replace(/\n{3,}/g, '\n\n')
                 .trim();
         };
@@ -744,6 +746,43 @@
         const unresolvedFormulaToken = rid => `[[MTEF_UNRESOLVED:${rid}]]`;
 
         /**
+         * Reports which formulas of a text are still unresolved.
+         *
+         * The token is written as [[MTEF_UNRESOLVED:rId71]]. A normalizer that rewrites option
+         * labels can turn its own tail into "[[MTEF_UNRESOLVED. rId71]]" - "UNRESOLVED:" reads
+         * exactly like the label "D." - so the separator is not trusted here and any spacing is
+         * accepted. This is the single place that decides whether a question still carries a
+         * formula the DOCX reader could not read.
+         */
+        const collectUnresolvedFormulaTokens = (text = '') => {
+            const source = String(text ?? '');
+            const ids = [];
+            const re = /\[\[\s*MTEF_UNRESOLVED\s*[:.．]?\s*([A-Za-z0-9_]+)\s*\]\]/gi;
+
+            let match;
+            while ((match = re.exec(source)) !== null) {
+                if (!ids.includes(match[1])) ids.push(match[1]);
+            }
+
+            return ids;
+        };
+
+        // Which formal field of a question still carries an unresolved formula. The question is
+        // withheld while this is non-empty, and no other question is affected.
+        const collectUnresolvedFormulaFields = (fields = {}) => {
+            const result = {};
+
+            for (const [field, value] of Object.entries(fields || {})) {
+                const ids = collectUnresolvedFormulaTokens(
+                    Array.isArray(value) ? value.join('\n') : value
+                );
+                if (ids.length) result[field] = ids;
+            }
+
+            return result;
+        };
+
+        /**
          * Resolves one <w:object> that holds a MathType equation.
          *
          * - at most one formula comes out of one object (rule 1);
@@ -838,6 +877,8 @@
             resolveDocxMathTypeObjectForV2,
             expandDocxMathTypeFormulasForV2,
             formulaRecordsForText,
+            collectUnresolvedFormulaTokens,
+            collectUnresolvedFormulaFields,
             extractDocxQuestionBlockByNumber,
             locateQuestionBlockFromParagraphs,
             extractDocxTableTextFallback,
