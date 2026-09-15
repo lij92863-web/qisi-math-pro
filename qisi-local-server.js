@@ -25,6 +25,11 @@ const SERVER_BUILD_ID = crypto.createHash('sha256')
   .slice(0, 16);
 const CONVERT_TIMEOUT_MS = Number(process.env.DOCX_CONVERT_TIMEOUT_MS || 120000);
 const MATHTYPE_TIMEOUT_MS = Number(process.env.MATHTYPE_TRANSLATE_TIMEOUT_MS || 60000);
+// The native MathType translator drives the installed MathType runtime through DDE. On
+// installations where that runtime crashes, every request raises a Windows application-error
+// dialog on the teacher's desktop. It is therefore off unless an operator explicitly turns it
+// on; without it every equation is answered from the deterministic MTEF reader instead.
+const MATHTYPE_NATIVE_ENABLED = String(process.env.QISI_MATHTYPE_NATIVE || '0').trim() === '1';
 const CONVERTER_MODE = String(process.env.QISI_DOCX_CONVERTER || 'word-first').toLowerCase();
 const DASHSCOPE_API_KEY = String(process.env.DASHSCOPE_API_KEY || '').trim();
 const AI_BODY_LIMIT = String(process.env.AI_BODY_LIMIT || '60mb');
@@ -845,6 +850,20 @@ app.post('/api/convert/mathtype-mtef', async (req, res) => {
 
   try {
     const runtime = res.locals.qisiRuntime || DEFAULT_RUNTIME;
+    if (!MATHTYPE_NATIVE_ENABLED && typeof runtime.mathTypeBatchInvoker !== 'function') {
+      // Answer every equation with an explicit "native disabled" failure so the browser keeps
+      // its deterministic local path and never launches the crashing native runtime.
+      return res.json({
+        ok: false,
+        code: 'MATHTYPE_NATIVE_DISABLED',
+        equations: validation.equations.map(row => ({
+          id: String(row.id),
+          ok: false,
+          code: 'MATHTYPE_NATIVE_DISABLED',
+          latex: ''
+        }))
+      });
+    }
     const result = await enqueueMathTypeTranslation(
       () => translateMtefBatch(validation.equations, {
         invokeBatch: runtime.mathTypeBatchInvoker

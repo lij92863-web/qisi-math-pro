@@ -57,6 +57,21 @@ node scripts/pdf-master-browser-runner.js dry-run
 
 默认开发和验证禁止执行 `real-run`，也禁止调用真实 AI/OCR。
 
+## MathType 原生转换开关
+
+DOCX 里的 MathType 公式默认由本地确定性 MTEF 读取器转换，不启动 MathType 程序。
+某些机器上安装的 MathType 原生组件会在转换时崩溃，并在桌面上弹出
+“DDE Server Window: MathType.exe 应用程序错误”对话框；默认关闭原生转换可以避免这些弹窗。
+
+如果确认本机 MathType 运行正常，并希望使用原生转换器作为首选来源，可以显式开启：
+
+```bat
+set QISI_MATHTYPE_NATIVE=1
+npm start
+```
+
+无论是否开启，无法转换的公式都不会被猜测或静默替换：相关题目会被跳过并在批次提示中说明。
+
 ## 目录说明
 
 - `app.js`：当前主应用入口，仍在迁移中。
