@@ -4948,7 +4948,9 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                 const parseNumberedSolutionBlocks = (section, sourceFile) => {
                     const source = window.Qisi.Utils.normalizeAnswerSolutionSource(section);
 
-                    const markerRegex = /(^|\n)\s*(?:第\s*)?([0-9０-９]{1,3})(?:\s*题)?[\.:：、．\)）]\s*/g;
+                    // A marker may sit behind an inline image token: in the teacher's files the
+                    // equation/figure preview of a question is anchored before its own marker.
+                    const markerRegex = /(^|\n)[\s\u3000]*(?:\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\][\s\u3000]*)*(?:第[\s\u3000]*)?([0-9０-９]{1,3})(?:\s*题)?[\.:：、．\)）]\s*/g;
 
                     const marks = [];
                     let match;
@@ -5002,7 +5004,11 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                 const parseInlineAnswerSolutionBlocks = (text, sourceFile) => {
                     const source = window.Qisi.Utils.normalizeAnswerSolutionSource(text);
 
-                    const markerRegex = /(^|\n)\s*(?:第\s*)?([0-9０-９]{1,3})(?:\s*题)?[\.:：、．\)）]?\s*/g;
+                    // Same active-anchor rule as the flat splitter, for the label form the teacher's
+                    // answer files use ("2【答案】"): the marker may be preceded by an inline image
+                    // token, and question 2 of 完整版答案.docx is written exactly that way. Without it
+                    // the whole question loses both its answer and its 详解.
+                    const markerRegex = /(^|\n)[\s\u3000]*(?:\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\][\s\u3000]*)*(?:第[\s\u3000]*)?([0-9０-９]{1,3})(?:\s*题)?[\.:：、．\)）]?\s*/g;
                     const marks = [];
                     let match;
 
@@ -5373,20 +5379,28 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                 const reconcileAnswerWithSolution = (answer, solution, warnings = [], mergeWarnings = []) => {
                     const cleanAnswer = normalizeAnswerForLatex(answer);
                     const solutionAnswer = extractChoiceAnswerFromSolution(solution);
-                    if (!solutionAnswer || !/^[A-D]{1,4}$/.test(cleanAnswer || solutionAnswer)) {
+
+                    if (!solutionAnswer || !/^[A-D]{1,4}$/.test(solutionAnswer)) {
                         return { answer: cleanAnswer, warnings, mergeWarnings };
                     }
+
+                    // A solution that ends with 故选C is the author's prose, not the answer key. A
+                    // missing answer is acceptable, a wrongly attached answer is not, so the
+                    // conclusion is only reported to the teacher - never written into the answer.
                     if (!cleanAnswer) {
                         return {
-                            answer: solutionAnswer,
-                            warnings: [...warnings, `已根据解析中的“故选${solutionAnswer}”补全答案，请核对。`],
-                            mergeWarnings
+                            answer: '',
+                            warnings: [
+                                ...warnings,
+                                `未在答案文件中给出本题答案字母；解析结尾提到“故选${solutionAnswer}”，系统未自动填入，请人工确认。`
+                            ],
+                            mergeWarnings: [...new Set([...mergeWarnings, 'missing_explicit_answer'])]
                         };
                     }
                     if (cleanAnswer !== solutionAnswer) {
                         return {
-                            answer: solutionAnswer,
-                            warnings: [...warnings, `答案与解析结论不一致：答案文件为 ${cleanAnswer}，解析中为 ${solutionAnswer}，已暂按解析结论填写，请人工核对。`],
+                            answer: cleanAnswer,
+                            warnings: [...warnings, `答案与解析结论不一致：答案文件为 ${cleanAnswer}，解析中为 ${solutionAnswer}，已保留答案文件的值，请人工核对。`],
                             mergeWarnings: [...new Set([...mergeWarnings, 'answerConflict'])]
                         };
                     }
@@ -12461,8 +12475,8 @@ ${repairInfo ? `【需要重点修复的问题】\n${repairInfo}` : ''}`;
                             draft.answer = normalizeAnswerForLatex(answerItems[idx].answer);
                             draft.sourceAnswerFileId = answerItems[idx].sourceFileId || draft.sourceAnswerFileId;
                             draft.answerSource = answerItems[idx].sourceFileName || draft.answerSource;
-                            draft.mergeWarnings = (draft.mergeWarnings || []).filter(item => item !== 'missing_answer');
-                            draft.warnings = (draft.warnings || []).filter(w => !String(w).includes('未在答案文件中匹配'));
+                            draft.mergeWarnings = (draft.mergeWarnings || []).filter(item => item !== 'missing_answer' && item !== 'missing_explicit_answer');
+                            draft.warnings = (draft.warnings || []).filter(w => !String(w).includes('未在答案文件中'));
                             draft.warnings.push('本题答案已按题目顺序自动匹配，请快速核对。');
                         }
                         if (canUseSolutionOrder && window.Qisi.Utils.cleanRecognizedText(solutionItems[idx]?.solution)) {
@@ -12549,8 +12563,8 @@ answers=${JSON.stringify(answers)}
                         const answer = normalizeAnswerForLatex(patch.answer);
                         if (answer && !window.Qisi.Utils.cleanRecognizedText(draft.answer)) {
                             draft.answer = answer;
-                            draft.mergeWarnings = (draft.mergeWarnings || []).filter(item => item !== 'missing_answer');
-                            draft.warnings = (draft.warnings || []).filter(w => !String(w).includes('未在答案文件中匹配'));
+                            draft.mergeWarnings = (draft.mergeWarnings || []).filter(item => item !== 'missing_answer' && item !== 'missing_explicit_answer');
+                            draft.warnings = (draft.warnings || []).filter(w => !String(w).includes('未在答案文件中'));
                             draft.warnings.push('本题答案已由系统二次对齐，请快速核对。');
                         }
                     });

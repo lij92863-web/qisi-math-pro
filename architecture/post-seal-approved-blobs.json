@@ -5,10 +5,10 @@
   "blobHashAlgorithm": "sha256 of the file with line endings normalised to LF",
   "approvedFiles": {
     "app.js": {
-      "gitBlob": "e25c962073ca81eaca37b602ae89d4afbef9461b",
-      "contentSha256": "a703001bfb54fd80ecdc288826ab8b948fe70d3bb93dc7ec366f717a23f4ecb0",
+      "gitBlob": "a370adee80713a2e814b6d2fdfa161557a61bb48",
+      "contentSha256": "05555758c8e53275112ca3c65b5ac73940fba20619d735e22a136aaa24f99e68",
       "authorisedAt": "2026-09-15",
-      "reason": "Fail-closed candidate merge (answer/solution conflicts become sticky and block formal admission) plus teacher-facing reliability fixes: the remembered view is restored before the first await, and a failed card edit is reported and rolled back to the stored truth. Then the deterministic MathType/MTEF restoration: the app's existing DOCX extraction path resolves each MathType OLE object through Qisi.DocxPipeline, keeps the formula evidence per file, and never reads the OLE control text. 2026-09-16: the DOCX SILENT WRONG CONTENT fix - the paragraph reader only reads real text elements (no structural element can become text), the flat question splitter moved to qisi-utils with the mark-sheet and image-token marker rules, and option evidence is only accepted from text that belongs to the question being filled.",
+      "reason": "Fail-closed candidate merge (answer/solution conflicts become sticky and block formal admission) plus teacher-facing reliability fixes: the remembered view is restored before the first await, and a failed card edit is reported and rolled back to the stored truth. Then the deterministic MathType/MTEF restoration: the app's existing DOCX extraction path resolves each MathType OLE object through Qisi.DocxPipeline, keeps the formula evidence per file, and never reads the OLE control text. 2026-09-16: the DOCX SILENT WRONG CONTENT fix - the paragraph reader only reads real text elements (no structural element can become text), the flat question splitter moved to qisi-utils with the mark-sheet and image-token marker rules, and option evidence is only accepted from text that belongs to the question being filled. Then the support-file active anchor and the missing explicit answer rule: an answer/solution marker may sit behind an inline image token, and a 详解 conclusion such as 故选C is reported to the teacher but never written into the answer field.",
       "ledger": "docs/integration/HARDENING_INTEGRATION_LEDGER_2026_09_15.md"
     },
     "qisi-pdf-support-controlled-write.js": {

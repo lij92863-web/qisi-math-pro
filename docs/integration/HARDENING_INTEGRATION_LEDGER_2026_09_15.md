@@ -518,3 +518,62 @@ npm run check               passed
 
 `app.js` shrank (the flat splitter moved into `qisi-utils.js`), so the bloat ceilings in
 `tests/code-quality-boundaries.test.js` did not need to move.
+
+## 14. Support-file active anchor and the missing explicit answer (2026-09-16, fifth pass)
+
+This closes item 1 of section 5 in `docs/integration/HANDOFF_2026_09_16.md`, measured on the real
+group 1 (`简略版题目（只有一页）.docx` + `完整版答案.docx`).
+
+### 14.1 What was wrong
+
+| mechanism | evidence on the real pair | fix |
+| --- | --- | --- |
+| the answer file's marker regex demanded a line start directly before the number | question 2's figure is anchored **in front of** its own marker, so the answer text layer reads `[[IMAGE:…]] 2【答案】` and the whole block — its `【答案】` line **and** its `【详解】` — was never parsed. Question 2 was the only question whose solution was missing, and it is exactly the question the handoff calls out | the marker rule now allows an inline image token before the marker, in `parseInlineAnswerSolutionBlocks` and in `parseNumberedSolutionBlocks` — the same active-anchor rule the flat splitter got in §13 |
+| a `详解` conclusion was written into the answer | `reconcileAnswerWithSolution` filled an empty answer from `故选：C`, and *replaced* an explicit answer when the file's letter disagreed with the solution's prose | the conclusion is now only reported to the teacher. An empty answer stays empty (`mergeWarnings: missing_explicit_answer` plus a warning naming the letter), and an explicit answer is kept on disagreement (`answerConflict`, `请人工核对`) |
+
+The rule the project already applies to candidates is unchanged: a missing answer is acceptable, a
+wrongly attached answer is not, and the two trusted repair paths (`repairDraftAnswersByOrder`, the
+Qwen alignment) clear both the `missing_answer` and the new `missing_explicit_answer` token when
+they fill the field from the answer file itself.
+
+### 14.2 Measured result on group 1
+
+`node artifacts/audit-baseline/docx-batch-acceptance.js --id G1 --question "<简略版题目>.docx"
+--support "<完整版答案>.docx"` (local evidence, not committed):
+
+| metric | at `f861202` | this round |
+| --- | --- | --- |
+| drafts | 6 | 6 |
+| answers | 1:B, 2:空, 3:B, 4:C, 5:D, 6:C | 1:B, 2:空, 3:B, 4:C, 5:D, 6:C |
+| question 2 solution | empty — the whole block was lost | its own `详解` (137 characters, ending `故选：C`) |
+| question 2 answer | empty (no block, so nothing to promote) | empty, with `missing_explicit_answer` and a warning that names `故选C` |
+| question 3 option D | `-1` (never `-1-1`) | `-1`, unchanged |
+| paid API calls / MathType launches | 0 / 0 | 0 / 0 |
+
+Question 6 still carries `[[MTEF_UNRESOLVED. rId71]]` in option D and is still produced as a draft;
+withholding it is item 2 of the handoff, not this round.
+
+### 14.3 Regressions
+
+| behaviour | inherited failure | test |
+| --- | --- | --- |
+| the `详解` behind an image-anchored marker is kept | `question 2 must keep the 详解 that follows its image-anchored marker, saw ""` | `tests/e2e/docx-support-active-anchor.test.js` |
+| a `详解` conclusion never becomes the answer | `故选D must never be promoted to the answer, saw "D"` | `tests/e2e/docx-support-active-anchor.test.js` |
+
+The fixture (`tests/fixtures/docx-support-anchor.js`) is the real group 1 shape in miniature: an
+explicit answer, an empty `【答案】` whose `详解` ends in `故选：C` behind an anchored figure, and a
+second empty `【答案】` with a plain marker so the no-promotion rule is proven on its own rather than
+through the marker fix. The inherited run was produced by
+`artifacts/audit-baseline/run-test-against-inherited-app.js`, which swaps in `git show HEAD:app.js`,
+runs the file, restores the working copy and verifies the restore by hash.
+
+### 14.4 Gates for this round
+
+```text
+npm test                    1338 tests, 1337 passed, 1 failed before the seal register was moved
+                            (the seal entry is expected to fail until the change is committed)
+npm run verify:safe         passed
+npm run verify:docx-stable  passed
+npm run verify:pdf-known-bad passed
+npm run verify:batch-safety passed
+```
