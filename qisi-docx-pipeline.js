@@ -158,7 +158,11 @@
             const source = String(xmlFragment || '');
             const parts = [];
 
-            source.replace(/<(?:w:t|m:t|w:instrText|w:delText)[^>]*>([\s\S]*?)<\/(?:w:t|m:t|w:instrText|w:delText)>/g, (_, textNode) => {
+            // The element name must be anchored: an unanchored "w:t" also matches structural elements
+            // such as <w:tblPr>, <w:tblBorders>, <w:tcPr> and <w:tcW>, whose attribute values are raw
+            // XML, not text - that is how long digit runs (attribute values glued together) used to
+            // reach the question text.
+            source.replace(/<(?:w:t|m:t|w:instrText|w:delText)(?=[\s/>])[^>]*>([\s\S]*?)<\/(?:w:t|m:t|w:instrText|w:delText)>/g, (_, textNode) => {
                 const text = stripXmlTagsForDocxText(textNode);
                 if (text) parts.push(text);
                 return '';
@@ -359,7 +363,10 @@
             const source = String(xml || '').replace(/<w:object\b[\s\S]*?<\/w:object>/g, ' ');
             const parts = [];
 
-            source.replace(/<(?:w:t|m:t|w:instrText|w:delText)[^>]*>([\s\S]*?)<\/(?:w:t|m:t|w:instrText|w:delText)>/g, (_, textNode) => {
+            // Same anchoring as extractPlainTextFromDocxXmlFragment: only the real text elements may
+            // match, so structural elements such as <w:tblPr> or <w:tcW> never contribute their
+            // attribute values to the paragraph text.
+            source.replace(/<(?:w:t|m:t|w:instrText|w:delText)(?=[\s/>])[^>]*>([\s\S]*?)<\/(?:w:t|m:t|w:instrText|w:delText)>/g, (_, textNode) => {
                 const text = decodeXmlEntitiesSafe(textNode || '');
                 if (text) parts.push(text);
                 return '';
