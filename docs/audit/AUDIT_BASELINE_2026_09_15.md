@@ -200,15 +200,29 @@ events" — the same thing a teacher would experience as "the button does nothin
 container now has `pointer-events: none` with `pointer-events: auto` on its close button, so it
 stays dismissable without blocking anything behind it.
 
-### 8.3 H6 open item
+### 8.3 H6 intermittent failure — root-caused, and it was a test artifact
 
-`handout-h6-browser.test.js` fails roughly once in four full-suite runs with a handout save
-conflict (`HANDOUT_CONFLICT`, editor one revision behind the stored record). It is the same
-*class* as the H3 conflict that was root-caused and fixed, through a path not yet identified.
-The test now records, for the next occurrence: every write to the handout store through Dexie
-hooks, every tracked application call with the revision before and after it, and a 100 ms
-revision timeline for both the editor and the store. No production behaviour was changed on
-speculation.
+`handout-h6-browser.test.js` failed roughly once in four full-suite runs with a handout save
+conflict (`HANDOUT_CONFLICT`, editor one revision behind the stored record). What the recorded
+evidence showed, step by step:
+
+```text
+store reached revision 4 and the editor adopted it (acknowledgeSave 3 -> 4)
+the editor's own revision then moved back to 3 with no store write
+wrapping the editor-state module showed the transition came from createEditorState with a
+revision-3 handout, called from page.evaluate - that is, from the test itself
+```
+
+The H6 test installs a 50-question performance fixture by replacing `app.editor`; the autosave
+persists that fixture, and the test later restores the pre-fixture editor snapshot, whose
+revision is older than the store. The application then correctly rejected the next save as a
+conflict. **This was not a product defect.** The test now suspends autosave while the fixture is
+installed and, on restore, adopts the stored revision so the snapshot lines up with the store.
+
+Result: 7 consecutive full-suite runs green after the change, against 4 failures in the 14 runs
+before it. This also demonstrates the value of the write/revision instrumentation: the same
+method that root-caused H3 root-caused this, and it distinguished "the product lost a revision"
+from "the test installed a stale one".
 
 1. **MathType native runtime still crashes** (`AccessViolation` in
    `MTXFormSetTranslator`) on this machine. Recovery is now bounded and per-formula,
