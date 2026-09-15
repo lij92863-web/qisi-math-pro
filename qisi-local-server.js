@@ -24,14 +24,40 @@ function normalizeServerPort(value, fallback = 3000) {
   return fallback;
 }
 
-function normalizeServerHost(value) {
-  return String(value || '').trim() || '127.0.0.1';
+const LOOPBACK_HOSTS = Object.freeze(['127.0.0.1', 'localhost', '::1']);
+
+function isLoopbackHost(value) {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (!raw) return false;
+  const unwrapped = raw.startsWith('[') && raw.endsWith(']') ? raw.slice(1, -1) : raw;
+  return LOOPBACK_HOSTS.includes(unwrapped);
+}
+
+// The service only ever serves the teacher's own browser, so the host is not a free choice. A value
+// that would put the AI proxy and the file APIs on a network interface - 0.0.0.0, a LAN address, or
+// any other name - is not honoured; the server binds loopback instead and says so.
+function normalizeServerHost(value, fallback = '127.0.0.1') {
+  const raw = String(value ?? '').trim();
+  if (!raw) return fallback;
+  if (!isLoopbackHost(raw)) return fallback;
+  const unwrapped = raw.toLowerCase().startsWith('[') ? raw.slice(1, -1) : raw;
+  return unwrapped.toLowerCase() === 'localhost' ? 'localhost' : unwrapped;
 }
 
 const PORT = normalizeServerPort(process.env.PORT || 3000);
 // The service only ever serves the local teacher's own browser. Binding a specific loopback host
 // keeps it off the network, and the origin guard below keeps a foreign page from talking to it.
 const HOST = normalizeServerHost(process.env.QISI_HOST || '127.0.0.1');
+const REQUESTED_HOST = String(process.env.QISI_HOST || '').trim();
+if (REQUESTED_HOST && !isLoopbackHost(REQUESTED_HOST)) {
+  // The secure logger only keeps structured fields (stage/code/...), so the fallback is reported as
+  // a code rather than as free text. QISI_HOST must not be able to expose this service on a network
+  // interface: the AI proxy and the file APIs are for the local teacher's browser only.
+  console.error('[qisi-local-server]', {
+    stage: 'qisi-local-server',
+    code: 'HOST_NOT_LOOPBACK'
+  });
+}
 const CONVERT_TIMEOUT_MS = Number(process.env.DOCX_CONVERT_TIMEOUT_MS || 120000);
 const CONVERTER_MODE = String(process.env.QISI_DOCX_CONVERTER || 'auto').toLowerCase();
 const DASHSCOPE_API_KEY = String(process.env.DASHSCOPE_API_KEY || '').trim();
@@ -757,6 +783,7 @@ module.exports = {
   startServer,
   normalizeServerPort,
   normalizeServerHost,
+  isLoopbackHost,
   isAllowedLocalOrigin,
   HOST,
   PORT
