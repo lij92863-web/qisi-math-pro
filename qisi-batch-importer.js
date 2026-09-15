@@ -1170,6 +1170,70 @@
         throw error;
     };
 
+    const inspectRichMathIntegrity = (rich, documentXml, translation) => {
+        const expectedPreviewRids = [...new Set(
+            rich.collectMathTypeObjectLinks(documentXml).map(link => String(link.previewRid))
+        )];
+        return {
+            expectedPreviewRids,
+            missing: expectedPreviewRids.filter(rid => !translation.mathByRid.has(rid)),
+            conflicts: (translation.diagnostics || []).filter(row => row.code === 'OLE_PREVIEW_CONTENT_CONFLICT')
+        };
+    };
+
+    // A formula that could not be converted leaves exactly one question incomplete. Failing the
+    // whole batch for it made a single unconvertible formula block every other question in the
+    // paper. The affected questions are withheld instead, so nothing incomplete reaches review
+    // and the rest of the paper stays usable. A formula that cannot be attributed to one
+    // question is still a hard failure, because guessing the owner is not acceptable.
+    const partitionQuestionsByFormulaErrors = (questions = [], formulaErrors = []) => {
+        const keptQuestions = [];
+        const withheldQuestions = [];
+        const attributed = new Set();
+
+        for (const question of questions || []) {
+            // The finished question already aggregates the diagnostics of the blocks it owns,
+            // which is the reliable owner signal. The paragraph range is only a fallback.
+            const ownDiagnostics = Array.isArray(question?.diagnostics) ? question.diagnostics : [];
+            const range = Array.isArray(question?.sourceParagraphRange) ? question.sourceParagraphRange : [];
+            const start = Number(range[0]);
+            const end = Number(range[1]);
+            const fromRange = (formulaErrors || []).filter(row => {
+                const paragraph = Number(row?.paragraphIndex);
+                if (!Number.isFinite(paragraph) || !Number.isFinite(start) || !Number.isFinite(end)) return false;
+                return paragraph >= start && paragraph <= (Number.isFinite(end) ? end : start);
+            });
+            const errors = [
+                ...ownDiagnostics.filter(row => row?.kind === 'formula-error'),
+                ...fromRange
+            ];
+
+            if (!errors.length) {
+                keptQuestions.push(question);
+                continue;
+            }
+
+            errors.forEach(row => attributed.add(row));
+            withheldQuestions.push({
+                questionNumber: String(question?.number ?? ''),
+                sourceParagraphRange: Number.isFinite(start) && Number.isFinite(end)
+                    ? [start, end]
+                    : [],
+                formulaErrors: errors.map(row => ({
+                    code: String(row?.code || ''),
+                    rid: String(row?.rid || ''),
+                    paragraphIndex: row?.paragraphIndex
+                }))
+            });
+        }
+
+        return {
+            keptQuestions,
+            withheldQuestions,
+            unattributed: (formulaErrors || []).filter(row => !attributed.has(row))
+        };
+    };
+
     const imageFromRichAsset = asset => ({
         id: asset.assetId,
         filename: `${asset.assetId}.${asset.ext || 'png'}`,
@@ -1256,7 +1320,19 @@
         const mediaMap = await buildMediaMaps(zip, relsXml, fileRecord.filename);
         const objectLinks = rich.collectMathTypeObjectLinks(documentXml);
         const translation = await rich.translateMathTypeMedia(mediaMap, { objectLinks });
-        const expectedFormulaRids = assertRichMathIntegrity(rich, documentXml, translation);
+        const formulaIntegrity = inspectRichMathIntegrity(rich, documentXml, translation);
+        const expectedFormulaRids = formulaIntegrity.expectedPreviewRids;
+        if (formulaIntegrity.conflicts.length) {
+            const error = new Error(
+                `DOCX MathType content integrity failed: ${formulaIntegrity.conflicts.length} conflicting formula(s).`
+            );
+            error.code = 'DOCX_MATHTYPE_INTEGRITY_BLOCKED';
+            error.diagnostics = {
+                missingPreviewRids: formulaIntegrity.missing,
+                conflicts: formulaIntegrity.conflicts
+            };
+            throw error;
+        }
         const richBlocks = rich.extractDocxRichBlocks(documentXml, {
             fileId: fileRecord.id || fileRecord.filename || 'docx',
             mediaMap,
@@ -1272,12 +1348,27 @@
         const questionBlocks = prepareDocxQuestionRichBlocks(richBlocks);
         const parsed = rich.parseQuestionRichBlocks(questionBlocks);
         const formulaErrors = richBlocks.flatMap(block => block.diagnostics || []).filter(row => row.kind === 'formula-error');
-        if (!parsed.ok || formulaErrors.length) {
+        if (!parsed.ok) {
             const error = new Error('DOCX rich-content state machine could not preserve every formula or question boundary.');
             error.code = 'DOCX_RICH_CONTENT_INTEGRITY_BLOCKED';
             error.diagnostics = { parser: parsed.diagnostics, formulaErrors };
             throw error;
         }
+        const { keptQuestions, withheldQuestions, unattributed } = partitionQuestionsByFormulaErrors(
+            parsed.questions,
+            formulaErrors
+        );
+        if (unattributed.length) {
+            const error = new Error('DOCX rich-content state machine could not preserve every formula or question boundary.');
+            error.code = 'DOCX_RICH_CONTENT_INTEGRITY_BLOCKED';
+            error.diagnostics = { parser: parsed.diagnostics, formulaErrors, unattributed };
+            throw error;
+        }
+        const withheldWarnings = withheldQuestions.map(row => (
+            `第 ${row.questionNumber || '?'} 题因公式无法转换已跳过`
+            + `（${row.formulaErrors.map(item => item.rid || item.code).join('、') || '未知公式'}），`
+            + '请手动补录该题。'
+        ));
         let alignedSupport = null;
         let embeddedSupportWarnings = [];
         let embeddedUnmatchedAnswers = [];
@@ -1334,7 +1425,7 @@
             row.question.questionKey,
             row.support
         ]));
-        const drafts = parsed.questions.map((question, index) => {
+        const drafts = keptQuestions.map((question, index) => {
             const draft = buildRichDraft(question, index, fileRecord, helpers, defaultMeta);
             const supportItem = supportByQuestionKey.get(question.questionKey);
             if (!supportItem) return draft;
@@ -1351,11 +1442,12 @@
             drafts,
             draftImages: [],
             unmatchedAnswers: embeddedUnmatchedAnswers,
-            warnings: embeddedSupportWarnings,
+            warnings: [...embeddedSupportWarnings, ...withheldWarnings],
             debug: {
                 blockCount: richBlocks.length,
                 mediaCount: mediaMap.size,
                 questionCount: drafts.length,
+                withheldQuestions,
                 embeddedSupportCount: supportByQuestionKey.size,
                 hasEmbeddedSupportHeading: documentPartition.hasSupportHeading,
                 embeddedSupportAlignmentCode: alignedSupport?.code || '',
@@ -1508,6 +1600,7 @@
         processBatch,
         parseDocxFile,
         parseDocxSupportFile,
+        partitionQuestionsByFormulaErrors,
         parsePdfFile,
         extractDocxQuestionSkeleton,
         extractDocxVisualPages,

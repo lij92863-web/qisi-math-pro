@@ -14986,7 +14986,8 @@ ${source}`;
                     questionItems = [],
                     answerItems = [],
                     solutionItems = [],
-                    authoritativeQuestionContract = null
+                    authoritativeQuestionContract = null,
+                    withheldQuestionNumbers = []
                 } = {}) => {
                     const allowedQuestionNumbers =
                         normalizeExplicitMergeQuestionNumbers(
@@ -14994,6 +14995,9 @@ ${source}`;
                                 ?.questionNumbers ||
                             []
                         );
+                    const withheldNumbers = new Set(
+                        normalizeExplicitMergeQuestionNumbers(withheldQuestionNumbers)
+                    );
 
                     const diagnostics = {
                         allowedQuestionNumbers,
@@ -15001,6 +15005,8 @@ ${source}`;
                         answerNumbers: [],
                         solutionNumbers: [],
                         missingQuestions: [],
+                        withheldQuestions: [],
+                        withheldSupportNumbers: [],
                         missingAnswerNumbers: [],
                         missingSolutionNumbers: [],
                         reviewOnlyMissingAnswerNumbers: [],
@@ -15093,9 +15099,14 @@ ${source}`;
                     diagnostics.missingQuestions =
                         allowedQuestionNumbers.filter(
                             questionNumber =>
-                                !questionMap.has(
-                                    questionNumber
-                                )
+                                !questionMap.has(questionNumber)
+                                && !withheldNumbers.has(questionNumber)
+                        );
+                    diagnostics.withheldQuestions =
+                        allowedQuestionNumbers.filter(
+                            questionNumber =>
+                                withheldNumbers.has(questionNumber)
+                                && !questionMap.has(questionNumber)
                         );
 
                     const buildSupportMap = (
@@ -15390,7 +15401,9 @@ ${source}`;
                                     rawItems,
                                 answerItems,
                                 solutionItems,
-                                authoritativeQuestionContract
+                                authoritativeQuestionContract,
+                                withheldQuestionNumbers:
+                                    options?.withheldQuestionNumbers || []
                             });
 
                         if (!explicitMergePlan.ok) {
@@ -17421,7 +17434,9 @@ ${source}`;
                         activeBatchId.value = batchId;
                         batchImportMode.value = 'review';
                         activeDraftQuestionId.value = drafts[0]?.id || '';
-                        showBatchToast(`V2 批量识别完成：生成 ${drafts.length} 道草稿。`);
+                        const withheldNotes = (result.warnings || []).filter(text => /已跳过/.test(String(text || '')));
+                        showBatchToast(`V2 批量识别完成：生成 ${drafts.length} 道草稿。`
+                            + (withheldNotes.length ? ` ${withheldNotes.join(' ')}` : ''));
                     } catch (error) {
                         console.error('[BATCH_V2][batch-failed]', error);
                         const isFatal = window.Qisi.Utils.isFatalQwenServiceError(error);
@@ -17545,6 +17560,10 @@ ${source}`;
                         const fullItems = [];
                         const contractUnmatchedSupport = [];
                         let authoritativeQuestionContract = null;
+                        // Question numbers the DOCX rich-content stage had to withhold because a
+                        // formula could not be converted. They are reported, not treated as
+                        // missing question coverage, so the rest of the paper still imports.
+                        const docxWithheldQuestionNumbers = [];
 
                         const appendDocxSupportWithinContract = ({
                             target,
@@ -19284,6 +19303,14 @@ ${source}`;
                                                     : 0;
                                                 return stem.length > 0 || optionCount > 0;
                                             });
+                                        // Questions the rich-content stage had to withhold because a
+                                        // formula could not be converted are reported, not treated as
+                                        // missing coverage, so the rest of the paper still imports.
+                                        docxWithheldQuestionNumbers.push(
+                                            ...(docxImporterResult.debug?.withheldQuestions || [])
+                                                .map(row => String(row?.questionNumber || '').trim())
+                                                .filter(Boolean)
+                                        );
                                     } catch (error) {
                                         if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
 
@@ -19717,7 +19744,8 @@ ${source}`;
                             batch,
                             files,
                             {
-                                authoritativeQuestionContract
+                                authoritativeQuestionContract,
+                                withheldQuestionNumbers: docxWithheldQuestionNumbers
                             }
                         );
                         let drafts = hasAuthoritativeQuestionContract
