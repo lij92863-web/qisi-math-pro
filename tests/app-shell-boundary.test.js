@@ -34,5 +34,8 @@ test('migrated module scripts load before app and app remains below baseline', (
         const index = main.indexOf(`./${script}`);
         assert.ok(index >= 0 && index < appIndex, `${script} order`);
     }
-    assert.ok(app.split(/\r?\n/).length < 22043);
+    // The ceiling tracks reviewed work only (see docs/integration/HARDENING_INTEGRATION_LEDGER_2026_09_15.md):
+    // the deterministic-first DOCX orchestration added the enrichment-gap handling, the skeleton
+    // contract and the deterministic support parsing.
+    assert.ok(app.split(/\r?\n/).length < 22071);
 });
