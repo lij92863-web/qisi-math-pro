@@ -1,7 +1,6 @@
 require('dotenv').config();
 
 const express = require('express');
-const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -18,7 +17,21 @@ const UPLOAD_DIR = path.join(TMP_DIR, 'uploads');
 const CONVERTED_DIR = path.join(TMP_DIR, 'converted');
 const TOOLS_DIR = path.join(ROOT, 'tools');
 const PS_CONVERTER = path.join(TOOLS_DIR, 'convert-docx-to-pdf.ps1');
-const PORT = Number(process.env.PORT || 3000);
+
+function normalizeServerPort(value, fallback = 3000) {
+  const port = Number(value);
+  if (Number.isInteger(port) && port >= 0 && port <= 65535) return port;
+  return fallback;
+}
+
+function normalizeServerHost(value) {
+  return String(value || '').trim() || '127.0.0.1';
+}
+
+const PORT = normalizeServerPort(process.env.PORT || 3000);
+// The service only ever serves the local teacher's own browser. Binding a specific loopback host
+// keeps it off the network, and the origin guard below keeps a foreign page from talking to it.
+const HOST = normalizeServerHost(process.env.QISI_HOST || '127.0.0.1');
 const CONVERT_TIMEOUT_MS = Number(process.env.DOCX_CONVERT_TIMEOUT_MS || 120000);
 const CONVERTER_MODE = String(process.env.QISI_DOCX_CONVERTER || 'auto').toLowerCase();
 const DASHSCOPE_API_KEY = String(process.env.DASHSCOPE_API_KEY || '').trim();
@@ -41,7 +54,52 @@ const tempJobManager = createTempJobManager({
 const app = express();
 const aiJsonParser = express.json({ limit: AI_BODY_LIMIT, type: 'application/json' });
 
-app.use(cors({ origin: true, credentials: false }));
+// Only the loopback origin that serves this application may call the service. Anything else -
+// a foreign page in the same browser, a page on the local network - is refused, so the AI proxy
+// and the file APIs cannot be driven from outside.
+function isAllowedLocalOrigin(origin, servicePort) {
+  const rawOrigin = String(origin || '').trim();
+  if (!rawOrigin) return true;
+
+  let parsed;
+  try {
+    parsed = new URL(rawOrigin);
+  } catch (_) {
+    return false;
+  }
+
+  if (parsed.protocol !== 'http:') return false;
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) return false;
+  if (parsed.pathname !== '/') return false;
+
+  const hostname = String(parsed.hostname || '').toLowerCase();
+  if (!['localhost', '127.0.0.1', '[::1]'].includes(hostname)) return false;
+
+  const originPort = parsed.port ? Number(parsed.port) : 80;
+  return originPort === normalizeServerPort(servicePort, -1);
+}
+
+app.use((req, res, next) => {
+  const origin = String(req.get('origin') || '').trim();
+
+  res.vary('Origin');
+  if (!isAllowedLocalOrigin(origin, PORT)) {
+    return res.status(403).json({
+      ok: false,
+      code: 'ORIGIN_NOT_ALLOWED',
+      error: 'This local service only accepts requests from its own loopback origin.'
+    });
+  }
+
+  if (origin) {
+    res.set('Access-Control-Allow-Origin', origin);
+    res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+  }
+
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  return next();
+});
 
 app.get('/api/ai/health', (req, res) => {
   res.json({
@@ -672,17 +730,34 @@ app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => 
 
 async function startServer() {
   await tempJobManager.cleanupExpired();
-  app.listen(PORT, () => {
-    console.log(`[qisi-local-server] running at http://localhost:${PORT}`);
-    console.log(`[qisi-local-server] open http://localhost:${PORT}/main.html`);
-    console.log(`[qisi-local-server] health check: http://localhost:${PORT}/api/health`);
-    console.log(`[qisi-local-server] converter self-test: http://localhost:${PORT}/api/convert/self-test`);
-    console.log(`[qisi-local-server] converter mode: ${CONVERTER_MODE}`);
-    console.log('[qisi-local-server] LibreOffice candidates:');
-    findLibreOfficeExecutable().forEach(p => console.log(`  - ${p}`));
+  return new Promise((resolve, reject) => {
+    const server = app.listen(PORT, HOST, () => {
+      console.log(`[qisi-local-server] running at http://${HOST}:${PORT}`);
+      console.log(`[qisi-local-server] open http://${HOST}:${PORT}/main.html`);
+      console.log(`[qisi-local-server] health check: http://${HOST}:${PORT}/api/health`);
+      console.log(`[qisi-local-server] converter self-test: http://${HOST}:${PORT}/api/convert/self-test`);
+      console.log(`[qisi-local-server] converter mode: ${CONVERTER_MODE}`);
+      console.log('[qisi-local-server] LibreOffice candidates:');
+      findLibreOfficeExecutable().forEach(p => console.log(`  - ${p}`));
+      resolve(server);
+    });
+    server.once('error', reject);
   });
 }
 
-startServer().catch(error => {
-  console.error('[SERVER_START_ERROR]', { code: error?.code || 'SERVER_START_FAILED' });
-});
+if (require.main === module) {
+  startServer().catch(error => {
+    console.error('[SERVER_START_ERROR]', { code: error?.code || 'SERVER_START_FAILED' });
+    process.exitCode = 1;
+  });
+}
+
+module.exports = {
+  app,
+  startServer,
+  normalizeServerPort,
+  normalizeServerHost,
+  isAllowedLocalOrigin,
+  HOST,
+  PORT
+};

@@ -2312,6 +2312,11 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 };
 
                 const mergeQuestionItemsWithFallback = (primaryItems = [], fallbackItems = []) => {
+                    // The conflict rule lives in one module so the final gate and this fallback merge
+                    // cannot drift apart: a presentation field may be chosen, an answer or solution
+                    // may not be chosen when two non-empty values disagree.
+                    const batchFallbackExclusiveField = (field, primaryItem, fallbackItem) =>
+                        batchFinalGateCandidateMerge.resolveExclusiveField(field, primaryItem, fallbackItem);
                     if (!Array.isArray(primaryItems) || !primaryItems.length) return fallbackItems || [];
                     if (!Array.isArray(fallbackItems) || !fallbackItems.length) return primaryItems;
 
@@ -2348,15 +2353,30 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         const mergedOptions = betterOptions(item.options, fallback.options);
                         const mergedOptionCount = optionCountOf(mergedOptions);
 
+                        // Both sides are normalised first, then compared: presentation differences
+                        // must not look like a conflict, and a real disagreement must not be resolved
+                        // by length or by whichever side happened to be primary.
                         const itemAnswer = normalizeAnswerForLatex(item.answer || '');
                         const fallbackAnswer = normalizeAnswerForLatex(fallback.answer || '');
-                        const mergedAnswer = itemAnswer || fallbackAnswer || '';
-
                         const itemSolution = cleanDisplayTextForBatchSave(item.solution || '');
                         const fallbackSolution = cleanDisplayTextForBatchSave(fallback.solution || '');
-                        const mergedSolution = window.Qisi.Utils.cleanRecognizedText(fallbackSolution).length > window.Qisi.Utils.cleanRecognizedText(itemSolution).length
-                            ? fallbackSolution
-                            : itemSolution;
+                        const exclusive = {
+                            answer: batchFallbackExclusiveField(
+                                'answer',
+                                { ...item, answer: itemAnswer },
+                                { ...fallback, answer: fallbackAnswer }
+                            ),
+                            solution: batchFallbackExclusiveField(
+                                'solution',
+                                { ...item, solution: itemSolution },
+                                { ...fallback, solution: fallbackSolution }
+                            )
+                        };
+                        const mergedAnswer = exclusive.answer.value || '';
+                        const mergedSolution = exclusive.solution.value || '';
+                        const fallbackConflicts = ['answer', 'solution']
+                            .filter(field => exclusive[field].conflict)
+                            .map(field => exclusive[field].conflict);
 
                         const itemRawText = window.Qisi.Utils.cleanRecognizedText(item.rawText || item.rawBlock || '');
                         const fallbackRawText = window.Qisi.Utils.cleanRecognizedText(fallback.rawText || fallback.rawBlock || '');
@@ -2433,9 +2453,33 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             warnings: [
                                 ...new Set([
                                     ...(fallback.warnings || []),
-                                    ...(item.warnings || [])
+                                    ...(item.warnings || []),
+                                    ...fallbackConflicts.map(conflict => {
+                                        const [left, right] = conflict.candidates;
+                                        return `${conflict.field === 'answer' ? '答案' : '解析'}冲突：`
+                                            + `候选一为“${left?.value || ''}”，候选二为“${right?.value || ''}”，`
+                                            + '系统不会自动选择，请人工确认。';
+                                    })
                                 ])
-                            ]
+                            ],
+                            // A disagreement between the primary recognition and its fallback is the
+                            // same class of conflict as a duplicate-question merge, so it is marked
+                            // the same way and blocks formal admission through provenance.
+                            ...(fallbackConflicts.length
+                                ? {
+                                    duplicateStatus: 'answerConflict',
+                                    fieldConflicts: Object.fromEntries(
+                                        fallbackConflicts.map(conflict => [conflict.field, conflict])
+                                    ),
+                                    fieldProvenance: {
+                                        ...(item.fieldProvenance || {}),
+                                        ...Object.fromEntries(fallbackConflicts.map(conflict => [
+                                            conflict.field,
+                                            { field: conflict.field, status: 'rejected', reasonCode: 'candidate-conflict' }
+                                        ]))
+                                    }
+                                }
+                                : {})
                         };
                     });
 
@@ -14913,71 +14957,28 @@ ${source}`;
                     return current;
                 };
 
-                const batchFinalGateMergeCandidateIntoBest = (best = {}, other = {}) => {
-                    const merged = { ...best };
-
-                    const bestOptions = Array.isArray(best.options) ? best.options : ['', '', '', ''];
-                    const otherOptions = Array.isArray(other.options) ? other.options : ['', '', '', ''];
-
-                    const bestOptionCount = batchFinalGateOptionCount(bestOptions);
-                    const otherOptionCount = batchFinalGateOptionCount(otherOptions);
-
-                    // 选项以更完整、更少乱码者为准。
-                    if (
-                        otherOptionCount > bestOptionCount ||
-                        (
-                            otherOptionCount === bestOptionCount &&
-                            batchFinalGateBadCharCount(otherOptions.join('\n')) < batchFinalGateBadCharCount(bestOptions.join('\n')) &&
-                            batchFinalGateLatexSignalCount(otherOptions.join('\n')) >= batchFinalGateLatexSignalCount(bestOptions.join('\n'))
-                        )
-                    ) {
-                        merged.options = otherOptions;
+                const batchFinalGateCandidateMerge = (() => {
+                    const mergeModule = window.Qisi?.BatchCandidateMerge;
+                    if (!mergeModule?.createBatchCandidateMerge) {
+                        throw new Error('Qisi.BatchCandidateMerge is required for the batch final gate.');
                     }
 
-                    merged.stem = batchFinalGateBetterText(best.stem, other.stem);
-                    merged.answer = batchFinalGateBetterText(best.answer, other.answer);
-                    merged.solution = batchFinalGateBetterText(best.solution, other.solution);
+                    return mergeModule.createBatchCandidateMerge({
+                        text: batchFinalGateText,
+                        badCharCount: batchFinalGateBadCharCount,
+                        latexSignalCount: batchFinalGateLatexSignalCount,
+                        optionCount: batchFinalGateOptionCount,
+                        qualityScore: batchFinalGateQualityScore,
+                        mergeImages: batchFinalGateMergeImages,
+                        allText: batchFinalGateAllText,
+                        betterText: batchFinalGateBetterText
+                    });
+                })();
 
-                    merged.images = batchFinalGateMergeImages(best.images || [], other.images || []);
-                    merged.recognizedImages = batchFinalGateMergeImages(best.recognizedImages || [], other.recognizedImages || []);
-
-                    // 保留原图证据。
-                    if (!merged.sourcePageImage && other.sourcePageImage) merged.sourcePageImage = other.sourcePageImage;
-                    if (!merged.answerPageImage && other.answerPageImage) merged.answerPageImage = other.answerPageImage;
-                    if (!merged.solutionPageImage && other.solutionPageImage) merged.solutionPageImage = other.solutionPageImage;
-
-                    const bestTrace = best.sourceTrace || {};
-                    const otherTrace = other.sourceTrace || {};
-
-                    merged.sourceTrace = {
-                        ...bestTrace,
-                        sourcePageImage: bestTrace.sourcePageImage || otherTrace.sourcePageImage || other.sourcePageImage || '',
-                        rawBlock: bestTrace.rawBlock || otherTrace.rawBlock || other.rawBlock || other.rawText || '',
-                        pageText: bestTrace.pageText || otherTrace.pageText || other.pageText || other.sourceText || '',
-                        duplicateMergedFrom: [
-                            ...(Array.isArray(bestTrace.duplicateMergedFrom) ? bestTrace.duplicateMergedFrom : []),
-                            {
-                                id: other.id || '',
-                                questionNumber: other.questionNumber || other.question || other.order || '',
-                                source: otherTrace.source || other.recognitionSource || other.source || '',
-                                score: batchFinalGateQualityScore(other),
-                                badChars: batchFinalGateBadCharCount(batchFinalGateAllText(other)),
-                                optionCount: batchFinalGateOptionCount(other.options),
-                                stemHead: batchFinalGateText(other.stem || '').slice(0, 100)
-                            }
-                        ]
-                    };
-
-                    merged.warnings = [
-                        ...new Set([
-                            ...(best.warnings || []),
-                            ...(other.warnings || []),
-                            `检测到重复题号，系统已合并候选并保留质量更高版本。`
-                        ])
-                    ];
-
-                    return merged;
-                };
+                const batchFinalGateMergeCandidateIntoBest = (best = {}, other = {}) =>
+                    // The merge contract lives in its own module so the conflict rule (never choose
+                    // between two disagreeing answers or solutions) is testable on its own.
+                    batchFinalGateCandidateMerge.mergeCandidate(best, other);
 
                 const batchFinalGateDedupeDrafts = (drafts = [], context = {}) => {
                     const stage = context.stage || 'unknown';
