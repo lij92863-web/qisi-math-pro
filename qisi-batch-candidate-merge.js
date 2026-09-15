@@ -58,20 +58,49 @@
             betterText
         } = helpers;
 
+        // Presentation-only normalisation: whitespace, and the fullwidth forms of the same
+        // characters. Nothing is deleted here, so mathematical punctuation keeps its meaning.
+        const toPresentationForm = value => String(text(value) || '')
+            .replace(/[\uFF01-\uFF5E]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+            .replace(/[\s\u3000]+/g, '');
+
+        // A pure option answer is one or more option labels, optionally decorated: "B", "(B)",
+        // "B.", "A,C", "AB". Only when both sides are strictly pure option answers may the
+        // decoration be discarded and the labels compared; "(0,1)" and "1,2" are not labels.
+        const OPTION_DECORATION_RE = /[()（）\[\]【】]/g;
+        const PURE_OPTION_SEQUENCE_RE = /^[A-H](?:[.,:;、，；：]?[A-H])*[.,:;、，；：]?$/;
+
+        const canonicalOptionAnswer = value => {
+            const stripped = toPresentationForm(value)
+                .replace(OPTION_DECORATION_RE, '')
+                .toUpperCase();
+            if (!stripped || !PURE_OPTION_SEQUENCE_RE.test(stripped)) return null;
+            return stripped.replace(/[^A-H]/g, '');
+        };
+
         // Two values are "the same" only when they agree after presentation-only differences are
         // removed. Anything else is a conflict; length and LaTeX signal are never used to choose.
         const normalizeForCompare = (field, value) => {
-            const collapsed = String(text(value) || '').replace(/\s+/g, '');
             if (field === 'answer') {
-                return collapsed
-                    .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
-                    .replace(/[.。、，,:：；;()（）]/g, '')
-                    .toUpperCase();
+                const labels = canonicalOptionAnswer(value);
+                return labels === null ? toPresentationForm(value) : labels;
             }
-            return collapsed
+            return String(text(value) || '')
+                .replace(/\s+/g, '')
                 .replace(/\\left|\\right/g, '')
                 .replace(/^\$+|\$+$/g, '')
                 .replace(/[。；;]$/g, '');
+        };
+
+        const valuesAreEquivalent = (field, leftValue, rightValue) => {
+            if (field === 'answer') {
+                const leftLabels = canonicalOptionAnswer(leftValue);
+                const rightLabels = canonicalOptionAnswer(rightValue);
+                // Option-label canonicalisation is allowed only when BOTH sides are pure labels.
+                if (leftLabels !== null && rightLabels !== null) return leftLabels === rightLabels;
+                return toPresentationForm(leftValue) === toPresentationForm(rightValue);
+            }
+            return normalizeForCompare(field, leftValue) === normalizeForCompare(field, rightValue);
         };
 
         const provenanceOf = (item, field) => {
@@ -93,6 +122,47 @@
             score: qualityScore(item),
             value: field ? String(item?.[field] ?? '') : ''
         });
+
+        // A field that already carries a candidate conflict stays conflicted. Only a teacher's
+        // manual provenance releases it; no later automatic candidate may dissolve it.
+        const manualProvenanceOf = (item, field) => {
+            const entry = provenanceOf(item, field);
+            return entry && entry.status === 'manual' ? entry : null;
+        };
+
+        const carriedConflictOf = (item, field) => {
+            if (manualProvenanceOf(item, field)) return null;
+            const record = item?.fieldConflicts?.[field];
+            if (record && typeof record === 'object') return clone(record);
+            const entry = provenanceOf(item, field);
+            if (entry && entry.status === 'rejected' && entry.reasonCode === CONFLICT_REASON) {
+                return { field, reasonCode: CONFLICT_REASON, candidates: [] };
+            }
+            return null;
+        };
+
+        // Folding three or more candidates must keep every disagreeing value, so the conflict
+        // record accumulates instead of being replaced by the last pair.
+        const accumulateConflict = (field, best, other, carriedBest, carriedOther) => {
+            const candidates = [];
+            const push = entry => {
+                if (!entry) return;
+                const value = String(entry.value ?? '');
+                if (!value) return;
+                if (candidates.some(item => item.id === entry.id && item.value === value)) return;
+                candidates.push(entry);
+            };
+
+            for (const record of [carriedBest, carriedOther]) {
+                for (const entry of record?.candidates || []) push(clone(entry));
+            }
+            for (const [item, carried] of [[best, carriedBest], [other, carriedOther]]) {
+                if (carried || !text(item?.[field])) continue;
+                push({ ...candidateIdentity(item, field), sourceTrace: clone(item?.sourceTrace || {}) });
+            }
+
+            return { field, reasonCode: CONFLICT_REASON, candidates };
+        };
 
         // Presentation fields: the better value may win, but the provenance must follow the value.
         const choosePresentationField = (field, best, other) => {
@@ -117,6 +187,18 @@
             const bestPresent = Boolean(text(bestValue));
             const otherPresent = Boolean(text(otherValue));
 
+            const carriedBest = carriedConflictOf(best, field);
+            const carriedOther = carriedConflictOf(other, field);
+            if (carriedBest || carriedOther) {
+                return {
+                    value: '',
+                    winner: null,
+                    provenance: { field, status: 'rejected', reasonCode: CONFLICT_REASON },
+                    conflict: accumulateConflict(field, best, other, carriedBest, carriedOther),
+                    sticky: true
+                };
+            }
+
             if (!bestPresent && !otherPresent) {
                 return { value: bestValue ?? '', winner: best, provenance: provenanceOf(best, field), conflict: null };
             }
@@ -126,7 +208,7 @@
             if (!otherPresent) {
                 return { value: bestValue, winner: best, provenance: provenanceOf(best, field), conflict: null };
             }
-            if (normalizeForCompare(field, bestValue) === normalizeForCompare(field, otherValue)) {
+            if (valuesAreEquivalent(field, bestValue, otherValue)) {
                 return { value: bestValue, winner: best, provenance: provenanceOf(best, field), conflict: null };
             }
 
@@ -213,10 +295,30 @@
                     .filter(field => exclusive[field].conflict)
                     .map(field => [field, exclusive[field].conflict])
             );
-            if (Object.keys(conflicts).length) {
-                merged.fieldConflicts = { ...(merged.fieldConflicts || {}), ...conflicts };
+
+            // Keep `fieldConflicts`, `duplicateStatus` and the rejected provenance telling the same
+            // story: a resolved field drops its record, a conflicted field keeps all of them.
+            const carriedConflicts = { ...(best.fieldConflicts || {}) };
+            const resolvedByTeacher = [];
+            for (const field of EXCLUSIVE_FIELDS) {
+                if (conflicts[field]) {
+                    carriedConflicts[field] = conflicts[field];
+                    continue;
+                }
+                if (carriedConflicts[field]) {
+                    delete carriedConflicts[field];
+                    resolvedByTeacher.push(field);
+                }
+            }
+            if (Object.keys(carriedConflicts).length) {
+                merged.fieldConflicts = carriedConflicts;
                 // The review page already lists this as "重复或答案冲突需要确认".
                 merged.duplicateStatus = 'answerConflict';
+            } else {
+                delete merged.fieldConflicts;
+                if (resolvedByTeacher.length && merged.duplicateStatus === 'answerConflict') {
+                    merged.duplicateStatus = 'none';
+                }
             }
 
             const fieldProvenance = { ...(best.fieldProvenance || {}) };
@@ -247,10 +349,14 @@
             if (Object.keys(provenance).length) merged.provenance = provenance;
             else delete merged.provenance;
 
-            const conflictWarnings = Object.values(conflicts).map(conflict => {
-                const [left, right] = conflict.candidates;
-                return `${conflict.field === 'answer' ? '答案' : '解析'}冲突：候选一为“${left.value}”，`
-                    + `候选二为“${right.value}”，系统不会自动选择，请人工确认。`;
+            const conflictWarnings = Object.entries(carriedConflicts).map(([field, conflict]) => {
+                const values = (conflict.candidates || [])
+                    .map(candidate => String(candidate.value ?? ''))
+                    .filter(Boolean);
+                const detail = values.length > 2
+                    ? `候选共 ${values.length} 个：${values.map(value => `“${value}”`).join('、')}`
+                    : `候选一为“${values[0] ?? ''}”，候选二为“${values[1] ?? ''}”`;
+                return `${field === 'answer' ? '答案' : '解析'}冲突：${detail}，系统不会自动选择，请人工确认。`;
             });
 
             merged.warnings = [
@@ -269,6 +375,8 @@
             mergeCandidate,
             resolveExclusiveField,
             normalizeForCompare,
+            valuesAreEquivalent,
+            canonicalOptionAnswer,
             CONFLICT_REASON
         });
     };
