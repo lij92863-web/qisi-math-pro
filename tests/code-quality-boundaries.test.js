@@ -9,10 +9,11 @@ const { inventoryAppJs } = require('../scripts/base-migration-inventory.js');
 
 test('app shell does not grow a new oversized business function', () => {
     const inventory = inventoryAppJs();
-    // The budget is a bloat guard, not a feature freeze: the 2026-09-15 integration added 13 lines
-    // of targeted reliability fixes (see docs/integration/HARDENING_INTEGRATION_LEDGER_2026_09_15.md)
-    // and nothing else, so the ceiling moves with exactly those lines.
-    assert.ok(inventory.appJsLines <= 21793, `app.js grew to ${inventory.appJsLines} lines`);
+    // The budget is a bloat guard, not a feature freeze. It moves only with reviewed work recorded in
+    // docs/integration/HARDENING_INTEGRATION_LEDGER_2026_09_15.md: 13 lines of reliability fixes in
+    // the integration round, then 54 lines that hook the deterministic MathType/MTEF reader into the
+    // app's existing DOCX extraction path.
+    assert.ok(inventory.appJsLines <= 21847, `app.js grew to ${inventory.appJsLines} lines`);
     const oversized = inventory.functions
         .filter(item => item.lineCount > 250)
         .map(item => item.name);

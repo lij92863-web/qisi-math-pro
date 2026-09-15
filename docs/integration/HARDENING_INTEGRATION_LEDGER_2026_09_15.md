@@ -366,3 +366,90 @@ npm run verify:no-real-ai    passed
 ```
 
 `origin/main` was not modified and the hardening branch was not merged.
+
+## 12. DOCX MTEF capability restoration (2026-09-15, third pass)
+
+Main's DOCX question path had no deterministic formula reader: both real files are MathType
+(35 and 146 `Equation.DSMT4` OLE objects, zero native OMML), so every formula was delegated to the
+vision model and the deterministic text dropped them. The capability was restored **without** merging
+the hardening branch and **without** restoring its DOCX pipeline: two self-contained reader modules
+plus one hook in main's own extraction path.
+
+### 12.1 What was added
+
+```text
+qisi-docx-ole-reader.js     OLE/CFB container -> "Equation Native" -> MTEF bytes (bytes only)
+qisi-docx-mtef-reader.js    MTEF -> LaTeX, with the import contract below
+qisi-docx-pipeline.js       resolveDocxMathTypeObjectForV2 / expandDocxMathTypeFormulasForV2
+app.js                      buildDocxOleBytesMap + the hook inside extractDocxTextWithMath
+main.html                   loads the two modules before app.js
+```
+
+`app.js` was changed only at its existing extension point (`extractDocxTextWithMath` already had a
+`<w:object>` branch); the seal register records the new blob/hash of `app.js`, and the bloat guard
+moved by exactly those 54 lines.
+
+### 12.2 The import contract, and where it is enforced
+
+| rule | enforcement |
+| --- | --- |
+| 1. one OLE object, at most one formula | `expandDocxMathTypeFormulasForV2` visits each `<w:object>` once and pushes one record |
+| 2. TeX source and typeset line never both consumed | `parseMtef` returns the two representations separately and `classifyMtef` uses exactly one |
+| 3. a reliable TeX source wins | `isReliableTexSource` + `origin: 'tex-source'` |
+| 4. reconstruction only without one | `origin: 'reconstruction'`, chosen only when the structural rows stand alone |
+| 5. undeterminable means unresolved | `status: 'unresolved'` with a code; nothing is guessed |
+| 6. one bad formula cannot sink other questions | the object becomes an inline `[[MTEF_UNRESOLVED:rId…]]` token, so only its own question is withheld |
+| 7. control fields are never text | `stripXmlTagsForDocxText` drops the `<w:object>` subtree; `false` never reaches the text |
+| 8. provenance says DOCX deterministic / MTEF | every record carries `source: 'docx-mtef'`, `evidenceRef: 'ole:<rId>'`, `status: 'deterministic-source'` |
+| 9. vision only for what the DOCX cannot give | formulas now come from the DOCX; vision is not used in this round's acceptance at all |
+| 10. MTEF against visual evidence is a conflict, not a preference | the formula records are kept per file (and per question) so a disagreement can be raised through the existing conflict path instead of silently picking one — see §12.5 |
+
+### 12.3 Deterministic acceptance on the same two real DOCX
+
+`node scripts/measure-docx-mtef-acceptance.js` runs the product's own pipeline module in the product
+runtime (a real browser page with JSZip), on the same pair the hardening baseline used.
+
+| metric | hardening baseline | integration, this round |
+| --- | --- | --- |
+| batch status | `review` | deterministic acceptance ran to completion (the vision batch is still blocked, §12.5) |
+| COMPLETE | 5 | 5 |
+| SAFE PARTIAL | 0 | 0 |
+| WITHHELD | 1 | 1 (question 6: unresolved formula `rId71`) |
+| WRONG MATCH | 0 | 0 |
+| answers | B C B C D C | B C B C D C |
+| options per question | 4 4 4 4 4, sixth question empty | 4 4 4 4 4, question 6 has one unresolved option |
+| formulas (181 OLE objects) | not measured | 180 extracted / 1 unresolved / 0 conflict |
+| MathType.exe spawned | no | no (the readers are pure JS) |
+| paid API calls | 0 | 0 |
+| `false` control text | present before §11.5 | absent |
+
+Question 3 option D is `-1` again, not `-1-1`: the TeX-source rule consumes one representation only.
+Question 2's answer is inferred from the answer file's own `故选：C` text and is reported as such —
+the answer file stores no letter for it.
+
+### 12.4 The 61 real MTEF samples
+
+`node scripts/measure-mtef-fidelity.js` over `artifacts/import-reliability` (real material, not
+committed):
+
+```text
+total 61     recovered 59  (58 reconstruction + 1 TeX source)     unresolved 2 (rId76, rId72)
+display-unsafe 0        matches the recorded summary: yes
+```
+
+`tests/docx-mtef-reader.test.js` keeps the original `-1-1` sample as a regression, plus the TeX-source
+preference, the reconstruction fallback, the unresolved path and the OLE container path.
+
+### 12.5 Residual risk (not closed in this round)
+
+The batch still routes a DOCX *question* file through DOCX → PDF → strict visual recognition, and that
+step throws before the deterministic text layer is prepared, so a vision failure still fails the whole
+batch (`DOCX 已成功转为 PDF，但页面视觉识别未完成`, 0 drafts). The restored reader is therefore
+exercised by the answer/solution DOCX and by the text-layer path, but it does not yet rescue a failed
+vision run.
+
+Aligning the order with rule 9 — prepare the deterministic DOCX text (stem, options, formulas) first
+and let vision add only layout, figures and question order — is the natural next step. It changes the
+import order of the stable DOCX chain, which this round was told not to touch, so it is deliberately
+left as a design step: the deterministic question set already passes acceptance, so the change is
+about *when* it is preferred, not about whether it is correct.
