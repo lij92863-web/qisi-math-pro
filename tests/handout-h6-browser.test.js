@@ -270,14 +270,18 @@ test('H6 completes main-to-handout student and teacher PDF workflow', {
                         const before = args[0]?.handout?.revision;
                         const result = original(...args);
                         const after = result?.handout?.revision;
-                        if (before !== after) {
+                        // Only state-producing calls are interesting: a read such as
+                        // getSelectedBlock returns a block, not a state.
+                        if (result && result.handout && before !== after) {
                             window.__qisiH6StateCalls.push({
                                 name,
                                 at: Date.now(),
                                 from: before,
                                 to: after,
+                                inputUpdatedAt: String(args[0]?.handout?.updatedAt || ''),
+                                outputUpdatedAt: String(result?.handout?.updatedAt || ''),
                                 stack: String(new Error('state').stack || '')
-                                    .split('\n').slice(1, 6).map(line => line.trim()).join(' | ')
+                                    .split('\n').slice(1, 5).map(line => line.trim()).join(' | ')
                             });
                         }
                         return result;
