@@ -1187,6 +1187,35 @@ the teacher reported; the only other change is that G2's questions 8 and 11 no l
 figures above their text. `tests/review-draft-state.test.js` locks all three behaviours (hand-over,
 keep-but-move, and "a question without a cue never receives a figure").
 
+### 24.4 Options written as formulas stayed glued inside the stem (this commit)
+
+The teacher's second report was the opposite problem: the options of 周二晚测 question 4 ran together on
+one line. They were never *in* the option list - the paper writes them as maths whose label is inside
+the formula:
+
+```text
+4. 在 $ΔABC$ 中，…则 $C$ 的大小为（ ）.
+$A.\frac{\pi }{4}$ $B.\frac{\pi }{3}$ $C.\frac{2\pi }{3}$ $D.\frac{3\pi }{4}$
+```
+
+Every splitter in the product looks for a plain "A." as text, so all four stayed in the stem, the
+question was typed 解答题, and the review preview showed one long line. `qisi-utils.js` now has
+`extractFormulaLabelledOptions`: a run of two or more label-led maths segments, labels ascending and
+starting at A, with nothing but whitespace between them, becomes the options. It is applied in
+`parseQuestionItemsFromText` **only** when the question has no options at all, so a question that
+already has an option list can never be restructured by it.
+
+Real material after the change: question 4 and question 6 each get their four options back and are
+typed 单选题 (they had been 解答题 with the options inside the stem). G1–G11 otherwise unchanged
+(options per group, choice-typed counts, draft counts and the 37 withheld are identical before and
+after). Locked by `tests/qisi-utils-formula-labelled-options.test.js`, which also pins the three
+negative shapes (starting at B, out of order, interrupted) and an ordinary option list.
+
+Not fixed by this rule, and reported as such: question 9's options are a *mixed* shape - its 梯形 stem
+line keeps the maths of option A with the "A." label missing, and C's label is missing too, while B
+and D keep theirs (lines 39-42 of the extracted text). That is the older "option label inside a formula
+is dropped" defect of the text layer, not this one.
+
 ### 22.4 The visual check found a silent content loss, and the reader now refuses it (`ecbf36c`)
 
 Looking at group 4 (`周二晚测.docx`) page by page showed its question 8 as a piecewise definition

@@ -1147,6 +1147,56 @@
             };
         };
 
+        // Exam papers often write the options as maths whose *label* is inside the formula:
+        //
+        //   "…则 $C$ 的大小为（ ）. $A.\frac{\pi }{4}$ $B.\frac{\pi }{3}$ $C.\frac{2\pi }{3}$ $D.\frac{3\pi }{4}$"
+        //
+        // The ordinary option splitter needs to see "A." as plain text, so on the real 周二晚测.docx
+        // those four options stayed glued inside the stem: the review page showed them on one line with
+        // no spacing and the question came out typed 解答题. This helper reads that one shape - a run of
+        // two or more label-led maths segments, labels ascending and starting at A, nothing but
+        // whitespace between them - and returns the options separately.
+        const FORMULA_LABELLED_OPTION_RE = /\$\s*([A-D])\s*[.．、:：)）]\s*([^$]{1,160}?)\s*\$/g;
+
+        const extractFormulaLabelledOptions = (rawText = '') => {
+            const source = String(rawText || '');
+            const found = [];
+            const re = new RegExp(FORMULA_LABELLED_OPTION_RE.source, 'g');
+
+            let hit;
+            while ((hit = re.exec(source)) !== null) {
+                found.push({
+                    label: hit[1], body: hit[2], start: hit.index, end: re.lastIndex
+                });
+            }
+
+            const run = found.length ? [found[0]] : [];
+            for (const item of found.slice(1)) {
+                const previous = run[run.length - 1];
+                const between = source.slice(previous.end, item.start);
+                if (!/^\s*$/.test(between)) break;
+                if (item.label.charCodeAt(0) !== previous.label.charCodeAt(0) + 1) break;
+                run.push(item);
+            }
+
+            if (run.length < 2 || run[0].label !== 'A') {
+                return { stem: source, options: ['', '', '', ''] };
+            }
+
+            const options = ['', '', '', ''];
+            for (const item of run) {
+                const body = String(item.body || '').trim();
+                if (!body) continue;
+                options[item.label.charCodeAt(0) - 65] = /[\\^_{}]/.test(body) ? `$${body}$` : body;
+            }
+
+            const stem = (source.slice(0, run[0].start) + source.slice(run[run.length - 1].end))
+                .replace(/[ \t\u3000]{2,}/g, ' ')
+                .trim();
+
+            return { stem, options };
+        };
+
         const extractInlineAnswerKey = (rawText = '') => {
             const { keyPart } = splitTextAtAnswerKeyHeading(rawText);
 
@@ -1282,6 +1332,7 @@
             splitFlatTextIntoQuestionBlocks,
             splitTextAtAnswerKeyHeading,
             extractInlineAnswerKey,
+            extractFormulaLabelledOptions,
             stripBatchImagePlaceholders,
             splitQuestionForStorage,
             stripAnswerSolution,

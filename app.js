@@ -4593,8 +4593,21 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         const answer = includeInlineAnswer ? window.Qisi.Utils.cleanRecognizedText(split.answer) : '';
                         const prepared = splitQuestionForStorage(split.stem, batchDefaultMeta.defaultType, ['', '', '', '']);
                         const repaired = window.Qisi.SupportRepair.repairChoiceOptions(prepared.stem || split.stem, prepared.options, prepared.type, choiceRepairDeps);
-                        const options = repaired.options;
-                        const stem = repaired.stem;
+                        let options = repaired.options;
+                        let stem = repaired.stem;
+
+                        // Options written as maths whose label sits *inside* the formula stay glued to
+                        // the stem for every splitter that looks for a plain "A." - on the real
+                        // 周二晚测.docx that left question 4 and 6 with no options at all, typed 解答题,
+                        // and the teacher saw the four options running together on one line. When the
+                        // question has no options, the run is read out of the stem here.
+                        if (!options.filter(value => window.Qisi.Utils.cleanRecognizedText(value)).length) {
+                            const labelled = window.Qisi.Utils.extractFormulaLabelledOptions(stem);
+                            if (labelled.options.filter(Boolean).length) {
+                                stem = labelled.stem;
+                                options = labelled.options;
+                            }
+                        }
                         return {
                             question: seg.question || String(idx + 1),
                             stem,
