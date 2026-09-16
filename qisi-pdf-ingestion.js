@@ -7,8 +7,9 @@
     'use strict';
     const pageCache = new Map();
     const VISUAL_SCHEMA_VERSION = 'pdf-question-region-v3';
-    const fileFatalVisualError = code => ['API_AUTH_ERROR', 'LOCAL_SERVER_UNREACHABLE',
-        'UPSTREAM_UNREACHABLE', 'DASHSCOPE_NOT_CONFIGURED'].includes(code);
+    const fileFatalVisualError = code => ['API_AUTH_ERROR', 'AI_PROXY_AUTH_FAILED', 'LOCAL_SERVER_UNREACHABLE',
+        'UPSTREAM_UNREACHABLE', 'AI_PROXY_FETCH_FAILED', 'AI_PROXY_TIMEOUT',
+        'DASHSCOPE_NOT_CONFIGURED'].includes(code);
     const REVIEW_LABELS = {
         'unmapped-glyphs': '公式字符无法从 PDF 文本层可靠映射',
         'contract-gap': '题号序列有缺口',

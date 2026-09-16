@@ -188,6 +188,27 @@ test('malformed response withholds one region while later proved regions continu
     } finally { Inspection.inspect = inspect; }
 });
 
+test('proxy upstream failure stops later regions in the file', async () => {
+    const inspect = Inspection.inspect;
+    let calls = 0;
+    try {
+        const pages = [page(1, [line('1. First', 100), line('2. Second', 300)], 'mixed'),
+            page(2, [line('3. Third', 100)], 'mixed')];
+        Inspection.inspect = async () => ({ pages, ...Inspection.segment(pages), timings: [] });
+        const result = await Ingestion.ingest({ file: { id: 'upstream-failure' }, questionRole: true,
+            helpers: { model: 'upstream-failure-mock', parseQuestions: () => [],
+                render: async (_, pageNo, __, region) => ({ url: `page-${pageNo}-${region?.[1] || 'whole'}` }),
+                request: async () => {
+                    calls++;
+                    throw Object.assign(Error('DashScope upstream request failed.'), { code: 'AI_PROXY_FETCH_FAILED' });
+                } } });
+        assert.equal(calls, 1, 'an unreachable upstream must not spend the remaining region budget');
+        assert.equal(result.visualCalls, 1);
+        assert.ok(result.withheld.some(item => item.errorCode === 'AI_PROXY_FETCH_FAILED'));
+        assert.equal(result.pageImages.length, 2, 'both original pages remain available for review');
+    } finally { Inspection.inspect = inspect; }
+});
+
 test('visual maxCalls stops further requests and leaves remaining regions withheld', async () => {
     const inspect = Inspection.inspect;
     let calls = 0;
