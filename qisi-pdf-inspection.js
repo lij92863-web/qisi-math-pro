@@ -103,7 +103,25 @@
             if (block.role === 'question') previous = n;
             safe.push(block);
         }
-        return { blocks: safe, rawBlocks: blocks, withheld };
+        // The per-question region: the union of the bounding boxes of the lines that belong to this
+        // question, page by page. It is what "程序负责归属" needs - the identity stays the text layer's, and
+        // the region says which part of which page that question actually occupies (header, footer, margin
+        // and the neighbouring question stay outside it). A question that carries no provable box simply
+        // has none, and its page stays whole-page withheld.
+        const regionByPage = block => {
+            const map = new Map();
+            for (const region of block.regions || []) {
+                const current = map.get(region.page) || { page: region.page, bbox: [...region.bbox] };
+                current.bbox = [Math.min(current.bbox[0], region.bbox[0]), Math.min(current.bbox[1], region.bbox[1]),
+                    Math.max(current.bbox[2], region.bbox[2]), Math.max(current.bbox[3], region.bbox[3])];
+                map.set(region.page, current);
+            }
+            return [...map.values()].sort((left, right) => left.page - right.page);
+        };
+
+        const withRegions = block => ({ ...block, regionByPage: regionByPage(block) });
+
+        return { blocks: safe.map(withRegions), rawBlocks: blocks.map(withRegions), withheld };
     };
     const inspect = (file, deps = {}) => {
         const cached = cache.get(file);

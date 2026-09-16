@@ -32,6 +32,36 @@ test('PDF text blocks carry cross-page evidence and do not turn footer numbers i
     assert.deepEqual([...Ingestion.crossPageNumbers(pages, 'question')], ['1']);
 });
 
+// "程序负责归属" needs the region a question actually occupies, not just the page. Every block now carries
+// the union of its own line boxes, page by page - the footer and the neighbouring question stay outside.
+test('every question block carries the region it occupies on each page', () => {
+    const pages = [page(1, [line('1. First question', 100), line('its second line', 130), line('page footer', 812)]),
+        page(2, [line('2. Second question', 190)])];
+    const blocks = Inspection.segment(pages).blocks;
+
+    assert.deepEqual(blocks[0].regionByPage, [{ page: 1, bbox: [90, 100, 500, 142] }],
+        'the question region is the union of its lines, without the footer');
+    assert.deepEqual(blocks[1].regionByPage, [{ page: 2, bbox: [90, 190, 500, 202] }]);
+});
+
+// A page whose anchors are proved keeps a question region in the vision plan; the review panel shows it
+// instead of the whole page.
+test('a withheld page carries the question region when the text layer proved it', async () => {
+    const inspect = Inspection.inspect;
+    try {
+        const mixed = [page(1, [line('1. First question', 120), line('2. Second question', 400)], 'mixed')];
+        mixed[0].anchors = Inspection.collectAnchors(mixed[0]);
+        Inspection.inspect = async () => ({ pages: mixed, ...Inspection.segment(mixed), timings: [] });
+        const result = await Ingestion.ingest({ file: { id: 'region' }, questionRole: true, helpers: {
+            parseQuestions: () => [{ question: '1', stem: 'First question' }], parseSupport: () => ({})
+        } });
+
+        const withheld = result.withheld.find(w => w.sourcePage === 1 && w.visualNeeded);
+        assert.deepEqual(withheld.region, [90, 120, 500, 412], 'the page plan carries the question band');
+        assert.ok(withheld.region[3] - withheld.region[1] < mixed[0].height, 'not the whole page');
+    } finally { Inspection.inspect = inspect; }
+});
+
 // The owner's rule of 2026-09-17: a gap in the numbering must not take the whole file's identity away.
 // The numbers the text proved stay usable, the hole is reported, and a duplicate / backward / unreadable
 // anchor is recorded on its own. (This test used to require `authoritative: false` for all three shapes.)

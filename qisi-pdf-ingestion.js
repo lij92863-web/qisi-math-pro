@@ -268,6 +268,19 @@
         const crossSupport = crossPageNumbers(inspection.pages, 'support');
         const evidenceFor = (block, source) => ({ source, sourceFileId: file.id, sourceFileName: file.filename,
             sourcePage: block.sourcePages[0], sourcePages: block.sourcePages, regions: block.regions, rawBlock: block.text });
+        // Where each question actually sits on its page, taken from the block's own line boxes. The vision
+        // plan and the review panel show that region instead of the whole page whenever the text layer could
+        // prove it; a question without a provable box keeps the whole page.
+        const questionRegionByPage = new Map();
+        for (const block of (inspection.blocks || []).filter(b => b.role === 'question')) {
+            for (const region of block.regionByPage || []) {
+                const current = questionRegionByPage.get(region.page);
+                questionRegionByPage.set(region.page, current
+                    ? { page: region.page, bbox: [Math.min(current.bbox[0], region.bbox[0]), Math.min(current.bbox[1], region.bbox[1]),
+                        Math.max(current.bbox[2], region.bbox[2]), Math.max(current.bbox[3], region.bbox[3])] }
+                    : { page: region.page, bbox: [...region.bbox] });
+            }
+        }
         if (questionRole) for (const block of inspection.blocks.filter(b => b.role === 'question')) {
             if (!questionContract.authoritative || !expected.includes(block.questionNumber)) continue;
             const items = helpers.parseQuestions(block.text, file, false);
@@ -303,8 +316,11 @@
             const supportOnly = (!questionRole && supportRole) || (fullRole &&
                 !page.anchors.some(a => a.role === 'question') && page.anchors.some(a => a.role === 'support'));
             const pageNumbers = (page.anchors || []).filter(a => a.role === (supportOnly ? 'support' : 'question')).map(key);
+            const provenRegion = supportOnly ? null : questionRegionByPage.get(page.pageNo)?.bbox;
+            const pageRegion = provenRegion && provenRegion.length === 4
+                ? provenRegion.map(Number) : [0, 0, page.width, page.height];
             const plan = { sourceFileId: file.id, sourcePage: page.pageNo, questionNumbers: pageNumbers,
-                region: [0, 0, page.width, page.height], reason: page.reason,
+                region: pageRegion, reason: page.reason,
                 status: 'withheld', visualNeeded: true };
             try {
                 const image = await (helpers.render || renderPage)(file, page.pageNo, trace);
