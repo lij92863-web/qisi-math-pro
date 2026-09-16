@@ -1034,10 +1034,11 @@ accent or an unknown modifier still resolves to `unresolved`), so the fail-close
 
 ### 22.3 Still open (deliberately)
 
-- The 10 remaining streams are listed above with their own cause each. Recovering the type-104
-  payload or the type-48 record would mean reading bytes whose meaning is not established by any
-  other stream in the corpus (the two type-104 payloads are not even the same shape), so they stay
-  fail-closed rather than guessed. `rId75` (question 7 of `完整版题目.docx`) is one of them.
+- The streams left unresolved after §22.2 are listed above with their own cause each (ten of them, and
+  one more after the guard of §22.4). Recovering the type-104 payload or the type-48 record would mean
+  reading bytes whose meaning is not established by any other stream in the corpus (the two type-104
+  payloads are not even the same shape), so they stay fail-closed rather than guessed. `rId75`
+  (question 7 of `完整版题目.docx`) is one of them.
 - Section 5.3 (per-question visual ground truth for G4–G11, see §22.4 for groups 3 and 4) is the
   next step.
 
