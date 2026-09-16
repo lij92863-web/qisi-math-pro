@@ -1057,7 +1057,7 @@
         //   * an inline image token may sit in front of the marker ("[[IMAGE:...]] 9. 如图…"), which
         //     is exactly where questions 1 and 9 were lost.
         const QUESTION_EVIDENCE_MARKER_RE =
-            /(?:^|\n)[\s\u3000]*(?:\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\][\s\u3000]*)*(?:第[\s\u3000]*)?([1-9][0-9]{0,2})[\s\u3000]*(?:题)?[\s\u3000]*[.．、:：\)）][\s\u3000]*/g;
+            /(?:^|\n)[ \t\u3000]*(?:\[\[(?:IMAGE|FORMULA_IMAGE|IMAGE_UNRESOLVED):[^\]]+\]\][ \t\u3000]*)*(?:第[ \t\u3000]*)?([1-9][0-9]{0,2})[ \t\u3000]*(?:题)?[ \t\u3000]*[.．、:：\)）][ \t\u3000]*/g;
 
         // Everything left on the marker's line is a bare number (optionally with 题 or a separator).
         const QUESTION_NUMBERING_ROW_REST_RE =
@@ -1180,6 +1180,7 @@
 
                 marks.push({
                     question: String(questionNo),
+                    leadingMedia: (hit[0].match(/\[\[(?:IMAGE|FORMULA_IMAGE|IMAGE_UNRESOLVED):[^\]]+\]\]/g) || []).join(' '),
                     start: hit.index + (hit[0].startsWith('\n') ? 1 : 0),
                     contentStart: re.lastIndex
                 });
@@ -1191,7 +1192,7 @@
 
             marks.forEach((mark, idx) => {
                 const next = marks[idx + 1];
-                const content = source.slice(mark.contentStart, next ? next.start : source.length).trim();
+                const content = [mark.leadingMedia, source.slice(mark.contentStart, next ? next.start : source.length).trim()].filter(Boolean).join(' ');
 
                 if (!content) return;
 

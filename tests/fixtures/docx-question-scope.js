@@ -48,7 +48,7 @@ const documentXml = '<w:document><w:body>'
     + paragraph(run('A. 一 B. 二 C. 三 D. 四'), OPTION_PARAGRAPH_PR)
 
     // Question 3: plain paragraphs.
-    + paragraph(run('3. 如图，在梯形 中，则 （ ）'))
+    + paragraph(ANCHORED_DRAWING.replace('rId90', 'rId91') + run('3. 如图，在梯形 中，则 （ ）'))
     + paragraph(run('A. 戊 B. 己 C. 庚 D. 辛'))
     + '</w:body></w:document>';
 
@@ -67,6 +67,7 @@ const rootRelsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
 const documentRelsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
     + '<Relationship Id="rId90" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>'
+    + '<Relationship Id="rId91" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>'
     + '</Relationships>';
 
 // One transparent 1x1 PNG so the drawing resolves to a real, displayable image.

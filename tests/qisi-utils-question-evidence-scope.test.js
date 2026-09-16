@@ -38,6 +38,13 @@ test('the flat splitter keeps every question the paper really has', () => {
     assert.match(blocks[0].block, /^已知集合/, 'question 1 is not lost to the numbering row');
     assert.match(blocks[2].block, /如图，在梯形/, 'an image token in front of a marker still starts a question');
     assert.match(blocks[2].block, /A\. 戊/, 'the image-prefixed block keeps its own options');
+    assert.match(blocks[2].block, /\[\[IMAGE:docx_img_9\]\]/, 'the marker must not consume its preceding image');
+});
+
+test('a previous question picture on its own line is not attached to the next question', () => {
+    const blocks = utils.splitFlatTextIntoQuestionBlocks('1. First question\n[[IMAGE:previous]]\n2. Next question');
+    assert.match(blocks[0].block, /\[\[IMAGE:previous\]\]/);
+    assert.doesNotMatch(blocks[1].block, /IMAGE/);
 });
 
 test('a whole-page text is not evidence for one question', () => {

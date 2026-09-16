@@ -770,6 +770,29 @@ Groups 1, 2 and the exam papers are unchanged (their keys use the labelled `【�
 
 `app.js` grew by 6 lines (the key stream is read in one call); the two bloat ceilings moved with it.
 
+## 19. Image ownership at the question marker (2026-09-16, tenth pass)
+
+The DOCX question splitter accepted an image token in front of a question marker (so questions whose
+marker sits behind their own figure are found at all), but the block content started *after* the
+marker, so that figure was silently dropped from the block: `完整版题目.docx` questions 8 and 11 kept
+their token in the extracted text and lost it in the draft.
+
+The rule is now structural, not positional:
+
+- a token **on the same line, in front of the marker** is mechanically part of *that* question, so the
+  marker carries it (as `leadingMedia`) into the block it opens;
+- a token on its own line before the next number is **not** moved: it stays in the preceding block and
+  is never guessed onto the following question;
+- the marker's leading-token scan uses `[ \t\u3000]` rather than `\s`, so it can never reach across a
+  line break and take the previous question's figure;
+- `IMAGE_UNRESOLVED` (a Word WMF/EMF figure the browser cannot display) is recognised by the same
+  rule, so a vector figure is carried as explicit evidence instead of disappearing.
+
+Regressions: `tests/qisi-utils-question-evidence-scope.test.js` (same-line token stays with its own
+question; a standalone token above the next number stays with the previous question) and
+`tests/e2e/docx-question-scope.test.js` through the real importer (question 3's stem keeps its token,
+question 2's stem must not receive it).
+
 ## 15. Group 1 closed: the withheld question (2026-09-16, sixth pass)
 
 This closes item 2 of section 5 in `docs/integration/HANDOFF_2026_09_16.md`.

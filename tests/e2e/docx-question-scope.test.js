@@ -107,6 +107,8 @@ test('every draft keeps its own stem and options, and the paper keeps its questi
         );
 
         const byNumber = new Map(drafts.map(draft => [draft.questionNumber, draft]));
+        assert.match(byNumber.get('3').stem, /\[\[IMAGE:/, 'drawing before the question number must survive the actual importer');
+        assert.doesNotMatch(byNumber.get('2').stem, /\[\[IMAGE:/, 'the following question drawing must not leak into the preceding stem');
 
         for (const [number, keyword] of Object.entries(fixture.stems)) {
             const draft = byNumber.get(number);
