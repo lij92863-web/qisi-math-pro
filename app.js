@@ -1036,10 +1036,10 @@
                     }
 
                     try {
-                        const resp = await fetch(`${baseUrl}/api/health`, {
+                        const resp = await fetchWithTimeout(`${baseUrl}/api/health`, {
                             method: 'GET',
                             cache: 'no-store'
-                        });
+                        }, 5000);
 
                         if (!resp.ok) {
                             throw new Error(`HTTP ${resp.status}`);
@@ -1078,10 +1078,10 @@
                     });
                     console.groupEnd();
 
-                    const resp = await fetch(`${baseUrl}/api/convert/docx-to-pdf`, {
+                    const resp = await fetchWithTimeout(`${baseUrl}/api/convert/docx-to-pdf`, {
                         method: 'POST',
                         body: form
-                    });
+                    }, 60000);
 
                     const data = await resp.json().catch(() => null);
 
@@ -4010,7 +4010,11 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     String(xml || '').replace(/(?:r:embed|r:link|r:id|o:relid)=["']([^"']+)["']/g, (_, rid) => {
                         const ref = imageRefsByRid?.[rid];
                         if (!ref?.id || seen.has(ref.id)) return '';
-                        if (ref.displayable === false) return '';
+                        if (ref.displayable === false) {
+                            tokens.push(`[[IMAGE_UNRESOLVED:${rid}]]`);
+                            seen.add(ref.id);
+                            return '';
+                        }
                         seen.add(ref.id);
                         tokens.push(BLOCK_IMAGE_TOKEN(ref.id));
                         return '';
@@ -4266,8 +4270,9 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     }
                     if (file.fileType === 'docx') {
                         if (!window.JSZip) return '';
-                        const zip = await window.Qisi.ArchiveSecurity.load(JSZip, await dataUrlToBlob(file.uploadPath), 'office-document', { name: file.filename || 'document.docx', type: file.mime || '' });
-                        const doc = await zip.file('word/document.xml')?.async('string');
+                        if (draftFileTextCache.has(file.id)) return draftFileTextCache.get(file.id);
+                        const context = await window.Qisi.IngestionContext.getDocx(file);
+                        const { zip, documentXml: doc, relsXml } = context;
                         window.Qisi.DocxPipeline.debugDocxXmlStructure(doc || '', file.filename);
 
                         const textNodesOnly = extractDocxTextNodesOnly(doc || '');
@@ -4278,8 +4283,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         console.log('head =', textNodesOnly.slice(0, 3000));
                         console.groupEnd();
 
-                        const relsXml = await zip.file('word/_rels/document.xml.rels')?.async('string').catch(() => '') || '';
-                        const { ridImageUrlMap, ridImageMetaMap } = await buildDocxMediaMaps(zip, relsXml, file.filename);
+                        const { ridImageUrlMap, ridImageMetaMap } = await context.trace.measure('media', () => buildDocxMediaMaps(zip, relsXml, file.filename));
                         const imageRefsByRid = {};
                         const imageRefs = [];
 
@@ -4306,7 +4310,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         draftFileRidImageMetaMapCache.set(file.id, ridImageMetaMap);
 
                         try {
-                            const oleBytesByRid = await buildDocxOleBytesMap(zip, relsXml);
+                            const oleBytesByRid = await context.getOleBytes();
                             const docxFormulas = [];
                             let text = extractDocxTextWithMath(
                                 doc || '', imageRefsByRid, oleBytesByRid, docxFormulas
@@ -4314,7 +4318,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             // Formula evidence stays available for provenance and for telling a
                             // deterministic MTEF result apart from a visual one.
                             docxFormulaEvidenceCache.set(file.id, docxFormulas);
-                            text = await resolveFormulaImageTokens(text, docxEmbeddedImageCache.get(file.id) || []);
+                            // Embedded formula images remain source evidence; ordinary DOCX never calls OCR.
 
                             const docxTableText = window.Qisi.DocxPipeline.extractDocxTableTextFallback(doc || '');
 
@@ -4363,10 +4367,8 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             draftFileTextCache.set(file.id, text);
                             return text;
                         } catch (error) {
-                            console.warn('DOCX 公式提取失败，降级为纯文本', error);
-                            const text = xmlText(doc || '');
-                            draftFileTextCache.set(file.id, text);
-                            return text;
+                            console.warn('DOCX 公式提取失败，已停止该文件解析以保留原始证据', error);
+                            throw error;
                         }
                     }
                     if (file.fileType === 'excel') {
@@ -4416,7 +4418,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                 const extractImagesFromDraftFile = async (file) => {
                     if (file.fileType !== 'docx' || !window.JSZip) return [];
-                    const zip = await window.Qisi.ArchiveSecurity.load(JSZip, await dataUrlToBlob(file.uploadPath), 'office-document', { name: file.filename || 'document.docx', type: file.mime || '' });
+                    const { zip } = await window.Qisi.IngestionContext.getDocx(file);
                     const mediaFiles = zip.file(/^word\/media\/.+/);
                     const images = [];
                     for (const media of mediaFiles) {
@@ -16207,6 +16209,7 @@ ${source}`;
                         const consumedVisualFileIds = new Set();
 
                         const questionItems = [];
+                        const ingestionUnmatched = [];
                         const answerItems = [];
                         const solutionItems = [];
                         const fullItems = [];
@@ -16806,10 +16809,6 @@ ${source}`;
                             await db.draftImportFiles.update(file.id, { parseStatus: 'processing', updatedAt: Date.now() });
                             try {
                                 let usedVisualRecognition = false;
-                                // Set when the visual step could not run: the DOCX deterministic evidence
-                                // still has to produce a safe draft set, with the gap recorded.
-                                let needsVisualEnrichment = false;
-                                let docxVisualEnrichmentGap = null;
                                 const isFullRole = batchIsFullRole(file);
                                 const hasQuestionRole = batchHasQuestionRole(file);
                                 const hasAnswerOrSolutionRole = batchHasAnswerRole(file) || batchHasSolutionRole(file);
@@ -16819,477 +16818,34 @@ ${source}`;
                                 let pdfVisualQuestionsCount = 0;
                                 let pdfPageFallbackDrafts = [];
 
-                                if (!usedVisualRecognition && file.fileType === 'docx' && hasQuestionRole) {
-                                    try {
-                                        const expected = batchExpectedCount;
-
-                                        console.warn('[BATCH_DEBUG][docx-local-convert-first]', {
-                                            filename: file.filename,
-                                            expected
-                                        });
-
-                                        const strictResult = await processDocxByLocalConvertAndStrictVision({
-                                            file,
-                                            batch,
-                                            processFiles,
-                                            expectedQuestionCount: expected,
-                                            onPageProgress: async (ratio, info) => {
-                                                await updateBatchProgress(
-                                                    batchId,
-                                                    baseProgress + fileProgressSpan * Math.min(0.95, Math.max(0, ratio || 0)),
-                                                    'processing'
-                                                );
-
-                                                console.log('[BATCH_DEBUG][docx-local-convert-vision-progress]', {
-                                                    filename: file.filename,
-                                                    ratio,
-                                                    info
-                                                });
-                                            }
-                                        });
-
-                                        registerAuthoritativeQuestionContract({
-                                            file,
-                                            skeleton:
-                                                strictResult.questionSkeleton
-                                        });
-
-                                        if (isFullRole) {
-                                            fullItems.push(...strictResult.questions);
-                                        } else {
-                                            questionItems.push(...strictResult.questions);
+                                if (file.fileType === 'docx') {
+                                    const result = await window.Qisi.DocxIngestion.ingest({
+                                        file, questionRole: hasQuestionRole,
+                                        supportRole: hasAnswerOrSolutionRole, fullRole: isFullRole,
+                                        expectedNumbers: authoritativeQuestionContract?.questionNumbers || [],
+                                        helpers: {
+                                            extractText: extractTextFromDraftFile,
+                                            extractSkeleton: window.QisiBatchImporter.extractDocxQuestionSkeleton,
+                                            parseQuestions: parseQuestionItemsFromText,
+                                            parseSupport: parseAnswerAndSolutionItemsFromText
                                         }
-
-                                        logBatchPdfDiag('strict-visual-direct-accepted', {
-                                            batchId,
-                                            filename: file.filename,
-                                            fileType: file.fileType,
-                                            roles: getBatchFileRoles(file),
-                                            addedQuestionCount: strictResult.questions?.length || 0,
-                                            questionItemsCount: questionItems.length,
-                                            fullItemsCount: fullItems.length,
-                                            pageImageCount: strictResult.pageImages?.length || 0
-                                        });
-
-                                        rememberPageImages(strictResult.pageImages || [], file);
-                                        usedVisualRecognition = true;
-
-                                        await db.draftImportFiles.update(file.id, {
-                                            parseStatus: 'success',
-                                            errorMessage: `DOCX 已自动转 PDF 并完成整页视觉识别：${strictResult.pdfRecord?.filename || ''}`,
-                                            updatedAt: Date.now()
-                                        });
-
-                                        await updateBatchProgress(batchId, baseProgress + fileProgressSpan, 'processing');
-                                        continue;
-                                    } catch (error) {
-                                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-
-                                        if (error?.failureSnapshot) {
-                                            console.error(
-                                                '[BATCH_DEBUG][docx-question-failure-snapshot]',
-                                                error.failureSnapshot
-                                            );
-
-                                            try {
-                                                await db
-                                                    .draftImportBatches
-                                                    .update(
-                                                        batchId,
-                                                        {
-                                                            recognitionFailureSnapshot:
-                                                                error.failureSnapshot,
-                                                            updatedAt:
-                                                                Date.now()
-                                                        }
-                                                    );
-                                            } catch (snapshotError) {
-                                                console.error(
-                                                    '[BATCH_DEBUG][docx-question-failure-snapshot-save-failed]',
-                                                    {
-                                                        batchId,
-                                                        message:
-                                                            snapshotError
-                                                                ?.message ||
-                                                            String(
-                                                                snapshotError
-                                                            )
-                                                    },
-                                                    snapshotError
-                                                );
-                                            }
-                                        }
-
-                                        console.error('[BATCH_DEBUG][docx-processing-failed]', {
-                                            filename: file.filename,
-                                            stage: error?.stage || 'unknown',
-                                            message: error?.message || String(error),
-                                            stack: error?.stack
-                                        }, error);
-                                        const renderDiagnostics =
-                                            error?.renderDiagnostics ||
-                                            error?.cause?.renderDiagnostics ||
-                                            error?.cause?.cause?.renderDiagnostics;
-
-                                        if (renderDiagnostics) {
-                                            console.error(
-                                                '[BATCH_DEBUG][pdf-render-failure-snapshot]',
-                                                renderDiagnostics
-                                            );
-                                        }
-
-                                        // Deterministic-first: the visual step is enrichment, not a gate.
-                                        // The DOCX itself already carries the text, the paragraph and
-                                        // table structure, the MathType/MTEF formulas and the media, so a
-                                        // transport or API failure must not throw the whole batch away.
-                                        // The gap is recorded and the deterministic DOCX importer below
-                                        // produces the drafts; only items that really lack visual evidence
-                                        // are marked for visual enrichment.
-                                        const failure = window.Qisi.Utils.describeVisualServiceFailure(error, 'DOCX 视觉增强');
-
-                                        needsVisualEnrichment = true;
-                                        docxVisualEnrichmentGap = {
-                                            stage: error?.stage || 'visual-recognition',
-                                            code: window.Qisi.Utils.classifyVisualServiceFailure(error).code,
-                                            message: failure
-                                        };
-
-                                        console.warn('[BATCH_DEBUG][docx-visual-enrichment-gap]', {
-                                            filename: file.filename,
-                                            stage: docxVisualEnrichmentGap.stage,
-                                            code: docxVisualEnrichmentGap.code,
-                                            message: failure
-                                        });
-
-                                        await db.draftImportFiles.update(file.id, {
-                                            parseStatus: 'partial',
-                                            errorMessage:
-                                                `${failure} 已改用 DOCX 确定性证据继续（题号/题干/选项/公式/图片/答案/解析均来自 DOCX 本身）。`,
-                                            updatedAt: Date.now()
-                                        });
+                                    });
+                                    if (result.skeleton?.authoritative) {
+                                        registerAuthoritativeQuestionContract({ file, skeleton: result.skeleton });
                                     }
-                                }
-
-                                if (
-                                    !usedVisualRecognition &&
-                                    file.fileType === 'docx' &&
-                                    !hasQuestionRole &&
-                                    hasAnswerOrSolutionRole &&
-                                    !isFullRole &&
-                                    recognitionMode !== 'cheap'
-                                ) {
-                                    try {
-                                        const observedQuestionNumbers =
-                                            normalizeQuestionContractNumbers(
-                                                [...questionItems, ...fullItems]
-                                                    .map(item =>
-                                                        item.questionNumber ||
-                                                        item.question ||
-                                                        item.order ||
-                                                        ''
-                                                    )
-                                            );
-
-                                        const hasQuestionDocx =
-                                            processFiles.some(
-                                                item =>
-                                                    item.fileType === 'docx' &&
-                                                    batchHasQuestionRole(item)
-                                            );
-
-                                        if (
-                                            hasQuestionDocx &&
-                                            !authoritativeQuestionContract
-                                        ) {
-                                            const error = new Error(
-                                                '批次包含题目 DOCX，' +
-                                                '但尚未建立权威题号契约。' +
-                                                '已停止答案识别。'
-                                            );
-
-                                            error.code =
-                                                'AUTHORITATIVE_QUESTION_CONTRACT_MISSING';
-
-                                            throw error;
-                                        }
-
-                                        const expectedQuestionNumbers =
-                                            authoritativeQuestionContract
-                                                ? [
-                                                    ...authoritativeQuestionContract
-                                                        .questionNumbers
-                                                ]
-                                                : observedQuestionNumbers;
-
-                                        if (
-                                            expectedQuestionNumbers.length === 0
-                                        ) {
-                                            const error = new Error(
-                                                '处理答案/解析文件前尚未获得题目题号集合。'
-                                            );
-
-                                            error.code =
-                                                'SUPPORT_EXPECTED_QUESTIONS_MISSING';
-
-                                            throw error;
-                                        }
-
-                                        console.log(
-                                            '[BATCH_DEBUG][support-question-contract]',
-                                            {
-                                                filename:
-                                                    file.filename,
-
-                                                evidence:
-                                                    authoritativeQuestionContract
-                                                        ?.evidence ||
-                                                    'recognized-question-items-fallback',
-
-                                                expectedQuestionNumbers,
-
-                                                observedQuestionNumbers
-                                            }
-                                        );
-
-                                        console.log(
-                                            '[BATCH_DEBUG][docx-support-visual-start]',
-                                            {
-                                                filename:
-                                                    file.filename,
-                                                roles:
-                                                    getBatchFileRoles(file),
-                                                recognitionMode,
-                                                expectedQuestionNumbers
-                                            }
-                                        );
-
-                                        // Deterministic-first: the answers and solutions were already parsed
-                                        // from the support DOCX text, so the page-image upgrade is optional.
-                                        // A transport or API failure here records a gap instead of ending the
-                                        // batch, and only items that really lack evidence ask for enrichment.
-                                        let supportResult = null;
-                                        let supportVisualUnavailable = false;
-                                        try {
-                                            supportResult =
-                                            await processStandaloneDocxSupportByVision({
-                                                file,
-                                                expectedQuestionNumbers,
-                                                requiredKinds: {
-                                                    answers:
-                                                        batchHasAnswerRole(file),
-                                                    solutions:
-                                                        batchHasSolutionRole(file)
-                                                },
-                                                onPageProgress:
-                                                    async (
-                                                        ratio,
-                                                        info
-                                                    ) => {
-                                                        const safeRatio =
-                                                            Math.min(
-                                                                1,
-                                                                Math.max(
-                                                                    0,
-                                                                    Number(
-                                                                        ratio || 0
-                                                                    )
-                                                                )
-                                                            );
-
-                                                        await updateBatchProgress(
-                                                            batchId,
-                                                            baseProgress +
-                                                            fileProgressSpan *
-                                                            (
-                                                                0.20 +
-                                                                safeRatio *
-                                                                0.75
-                                                            ),
-                                                            'processing'
-                                                        );
-
-                                                        console.log(
-                                                            '[BATCH_DEBUG][docx-support-visual-progress]',
-                                                            {
-                                                                filename:
-                                                                    file.filename,
-                                                                ratio:
-                                                                    safeRatio,
-                                                                info
-                                                            }
-                                                        );
-                                                    }
-                                            });
-                                        } catch (supportError) {
-                                            supportVisualUnavailable = true;
-                                            needsVisualEnrichment = true;
-                                            docxVisualEnrichmentGap = docxVisualEnrichmentGap || {
-                                                stage: 'docx-support-vision',
-                                                code: window.Qisi.Utils.classifyVisualServiceFailure(supportError).code,
-                                                message: window.Qisi.Utils.describeVisualServiceFailure(supportError, '答案/解析视觉增强')
-                                            };
-
-                                            console.warn('[BATCH_DEBUG][docx-support-visual-enrichment-gap]', {
-                                                filename: file.filename,
-                                                stage: docxVisualEnrichmentGap.stage,
-                                                code: docxVisualEnrichmentGap.code,
-                                                message: docxVisualEnrichmentGap.message
-                                            });
-
-                                            // Deterministic-first for the answer/solution file: the DOCX text
-                                            // is parsed with the same parser the rest of the batch uses, so
-                                            // the answers and solutions are attached with their own source
-                                            // provenance. Nothing is guessed: a question whose answer is not
-                                            // stated in the file simply stays empty for manual review.
-                                            try {
-                                                const supportText = await extractTextFromDraftFile(file);
-                                                if (supportText) draftFileTextCache.set(file.id, supportText);
-
-                                                const parsedSupport = supportText
-                                                    ? parseAnswerAndSolutionItemsFromText(supportText, file)
-                                                    : { answers: [], solutions: [] };
-
-                                                // Scope the support file to the questions this batch owns.
-                                                // The answer file may cover more questions (it is shared with
-                                                // another paper); items outside the contract are reported as
-                                                // unmatched instead of being attached to the wrong question.
-                                                const contractNumbers = new Set(
-                                                    (
-                                                        authoritativeQuestionContract
-                                                            ?.questionNumbers || []
-                                                    )
-                                                        .map(value => normalizeQuestionKey(value))
-                                                        .filter(Boolean)
-                                                );
-                                                const belongsToContract = item => {
-                                                    const number = normalizeQuestionKey(
-                                                        item?.questionNumber ||
-                                                        item?.question ||
-                                                        item?.order ||
-                                                        ''
-                                                    );
-                                                    return Boolean(number) && contractNumbers.has(number);
-                                                };
-                                                const supportAnswers = (parsedSupport.answers || [])
-                                                    .filter(belongsToContract);
-                                                const supportSolutions = (parsedSupport.solutions || [])
-                                                    .filter(belongsToContract);
-                                                const outsideContract = (parsedSupport.answers || []).length
-                                                    - supportAnswers.length
-                                                    + ((parsedSupport.solutions || []).length
-                                                        - supportSolutions.length);
-
-                                                answerItems.push(...supportAnswers);
-                                                solutionItems.push(...supportSolutions);
-                                                if (outsideContract > 0) {
-                                                    unmatchedAnswers.value = [
-                                                        ...(unmatchedAnswers.value || []),
-                                                        {
-                                                            fileId: file.id,
-                                                            filename: file.filename,
-                                                            count: outsideContract,
-                                                            reason: 'outside-question-contract'
-                                                        }
-                                                    ];
-                                                }
-
-                                                console.log('[BATCH_DEBUG][docx-support-deterministic-parsed]', {
-                                                    filename: file.filename,
-                                                    answerCount: supportAnswers.length,
-                                                    solutionCount: supportSolutions.length,
-                                                    outsideContract
-                                                });
-                                            } catch (supportParseError) {
-                                                console.warn('[BATCH_DEBUG][docx-support-deterministic-parse-failed]', {
-                                                    filename: file.filename,
-                                                    message: supportParseError?.message || String(supportParseError)
-                                                });
-                                            }
-                                        }
-
-                                        if (!supportVisualUnavailable) {
-                                            answerItems.push(
-                                                ...(supportResult.answers || [])
-                                            );
-
-                                            solutionItems.push(
-                                                ...(supportResult.solutions || [])
-                                            );
-
-                                            rememberPageImages(
-                                                supportResult.pageImages || [],
-                                                file
-                                            );
-
-                                            usedVisualRecognition = true;
-
-                                            await db.draftImportFiles.update(
-                                                file.id,
-                                                {
-                                                    parseStatus:
-                                                        'success',
-                                                    errorMessage:
-                                                        '答案/解析 DOCX 已转 PDF 并完成视觉识别：' +
-                                                        `${supportResult.pdfRecord?.filename || ''}`,
-                                                    updatedAt:
-                                                        Date.now()
-                                                }
-                                            );
-                                        } else {
-                                            await db.draftImportFiles.update(
-                                                file.id,
-                                                {
-                                                    parseStatus:
-                                                        'partial',
-                                                    errorMessage:
-                                                        `${docxVisualEnrichmentGap.message} ` +
-                                                        '已改用 DOCX 确定性答案/解析继续。',
-                                                    updatedAt:
-                                                        Date.now()
-                                                }
-                                            );
-                                        }
-
-                                        await updateBatchProgress(
-                                            batchId,
-                                            baseProgress +
-                                            fileProgressSpan,
-                                            'processing'
-                                        );
-
-                                        continue;
-                                    } catch (error) {
-                                        const renderDiagnostics =
-                                            error?.renderDiagnostics ||
-                                            error?.cause?.renderDiagnostics ||
-                                            error?.cause?.cause?.renderDiagnostics;
-
-                                        if (renderDiagnostics) {
-                                            console.error(
-                                                '[BATCH_DEBUG][pdf-render-failure-snapshot]',
-                                                renderDiagnostics
-                                            );
-                                        }
-                                        console.error(
-                                            '[BATCH_DEBUG][docx-support-visual-failed]',
-                                            {
-                                                filename:
-                                                    file.filename,
-                                                stage:
-                                                    error?.stage ||
-                                                    'unknown',
-                                                code:
-                                                    error?.code ||
-                                                    '',
-                                                message:
-                                                    error?.message ||
-                                                    String(error)
-                                            },
-                                            error
-                                        );
-
-                                        throw error;
-                                    }
+                                    (isFullRole ? fullItems : questionItems).push(...result.questions);
+                                    answerItems.push(...result.answers);
+                                    solutionItems.push(...result.solutions);
+                                    ingestionUnmatched.push(...result.unmatched);
+                                    await db.draftImportFiles.update(file.id, {
+                                        parseStatus: result.unmatched.length ? 'partial' : 'success',
+                                        ingestionTimings: result.timings,
+                                        unmatchedEvidence: result.unmatched,
+                                        errorMessage: result.unmatched.length ? '部分答案或解析的题号无法确认，请人工核对。' : '',
+                                        updatedAt: Date.now()
+                                    });
+                                    await updateBatchProgress(batchId, baseProgress + fileProgressSpan, 'processing');
+                                    continue;
                                 }
 
                                 if (
@@ -17784,271 +17340,6 @@ ${source}`;
                                         text = '';
                                     }
                                 }
-                                if (!usedVisualRecognition && file.fileType === 'docx' && hasQuestionRole) {
-                                    let docxImporterItems = [];
-                                    let docxImporterResult = null;
-                                    const expectedDocxQuestionCount = 0;
-                                    const companionVisualFile = window.Qisi.DocxPipeline.findUploadedVisualCompanionForDocx(file, processFiles);
-
-                                    // The answer/solution file needs a question-number contract, which the
-                                    // visual path used to be the only source of. The DOCX skeleton is the
-                                    // same evidence without vision, so it becomes the contract whenever it
-                                    // is authoritative; otherwise the gap is recorded instead of guessing.
-                                    if (!authoritativeQuestionContract) {
-                                        try {
-                                            const skeleton = await window.QisiBatchImporter
-                                                .extractDocxQuestionSkeleton(file);
-
-                                            if (skeleton?.authoritative) {
-                                                registerAuthoritativeQuestionContract({ file, skeleton });
-
-                                                console.log('[BATCH_DEBUG][docx-skeleton-contract]', {
-                                                    filename: file.filename,
-                                                    questionNumbers: skeleton.questionNumbers
-                                                });
-                                            } else {
-                                                needsVisualEnrichment = true;
-                                                docxVisualEnrichmentGap = docxVisualEnrichmentGap || {
-                                                    stage: 'docx-question-skeleton',
-                                                    code: `SKELETON_${String(skeleton?.diagnostics?.reason || 'not-authoritative').toUpperCase()}`,
-                                                    message:
-                                                        `DOCX 题号骨架不可靠（${skeleton?.diagnostics?.reason || 'unknown'}），` +
-                                                        '答案/解析对位需要人工或视觉确认。'
-                                                };
-
-                                                console.warn('[BATCH_DEBUG][docx-skeleton-not-authoritative]', {
-                                                    filename: file.filename,
-                                                    diagnostics: skeleton?.diagnostics || null
-                                                });
-                                            }
-                                        } catch (skeletonError) {
-                                            console.warn('[BATCH_DEBUG][docx-skeleton-failed]', {
-                                                filename: file.filename,
-                                                message: skeletonError?.message || String(skeletonError)
-                                            });
-                                        }
-                                    }
-
-                                    if (companionVisualFile) {
-                                        const expected = batchExpectedCount || expectedDocxQuestionCount || 0;
-
-                                        console.warn('[BATCH_DEBUG][docx-use-uploaded-visual-companion]', {
-                                            docx: file.filename,
-                                            companion: companionVisualFile.filename,
-                                            companionType: companionVisualFile.fileType,
-                                            expected
-                                        });
-
-                                        const strictResult = await processStrictVisualQuestionFile({
-                                            file: companionVisualFile,
-                                            batch,
-                                            expectedQuestionCount: expected,
-                                            onPageProgress: async (ratio, info) => {
-                                                await updateBatchProgress(
-                                                    batchId,
-                                                    baseProgress + fileProgressSpan * Math.min(0.95, Math.max(0, ratio || 0)),
-                                                    'processing'
-                                                );
-
-                                                console.log('[BATCH_DEBUG][docx-companion-visual-progress]', {
-                                                    docx: file.filename,
-                                                    companion: companionVisualFile.filename,
-                                                    ratio,
-                                                    info
-                                                });
-                                            }
-                                        });
-
-                                        const check = strictResult.check || validateVisualQuestionItems(strictResult.questions, expected);
-                                        if (check.fatal) {
-                                            throw new Error(
-                                                `DOCX 伴随视觉文件识别发生致命错误：${(check.fatalReasons || check.reasons || []).join('；') || '未知原因'}`
-                                            );
-                                        }
-
-                                        if (isFullRole) {
-                                            fullItems.push(...strictResult.questions);
-                                        } else {
-                                            questionItems.push(...strictResult.questions);
-                                        }
-
-                                        rememberPageImages(strictResult.pageImages || [], companionVisualFile);
-                                        consumedVisualFileIds.add(companionVisualFile.id);
-                                        usedVisualRecognition = true;
-
-                                        await db.draftImportFiles.update(file.id, {
-                                            parseStatus: 'success',
-                                            errorMessage: `DOCX 含 WMF/OLE 时优先使用伴随视觉文件 ${companionVisualFile.filename} 识别`,
-                                            updatedAt: Date.now()
-                                        });
-
-                                        await db.draftImportFiles.update(companionVisualFile.id, {
-                                            parseStatus: 'success',
-                                            errorMessage: `已作为 ${file.filename} 的视觉识别来源`,
-                                            updatedAt: Date.now()
-                                        });
-
-                                        await updateBatchProgress(batchId, baseProgress + fileProgressSpan, 'processing');
-                                        continue;
-                                    }
-
-                                    console.warn('[BATCH_DEBUG][docx-no-uploaded-visual-companion]', {
-                                        filename: file.filename,
-                                        message: '本轮主流程不再读取 manifest/page-1.png 固定路径；如 DOCX 含 WMF/OLE，必须通过本地转换服务先转 PDF。'
-                                    });
-
-                                    if (!docxImporterItems.length) {
-                                    try {
-                                        if (!window.QisiBatchImporter?.parseDocxFile) {
-                                            throw new Error('批量录题 DOCX 模块未加载，请检查 qisi-batch-importer.js 引入顺序。');
-                                        }
-
-                                        docxImporterResult = await window.QisiBatchImporter.parseDocxFile(file, {
-                                            defaultMeta: toRaw(batchDefaultMeta),
-                                            helpers: {
-                                                cleanRecognizedText,
-                                                cleanDisplayTextForBatchSave,
-                                                cleanDisplayOptionsForBatchSave,
-                                                normalizeAnswerForLatex,
-                                                makeBatchId,
-                                                recognizeTextQuestionsWithQwen,
-                                                recognizeAnswerSolutionWithQwen,
-                                                isFatalQwenServiceError,
-                                                updateProgress: (progress) => updateBatchProgress(
-                                                    batchId,
-                                                    baseProgress + fileProgressSpan * Math.min(0.95, Math.max(0, progress || 0)),
-                                                    'processing'
-                                                )
-                                            }
-                                        });
-
-                                        docxImporterItems = (docxImporterResult.drafts || [])
-                                            .map(window.Qisi.ReviewDraftState.convertDocxImporterDraftToRecognitionItem)
-                                            .filter(item => {
-                                                const stem = window.Qisi.Utils.cleanRecognizedText(item?.stem || '');
-                                                const optionCount = Array.isArray(item?.options)
-                                                    ? item.options.filter(opt => window.Qisi.Utils.cleanRecognizedText(opt || '')).length
-                                                    : 0;
-                                                return stem.length > 0 || optionCount > 0;
-                                            });
-                                    } catch (error) {
-                                        if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-
-                                        console.warn('[BATCH_DEBUG][docx-importer-failed-fallback-to-text]', {
-                                            filename: file.filename,
-                                            message: error?.message || String(error)
-                                        }, error);
-
-                                        docxImporterItems = [];
-                                        docxImporterResult = null;
-                                    }
-                                    }
-
-                                    if (docxImporterItems.length > 0 && docxImporterItems.some(window.Qisi.Utils.itemHasUnconvertedImagePlaceholder)) {
-                                        console.error('[BATCH_DEBUG][docx-placeholder-blocked-no-uploaded-visual]', {
-                                            filename: file.filename,
-                                            itemCount: docxImporterItems.length
-                                        });
-
-                                        throw new Error(
-                                            `DOCX ${file.filename} 中存在 WMF/EMF/OLE 公式图片选项，不能直接转成 LaTeX。` +
-                                            '本地转换服务未能成功将 DOCX 转为 PDF，因此不能生成完整 LaTeX。' +
-                                            '请确认已经运行 npm start，并用 http://localhost:3000/main.html 打开软件。'
-                                        );
-                                    }
-
-                                    if (docxImporterItems.length > 0) {
-                                        if (needsVisualEnrichment) {
-                                            // The gap belongs to the whole file, but only the items whose
-                                            // own evidence is incomplete need a human/visual look; the
-                                            // rest stay usable on DOCX evidence alone.
-                                            docxImporterItems = docxImporterItems.map(item => {
-                                                const evidence = JSON.stringify({
-                                                    stem: item?.stem || '',
-                                                    options: item?.options || [],
-                                                    solution: item?.solution || ''
-                                                });
-                                                const incomplete = /\[\[MTEF_UNRESOLVED:/.test(evidence)
-                                                    || /公式图片|待识别|待转换/.test(evidence);
-                                                const gapNote =
-                                                    `NEEDS_VISUAL_ENRICHMENT：${docxVisualEnrichmentGap.message}`;
-
-                                                return {
-                                                    ...item,
-                                                    visualEnrichmentGap: docxVisualEnrichmentGap,
-                                                    ...(incomplete
-                                                        ? {
-                                                            needsVisualEnrichment: true,
-                                                            warnings: [
-                                                                ...(Array.isArray(item.warnings) ? item.warnings : []),
-                                                                gapNote
-                                                            ]
-                                                        }
-                                                        : {})
-                                                };
-                                            });
-
-                                            await db.draftImportBatches.update(batchId, {
-                                                recognitionEnrichmentGap: docxVisualEnrichmentGap,
-                                                updatedAt: Date.now()
-                                            });
-                                        }
-
-                                        if (isFullRole) {
-                                            fullItems.push(...docxImporterItems);
-                                        } else {
-                                            questionItems.push(...docxImporterItems);
-                                        }
-
-                                        // 不直接使用 docxImporterResult.draftImages。
-                                        // DOCX importer 的 inline 图片通过 item.images -> mergeDraftRecognition -> draft.images 传递。
-                                        // 直接 push draftImages 会造成 questionId 与最终 draft.id 不一致。
-
-                                        if (isFullRole || hasAnswerOrSolutionRole) {
-                                            let parsed = text
-                                                ? parseAnswerAndSolutionItemsFromText(text, file)
-                                                : { answers: [], solutions: [] };
-
-                                            if (text) {
-                                                try {
-                                                    const qwenParsed = await recognizeAnswerSolutionWithQwen(text, file);
-                                                    parsed = mergeAnswerSolutionResults(parsed, qwenParsed);
-                                                } catch (error) {
-                                                    console.warn('[BATCH_DEBUG][docx-answer-solution-qwen-failed-keep-local]', error);
-                                                }
-                                            }
-
-                                            answerItems.push(...(parsed.answers || []));
-                                            solutionItems.push(...(parsed.solutions || []));
-                                        }
-
-                                        console.groupCollapsed('[BATCH_DEBUG][docx-importer-items]');
-                                        console.table(docxImporterItems.map((item, idx) => ({
-                                            idx,
-                                            q: item.question || item.questionNumber,
-                                            type: item.type,
-                                            optionCount: Array.isArray(item.options) ? item.options.filter(Boolean).length : 0,
-                                            optionA: item.options?.[0] || '',
-                                            optionB: item.options?.[1] || '',
-                                            optionC: item.options?.[2] || '',
-                                            optionD: item.options?.[3] || '',
-                                            stemHead: window.Qisi.Utils.cleanRecognizedText(item.stem).slice(0, 120),
-                                            optionImageCount: Array.isArray(item.images) ? item.images.length : 0
-                                        })));
-                                        console.groupEnd();
-
-                                        // 只有 importer 真正产出题目时，才阻止后续旧文本流程。
-                                        usedVisualRecognition = true;
-                                    } else {
-                                        console.warn('[BATCH_DEBUG][docx-importer-empty-fallback-to-text]', {
-                                            filename: file.filename,
-                                            hasTextFallback: Boolean(text),
-                                            textLength: String(text || '').length
-                                        });
-
-                                        // 关键：这里不能设置 usedVisualRecognition = true，后面的旧文本流程会继续执行。
-                                    }
-                                }
                                 if (usedVisualRecognition && file.fileType === 'pdf' && text) {
                                     const attachTextLayerEvidence = (item) => {
                                         if (!item || item.sourceFileId !== file.id) return;
@@ -18244,13 +17535,7 @@ ${source}`;
                                 authoritativeQuestionContract
                             }
                         );
-                        let drafts = hasAuthoritativeQuestionContract
-                            ? merged.drafts
-                            : repairDraftAnswersByOrder(
-                                merged.drafts,
-                                answerItems,
-                                solutionItems
-                            );
+                        let drafts = merged.drafts;
 
                         // 第一道闸门：刚生成 drafts 后，先去掉明显重复，避免后续答案对齐、视觉修复浪费在重复题上。
                         let batchGateResult = batchFinalGateDedupeDrafts(drafts, {
@@ -18338,15 +17623,6 @@ ${source}`;
                             }
                         }
 
-                        if (!hasAuthoritativeQuestionContract && !pdfSupportFailClosed) {
-                            try {
-                                await repairDraftAnswersWithQwen(drafts, answerItems, solutionItems);
-                            } catch (error) {
-                                if (window.Qisi.Utils.isFatalQwenServiceError(error)) throw error;
-                                console.warn('答案全局对齐失败，保留已有匹配结果', error);
-                            }
-                        }
-
                         console.groupCollapsed('[BATCH_DEBUG][docx-current-final-before-save]');
                         console.table((drafts || []).map((d, idx) => ({
                             idx,
@@ -18371,7 +17647,7 @@ ${source}`;
                             const sourceFileForDraft = files.find(file =>
                                 file.id === (draft.sourceFileId || draft.sourceQuestionFileId || draft.sourceTrace?.sourceFileId)
                             );
-                            if (sourceFileForDraft?.fileType === 'docx' && draft.sourceTrace?.source !== 'docx-importer') {
+                            if (sourceFileForDraft?.fileType === 'docx' && !draftFileTextCache.has(sourceFileForDraft.id)) {
                                 addWarningOnce(draft, DOCX_TEXT_ONLY_WARNING);
                             }
                             window.Qisi.Utils.preserveRawEvidence(draft);
@@ -18760,6 +18036,7 @@ ${source}`;
                         console.groupEnd();
 
                         batchDebugLog('final', drafts.map(toBatchDebugQuestion));
+                        drafts.forEach(window.Qisi.DocxIngestion.markImageGaps);
                         if (activeBatchCostStats) {
                             console.groupCollapsed('[BATCH_COST][summary]');
                             console.table([activeBatchCostStats]);
@@ -18842,7 +18119,7 @@ ${source}`;
                                 submittedCount: 0,
                                 problemCount,
                                 unassignedImageCount: finalDraftImages.filter(img => img.status === 'unassigned').length,
-                                unmatchedAnswers: unmatched,
+                                unmatchedAnswers: [...unmatched, ...ingestionUnmatched],
                                 updatedAt: Date.now(),
                                 errorMessage: drafts.length ? '' : '没有识别到题目，请确认文件内容清晰，或重新上传 DOCX / PDF。'
                             });
@@ -22133,4 +21410,3 @@ Promise.all([imageReady, fontReady]).then(() => {
                 ]
             }
         );
-

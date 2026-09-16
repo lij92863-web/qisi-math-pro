@@ -5,6 +5,22 @@ const reader = require('../qisi-docx-mtef-reader.js');
 const oleReader = require('../qisi-docx-ole-reader.js');
 const { buildOleContainer, equationNativeStream } = require('./helpers/ole-container.js');
 
+test('MTEF subscript and superscript slots attach to the preceding base', () => {
+    const char = c => Buffer.from([2, 0, 0x88, c.charCodeAt(0), 0]);
+    const line = s => Buffer.concat([Buffer.from([1, 0]), ...[...s].map(char), Buffer.from([0])]);
+    for (const [selector, sub, sup, expected] of [
+        [27, 'A', '', 'C_{A}'], [28, '', '2', 'C^{2}'], [29, '1', '2', 'C_{1}^{2}']
+    ]) {
+        const bytes = Buffer.concat([
+            Buffer.from([5, 1, 0, 7, 8]), Buffer.from('DSMT4\0'), Buffer.from([0, 1, 0]),
+            char('C'), Buffer.from([3, 0, selector, 0, 0]), line(sub), line(sup), Buffer.from([0, 0, 0])
+        ]);
+        const result = reader.readFormulaFromOle(buildOleContainer('Equation Native', equationNativeStream(bytes)));
+        assert.equal(result.status, 'extracted');
+        assert.equal(result.latex, expected);
+    }
+});
+
 // A structural MTEF line that renders the single character "x".
 const reconstructedMtef = () => Buffer.concat([
     Buffer.from([5, 1, 0, 7, 8]),

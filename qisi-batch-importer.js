@@ -5,6 +5,7 @@
     };
 
     const loadDocxZip = async (fileRecord) => {
+        if (window.Qisi?.IngestionContext) return (await window.Qisi.IngestionContext.getDocx(fileRecord)).zip;
         if (!window.JSZip) throw new Error('JSZip not loaded, cannot parse DOCX.');
         const buffer = await dataUrlToArrayBuffer(fileRecord.uploadPath);
         return await window.Qisi.ArchiveSecurity.load(
@@ -94,8 +95,7 @@
             const ext = getExt(target);
             const isMedia =
                 /\/image/i.test(rel.type || '') ||
-                /oleObject/i.test(rel.type || '') ||
-                /\.(png|jpe?g|gif|bmp|webp|svg|emf|wmf|bin)$/i.test(target);
+                /\.(png|jpe?g|gif|bmp|webp|svg|emf|wmf)$/i.test(target);
 
             if (!isMedia) continue;
 
@@ -486,6 +486,7 @@
         let current = null;
 
         for (const p of paragraphs) {
+            if (/^(?:.{0,12}?)?(?:参考答案|答案|答案[与及和]解析)\s*[:：]?\s*$/.test(p.text.trim()) && current) break;
             const qNo = getQuestionNoFromLine(p.text || '');
 
             if (qNo) {
@@ -629,7 +630,8 @@
 
         const {
             documentXml
-        } = await readDocxCoreXml(zip);
+        } = window.Qisi?.IngestionContext
+            ? await window.Qisi.IngestionContext.getDocx(fileRecord) : await readDocxCoreXml(zip);
 
         if (!documentXml) {
             throw new Error(
@@ -904,9 +906,14 @@
         const draftImages = [];
 
         const zip = await loadDocxZip(fileRecord);
-        const { documentXml, relsXml } = await readDocxCoreXml(zip);
+        const extraction = window.Qisi?.IngestionContext
+            ? await window.Qisi.IngestionContext.getDocx(fileRecord) : null;
+        const { documentXml, relsXml } = extraction || await readDocxCoreXml(zip);
+        const expanded = extraction
+            ? window.Qisi.DocxPipeline.expandDocxMathTypeFormulasForV2(documentXml, await extraction.getOleBytes())
+            : { text: documentXml, formulas: [] };
         const mediaMap = await buildMediaMaps(zip, relsXml, fileRecord.filename);
-        const blocks = buildQuestionBlocksFromDocumentXml(documentXml);
+        const blocks = buildQuestionBlocksFromDocumentXml(expanded.text);
 
         const drafts = blocks.map((block, index) => {
             const parsedOptions = parseOptionsFromBlock(block, mediaMap, helpers);
@@ -934,6 +941,7 @@
                 images: optionImages,
                 questionImages: [],
                 rawBlock: block.lines.join('\n'),
+                formulaEvidence: expanded.formulas,
                 renderableText: parsedOptions.renderableText || '',
                 sourceFileId: fileRecord.id || '',
                 sourceFileName: fileRecord.filename || '',

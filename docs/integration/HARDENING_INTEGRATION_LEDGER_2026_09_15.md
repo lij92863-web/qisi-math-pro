@@ -815,3 +815,12 @@ npm run verify:docx-stable  passed
 npm run verify:pdf-known-bad passed
 npm run verify:batch-safety passed
 ```
+# 2026-09-16 continuous ingestion audit (owner authorized)
+
+See `INGESTION_AUDIT_PLAN_2026_09_16.md` for the independent baseline and scope. `app.js` now
+delegates ordinary DOCX ingestion to a deterministic module, sharing a single archive context,
+and no longer runs order-based or AI index-based support repair. Automatic Word numbering is
+resolved from numbering.xml; ambiguous pictures and MTEF structures stay visible and withheld.
+The seal regression now hashes the actual working file, so exact reviewed content can pass the
+gate BEFORE a commit and uncommitted unauthorized edits cannot hide behind HEAD. No ceiling is
+raised. Original materials and local evidence remain untracked; main and real data are untouched.

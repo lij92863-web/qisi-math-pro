@@ -176,8 +176,8 @@
             return `\\left${left}${slots[0] || ''}\\right${right}`;
         }
         if (selector === 10) {
-            return variation & 1
-                ? `\\sqrt[${slots[0] || ''}]{${slots[1] || ''}}`
+            return variation & 1 && slots[1]
+                ? `\\sqrt[${slots[1] || ''}]{${slots[0] || ''}}`
                 : `\\sqrt{${slots[0] || ''}}`;
         }
         if (selector === 11) return `\\frac{${slots[0] || ''}}{${slots[1] || ''}}`;
@@ -195,9 +195,14 @@
             const upper = slots[2] ? `^{${slots[2]}}` : '';
             return `${slots[0] || ''}${lower}${upper}`;
         }
-        if (selector === 27) return `{${slots[0] || ''}}_{${slots[1] || ''}}`;
-        if (selector === 28) return `{${slots[0] || ''}}^{${slots[1] || ''}}`;
-        if (selector === 29) return `{${slots[0] || ''}}_{${slots[1] || ''}}^{${slots[2] || ''}}`;
+        if (selector >= 27 && selector <= 29) {
+            // MTEF's script template contains sub/sup slots, not a base. The base is
+            // the preceding record. Keeping slot zero as a base silently turned C_A into CA.
+            if (variation & 1 || slots.length !== 2) return unsupported();
+            const lower = slots[0] ? `_{${slots[0]}}` : '';
+            const upper = slots[1] ? `^{${slots[1]}}` : '';
+            return `${lower}${upper}`;
+        }
         if (selector === 31) return `\\vec{${slots[0] || ''}}`;
         if (selector === 32) return `\\widetilde{${slots[0] || ''}}`;
         if (selector === 33) return `\\widehat{${slots[0] || ''}}`;

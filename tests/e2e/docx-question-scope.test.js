@@ -84,6 +84,10 @@ test('every draft keeps its own stem and options, and the paper keeps its questi
 }, async () => {
     const harness = await startBrowserApp(32133);
     const { page } = harness;
+    const conversions = [];
+    page.on('request', request => {
+        if (request.url().includes('/api/convert/')) conversions.push(request.url());
+    });
 
     try {
         const base64 = await buildDocxInPage(page, {
@@ -137,6 +141,8 @@ test('every draft keeps its own stem and options, and the paper keeps its questi
             false
         );
         assert.deepEqual(harness.pageErrors, []);
+        assert.deepEqual(conversions, [], 'ordinary DOCX must never require PDF conversion');
+        assert.deepEqual(harness.forbiddenRequests, [], 'ordinary DOCX must not attempt AI/OCR');
     } finally {
         await harness.close();
     }

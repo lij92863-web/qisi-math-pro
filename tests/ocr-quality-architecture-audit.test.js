@@ -32,6 +32,10 @@ const gitBlobOf = (revision, file) => {
         return '';
     }
 };
+const workingBlobOf = file => fs.existsSync(path.join(root, file))
+    ? execFileSync('git', ['hash-object', '--path', file, file], {
+        cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']
+    }).trim() : '';
 // Line endings are normalised so the hash means "this content", not "this checkout's autocrlf".
 const contentSha256 = file => {
     const full = path.join(root, file);
@@ -96,7 +100,7 @@ test('Program A controlled-write, FormalAdmission, Route B, and app stay unchang
         const entry = approved[file];
         if (!entry) {
             assert.equal(
-                gitBlobOf('HEAD', file),
+                workingBlobOf(file),
                 gitBlobOf(PROGRAM_A_SEAL, file),
                 `${file} changed without an entry in ${APPROVAL_REGISTER_PATH}`
             );
@@ -116,7 +120,7 @@ test('Program A controlled-write, FormalAdmission, Route B, and app stay unchang
         assert.match(read(entry.ledger), new RegExp(file.replace(/[.]/g, '\\.')), entry.ledger);
 
         assert.equal(
-            gitBlobOf('HEAD', file),
+            workingBlobOf(file),
             entry.gitBlob,
             `${file} differs from the approved blob; review the change and update ${APPROVAL_REGISTER_PATH}`
         );
