@@ -159,6 +159,42 @@ every group, so it needs its own before/after matrix run.
 
 ## 6. What this round does **not** claim
 
+## 6b. Groups 5–11: the pages are rendered, the per-question pass has started (2026-09-16, later round)
+
+The originals are now rendered for every remaining group with the same method as groups 1–4
+(`artifacts/audit-baseline/rendered-g5` … `rendered-g11`, LibreOffice outside the sandbox, then pdf.js
+per page):
+
+```text
+G5 高二.docx                     22 pages      G6 题目+答案.docx                11 pages
+G7 佛山一模                       12 pages      G8 深圳高级中学                   12 pages
+G9 十二校一模                     12 pages      G10 河北昌黎                     12 pages
+G11 武汉四调                      12 pages
+```
+
+A tool was written to compare every draft against the rendered page text
+(`artifacts/audit-baseline/group-page-crosscheck.cjs`). It is **not** evidence and is not used as a
+`VISUALLY_VERIFIED` label: the text layer of a maths paper splits formulas into glyph runs, so a stem's
+token coverage of 0.4–0.8 is normal and an answer string of one digit matches anywhere. It is kept only
+to point at pages worth looking at.
+
+### 6b.1 What was actually looked at in this round: 佛山一模 (G7) pages 1 and 4
+
+| # | page shows | draft | verdict |
+| --- | --- | --- | --- |
+| 1 | 复数 $z$ 满足 $\frac{z}{z+i}=1-i$，求 $\left|z-2i\right|$（选项 $2$、$\sqrt{5}$、$2\sqrt{2}$、$\sqrt{10}$） | stem and the four options match | `VISUALLY_VERIFIED_G7_Q1` |
+| 2 | 集合 $A=\{x\mid-1<x\le1\}$、$B=\{x\mid0<x<2\}$，求 $A\cap B$ | stem and options match, answer A = $\{x\mid0<x\le1\}$ is the page's own option A | `VISUALLY_VERIFIED_G7_Q2` |
+| 3 | 80,90,96,$x$,110,120 的第 50 百分位数与平均数相同，求 $x$（选项 98 / 104 / 106 / 108） | options match; the draft holds **C (106)**, while the page's own arithmetic gives $x=104$, which is option B | `MANUAL_REVIEW_G7_Q3` - **the draft answer must be checked against the paper's answer key**; this is either a defect in the paper's key or a real wrong answer, and it is the first thing the next pass must resolve |
+| 4 | $\triangle ABC$，$a=2$，$b=\sqrt{6}$，$c=4$，求 $\cos B$（$\frac58$/$\frac34$/$\frac78$/$\frac{15}{16}$） | stem and options match | `VISUALLY_VERIFIED_G7_Q4`（answer not checked yet） |
+| 5 | 长 3 的铁丝截 9 段组成正三棱柱框架，求体积最大（$\frac{\sqrt3}{36}$ 等） | stem and options match; question is `withheld` because a formula in it is unreadable | `WITHHELD_G7_Q5` |
+| 6 | 等比数列 $\{a_n\}$ 公比 2，求 $\frac{a_2+a_4+a_6}{a_1+a_3+a_5}$ | stem and options match | `VISUALLY_VERIFIED_G7_Q6` |
+| 16 | 血液中药物浓度与代谢时间（含参考公式、相关系数式，跨页到第 4 页） | the question is `withheld`; the page shows which formulas the reader could not resolve | `WITHHELD_G7_Q16` |
+| 17 | 四面体 $OABC$，$E,F,G,H$ 为各边中点，**一个**图形 | the draft carries **three** images for this question while the page draws one figure | `MANUAL_REVIEW_G7_Q17` - the extra images need looking at (an over-bound figure is the image-side twin of a wrong answer) |
+
+Everything else in G7 (questions 7–15, 18, 19, and the whole answer/solution section) has **not** been
+looked at yet, and G5, G6, G8, G9, G10 and G11 have not been looked at at all in this round: those
+pages exist under `artifacts/audit-baseline/rendered-g*` and nothing about them is claimed here.
+
 ## 7. Survey of the remaining groups (batch level only)
 
 **Update (same day, after the archive and MTEF fixes):** the local LibreOffice conversion works when
