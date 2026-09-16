@@ -958,3 +958,84 @@ resolved from numbering.xml; ambiguous pictures and MTEF structures stay visible
 The seal regression now hashes the actual working file, so exact reviewed content can pass the
 gate BEFORE a commit and uncommitted unauthorized edits cannot hide behind HEAD. No ceiling is
 raised. Original materials and local evidence remain untracked; main and real data are untouched.
+
+## 22. The takeover round: the conflict fixture, and what the MTEF failures really are
+  (2026-09-16, thirteenth pass)
+
+This is steps 3 and 4 of section 8 of `HANDOFF_DOCX_PDF_TAKEOVER_2026_09_16.md`, at
+`615b7a5` → `abe0d12`. Step 2 was re-run first: the G1–G11 matrix reproduced section 3 of the
+handoff exactly (all `review`, 6/12/14/12/56/14/19/19/19/19/19 drafts, withheld
+0/1/4/0/5/4/8/4/10/4/2, AI requests 0, `blockedAi` 0), and the PDF inspection reproduced the same
+three `mixed`/`unmapped-glyphs` files with the same page counts.
+
+### 22.1 The answer-region conflict now has a stable fixture (`f4558cc`)
+
+The conflict path had only real-material proof (高二.docx question 49). The shape the gate needs is a
+*duplicate key marker*, so the fixture is that shape and not an easier one:
+
+```text
+question file   three single-choice questions
+answer file     1【答案】B   3【答案】D   参考答案   2． $\left(-3,0\right)$ 2．9
+```
+
+`tests/fixtures/docx-answer-key-conflict.js` + `tests/e2e/docx-answer-key-conflict.test.js` run that
+pair through the real batch path and assert, on the draft record *and* on the rendered review card
+(`.batch-problem-card`): question 2's answer is empty, the notice names both values, and
+`mergeWarnings` carries `answerConflict`; questions 1 and 3 keep `B` and `D`.
+
+Sensitivity was checked, not assumed: the same fixture with a single-valued key (`2．9 4．1`) attaches
+`9` to question 2 and shows no notice, so the test really distinguishes the two shapes.
+
+### 22.2 The MTEF failures are not one class, and the biggest class was not a walk desync (`abe0d12`)
+
+Section 5.2 of the handoff expected the 21 unresolved streams to be a row-zone (LINE/CHAR) walk
+problem traced from `rId75`. Traced over the whole corpus, that is not what the data says: the walk
+itself is fine in 11 of them, and the reader was rejecting a *readable* record.
+
+| class | streams | reader's actual failure |
+| --- | --- | --- |
+| a coloured accent inside the character's modifier list | 11 | the list was read as "embellishment records only"; MathType writes the accent's COLOR record first, so the reader threw on the colour |
+| accent code 5 | 3 | an accent code the reader does not know |
+| unknown record type 48 | 2 | the walk stops on it |
+| a type-104 record whose payload runs to the end of the stream | 2 | `Unterminated MTEF record list` |
+| a private-use character (U+EF02) | 1 | fail-closed by design (no glyph guess) |
+| a truncated record | 1 | the bytes end mid-record |
+| an unsupported structure | 1 | reported `MTEF_UNSUPPORTED_STRUCTURE` |
+
+The fixed rule is about the *modifier list*, not about one equation: a colour carries no content and
+is skipped, an accent is applied, anything else — and any accent code the reader does not know — still
+fails closed. Measured with `mtef-corpus-scan.js` over all 1048 real streams:
+
+```text
+before  extracted 1027  unresolved 21
+after   extracted 1038  unresolved 10
+diff    exactly 11 lines, every one unresolved -> extracted, every one a coherent formula:
+        \vec{a}   \vec{b}   \vec{a}·\vec{b}=3   |\vec{a}|=3,|\vec{b}|=2
+        \frac{\vec{a}}{3}-\frac{\vec{b}}{2}=(\frac{3}{5},\frac{4}{5})
+        \left|\vec{a}-\vec{b}\right|=\sqrt{(\vec{a}-\vec{b})^{2}}=\sqrt{7}
+        \left(\lambda \vec{a}-\vec{b}\right)⊥\vec{b}          (g4/周二晚测, geometry)
+1037 of 1048 results are byte-identical.
+```
+
+The 11 recovered equations sit in the vector questions of 题目.docx / 答案.docx and in a geometry
+question of 周二晚测.docx, which is what their neighbours are about. On the real G1–G11 matrix the
+withheld questions fall and nothing else moves:
+
+```text
+            G2 G3 G4 G5 G6 G7 G8 G9 G10 G11   total
+before §22  1  4  0  5  4  8  4 10   4   2      41
+after §22   1  3  0  4  3  6  4  9   4   2      36
+```
+
+Answer counts, draft counts, batch statuses and the zero-AI-request property are unchanged.
+`tests/docx-mtef-reader.test.js` carries the rule (a colour does not hide its accent; an unknown
+accent or an unknown modifier still resolves to `unresolved`), so the fail-closed half is locked too.
+
+### 22.3 Still open (deliberately)
+
+- The 10 remaining streams are listed above with their own cause each. Recovering the type-104
+  payload or the type-48 record would mean reading bytes whose meaning is not established by any
+  other stream in the corpus (the two type-104 payloads are not even the same shape), so they stay
+  fail-closed rather than guessed. `rId75` (question 7 of `完整版题目.docx`) is one of them.
+- Section 5.3 (per-question visual ground truth for G3–G11) and section 5.4 (the PDF zero-cost
+  ingestion run and the region list) are the next steps, in that order.
