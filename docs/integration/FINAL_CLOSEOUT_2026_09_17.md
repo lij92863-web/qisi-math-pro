@@ -1,5 +1,49 @@
 # 收口报告（2026-09-17）
 
+## CURRENT STATE — 2026-09-17 takeover（尚未达到最终收口）
+
+The material below this section is a historical snapshot ending at `ba5758c`, not the current integration HEAD. This takeover began at `c54bec52ca41521e8f7a9d237fbec476e9b7b0b9`; `origin/main` remained `b15e6fbe24c525c95a573b51a0c7ab68e77f4790`. Current code commits: `9c49275` (local refresh), `31fb0c7` (PDF evidence/regions), `667642b` (G5 stale MathType payload). This report is still under review.
+
+### Verified current facts
+
+- PDF text and Vision no longer silently replace each other: conflicting stem/options stay as deterministic text, retain both field evidence values, create a `field-evidence-conflict` review item, and fail FormalAdmission until a teacher edits the field. An exact `[[PDF_UNMAPPED]]` gap can be filled from a matching Vision transcription; the raw text remains in evidence.
+- Independent support PDFs are resegmented with support role. On the real `完整版题目.pdf` / `完整版答案.pdf` pair, a zero-cost browser mock observed 12 question calls and 12 support calls, one fixed number each; question and support Q6 each carried two page regions. There were no model calls to an upstream service.
+- Regions are full content-width vertical bands bounded by question and section anchors. Real question Q8's right-side diagram lies in its region; the next question and footer are outside. Graphics whose ownership cannot be proved by existing geometry remain a limitation for manual review.
+- Section headings on the real question PDF establish Q1–6 单选题, Q7–9 多选题, Q10–12 填空题. A model-supplied type is ignored. Unknown type remains blank for review.
+- The blocked-transport product run stayed in `review`: 11 text drafts, six withheld page items, support gate `fail-closed`, one blocked request in each input file, zero paid calls and zero page errors. Q11 still lacks a safe text draft. A visible `[[PDF_UNMAPPED]]` field is rejected by FormalAdmission.
+- A counted mock of one mixed PDF page with two question regions measured PDF opens/renders **3/3 before** ingest-scope reuse and **1/1 after**. Crops remain two. The document and canvases are released at the end of ingest. This is a resource-count result, not a measured real-world latency claim.
+- Ordinary HTML/JS responses now carry `Cache-Control: no-store`; the header and conditional-refresh regression passed. Review reasons show Chinese explanations alongside the original machine codes.
+- The current saved G4 DOCX batch has Q4 and Q6 as 单选题 with four options and Q10 with `z_{1}` and `m^{2}`. Q9 still has zero structured options and needs manual review.
+- The fresh G5 page-by-page check exposed one silent wrong-content item: Q25's embedded MathType bytes say `[-1,1]`, while Word's own visible preview says `9,10,11,x,y`. The reader now rejects this exact stale payload; a real browser batch rerun shows `[[MTEF_UNRESOLVED:rId133]]`, `unresolved-formula`, and `withheld=true` for Q25. This is a corpus-specific guard, not general proof that other OLE previews and payloads always agree.
+- All eleven DOCX inputs were rerun through the browser batch path at code HEAD `667642b` with AI blocked. The same-HEAD matrix below uses `artifacts/audit-baseline/docx-batch-takeover-G1.json` through `G11.json`. No MathType.exe launch was requested by this parser path.
+- The original rendered `完整版题目.pdf` page 1 was inspected directly. Q1 prints `sin(nπ/2)` with the π visible; the historical Vision `sin(m/2)` omitted π and changed the variable. Q5 prints a `BA·AC` term in its first vector fraction; the historical Vision head starts with `BC/|BC|` and is not an acceptable replacement. These are regression conflicts, not teacher choices. The new merge keeps the deterministic value and the competing visual raw value for review.
+
+### Verification and remaining limitations
+
+| DOCX group | drafts | answers | solutions | withheld | blocked AI |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| G1 | 6 | 5 | 6 | 0 | 0 |
+| G2 | 12 | 11 | 12 | 1 | 0 |
+| G3 | 14 | 14 | 14 | 3 | 0 |
+| G4 | 12 | 0 | 0 | 0 | 0 |
+| G5 | 56 | 54 | 0 | 5 | 0 |
+| G6 | 14 | 14 | 14 | 3 | 0 |
+| G7 | 19 | 14 | 19 | 6 | 0 |
+| G8 | 19 | 14 | 19 | 4 | 0 |
+| G9 | 19 | 14 | 19 | 9 | 0 |
+| G10 | 19 | 14 | 19 | 4 | 0 |
+| G11 | 19 | 14 | 19 | 5 | 0 |
+
+Current DOCX withheld total: **40**. This supersedes the historical 39 below.
+
+`verify:safe`, `verify:docx-stable`, `verify:pdf-known-bad`, and `verify:batch-safety` passed after the code changes. The current safe suite is 1414 tests; DOCX stable is 20 and PDF known-bad is 65. The real PDF zero-cost run and the per-question mock are local artifacts, not committed fixtures. G5's 22 rendered pages have now been viewed against Q1–56 and the printed answer key; Q15, Q19, Q25, Q28 and Q34 are withheld where visible formulas are unresolved, and Q48/49 answers are withheld because the printed key duplicates 49 and omits 48. G6–G11 have not all received a fresh per-question visual comparison at this HEAD. Therefore global DOCX WRONG MATCH and SILENT WRONG CONTENT cannot honestly be certified as zero from this takeover. No paid Vision acceptance was authorised in this task. Merge readiness remains **NO** until the visual matrix and authorised paid PDF acceptance are complete.
+
+### Next paid-call proposal — requires fresh authorisation
+
+At standard mode the current app selects `qwen-vl-plus`. For `完整版题目.pdf` request Q1–6 on page 1 and Q7–12 on page 2, with Q6 carrying page 1 plus its continuation on page 2: **12 calls, maxCalls 12**. For `完整版答案.pdf` request Q1–6 on page 1, Q7 on page 2, Q8–10 on page 3, and Q11–12 on page 4; support Q6 carries its page 2 continuation: **12 calls, maxCalls 12**. Each request uses the measured region bbox in the zero-cost mock and a fixed, text-proved number. Deterministic text contains unmapped math glyphs; the visual call is for transcription only. The maximum is **24 calls**, with a rough historical budget of ¥0.5–2 based on several cents per call; actual token billing must be checked before authorisation. Stop on an authentication/upstream failure, keep malformed individual regions withheld, and do not admit conflicting fields. No call in this plan has been made.
+
+## HISTORICAL / SUPERSEDED FINDINGS — snapshot at `ba5758c`
+
 ## Git
 
 ```text

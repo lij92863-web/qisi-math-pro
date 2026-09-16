@@ -1,5 +1,9 @@
 # DOCX visual ground truth — group 1 (2026-09-16)
 
+> **Current correction (2026-09-17):** The G4 observations below are historical. Saved G4 batch evidence (`artifacts/audit-baseline/docx-batch-astra-G4.json`) shows Q4 and Q6 as 单选题 with four options, Q10 with `z_{1}` and `m^{2}`, and Q9 still as 多选题 with zero structured options. Q9 remains MANUAL REVIEW. This saved batch was not a new page-by-page visual pass. G5–G11 must not be labelled fully `VISUALLY_VERIFIED` from text probes or answer-key matching alone.
+
+> **G5 visual update (2026-09-17):** All 22 rendered pages of `高二.docx` were viewed against the fresh 56-draft browser run. The printed Q25 formula is `9,10,11,x,y`, but the embedded MathType payload reconstructed as `[-1,1]`; this was a silent wrong-content defect. Commit `667642b` rejects the exact stale payload. The rerun now visibly marks Q25 `[[MTEF_UNRESOLVED:rId133]]` and withholds it. Q15, Q19, Q28 and Q34 are also withheld for unresolved formulas, making G5's current withheld count **5**. The rendered answer key matches the 54 attached answers; its duplicated `49.` and missing `48.` leave both answers unattached. This is a G5-only visual check and does not establish a zero-error claim for G6–G11.
+
 Item 3 of `docs/integration/HANDOFF_2026_09_16.md` asks for a visual comparison of the imported
 drafts against the original pages, and says nothing may be marked `VISUALLY_VERIFIED_*` before
 someone has actually looked at the page. This file records that comparison for **group 1 only**
