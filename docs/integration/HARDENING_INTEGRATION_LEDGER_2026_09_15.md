@@ -1878,3 +1878,29 @@ verify:safe 1397/1397；tests/pdf-ingestion.test.js 9/9（新增 gap/duplicate/b
 **老师浏览器里那次"0 题"的真正原因就是这条**：模型服务不可达。区别是——
 现在模型不可达时不再 0 题（文本安全部分给出 6 / 11 题），而在模型可达时会带公式替换文本版。
 恢复联网（代理/VPN/防火墙放行该域名）后，同一份材料重跑即可看到带公式的结果。
+
+### 34.1 关掉代理之后：按区域调用成功（6 次授权全部用于产出）
+
+```text
+DNS    dashscope.aliyuncs.com → 39.96.213.166 / 8.152.159.24 / 39.96.198.249（真实地址）
+HTTPS  dashscope.aliyuncs.com/compatible-mode/v1/models → 有响应（404 = 链路通）
+根因确认：之前是代理（127.0.0.1:7890，TUN + fake-ip）把 *.aliyuncs.com 按"直连"处理，
+          而那条直连出口是死的；关掉代理后立刻可用。前两次失败的请求根本没到模型，未计费。
+```
+
+按区域调用（batch D，`简略版题目（只有一页）.pdf` 第 1 页）：
+
+```text
+visualCalls 6/6   草稿 6   页面错误 0   待核对 0
+每题一次请求、每次只发该题裁图 + 程序给定的题号（提示词："这是第 N 题所在的图片区域…"）
+q1  已知集合 $A=\left\{x \mid x=\sin \frac{n \pi}{2}, n \in \mathbb{Z}\right\}$, $B=\{0,1\}$ … 4 选项
+q2  正四棱台… 4 选项        q3  $\overrightarrow{a}$、$\overrightarrow{b}$ … 4 选项
+q4  折扇…（图片说明）       q5  $\frac{\overrightarrow{BC}}{|\overrightarrow{BC}|}+\cdots$
+q6  圆锥内切球体积比（原文完整）
+```
+
+**同时发现一处需要老师定夺的冲突**（恰好印证"两份证据都要留"的价值）：q5 的分数式第一项，
+DOCX 链读作 `\overrightarrow{BA}\cdot\overrightarrow{AC}`，视觉链读作
+`\overrightarrow{BC}/|\overrightarrow{BC}|` —— 两者不一致。视觉结果带着
+"PDF 视觉转录待人工逐题核对；题号由页面文本层确定。"的提醒进入待核对区，正式题库 0 行，
+由老师看原页裁决。（按规则 15 的精神，这条差异要如实记录而不是让任何一方自动胜出。）
