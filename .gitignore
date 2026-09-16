@@ -56,3 +56,6 @@ local-ocr/tmp/
 # test reports
 playwright-report/
 test-results/
+
+# local real-material evidence and acceptance runners: never committed, never deleted
+/artifacts/
