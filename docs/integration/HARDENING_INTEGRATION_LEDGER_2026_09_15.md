@@ -1808,3 +1808,33 @@ qisi-pdf-inspection.js 的 segment()：page.kind !== 'text' 的页整页跳过
 ```
 
 也就是说：模型在时走视觉、模型不在时走文本安全部分，两条路都留着，正式题库仍是 0 行。
+
+## 32. PDF 题号契约不再是全有或全无（safe segments / gap）
+
+按主人 2026-09-17 的指示（"已被结构证明的题号继续可用；缺失题号形成 gap；duplicate / backward /
+unknown 单独记录；不因一个 anchor 缺失让整份 PDF 失去全部可信定位；不制造假题"），
+`qisi-pdf-ingestion.js` 的 `contract()` 从"必须连续且唯一，否则 authoritative=false、题号清空"
+改成安全分段模型：
+
+```text
+observed 1,2,3,5,6
+  → segments [[1,2,3],[5,6]]   questionNumbers [1,2,3,5,6]   missing [4]   authoritative true
+  4 只作为 missing 报告，绝不猜；缺口本身进 withheld（reason: contract-gap），审核页可见
+duplicate 1,1  → 只发布一次，conflicts [{1, duplicate-question-number}]
+backward  2,1  → 只发布 2，conflicts [{1, question-number-not-increasing}]
+unknown   1,x  → 只发布 1，conflicts [{x, unknown-question-number}]
+空的 anchors     → authoritative false（什么都没证明就什么都不发布）
+```
+
+仍然"宁可空、不能错挂"：每个被接受的题号仍然必须是页面文本自己写出来的那个号，模型给的题号
+一律不能单独授权一行（`acceptVisual` 的序列闸门未变）。
+
+零成本回归（AI 阻断 = 模型不可用）：
+
+```text
+完整版题目.pdf + 完整版答案.pdf   → 11 份草稿（与改动前一致），6 项待核对（页级 unmapped-glyphs）
+verify:safe 1397/1397；tests/pdf-ingestion.test.js 9/9（新增 gap/duplicate/backward/unknown 四条断言）
+```
+
+下一步（尚未做）：把 region 从整页细化到"每题区域"（PDF 文本层 + 几何 → 每题 bbox → 只裁该区域
+交视觉），这是主人列表里的第 8 项。

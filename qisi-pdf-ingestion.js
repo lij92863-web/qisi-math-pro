@@ -7,11 +7,49 @@
     'use strict';
     const pageCache = new Map();
     const key = item => String(item?.questionNumber || item?.question || '');
+    // A file's numbering is not all-or-nothing. What the page's own text layer proved stays usable, a hole
+    // is reported as a missing number, and a duplicate / backward / unreadable anchor is recorded on its
+    // own instead of taking away every identity in the file (owner's rule, 2026-09-17: 已被结构证明的
+    // 题号继续可用；缺失题号形成 gap；不因一个 anchor 缺失让整份 PDF 失去全部可信定位). Nothing is
+    // guessed - a gap stays a gap - and every accepted number is still the number the text itself carried.
     const contract = anchors => {
         const numbers = anchors.map(key);
-        const valid = numbers.length > 0 && new Set(numbers).size === numbers.length &&
-            numbers.every((n, i) => /^[1-9]\d{0,2}$/.test(n) && (!i || Number(n) === Number(numbers[i - 1]) + 1));
-        return { authoritative: valid, questionNumbers: valid ? numbers : [], evidence: 'pdf-text-geometry', anchors };
+        const accepted = [];
+        const conflicts = [];
+        const segments = [];
+        const seen = new Set();
+        let previous = 0;
+
+        for (const raw of numbers) {
+            const number = String(raw ?? '');
+            const value = Number(number);
+            if (!/^[1-9]\d{0,2}$/.test(number)) { conflicts.push({ number, reason: 'unknown-question-number' }); continue; }
+            if (seen.has(number)) { conflicts.push({ number, reason: 'duplicate-question-number' }); continue; }
+            if (accepted.length && value <= previous) { conflicts.push({ number, reason: 'question-number-not-increasing' }); continue; }
+            seen.add(number);
+            accepted.push(number);
+            previous = value;
+            const last = segments[segments.length - 1];
+            if (last && Number(last[last.length - 1]) === value - 1) last.push(number);
+            else segments.push([number]);
+        }
+
+        const missing = [];
+        if (accepted.length > 1) {
+            for (let value = Number(accepted[0]) + 1; value < Number(accepted[accepted.length - 1]); value += 1) {
+                if (!seen.has(String(value))) missing.push(String(value));
+            }
+        }
+
+        return {
+            authoritative: accepted.length > 0,
+            questionNumbers: accepted,
+            segments,
+            missing,
+            conflicts,
+            evidence: 'pdf-text-geometry',
+            anchors
+        };
     };
     const acceptVisual = (items, expected, supportOnly = false) => {
         if (!Array.isArray(items)) return { accepted: [], reason: 'invalid-visual-items' };
@@ -218,6 +256,12 @@
         const expected = questionRole ? questionContract.questionNumbers : expectedNumbers.map(String);
         const result = { questions: [], answers: [], solutions: [], pageImages: [], withheld: [...inspection.withheld.filter(w => !w.kind)], unmatched: [],
             contract: questionContract, inspection, timings: trace.stages, visualCalls: 0, cacheHits: 0 };
+        // A hole in the numbering is shown to the teacher as its own withheld item: the numbers around it
+        // keep working, and nobody has to guess what the missing one said.
+        if (questionRole) for (const number of questionContract.missing) {
+            result.withheld.push({ sourceFileId: file.id, questionNumbers: [number], status: 'withheld',
+                reason: 'contract-gap', visualNeeded: false });
+        }
         const rawAnswers = [], rawSolutions = [];
         const supportContract = contract(anchors.filter(a => a.role === 'support'));
         const crossQuestions = crossPageNumbers(inspection.pages, 'question');

@@ -32,8 +32,32 @@ test('PDF text blocks carry cross-page evidence and do not turn footer numbers i
     assert.deepEqual([...Ingestion.crossPageNumbers(pages, 'question')], ['1']);
 });
 
-test('PDF contracts reject gaps, duplicates and reversal; model numbers alone cannot authorize a row', () => {
-    for (const values of [['1', '3'], ['1', '1'], ['2', '1']]) assert.equal(Ingestion.contract(values.map(question => ({ question }))).authoritative, false);
+// The owner's rule of 2026-09-17: a gap in the numbering must not take the whole file's identity away.
+// The numbers the text proved stay usable, the hole is reported, and a duplicate / backward / unreadable
+// anchor is recorded on its own. (This test used to require `authoritative: false` for all three shapes.)
+test('PDF contracts keep safe segments, report the gap, and record bad anchors', () => {
+    const byGap = Ingestion.contract(['1', '2', '3', '5', '6'].map(question => ({ question })));
+    assert.deepEqual(byGap.segments, [['1', '2', '3'], ['5', '6']], 'the proved runs stay usable');
+    assert.deepEqual(byGap.missing, ['4'], 'the hole is named, never guessed');
+    assert.deepEqual(byGap.questionNumbers, ['1', '2', '3', '5', '6']);
+    assert.equal(byGap.authoritative, true);
+
+    const duplicate = Ingestion.contract(['1', '1'].map(question => ({ question })));
+    assert.deepEqual(duplicate.questionNumbers, ['1'], 'a repeated anchor is not published twice');
+    assert.deepEqual(duplicate.conflicts, [{ number: '1', reason: 'duplicate-question-number' }]);
+
+    const backward = Ingestion.contract(['2', '1'].map(question => ({ question })));
+    assert.deepEqual(backward.questionNumbers, ['2'], 'a number that goes backwards is recorded, not trusted');
+    assert.deepEqual(backward.conflicts, [{ number: '1', reason: 'question-number-not-increasing' }]);
+
+    const unknown = Ingestion.contract(['1', 'x'].map(question => ({ question })));
+    assert.deepEqual(unknown.questionNumbers, ['1']);
+    assert.deepEqual(unknown.conflicts, [{ number: 'x', reason: 'unknown-question-number' }]);
+
+    const none = Ingestion.contract([].map(question => ({ question })));
+    assert.equal(none.authoritative, false, 'nothing proved means nothing to publish');
+
+    // A model number is never allowed to authorize a row on its own.
     for (const values of [['1', '3'], ['1', '1'], ['2', '1']]) assert.ok(Ingestion.acceptVisual(values.map(question => ({ question, stem: 'text' })), ['1', '2']).reason);
     const blank = Ingestion.acceptVisual([{ question: '1', stem: '' }], ['1']);
     assert.deepEqual(blank.missing, ['1']);
