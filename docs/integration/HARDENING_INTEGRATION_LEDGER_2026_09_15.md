@@ -1013,18 +1013,19 @@ diff    exactly 11 lines, every one unresolved -> extracted, every one a coheren
         \vec{a}   \vec{b}   \vec{a}·\vec{b}=3   |\vec{a}|=3,|\vec{b}|=2
         \frac{\vec{a}}{3}-\frac{\vec{b}}{2}=(\frac{3}{5},\frac{4}{5})
         \left|\vec{a}-\vec{b}\right|=\sqrt{(\vec{a}-\vec{b})^{2}}=\sqrt{7}
-        \left(\lambda \vec{a}-\vec{b}\right)⊥\vec{b}          (g4/周二晚测, geometry)
+        \left(\lambda \vec{a}-\vec{b}\right)⊥\vec{b}          (高二.docx, a vector question)
 1037 of 1048 results are byte-identical.
 ```
 
-The 11 recovered equations sit in the vector questions of 题目.docx / 答案.docx and in a geometry
-question of 周二晚测.docx, which is what their neighbours are about. On the real G1–G11 matrix the
+The 11 recovered equations sit in the vector questions of 题目.docx / 答案.docx and in a vector
+question of 高二.docx, which is what their neighbours are about. On the real G1–G11 matrix the
 withheld questions fall and nothing else moves:
 
 ```text
             G2 G3 G4 G5 G6 G7 G8 G9 G10 G11   total
 before §22  1  4  0  5  4  8  4 10   4   2      41
-after §22   1  3  0  4  3  6  4  9   4   2      36
+after 22.2  1  3  0  4  3  6  4  9   4   2      36
+after 22.4  1  3  1  4  3  6  4  9   4   2      37
 ```
 
 Answer counts, draft counts, batch statuses and the zero-AI-request property are unchanged.
@@ -1037,5 +1038,41 @@ accent or an unknown modifier still resolves to `unresolved`), so the fail-close
   payload or the type-48 record would mean reading bytes whose meaning is not established by any
   other stream in the corpus (the two type-104 payloads are not even the same shape), so they stay
   fail-closed rather than guessed. `rId75` (question 7 of `完整版题目.docx`) is one of them.
-- Section 5.3 (per-question visual ground truth for G3–G11) and section 5.4 (the PDF zero-cost
-  ingestion run and the region list) are the next steps, in that order.
+- Section 5.3 (per-question visual ground truth for G4–G11, see §22.4 for groups 3 and 4) is the
+  next step.
+
+### 22.4 The visual check found a silent content loss, and the reader now refuses it (`ecbf36c`)
+
+Looking at group 4 (`周二晚测.docx`) page by page showed its question 8 as a piecewise definition
+
+```text
+f(x) = { x²+2x−3, x≤0
+       { −2+ln x,  x>0
+```
+
+while the draft held `$f\left(x\right)=\left\{\right.$` — the two rows were gone and **nothing marked
+the question**: it was not withheld, carried no `MTEF_UNRESOLVED` token, and read as a complete
+question. Traced to `zhou2/q/word/embeddings/oleObject51.bin`: the two rows live in a PILE record
+*inside* the brace template, so the template's own slot list is empty while the template clearly
+carried content, and `MTEF_RECONSTRUCTED_OK` was reported for an empty shell.
+
+The rule added is about the class, not the question: a template that carried content records but whose
+content slot is empty is left unresolved, so the question is withheld and the teacher sees the gap
+instead of a formula that silently lost its inside. The fence templates are guarded; the *optional*
+slots are not (an absent square-root index, an absent sub/superscript and the arrow forms are
+legitimate, and guarding the arrow template was measured to break the working
+`\overrightarrow{CP}\cdot \overrightarrow{DP}` of 完整版题目.docx, so it was reverted).
+
+Corpus proof (`mtef-corpus-scan.js`, 1048 real streams): exactly **one** line changes
+
+```text
+zhou2/q/word/embeddings/oleObject51.bin
+  before  extracted  MTEF_RECONSTRUCTED_OK  f\left(x\right)=\left\{\right.
+  after   unresolved MTEF_UNSUPPORTED_STRUCTURE   (empty-template-slot-2)
+```
+
+On the matrix this is group 4 question 8 becoming withheld (with the token in the stem); every other
+group, answer count and withheld count is unchanged, and the total is 37. Every withheld question in
+all eleven groups was checked to carry its `MTEF_UNRESOLVED` token, so no question is withheld without
+a visible reason. Group 3's page-by-page record is in
+`docs/integration/DOCX_VISUAL_GROUND_TRUTH_2026_09_16.md` §4.
