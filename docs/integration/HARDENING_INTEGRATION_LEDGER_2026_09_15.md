@@ -1364,6 +1364,23 @@ so the next probe is a dump of `supportText`/`documentPart` as the ingest comput
 reader of §25.3 is kept - it is what made 十二校一模's rows readable and it changes nothing else - and
 the drafts of all eleven groups are unchanged apart from the two recovered answers.
 
+The probe was run, and it moved the boundary one layer further out (all of it from the file's own text):
+
+```text
+* splitAnswerSolutionSections does not recognise the 【分析】/【详解】 label form, so it never splits
+  this paper into an answer part and a solution part - answerPart and solutionPart are both the whole
+  document. That is harmless by itself, but it means the answer-side rules all run over the full text.
+* the ingest's support heading is found on the *table's own header cell* "答案" (line 94), not on the
+  title line, because the title is longer than the 12 characters that rule allows. The support side
+  therefore starts inside the key table: the numbers of that table (lines 84-93) are on the question
+  side and only the letters onwards are on the support side.
+* the inline block markers are still found (50 of them) and the normalised text keeps "1．C" / "2．D",
+  so the block reader has everything it needs - which means the emptiness happens between those two
+  facts and the drafts, and the next probe is the value of `supportText` itself for that file.
+```
+
+None of this is a behaviour change; it is the trace that the next step starts from.
+
 ### 22.4 The visual check found a silent content loss, and the reader now refuses it (`ecbf36c`)
 
 Looking at group 4 (`周二晚测.docx`) page by page showed its question 8 as a piecewise definition
