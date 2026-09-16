@@ -181,14 +181,9 @@ test('a template whose content never reached its slot is unresolved, not an empt
         ...[...text].map(character => plainChar(character.charCodeAt(0))),
         Buffer.from([0])
     ]);
-    const pile = Buffer.concat([
-        Buffer.from([4, 0, 0, 0]),
-        lineOf('a'),
-        lineOf('b'),
-        Buffer.from([0])
-    ]);
 
-    const shell = reader.classifyMtef(mtefWithRows([mtefTemplate(2, 1, [pile])]));
+    // Content the reader cannot place inside the fence: a bare character, no slot and no pile.
+    const shell = reader.classifyMtef(mtefWithRows([mtefTemplate(2, 1, [plainChar(0x61)])]));
     assert.equal(shell.status, 'unresolved', 'the empty brace must not be offered as the formula');
     assert.equal(shell.latex, '');
     assert.equal(shell.code, 'MTEF_UNSUPPORTED_STRUCTURE');
@@ -199,6 +194,28 @@ test('a template whose content never reached its slot is unresolved, not an empt
     ]));
     assert.equal(filled.status, 'extracted');
     assert.equal(filled.latex, '\\left\\{x\\right.');
+});
+
+// The piecewise definition of 周二晚测.docx question 8 keeps its two rows in a PILE inside the brace
+// template. Before this rule the whole question had to be withheld (or, worse, read as "f(x)={ }").
+test('a braced structure renders the rows it carries in a pile', () => {
+    const plainChar = code => Buffer.from([2, 0, 0x88, code, 0]);
+    const lineOf = text => Buffer.concat([
+        Buffer.from([1, 0]),
+        ...[...text].map(character => plainChar(character.charCodeAt(0))),
+        Buffer.from([0])
+    ]);
+    const pile = Buffer.concat([
+        Buffer.from([4, 0, 0, 0]),
+        lineOf('a'),
+        lineOf('b'),
+        Buffer.from([0])
+    ]);
+
+    const result = reader.classifyMtef(mtefWithRows([mtefTemplate(2, 1, [pile])]));
+
+    assert.equal(result.status, 'extracted');
+    assert.equal(result.latex, '\\left\\{\\begin{matrix}a\\\\b\\end{matrix}\\right.');
 });
 
 // The vector accent of real material (周二晚测.docx question 3's options, "\\vec{BC}") is a MathType

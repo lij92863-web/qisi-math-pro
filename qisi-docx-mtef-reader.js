@@ -182,6 +182,17 @@
             }
             return value || '';
         };
+        // A braced structure may keep its rows in a PILE ("f(x) = { row1 ; row2" - the piecewise
+        // definition of 周二晚测.docx question 8) instead of in a line slot. Refusing the empty shell is
+        // right, but the rows are right there in the template: they render as a matrix inside the
+        // fence, which is what the page shows.
+        const fenceBody = () => {
+            const direct = structural(rows).filter(row => row.kind === 'line').map(row => row.latex).join('');
+            if (direct) return content(direct);
+            const pile = rows.filter(row => row && row.kind === 'pile').map(row => row.latex).join('');
+            if (pile) return `\\begin{matrix}${pile}\\end{matrix}`;
+            return content('');
+        };
         if (selector >= 0 && selector <= 8) {
             const fences = [
                 ['\\langle', '\\rangle'], ['(', ')'], ['\\{', '\\}'], ['[', ']'],
@@ -189,13 +200,13 @@
             ][selector];
             const left = variation & 1 ? fences[0] : '.';
             const right = variation & 2 ? fences[1] : '.';
-            return `\\left${left}${content(slots[0])}\\right${right}`;
+            return `\\left${left}${fenceBody()}\\right${right}`;
         }
         if (selector === 9) {
             const fences = ['(', ')', '[', ']'];
             const left = fences[variation & 0x03];
             const right = fences[(variation >> 4) & 0x03];
-            return `\\left${left}${content(slots[0])}\\right${right}`;
+            return `\\left${left}${fenceBody()}\\right${right}`;
         }
         if (selector === 10) {
             return variation & 1 && slots[1]

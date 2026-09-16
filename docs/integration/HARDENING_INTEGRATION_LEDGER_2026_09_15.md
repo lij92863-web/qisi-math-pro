@@ -1216,19 +1216,27 @@ line keeps the maths of option A with the "A." label missing, and C's label is m
 and D keep theirs (lines 39-42 of the extracted text). That is the older "option label inside a formula
 is dropped" defect of the text layer, not this one.
 
-### 24.5 Why question 8 shows `[[MTEF_UNRESOLVED:rId99]]` (answered, not expanded)
+### 24.5 `[[MTEF_UNRESOLVED:rId99]]` is gone: the braced rows were right there (this commit)
 
-The token is the fail-closed outcome, and it is *new today*: before §22.4 the same equation was
-reported as `MTEF_RECONSTRUCTED_OK` and the draft silently read `$f\left(x\right)=\left\{\right.$` - a
-piecewise definition with both of its rows gone and no warning on the question. Traced bytes
-(`docx-raw/zhou2/q/word/embeddings/oleObject51.bin`): the two rows live in a PILE record *inside* the
-brace template, so the template's own slot list is empty while the template carried content, and the
-reader now refuses to present the empty shell. Question 8 is therefore withheld with the token visible
-and cannot be admitted until a teacher fills it in.
+The token was the fail-closed half of §22.4: before that guard the same equation was reported as
+`MTEF_RECONSTRUCTED_OK` and the draft silently read `$f\left(x\right)=\left\{\right.$` - a piecewise
+definition with both of its rows gone. The bytes
+(`docx-raw/zhou2/q/word/embeddings/oleObject51.bin`) show why: the two rows live in a PILE record
+*inside* the brace template, so the template's own slot list is empty while the template carried
+content. The rows were therefore never lost - the reader simply refused to put them anywhere.
 
-Per the owner's rule 3 of the 2026-09-16 instruction set, the remaining unsupported MTEF shapes stay
-`MTEF_UNRESOLVED`/`WITHHELD` rather than being chased to full coverage; the reader is only extended
-when real material shows `WRONG MATCH` or `SILENT WRONG CONTENT` again.
+The fence templates now fall back to the pile they carry, and the braced structure renders as what the
+page shows:
+
+```text
+已知函数 $f\left(x\right)=\left\{\begin{matrix}x^{2}+2x-3,x\le 0\\-2+lnx,x>0\end{matrix}\right.$，令 $h(x)=f(x)-k$，则下列说法正确的是（ ）
+```
+
+The exponent is right (`x^{2}`, the page's 二次项), the second row matches the page, and KaTeX renders
+the expression (checked in the browser's own KaTeX). Corpus-wide exactly one stream changes - this one,
+from `unresolved` back to `extracted` - and on the matrix 周二晚测 loses its only withheld question
+(G4: 1 → 0, total 37 → 36). The empty-shell guard still holds for a template that has neither a slot
+nor a pile, which is what `tests/docx-mtef-reader.test.js` now pins.
 
 ### 24.6 Every letter that means a symbol is now inline LaTeX (this commit)
 
