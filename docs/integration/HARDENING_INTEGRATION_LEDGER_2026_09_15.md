@@ -793,6 +793,66 @@ question; a standalone token above the next number stays with the previous quest
 `tests/e2e/docx-question-scope.test.js` through the real importer (question 3's stem keeps its token,
 question 2's stem must not receive it).
 
+## 20. Takeover audit and final DOCX matrix at `34d618c` (2026-09-16, eleventh pass)
+
+### 20.1 Work preserved and pushed
+
+The working copy held three unpushed commits plus an uncommitted image-ownership fix. The uncommitted
+diff was saved to `artifacts/audit-baseline/ds-takeover-working-tree.patch` (local evidence), audited,
+tested and committed, and `4ced38e..34d618c` was pushed. Nothing was reset, cleaned, stashed or
+checked out; `artifacts/` was never staged.
+
+```text
+34d618c keep a figure token with the question whose marker it precedes   (this pass)
+7c363e3 stage ingestion inspect PDF evidence and retain unresolved pages for review
+20bd59b stage ingestion make DOCX deterministic and preserve numbered evidence
+```
+
+### 20.2 DOCX matrix, all groups re-run at this one HEAD (zero AI requests)
+
+`node artifacts/audit-baseline/astra-run-docx-matrix.cjs` → `artifacts/audit-baseline/astra-docx-final-matrix-34d618c.log`
+
+| group | material | status | drafts | answers | withheld | AI calls | elapsed |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| G1 | 简略版题目 + 完整版答案 | review | 6 | 5 | 0 | 0 | ~2 s |
+| G2 | 完整版题目 + 完整版答案 | review | 12 | 11 | 1 | 0 | 3.1 s |
+| G3 | 题目 + 答案 | review | 14 | 14 | 4 | 0 | ~3 s |
+| G4 | 周二晚测 | review | 12 | 0 | 0 | 0 | ~2 s |
+| G5 | 高二 | review | 56 | 54 | 5 | 0 | 4.6 s |
+| G6 | 题目+答案 | review | 14 | 14 | 4 | 0 | ~3 s |
+| G7–G11 | 五份高三试卷 | review | 19 each | 19 / 19 / 18 / 0 / 18 | 8 / 4 / 10 / 2 / 4 | 0 | 3–5 s each |
+
+Every withheld question is withheld for an unresolved MathType formula in its own field (the
+`MTEF_UNREADABLE` class of §18.1); the DOCX path issues no model request at all.
+
+### 20.3 Image ownership verified on real material
+
+`完整版题目.docx` after the fix: question 8's stem now begins with its own token
+(`[[IMAGE:…]] 如图，一块半径为4的圆形铁片…`), and questions 4 and 11 carry theirs as well; no other
+question's stem received a token. Before the fix the same two tokens were missing from the drafts.
+
+### 20.4 PDF module state (audited, not re-implemented)
+
+```text
+main.html:1555-1558  qisi-ingestion-context.js, qisi-docx-ingestion.js,
+                     qisi-pdf-inspection.js, qisi-pdf-ingestion.js
+app.js:4274,4421     IngestionContext.getDocx (shared extraction context)
+app.js:16831,16862   DocxIngestion.ingest / PdfIngestion.ingest
+app.js:18080         DocxIngestion.markImageGaps
+tests                pdf-ingestion.test.js, e2e/pdf-inspection-import.test.js (both pass)
+docs/integration     PDF_INSPECTION_STAGE_2026_09_16.md, INGESTION_AUDIT_PLAN_2026_09_16.md
+```
+
+The PDF work is therefore already integrated, as the handoff's "latest entry" said. No paid visual
+call has been made in this session, and none is made by the test suite.
+
+### 20.5 Still open
+
+- Per-question visual ground truth for the DOCX groups beyond 1–3 (the renders exist locally under
+  `artifacts/audit-baseline/rendered*`), and the PDF real-material zero-cost run plus the per-region
+  list of what would need paid vision.
+- The 20 `MTEF_UNREADABLE` streams (§18.1) keep their questions withheld.
+
 ## 15. Group 1 closed: the withheld question (2026-09-16, sixth pass)
 
 This closes item 2 of section 5 in `docs/integration/HANDOFF_2026_09_16.md`.
