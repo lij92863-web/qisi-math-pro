@@ -1904,3 +1904,30 @@ DOCX 链读作 `\overrightarrow{BA}\cdot\overrightarrow{AC}`，视觉链读作
 `\overrightarrow{BC}/|\overrightarrow{BC}|` —— 两者不一致。视觉结果带着
 "PDF 视觉转录待人工逐题核对；题号由页面文本层确定。"的提醒进入待核对区，正式题库 0 行，
 由老师看原页裁决。（按规则 15 的精神，这条差异要如实记录而不是让任何一方自动胜出。）
+
+### 34.2 24 次授权（batch E）：两份完整版的题目卷跑完
+
+```text
+完整版题目.pdf（question）  parseStatus success   visualCalls 12  → 12 份草稿（1-12 全齐）
+完整版答案.pdf（support）                         visualCalls  4  （按页，未走逐题区域）
+合计 16/24 次；正式题库 0 行；支持闸门 mode=prefix
+12 题题型：单选 8（q1-q5、q7-q9、q2? 以输出为准）、填空 3（q10-q12）、解答 1（q6）
+```
+
+题目卷逐题转录的样例（公式全部还原）：
+
+```text
+q1  已知集合 $A=\left\{x \mid x=\sin \frac{m}{2}, n \in Z\right\}$, $B=\{0,1\}$ …   （答案栏 B 来自卷面）
+q3  已知$\overrightarrow{a}$和$\overrightarrow{b}$是两个不共线的向量，若$\overrightarrow{AB}=…$
+q5  在 $\triangle ABC$ 中，$\frac{\overrightarrow{BC}}{|\overrightarrow{BC}|}+\cdots$
+q8  如图，一块半径为 4 的圆形铁片上有 3 块阴影部分…（选项 4）
+q11 在四边形 $ABCD$ 中，$AB \parallel CD$，$AB=3$，$CD=2$，$AD=\sqrt{3}$…（上一轮文本安全部分缺的 q11 也回来了）
+```
+
+两点如实记录：
+
+1. **支持文件这 4 次仍按页调用**（逐题区域的映射对 support 块没有命中），所以答案卷的解析只用上
+   页级路径，闸门仍是 prefix；要把它也做成逐题，需要把 support 块的号码与页面 anchors 对齐——记
+   为下一步。
+2. q1 的 $A=\left\{x \mid x=\sin \frac{m}{2}\right\}$ 与卷面（$\sin\frac{n\pi}{2}$）仍有出入，
+   与 §34.1 的 q5 同类：**视觉读数与卷面/文本不一致时必须人工核对**，草稿已带该提醒，未入库。

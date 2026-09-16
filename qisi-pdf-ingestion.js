@@ -297,6 +297,7 @@
         // prove it; a question without a provable box keeps the whole page.
         const questionRegionByPage = new Map();
         const questionRegionsByNumber = new Map();
+        const supportRegionsByNumber = new Map();
         for (const block of (inspection.blocks || []).filter(b => b.role === 'question')) {
             for (const region of block.regionByPage || []) {
                 questionRegionsByNumber.set(`${region.page}:${block.questionNumber}`, region.bbox);
@@ -307,6 +308,11 @@
                     ? { page: region.page, bbox: [Math.min(current.bbox[0], region.bbox[0]), Math.min(current.bbox[1], region.bbox[1]),
                         Math.max(current.bbox[2], region.bbox[2]), Math.max(current.bbox[3], region.bbox[3])] }
                     : { page: region.page, bbox: [...region.bbox] });
+            }
+        }
+        for (const block of (inspection.blocks || []).filter(b => b.role === 'support')) {
+            for (const region of block.regionByPage || []) {
+                supportRegionsByNumber.set(`${region.page}:${block.questionNumber}`, region.bbox);
             }
         }
         if (questionRole) for (const block of inspection.blocks.filter(b => b.role === 'question')) {
@@ -362,8 +368,9 @@
                 // When every question of this page has its own box, the model gets one question at a time
                 // and the number the text layer already proved: attribution stays with the program, and no
                 // neighbouring question or footer can reach the request.
-                const regionItems = supportOnly ? [] : pageNumbers
-                    .map(number => ({ number, bbox: questionRegionsByNumber.get(`${page.pageNo}:${number}`) }))
+                const regionLookup = supportOnly ? supportRegionsByNumber : questionRegionsByNumber;
+                const regionItems = pageNumbers
+                    .map(number => ({ number, bbox: regionLookup.get(`${page.pageNo}:${number}`) }))
                     .filter(item => Array.isArray(item.bbox) && item.bbox.length === 4);
                 if (regionItems.length && regionItems.length === pageNumbers.length) {
                     let regionFailure = '';
@@ -383,7 +390,7 @@
                             } else result.cacheHits++;
 
                             const raw = await regionPending;
-                            const checked = acceptVisual(raw, [item.number], false);
+                            const checked = acceptVisual(raw, [item.number], supportOnly);
                             if (checked.reason || !checked.accepted.length) {
                                 regionFailure = regionFailure || checked.reason || 'missing-visual-question';
                                 result.withheld.push({ ...plan, questionNumbers: [item.number],
@@ -402,7 +409,13 @@
                                     warnings: ['PDF 视觉转录待人工逐题核对；题号由页面文本层确定。'] };
                                 const existing = result.questions.findIndex(question => key(question) === key(entry));
                                 const upgraded = { ...candidate, answer: '', solution: '' };
-                                if (existing < 0) result.questions.push(upgraded);
+                                if (supportOnly) {
+                                    // Same rules as the whole-page support path: a letter answer is never
+                                    // reconstructed from a model reading, and a solution is taken as it is.
+                                    if (entry.answer && !/^[A-D\s]+$/.test(entry.answer)
+                                        && !rawAnswers.some(row => key(row) === key(entry))) rawAnswers.push(candidate);
+                                    if (typeof entry.solution === 'string' && entry.solution.trim()) rawSolutions.push(candidate);
+                                } else if (existing < 0) result.questions.push(upgraded);
                                 else result.questions[existing] = upgraded;
                             }
                         } catch (error) {
