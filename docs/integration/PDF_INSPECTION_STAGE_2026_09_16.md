@@ -153,3 +153,16 @@ gate       支持侧 fail-closed，fusedQuestionNumbers = 1-6（P2）/ 1-12（P3
 `qisi-pdf-ingestion.js` 现在：① 解析失败时把模型原文（前 1200 字 + 长度 + 结尾 + finish_reason）
 作为证据留下；② 按模型实际的写法读回复（围栏/前后文字、LaTeX 转义修复、截断时用忽略字符串内部括号
 的扫描逐个取出完整条目）。题号仍必须过文本层证明与序列闸门，所以宽松读取不会带来错挂。
+
+第二批（同一晚，4 次调用）补上了支持侧的实测：`完整版题目.docx`（确定性 12 题）+
+`完整版答案.pdf`（4 页扫描答案卷，模型 `qwen-vl-plus`）→
+
+```text
+支持闸门 mode = prefix，fusedQuestionNumbers = 2-12
+接上的只有第 1 题的解析（parser-safe-solution，219 字）；2-12 题 pdf-support-field-withheld
+q6 在答案卷第 1 页被判 cross-page-visual-block（跨页题块）
+原因：扫描答案卷自身的字母序列在第 2 题断档，可靠前缀到第 1 题为止
+正式题库 0 行
+```
+
+这就是 §5.4 想要的 PDF support 归属验收：真实材料上"可靠部分接上、不可靠一律不挂"。
