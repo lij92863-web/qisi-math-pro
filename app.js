@@ -4962,20 +4962,38 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                     const keyValues = new Map();
 
                     keyEntries.forEach(entry => {
-                        const previous = keyValues.get(entry.questionNumber);
                         const value = window.Qisi.Utils.cleanRecognizedText(entry.answer);
+                        if (!value) return;
 
-                        if (!previous) {
-                            keyValues.set(entry.questionNumber, { value, conflict: false });
+                        const previous = keyValues.get(entry.questionNumber) || { values: [] };
+                        if (!previous.values.includes(value)) previous.values.push(value);
+                        keyValues.set(entry.questionNumber, previous);
+                    });
+
+                    const addKeyAnswerItem = (question, answer, confidence) => {
+                        const normalized = normalizeAnswerValue(answer);
+                        if (!normalized) return;
+
+                        answers.push({
+                            question: normalizeQuestionKey(question),
+                            answer: normalized,
+                            confidence,
+                            warnings: [],
+                            sourceFileId: sourceFile.id,
+                            sourceFileName: sourceFile.filename
+                        });
+                    };
+
+                    keyValues.forEach((entry, questionNumber) => {
+                        if (entry.values.length === 1) {
+                            addAnswer(questionNumber, entry.values[0], 0.8);
                             return;
                         }
 
-                        if (previous.value !== value) previous.conflict = true;
-                    });
-
-                    keyValues.forEach((entry, questionNumber) => {
-                        if (entry.conflict) return;
-                        addAnswer(questionNumber, entry.value, 0.8);
+                        // The key states two different values for this number: both are kept as
+                        // evidence (the merge records the conflict and leaves the answer empty), never
+                        // silently reduced to the longer one.
+                        entry.values.forEach(value => addKeyAnswerItem(questionNumber, value, 0.8));
                     });
 
                     return answers;
@@ -13921,7 +13939,23 @@ ${source}`;
                         const cleanOptions = repaired.options;
                         let cleanSolution = cleanDisplayTextForBatchSave(solution?.solution || '');
                         const reconciled = reconcileAnswerWithSolution(answer?.answer || '', cleanSolution, warnings, mergeWarnings);
-                        const cleanAnswer = reconciled.answer;
+                        let cleanAnswer = reconciled.answer;
+                        // A conflict between two candidates keeps *both* values as evidence and gives
+                        // the field back empty: choosing one of two disagreeing answers is exactly the
+                        // wrongly attached answer this project forbids, and a field that is empty only
+                        // because of a conflict must never be filled in by a later candidate either.
+                        if (answerConflicts.has(mergeKey)) {
+                            const conflictValues = (answerConflicts.get(mergeKey) || [])
+                                .map(entry => window.Qisi.Utils.cleanRecognizedText(entry?.answer))
+                                .filter(Boolean);
+
+                            if (conflictValues.length) {
+                                warnings.push(
+                                    `本题有两个不一致的答案候选（${[...new Set(conflictValues)].join(' / ')}），已保留双方证据且不自动选择，请人工确认。`
+                                );
+                            }
+                            cleanAnswer = '';
+                        }
                         warnings.splice(0, warnings.length, ...reconciled.warnings);
                         mergeWarnings.splice(0, mergeWarnings.length, ...reconciled.mergeWarnings);
                         if (mergeWarnings.includes('answerConflict')) duplicateStatus = 'answerConflict';
