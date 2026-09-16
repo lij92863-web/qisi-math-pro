@@ -30,6 +30,58 @@
   没有实际付费调用。失败路径可复核，不代表识别成功。
 - 三份真实 PDF 共 7 页均为 mixed；不是“无文本扫描件”。
 
+## 真实材料零成本跑批（2026-09-16 接手轮补测）
+
+`artifacts/audit-baseline/astra-pdf-acceptance.cjs`（沙箱内执行，AI 传输被测试代理阻断）把三份真实
+PDF 走了一遍真实批量入口，付费调用 0 次：
+
+| 组 | 文件（role） | 批次 | 草稿 | 页面 | withheld 项 | 付费调用 |
+| --- | --- | --- | --- | --- | --- | --- |
+| astra-P1 | 简略版题目（只有一页）.pdf（question） | review | 0 | 1 页 mixed | 1 | 0（1 次被阻断） |
+| astra-P2 | 完整版题目.pdf（question） | review | 0 | 2 页 mixed | 2 | 0（1 次被阻断） |
+| astra-P3 | 完整版题目.pdf（question）+ 完整版答案.pdf（support） | review | 0 | 2 + 4 页 mixed | 6 | 0（1 次被阻断） |
+
+观察值：
+
+- **没有假题**：三组都是 0 草稿、`totalCount 0`，没有任何模型自报内容进入草稿；
+- **原页保留**：批次 `ingestionSourcePages` 保存了全部 7 页的页面图（P1 1 页、P2 2 页、
+  P3 6 页），审核页可以看图核对；
+- **每次阻断都发生在第一个视觉请求**：文件内其余页不再发请求（`visualCalls 1`），
+  与“首个服务错误终止该文件其余请求”的既有规则一致；
+- 唯一的控制台错误是测试代理阻断 `http://127.0.0.1:32150/api/ai/chat` 的 `ERR_BLOCKED_BY_CLIENT`，
+  没有产品自身报错（`pageErrors 0`）。
+
+### 逐页“需视觉”清单（本条即当前精度上限）
+
+`待核对原页` 的每一项现在都带：页码、**文本层证明的题号**、原因码、传输错误码与 region：
+
+```text
+P1 p1  题号 1-6     reason unmapped-glyphs   error LOCAL_SERVER_UNREACHABLE   region [0,0,595.3,841.9]
+P2 p1  题号 1-6     reason unmapped-glyphs   error LOCAL_SERVER_UNREACHABLE   region [0,0,595.3,841.9]
+P2 p2  题号 7-12    reason unmapped-glyphs   error LOCAL_SERVER_UNREACHABLE   region [0,0,595.3,841.9]
+P3 p1  题号 1-6 / p2 题号 7 / p3 题号 8-10 / p4 题号 11-12   （同上，答案文件）
+```
+
+region 目前恒为**整页**（`0,0,595.3,841.9`），也就是“需视觉”的粒度到页为止，还没有
+“页内哪一块区域”的清单。要做页内区域清单，需要在 inspection 阶段把 unmapped-glyph 的行位置
+聚合成区域，这是一项独立于本轮的工作。
+
+### 审核页可见性核对（观察到的缺口）
+
+`main.html` 的 `待核对原页` 折叠块（`data-testid="pdf-withheld-review"`）实际渲染的是：
+
+```text
+待核对原页：N 项内容尚未形成可靠草稿
+第 1 页｜题号 1、2、3、4、5、6：待人工核对
+<原页图>
+```
+
+即**页码**、**题号**和**原页图**可见；批次级提示
+（`部分 PDF 内容尚未形成可靠草稿，请展开待核对原页查看。`）也可见。但记录里已经具备的
+**原因码（unmapped-glyphs）**、**region** 和**传输错误（错误码 + 消息）**没有任何地方显示，
+老师只能看到“待人工核对”，看不到“为什么”。这是一处**只报不改**的缺口：本轮的任务是核对
+可见性，改成显示原因码需要一份原因码到中文的映射，属于独立决定。
+
 ## 尚未完成
 
 1. 尚未授权真实付费视觉服务，不能声称 PDF 视觉结果质量通过。
