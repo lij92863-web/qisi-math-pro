@@ -1522,3 +1522,79 @@ tests/e2e/docx-table-cell-question-marker.test.js    the real batch path:
                                                        - the paper's key attaches, and "(1)" leaves the
                                                          answer empty while its 详解 still attaches
 ```
+
+## 27. 佛山一模: the options a tab was holding, and the figures that belong to the 详解
+
+Section §5.2 of the handoff left two defects in `广东佛山市第一中学2026届高三一模检测数学试题.docx`:
+question 3 has no options, question 17 carries three figures where the page draws one.
+
+### 27.1 Question 3's options were separated by a Word tab
+
+The options are there, on one line, in the document itself:
+
+```xml
+<w:r><w:t>A．98</w:t></w:r><w:r><w:tab /></w:r>
+<w:r><w:t>B．104</w:t></w:r><w:r><w:tab /></w:r>
+<w:r><w:t>C．106</w:t></w:r><w:r><w:tab /></w:r>
+<w:r><w:t>D．108</w:t></w:r>
+```
+
+The extraction reader knew the element as `<w:tab/>`, and Word writes it as `<w:tab />` - so the tab was
+dropped, the four options reached the option reader glued together as `A．98B．104C．106D．108`, and no
+reader can split that while keeping the stems intact. The tab and break elements are now matched with
+optional whitespace before the slash (`app.js`, `extractDocxTextWithMath`, and the `xmlText` helper next
+to it). The same line, read again:
+
+```text
+q3 单选题 ["98","104","106","108"]   (before: no options, "选择题仅识别到 0/4 个选项")
+```
+
+G7 has eleven four-option questions after this (ten before). It is the only group that changes; every
+other group's answers, counts and withheld set are identical.
+
+### 27.2 A figure drawn in the 详解 is not a figure of the question
+
+Question 17 of the same paper draws one 四面体 in the question itself (document line 59-60) and two
+坐标系 figures while solving it (lines 245, 263). The draft held all three and showed all three, because
+the DOCX token binder collected every `[[IMAGE:…]]` token of the draft - stem, options, answer *and*
+solution - and bound each one as `source: 'docx-inline-figure'` with the description
+`题中图形：Word 内嵌选项图片`, which is exactly what the stem inliner looks for.
+
+The pages say what the paper draws: pages 1 and 2 (the question pages) carry no figure at all for
+questions 1-11, and the drawings appear only next to the 详解 that needed them. So a token found in the
+answer/solution text is a *solution* illustration:
+
+```text
+question-owned token (stem/options) -> source 'docx-inline-figure',  description 题中图形：…
+support-only token  (answer/solution) -> source 'docx-solution-figure', description 解析插图：…
+```
+
+Both stay rows of the draft - the 详解 token has to resolve when the solution is displayed and when the
+question is exported - but only the question-owned ones are inlined into the stem, because
+`shouldInlineDraftImageInStemForV2` accepts only sources and descriptions that mean 题图.
+
+Measured over the whole matrix: every draft's figures are now exactly the tokens that draft carries, and
+no draft's stem shows a 详解 drawing.
+
+```text
+G7  q17 stem figures 3 -> 1   (draft still holds its own figure + the two 详解 figures)
+G7  q2 q8 q11 q14    stem figure removed (their drawings come from the 详解 alone)
+G8  q18 / G10 q11 q13 q18 / G11 q14 / G6 q13   same shape
+answers, question counts, option counts and the withheld total (39): unchanged
+```
+
+Test: `tests/e2e/docx-tab-options-and-solution-figures.test.js` with
+`tests/fixtures/docx-tab-options-and-solution-figures.js` - one paper file, tab-separated options, one
+figure of its own and two in the 详解; it asserts the four options, the single stem figure and that the
+详解 keeps its two.
+
+### 27.3 Found on the way, not fixed (next step)
+
+The last question of six groups still carries the paper's answer-key header in its stem, e.g.
+`G7 q19 … 《广东佛山市第一中学2026届高三一模检测数学试题》参考答案 题号 1 2 3 … 10`. The answer-key
+heading rule only allows twelve characters before `参考答案`, and those titles are 20-43 characters long,
+so the cut happens at the key table's `答案` cell instead of the title line and the header rows land in the
+question text. The same three copies of that rule exist in `qisi-utils.js` (`ANSWER_KEY_HEADING_RE`),
+`qisi-docx-ingestion.js` and `qisi-batch-importer.js`. This is visible content in the stem, and the next
+step is to widen it (or to give the three call sites one shared rule) with the same kind of before/after
+matrix evidence as above.

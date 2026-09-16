@@ -3786,7 +3786,7 @@ ${JSON.stringify(questionSummaries, null, 2)}
                 };
 
                 const xmlText = (xml) => String(xml || '')
-                    .replace(/<w:tab\/>/g, ' ')
+                    .replace(/<w:tab\s*\/>/g, ' ')
                     .replace(/<\/w:p>/g, '\n')
                     .replace(/<\/w:tr>/g, '\n')
                     .replace(/<[^>]+>/g, '')
@@ -4141,7 +4141,12 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             // node" that swallows everything up to the next </w:t>. On the real
                             // 周二晚测.docx that leaked a drawing's <wp:posOffset> values into the paper
                             // text as 13-15 digit runs and swallowed option labels such as "A. ".
-                            /__MATH_TOKEN_(\d+)__|<w:drawing[\s\S]*?<\/w:drawing>|<w:pict[\s\S]*?<\/w:pict>|<w:object[\s\S]*?<\/w:object>|<(?:w:t|m:t|w:instrText|w:delText)(?=[\s/>])[^>]*>([\s\S]*?)<\/(?:w:t|m:t|w:instrText|w:delText)>|<w:tab\/>|<w:br\/>|<m:chr[^>]*m:val="([^"]+)"[^>]*\/>/g,
+                            // The tab/break elements are matched with optional whitespace before the
+                            // closing slash: Word writes both "<w:tab/>" and "<w:tab />", and a tab is a
+                            // separator the teacher typed. A sentence that lost its tab reads as one
+                            // word - 佛山一模 question 3 prints its options as "A．98<tab>B．104<tab>…"
+                            // and came out "A．98B．104C．106D．108", which no option reader can split.
+                            /__MATH_TOKEN_(\d+)__|<w:drawing[\s\S]*?<\/w:drawing>|<w:pict[\s\S]*?<\/w:pict>|<w:object[\s\S]*?<\/w:object>|<(?:w:t|m:t|w:instrText|w:delText)(?=[\s/>])[^>]*>([\s\S]*?)<\/(?:w:t|m:t|w:instrText|w:delText)>|<w:tab\s*\/>|<w:br\s*\/>|<m:chr[^>]*m:val="([^"]+)"[^>]*\/>/g,
                             (m, tokenIndex, textNode, mathChar) => {
                                 if (m.startsWith('<w:tab')) {
                                     parts.push(' ');
@@ -17983,12 +17988,23 @@ ${source}`;
                                     (draft.sourceFileId || draft.sourceQuestionFileId || draft.sourceTrace?.sourceFileId) === file.id
                                 )
                                 .forEach(draft => {
-                                    const tokenIds = extractImageTokenIds([
+                                    // A token that sits in the 详解 is an illustration the teacher drew
+                                    // while solving the question, not a figure of the question:
+                                    // 佛山一模 question 17 draws one 四面体 in the question itself and
+                                    // two 坐标系 figures in its 详解, and all three were pushed into the
+                                    // stem, so the review page showed three pictures for a question whose
+                                    // page draws one. The image still belongs to the draft - the 详解
+                                    // token has to resolve when the solution is shown and exported - it
+                                    // just never becomes part of the question text.
+                                    const questionTokenIds = new Set(extractImageTokenIds([
                                         draft.stem,
-                                        ...(Array.isArray(draft.options) ? draft.options : []),
-                                        draft.answer,
-                                        draft.solution
-                                    ].map(x => String(x || '')).join('\n'));
+                                        ...(Array.isArray(draft.options) ? draft.options : [])
+                                    ].map(x => String(x || '')).join('\n')));
+                                    const tokenIds = [...new Set([
+                                        ...questionTokenIds,
+                                        ...extractImageTokenIds([draft.answer, draft.solution]
+                                            .map(x => String(x || '')).join('\n'))
+                                    ])];
 
                                     const boundRefs = [];
 
@@ -17996,13 +18012,14 @@ ${source}`;
                                         const ref = refsById.get(tokenId);
                                         if (!ref?.id || ref.displayable === false || usedDocxImageIds.has(ref.id)) return;
 
+                                        const solutionFigure = !questionTokenIds.has(tokenId);
                                         usedDocxImageIds.add(ref.id);
                                         boundRefs.push({
                                             id: ref.id,
                                             url: ref.url,
                                             align: 'center',
                                             displayable: ref.displayable,
-                                            source: 'docx-inline-figure'
+                                            source: solutionFigure ? 'docx-solution-figure' : 'docx-inline-figure'
                                         });
                                         draftImages.push({
                                             id: ref.id,
@@ -18014,8 +18031,10 @@ ${source}`;
                                             sourcePage: 0,
                                             bbox: [],
                                             confidence: 0.82,
-                                            description: '题中图形：Word 内嵌选项图片',
-                                            source: 'docx-inline-figure',
+                                            description: solutionFigure
+                                                ? '解析插图：Word 内嵌解析图片'
+                                                : '题中图形：Word 内嵌选项图片',
+                                            source: solutionFigure ? 'docx-solution-figure' : 'docx-inline-figure',
                                             status: 'bound',
                                             createdAt: Date.now()
                                         });
