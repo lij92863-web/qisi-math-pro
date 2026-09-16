@@ -184,7 +184,7 @@ to point at pages worth looking at.
 | --- | --- | --- | --- |
 | 1 | 复数 $z$ 满足 $\frac{z}{z+i}=1-i$，求 $\left|z-2i\right|$（选项 $2$、$\sqrt{5}$、$2\sqrt{2}$、$\sqrt{10}$） | stem and the four options match | `VISUALLY_VERIFIED_G7_Q1` |
 | 2 | 集合 $A=\{x\mid-1<x\le1\}$、$B=\{x\mid0<x<2\}$，求 $A\cap B$ | stem and options match, answer A = $\{x\mid0<x\le1\}$ is the page's own option A | `VISUALLY_VERIFIED_G7_Q2` |
-| 3 | 80,90,96,$x$,110,120 的第 50 百分位数与平均数相同，求 $x$（选项 98 / 104 / 106 / 108） | options match; the draft holds **C (106)**, while the page's own arithmetic gives $x=104$, which is option B | `MANUAL_REVIEW_G7_Q3` - **the draft answer must be checked against the paper's answer key**; this is either a defect in the paper's key or a real wrong answer, and it is the first thing the next pass must resolve |
+| 3 | 80,90,96,$x$,110,120 的第 50 百分位数与平均数相同，求 $x$（选项 98 / 104 / 106 / 108） | options match; the draft holds **C (106)** | `WRONG_MATCH_G7_Q3` - **resolved against the paper's own answer key, see §6b.2: the key says B and the draft says C** |
 | 4 | $\triangle ABC$，$a=2$，$b=\sqrt{6}$，$c=4$，求 $\cos B$（$\frac58$/$\frac34$/$\frac78$/$\frac{15}{16}$） | stem and options match | `VISUALLY_VERIFIED_G7_Q4`（answer not checked yet） |
 | 5 | 长 3 的铁丝截 9 段组成正三棱柱框架，求体积最大（$\frac{\sqrt3}{36}$ 等） | stem and options match; question is `withheld` because a formula in it is unreadable | `WITHHELD_G7_Q5` |
 | 6 | 等比数列 $\{a_n\}$ 公比 2，求 $\frac{a_2+a_4+a_6}{a_1+a_3+a_5}$ | stem and options match | `VISUALLY_VERIFIED_G7_Q6` |
@@ -194,6 +194,37 @@ to point at pages worth looking at.
 Everything else in G7 (questions 7–15, 18, 19, and the whole answer/solution section) has **not** been
 looked at yet, and G5, G6, G8, G9, G10 and G11 have not been looked at at all in this round: those
 pages exist under `artifacts/audit-baseline/rendered-g*` and nothing about them is claimed here.
+
+### 6b.2 A real wrong answer, pinned to the paper's own key (佛山一模 question 3)
+
+The answer key of the paper was read **out of the rendered page text** (page 6 of
+`rendered-g7/…pdf`, which is `答案第 1 页`), so this is the paper's own statement and not a computation:
+
+```text
+题 号  1  2  3  4  5  6  7  8  9  10          3．B 【分析】根据一组数据的百分位数与平均数的定义，
+答案   D  A  B  C  C  D  D  A  AD ACD         【详解】… 依题意，… 解得 … . 故选：B.
+题 号  11
+答案   ABD
+```
+
+The draft's answers for that paper are `1 D, 2 A, 3 C, 4 C, 5 C, 6 D, 7 D, 8 A, 9 AD, 10 ACD, 11 ABD`:
+**every one matches the key except question 3, where the draft holds C while the paper says B.** A
+wrongly attached answer is the outcome this project treats as unacceptable, so this is the top open
+defect of the round.
+
+What the text layer looks like there (the key is a Word table, one cell per line):
+
+```text
+74: "1"  75: "2"  76: "3" … 83: "10"   84: "答案"
+85: "D"  86: "A"  87: "B"  88: "C"  89: "C"  90: "D"  91: "D"  92: "A"  93: "AD"  94: "ACD"
+95: "题号" 96: "11" 97: "答案" 98: "ABD"
+```
+
+and the same key is present a second time in the file-wide table fallback
+(`题号 1 2 3 4 5 6 7 8 9 10` / `答案 D A B C C D D A AD ACD`), so both evidence streams say B. The
+next action is a fixture built from this exact table shape (a key whose numbers and answers are one
+cell per line, followed by a 详解 section whose first sentence also starts with `1．D`), because the
+current reader pairs that shape somewhere other than row for row.
 
 ## 7. Survey of the remaining groups (batch level only)
 
