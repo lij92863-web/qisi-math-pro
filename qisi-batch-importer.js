@@ -521,7 +521,9 @@
         let current = null;
 
         for (const p of paragraphs) {
-            if (/^(?:.{0,12}?)?(?:参考答案|答案|答案[与及和]解析)\s*[:：]?\s*$/.test(p.text.trim()) && current) break;
+            // The same heading rule the question/support split uses (qisi-utils), so the skeleton stops
+            // exactly where the question text stops.
+            if (current && window.Qisi.Utils.isAnswerKeyHeadingLine(p.text)) break;
             const qNo = getQuestionNoFromLine(p.text || '');
 
             if (qNo) {

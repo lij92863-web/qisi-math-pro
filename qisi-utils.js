@@ -1117,7 +1117,15 @@
         // ("答案" / "参考答案" on its own or as the tail of a title line) and read as one sequence:
         // each marker starts an entry that runs to the next marker, the fragment before the first
         // marker belongs to no question, and an unusable value is skipped rather than trusted.
-        const ANSWER_KEY_HEADING_RE = /^(?:.{0,12}?)?(?:参考答案|答案)$/;
+        // The heading is the word alone ("答案", "参考答案"), the tail of a short label ("高二答案"), or
+        // the tail of the paper's own title in 《》 - however long that title is. The six real papers that
+        // print their name before 参考答案 are 20 to 43 characters long, and with the 12-character limit
+        // the cut fell on the answer *table's* own header cell "答案" instead, which left the 题号 rows of
+        // the key inside the last question's stem (G6/G7/G8/G9/G10/G11 question 14 or 19).
+        const ANSWER_KEY_HEADING_RE = /^(?:《[^》]*》\s*)?(?:.{0,12}?)?(?:参考答案|答案|答案[与及和解析])\s*[:：]?$/;
+
+        const isAnswerKeyHeadingLine = (line = '') =>
+            ANSWER_KEY_HEADING_RE.test(String(line || '').trim());
 
         // The document text and the answer key are two different things: the key is a list of
         // "number separator value" entries and must never be read as 解析/solution prose. Everything
@@ -1492,6 +1500,7 @@
             normalizeAnswerSolutionSource,
             normalizeFigureBbox,
             preserveRawEvidence,
+            isAnswerKeyHeadingLine,
             questionMatchesLibraryFilters,
             protectBatchMediaTokens,
             protectLatexMathSegments,

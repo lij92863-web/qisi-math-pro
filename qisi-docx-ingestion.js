@@ -24,8 +24,10 @@
         const { trace } = context;
         const text = await trace.measure('text-math-media', () => helpers.extractText(file));
         const lines = text.split('\n');
+        // One rule decides what an answer-key heading is (qisi-utils), so the question text, the key
+        // reader and the skeleton can never disagree about where the key starts.
         const supportHeading = lines.findIndex((line, index) =>
-            /^(?:.{0,12}?)?(?:参考答案|答案|答案[与及和]解析)\s*[:：]?\s*$/.test(line.trim()) &&
+            root.Qisi.Utils.isAnswerKeyHeadingLine(line) &&
             root.Qisi.Utils.collectQuestionEvidenceMarkers(lines.slice(0, index).join('\n')).length > 0);
         const questionText = supportHeading >= 0 ? lines.slice(0, supportHeading).join('\n') : text;
         const supportText = supportHeading >= 0 ? lines.slice(supportHeading).join('\n') : text;

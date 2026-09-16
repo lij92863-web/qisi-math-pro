@@ -1598,3 +1598,49 @@ question text. The same three copies of that rule exist in `qisi-utils.js` (`ANS
 `qisi-docx-ingestion.js` and `qisi-batch-importer.js`. This is visible content in the stem, and the next
 step is to widen it (or to give the three call sites one shared rule) with the same kind of before/after
 matrix evidence as above.
+
+## 28. The key's own header rows were sitting in the last question's stem
+
+That next step, taken. Six of the eleven groups ended their last question with the paper's answer table:
+
+```text
+G7 q19 … >ln\left(n+1\right)$.
+        《广东佛山市第一中学2026届高三一模检测数学试题》参考答案
+        题号
+        1
+        2
+        …
+        10
+```
+
+The heading rule allowed twelve characters in front of 参考答案, and the real titles are 20 to 43
+characters long (the longest is 十二校一模's). The title line therefore never matched: the ingest's
+support heading fell on the answer *table's* own header cell `答案`, the question text ran on into the
+key's 题号 rows, and no marker stopped the last question there.
+
+Evidence over the texts the acceptance run saved for all eleven groups
+(`artifacts/audit-baseline/probe-answer-heading-lines.cjs`): the widened rule matches exactly these new
+lines, every one of them a real title, and nothing else in any group:
+
+```text
+G3  line 0   《2026年7月9日高中数学作业》参考答案
+G6  line 35  《2026年7月9日高中数学作业》参考答案
+G7  line 72  《广东佛山市第一中学2026届高三一模检测数学试题》参考答案
+G8  line 74  《广东深圳高级中学（集团）2026届高三适应性考试数学试卷》参考答案
+G9  line 86  《广东省十二所重点中学校2026届高三年级第一次模拟考（十二校一模）数学试题》参考答案
+G10 line 78  《河北昌黎第一中学2025-2026学年高三考前自测考试数学试卷》参考答案
+G11 line 82  《湖北省武汉市2025届高三下学期毕业生四月调研考试数学试题》参考答案
+```
+
+The rule is now one function, `Qisi.Utils.isAnswerKeyHeadingLine`, and the two copies that had drifted
+are gone: `qisi-docx-ingestion.js` (where the question text and the support text are cut apart) and
+`qisi-batch-importer.js` (where the question skeleton stops) both ask it, so the skeleton and the
+question text cannot disagree about where the key begins. `app.js` is untouched this round.
+
+Result on the whole matrix: no stem carries the key's header rows any more (**six before, zero now**), and
+every group's question count, answer set and withheld set is identical to the run before the change
+(withheld total 39). `splitTextAtAnswerKeyHeading` keeps its own safety valve - a heading with nothing
+key-shaped after it opens no key section - and the new test pins both sides of it.
+
+Test: `tests/qisi-utils-answer-key-heading.test.js` (the six real titles, the shapes that must not match,
+the cut, and the valve).
