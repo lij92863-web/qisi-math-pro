@@ -53,11 +53,20 @@
         let role = 'question';
         let previousPage = 0;
         for (const page of pages) {
-            if (page.pageNo !== previousPage + 1 || page.kind !== 'text') active = null;
+            // A "mixed" page has a text layer the teacher can read: the parts that could not be mapped
+            // are the formula glyphs, which the page carries as pictures. Throwing that text away made the
+            // whole file produce nothing whenever the visual service was unavailable (the teacher saw
+            // "0 题" for 完整版题目.pdf). The page is still listed as needing visual review, but what the
+            // text proves is kept as a safe partial draft.
+            const usable = page.kind !== 'scanned';
+            if (page.pageNo !== previousPage + 1 || !usable) active = null;
             previousPage = page.pageNo;
-            if (page.kind !== 'text') {
+            if (!usable) {
                 withheld.push({ sourcePage: page.pageNo, reason: page.reason, kind: page.kind });
                 continue;
+            }
+            if (page.kind !== 'text') {
+                withheld.push({ sourcePage: page.pageNo, reason: page.reason, kind: page.kind });
             }
             for (const line of page.lines) {
                 const text = line.text.trim();

@@ -161,8 +161,29 @@ test('a fenced or cut-off visual reply keeps its complete items', async () => {
             assert.equal(result.questions[0].fieldEvidence.stem.source, 'pdf-vision');
             if (expected.length < 2) {
                 assert.ok(result.withheld.some(w => w.reason === 'missing-visual-question'),
-                    'the item that never arrived stays withheld');
+                   'the item that never arrived stays withheld');
             }
         }
+    } finally { Inspection.inspect = inspect; }
+});
+
+// The teacher's real case: 完整版题目.pdf is two "mixed" pages (the formula glyphs cannot be mapped), the
+// visual service was unreachable, and the whole file produced **0 题**. The readable text of a mixed page
+// is now kept as a safe partial draft while the page is still listed for visual review.
+test('a mixed page keeps the text it can read when the visual service is unavailable', async () => {
+    const inspect = Inspection.inspect;
+    try {
+        const mixed = [page(1, [line('1. A sufficiently long ordinary question')], 'mixed')];
+        Inspection.inspect = async () => ({ pages: mixed, ...Inspection.segment(mixed), timings: [] });
+        const result = await Ingestion.ingest({ file: { id: 'mixed-partial' }, questionRole: true, helpers: {
+            parseQuestions: () => [{ question: '1', stem: 'A sufficiently long ordinary question' }],
+            parseSupport: () => ({})
+        } });
+
+        assert.deepEqual(result.questions.map(q => q.question), ['1'],
+            'the text of a mixed page still makes a draft');
+        assert.equal(result.visualCalls, 0);
+        assert.ok(result.withheld.some(w => w.sourcePage === 1 && w.visualNeeded),
+            'the page is still listed as needing visual review');
     } finally { Inspection.inspect = inspect; }
 });

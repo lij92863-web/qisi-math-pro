@@ -300,8 +300,17 @@
                         // must not be reconstructed from a worked solution by a model.
                         if (item.answer && !/^[A-D\s]+$/.test(item.answer) && !rawAnswers.some(a => key(a) === key(item))) rawAnswers.push(candidate);
                         if (typeof item.solution === 'string' && item.solution.trim()) rawSolutions.push(candidate);
-                    } else if (!result.questions.some(q => key(q) === key(item))) {
-                        result.questions.push({ ...candidate, answer: '', solution: '' });
+                    } else {
+                        // The same question may already be there from this page's own text (a "mixed" page
+                        // keeps its readable text as a safe partial draft). The transcription carries the
+                        // formulas the text could not, so it replaces that text-only version.
+                        const existing = result.questions.findIndex(q => key(q) === key(item));
+                        const upgraded = { ...candidate, answer: '', solution: '' };
+                        if (existing < 0) result.questions.push(upgraded);
+                        else if (result.questions[existing].sourceTrace?.source === 'pdf-text'
+                            || result.questions[existing].rawBlock) {
+                            result.questions[existing] = upgraded;
+                        }
                     }
                 }
                 if (checked.missing.length) result.withheld.push({ ...plan, questionNumbers: checked.missing, reason: 'missing-visual-question' });
