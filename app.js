@@ -1995,32 +1995,14 @@ ${JSON.stringify(questionSummaries, null, 2)}
                         .replace(/∩/g, '\\cap ')
                         .replace(/∪/g, '\\cup ')
                         .replace(/→/g, '\\to ');
-                    const mathRun = /(?:\\(?:triangle|angle|vec|overline)\s*(?:\{[^{}\n]+\}|[A-Z]{1,4}))|(?:\\(?:d?frac)\s*\{[^{}\n]+\}\s*\{[^{}\n]+\})|(?:\\sqrt(?:\[[^\]\n]+\])?\s*\{[^{}\n]+\})|(?:\\(?:sin|cos|tan|ln|log|alpha|beta|gamma|theta|lambda|mu|pi|le|ge|ne|subset|subseteq|in|cap|cup|to|cdot|times|parallel|perp)(?![A-Za-z]))|(?:[A-Za-z]{1,4}\s*[=<>+\-]\s*[A-Za-z0-9{}\\^_+\-*/().]+)/g;
-                    const { protectedText, chunks, issues } = protectLatexMathSegments(raw);
-                    if (issues.length) {
-                        console.warn('[LATEX_NORMALIZE][delimiter-issues]', { raw, issues });
-                    }
-                    let text = protectedText;
-                    text = normalizeSymbols(text);
-                    // A run that sits flush against an existing math segment (the "#{n}" of a Word
-                    // superscript ends right where "\in R" begins) would otherwise leave two touching
-                    // delimiters and read as "$$" once the segments are restored.
-                    let mergesWithMathSegment = false;
-                    text = text.replace(mathRun, (match, offset, all) => {
-                        const clean = match.trim();
-                        if (!clean || /@@QISI_MATH_SEGMENT_\d+@@/.test(clean)) return match;
-                        const before = all[offset - 1] || '';
-                        const after = all[offset + match.length] || '';
-                        if (before === '$' || after === '$') return match;
-                        if (/@@QISI_MATH_SEGMENT_\d+@@$/.test(all.slice(0, offset))
-                            || /^@@QISI_MATH_SEGMENT_\d+@@/.test(all.slice(offset + match.length))) {
-                            mergesWithMathSegment = true;
-                        }
-                        if (/^[A-D]$/.test(clean)) return match;
-                        return `$${clean}$`;
-                    });
-                    const restored = restoreLatexMathSegments(text, chunks);
-                    return mergesWithMathSegment ? restored.replace(/\$\$/g, '') : restored;
+                    // Every maths run in the field becomes inline LaTeX: a letter or digit that means a
+                    // symbol must not stay in the body font. The rule lives in Qisi.Utils
+                    // (promoteMathRuns) so it is testable on its own, it understands the $…$ segments
+                    // that are already maths, and it is the *only* place that decides what is maths in a
+                    // field - the old narrower pattern was folded into it.
+                    return window.Qisi.Utils.repairMathDelimiters(
+                        window.Qisi.Utils.promoteMathRuns(normalizeSymbols(raw))
+                    );
                 };
 
                 const repairCommonLatexOcrErrors = (value) => {

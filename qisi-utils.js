@@ -1147,6 +1147,167 @@
             };
         };
 
+        // A Word paper mixes prose with maths the teacher typed as *ordinary text*: "如图，四棱锥PABCD中",
+        // "a，b，c的大小顺序为", "sinθ", "V＝√3/4". A letter that means a symbol has to be typeset as a
+        // symbol, so every maths run in the text is promoted to inline LaTeX. This is one rule that reads
+        // the *shape* of the run and nothing else - no document name, no question number, no keyword list:
+        //
+        //   * a run is a maximal sequence of maths characters (Latin letters, digits, Greek letters,
+        //     LaTeX commands, operators and maths symbols); a space stays inside the run when another
+        //     maths character follows it, so "2cos θ" is one formula instead of two;
+        //   * a run is maths when it holds an operator or a maths symbol, or two or more letters; a
+        //     single letter is maths too ("a，b，c"), except an option label ("A." / "B、"), which belongs
+        //     to the option reader rather than to a formula;
+        //   * a run that is only digits is *not* maths: a year or a question number in prose must not be
+        //     dressed up as a formula;
+        //   * trailing sentence punctuation stays outside the formula, and the standard function names
+        //     (sin, cos, tan, log, ln, ...) become their upright LaTeX form.
+        // A backslash is part of a run: it introduces a LaTeX command ("\in", "\sqrt{3}"), and a run
+        // that starts at the command must not be split from the command itself.
+        const MATH_RUN_CHAR_RE = /[0-9A-Za-z+\-=*/^_<>|(){}\\\u00b1\u00b7\u00d7\u00f7\u2192\u2208\u2205\u221a\u221e\u2220\u2225\u2229\u222a\u22a5\u2264\u2265\u2260\u25b3\u2032\u03b1-\u03c9\u0391-\u03a9\uff1d\uff0b\uff0d\uff1c\uff1e\uff0a\uff0f]/;
+        const MATH_RUN_OPERATOR_RE = /[+\-=*/^_<>|(){}\\\u00b1\u00d7\u00f7\u2192\u2208\u2229\u222a\u2225\u22a5\u2220\u2264\u2265\u2260\u25b3\u221a\u221e\u2032]/;
+        // The teacher's paper writes "AP＝1" with fullwidth signs; inside a promoted run they are the
+        // same sign. Fullwidth punctuation outside a run (Chinese commas, brackets) is never touched.
+        const FULLWIDTH_SIGN_MAP = Object.freeze({
+            '\uff1d': '=', '\uff0b': '+', '\uff0d': '-', '\uff1c': '<', '\uff1e': '>', '\uff0a': '*', '\uff0f': '/'
+        });
+        const FULLWIDTH_SIGN_RE = /[\uff1d\uff0b\uff0d\uff1c\uff1e\uff0a\uff0f]/g;
+        const MATH_FUNCTION_NAME_RE = /(^|[^A-Za-z\\])(sin|cos|tan|cot|sec|csc|log|ln|lim|max|min|exp)(?![A-Za-z])/g;
+        const OPTION_LABEL_AFTER_RE = /^[\s\u3000]*[.．、:：)）]/;
+        // Two kinds of span are opaque to this pass: an inline token such as [[IMAGE:dimg_…]] and any
+        // span a caller has parked between @@…@@ (the extraction layer parks its protected maths
+        // segments there). Neither is a formula, and neither may be touched.
+        const OPAQUE_SPAN_RE = /\[\[[^\]]+\]\]|@@[^@\u0001\u0002]+@@/g;
+        // The scanner needs to know whether an opaque span starts *here*; a non-global pattern is used
+        // so that no lastIndex state can leak between calls.
+        const OPAQUE_SPAN_AT_START_RE = /^(?:\[\[[^\]]+\]\]|@@[^@\u0001\u0002]+@@)/;
+
+        const promoteMathRuns = (text = '') => {
+            // Tokens such as [[IMAGE:dimg_…]] carry letters and underscores without being formulas; they
+            // are parked behind placeholders for this pass and put back exactly as they were.
+            const tokens = [];
+            const source = String(text || '').replace(OPAQUE_SPAN_RE, match => {
+                tokens.push(match);
+                return `\u0001${tokens.length - 1}\u0002`;
+            });
+            if (!source) return String(text || '');
+
+            // The text is split into maths pieces and plain pieces first: a segment that was already
+            // maths (…$…$…) and a run this rule promotes are both maths, so they are simply one piece
+            // when they touch. Nothing has to be glued back together afterwards.
+            const pieces = [];
+            const push = (isMath, value, display = false) => {
+                if (!value) return;
+                const previous = pieces[pieces.length - 1];
+                if (previous && previous.isMath === isMath) {
+                    previous.value += value;
+                    // Two runs that merged are one inline formula; a display fence only survives alone.
+                    if (isMath) previous.display = previous.display && display;
+                } else {
+                    pieces.push({ isMath, value, display });
+                }
+            };
+
+            let index = 0;
+
+            while (index < source.length) {
+                const rest = source.slice(index);
+                const opaque = OPAQUE_SPAN_AT_START_RE.exec(rest);
+                if (opaque) {
+                    push(false, opaque[0]);
+                    index += opaque[0].length;
+                    continue;
+                }
+
+                if (source.startsWith('$$', index)) {
+                    const close = source.indexOf('$$', index + 2);
+                    if (close < 0) { push(false, source[index]); index += 1; continue; }
+                    push(true, source.slice(index + 2, close), true);
+                    index = close + 2;
+                    continue;
+                }
+                if (source[index] === '$') {
+                    const close = source.indexOf('$', index + 1);
+                    if (close < 0) { push(false, source[index]); index += 1; continue; }
+                    push(true, source.slice(index + 1, close));
+                    index = close + 1;
+                    continue;
+                }
+
+                if (!MATH_RUN_CHAR_RE.test(source[index])) {
+                    push(false, source[index]);
+                    index += 1;
+                    continue;
+                }
+
+                let end = index;
+                let runLooksLikeMaths = false;
+                while (end < source.length) {
+                    const character = source[end];
+                    if (MATH_RUN_CHAR_RE.test(character)) {
+                        if (/[A-Za-z\u0391-\u03a9\u03b1-\u03c9]/.test(character) || MATH_RUN_OPERATOR_RE.test(character)) {
+                            runLooksLikeMaths = true;
+                        }
+                        end += 1;
+                        continue;
+                    }
+                    // A space stays inside the run only when the part before it already looks like maths
+                    // ("2cos θ"), never when it separates two plain tokens ("1 B" of an option list).
+                    const separator = character;
+                    const joinsRun = (separator === ' ' || separator === '\u3000')
+                        && runLooksLikeMaths
+                        && end + 1 < source.length && MATH_RUN_CHAR_RE.test(source[end + 1]);
+                    if (!joinsRun) break;
+                    end += 2;
+                }
+
+                const rawRun = source.slice(index, end);
+                const run = rawRun
+                    .replace(/[.,;:]+$/, '')
+                    .replace(FULLWIDTH_SIGN_RE, sign => FULLWIDTH_SIGN_MAP[sign] || sign);
+                const trailing = rawRun.slice(run.length);
+                const letters = (run.match(/[A-Za-z\u0391-\u03a9\u03b1-\u03c9]/g) || []).length;
+                const digits = (run.match(/[0-9]/g) || []).length;
+                const isOptionLabel = /^[A-D]$/.test(run) && OPTION_LABEL_AFTER_RE.test(source.slice(end));
+                // A formula has to hold something that can be a symbol: a letter, or a number with an
+                // operator beside it. A bare number ("2026年") and an answer blank ("_____") stay text.
+                const isMath = !isOptionLabel
+                    && (letters >= 1 || (digits >= 1 && /[+\-=*/<>]/.test(run)));
+
+                if (isMath && run) {
+                    const body = run
+                        .replace(MATH_FUNCTION_NAME_RE, (match, before, name) => `${before}\\${name} `)
+                        .trim();
+                    push(true, body);
+                    push(false, trailing);
+                } else {
+                    push(false, rawRun);
+                }
+                index = end;
+            }
+
+            return pieces
+                .map(piece => (piece.isMath ? `$${piece.display ? '$' : ''}${piece.value}$${piece.display ? '$' : ''}` : piece.value))
+                .join('')
+                .replace(/\u0001(\d+)\u0002/g, (match, position) => tokens[Number(position)] || '');
+        };
+
+        // Exam papers often write the options as maths whose *label* is inside the formula:
+        // A field that ends up with an odd number of "$$" has a broken delimiter: one of them is the
+        // seam left by a split (a stem cut between two formulas), not a display fence. Collapsing the
+        // odd one to a single "$" restores the pairing without touching a real display pair, which
+        // always contributes two of them.
+        const repairMathDelimiters = (text = '') => {
+            let output = String(text || '');
+            for (let guard = 0; guard < 16; guard += 1) {
+                const doubles = output.match(/\$\$/g);
+                if (!doubles || doubles.length % 2 === 0) break;
+                const at = output.indexOf('$$');
+                output = `${output.slice(0, at)}$${output.slice(at + 2)}`;
+            }
+            return output;
+        };
+
         // Exam papers often write the options as maths whose *label* is inside the formula:
         //
         //   "…则 $C$ 的大小为（ ）. $A.\frac{\pi }{4}$ $B.\frac{\pi }{3}$ $C.\frac{2\pi }{3}$ $D.\frac{3\pi }{4}$"
@@ -1333,6 +1494,8 @@
             splitTextAtAnswerKeyHeading,
             extractInlineAnswerKey,
             extractFormulaLabelledOptions,
+            promoteMathRuns,
+            repairMathDelimiters,
             stripBatchImagePlaceholders,
             splitQuestionForStorage,
             stripAnswerSolution,

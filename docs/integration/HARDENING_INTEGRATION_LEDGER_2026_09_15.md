@@ -1230,6 +1230,46 @@ Per the owner's rule 3 of the 2026-09-16 instruction set, the remaining unsuppor
 `MTEF_UNRESOLVED`/`WITHHELD` rather than being chased to full coverage; the reader is only extended
 when real material shows `WRONG MATCH` or `SILENT WRONG CONTENT` again.
 
+### 24.6 Every letter that means a symbol is now inline LaTeX (this commit)
+
+The teacher's follow-up was that item 5 was not thorough: after the Word superscript fix, the *body
+font* letters were still there - `sinθ`, `λ`, `a，b，c`, `ABD`, `PBC`, `PABCD` in 周二晚测, and the same
+shapes in other papers. One rule now decides this, and it is one pure function rather than a document
+patch: `Qisi.Utils.promoteMathRuns`.
+
+```text
+* a run is a maximal sequence of maths characters: Latin letters, digits, Greek letters, LaTeX
+  commands and maths symbols, with an inner space kept inside the run ("2cos θ" is one formula);
+* a run is maths when it holds a letter, or a digit beside an operator;
+* an option label ("A." / "B、"), a bare year ("2026年") and an answer blank ("_____") stay text -
+  the first belongs to the option reader, the last two are not formulas;
+* [[IMAGE:…]] / [[MTEF_UNRESOLVED:…]] tokens and text that is already inside $…$ are never touched;
+* inside a run the standard function names become their upright form (sin, cos, log, ln, ...), and
+  fullwidth signs are normalised ("AP＝1" becomes $AP=1$).
+```
+
+It is wired into the *existing* field normaliser (`normalizeMathTextForLatex`), where it **replaced**
+the narrower maths pattern together with the protect/restore machinery: that machinery existed only to
+keep the narrower rule out of existing `$…$` segments, and the new rule handles segments itself, so the
+same layer got smaller and there is exactly one place that decides what is maths in a field. Nothing
+was added to the parser, the review model or the stores.
+
+One defect the change exposed and fixed: a field that a split left with an odd number of `$$` (佛山一模
+question 10, 武汉四调 question 18) was repaired by `Qisi.Utils.repairMathDelimiters`, which pairs the
+broken delimiter and leaves a real display pair alone.
+
+Real material after the change (G1–G11, same day):
+
+```text
+q2  已知函数 $f(x)=2^{x}+x,g(x)=log_{2}x+x,h(x)=x^{3}+x$ 的零点分别为$a$，$b$，$c$，则$a$，$b$，$c$的大小顺序为（ ）
+q6  如图，四棱锥$P$-$ABCD$中，底面$ABCD$为矩形，$PA⊥$平面$ABCD$，$E$为$PD$的中点，设$AP=1$，$AD=$ $\sqrt{3}$…
+q10 已知复数$z_{1}=m+(4-m^{2})i(m\in R)$，$z_{2}=2cos$ $θ+(λ+3\sin θ)i(λ$，$θ\in R$）…
+q12 如图，已知 $OPQ$ 是半径为1，圆心角为 $\frac{\pi }{3}$ 的扇形，$C$是扇形弧上的动点， $ABCD$ 是扇形的内接矩形.记 $\angle POC=α$，
+```
+
+Draft counts, answer counts and the 36 withheld questions are unchanged in all eleven groups, and no
+field contains a broken `$$` any more. Locked by `tests/qisi-utils-promote-math-runs.test.js`.
+
 ### 22.4 The visual check found a silent content loss, and the reader now refuses it (`ecbf36c`)
 
 Looking at group 4 (`周二晚测.docx`) page by page showed its question 8 as a piecewise definition
