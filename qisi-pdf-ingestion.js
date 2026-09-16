@@ -48,6 +48,74 @@
             } finally { canvas.width = canvas.height = 0; }
         } finally { await (pdf ? pdf.destroy() : loading.destroy()); }
     };
+    // The model writes LaTeX, and LaTeX is full of braces, so a reply that stops in the middle of the
+    // array cannot be cut at the last "}" of the text. This walks the reply once, ignoring anything
+    // inside a string, and keeps every complete "{...}" item of the questions array. An item that is
+    // incomplete or unreadable is simply not read; nothing is invented.
+    const CONTROL_CHARACTERS_RE = /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g;
+    // The model answers with LaTeX, and a LaTeX backslash is not a JSON escape: "\left\{", "\frac" and
+    // "\sin" are all illegal inside a JSON string, so JSON.parse refuses the whole reply even when every
+    // item is complete and correct - that is exactly what the first authorised call returned. The repair
+    // doubles only those backslashes (a LaTeX backslash becomes a literal backslash) and leaves a legal
+    // escape alone: \\, \", \/ and \uXXXX.
+    const repairLatexJsonEscapes = (value = '') => {
+        const text = String(value || '');
+        let output = '';
+        for (let index = 0; index < text.length; index += 1) {
+            const character = text[index];
+            if (character !== '\\') { output += character; continue; }
+            const next = text[index + 1] || '';
+            if (next === '\\' || next === '"' || next === '/' || next === 'u') {
+                output += `\\${next}`;
+                index += 1;
+                continue;
+            }
+            output += '\\\\';
+        }
+        return output;
+    };
+    const readVisualQuestionItems = (value = '') => {
+        const text = String(value || '');
+        const declared = text.search(/"questions"\s*:\s*\[/);
+        const from = declared < 0 ? -1 : text.indexOf('[', declared);
+        if (from < 0) return [];
+
+        const items = [];
+        let depth = 0;
+        let itemStart = -1;
+        let inString = false;
+        let escaped = false;
+
+        for (let index = from; index < text.length; index += 1) {
+            const character = text[index];
+            if (inString) {
+                if (escaped) escaped = false;
+                else if (character === '\\') escaped = true;
+                else if (character === '"') inString = false;
+                continue;
+            }
+            if (character === '"') { inString = true; continue; }
+            if (character === '{') {
+                if (!depth) itemStart = index;
+                depth += 1;
+                continue;
+            }
+            if (character !== '}') continue;
+            depth -= 1;
+            if (depth > 0 || itemStart < 0) continue;
+            const raw = text.slice(itemStart, index + 1);
+            depth = 0;
+            itemStart = -1;
+            try {
+                items.push(JSON.parse(raw));
+            } catch (_) {
+                try { items.push(JSON.parse(repairLatexJsonEscapes(raw.replace(CONTROL_CHARACTERS_RE, ' ')))); }
+                catch (_) { /* an item that cannot be read is not read */ }
+            }
+        }
+
+        return items.filter(item => item && typeof item === 'object');
+    };
     const requestVisual = async (image, expectedNumbers, helpers) => {
         const response = await helpers.request({
             model: helpers.model,
@@ -62,11 +130,50 @@
         if (!response.ok) throw Object.assign(new Error(json?.error?.message || json?.error || `HTTP ${response.status}`),
             { code: response.status === 401 || response.status === 403 ? 'API_AUTH_ERROR' : json?.code || 'API_RESPONSE_ERROR' });
         const content = json?.choices?.[0]?.message?.content;
-        try {
-            const parsed = JSON.parse(String(content || '').replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, ''));
-            if (!Array.isArray(parsed.questions)) throw Error('questions');
-            return parsed.questions;
-        } catch (_) { throw Object.assign(new Error('视觉服务未返回有效题目结构'), { code: 'MALFORMED_MODEL_RESPONSE' }); }
+        // A model answer is prose-shaped: it may be fenced with ```json, it may carry a sentence before or
+        // after the JSON, and it may be cut off by the token budget in the middle of the array. Only
+        // complete items are ever read, and every number is validated against the page's own text layer
+        // afterwards (acceptVisual), so a salvaged prefix can never attach a question to the wrong page.
+        const visualQuestions = (() => {
+            const text = String(content ?? '');
+            const start = text.indexOf('{');
+            if (start < 0) return null;
+
+            const bodies = [];
+            for (let cut = text.lastIndexOf('}'); cut > start; cut = text.lastIndexOf('}', cut - 1)) {
+                bodies.push(text.slice(start, cut + 1));
+                if (bodies.length >= 60) break;
+            }
+
+            for (const body of bodies) {
+                const trimmed = body.replace(/[\s,]+$/, '');
+                for (const candidate of [trimmed, `${trimmed}]}`, `${trimmed}]}]}`, `${trimmed}}`]) {
+                    for (const form of [candidate, repairLatexJsonEscapes(candidate),
+                        candidate.replace(CONTROL_CHARACTERS_RE, ' '),
+                        repairLatexJsonEscapes(candidate.replace(CONTROL_CHARACTERS_RE, ' '))]) {
+                        try {
+                            const parsed = JSON.parse(form);
+                            if (Array.isArray(parsed?.questions)) return parsed.questions;
+                        } catch (_) { /* the next candidate, or the next item boundary */ }
+                    }
+                }
+            }
+
+            const salvaged = readVisualQuestionItems(text);
+            return salvaged.length ? salvaged : null;
+        })();
+        if (visualQuestions) return visualQuestions;
+
+        // The model's own answer is evidence: when it cannot be read as the requested structure, a
+        // bounded head of it travels with the failure, so the review page (and the next round) sees
+        // what actually came back instead of only "not a valid question structure".
+        throw Object.assign(new Error('视觉服务未返回有效题目结构'), {
+            code: 'MALFORMED_MODEL_RESPONSE',
+            rawContent: String(content ?? '').slice(0, 1200),
+            rawLength: String(content ?? '').length,
+            rawTail: String(content ?? '').slice(-300),
+            finishReason: json?.choices?.[0]?.finish_reason ?? null
+        });
     };
     const gateSupport = (answers, solutions, expectedNumbers, drafts) => {
         const aligned = root.Qisi.PdfSupportAligner.alignPdfSupport({ answerItems: answers,
@@ -201,7 +308,11 @@
             } catch (error) {
                 const code = error.code || root.Qisi.Utils.classifyVisualServiceFailure?.(error)?.code || 'TRANSPORT_ERROR';
                 transportFailure = code;
-                result.withheld.push({ ...plan, errorCode: code, message: error.message });
+                result.withheld.push({ ...plan, errorCode: code, message: error.message,
+                    rawEvidence: error.rawContent ?? null,
+                    rawDiagnostics: error.rawLength === undefined ? null : {
+                        length: error.rawLength, tail: error.rawTail, finishReason: error.finishReason
+                    } });
             }
         }
         if (supportRole || fullRole) {

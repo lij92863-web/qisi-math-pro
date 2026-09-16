@@ -1644,3 +1644,67 @@ key-shaped after it opens no key section - and the new test pins both sides of i
 
 Test: `tests/qisi-utils-answer-key-heading.test.js` (the six real titles, the shapes that must not match,
 the cut, and the valve).
+
+## 29. 第一次授权的付费视觉：真实回复读不出来的原因，和它现在的结果
+
+主人本轮授权原文："给你5次机会" → 随后"给你7次付费视觉调用机会吧"。预算 7 次，实际用掉 6 次，
+留 1 次备用。每次调用都由 `artifacts/audit-baseline/astra-pdf-real-vision.cjs` 记录在案（该脚本把
+文件级 `visualCalls` 当计数表，并且只允许事先批准的批次）。
+
+### 29.1 六次呼叫的账
+
+```text
+1-2  batch A  简略版题目 p1 + 完整版答案 p1   → 0 草稿；题目页 MALFORMED_MODEL_RESPONSE
+3    batch A2 简略版题目 p1（单独复现）       → 同样失败，且当时错误里没有任何模型原文
+4    batch A2 补上证据之后重跑                → 拿到模型原文的前 1200 字
+5-6  batch A  修好读取之后重跑                → 6 份草稿（题目页 success），答案页回复也读出来了
+```
+
+### 29.2 根因：模型给的是 LaTeX，而不是 JSON 的转义
+
+第 4 次呼叫留下的原文（现已作为证据保存在批次记录里）长得完全正确：
+
+```text
+```json
+{ "questions": [ { "questionNumber": "1",
+  "stem": "已知集合 $A = \left\{ x \mid x = \sin \frac{n\pi}{2}, n \in \mathbb{Z} \right\}$…"
+```
+
+问题就在 `\left` `\{` `\frac` `\sin`：JSON 只允许 `\\ \" \/ \b \f \n \r \t \uXXXX` 这些转义，
+`\l` 是**非法转义**，于是 `JSON.parse` 拒绝整份回复——内容其实一条不缺。之前的代码把这份原文连同
+错误一起丢掉了，所以只能报告"未返回有效题目结构"。
+
+两处改动（都在 `qisi-pdf-ingestion.js`，`app.js` 未动、封印未动）：
+
+```text
+1. 证据不再丢：解析失败时，模型原文的前 1200 字 + 长度 + 结尾 300 字 + finish_reason 跟着 withheld
+   记录一起保存（规则 9：先留原始证据）。
+2. 回复按模型实际会写的样子来读：
+   * 允许 ```json 围栏、前后夹带一句话（取第一个 "{" 到最后一个 "}"）；
+   * 把 LaTeX 的反斜杠补成 JSON 转义（只补非法转义，`\\` / `\"` / `\/` / `\uXXXX` 原样保留）；
+   * 回复被 token 预算截断时，用一次性扫描（忽略字符串内部的括号）逐个取出**完整**的题目对象，
+     不完整的那个不读——题号随后仍要过文本层证明与序列闸门，所以不可能挂到别的页上。
+```
+
+### 29.3 结果：一页扫描题变成了 6 道草稿
+
+```text
+简略版题目（只有一页）.pdf   parseStatus success   visualCalls 1 → 6 份草稿，全部 单选题、4 选项
+                            每份：source pdf-vision、题号由文本层证明、带"PDF 视觉转录待人工逐题核对"提醒
+                            正式题库 0 行（只进 review）
+完整版答案.pdf p1           回复同样读出来了；q6 因跨页被判 cross-page-visual-block
+                            支持闸门仍是 fail-closed：文本层给出的答案条目在 2 号处断档、7-9 号又不在
+                            本题集契约（1-6）之内 → 答案与解析一律不挂
+```
+
+交叉验证（不额外花钱）：把 PDF 的 6 份草稿与**同一份卷子的 DOCX 文本**（G1 的
+`简略版题目（只有一页）.docx`，确定性抽取）逐题比：
+
+```text
+q2 原文完全一致；q6 完全一致；q1/q3/q4/q5 数学与文字一致，
+差别只在写法（模型写 \overrightarrow{a}/\mid/\sin/\mathbb{Z}，DOCX 里是 \vec{a}/sin/Z，
+q2 的"棱台"模型写对、DOCX 里是"梭台"）→ 4 个选项逐题对齐
+```
+
+测试：`tests/pdf-ingestion.test.js` 增加三条——解析失败保留模型原文、围栏/截断回复取出完整条目、
+LaTeX 转义修复后完整回复逐条读出（含截断与完整两种形状）。

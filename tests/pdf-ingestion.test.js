@@ -97,3 +97,72 @@ test('successful visual transcription is cached, cannot sneak in answers, and ca
         assert.equal(calls, 2);
     } finally { Inspection.inspect = inspect; }
 });
+
+// The first authorised real vision call (2026-09-16, 简略版题目（只有一页）.pdf) came back as something
+// the reader could not parse, and the failure said only "not a valid question structure": the model's
+// own text was thrown away with the error, so nothing could tell a truncated JSON reply apart from a
+// refusal. A model answer that cannot be read as the requested structure is evidence like any other,
+// and a bounded head of it now travels with the withheld page.
+test('a visual answer that cannot be parsed keeps the model text as evidence', async () => {
+    const inspect = Inspection.inspect;
+    try {
+        const pages = [page(1, [line('1. First question')], 'mixed')];
+        Inspection.inspect = async () => ({ pages, blocks: [], withheld: [], timings: [] });
+        const result = await Ingestion.ingest({ file: { id: 'malformed' }, questionRole: true, helpers: {
+            model: 'malformed-mock', render: async () => ({ url: 'data:image/jpeg;base64,AA==' }),
+            request: async () => ({ ok: true, json: async () => ({
+                choices: [{ message: { content: 'I cannot read this page, here is a description instead.' } }]
+            }) })
+        } });
+
+        assert.equal(result.questions.length, 0);
+        const withheld = result.withheld.find(w => w.errorCode === 'MALFORMED_MODEL_RESPONSE');
+        assert.ok(withheld, `expected a malformed-response entry, saw ${JSON.stringify(result.withheld)}`);
+        assert.match(String(withheld.rawEvidence), /cannot read this page/,
+            'the model text must survive the failure');
+        assert.deepEqual(withheld.questionNumbers, ['1'], 'the page keeps the numbers the text layer proved');
+    } finally { Inspection.inspect = inspect; }
+});
+
+// The real reply of that first authorised call started exactly like the requested structure and was
+// fenced in ```json; a reply can also be cut off by the token budget in the middle of the array. Both
+// shapes are read now - every complete item, nothing invented - and the numbers still have to match the
+// page's own text layer.
+test('a fenced or cut-off visual reply keeps its complete items', async () => {
+    const inspect = Inspection.inspect;
+    const first = { questionNumber: '1', stem: 'First question', options: ['A', 'B', 'C', 'D'], answer: '', solution: '' };
+    try {
+        const pages = [page(1, [line('1. First question'), line('2. Second question', 200)], 'mixed')];
+        Inspection.inspect = async () => ({ pages, blocks: [], withheld: [], timings: [] });
+
+        const cases = [
+            ['```json\n' + JSON.stringify({ questions: [first, { ...first, questionNumber: '2', stem: 'Second question' }] }) + '\n```', ['1', '2']],
+            ['```json\n' + JSON.stringify({ questions: [first] }).slice(0, -2) + ',{"questionNumber":"2","stem":"Sec', ['1']],
+            // The shape of the real reply: every stem carries LaTeX braces, and the array stops in the
+            // middle of an item, so "cut at the last }" is not the same as "cut at an item boundary".
+            ['{"questions":[{"questionNumber":"1","stem":"已知 $\\left\\{ x \\mid x = \\sin \\frac{n\\pi}{2} \\right\\}$，则（　　）",'
+                + '"options":["A. $A = \\{0, 1\\}$"],"answer":"B","solution":""},{"questionNumber":"2","stem":"正四棱台的上、下底面的边长分别为 $2$，$8$', ['1']],
+            // The same LaTeX but a complete reply: every item is read, and the backslashes survive as the
+            // model wrote them.
+            ['{"questions":[{"questionNumber":"1","stem":"已知 $\\left\\{ x \\mid x = \\sin \\frac{n\\pi}{2} \\right\\}$",'
+                + '"options":["A. $\\\\frac{1}{2}$"],"answer":"B","solution":""},'
+                + '{"questionNumber":"2","stem":"正四棱台的上、下底面的边长分别为 $2$，$8$","options":[],"answer":"C","solution":""}]}',
+                ['1', '2']]
+        ];
+        for (const [index, [content, expected]] of cases.entries()) {
+            const result = await Ingestion.ingest({ file: { id: 'fenced' }, questionRole: true, helpers: {
+                // A fresh model name per shape: the page cache is keyed by the rendered image and the
+                // model, and a cached reply would hide the parse this test is about.
+                model: `fenced-mock-${index}`, render: async () => ({ url: 'data:image/jpeg;base64,AA==' }),
+                request: async () => ({ ok: true, json: async () => ({ choices: [{ message: { content } }] }) })
+            } });
+            assert.deepEqual(result.questions.map(q => q.question), expected,
+                `only the item whose number the page proves is read: ${content.slice(0, 40)}`);
+            assert.equal(result.questions[0].fieldEvidence.stem.source, 'pdf-vision');
+            if (expected.length < 2) {
+                assert.ok(result.withheld.some(w => w.reason === 'missing-visual-question'),
+                    'the item that never arrived stays withheld');
+            }
+        }
+    } finally { Inspection.inspect = inspect; }
+});
