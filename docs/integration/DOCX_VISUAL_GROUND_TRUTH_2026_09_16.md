@@ -232,6 +232,49 @@ text is a cheap way to check answers for every remaining group before looking at
 What that leaves open in this group: question 3's missing options (0/4), and question 17's three
 attached images against the single figure the page draws.
 
+### 6b.3 Answer attribution checked for every remaining group (rendered key text vs drafts)
+
+The same cheap check - read the paper's own answer table out of the *rendered* page text, compare it with
+the drafts answer by answer - was run for the papers that carry an answer section. Result, question by
+question:
+
+```text
+group  file                   key (paper's own)                         drafts                     verdict
+G5     高二.docx               1．2 2．3 … stream under 高二答案           54 of 54 match               OK
+G6     题目+答案.docx          1 B 2 B 3 D 4 C 5 B 6 B 7 A 8 B 9 BD 10 BD 11 BC   identical          OK
+G7     佛山一模                1 D 2 A 3 B 4 C 5 C 6 D 7 D 8 A 9 AD 10 ACD 11 ABD  identical          OK
+G8     深圳高级中学            1 D 2 A 3 B 4 A 5 C 6 D 7 C 8 D 9 AB 10 BCD 11 BC  identical          OK
+G9     十二校一模              1 D 2 D 3 D 4 C 5 D 6 C 7 C 8 B 9 AD 10 ACD 11 ACD  1 D, **2 $P$**, 3 D …  **DEFECT (see below)**
+G10    河北昌黎                1 A 2 A 3 B 4 C 5 B 6 D 7 A 8 B 9 ABC 10 ABD 11 BCD  identical         OK
+G11    武汉四调                1 C 2 D 3 C 4 A 5 A 6 B 7 D 8 C 9 BCD 10 AD 11 BD  **all 19 answers empty**  **DEFECT (see below)**
+```
+
+For G5 the paper's key is the `1．2 2．3 …` stream (its own kind: it states 49 twice with different
+values and skips 48), and every draft matches it, with 48 and 49 correctly left empty.
+
+#### The two defects this check found
+
+**G9 question 2 holds a stray symbol instead of the key's letter.** The paper says `2．D` (file text line
+119) and the draft holds `$P$`:
+
+```text
+stem   2．已知 $p:x<-3$ 或 $x>2,q:x>a$ ，且 $q$ 是 $p$ 的充分不必要条件，则实数 $a$ 的取值范围（ ）
+key    2．D
+draft  answer = "$P$"    options = $a\le 2$ / $a\le -3$ / $a>2$ / $a\ge 2$
+```
+
+The value is the *variable* `p` of the stem, and it has also been upper-cased - which is the
+option-label canonicalisation that exists to turn a written option value into its letter. Two things are
+therefore needed, and neither is a per-paper patch: an answer may only be taken from a slot the file
+states as an answer (the key entry, a labelled block, or the value before a 详解 label), never from a
+symbol inside the question's own text; and the A–D canonicalisation must refuse a letter that is a
+variable of the stem rather than one of the question's own options.
+
+**G11 (武汉四调) attaches no answer at all although the paper states 19 of them.** The key is in the
+file (`题号 1 2 3 4 5 6 7 8 9 10` / `答案 C D C A A B D C BCD AD`, `题号 11` / `答案 BD`, plus the
+solutions), and the drafts are `1:- … 19:-`. That is fail-closed (nothing wrong was attached), but it is
+19 questions of manual work for the teacher, so the reader has to learn this key shape too.
+
 ## 7. Survey of the remaining groups (batch level only)
 
 **Update (same day, after the archive and MTEF fixes):** the local LibreOffice conversion works when
