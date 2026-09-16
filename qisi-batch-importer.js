@@ -469,6 +469,25 @@
         return markers >= 2 && !rest;
     };
 
+    // Everything left on the marker's own line is a number (or the word 题, or a separator): that is
+    // the tail of a table value ("7.0") or a numbering row, not the start of a question. The
+    // text-level reader has always refused these (see QUESTION_NUMBERING_ROW_REST_RE in qisi-utils).
+    const isMarkerNumberTail = (
+        value = '',
+        markerLength = 0
+    ) => {
+        const rest =
+            String(value || '')
+                .slice(markerLength)
+                .split('\n')[0]
+                .trim();
+
+        if (!rest) return false;
+        if (!/\d/.test(rest)) return false;
+
+        return /^(?:(?:\d{1,3}|第)[\s\u3000]*(?:题)?[\s\u3000]*[.．、:：\)）]?[\s\u3000]*)+$/.test(rest);
+    };
+
     const getQuestionNoFromLine = (
         line = ''
     ) => {
@@ -476,9 +495,25 @@
             return '';
         }
 
-        return parseLeadingQuestionMarker(
-            line
-        ).questionNumber;
+        const marker =
+            parseLeadingQuestionMarker(line);
+
+        if (!marker.questionNumber) {
+            return '';
+        }
+
+        // A marker whose own line holds nothing but numbers is the tail of a table value or a
+        // numbering row, never a question: 武汉四调 prints its 评委 scores as table cells "7.0",
+        // "9.3", "8.9", so the leading "7." looked exactly like the marker of question 7 and the
+        // skeleton invented numbers 5-9 a second time. The text-level reader has always refused
+        // these (a marker followed only by numbers is the paper's numbering row), and the block
+        // reader has to refuse them the same way, or the skeleton and the questions the text reader
+        // finds disagree and the whole paper's answer key is withheld.
+        if (isMarkerNumberTail(line, marker.markerLength)) {
+            return '';
+        }
+
+        return marker.questionNumber;
     };
     const buildQuestionBlocksFromDocumentXml = (documentXml = '') => {
         const paragraphs = splitDocxParagraphs(documentXml);

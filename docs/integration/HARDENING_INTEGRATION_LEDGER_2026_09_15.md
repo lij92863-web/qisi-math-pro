@@ -1416,3 +1416,109 @@ group, answer count and withheld count is unchanged, and the total is 37. Every 
 all eleven groups was checked to carry its `MTEF_UNRESOLVED` token, so no question is withheld without
 a visible reason. Group 3's page-by-page record is in
 `docs/integration/DOCX_VISUAL_GROUND_TRUTH_2026_09_16.md` §4.
+
+## 26. 武汉四调's answer key had nothing to do with the support heading (2026-09-16, sixteenth pass)
+
+Section §25.3 left one hypothesis: the support side of 武汉四调 is emptied by the heading split inside
+`qisi-docx-ingestion.js`, because the ingest's support heading lands on the key table's own header cell
+`答案` instead of the (too long) title line. The probe that hypothesis asked for was written
+(`artifacts/audit-baseline/probe-g11-ingest.cjs`) and it printed the real ingest values for that file.
+The hypothesis is wrong, and the file was never losing its support text:
+
+```text
+supportHeading: line 94 ("答案"), supportText = 答案 / C D C A A B D C BCD AD / 题号 11 答案 BD / 1．C …
+helpers.parseSupport(supportText) -> 18 answers, 19 solutions   (the support parse was fine)
+ingest filter -> 0 answers, 0 solutions
+unmatched       -> 37, every one of them "unproved-question-identity" (18 answers + 19 solutions)
+skeleton        -> authoritative: false, 31 entries:
+                   1 2 3 4 | 7 9 8 9 8 8 8 9 8 8 8 8 | 5 6 7 8 9 10 11 12 … 19
+```
+
+The twelve numbers between 4 and 5 are question 4's own score table. 武汉四调 prints the 评委 scores as
+table cells ("7.0", "9.3", "8.3", "9.2", "8.9", "8.9"), each of them a paragraph of its own inside
+`<w:tbl>`, and `7.0` starts exactly like the marker of question 7. The XML block reader behind the
+skeleton had no rule against that, so it invented 7/8/9 a second time - the skeleton stopped being
+continuous and unique, `registerAuthoritativeQuestionContract` declined it, the ingest's identity gate
+then had an empty expected set, and **every** answer and solution of the paper was rejected as
+unproven. No wrong content was attached - the opposite: the paper's own correct key was withheld whole.
+
+### 26.1 The rule the block reader was missing (`qisi-batch-importer.js`)
+
+The text-level question reader has always refused these cells: a marker whose line holds nothing but
+numbers is the paper's numbering row (or the tail of a table value), never a question
+(`QUESTION_NUMBERING_ROW_REST_RE` in `qisi-utils.js`). The block reader only had the weaker
+"two or more markers on the line" form of that rule, so it read `7.0` as question 7. `isMarkerNumberTail`
+adds the same rule to `getQuestionNoFromLine`, and nothing else in the block reader changes.
+
+Skeleton after the change: `1 2 3 4 … 19`, `noDuplicates: true`, `contiguous: true`,
+`authoritative: true`. The contract is registered, the support gate accepts the key, and 武汉四调's
+answers attach.
+
+A first attempt took the wider route - classify every paragraph inside `<w:tbl>` as a cell, so no cell
+can ever start a question. It fixes this file too, and it was rejected for a measured reason: it makes
+the skeleton *stricter* than the text-level reader. A table cell that carries more than a bare number
+("8.9 乙") still produces a phantom question in the text reader but would no longer produce one in the
+skeleton, and the explicit merge then fails the whole batch with `question-items-violate-contract` and
+zero drafts - measured on this round's fixture, where the batch failed. The rule kept is the one both
+readers share, so the two can never disagree about a cell.
+
+### 26.2 What the paper states as an answer, and what only looks like one (`qisi-utils.js`, `app.js`)
+
+With the gate open, the support parse's 18 answers were still not all answers. They are the first lines
+of the 详解 blocks:
+
+```text
+12．3                          -> the paper's own answer "3"      (故答案为：3.)
+13． $36$                      -> the paper's own answer "36"     (故答案为：36.)
+14． $\frac{\sqrt{3}}{3}$      -> the paper's own answer          (故答案为：…)
+15．(1)  …然后是本小题的详解  -> "(1)" is the first sub-question, not an answer
+16．(1) $e$ / (2) …            -> part 1 only; the answer field must not carry half a multi-part answer
+17．(1) …   18．(1) …          -> same shape
+```
+
+`Qisi.Utils.isSubQuestionMarkerValue` refuses an answer slot that begins with a bracketed sub-question
+marker, and `normalizeAnswerValue` (the single funnel every answer of every path passes through) uses
+it. A real bracketed answer keeps working: `(0,1)`, `(-∞,0)`, `(1,2)`, `（-1，2）`, `[0,1)` all carry
+more than the bare marker inside the bracket and are left alone.
+
+Result for 武汉四调, all nineteen drafts: `1:C 2:D 3:C 4:A 5:A 6:B 7:D 8:C 9:BCD 10:AD 11:BD 12:3
+13:$36$ 14:$\frac{\sqrt{3}}{3}$`, `15-19` empty (the paper prints no answer line for those - the
+详解 gives the parts), and 19 of 19 solutions attached for the first time.
+
+### 26.3 The same rule removed wrong content from four other groups
+
+The "(1) …" values were not only in 武汉四调 - the same shape had been attached as the *answer* of
+questions 15-19 of four other real papers. Before/after over the whole matrix
+(`astra-matrix-keyrow.log` -> `astra-docx-final-matrix-g11.log`):
+
+```text
+G7  q15 "(1) $B=\frac{\pi }{3}$"                      -> empty     (and q16-q19 likewise)
+G8  q15 "(1) $h=8\sqrt{3}$" … q19 "(1)"               -> empty     (q15-q19)
+G9  q15 "(1) $a_{n}=2n-1$； $b_{n}=3^{n-1}$" …        -> empty     (q15-q19)
+G10 q15 "(1) $\frac{2}{3}$" …                         -> empty     (q15-q19)
+G11 q1-q14 ""                                         -> the key above
+G1  unchanged (6 drafts, 5 answers)   G2/G3/G4/G5/G6  unchanged, every count and every answer
+```
+
+Those twenty values were the first sub-question of a 解答题, never the answer of the question, so the
+answer field is now empty and the question keeps its ordinary missing-answer warning. Per the project
+rule a missing answer is acceptable and a half answer in the answer field is not.
+
+### 26.4 Withheld count, and why it moved from 36 to 39
+
+Attaching the solutions of 武汉四调 for the first time brings their unresolved MathType streams into the
+drafts: questions 6, 7, 11, 16 and 19 now carry `MTEF_UNRESOLVED` tokens (in the stem or in the newly
+attached solution) and are withheld with that visible reason instead of the two that were withheld
+before. Nothing is resolved by guessing: the tokens stay in the field, the question cannot be admitted
+until a teacher fills it in. Total across the eleven groups: 39 (was 36).
+
+### 26.5 Tests
+
+```text
+tests/qisi-utils-subquestion-marker.test.js          the value rule, both directions
+tests/e2e/docx-table-cell-question-marker.test.js    the real batch path:
+  fixtures/docx-table-cell-question-marker.js          - a score table cell ("7.0") must not become a
+                                                         question (skeleton stays 1..4, authoritative)
+                                                       - the paper's key attaches, and "(1)" leaves the
+                                                         answer empty while its 详解 still attaches
+```

@@ -4971,6 +4971,10 @@ ${JSON.stringify(questionSummaries, null, 2)}
 
                     if (!raw) return '';
 
+                    // A slot that holds the first line of the solution is not an answer. 武汉四调
+                    // writes "15．(1)" and then the 详解, and "(1)" is the sub-question, not a value.
+                    if (window.Qisi.Utils.isSubQuestionMarkerValue(raw)) return '';
+
                     const choice = raw
                         .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
                         .replace(/[.\s、，。:：；;()（）]/g, '')

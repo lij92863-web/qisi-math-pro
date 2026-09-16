@@ -1358,6 +1358,15 @@
             return { stem, options };
         };
 
+        // An answer file may put the solution where an answer would be: 武汉四调 prints "15．(1)" and
+        // then the 详解 of a three-part 解答, so the answer slot holds a sub-question marker rather
+        // than a value. Reading "(1)" as the answer of question 15 is wrong content, and an empty
+        // answer is the acceptable outcome, so such a slot is refused here. A real answer that
+        // starts with a bracket - an interval "(0,1)" or a point "(1,2)" - has more than the bare
+        // marker inside its bracket and is left alone.
+        const isSubQuestionMarkerValue = (value = '') =>
+            /^[（(]\s*(?:[1-9]\d{0,1}|[ⅠⅡⅢⅣⅤⅥ])\s*[）)]/.test(String(value || '').trim());
+
         const extractInlineAnswerKey = (rawText = '') => {
             const { keyPart } = splitTextAtAnswerKeyHeading(rawText);
 
@@ -1493,6 +1502,7 @@
             splitFlatTextIntoQuestionBlocks,
             splitTextAtAnswerKeyHeading,
             extractInlineAnswerKey,
+            isSubQuestionMarkerValue,
             extractFormulaLabelledOptions,
             promoteMathRuns,
             repairMathDelimiters,
