@@ -64,6 +64,16 @@ test('the local service only answers its own loopback origin and stays off the n
     try {
         await waitForServer(origin, server);
 
+        for (const asset of ['/main.html', '/qisi-pdf-ingestion.js']) {
+            const fresh = await fetch(origin + asset);
+            assert.equal(fresh.status, 200);
+            assert.equal(fresh.headers.get('cache-control'), 'no-store');
+            const ordinaryRefresh = await fetch(origin + asset, {
+                headers: { 'If-Modified-Since': fresh.headers.get('last-modified') || new Date().toUTCString() }
+            });
+            assert.equal(ordinaryRefresh.status, 200, 'ordinary refresh must read current source');
+        }
+
         // A request without an Origin (a normal navigation or a local tool) is served.
         const plain = await fetch(origin + '/api/ai/health');
         assert.equal(plain.status, 200);

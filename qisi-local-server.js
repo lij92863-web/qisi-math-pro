@@ -242,7 +242,11 @@ app.post('/api/ai/ocr', aiJsonParser, (req, res) => {
 });
 
 app.use(express.json({ limit: '2mb' }));
-app.use(express.static(ROOT, { extensions: ['html'], maxAge: 0, etag: false }));
+app.use(express.static(ROOT, { extensions: ['html'], maxAge: 0, etag: false,
+  setHeaders(res, filePath) {
+    if (/\.(?:html?|m?js)$/i.test(filePath)) res.setHeader('Cache-Control', 'no-store');
+  }
+}));
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
