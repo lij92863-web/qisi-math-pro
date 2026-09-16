@@ -97,6 +97,34 @@
             draftImages: 'id, batchId, questionId, status, createdAt'
         });
 
+        // Version 9 exists because the question bank on this machine is already at 9: the handout line
+        // (`stage H2 add handout domain repository`) added the three handouts stores and every profile
+        // that opened that build was upgraded to 9. A build that only declares up to 8 cannot open such
+        // a bank at all - IndexedDB refuses to open a lower version, which is what the teacher saw as
+        // "题库数据加载失败：VersionError The requested version (80) is less than the existing version (90)".
+        //
+        // The declaration below is deliberately *identical* to the one that created version 9, store for
+        // store, including the three stores this line does not use yet. That keeps both lines in exact
+        // agreement: opening an existing bank performs no upgrade at all (same version, same schema), so
+        // nothing is migrated, renamed or deleted, and a bank created here can still be opened by the
+        // handout build afterwards.
+        db.version(9).stores({
+            questions: 'id, grade, type, diff, knowledge, knowledgeType, systemKnowledge, personalKnowledge, createdAt',
+            images: 'id, createdAt',
+            customTemplates: 'id, name, createdAt',
+            personalKnowledge: 'id, updatedAt',
+            externalQuestions: 'id, batchId, sourceTeacher, importedAt, importOrder, processStatus, detectedStatus',
+            importBatches: 'id, sourceTeacher, importedAt, importStatus',
+            mergeBatches: 'id, createdAt, revertedAt',
+            draftImportBatches: 'id, status, createdAt, updatedAt',
+            draftImportFiles: 'id, batchId, role, fileType, parseStatus, createdAt',
+            draftQuestions: 'id, batchId, order, questionNumber, status, duplicateStatus, selected, createdAt',
+            draftImages: 'id, batchId, questionId, status, createdAt',
+            handouts: 'id, title, status, createdAt, updatedAt',
+            handoutAssets: 'id, handoutId, sourceQuestionId, sourceImageId, createdAt',
+            handoutRevisions: 'id, handoutId, revision, createdAt'
+        });
+
         const getQuestionKnowledge = (q, type) => {
             if (!q) return '';
 
