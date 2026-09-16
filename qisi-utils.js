@@ -427,14 +427,19 @@
             // "$\\triangle ABC$" counts as option A, so the stem is cut in the middle of a formula
             // and the rest of the question is filed as option A.
             const labelRegex = /(^|[\n\r\s　]|[（(])([A-D])(?=[^A-Za-z0-9_])\s*(?:[\.．、:：\)）]|(?=\s*[$\\\u4e00-\u9fa5A-Za-z0-9（(]))/g;
+            const mathSpans = [...source.matchAll(/\$\$[\s\S]*?\$\$|\$[^$]*\$/g)]
+                .map(hit => [hit.index, hit.index + hit[0].length]);
 
             const hits = [];
             let match;
 
             while ((match = labelRegex.exec(source)) !== null) {
+                const start = match.index + match[1].length;
+                // Letters in P(A), P(B), etc. belong to the formula, not the option list.
+                if (mathSpans.some(([from, to]) => from <= start && start < to)) continue;
                 hits.push({
                     label: match[2],
-                    start: match.index + match[1].length,
+                    start,
                     contentStart: labelRegex.lastIndex
                 });
             }

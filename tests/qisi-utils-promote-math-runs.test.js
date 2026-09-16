@@ -76,3 +76,19 @@ test('the real question 10 stem comes out fully typeset', () => {
     assert.ok(promoted.includes('$\u03bb$的取值范围'), 'the Greek letter is a symbol');
     assert.doesNotMatch(promoted, /\$\$/);
 });
+
+test('a probability formula does not turn its event letters into option labels', () => {
+    const text = '已知 $P\\left(A\\right)=\\frac{1}{6}$，$P\\left(B\\right)=\\frac{1}{2}$，则（ ）\n' +
+        'A． $P\\left(AB\\right)=\\frac{1}{6}$ B． $P\\left(\\bar{A}B\\right)=\\frac{5}{6}$\n' +
+        'C． $P\\left(\\bar{A}\\left|B\\right.\\right)=\\frac{2}{3}$ D． $P\\left(A+B\\right)=\\frac{1}{2}$';
+    const split = utils.splitQuestionForStorage(text, '多选题');
+    assert.ok(split);
+    assert.match(split.stem, /P\\left\(A\\right\)=\\frac\{1\}\{6\}/);
+    assert.match(split.stem, /P\\left\(B\\right\)=\\frac\{1\}\{2\}/);
+    assert.deepEqual(split.options, [
+        '$P\\left(AB\\right)=\\frac{1}{6}$',
+        '$P\\left(\\bar{A}B\\right)=\\frac{5}{6}$',
+        '$P\\left(\\bar{A}\\left|B\\right.\\right)=\\frac{2}{3}$',
+        '$P\\left(A+B\\right)=\\frac{1}{2}$'
+    ]);
+});
