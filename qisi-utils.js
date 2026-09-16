@@ -1119,14 +1119,40 @@
         // marker belongs to no question, and an unusable value is skipped rather than trusted.
         const ANSWER_KEY_HEADING_RE = /^(?:.{0,12}?)?(?:参考答案|答案)$/;
 
-        const extractInlineAnswerKey = (rawText = '') => {
-            const lines = String(rawText || '').split(/\r?\n/);
+        // The document text and the answer key are two different things: the key is a list of
+        // "number separator value" entries and must never be read as 解析/solution prose. Everything
+        // from the key's heading onwards is therefore handed to the key reader only.
+        const splitTextAtAnswerKeyHeading = (rawText = '') => {
+            const text = String(rawText || '');
+            const lines = text.split(/\r?\n/);
             const headingIndex = lines.findIndex(line => ANSWER_KEY_HEADING_RE.test(line.trim()));
 
-            if (headingIndex < 0) return [];
+            if (headingIndex < 0) return { documentPart: text, keyPart: '' };
 
-            const keyText = lines.slice(headingIndex + 1).join('\n')
+            // A heading alone does not make an answer key: the section after it has to *be* one. A
+            // bare key is a list of "number separator value" entries with no 【答案】/【详解】 labels,
+            // so a document whose 解析 section happens to start with the word 答案 keeps all of its
+            // labelled content in the document part.
+            const keyCandidate = lines.slice(headingIndex + 1).join('\n');
+            const normalizedCandidate = keyCandidate
                 .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248));
+            const looksLikeBareKey = !/【/.test(keyCandidate)
+                && (normalizedCandidate.match(/(?:^|[\s\u3000])\d{1,3}\s*[.．、:：\)）]/g) || []).length >= 2;
+
+            if (!looksLikeBareKey) return { documentPart: text, keyPart: '' };
+
+            return {
+                documentPart: lines.slice(0, headingIndex).join('\n'),
+                keyPart: keyCandidate
+            };
+        };
+
+        const extractInlineAnswerKey = (rawText = '') => {
+            const { keyPart } = splitTextAtAnswerKeyHeading(rawText);
+
+            if (!keyPart) return [];
+
+            const keyText = keyPart.replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248));
             const markers = [...keyText.matchAll(/(?:^|[\s\u3000])(\d{1,3})\s*[.．、:：\)）]/g)];
 
             if (markers.length < 2) return [];
@@ -1254,6 +1280,7 @@
             sanitizeLatexWrapperArtifacts,
             splitAnswerSolutionSections,
             splitFlatTextIntoQuestionBlocks,
+            splitTextAtAnswerKeyHeading,
             extractInlineAnswerKey,
             stripBatchImagePlaceholders,
             splitQuestionForStorage,

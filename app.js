@@ -4955,10 +4955,28 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                     });
 
                     // An answer key is a stream of entries that may wrap across lines; the rule lives in
-                    // qisi-utils so it can be tested on its own shapes. The existing answers of a
-                    // question always win, because the list keeps the first value for a number.
-                    window.Qisi.Utils.extractInlineAnswerKey(answerPart)
-                        .forEach(entry => addAnswer(entry.questionNumber, entry.answer, 0.8));
+                    // qisi-utils so it can be tested on its own shapes. A number the key gives twice
+                    // with two different values is a conflict: neither value is attached, so the
+                    // teacher decides (the question keeps the ordinary missing-answer warning).
+                    const keyEntries = window.Qisi.Utils.extractInlineAnswerKey(answerPart);
+                    const keyValues = new Map();
+
+                    keyEntries.forEach(entry => {
+                        const previous = keyValues.get(entry.questionNumber);
+                        const value = window.Qisi.Utils.cleanRecognizedText(entry.answer);
+
+                        if (!previous) {
+                            keyValues.set(entry.questionNumber, { value, conflict: false });
+                            return;
+                        }
+
+                        if (previous.value !== value) previous.conflict = true;
+                    });
+
+                    keyValues.forEach((entry, questionNumber) => {
+                        if (entry.conflict) return;
+                        addAnswer(questionNumber, entry.value, 0.8);
+                    });
 
                     return answers;
                 };
@@ -5109,7 +5127,10 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                 };
 
                 const parseSolutionItemsFromText = (text, sourceFile) => {
-                    const source = window.Qisi.Utils.normalizeAnswerSolutionSource(text);
+                    // The answer key is a list of answer entries, never 解析 prose: reading it as a
+                    // solution is what put another question's key line into 高二 question 49's solution.
+                    const { documentPart } = window.Qisi.Utils.splitTextAtAnswerKeyHeading(text);
+                    const source = window.Qisi.Utils.normalizeAnswerSolutionSource(documentPart);
                     const { solutionPart } = window.Qisi.Utils.splitAnswerSolutionSections(source);
 
                     const fromGlobalSection = parseNumberedSolutionBlocks(solutionPart, sourceFile);
@@ -5120,9 +5141,10 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                 };
 
                 const parseAnswerAndSolutionItemsFromText = (text, sourceFile) => {
+                    const { documentPart } = window.Qisi.Utils.splitTextAtAnswerKeyHeading(text);
                     const directAnswers = parseAnswerItemsFromText(text, sourceFile);
                     const directSolutions = parseSolutionItemsFromText(text, sourceFile);
-                    const inline = parseInlineAnswerSolutionBlocks(text, sourceFile);
+                    const inline = parseInlineAnswerSolutionBlocks(documentPart, sourceFile);
 
                     const answers = [...directAnswers];
                     const solutions = [...directSolutions];
