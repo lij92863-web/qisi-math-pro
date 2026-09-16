@@ -270,6 +270,22 @@ states as an answer (the key entry, a labelled block, or the value before a 详�
 symbol inside the question's own text; and the A–D canonicalisation must refuse a letter that is a
 variable of the stem rather than one of the question's own options.
 
+Where the symbol actually comes from (traced one step further): it is not the stem at all but a cell of
+question 17's probability table, in the solutions section of the same file -
+
+```text
+313: "17．(1)平均值为 $76.6$ ，上四分位数为 $86.25$ ；"
+314: "(2)"
+315: "${X}$"  316: "0"  317: "1"  318: "2"
+319: "$P$"  320: "$\\frac{2}{5}$"  321: "$\\frac{8}{15}$"  322: "$\\frac{1}{15}$"
+```
+
+- so the item that reached question 2 is a support item the file never gave a question number to, and it
+was matched **by position** rather than by identity. That is the exact rule the constitution forbids
+("AI/OCR 返回的题号只能当证据；不得按数组 index 补答案"), and it is why the fix has to be in the
+support-item matching rather than in a value filter: an item without a proved question number must stay
+unmatched and be reported, never attached to the n-th question.
+
 **G11 (武汉四调) attaches no answer at all although the paper states 19 of them.** The key is in the
 file (`题号 1 2 3 4 5 6 7 8 9 10` / `答案 C D C A A B D C BCD AD`, `题号 11` / `答案 BD`, plus the
 solutions), and the drafts are `1:- … 19:-`. That is fail-closed (nothing wrong was attached), but it is
