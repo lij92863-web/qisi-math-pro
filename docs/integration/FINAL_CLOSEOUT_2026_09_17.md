@@ -2,7 +2,7 @@
 
 ## CURRENT STATE — 2026-09-17 takeover（尚未达到最终收口）
 
-The material below this section is a historical snapshot ending at `ba5758c`, not the current integration HEAD. This takeover began at `c54bec52ca41521e8f7a9d237fbec476e9b7b0b9`; `origin/main` remained `b15e6fbe24c525c95a573b51a0c7ab68e77f4790`. Current code commits: `9c49275` (local refresh), `31fb0c7` (PDF evidence/regions), `667642b` (G5 stale MathType payload). This report is still under review.
+The material below this section is a historical snapshot ending at `ba5758c`, not the current integration HEAD. This takeover began at `c54bec52ca41521e8f7a9d237fbec476e9b7b0b9`; `origin/main` remained `b15e6fbe24c525c95a573b51a0c7ab68e77f4790`. Current code commits: `9c49275` (local refresh), `31fb0c7` (PDF evidence/regions), `667642b` (G5 stale MathType payload), `b6f202f` (G7 event letters versus option labels). This report is still under review.
 
 ### Verified current facts
 
@@ -15,7 +15,8 @@ The material below this section is a historical snapshot ending at `ba5758c`, no
 - Ordinary HTML/JS responses now carry `Cache-Control: no-store`; the header and conditional-refresh regression passed. Review reasons show Chinese explanations alongside the original machine codes.
 - The current saved G4 DOCX batch has Q4 and Q6 as 单选题 with four options and Q10 with `z_{1}` and `m^{2}`. Q9 still has zero structured options and needs manual review.
 - The fresh G5 page-by-page check exposed one silent wrong-content item: Q25's embedded MathType bytes say `[-1,1]`, while Word's own visible preview says `9,10,11,x,y`. The reader now rejects this exact stale payload; a real browser batch rerun shows `[[MTEF_UNRESOLVED:rId133]]`, `unresolved-formula`, and `withheld=true` for Q25. This is a corpus-specific guard, not general proof that other OLE previews and payloads always agree.
-- All eleven DOCX inputs were rerun through the browser batch path at code HEAD `667642b` with AI blocked. The same-HEAD matrix below uses `artifacts/audit-baseline/docx-batch-takeover-G1.json` through `G11.json`. No MathType.exe launch was requested by this parser path.
+- The G7 rendered Q10 page exposed another silent wrong-content item: formula event letters in `P(A)` / `P(B)` were split as option labels. The existing shared option splitter now excludes labels inside math spans. The real browser rerun keeps all three printed probability conditions and the four actual options, with answer `ACD`.
+- All eleven DOCX inputs were rerun through the browser batch path at code HEAD `b6f202f` with AI blocked. The same-HEAD matrix below uses `artifacts/audit-baseline/docx-batch-takeover-G1.json` through `G11.json`. No MathType.exe launch was requested by this parser path.
 - The original rendered `完整版题目.pdf` page 1 was inspected directly. Q1 prints `sin(nπ/2)` with the π visible; the historical Vision `sin(m/2)` omitted π and changed the variable. Q5 prints a `BA·AC` term in its first vector fraction; the historical Vision head starts with `BC/|BC|` and is not an acceptable replacement. These are regression conflicts, not teacher choices. The new merge keeps the deterministic value and the competing visual raw value for review.
 
 ### Verification and remaining limitations
@@ -36,7 +37,7 @@ The material below this section is a historical snapshot ending at `ba5758c`, no
 
 Current DOCX withheld total: **40**. This supersedes the historical 39 below.
 
-`verify:safe`, `verify:docx-stable`, `verify:pdf-known-bad`, and `verify:batch-safety` passed after the code changes. The current safe suite is 1414 tests; DOCX stable is 20 and PDF known-bad is 65. The real PDF zero-cost run and the per-question mock are local artifacts, not committed fixtures. G5's 22 rendered pages have now been viewed against Q1–56 and the printed answer key; Q15, Q19, Q25, Q28 and Q34 are withheld where visible formulas are unresolved, and Q48/49 answers are withheld because the printed key duplicates 49 and omits 48. G6–G11 have not all received a fresh per-question visual comparison at this HEAD. Therefore global DOCX WRONG MATCH and SILENT WRONG CONTENT cannot honestly be certified as zero from this takeover. No paid Vision acceptance was authorised in this task. Merge readiness remains **NO** until the visual matrix and authorised paid PDF acceptance are complete.
+`verify:safe`, `verify:docx-stable`, `verify:pdf-known-bad`, and `verify:batch-safety` passed after the code changes. The current safe suite is 1415 tests; DOCX stable is 20 and PDF known-bad is 65. The real PDF zero-cost run and the per-question mock are local artifacts, not committed fixtures. G5's 22 rendered pages have now been viewed against Q1–56 and the printed answer key; Q15, Q19, Q25, Q28 and Q34 are withheld where visible formulas are unresolved, and Q48/49 answers are withheld because the printed key duplicates 49 and omits 48. G6's 11 rendered pages have also been viewed against Q1–14 and the answer/solution headings, with Q1/Q10/Q13 withheld. G7 Q10's actual silent truncation is fixed and its Q1–11 printed answer key matches; the available 12-page render does not cover the Q16–19 solution text. G7–G11 have not all received a fresh per-question visual comparison at this HEAD. Therefore global DOCX WRONG MATCH and SILENT WRONG CONTENT cannot honestly be certified as zero from this takeover. No paid Vision acceptance was authorised in this task. Merge readiness remains **NO** until the visual matrix and authorised paid PDF acceptance are complete.
 
 ### Next paid-call proposal — requires fresh authorisation
 
