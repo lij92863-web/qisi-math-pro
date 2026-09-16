@@ -201,6 +201,28 @@ test('a template whose content never reached its slot is unresolved, not an empt
     assert.equal(filled.latex, '\\left\\{x\\right.');
 });
 
+// The vector accent of real material (周二晚测.docx question 3's options, "\\vec{BC}") is a MathType
+// *vector template* whose base is the whole two-letter group. Written as the LaTeX accent `\\vec` it
+// renders with the arrow over the first letter only - the teacher's "向量符号太小" report - so a base
+// wider than one atom is written `\\overrightarrow`, which stretches over it.
+test('a vector accent stretches over a multi-letter base and stays short over one letter', () => {
+    const plainChar = code => Buffer.from([2, 0, 0x88, code, 0]);
+    const lineOf = text => Buffer.concat([
+        Buffer.from([1, 0]),
+        ...[...text].map(character => plainChar(character.charCodeAt(0))),
+        Buffer.from([0])
+    ]);
+    const vectorTemplate = text => mtefTemplate(31, 0, [lineOf(text)]);
+
+    const wide = reader.classifyMtef(mtefWithRows([vectorTemplate('BC')]));
+    assert.equal(wide.status, 'extracted');
+    assert.equal(wide.latex, '\\overrightarrow{BC}');
+
+    const narrow = reader.classifyMtef(mtefWithRows([vectorTemplate('a')]));
+    assert.equal(narrow.status, 'extracted');
+    assert.equal(narrow.latex, '\\vec{a}');
+});
+
 test('the equation is read out of a real OLE container', () => {
     const container = buildOleContainer(
         'Equation Native',

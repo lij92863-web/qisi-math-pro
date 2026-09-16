@@ -147,6 +147,17 @@
     );
     const texSourceRows = rows => rows.filter(row => row?.kind === 'future');
 
+    // A MathType vector accent is a *long* arrow drawn over the whole base ("BA", "BC", "AO"), but the
+    // LaTeX `\vec` accent is a fixed-width glyph: KaTeX puts it over the first letter only, which is
+    // exactly what the teacher reported as "向量符号太小，没有覆盖两个大写字母". A base wider than a
+    // single atom therefore has to be written `\overrightarrow`, which stretches to cover it; a single
+    // letter keeps the ordinary short accent.
+    const vectorAccent = base => {
+        const value = String(base || '');
+        const atoms = value.replace(/\\[a-zA-Z]+|[{}^_\s]/g, '');
+        return atoms.length > 1 ? `\\overrightarrow{${value}}` : `\\vec{${value}}`;
+    };
+
     const decodeFutureLatex = (type, payload) => {
         if (type !== 102 || !payload?.length) return '';
         const parts = String.fromCharCode(...payload).split('\0');
@@ -214,7 +225,7 @@
             const upper = slots[1] ? `^{${slots[1]}}` : '';
             return `${lower}${upper}`;
         }
-        if (selector === 31) return `\\vec{${slots[0] || ''}}`;
+        if (selector === 31) return vectorAccent(slots[0]);
         if (selector === 32) return `\\widetilde{${slots[0] || ''}}`;
         if (selector === 33) return `\\widehat{${slots[0] || ''}}`;
         if (selector === 34) return `\\widehat{${slots[0] || ''}}`;
