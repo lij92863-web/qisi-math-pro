@@ -287,12 +287,17 @@
     const mergeVisualQuestion = (existing, visual, sectionType = '') => {
         const merged = existing ? { ...existing } : { ...visual, type: sectionType };
         const conflicts = [];
+        const replaced = [];
         merged.fieldEvidence = { ...(existing?.fieldEvidence || {}) };
         for (const field of ['stem', 'options']) {
             const oldValue = existing?.[field];
             const newValue = visual[field];
             const oldPresent = Array.isArray(oldValue) ? oldValue.length > 0 : !!String(oldValue || '').trim();
             const newPresent = Array.isArray(newValue) ? newValue.length > 0 : !!String(newValue || '').trim();
+            // Text the page itself could not lay out linearly - a formula built from stacked rows, an
+            // unreadable code point - is a safe partial, not a transcription. Only there may the visual
+            // reading take the field; both values stay in evidence and the draft keeps a review warning.
+            const textNotATranscription = existing?.fieldEvidence?.[field]?.textLayerReliable === false;
             const evidence = existing
                 ? { ...(existing.fieldEvidence?.[field] || {}), rawValue: oldValue,
                     vision: visual.fieldEvidence?.[field] }
@@ -310,7 +315,16 @@
                     if (!part || at < 0) { gapFilled = false; break; }
                     cursor = at + part.length;
                 }
+                const visionHasGap = JSON.stringify(newValue ?? '').includes(marker);
                 if (gapFilled && cursor <= newValue.length - parts.at(-1).length) merged[field] = newValue;
+                else if (textNotATranscription && !visionHasGap) {
+                    merged[field] = newValue;
+                    replaced.push(field);
+                    evidence.textLayerReplaced = true;
+                    // The value in the draft is the reading of the page image now, so the evidence says so
+                    // instead of still naming the text layer as the source of the displayed value.
+                    evidence.valueSource = 'pdf-vision';
+                }
                 else { conflicts.push(field); evidence.conflict = true; }
             }
             merged.fieldEvidence[field] = evidence;
@@ -318,7 +332,10 @@
         if (existing) {
             merged.type = existing.type;
             merged.sourceTrace = existing.sourceTrace;
-            merged.warnings = [...new Set([...(existing.warnings || []), ...(visual.warnings || [])])];
+            merged.warnings = [...new Set([...(existing.warnings || []), ...(visual.warnings || []),
+                ...(replaced.length
+                    ? ['PDF 文本层的公式结构不完整（分数、根式等由多行拼成），此处采用视觉转录，需人工核对。']
+                    : [])])];
         }
         return { question: merged, conflicts };
     };
@@ -406,9 +423,15 @@
             if (!questionContract.authoritative || !expected.includes(block.questionNumber)) continue;
             const items = helpers.parseQuestions(block.text, file, false);
             if (items.length !== 1 || key(items[0]) !== block.questionNumber) continue;
+            // A page that is not plain text (a figure, an unmapped code point, a formula drawn as stacked
+            // rows) leaves the linear text as a safe partial, not as a transcription: rows belonging to a
+            // fraction or a radical can sit above the question's own line. The evidence records that, so a
+            // visual transcription may replace it later; on a plain text page the text stays the authority.
+            const textEvidence = { ...evidenceFor(block, 'pdf-text'),
+                textLayerReliable: block.textLayerReliable !== false };
             result.questions.push({ ...items[0], type: block.type || '', answer: '', solution: '', sourceTrace: evidenceFor(block, 'pdf-text'),
                 sourcePage: block.sourcePages[0], sourcePages: block.sourcePages,
-                fieldEvidence: { stem: evidenceFor(block, 'pdf-text'), options: evidenceFor(block, 'pdf-text') } });
+                fieldEvidence: { stem: { ...textEvidence }, options: { ...textEvidence } } });
         }
         // Explicit objective answers can be read even when surrounding formula glyphs cannot.
         // Every other support field remains under the sequence and evidence gates.
@@ -628,6 +651,11 @@
         for (const question of result.questions) {
             if (JSON.stringify([question.stem, question.options]).includes('[[PDF_UNMAPPED]]')) {
                 question.warnings = [...new Set([...(question.warnings || []), '此处公式需视觉补全；补全前不能正式入库。'])];
+            }
+            if (question.fieldEvidence?.stem?.textLayerReliable === false
+                && !question.fieldEvidence.stem.textLayerReplaced) {
+                question.warnings = [...new Set([...(question.warnings || []),
+                    'PDF 文本层的分数、根式等由多行拼成，线性文本可能不完整；需人工核对原页或由视觉转录补全。'])];
             }
         }
         result.questions.sort((a, b) => Number(key(a)) - Number(key(b)));

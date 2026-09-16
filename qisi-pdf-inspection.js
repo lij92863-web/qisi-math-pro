@@ -29,17 +29,102 @@
         }
         return rows.map(row => {
             row.items.sort((a, b) => a.x - b.x);
-            return { text: row.items.map(i => i.str).join(' '),
+            return { text: row.items.map(i => i.str).filter(part => part !== '').join(' '),
+                rawText: row.items.map(i => i.raw ?? i.str).join(' '),
+                structural: row.items.some(i => i.structural),
                 bbox: [Math.min(...row.items.map(i => i.x)), row.y,
                     Math.max(...row.items.map(i => i.x + i.width)), row.y + row.height],
                 wideGap: row.items.some((item, i, all) => i > 0 && item.x - all[i - 1].x - all[i - 1].width > 100) };
         });
+    };
+    // Word writes a MathType/Equation preview with the Symbol and MT Extra fonts. Both are *symbolic*
+    // fonts whose Windows encoding lives in the private-use area (U+F020-U+F0FF), so the PDF's own
+    // ToUnicode hands a text extractor U+F0xx instead of the character the teacher sees: every =, {, ∈,
+    // ⋅, ∠, ° and triangle arrived as a wall of [[PDF_UNMAPPED]] and no question could be read. The low
+    // byte of those code points is the character code of the font's published encoding, so the glyph can
+    // be read back from the font standard instead of guessed: `SymbolMT` uses the Adobe Symbol encoding
+    // and `MT-Extra` the MathType extra-font encoding. Codes outside the proved set stay unmapped on
+    // purpose - a wrong symbol is worse than a missing one.
+    const SYMBOL_GLYPHS = new Map([
+        [0x22, '∀'], [0x24, '∃'], [0x27, '∋'], [0x2a, '∗'], [0x2d, '−'], [0x40, '≅'],
+        [0x41, 'Α'], [0x42, 'Β'], [0x43, 'Χ'], [0x44, 'Δ'], [0x45, 'Ε'], [0x46, 'Φ'], [0x47, 'Γ'],
+        [0x48, 'Η'], [0x49, 'Ι'], [0x4a, 'ϑ'], [0x4b, 'Κ'], [0x4c, 'Λ'], [0x4d, 'Μ'], [0x4e, 'Ν'],
+        [0x4f, 'Ο'], [0x50, 'Π'], [0x51, 'Θ'], [0x52, 'Ρ'], [0x53, 'Σ'], [0x54, 'Τ'], [0x55, 'Υ'],
+        [0x56, 'ς'], [0x57, 'Ω'], [0x58, 'Ξ'], [0x59, 'Ψ'], [0x5a, 'Ζ'], [0x5c, '∴'], [0x5e, '⊥'],
+        [0x60, '‾'],
+        [0x61, 'α'], [0x62, 'β'], [0x63, 'χ'], [0x64, 'δ'], [0x65, 'ε'], [0x66, 'φ'], [0x67, 'γ'],
+        [0x68, 'η'], [0x69, 'ι'], [0x6a, 'ϕ'], [0x6b, 'κ'], [0x6c, 'λ'], [0x6d, 'μ'], [0x6e, 'ν'],
+        [0x6f, 'ο'], [0x70, 'π'], [0x71, 'θ'], [0x72, 'ρ'], [0x73, 'σ'], [0x74, 'τ'], [0x75, 'υ'],
+        [0x76, 'ϖ'], [0x77, 'ω'], [0x78, 'ξ'], [0x79, 'ψ'], [0x7a, 'ζ'], [0x7e, '∼'],
+        [0xa0, '€'], [0xa1, 'ϒ'], [0xa2, '′'], [0xa3, '≤'], [0xa4, '⁄'], [0xa5, '∞'], [0xa6, 'ƒ'],
+        [0xa7, '♣'], [0xa8, '♦'], [0xa9, '♥'], [0xaa, '♠'], [0xab, '↔'], [0xac, '←'], [0xad, '↑'],
+        [0xae, '→'], [0xaf, '↓'],
+        [0xb0, '°'], [0xb1, '±'], [0xb2, '″'], [0xb3, '≥'], [0xb4, '×'], [0xb5, '∝'], [0xb6, '∂'],
+        [0xb7, '•'], [0xb8, '÷'], [0xb9, '≠'], [0xba, '≡'], [0xbb, '≈'], [0xbc, '…'], [0xbf, '↵'],
+        [0xc0, 'ℵ'], [0xc1, 'ℑ'], [0xc2, 'ℜ'], [0xc3, '℘'], [0xc4, '⊗'], [0xc5, '⊕'], [0xc6, '∅'],
+        [0xc7, '∩'], [0xc8, '∪'], [0xc9, '⊃'], [0xca, '⊇'], [0xcb, '⊄'], [0xcc, '⊂'], [0xcd, '⊆'],
+        [0xce, '∈'], [0xcf, '∉'],
+        [0xd0, '∠'], [0xd1, '∇'], [0xd2, '®'], [0xd3, '©'], [0xd4, '™'], [0xd5, '∏'], [0xd6, '√'],
+        [0xd7, '⋅'], [0xd8, '¬'], [0xd9, '∧'], [0xda, '∨'], [0xdb, '⇔'], [0xdc, '⇐'], [0xdd, '⇑'],
+        [0xde, '⇒'], [0xdf, '⇓'],
+        [0xe0, '◊'], [0xe1, '⟨'], [0xe2, '⟩'], [0xe3, '∫'], [0xe5, '∑']
+    ]);
+    // A stretched delimiter or radical is drawn as stacked pieces (top, extender, bottom) at one x. They
+    // are one character for the reader, so the first piece of a family at one position is emitted and the
+    // rest of that column is dropped. Verified against the rendered pages of the real papers.
+    const SYMBOL_STRUCTURE = new Map([
+        [0xe6, '√'], [0xe7, '√'], [0xe8, '√'],
+        [0xe9, '['], [0xea, '['], [0xeb, '['],
+        [0xec, '{'], [0xed, '{'], [0xee, '{'],
+        [0xf6, ')'], [0xf7, ')'], [0xf8, ')'],
+        [0xf9, ']'], [0xfa, ']'], [0xfb, ']'],
+        [0xfc, '}'], [0xfd, '}'], [0xfe, '}'],
+        // Pure extensions only lengthen a mark the base character already carries.
+        [0xbd, ''], [0xbe, '']
+    ]);
+    const MT_EXTRA_GLYPHS = new Map([[0x49, '∩'], [0x51, '∵'], [0x56, '△'], [0x6f, '°']]);
+    // Arrow heads, arrow shafts and the wide slur are drawn marks over other characters, not characters.
+    const MT_EXTRA_STRUCTURE = new Set([0x72, 0x75, 0xbb]);
+    // A multi-paper PDF names its fonts "<SUBSET>+<Family>"; the subset tag is per file, not per font.
+    const fontFamily = name => String(name || '').replace(/^[A-Z]{6}\+/, '');
+    const decodeGlyphRun = (value, fontName, seen = new Set(), x = 0) => {
+        const family = fontFamily(fontName);
+        const symbol = /(^|[^a-z])symbol/i.test(family);
+        const extra = /mt[-_ ]?extra/i.test(family);
+        let text = '';
+        let structural = false;
+        for (const character of String(value ?? '')) {
+            const code = character.codePointAt(0);
+            if (code < 0xe000 || code > 0xf8ff) { text += character; continue; }
+            const low = code & 0xff;
+            if (extra) {
+                if (MT_EXTRA_GLYPHS.has(low)) { text += MT_EXTRA_GLYPHS.get(low); continue; }
+                if (MT_EXTRA_STRUCTURE.has(low)) { structural = true; continue; }
+                text += character;
+                continue;
+            }
+            if (!symbol) { text += character; continue; }
+            if (SYMBOL_STRUCTURE.has(low)) {
+                structural = true;
+                const drawn = SYMBOL_STRUCTURE.get(low);
+                // One delimiter column per position: the pieces share an x, so a 2pt bucket is one glyph.
+                const column = `${drawn}|${Math.round(Number(x) / 2)}`;
+                if (drawn && !seen.has(column)) { seen.add(column); text += drawn; }
+                continue;
+            }
+            if (SYMBOL_GLYPHS.has(low)) { text += SYMBOL_GLYPHS.get(low); continue; }
+            // The rest of the Symbol encoding is ASCII, so a code point that is already a visible
+            // character is the character the reader sees.
+            text += low >= 0x20 && low <= 0x7e ? String.fromCharCode(low) : character;
+        }
+        return { text, structural };
     };
     const classify = ({ lines = [], imageCount = 0, vectorCount = 0, rotation = 0, hasSmallText = false }) => {
         const text = lines.map(l => l.text).join('\n');
         const meaningful = text.replace(/[\s\d.．、:：()（）]/g, '').length;
         if (meaningful < 20) return { kind: 'scanned', reason: 'insufficient-text', text };
         if (/[\uFFFD\uE000-\uF8FF]/.test(text)) return { kind: 'mixed', reason: 'unmapped-glyphs', text };
+        if (lines.some(line => line.structural)) return { kind: 'mixed', reason: 'stacked-formula-glyphs', text };
         if (rotation % 180 !== 0) return { kind: 'mixed', reason: 'rotated-layout', text };
         if (hasSmallText) return { kind: 'mixed', reason: 'possible-scripts-or-detached-text', text };
         if (lines.some(l => l.wideGap)) return { kind: 'mixed', reason: 'columns-or-detached-text', text };
@@ -70,8 +155,10 @@
                 withheld.push({ sourcePage: page.pageNo, reason: page.reason, kind: page.kind });
             }
             for (const line of page.lines) {
-                const rawText = line.text.trim();
-                const text = rawText.replace(/[\uFFFD\uE000-\uF8FF]+/g, '[[PDF_UNMAPPED]]');
+                // `line.rawText` keeps the page's own code points as evidence even where they were
+                // decoded for display; anything the decoder could not prove is still marked unmapped.
+                const rawText = String(line.rawText ?? line.text).trim();
+                const text = String(line.text).trim().replace(/[\uFFFD\uE000-\uF8FF]+/g, '[[PDF_UNMAPPED]]');
                 if (/^(?:参考答案|答案|答案[与及和]解析|参考答案[与及和]解析)\s*[:：]?$/.test(text)) {
                     role = 'support'; active = null; continue;
                 }
@@ -89,11 +176,15 @@
                 if (hit) {
                     active = { questionNumber: hit[1].replace(/\s/g, ''), role, type: role === 'question' ? sectionType : '', text, rawText,
                         sourcePages: [page.pageNo],
+                        structuralGlyphs: Boolean(line.structural),
+                        textLayerReliable: page.kind === 'text' && !line.structural,
                         regions: [{ page: page.pageNo, bbox: [...line.bbox] }] };
                     blocks.push(active);
                 } else if (active) {
                     active.text += `\n${text}`;
                     active.rawText += `\n${rawText}`;
+                    if (line.structural) active.structuralGlyphs = true;
+                    if (page.kind !== 'text' || line.structural) active.textLayerReliable = false;
                     if (!active.sourcePages.includes(page.pageNo)) active.sourcePages.push(page.pageNo);
                     active.regions.push({ page: page.pageNo, bbox: [...line.bbox] });
                 }
@@ -171,10 +262,19 @@
                     const operators = await bounded(() => page.getOperatorList(), 15000, 'PDF_OPERATORS_TIMEOUT');
                     const imageOps = new Set(['paintImageXObject', 'paintInlineImageXObject', 'paintImageMaskXObject', 'paintImageXObjectRepeat', 'paintImageMaskXObjectRepeat'].map(n => pdfjs.OPS[n]));
                     const vectorOps = new Set(['stroke', 'fill', 'eoFill', 'fillStroke', 'eoFillStroke'].map(n => pdfjs.OPS[n]));
+                    // getOperatorList above is what resolves the page's fonts; without it the font lookup
+                    // throws and the symbolic glyphs would stay undecoded. A font that is still unknown is
+                    // left alone rather than guessed.
+                    const familyOf = loadedName => {
+                        try { return page.commonObjs?.get?.(loadedName)?.name || ''; } catch { return ''; }
+                    };
+                    const seenColumns = new Set();
                     const items = content.items.filter(i => i.str?.trim()).map(i => {
                         const t = pdfjs.Util.transform(viewport.transform, i.transform);
                         const height = Math.max(Math.abs(i.height || 0), 1);
-                        return { str: i.str, x: t[4], y: t[5] - height, width: i.width, height };
+                        const decoded = decodeGlyphRun(i.str, familyOf(i.fontName), seenColumns, t[4]);
+                        return { str: decoded.text, raw: i.str, structural: decoded.structural,
+                            x: t[4], y: t[5] - height, width: i.width, height };
                     });
                     const lines = groupLines(items);
                     const heights = items.map(i => i.height).sort((a, b) => a - b);
@@ -198,5 +298,5 @@
         promise.catch(() => { if (cache.get(file)?.promise === promise) cache.delete(file); });
         return promise;
     };
-    return { groupLines, classify, segment, collectAnchors, inspect };
+    return { groupLines, classify, segment, collectAnchors, inspect, decodeGlyphRun };
 });

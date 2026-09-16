@@ -124,6 +124,38 @@ test('deterministic PDF fields survive visual conflict and only explicit gaps ca
     assert.deepEqual(twoGaps.conflicts, []);
 });
 
+// A question whose page is not plain text has text the model must be allowed to replace: a fraction or a
+// radical is drawn as several rows, so the linear text can carry a neighbouring question's row. The text
+// value stays in evidence and the draft keeps a review warning.
+test('a text layer proved unusable is replaced by the visual transcription, a usable one is not', () => {
+    const partial = { question: '1', type: '单选题', stem: '5 . 在 中， ， ，则 的形状为（ ）\nBC BC BC AB 2',
+        options: ['直角三角形', '三边均不相等的三角形', '等边三角形', '等腰（非等边）三角形'],
+        sourceTrace: { source: 'pdf-text' },
+        fieldEvidence: { stem: { source: 'pdf-text', textLayerReliable: false },
+            options: { source: 'pdf-text', textLayerReliable: false } } };
+    const visual = { question: '1', stem: '在△ABC中，$\\frac{\\vec{BA}\\cdot\\vec{AC}}{|\\vec{BC}|}=0$，则△ABC的形状为（ ）',
+        options: ['直角三角形', '三边均不相等的三角形', '等边三角形', '等腰（非等边）三角形'],
+        fieldEvidence: { stem: { source: 'pdf-vision', rawValue: 'text' },
+            options: { source: 'pdf-vision', rawValue: ['直角三角形'] } } };
+    const replaced = Ingestion.mergeVisualQuestion(partial, visual);
+    assert.match(replaced.question.stem, /\\frac/, 'the reading of the page replaces the stacked text');
+    assert.deepEqual(replaced.conflicts, []);
+    assert.equal(replaced.question.fieldEvidence.stem.rawValue, partial.stem, 'the text stays as evidence');
+    assert.equal(replaced.question.fieldEvidence.stem.textLayerReplaced, true);
+    assert.equal(replaced.question.fieldEvidence.stem.valueSource, 'pdf-vision');
+    assert.match(replaced.question.warnings.join('\n'), /视觉转录/);
+
+    const trusted = Ingestion.mergeVisualQuestion({ ...partial,
+        fieldEvidence: { stem: { source: 'pdf-text', textLayerReliable: true },
+            options: { source: 'pdf-text', textLayerReliable: true } } }, visual);
+    assert.equal(trusted.question.stem, partial.stem);
+    assert.deepEqual(trusted.conflicts, ['stem']);
+
+    const withGap = Ingestion.mergeVisualQuestion({ ...partial, stem: 'sin([[PDF_UNMAPPED]])' },
+        { ...visual, stem: 'sin([[PDF_UNMAPPED]]) 仍缺' });
+    assert.deepEqual(withGap.conflicts, ['stem'], 'a reply that still carries a gap is not an improvement');
+});
+
 test('a separately assigned support PDF has support blocks and per-question regions', async () => {
     const inspect = Inspection.inspect;
     const asked = [];
