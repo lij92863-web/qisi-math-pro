@@ -2238,7 +2238,14 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     const questionKeysBad = validQuestionKeys.length < items.length * 0.5;
                     const supportKeysBad = validSupportKeys.length < supportItems.length * 0.5;
 
-                    return sameCount && (questionKeysBad || supportKeysBad);
+                    // Matching by position is only for a legacy pair of *un-numbered* lists (an OCR page
+                    // transcription on both sides). When the questions are numbered and the support items
+                    // are not, the support items carry no identity at all: attaching them to the n-th
+                    // question is the index-based guess this project forbids. 十二校一模 question 2 got the
+                    // symbol "P" that way - a cell of question 17's probability table reached the answer
+                    // field because it happened to be the second un-numbered item. Such items stay
+                    // unmatched and are reported instead.
+                    return sameCount && questionKeysBad && supportKeysBad;
                 };
 
                 const withMatchKeys = (items, matchByOrder) => (items || []).map((item, idx) => ({
@@ -5156,13 +5163,18 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                     // answer files use ("2【答案】"): the marker may be preceded by an inline image
                     // token, and question 2 of 完整版答案.docx is written exactly that way. Without it
                     // the whole question loses both its answer and its 详解.
-                    const markerRegex = /(^|\n)[\s\u3000]*(?:\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\][\s\u3000]*)*(?:第[\s\u3000]*)?([0-9０-９]{1,3})(?:\s*题)?[\.:：、．\)）]?\s*/g;
+                    // A marker is "2．", "2、", "第2题" or "2【答案】" - but never a *bare* number. A bare
+                    // number is a table cell, and on 十二校一模 the probability table of question 17
+                    // supplies cells "0 1 2 $P$": accepting "2" as a marker made that "$P$" the answer of
+                    // question 2 (a wrongly attached answer). The separator - or an answer/analysis label
+                    // right after the number - is therefore required.
+                    const markerRegex = /(^|\n)[\s\u3000]*(?:\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\][\s\u3000]*)*(?:(?:第[\s\u3000]*)?([0-9０-９]{1,3})(?:\s*题)?[\s\u3000]*[\.:：、．\)）]|(?:第[\s\u3000]*)?([0-9０-９]{1,3})(?=\s*【(?:答案|参考答案|解析|详解|解答|分析)】))[\s\u3000]*/g;
                     const marks = [];
                     let match;
 
                     while ((match = markerRegex.exec(source)) !== null) {
                         marks.push({
-                            question: normalizeQuestionKey(match[2]),
+                            question: normalizeQuestionKey(match[2] || match[3]),
                             start: match.index + match[1].length,
                             contentStart: markerRegex.lastIndex
                         });

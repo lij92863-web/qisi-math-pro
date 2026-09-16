@@ -1278,6 +1278,54 @@ q12 如图，已知 $OPQ$ 是半径为1，圆心角为 $\frac{\pi }{3}$ 的扇�
 Draft counts, answer counts and the 36 withheld questions are unchanged in all eleven groups, and no
 field contains a broken `$$` any more. Locked by `tests/qisi-utils-promote-math-runs.test.js`.
 
+## 25. The visual-ground-truth round: a wrongly attached answer, and its fix
+
+### 25.1 What the page-by-page pass has produced so far
+
+The remaining originals were rendered (G5 22 pages, G6 11, G7–G11 12 each) and two new cheap checks
+were built, both recorded in `DOCX_VISUAL_GROUND_TRUTH_2026_09_16.md`:
+
+```text
+* the paper's own answer table is read out of the *rendered* page text, so every answer can be checked
+  question by question without opening images;
+* a draft-versus-rendered-text cross-check points at pages worth looking at (it is documented as *not*
+  evidence: a maths text layer splits formulas into glyph runs).
+```
+
+Results: 高二 54/54, 题目+答案 11/11, 佛山一模 11/11, 深圳高级中学 11/11, 河北昌黎 11/11 answers match
+the papers' own keys; 佛山一模 questions 1–6 and 16–17 were also looked at on the page. An earlier
+claim in that file - that 佛山一模 question 3 held a wrong answer - was my misreading of a draft dump; it
+was withdrawn in the same file and the question's real defect (0 of 4 options) recorded instead.
+
+### 25.2 The one wrong answer, and the two rules that produced it (this commit)
+
+十二校一模 question 2 held `$P$` while the paper's key says D. Traced to the byte level of the text
+layer: the probability table of question 17 contributes the cells
+
+```text
+315: "${X}$"  316: "0"  317: "1"  318: "2"  319: "$P$"  320: "$\\frac{2}{5}$" …
+```
+
+and two *existing* rules turned that into an answer for question 2 - the index-based guess this project
+forbids:
+
+```text
+* parseInlineAnswerSolutionBlocks accepted a bare number as a question marker. "2" therefore started a
+  block, its first line "$P$" was read as the "answer slot before the 详解 label", and the symbol became
+  question 2's answer. A marker must now be "2．" / "2、" / "第2题" / "2【答案】": a bare number is a
+  table cell and starts nothing.
+* shouldMatchByOrder attached support items to questions by position whenever *either* side looked
+  un-numbered. It now requires *both* sides to be un-numbered - the only case where order carries
+  identity - so a numbered question list can never receive positional answers again.
+```
+
+Measured on the real matrix: 十二校一模 question 2 reads **D** (the paper's own key), and both
+深圳高级中学 and 十二校 recover the answer a hijacked block had swallowed (G8 18 → 19 answers,
+G9 18 → 19). Draft counts, withheld counts (36), statuses and `verify:safe` (1385) are unchanged.
+
+Still queued from the same list: G11's key shape (19 answers unread), 佛山一模 question 3's missing
+options and question 17's three images, then the remaining per-question page pass.
+
 ### 22.4 The visual check found a silent content loss, and the reader now refuses it (`ecbf36c`)
 
 Looking at group 4 (`周二晚测.docx`) page by page showed its question 8 as a piecewise definition
