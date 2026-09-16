@@ -218,7 +218,17 @@
         if (options & 0x10) cursor.uint16();
         let latex = charLatex(mtCode);
         if (options & 0x01) {
-            const embellishments = readList(cursor).map(row => row.embell);
+            // The list after a character is its *modifier* list, and an accent is only one of the
+            // records it may hold: when the teacher coloured an accent, MathType writes the accent's
+            // COLOR record first and the EMBELL record after it. Demanding embellishment records only
+            // therefore rejected whole equations whose bytes are perfectly readable. A colour is not
+            // content, so it is skipped; the accent is applied; anything else - and any accent code
+            // this reader does not know - still fails closed rather than being guessed.
+            const modifiers = readList(cursor);
+            if (modifiers.some(row => row.kind !== 'embellishment' && row.kind !== 'color')) {
+                throw new Error('Unsupported MTEF character modifier.');
+            }
+            const embellishments = modifiers.map(row => row.embell).filter(value => value != null);
             if (embellishments.some(value => ![9, 11, 17].includes(value))) {
                 throw new Error('Unsupported MTEF embellishment.');
             }

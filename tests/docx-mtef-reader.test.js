@@ -117,6 +117,46 @@ test('an OLE container without an Equation Native stream is unresolved, not empt
     assert.equal(result.code, 'MTEF_MISSING_PAYLOAD');
 });
 
+// Real material: the vector questions of 题目.docx / 答案.docx write a coloured accent, and MathType
+// stores the accent's colour *before* the accent itself inside the character's modifier list
+// ("02 01 83 61 00 0f 00 06 00 0b 00" = the character a, a colour, the vector accent). Reading that
+// list as "embellishment records only" threw on the colour and lost the whole equation, even though
+// the bytes were readable. The colour carries no content, so it is skipped; the accent still decides
+// the LaTeX.
+const charWithModifiers = (code, modifiers) => Buffer.concat([
+    Buffer.from([2, 1, 0x83, code, 0]),
+    ...modifiers,
+    Buffer.from([0])
+]);
+const mtefLine = chars => Buffer.concat([
+    Buffer.from([5, 1, 0, 6, 9]),
+    Buffer.from('DSMT6\0', 'latin1'),
+    Buffer.from([0, 1, 0]),
+    ...chars,
+    Buffer.from([0, 0, 0])
+]);
+
+test('a colour inside a character\u2019s modifier list does not hide its accent', () => {
+    const colour = Buffer.from([15, 0]);            // colour 0
+    const vectorAccent = Buffer.from([6, 0, 11]);   // EMBELL 11 = the vector arrow
+    const result = reader.classifyMtef(mtefLine([charWithModifiers(0x61, [colour, vectorAccent])]));
+
+    assert.equal(result.status, 'extracted');
+    assert.equal(result.origin, 'reconstruction');
+    assert.equal(result.latex, '\\vec{a}');
+});
+
+test('an unknown accent or an unknown modifier still fails closed', () => {
+    const unknownAccent = reader.classifyMtef(mtefLine([charWithModifiers(0x61, [Buffer.from([6, 0, 5])])]));
+    assert.equal(unknownAccent.status, 'unresolved');
+    assert.equal(unknownAccent.latex, '');
+
+    // A SIZE record is not a modifier: the walk would be guessing if it were skipped.
+    const unknownModifier = reader.classifyMtef(mtefLine([charWithModifiers(0x61, [Buffer.from([10])])]));
+    assert.equal(unknownModifier.status, 'unresolved');
+    assert.equal(unknownModifier.latex, '');
+});
+
 test('the equation is read out of a real OLE container', () => {
     const container = buildOleContainer(
         'Equation Native',
