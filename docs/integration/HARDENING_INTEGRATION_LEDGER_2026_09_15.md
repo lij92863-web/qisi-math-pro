@@ -1138,6 +1138,55 @@ material and no plain number was promoted to an exponent. The remaining plain le
 the teacher's own unformatted Word text (no superscript, no MathType object); wrapping those would need
 a formula-extent guess, which is deliberately not done here.
 
+### 24.3 A figure above its question, and a figure on the wrong question (this commit)
+
+Two of the teacher's reports are one mechanism. Word anchors a floating figure in a paragraph of its
+own, and `extractDocxTextWithMath` writes its token where that anchor sits, so a figure can arrive as a
+token at the *head* of the following question's stem:
+
+```text
+[[IMAGE:dimg_…]] 11. 在正方体 $ABCD-A_{1}B_{1}C_{1}D_{1}$ 中，…         (question 11, no 如图)
+12.如图，已知 $OPQ$ 是半径为1，圆心角为 \frac{\pi}{3} 的扇形，…          (question 12, 如图)
+```
+
+Question 11's own text never mentions a figure; question 12 *begins* with 如图 and its page shows the
+扇形 OPQ drawing beside it - but the token was attached to 11, so 12 showed no figure and 11 showed a
+figure that is not its own. The same shape put 梯形 $ABCD$'s figure above question 9's text.
+
+The rule lives in `qisi-review-draft-state.js` (`relocateFigureTokensForReview`) and app.js only calls
+it, once, **before** the existing DOCX image binding (the binding follows the token, so the order is
+what makes the ownership land in the right place). It is deliberately narrow, because moving a figure
+is the wrong-content risk this project refuses:
+
+- only a token that *leads* its stem is considered - that is the anchored shape;
+- a token is handed to the next question only when all three hold: the owning question's own text has
+  no figure cue at all, the next question's text *begins* with 如图/见图/下图/图中, and the next
+  question has no figure yet;
+- every other leading token simply moves from the head of its stem to the end, so a figure never sits
+  above its own question text (that is the teacher's "图会在题目上方" report).
+
+Measured on the real G1–G11 matrix:
+
+```text
+group  drafts      images      stems that lead with a token   withheld
+G1     6 -> 6      1 -> 1      [] -> []                       0
+G2    12 -> 12     3 -> 3      [8, 11] -> []                  1
+G3    14 -> 14     0 -> 0      [] -> []                       3
+G4    12 -> 12     3 -> 3      [] -> []                       1     (q11 -> q12 inside this group)
+G5    56 -> 56     1 -> 1      [] -> []                       4
+G6    14 -> 14     1 -> 1      [] -> []                       3
+G7    19 -> 19     5 -> 5      [] -> []                       6
+G8    19 -> 19     7 -> 7      [] -> []                       4
+G9    19 -> 19     2 -> 2      [] -> []                       9
+G10   19 -> 19     6 -> 6      [] -> []                       4
+G11   19 -> 19     2 -> 2      [] -> []                       2
+```
+
+No group's figure *count* changed, so no figure moved to a different question anywhere except the one
+the teacher reported; the only other change is that G2's questions 8 and 11 no longer show their own
+figures above their text. `tests/review-draft-state.test.js` locks all three behaviours (hand-over,
+keep-but-move, and "a question without a cue never receives a figure").
+
 ### 22.4 The visual check found a silent content loss, and the reader now refuses it (`ecbf36c`)
 
 Looking at group 4 (`周二晚测.docx`) page by page showed its question 8 as a piecewise definition

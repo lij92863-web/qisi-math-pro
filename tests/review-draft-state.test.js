@@ -14,7 +14,8 @@ const {
     mergeDocxVisualDraftsByQuestionNumberForV2,
     buildDraftImagePlacementCode,
     shouldInlineDraftImageInStemForV2,
-    attachDraftImageTokensIntoStemsForV2
+    attachDraftImageTokensIntoStemsForV2,
+    relocateFigureTokensForReview
 } = require('../qisi-review-draft-state.js');
 
 test('BM08: summarize', () => {
@@ -224,4 +225,59 @@ test('BMR3: attaches draft image tokens without mutating unrelated drafts', () =
     assert.equal(result[0].imageReviewStatus, 'need_confirm');
     assert.ok(result[0].updatedAt >= now);
     assert.equal(result[1], drafts[1]);
+});
+
+// 周二晚测.docx: the 扇形 OPQ figure is anchored in front of question 11's marker, but the paper draws
+// it beside question 12, whose text starts with 如图 - and question 11 never mentions a figure. A token
+// that leads a stem must not sit above that question's text either.
+test('a figure anchored in front of a marker goes to the question that asks for it', () => {
+    const drafts = [
+        {
+            id: 'q11',
+            questionNumber: '11',
+            stem: '[[IMAGE:fig-sector]] 在正方体 $ABCD-A_{1}B_{1}C_{1}D_{1}$ 中，E是棱 $DD_{1}$ 的中点'
+        },
+        {
+            id: 'q12',
+            questionNumber: '12',
+            stem: '如图，已知 $OPQ$ 是半径为1的扇形，$ABCD$ 是扇形的内接矩形'
+        }
+    ];
+
+    const result = relocateFigureTokensForReview(drafts);
+
+    assert.equal(result[0].stem.includes('[[IMAGE:'), false, 'question 11 must lose the token');
+    assert.equal(result[1].stem, '如图，已知 $OPQ$ 是半径为1的扇形，$ABCD$ 是扇形的内接矩形\n[[IMAGE:fig-sector]]');
+});
+
+test('a figure stays with its own question but never above the question text', () => {
+    const drafts = [
+        {
+            id: 'q9',
+            questionNumber: '9',
+            stem: '[[IMAGE:fig-trapezoid]] 如图，在梯形 $ABCD$ 中，$AD//BC$，M、N 分别为动点'
+        },
+        {
+            id: 'q10',
+            questionNumber: '10',
+            stem: '已知复数 $z$ 的方程，则 $\\lambda$ 的取值范围为____'
+        }
+    ];
+
+    const result = relocateFigureTokensForReview(drafts);
+
+    assert.equal(result[0].stem, '如图，在梯形 $ABCD$ 中，$AD//BC$，M、N 分别为动点\n[[IMAGE:fig-trapezoid]]');
+    assert.equal(result[1].stem, drafts[1].stem, 'a question without a cue keeps its own text untouched');
+});
+
+test('a figure is not handed to a neighbour that did not ask for one', () => {
+    const drafts = [
+        { id: 'q1', questionNumber: '1', stem: '[[IMAGE:fig-a]] 函数的图像如下所示，则' },
+        { id: 'q2', questionNumber: '2', stem: '已知集合 $A$，求 $A\\cap B$' }
+    ];
+
+    const result = relocateFigureTokensForReview(drafts);
+
+    assert.equal(result[0].stem, '函数的图像如下所示，则\n[[IMAGE:fig-a]]');
+    assert.equal(result[1].stem, drafts[1].stem);
 });

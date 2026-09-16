@@ -351,6 +351,74 @@
 
         const INLINE_IMAGE_TOKEN_RE_FOR_V2 = /\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\]/g;
 
+        // A figure that Word anchors in front of a question's marker ("[[IMAGE:…]] 11. 在正方体…")
+        // arrives as a token at the *start* of that stem, which puts the picture above the question in
+        // the review page and - when the anchor really belongs to the question below it - on the wrong
+        // question entirely. Real material (周二晚测.docx) shows both: the teacher's page draws the
+        // 扇形 OPQ figure beside question 12, whose text starts with 如图, while the token was attached
+        // to question 11, whose own text never mentions a figure.
+        //
+        // The rule is deliberately narrow, because moving a figure is exactly the wrong-content risk
+        // this project refuses:
+        //   * only a token that leads its stem is considered (that is the anchored shape);
+        //   * it is handed to the *next* question only when the owning question's own text carries no
+        //     figure cue at all, the next question's text *begins* with 如图/见图/下图/图中, and the
+        //     next question has no figure yet;
+        //   * a token that stays is moved from the head of the stem to its end, so a figure never sits
+        //     above its own question text.
+        const FIGURE_CUE_RE_FOR_V2 =
+            /如图|见图|下图|图中|图甲|图乙|图丙|示意图|统计图|函数图像|几何图|阴影部分/;
+        const FIGURE_LEADING_CUE_RE_FOR_V2 = /^\s*(?:如图|见图|下图|图中)/;
+        const LEADING_IMAGE_TOKENS_RE_FOR_V2 =
+            /^\s*((?:\[\[(?:IMAGE|FORMULA_IMAGE|IMAGE_UNRESOLVED):[^\]]+\]\][\s\u3000]*)+)/;
+        const ANY_IMAGE_TOKEN_RE_FOR_V2 = /\[\[(?:IMAGE|FORMULA_IMAGE|IMAGE_UNRESOLVED):[^\]]+\]\]/g;
+
+        const splitLeadingImageTokensForV2 = (stem = '') => {
+            const text = String(stem || '');
+            const match = LEADING_IMAGE_TOKENS_RE_FOR_V2.exec(text);
+            if (!match) return { tokens: [], rest: text };
+            return { tokens: match[0].match(ANY_IMAGE_TOKEN_RE_FOR_V2) || [], rest: text.slice(match[0].length) };
+        };
+
+        const relocateFigureTokensForReview = (drafts = []) => {
+            const list = Array.isArray(drafts) ? drafts.slice() : [];
+            if (list.length < 1) return drafts;
+
+            const tokensFor = new Map();
+            const leadingIndexes = new Set();
+
+            for (let index = 0; index < list.length; index += 1) {
+                const draft = list[index];
+                const { tokens, rest } = splitLeadingImageTokensForV2(draft?.stem || '');
+                if (!tokens.length) continue;
+
+                leadingIndexes.add(index);
+
+                const next = list[index + 1];
+                const nextStem = String(next?.stem || '');
+                const nextHasFigure = (nextStem.match(ANY_IMAGE_TOKEN_RE_FOR_V2) || []).length > 0;
+                const handToNext = Boolean(next)
+                    && !FIGURE_CUE_RE_FOR_V2.test(rest)
+                    && !nextHasFigure
+                    && FIGURE_LEADING_CUE_RE_FOR_V2.test(nextStem);
+
+                const target = handToNext ? index + 1 : index;
+                tokensFor.set(target, [...(tokensFor.get(target) || []), ...tokens]);
+            }
+
+            return list.map((draft, index) => {
+                if (!draft) return draft;
+                const moved = tokensFor.get(index);
+                if (!moved && !leadingIndexes.has(index)) return draft;
+                const { rest } = splitLeadingImageTokensForV2(draft.stem || '');
+                const stem = [rest, ...(moved || [])]
+                    .map(value => String(value || '').trim())
+                    .filter(Boolean)
+                    .join('\n');
+                return { ...draft, stem: stem || String(draft.stem || '') };
+            });
+        };
+
         const appendImageTokensToStemForV2 = (stem = '', images = []) => {
             let output = String(stem || '').trim();
 
@@ -423,7 +491,9 @@
             mergeDocxVisualDraftsByQuestionNumberForV2,
             buildDraftImagePlacementCode,
             shouldInlineDraftImageInStemForV2,
-            attachDraftImageTokensIntoStemsForV2
+            attachDraftImageTokensIntoStemsForV2,
+            relocateFigureTokensForReview,
+            splitLeadingImageTokensForV2
         };
     }
 );

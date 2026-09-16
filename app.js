@@ -17943,6 +17943,11 @@ ${source}`;
                             }
                             await bindRecognizedQuestionFigures(draft, draftImages, files, batchId);
                         }
+                        // A Word figure anchored in front of a marker belongs to the question whose text
+                        // asks for it, and never above that question's text. This runs before the DOCX
+                        // images are bound, because the binding follows the token.
+                        drafts = window.Qisi.ReviewDraftState.relocateFigureTokensForReview(drafts);
+
                         for (const file of files.filter(item => item.fileType === 'docx')) {
                             const docxRefs = docxEmbeddedImageCache.get(file.id) || [];
                             const refsById = new Map(docxRefs.map(ref => [ref.id, ref]));
