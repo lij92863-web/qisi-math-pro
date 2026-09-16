@@ -62,6 +62,37 @@ test('a withheld page carries the question region when the text layer proved it'
     } finally { Inspection.inspect = inspect; }
 });
 
+// With a box per question, the request carries one question and one number: the model cannot mix two
+// questions up, and the number it returns is only ever the one the text layer proved.
+test('a page with per-question boxes is transcribed one question at a time', async () => {
+    const inspect = Inspection.inspect;
+    const asked = [];
+    try {
+        const mixed = [page(1, [line('1. First question', 120), line('2. Second question', 400)], 'mixed')];
+        mixed[0].anchors = Inspection.collectAnchors(mixed[0]);
+        Inspection.inspect = async () => ({ pages: mixed, ...Inspection.segment(mixed), timings: [] });
+        const result = await Ingestion.ingest({ file: { id: 'region-calls' }, questionRole: true, helpers: {
+            model: 'region-mock',
+            parseQuestions: () => [], parseSupport: () => ({}),
+            render: async (file, pageNo, trace, region) => ({ url: `crop-${region ? region[1] : 'whole'}`, region }),
+            request: async payload => {
+                const text = payload.messages[0].content[0].text;
+                const number = (/这是第\s*(\d+)\s*题/.exec(text) || [])[1] || '?';
+                asked.push(text.includes('所在的图片区域') ? `region:${number}` : 'whole-page');
+                return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({
+                    questions: [{ questionNumber: number, stem: `stem ${number}`, options: [], answer: '', solution: '' }]
+                }) } }] }) };
+            }
+        } });
+
+        assert.deepEqual(asked, ['region:1', 'region:2'], 'one request per question, with its own number');
+        assert.deepEqual(result.questions.map(q => q.question), ['1', '2']);
+        assert.equal(result.visualCalls, 2);
+        assert.equal(result.withheld.some(w => w.visualNeeded), false,
+            'every question of the page was transcribed, so nothing is left to review');
+    } finally { Inspection.inspect = inspect; }
+});
+
 // The owner's rule of 2026-09-17: a gap in the numbering must not take the whole file's identity away.
 // The numbers the text proved stay usable, the hole is reported, and a duplicate / backward / unreadable
 // anchor is recorded on its own. (This test used to require `authoritative: false` for all three shapes.)

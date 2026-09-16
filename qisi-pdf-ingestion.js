@@ -66,7 +66,10 @@
         const accepted = items.filter(item => supportOnly || (typeof item.stem === 'string' && item.stem.trim()));
         return { accepted, missing: expected.filter(n => !accepted.some(item => key(item) === String(n))) };
     };
-    const renderPage = async (file, pageNo, trace) => {
+    // `region` is a PDF-space bbox ([x1,y1,x2,y2]) of one question. When it is given, only that part of
+    // the page is rendered, so the model sees one question and nothing else: the neighbouring question,
+    // the header and the footer never reach it.
+    const renderPage = async (file, pageNo, trace, region) => {
         const bounded = root.Qisi.IngestionContext.withTimeout;
         const bytes = await bounded(async () => new Uint8Array(await (await root.fetch(file.uploadPath)).arrayBuffer()), 15000, 'PDF_READ_TIMEOUT');
         const loading = root.pdfjsLib.getDocument({ data: bytes });
@@ -82,7 +85,24 @@
             try {
                 const task = page.render({ canvasContext: canvas.getContext('2d'), viewport });
                 await trace.measure(`render:${pageNo}`, () => bounded(() => task.promise, 20000, 'PDF_RENDER_TIMEOUT', () => task.cancel()));
-                return { url: canvas.toDataURL('image/jpeg', 0.88), width: canvas.width, height: canvas.height };
+                const whole = { url: canvas.toDataURL('image/jpeg', 0.88), width: canvas.width, height: canvas.height };
+                if (!Array.isArray(region) || region.length !== 4) return whole;
+
+                const left = Math.max(0, Math.min(region[0], region[2]) * scale);
+                const top = Math.max(0, Math.min(region[1], region[3]) * scale);
+                const right = Math.min(canvas.width, Math.max(region[0], region[2]) * scale);
+                const bottom = Math.min(canvas.height, Math.max(region[1], region[3]) * scale);
+                const width = Math.ceil(right - left);
+                const height = Math.ceil(bottom - top);
+                if (width < 16 || height < 16) return whole;
+
+                const cropped = root.document.createElement('canvas');
+                cropped.width = width;
+                cropped.height = height;
+                try {
+                    cropped.getContext('2d').drawImage(canvas, left, top, width, height, 0, 0, width, height);
+                    return { url: cropped.toDataURL('image/jpeg', 0.9), width, height, region: [...region] };
+                } finally { cropped.width = cropped.height = 0; }
             } finally { canvas.width = canvas.height = 0; }
         } finally { await (pdf ? pdf.destroy() : loading.destroy()); }
     };
@@ -154,13 +174,17 @@
 
         return items.filter(item => item && typeof item === 'object');
     };
-    const requestVisual = async (image, expectedNumbers, helpers) => {
+    const requestVisual = async (image, expectedNumbers, helpers, regionNumber) => {
         const response = await helpers.request({
             model: helpers.model,
             messages: [{ role: 'user', content: [
-                { type: 'text', text: '逐题转录页面，只返回 JSON {"questions":[{"questionNumber":"1","stem":"","options":[],"answer":"","solution":""}]}。'
-                    + '保留公式的 LaTeX 和原有题号。不猜缺失内容。不把详解结论当成显式答案。'
-                    + '跨页不完整的题干留空。题号必须来自此页面，文本层已证明的题号为：' + JSON.stringify(expectedNumbers) },
+                { type: 'text', text: (regionNumber
+                    ? '这是第 ' + regionNumber + ' 题所在的图片区域（页面上该题的位置已由程序确定，题号不需要你判断）。'
+                        + '只转录这一题，只返回 JSON {"questions":[{"questionNumber":"' + regionNumber
+                        + '","stem":"","options":[],"answer":"","solution":""}]}。'
+                    : '逐题转录页面，只返回 JSON {"questions":[{"questionNumber":"1","stem":"","options":[],"answer":"","solution":""}]}。'
+                        + '保留公式的 LaTeX 和原有题号。不猜缺失内容。不把详解结论当成显式答案。'
+                        + '跨页不完整的题干留空。题号必须来自此页面，文本层已证明的题号为：' + JSON.stringify(expectedNumbers)) },
                 { type: 'image_url', image_url: { url: image.url } }
             ] }], temperature: 0, max_tokens: 6000
         });
@@ -272,7 +296,11 @@
         // plan and the review panel show that region instead of the whole page whenever the text layer could
         // prove it; a question without a provable box keeps the whole page.
         const questionRegionByPage = new Map();
+        const questionRegionsByNumber = new Map();
         for (const block of (inspection.blocks || []).filter(b => b.role === 'question')) {
+            for (const region of block.regionByPage || []) {
+                questionRegionsByNumber.set(`${region.page}:${block.questionNumber}`, region.bbox);
+            }
             for (const region of block.regionByPage || []) {
                 const current = questionRegionByPage.get(region.page);
                 questionRegionByPage.set(region.page, current
@@ -329,6 +357,66 @@
                 const proven = supportOnly ? supportContract.authoritative && pageNumbers.every(n => expected.includes(n)) : questionContract.authoritative;
                 if (!proven || !pageNumbers.length || !helpers.request || transportFailure) {
                     result.withheld.push({ ...plan, errorCode: transportFailure || 'VISUAL_REVIEW_REQUIRED' });
+                    continue;
+                }
+                // When every question of this page has its own box, the model gets one question at a time
+                // and the number the text layer already proved: attribution stays with the program, and no
+                // neighbouring question or footer can reach the request.
+                const regionItems = supportOnly ? [] : pageNumbers
+                    .map(number => ({ number, bbox: questionRegionsByNumber.get(`${page.pageNo}:${number}`) }))
+                    .filter(item => Array.isArray(item.bbox) && item.bbox.length === 4);
+                if (regionItems.length && regionItems.length === pageNumbers.length) {
+                    let regionFailure = '';
+                    for (const item of regionItems) {
+                        try {
+                            const crop = await (helpers.render || renderPage)(file, page.pageNo, trace, item.bbox);
+                            const regionBytes = new TextEncoder().encode(crop.url + helpers.model + item.number + ':region:pdf-v2');
+                            const regionHash = Array.from(new Uint8Array(await root.crypto.subtle.digest('SHA-256', regionBytes))).map(n => n.toString(16).padStart(2, '0')).join('');
+                            let regionPending = pageCache.get(regionHash);
+                            if (!regionPending) {
+                                result.visualCalls++;
+                                regionPending = trace.measure(`vision:${page.pageNo}:${item.number}`,
+                                    () => root.Qisi.IngestionContext.withTimeout(() => requestVisual(crop, [item.number], helpers, item.number), 90000, 'PDF_VISION_TIMEOUT'));
+                                pageCache.set(regionHash, regionPending);
+                                regionPending.catch(() => pageCache.delete(regionHash));
+                                if (pageCache.size > 32) pageCache.delete(pageCache.keys().next().value);
+                            } else result.cacheHits++;
+
+                            const raw = await regionPending;
+                            const checked = acceptVisual(raw, [item.number], false);
+                            if (checked.reason || !checked.accepted.length) {
+                                regionFailure = regionFailure || checked.reason || 'missing-visual-question';
+                                result.withheld.push({ ...plan, questionNumbers: [item.number],
+                                    reason: checked.reason || 'missing-visual-question', rawEvidence: raw });
+                                continue;
+                            }
+
+                            const evidence = { source: 'pdf-vision', sourceFileId: file.id, sourcePage: page.pageNo,
+                                region: item.bbox, assetHash: regionHash, model: helpers.model };
+                            for (const entry of checked.accepted) {
+                                const candidate = { ...entry, question: key(entry), sourceFileId: file.id,
+                                    sourceFileName: file.filename, sourcePage: page.pageNo, sourcePageImage: crop.url,
+                                    sourceTrace: evidence,
+                                    fieldEvidence: Object.fromEntries(['stem', 'options', 'answer', 'solution']
+                                        .map(field => [field, { ...evidence, rawValue: entry[field] }])),
+                                    warnings: ['PDF 视觉转录待人工逐题核对；题号由页面文本层确定。'] };
+                                const existing = result.questions.findIndex(question => key(question) === key(entry));
+                                const upgraded = { ...candidate, answer: '', solution: '' };
+                                if (existing < 0) result.questions.push(upgraded);
+                                else result.questions[existing] = upgraded;
+                            }
+                        } catch (error) {
+                            const code = error.code || root.Qisi.Utils.classifyVisualServiceFailure?.(error)?.code || 'TRANSPORT_ERROR';
+                            transportFailure = code;
+                            regionFailure = code;
+                            result.withheld.push({ ...plan, questionNumbers: [item.number], errorCode: code,
+                                message: error.message, rawEvidence: error.rawContent ?? null });
+                            break;
+                        }
+                    }
+                    if (regionFailure && !result.withheld.some(w => w.sourcePage === page.pageNo && w.visualNeeded)) {
+                        result.withheld.push({ ...plan, errorCode: regionFailure });
+                    }
                     continue;
                 }
                 const bytes = new TextEncoder().encode(image.url + helpers.model + JSON.stringify(pageNumbers) + ':' + supportOnly + ':pdf-v2');
