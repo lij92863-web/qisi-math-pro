@@ -853,6 +853,47 @@ call has been made in this session, and none is made by the test suite.
   list of what would need paid vision.
 - The 20 `MTEF_UNREADABLE` streams (§18.1) keep their questions withheld.
 
+## 21. The answer key is not 解析 prose, and the PDF facts (2026-09-16, twelfth pass)
+
+### 21.1 Fixed: a key line reached a solution field
+
+`高二.docx` question 49's solution held `$\left(-3,0\right)$ 49．9 50． $3x-y=0$ 51． $4\sqrt{2}\pi$` —
+another question's key line. The answer key was being read as ordinary document prose, so the key
+stream reached the solution parser.
+
+Rule now, in `qisi-utils.js`:
+
+- the key section is split off first (`splitTextAtAnswerKeyHeading`) and only the key reader sees it,
+  so the solution parser only ever sees document prose;
+- a heading only counts when the section after it really *is* a bare key: at least two
+  `number separator value` entries and no `【…】` label. A document whose 解析 section happens to start
+  with the word 答案 therefore keeps all of its labelled content (the first, looser version of this
+  rule cost six groups 3–8 answers each and was caught by the matrix, not by review);
+- a number the key gives twice with two different values attaches **no** answer at all instead of
+  letting the longer value win.
+
+Real material after the fix: `高二.docx` q48 and q49 have an empty answer **and** an empty solution,
+q47/q50 keep theirs, 56 drafts, 54 answers, 5 withheld, zero AI requests; the whole G1–G11 matrix is
+back at its previous values in one run.
+
+### 21.2 PDF zero-cost facts (inspection only, no paid call)
+
+`artifacts/audit-baseline/astra-pdf-inspection.json` (Astra's inspector, re-read this pass):
+
+| file | pages | page kind | reason | text chars | images | vector ops |
+| --- | --- | --- | --- | --- | --- | --- |
+| 完整版答案.pdf | 4 | mixed ×4 | unmapped-glyphs | 4556 | 3 | 379 |
+| 完整版题目.pdf | 2 | mixed ×2 | unmapped-glyphs | 1900 | 3 | 83 |
+| 简略版题目（只有一页）.pdf | 1 | mixed ×1 | unmapped-glyphs | 1004 | 1 | 22 |
+
+Every page is `mixed`, not scanned: the Chinese prose and the layout are in the text layer, while the
+mathematics uses a Symbol font whose glyphs do not map, so the text layer cannot be trusted for
+formulas. That is the shape the ingestion is designed for (text + geometry + anchors, vision only for
+the regions that need it), and it means any paid visual pass would be sized by region, not by page:
+7 real pages in total carry 22 + 83 + 379 vector operations, and the unmapped-glyph spans are the
+candidates. No paid call has been made; a cost proposal (model, call count, expected RMB, and why the
+deterministic path cannot finish the job) is still owed before any such call.
+
 ## 15. Group 1 closed: the withheld question (2026-09-16, sixth pass)
 
 This closes item 2 of section 5 in `docs/integration/HANDOFF_2026_09_16.md`.
