@@ -14098,7 +14098,9 @@ ${source}`;
                                 warnings.push('疑似串题解析已暂不自动填入，请从答案/解析原文重新核对。');
                             }
                         }
-                        const inferredType = normalizeQuestionType(item.type || meta.defaultType, cleanStem, cleanOptions, cleanAnswer, meta.defaultType);
+                        const inferredType = String(item.sourceTrace?.source || '').startsWith('pdf-')
+                            ? (item.type || '')
+                            : normalizeQuestionType(item.type || meta.defaultType, cleanStem, cleanOptions, cleanAnswer, meta.defaultType);
                         const optionIssue = choiceOptionIssue(inferredType, cleanOptions, cleanAnswer);
                         if (optionIssue) {
                             warnings.push(optionIssue);

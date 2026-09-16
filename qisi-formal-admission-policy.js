@@ -151,6 +151,14 @@
     };
 
     const validateFieldDecision = (field, value, provenance, mode, draft, errors) => {
+        const unresolvedPdf = (typeof value === 'string' ? value : JSON.stringify(value ?? ''))
+            .includes('[[PDF_UNMAPPED]]');
+        if (provenance?.status !== 'manual' && (unresolvedPdf || draft.fieldEvidence?.[field]?.conflict)) {
+            errors.push(errorOf('admission-field-rejected', field,
+                'Unresolved PDF evidence requires a manual field edit.',
+                unresolvedPdf ? 'pdf-unmapped' : 'pdf-evidence-conflict'));
+            return;
+        }
         if (!isRecord(provenance)) {
             errors.push(errorOf(
                 'admission-provenance-missing',

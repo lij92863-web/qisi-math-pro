@@ -74,6 +74,21 @@ test('PDF rejected solution cannot enter a formal question', () => {
     assert.ok(errorCodes(result).includes('admission-field-rejected'));
 });
 
+test('PDF unmapped text and conflicting field evidence cannot enter formal data', () => {
+    const unresolved = makeDraft();
+    unresolved.stem = 'before [[PDF_UNMAPPED]] after';
+    const first = Policy.evaluateDraftAdmission(unresolved, context('pdf-ai'));
+    assert.equal(first.accepted, false);
+    assert.ok(first.errors.some(error => error.details === 'pdf-unmapped'));
+
+    const conflicting = makeDraft();
+    conflicting.fieldEvidence = { stem: { source: 'pdf-text', conflict: true,
+        vision: { source: 'pdf-vision', rawValue: 'different stem' } } };
+    const second = Policy.evaluateDraftAdmission(conflicting, context('pdf-ai'));
+    assert.equal(second.accepted, false);
+    assert.ok(second.errors.some(error => error.details === 'pdf-evidence-conflict'));
+});
+
 test('teacher rewrite allows a PDF answer as field-level manual provenance', () => {
     const draft = makeDraft();
     draft.fieldProvenance.answer = provenance('manual', {

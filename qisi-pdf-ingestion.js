@@ -6,6 +6,24 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
     'use strict';
     const pageCache = new Map();
+    const VISUAL_SCHEMA_VERSION = 'pdf-question-region-v3';
+    const fileFatalVisualError = code => ['API_AUTH_ERROR', 'LOCAL_SERVER_UNREACHABLE',
+        'UPSTREAM_UNREACHABLE', 'DASHSCOPE_NOT_CONFIGURED'].includes(code);
+    const REVIEW_LABELS = {
+        'unmapped-glyphs': '公式字符无法从 PDF 文本层可靠映射',
+        'contract-gap': '题号序列有缺口',
+        'cross-page-visual-block': '题目跨页，当前区域不足以可靠转录',
+        'field-evidence-conflict': 'PDF 文本与视觉识别内容不一致',
+        'missing-visual-question': '视觉回复缺少此题',
+        MALFORMED_MODEL_RESPONSE: '模型回复格式无效',
+        AI_PROXY_FETCH_FAILED: '本地视觉服务请求失败',
+        API_AUTH_ERROR: '视觉服务认证失败',
+        LOCAL_SERVER_UNREACHABLE: '本地服务不可达',
+        UPSTREAM_UNREACHABLE: 'DashScope 上游不可达，请检查网络或代理路由',
+        VISUAL_CALL_BUDGET_EXCEEDED: '视觉调用次数已达本次上限',
+        VISUAL_REVIEW_REQUIRED: '需要人工核对原页'
+    };
+    const reviewLabel = code => code ? `${REVIEW_LABELS[code] || '需要人工核对'}（${code}）` : '';
     const key = item => String(item?.questionNumber || item?.question || '');
     // A file's numbering is not all-or-nothing. What the page's own text layer proved stays usable, a hole
     // is reported as a missing number, and a duplicate / backward / unreadable anchor is recorded on its
@@ -66,45 +84,60 @@
         const accepted = items.filter(item => supportOnly || (typeof item.stem === 'string' && item.stem.trim()));
         return { accepted, missing: expected.filter(n => !accepted.some(item => key(item) === String(n))) };
     };
-    // `region` is a PDF-space bbox ([x1,y1,x2,y2]) of one question. When it is given, only that part of
-    // the page is rendered, so the model sees one question and nothing else: the neighbouring question,
-    // the header and the footer never reach it.
-    const renderPage = async (file, pageNo, trace, region) => {
+    const closeRenderScope = async scope => {
+        for (const { canvas } of scope.rasters.values()) canvas.width = canvas.height = 0;
+        scope.rasters.clear();
+        if (scope.pdf) await scope.pdf.destroy();
+        else if (scope.loading) await scope.loading.destroy();
+        scope.pdf = scope.loading = null;
+    };
+    // A scope belongs to one ingest. The first crop opens the document; later crops reuse its page
+    // raster. The standalone export owns and closes a temporary scope for callers outside ingest.
+    const renderPage = async (file, pageNo, trace, region, sharedScope) => {
+        const scope = sharedScope || { rasters: new Map() };
         const bounded = root.Qisi.IngestionContext.withTimeout;
-        const bytes = await bounded(async () => new Uint8Array(await (await root.fetch(file.uploadPath)).arrayBuffer()), 15000, 'PDF_READ_TIMEOUT');
-        const loading = root.pdfjsLib.getDocument({ data: bytes });
-        let pdf;
         try {
-            pdf = await bounded(() => loading.promise, 15000, 'PDF_OPEN_TIMEOUT', () => loading.destroy());
-            const page = await bounded(() => pdf.getPage(pageNo), 15000, 'PDF_PAGE_TIMEOUT');
-            const base = page.getViewport({ scale: 1 });
-            const scale = Math.min(2, 2200 / Math.max(base.width, base.height), Math.sqrt(4000000 / (base.width * base.height)));
-            const viewport = page.getViewport({ scale });
-            const canvas = root.document.createElement('canvas');
-            canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
-            try {
-                const task = page.render({ canvasContext: canvas.getContext('2d'), viewport });
-                await trace.measure(`render:${pageNo}`, () => bounded(() => task.promise, 20000, 'PDF_RENDER_TIMEOUT', () => task.cancel()));
-                const whole = { url: canvas.toDataURL('image/jpeg', 0.88), width: canvas.width, height: canvas.height };
-                if (!Array.isArray(region) || region.length !== 4) return whole;
-
-                const left = Math.max(0, Math.min(region[0], region[2]) * scale);
-                const top = Math.max(0, Math.min(region[1], region[3]) * scale);
-                const right = Math.min(canvas.width, Math.max(region[0], region[2]) * scale);
-                const bottom = Math.min(canvas.height, Math.max(region[1], region[3]) * scale);
-                const width = Math.ceil(right - left);
-                const height = Math.ceil(bottom - top);
-                if (width < 16 || height < 16) return whole;
-
-                const cropped = root.document.createElement('canvas');
-                cropped.width = width;
-                cropped.height = height;
+            if (!scope.pdf) {
+                const bytes = await bounded(async () => new Uint8Array(await (await root.fetch(file.uploadPath)).arrayBuffer()),
+                    15000, 'PDF_READ_TIMEOUT');
+                scope.loading = root.pdfjsLib.getDocument({ data: bytes });
+                scope.pdf = await bounded(() => scope.loading.promise, 15000, 'PDF_OPEN_TIMEOUT', () => scope.loading.destroy());
+            }
+            let raster = scope.rasters.get(pageNo);
+            if (!raster) {
+                const page = await bounded(() => scope.pdf.getPage(pageNo), 15000, 'PDF_PAGE_TIMEOUT');
+                const base = page.getViewport({ scale: 1 });
+                const scale = Math.min(2, 2200 / Math.max(base.width, base.height),
+                    Math.sqrt(4000000 / (base.width * base.height)));
+                const viewport = page.getViewport({ scale });
+                const canvas = root.document.createElement('canvas');
+                canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
                 try {
-                    cropped.getContext('2d').drawImage(canvas, left, top, width, height, 0, 0, width, height);
-                    return { url: cropped.toDataURL('image/jpeg', 0.9), width, height, region: [...region] };
-                } finally { cropped.width = cropped.height = 0; }
-            } finally { canvas.width = canvas.height = 0; }
-        } finally { await (pdf ? pdf.destroy() : loading.destroy()); }
+                    const task = page.render({ canvasContext: canvas.getContext('2d'), viewport });
+                    await trace.measure(`render:${pageNo}`, () => bounded(() => task.promise,
+                        20000, 'PDF_RENDER_TIMEOUT', () => task.cancel()));
+                    raster = { canvas, scale };
+                    scope.rasters.set(pageNo, raster);
+                } catch (error) { canvas.width = canvas.height = 0; throw error; }
+                finally { page.cleanup?.(); }
+            }
+            const { canvas, scale } = raster;
+            const whole = () => ({ url: canvas.toDataURL('image/jpeg', 0.88), width: canvas.width, height: canvas.height });
+            if (!Array.isArray(region) || region.length !== 4) return whole();
+            const left = Math.max(0, Math.min(region[0], region[2]) * scale);
+            const top = Math.max(0, Math.min(region[1], region[3]) * scale);
+            const right = Math.min(canvas.width, Math.max(region[0], region[2]) * scale);
+            const bottom = Math.min(canvas.height, Math.max(region[1], region[3]) * scale);
+            const width = Math.ceil(right - left);
+            const height = Math.ceil(bottom - top);
+            if (width < 16 || height < 16) return whole();
+            const cropped = root.document.createElement('canvas');
+            cropped.width = width; cropped.height = height;
+            try {
+                cropped.getContext('2d').drawImage(canvas, left, top, width, height, 0, 0, width, height);
+                return { url: cropped.toDataURL('image/jpeg', 0.9), width, height, region: [...region] };
+            } finally { cropped.width = cropped.height = 0; }
+        } finally { if (!sharedScope) await closeRenderScope(scope); }
     };
     // The model writes LaTeX, and LaTeX is full of braces, so a reply that stops in the middle of the
     // array cannot be cut at the last "}" of the text. This walks the reply once, ignoring anything
@@ -175,17 +208,19 @@
         return items.filter(item => item && typeof item === 'object');
     };
     const requestVisual = async (image, expectedNumbers, helpers, regionNumber) => {
+        const images = Array.isArray(image) ? image : [image];
         const response = await helpers.request({
             model: helpers.model,
             messages: [{ role: 'user', content: [
                 { type: 'text', text: (regionNumber
                     ? '这是第 ' + regionNumber + ' 题所在的图片区域（页面上该题的位置已由程序确定，题号不需要你判断）。'
+                        + (images.length > 1 ? '多张图片按页顺序展示同一题的跨页内容。' : '')
                         + '只转录这一题，只返回 JSON {"questions":[{"questionNumber":"' + regionNumber
                         + '","stem":"","options":[],"answer":"","solution":""}]}。'
                     : '逐题转录页面，只返回 JSON {"questions":[{"questionNumber":"1","stem":"","options":[],"answer":"","solution":""}]}。'
                         + '保留公式的 LaTeX 和原有题号。不猜缺失内容。不把详解结论当成显式答案。'
                         + '跨页不完整的题干留空。题号必须来自此页面，文本层已证明的题号为：' + JSON.stringify(expectedNumbers)) },
-                { type: 'image_url', image_url: { url: image.url } }
+                ...images.map(item => ({ type: 'image_url', image_url: { url: item.url } }))
             ] }], temperature: 0, max_tokens: 6000
         });
         const json = await response.json();
@@ -248,6 +283,44 @@
             mode: aligned.mode, fusedQuestionNumbers: aligned.fusedQuestionNumbers, decisions: controlled.fieldDecisions,
             warnings: controlled.warnings };
     };
+    const mergeVisualQuestion = (existing, visual, sectionType = '') => {
+        const merged = existing ? { ...existing } : { ...visual, type: sectionType };
+        const conflicts = [];
+        merged.fieldEvidence = { ...(existing?.fieldEvidence || {}) };
+        for (const field of ['stem', 'options']) {
+            const oldValue = existing?.[field];
+            const newValue = visual[field];
+            const oldPresent = Array.isArray(oldValue) ? oldValue.length > 0 : !!String(oldValue || '').trim();
+            const newPresent = Array.isArray(newValue) ? newValue.length > 0 : !!String(newValue || '').trim();
+            const evidence = existing
+                ? { ...(existing.fieldEvidence?.[field] || {}), rawValue: oldValue,
+                    vision: visual.fieldEvidence?.[field] }
+                : visual.fieldEvidence?.[field];
+            if (!existing || !oldPresent) {
+                if (newPresent) merged[field] = newValue;
+            } else if (JSON.stringify(oldValue) !== JSON.stringify(newValue) && newPresent) {
+                const marker = '[[PDF_UNMAPPED]]';
+                const parts = field === 'stem' && typeof oldValue === 'string' ? oldValue.split(marker) : [];
+                let gapFilled = parts.length > 1 && typeof newValue === 'string'
+                    && newValue.startsWith(parts[0]) && newValue.endsWith(parts.at(-1));
+                let cursor = parts[0]?.length || 0;
+                for (const part of parts.slice(1, -1)) {
+                    const at = newValue.indexOf(part, cursor);
+                    if (!part || at < 0) { gapFilled = false; break; }
+                    cursor = at + part.length;
+                }
+                if (gapFilled && cursor <= newValue.length - parts.at(-1).length) merged[field] = newValue;
+                else { conflicts.push(field); evidence.conflict = true; }
+            }
+            merged.fieldEvidence[field] = evidence;
+        }
+        if (existing) {
+            merged.type = existing.type;
+            merged.sourceTrace = existing.sourceTrace;
+            merged.warnings = [...new Set([...(existing.warnings || []), ...(visual.warnings || [])])];
+        }
+        return { question: merged, conflicts };
+    };
     const crossPageNumbers = (pages, role) => {
         const result = new Set();
         for (let i = 1; i < pages.length; i++) {
@@ -268,12 +341,16 @@
         catch (error) {
             return { questions: [], answers: [], solutions: [], pageImages: [], unmatched: [], timings: [],
                 contract: contract([]), inspection: { pages: [], timings: [] },
-                withheld: [{ sourceFileId: file.id, reason: 'pdf-inspection-failed', errorCode: error.code || 'PDF_READ_ERROR', message: error.message }] };
+                withheld: [{ sourceFileId: file.id, reason: 'pdf-inspection-failed', errorCode: error.code || 'PDF_READ_ERROR', message: error.message,
+                    reasonDisplay: reviewLabel('pdf-inspection-failed'), errorDisplay: reviewLabel(error.code || 'PDF_READ_ERROR') }] };
         }
         // A separately assigned support file supplies role evidence even when its markers
         // use ordinary decimal punctuation rather than an explicit 【答案】 label.
-        if (!questionRole && supportRole) inspection = { ...inspection, pages: inspection.pages.map(page => ({ ...page,
-            anchors: page.anchors.map(anchor => ({ ...anchor, role: 'support' })) })) };
+        if (!questionRole && supportRole) {
+            const pages = inspection.pages.map(page => ({ ...page,
+                anchors: page.anchors.map(anchor => ({ ...anchor, role: 'support' })) }));
+            inspection = { ...inspection, pages, ...root.Qisi.PdfInspection.segment(pages, 'support') };
+        }
         const trace = root.Qisi.IngestionContext.createTrace(file.id);
         const anchors = inspection.pages.flatMap(page => page.anchors || []);
         const questionContract = contract(anchors.filter(a => a.role === 'question'));
@@ -287,18 +364,26 @@
                 reason: 'contract-gap', visualNeeded: false });
         }
         const rawAnswers = [], rawSolutions = [];
+        const maxCalls = Number.isFinite(Number(helpers.maxCalls))
+            ? Math.max(0, Number(helpers.maxCalls)) : 24;
         const supportContract = contract(anchors.filter(a => a.role === 'support'));
         const crossQuestions = crossPageNumbers(inspection.pages, 'question');
         const crossSupport = crossPageNumbers(inspection.pages, 'support');
         const evidenceFor = (block, source) => ({ source, sourceFileId: file.id, sourceFileName: file.filename,
-            sourcePage: block.sourcePages[0], sourcePages: block.sourcePages, regions: block.regions, rawBlock: block.text });
+            sourcePage: block.sourcePages[0], sourcePages: block.sourcePages, regions: block.regions,
+            rawBlock: block.rawText || block.text });
         // Where each question actually sits on its page, taken from the block's own line boxes. The vision
         // plan and the review panel show that region instead of the whole page whenever the text layer could
         // prove it; a question without a provable box keeps the whole page.
         const questionRegionByPage = new Map();
         const questionRegionsByNumber = new Map();
+        const questionTypeByNumber = new Map();
+        const questionBlocksByNumber = new Map();
         const supportRegionsByNumber = new Map();
+        const supportBlocksByNumber = new Map();
         for (const block of (inspection.blocks || []).filter(b => b.role === 'question')) {
+            questionBlocksByNumber.set(block.questionNumber, block);
+            if (block.type) questionTypeByNumber.set(block.questionNumber, block.type);
             for (const region of block.regionByPage || []) {
                 questionRegionsByNumber.set(`${region.page}:${block.questionNumber}`, region.bbox);
             }
@@ -311,6 +396,7 @@
             }
         }
         for (const block of (inspection.blocks || []).filter(b => b.role === 'support')) {
+            supportBlocksByNumber.set(block.questionNumber, block);
             for (const region of block.regionByPage || []) {
                 supportRegionsByNumber.set(`${region.page}:${block.questionNumber}`, region.bbox);
             }
@@ -319,7 +405,7 @@
             if (!questionContract.authoritative || !expected.includes(block.questionNumber)) continue;
             const items = helpers.parseQuestions(block.text, file, false);
             if (items.length !== 1 || key(items[0]) !== block.questionNumber) continue;
-            result.questions.push({ ...items[0], answer: '', solution: '', sourceTrace: evidenceFor(block, 'pdf-text'),
+            result.questions.push({ ...items[0], type: block.type || '', answer: '', solution: '', sourceTrace: evidenceFor(block, 'pdf-text'),
                 sourcePage: block.sourcePages[0], sourcePages: block.sourcePages,
                 fieldEvidence: { stem: evidenceFor(block, 'pdf-text'), options: evidenceFor(block, 'pdf-text') } });
         }
@@ -329,7 +415,8 @@
             const candidates = [];
             for (const page of inspection.pages) for (const anchor of page.anchors) {
                 if (anchor.role !== 'support') continue;
-                const match = anchor.rawText.match(/^\s*([1-9]\d{0,2})\s*【\s*答案\s*】\s*([A-D](?:\s*[A-D]){0,3})\s*$/);
+                const match = anchor.rawText.match(/^\s*([1-9]\d{0,2})\s*【\s*答案\s*】\s*([A-D](?:\s*[A-D]){0,3})\s*$/)
+                    || anchor.rawText.match(/^\s*([1-9]\d{0,2})\s*[.．、]\s*([A-D](?:\s*[A-D]){0,3})\s*$/);
                 if (match) candidates.push({ question: match[1], answer: match[2].replace(/\s/g, ''),
                     sourceFileId: file.id, sourceFileName: file.filename, sourcePage: page.pageNo,
                     fieldEvidence: { answer: { ...anchor, source: 'pdf-text', sourceFileId: file.id } } });
@@ -346,6 +433,10 @@
             }
         }
         let transportFailure = null;
+        const renderScope = { rasters: new Map() };
+        const renderImage = helpers.render || ((source, pageNo, stage, region) =>
+            renderPage(source, pageNo, stage, region, renderScope));
+        try {
         for (const page of inspection.pages.filter(p => p.kind !== 'text')) {
             const supportOnly = (!questionRole && supportRole) || (fullRole &&
                 !page.anchors.some(a => a.role === 'question') && page.anchors.some(a => a.role === 'support'));
@@ -357,7 +448,7 @@
                 region: pageRegion, reason: page.reason,
                 status: 'withheld', visualNeeded: true };
             try {
-                const image = await (helpers.render || renderPage)(file, page.pageNo, trace);
+                const image = await renderImage(file, page.pageNo, trace);
                 result.pageImages.push({ sourceFileId: file.id, sourceFileName: file.filename, pageNo: page.pageNo, imageUrl: image.url });
                 // No independent number evidence means model output can only be an untrusted proposal.
                 const proven = supportOnly ? supportContract.authoritative && pageNumbers.every(n => expected.includes(n)) : questionContract.authoritative;
@@ -376,14 +467,32 @@
                     let regionFailure = '';
                     for (const item of regionItems) {
                         try {
-                            const crop = await (helpers.render || renderPage)(file, page.pageNo, trace, item.bbox);
-                            const regionBytes = new TextEncoder().encode(crop.url + helpers.model + item.number + ':region:pdf-v2');
+                            const block = (supportOnly ? supportBlocksByNumber : questionBlocksByNumber).get(item.number);
+                            const crosses = (supportOnly ? crossSupport : crossQuestions).has(item.number);
+                            const regions = crosses
+                                ? block?.regionByPage || [] : [{ page: page.pageNo, bbox: item.bbox }];
+                            if ((crosses && regions.length < 2)
+                                || !regions.length || regions.some((region, index) => !Array.isArray(region.bbox)
+                                || region.bbox.length !== 4 || (index && region.page !== regions[index - 1].page + 1))) {
+                                result.withheld.push({ ...plan, questionNumbers: [item.number],
+                                    reason: 'cross-page-visual-block' });
+                                continue;
+                            }
+                            const crops = [];
+                            for (const region of regions) crops.push(await renderImage(file, region.page, trace, region.bbox));
+                            const crop = crops[0];
+                            const regionBytes = new TextEncoder().encode(crops.map(image => image.url).join('|') + helpers.model + item.number + ':' + VISUAL_SCHEMA_VERSION);
                             const regionHash = Array.from(new Uint8Array(await root.crypto.subtle.digest('SHA-256', regionBytes))).map(n => n.toString(16).padStart(2, '0')).join('');
                             let regionPending = pageCache.get(regionHash);
                             if (!regionPending) {
+                                if (result.visualCalls >= maxCalls) {
+                                    result.withheld.push({ ...plan, questionNumbers: [item.number],
+                                        errorCode: 'VISUAL_CALL_BUDGET_EXCEEDED' });
+                                    continue;
+                                }
                                 result.visualCalls++;
                                 regionPending = trace.measure(`vision:${page.pageNo}:${item.number}`,
-                                    () => root.Qisi.IngestionContext.withTimeout(() => requestVisual(crop, [item.number], helpers, item.number), 90000, 'PDF_VISION_TIMEOUT'));
+                                    () => root.Qisi.IngestionContext.withTimeout(() => requestVisual(crops, [item.number], helpers, item.number), 90000, 'PDF_VISION_TIMEOUT'));
                                 pageCache.set(regionHash, regionPending);
                                 regionPending.catch(() => pageCache.delete(regionHash));
                                 if (pageCache.size > 32) pageCache.delete(pageCache.keys().next().value);
@@ -399,7 +508,7 @@
                             }
 
                             const evidence = { source: 'pdf-vision', sourceFileId: file.id, sourcePage: page.pageNo,
-                                region: item.bbox, assetHash: regionHash, model: helpers.model };
+                                region: item.bbox, regions, assetHash: regionHash, model: helpers.model };
                             for (const entry of checked.accepted) {
                                 const candidate = { ...entry, question: key(entry), sourceFileId: file.id,
                                     sourceFileName: file.filename, sourcePage: page.pageNo, sourcePageImage: crop.url,
@@ -415,16 +524,24 @@
                                     if (entry.answer && !/^[A-D\s]+$/.test(entry.answer)
                                         && !rawAnswers.some(row => key(row) === key(entry))) rawAnswers.push(candidate);
                                     if (typeof entry.solution === 'string' && entry.solution.trim()) rawSolutions.push(candidate);
-                                } else if (existing < 0) result.questions.push(upgraded);
-                                else result.questions[existing] = upgraded;
+                                } else {
+                                    const merged = mergeVisualQuestion(result.questions[existing], upgraded,
+                                        questionTypeByNumber.get(item.number) || '');
+                                    if (existing < 0) result.questions.push(merged.question);
+                                    else result.questions[existing] = merged.question;
+                                    if (merged.conflicts.length) result.withheld.push({ ...plan,
+                                        questionNumbers: [item.number], reason: 'field-evidence-conflict',
+                                        fields: merged.conflicts, rawEvidence: { deterministic: result.questions[existing]?.sourceTrace,
+                                            vision: entry } });
+                                }
                             }
                         } catch (error) {
                             const code = error.code || root.Qisi.Utils.classifyVisualServiceFailure?.(error)?.code || 'TRANSPORT_ERROR';
-                            transportFailure = code;
+                            if (fileFatalVisualError(code)) transportFailure = code;
                             regionFailure = code;
                             result.withheld.push({ ...plan, questionNumbers: [item.number], errorCode: code,
                                 message: error.message, rawEvidence: error.rawContent ?? null });
-                            break;
+                            if (transportFailure) break;
                         }
                     }
                     if (regionFailure && !result.withheld.some(w => w.sourcePage === page.pageNo && w.visualNeeded)) {
@@ -432,10 +549,14 @@
                     }
                     continue;
                 }
-                const bytes = new TextEncoder().encode(image.url + helpers.model + JSON.stringify(pageNumbers) + ':' + supportOnly + ':pdf-v2');
+                const bytes = new TextEncoder().encode(image.url + helpers.model + JSON.stringify(pageNumbers) + ':' + supportOnly + ':' + VISUAL_SCHEMA_VERSION);
                 const hash = Array.from(new Uint8Array(await root.crypto.subtle.digest('SHA-256', bytes))).map(n => n.toString(16).padStart(2, '0')).join('');
                 let pending = pageCache.get(hash);
                 if (!pending) {
+                    if (result.visualCalls >= maxCalls) {
+                        result.withheld.push({ ...plan, errorCode: 'VISUAL_CALL_BUDGET_EXCEEDED' });
+                        continue;
+                    }
                     result.visualCalls++;
                     pending = trace.measure(`vision:${page.pageNo}`, () => root.Qisi.IngestionContext.withTimeout(() => requestVisual(image, pageNumbers, helpers), 90000, 'PDF_VISION_TIMEOUT'));
                     pageCache.set(hash, pending);
@@ -467,17 +588,20 @@
                         // formulas the text could not, so it replaces that text-only version.
                         const existing = result.questions.findIndex(q => key(q) === key(item));
                         const upgraded = { ...candidate, answer: '', solution: '' };
-                        if (existing < 0) result.questions.push(upgraded);
-                        else if (result.questions[existing].sourceTrace?.source === 'pdf-text'
-                            || result.questions[existing].rawBlock) {
-                            result.questions[existing] = upgraded;
-                        }
+                        const merged = mergeVisualQuestion(result.questions[existing], upgraded,
+                            questionTypeByNumber.get(key(item)) || '');
+                        if (existing < 0) result.questions.push(merged.question);
+                        else result.questions[existing] = merged.question;
+                        if (merged.conflicts.length) result.withheld.push({ ...plan,
+                            questionNumbers: [key(item)], reason: 'field-evidence-conflict',
+                            fields: merged.conflicts, rawEvidence: { deterministic: result.questions[existing]?.sourceTrace,
+                                vision: item } });
                     }
                 }
                 if (checked.missing.length) result.withheld.push({ ...plan, questionNumbers: checked.missing, reason: 'missing-visual-question' });
             } catch (error) {
                 const code = error.code || root.Qisi.Utils.classifyVisualServiceFailure?.(error)?.code || 'TRANSPORT_ERROR';
-                transportFailure = code;
+                if (fileFatalVisualError(code)) transportFailure = code;
                 result.withheld.push({ ...plan, errorCode: code, message: error.message,
                     rawEvidence: error.rawContent ?? null,
                     rawDiagnostics: error.rawLength === undefined ? null : {
@@ -485,6 +609,7 @@
                     } });
             }
         }
+        } finally { await closeRenderScope(renderScope); }
         if (supportRole || fullRole) {
             rawAnswers.sort((a, b) => Number(key(a)) - Number(key(b)));
             // Never reorder model solutions: the sequence gate must see source order.
@@ -499,8 +624,16 @@
             if (!result.withheld.some(w => w.questionNumbers?.includes(n))) result.withheld.push({ sourceFileId: file.id, questionNumbers: [n], reason: 'unresolved-question' });
         }
         if (!result.questions.length && questionRole && !result.withheld.length) result.withheld.push({ sourceFileId: file.id, reason: 'no-proven-question-markers' });
+        for (const question of result.questions) {
+            if (JSON.stringify([question.stem, question.options]).includes('[[PDF_UNMAPPED]]')) {
+                question.warnings = [...new Set([...(question.warnings || []), '此处公式需视觉补全；补全前不能正式入库。'])];
+            }
+        }
         result.questions.sort((a, b) => Number(key(a)) - Number(key(b)));
+        result.withheld = result.withheld.map(item => ({ ...item,
+            reasonDisplay: reviewLabel(item.reason), errorDisplay: reviewLabel(item.errorCode) }));
         return result;
     };
-    return { contract, acceptVisual, gateSupport, crossPageNumbers, renderPage, ingest };
+    return { contract, acceptVisual, gateSupport, mergeVisualQuestion, reviewLabel,
+        crossPageNumbers, renderPage, ingest };
 });

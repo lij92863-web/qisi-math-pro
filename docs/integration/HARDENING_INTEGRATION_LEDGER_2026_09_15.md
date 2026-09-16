@@ -1,5 +1,9 @@
 # Hardening integration ledger — `codex/app-refactor-master-plan-r1` against `origin/main` (2026-09-15)
 
+## 2026-09-17 takeover: PDF evidence and type admission
+
+Current change under review: `app.js` now passes through only a section-proved PDF type; it does not infer one from options. `qisi-formal-admission-policy.js` rejects a PDF field containing `[[PDF_UNMAPPED]]` or conflicting text/vision evidence until a teacher edits that field. The existing FormalAdmission owner remains the only formal gate. These two sealed-file edits are recorded in `architecture/post-seal-approved-blobs.json`; narrow regressions are in `tests/pdf-ingestion.test.js` and `tests/formal-admission-policy.test.js`. No real visual service was called.
+
 ## 2026-09-16 PDF inspection stage
 
 `main` still enters rendering/vision before assessing PDF text. The integration adds

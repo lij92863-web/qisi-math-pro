@@ -46,11 +46,12 @@
         if (imageCount || vectorCount > 10) return { kind: 'mixed', reason: 'non-text-content', text };
         return { kind: 'text', reason: 'text-geometry', text };
     };
-    const segment = pages => {
+    const segment = (pages, initialRole = 'question') => {
         const blocks = [];
         const withheld = [];
         let active = null;
-        let role = 'question';
+        let role = initialRole;
+        let sectionType = '';
         let previousPage = 0;
         for (const page of pages) {
             // A "mixed" page has a text layer the teacher can read: the parts that could not be mapped
@@ -69,19 +70,30 @@
                 withheld.push({ sourcePage: page.pageNo, reason: page.reason, kind: page.kind });
             }
             for (const line of page.lines) {
-                const text = line.text.trim();
+                const rawText = line.text.trim();
+                const text = rawText.replace(/[\uFFFD\uE000-\uF8FF]+/g, '[[PDF_UNMAPPED]]');
                 if (/^(?:参考答案|答案|答案[与及和]解析|参考答案[与及和]解析)\s*[:：]?$/.test(text)) {
                     role = 'support'; active = null; continue;
                 }
+                const heading = text.match(/^\s*[一二三四五六七八九十]+\s*[、.．]\s*(单项选择题|单选题|多项选择题|多选题|填空题|解答题)/);
+                if (heading) {
+                    sectionType = /多项|多选/.test(heading[1]) ? '多选题'
+                        : /单项|单选/.test(heading[1]) ? '单选题' : heading[1];
+                    active = null;
+                    continue;
+                }
                 // A margin page number can never establish or extend a question.
                 if (line.bbox[1] > page.height * 0.95 || line.bbox[3] < page.height * 0.035) continue;
-                const hit = text.match(marker);
+                const hit = text.match(marker) || (role === 'support'
+                    ? text.match(/^\s*([1-9]\d{0,2})\s*【\s*(?:答案|解析|详解)\s*】/) : null);
                 if (hit) {
-                    active = { questionNumber: hit[1].replace(/\s/g, ''), role, text, sourcePages: [page.pageNo],
+                    active = { questionNumber: hit[1].replace(/\s/g, ''), role, type: role === 'question' ? sectionType : '', text, rawText,
+                        sourcePages: [page.pageNo],
                         regions: [{ page: page.pageNo, bbox: [...line.bbox] }] };
                     blocks.push(active);
                 } else if (active) {
                     active.text += `\n${text}`;
+                    active.rawText += `\n${rawText}`;
                     if (!active.sourcePages.includes(page.pageNo)) active.sourcePages.push(page.pageNo);
                     active.regions.push({ page: page.pageNo, bbox: [...line.bbox] });
                 }
@@ -93,7 +105,7 @@
         for (const block of blocks) {
             const key = `${block.role}:${block.questionNumber}`;
             const n = Number(block.questionNumber);
-            if (seen.has(key) || (block.role === 'question' && n <= previous)) {
+            if ((block.role === 'question' && seen.has(key)) || (block.role === 'question' && n <= previous)) {
                 withheld.push({ questionNumber: block.questionNumber, reason: 'duplicate-or-backward-marker' });
                 // The first occurrence is ambiguous too. Keep raw evidence but publish neither.
                 for (let i = safe.length - 1; i >= 0; i--) if (`${safe[i].role}:${safe[i].questionNumber}` === key) safe.splice(i, 1);
@@ -103,11 +115,8 @@
             if (block.role === 'question') previous = n;
             safe.push(block);
         }
-        // The per-question region: the union of the bounding boxes of the lines that belong to this
-        // question, page by page. It is what "程序负责归属" needs - the identity stays the text layer's, and
-        // the region says which part of which page that question actually occupies (header, footer, margin
-        // and the neighbouring question stay outside it). A question that carries no provable box simply
-        // has none, and its page stays whole-page withheld.
+        // Use the proved anchor boundaries as a vertical band. A text-box union cuts off diagrams
+        // beside the text; the band includes the page content width while excluding adjacent questions.
         const regionByPage = block => {
             const map = new Map();
             for (const region of block.regions || []) {
@@ -115,6 +124,21 @@
                 current.bbox = [Math.min(current.bbox[0], region.bbox[0]), Math.min(current.bbox[1], region.bbox[1]),
                     Math.max(current.bbox[2], region.bbox[2]), Math.max(current.bbox[3], region.bbox[3])];
                 map.set(region.page, current);
+            }
+            for (const current of map.values()) {
+                const page = pages.find(item => item.pageNo === current.page);
+                const anchors = (page?.anchors || []).filter(anchor => anchor.role === block.role)
+                    .sort((a, b) => a.bbox[1] - b.bbox[1]);
+                const own = anchors.find(anchor => anchor.questionNumber === block.questionNumber);
+                const continuation = !own && current.page !== block.sourcePages[0];
+                const next = anchors.find(anchor => anchor.bbox[1] > (own?.bbox[1] ?? -1));
+                if (!page || (!own && !continuation)) { map.delete(current.page); continue; }
+                const headingAfter = page.lines.find(line => line.bbox[1] > (own?.bbox[1] ?? page.height * 0.035)
+                    && /^\s*[一二三四五六七八九十]+\s*[、.．]\s*(?:单项选择题|单选题|多项选择题|多选题|填空题|解答题)/.test(line.text));
+                current.bbox = [page.width * 0.05, own ? Math.max(page.height * 0.035, own.bbox[1] - 2) : page.height * 0.035,
+                    page.width * 0.95, Math.min(page.height * 0.95,
+                        next ? next.bbox[1] - 2 : page.height * 0.95,
+                        headingAfter ? headingAfter.bbox[1] - 2 : page.height * 0.95)];
             }
             return [...map.values()].sort((left, right) => left.page - right.page);
         };

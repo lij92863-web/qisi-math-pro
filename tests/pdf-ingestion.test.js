@@ -22,6 +22,19 @@ test('PDF inspector distinguishes usable text from glyph, layout and scan uncert
     assert.deepEqual(Inspection.collectAnchors(page(1, [line('1 1 . 如图，在四边形中，计算其面积')])).map(a => a.questionNumber), ['11']);
 });
 
+test('mixed PDF text keeps readable words around an explicit unmapped gap', () => {
+    const p = page(1, [line('1. 可靠中文 \uf02b 可靠结尾', 100)], 'mixed');
+    const block = Inspection.segment([p]).blocks[0];
+    assert.equal(block.text, '1. 可靠中文 [[PDF_UNMAPPED]] 可靠结尾');
+    assert.equal(block.rawText, '1. 可靠中文 \uf02b 可靠结尾');
+});
+
+test('PDF review labels explain reasons in Chinese and retain machine codes', () => {
+    assert.equal(Ingestion.reviewLabel('unmapped-glyphs'),
+        '公式字符无法从 PDF 文本层可靠映射（unmapped-glyphs）');
+    assert.match(Ingestion.reviewLabel('MALFORMED_MODEL_RESPONSE'), /模型回复格式无效（MALFORMED_MODEL_RESPONSE）/);
+});
+
 test('PDF text blocks carry cross-page evidence and do not turn footer numbers into questions', () => {
     const pages = [page(1, [line('1. First question'), line('page footer', 812)]),
         page(2, [line('continued'), line('2. Second question', 180)])];
@@ -39,9 +52,9 @@ test('every question block carries the region it occupies on each page', () => {
         page(2, [line('2. Second question', 190)])];
     const blocks = Inspection.segment(pages).blocks;
 
-    assert.deepEqual(blocks[0].regionByPage, [{ page: 1, bbox: [90, 100, 500, 142] }],
-        'the question region is the union of its lines, without the footer');
-    assert.deepEqual(blocks[1].regionByPage, [{ page: 2, bbox: [90, 190, 500, 202] }]);
+    assert.deepEqual(blocks[0].regionByPage, [{ page: 1, bbox: [30, 98, 570, 798] }],
+        'the question band includes figures to the right while excluding the footer');
+    assert.deepEqual(blocks[1].regionByPage, [{ page: 2, bbox: [30, 188, 570, 798] }]);
 });
 
 // A page whose anchors are proved keeps a question region in the vision plan; the review panel shows it
@@ -57,9 +70,210 @@ test('a withheld page carries the question region when the text layer proved it'
         } });
 
         const withheld = result.withheld.find(w => w.sourcePage === 1 && w.visualNeeded);
-        assert.deepEqual(withheld.region, [90, 120, 500, 412], 'the page plan carries the question band');
+        assert.deepEqual(withheld.region, [30, 118, 570, 798], 'the page plan carries the question band');
         assert.ok(withheld.region[3] - withheld.region[1] < mixed[0].height, 'not the whole page');
     } finally { Inspection.inspect = inspect; }
+});
+
+test('question bands include right-side figures and stop before the next anchor', () => {
+    const p = page(1, [line('1. Left-hand stem', 100), line('A. option below graph', 250),
+        line('2. Next question', 400), line('page footer', 812)], 'mixed');
+    const blocks = Inspection.segment([p]).blocks;
+    assert.deepEqual(blocks[0].regionByPage[0].bbox, [30, 98, 570, 398]);
+    assert.ok(blocks[0].regionByPage[0].bbox[2] > 520, 'right-side figure at x=520 remains in crop');
+    assert.ok(blocks[0].regionByPage[0].bbox[3] < 400, 'neighbour is excluded');
+    assert.ok(blocks[1].regionByPage[0].bbox[3] < 812, 'footer is excluded');
+});
+
+test('PDF section headings, rather than visual type guesses, determine question type', () => {
+    const p = page(1, [line('一、单项选择题', 60), line('1. First', 100),
+        line('二、多项选择题', 200), line('7. Multiple', 240),
+        line('三、填空题', 400), line('10. Blank', 440)]);
+    assert.deepEqual(Inspection.segment([p]).blocks.map(block => [block.questionNumber, block.type]),
+        [['1', '单选题'], ['7', '多选题'], ['10', '填空题']]);
+    const visionOnly = Ingestion.mergeVisualQuestion(null, { question: '7', type: '单选题', stem: 'text' });
+    assert.equal(visionOnly.question.type, '', 'model type alone is not structural evidence');
+});
+
+test('deterministic PDF fields survive visual conflict and only explicit gaps can be filled', () => {
+    const deterministic = { question: '1', type: '多选题', stem: 'sin(nπ/2)', options: ['A', 'B'],
+        sourceTrace: { source: 'pdf-text' }, fieldEvidence: { stem: { source: 'pdf-text' } } };
+    const visual = { question: '1', type: '单选题', stem: 'sin(m/2)', options: ['A', 'C'],
+        fieldEvidence: { stem: { source: 'pdf-vision', rawValue: 'sin(m/2)' } } };
+    const conflict = Ingestion.mergeVisualQuestion(deterministic, visual);
+    assert.equal(conflict.question.stem, 'sin(nπ/2)');
+    assert.equal(conflict.question.type, '多选题');
+    assert.deepEqual(conflict.question.options, ['A', 'B']);
+    assert.deepEqual(conflict.conflicts, ['stem', 'options']);
+    assert.equal(conflict.question.fieldEvidence.stem.vision.rawValue, 'sin(m/2)');
+
+    const vectorConflict = Ingestion.mergeVisualQuestion({ ...deterministic,
+        stem: 'BA·AC / |BC|' }, { ...visual, stem: 'BC / |BC|' });
+    assert.equal(vectorConflict.question.stem, 'BA·AC / |BC|');
+    assert.deepEqual(vectorConflict.conflicts, ['stem', 'options']);
+
+    const gap = Ingestion.mergeVisualQuestion({ ...deterministic, stem: 'sin([[PDF_UNMAPPED]])' },
+        { ...visual, stem: 'sin(nπ/2)', options: ['A', 'B'] });
+    assert.equal(gap.question.stem, 'sin(nπ/2)');
+    assert.deepEqual(gap.conflicts, []);
+    assert.equal(gap.question.fieldEvidence.stem.rawValue, 'sin([[PDF_UNMAPPED]])');
+    const twoGaps = Ingestion.mergeVisualQuestion({ ...deterministic,
+        stem: '前 [[PDF_UNMAPPED]] 中 [[PDF_UNMAPPED]] 后' },
+        { ...visual, stem: '前 公式甲 中 公式乙 后', options: ['A', 'B'] });
+    assert.equal(twoGaps.question.stem, '前 公式甲 中 公式乙 后');
+    assert.deepEqual(twoGaps.conflicts, []);
+});
+
+test('a separately assigned support PDF has support blocks and per-question regions', async () => {
+    const inspect = Inspection.inspect;
+    const asked = [];
+    try {
+        const pages = [page(1, [line('1. Answer and reasoning', 100), line('2. Answer and reasoning', 400)], 'mixed')];
+        Inspection.inspect = async () => ({ pages, ...Inspection.segment(pages), timings: [] });
+        const result = await Ingestion.ingest({ file: { id: 'support-role' }, supportRole: true,
+            expectedNumbers: ['1', '2'], helpers: { model: 'support-role-mock',
+                render: async (_, __, ___, region) => ({ url: `support-${region?.[1] || 'page'}` }),
+                request: async payload => {
+                    asked.push(payload.messages[0].content[0].text);
+                    return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({
+                        questions: [{ questionNumber: (/第 (\d+) 题/.exec(payload.messages[0].content[0].text) || [])[1],
+                            stem: '', answer: '', solution: '' }]
+                    }) } }] }) };
+                } } });
+        assert.deepEqual(result.inspection.blocks.map(b => b.role), ['support', 'support']);
+        assert.equal(result.inspection.rawBlocks.every(b => b.role === 'support'), true);
+        assert.equal(asked.length, 2);
+        assert.ok(asked.every(text => text.includes('所在的图片区域')));
+    } finally { Inspection.inspect = inspect; }
+});
+
+test('an explicit support answer row is distinct from a solution conclusion', async () => {
+    const inspect = Inspection.inspect;
+    try {
+        const p = page(1, [line('8. C', 100), line('9. 故选 C, with detailed working', 300)], 'mixed');
+        Inspection.inspect = async () => ({ pages: [p], ...Inspection.segment([p]), timings: [] });
+        const result = await Ingestion.ingest({ file: { id: 'explicit-answer' }, supportRole: true,
+            expectedNumbers: ['8', '9'], drafts: [8, 9].map(n => ({ question: String(n), type: '单选题',
+                options: ['one', 'two', 'three', 'four'] })),
+            helpers: { parseSupport: () => ({}), render: async () => ({ url: 'mock-page' }) } });
+        assert.deepEqual(result.answers, [], 'existing answer/solution sequence gate still fails closed');
+        assert.ok(result.unmatched.some(item => item.question === '8' && item.answer === 'C'),
+            'the explicit row remains a candidate with raw evidence for review');
+        assert.equal(result.unmatched.some(item => item.question === '9' && item.answer), false,
+            'the solution conclusion never becomes an answer candidate');
+    } finally { Inspection.inspect = inspect; }
+});
+
+test('malformed response withholds one region while later proved regions continue', async () => {
+    const inspect = Inspection.inspect;
+    let calls = 0;
+    try {
+        const pages = [page(1, [line('1. First', 100), line('2. Second', 300), line('3. Third', 500)], 'mixed')];
+        Inspection.inspect = async () => ({ pages, ...Inspection.segment(pages), timings: [] });
+        const result = await Ingestion.ingest({ file: { id: 'local-failure' }, questionRole: true,
+            helpers: { model: 'local-failure-mock', parseQuestions: () => [],
+                render: async (_, __, ___, region) => ({ url: `local-${region?.[1] || 'page'}` }),
+                request: async payload => {
+                    calls++;
+                    if (calls === 2) return { ok: true, json: async () => ({ choices: [{ message: { content: 'broken' } }] }) };
+                    const number = (/第 (\d+) 题/.exec(payload.messages[0].content[0].text) || [])[1];
+                    return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({
+                        questions: [{ questionNumber: number, stem: `stem ${number}` }]
+                    }) } }] }) };
+                } } });
+        assert.equal(calls, 3);
+        assert.deepEqual(result.questions.map(q => q.question), ['1', '3']);
+        assert.ok(result.withheld.some(w => w.errorCode === 'MALFORMED_MODEL_RESPONSE'
+            && w.questionNumbers[0] === '2'));
+    } finally { Inspection.inspect = inspect; }
+});
+
+test('visual maxCalls stops further requests and leaves remaining regions withheld', async () => {
+    const inspect = Inspection.inspect;
+    let calls = 0;
+    try {
+        const pages = [page(1, [line('1. First', 100), line('2. Second', 300)], 'mixed')];
+        Inspection.inspect = async () => ({ pages, ...Inspection.segment(pages), timings: [] });
+        const result = await Ingestion.ingest({ file: { id: 'budget' }, questionRole: true,
+            helpers: { model: 'budget-mock', maxCalls: 1, parseQuestions: () => [],
+                render: async (_, __, ___, region) => ({ url: `budget-${region?.[1] || 'page'}` }),
+                request: async payload => {
+                    calls++;
+                    const number = (/第 (\d+) 题/.exec(payload.messages[0].content[0].text) || [])[1];
+                    return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({
+                        questions: [{ questionNumber: number, stem: `stem ${number}` }]
+                    }) } }] }) };
+                } } });
+        assert.equal(calls, 1);
+        assert.ok(result.withheld.some(item => item.errorCode === 'VISUAL_CALL_BUDGET_EXCEEDED'
+            && item.questionNumbers[0] === '2'));
+    } finally { Inspection.inspect = inspect; }
+});
+
+test('a proved cross-page question sends both regions without the next question or heading', async () => {
+    const inspect = Inspection.inspect;
+    const calls = [];
+    try {
+        const pages = [page(1, [line('6. Stem on first page', 700)], 'mixed'),
+            page(2, [line('A. continued option', 45), line('二、多项选择题', 180),
+                line('7. Next question', 230)], 'mixed')];
+        Inspection.inspect = async () => ({ pages, ...Inspection.segment(pages), timings: [] });
+        const q6 = Inspection.segment(pages).blocks[0];
+        assert.equal(q6.regionByPage.length, 2);
+        assert.ok(q6.regionByPage[1].bbox[3] < 180);
+        const result = await Ingestion.ingest({ file: { id: 'cross-region' }, questionRole: true,
+            helpers: { model: 'cross-region-mock', parseQuestions: () => [],
+                render: async (_, pageNo, __, region) => ({ url: `${pageNo}:${region?.[1] || 'page'}` }),
+                request: async payload => {
+                    calls.push(payload.messages[0].content);
+                    const number = (/第 (\d+) 题/.exec(payload.messages[0].content[0].text) || [])[1];
+                    return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({
+                        questions: [{ questionNumber: number, stem: `stem ${number}` }]
+                    }) } }] }) };
+                } } });
+        assert.equal(calls[0].length, 3, 'q6 request has two page crops');
+        assert.deepEqual(result.questions.map(q => q.question), ['6', '7']);
+    } finally { Inspection.inspect = inspect; }
+});
+
+test('one PDF ingest opens the document once and rasterises a page once for several regions', async () => {
+    const inspect = Inspection.inspect;
+    const originals = { fetch: global.fetch, pdfjsLib: global.pdfjsLib, document: global.document };
+    let opens = 0;
+    let renders = 0;
+    let destroyed = 0;
+    const canvases = [];
+    try {
+        const pages = [page(1, [line('1. First', 100), line('2. Second', 300)], 'mixed')];
+        Inspection.inspect = async () => ({ pages, ...Inspection.segment(pages), timings: [] });
+        global.fetch = async () => ({ arrayBuffer: async () => new Uint8Array([1, 2]).buffer });
+        global.pdfjsLib = { getDocument: () => {
+            opens++;
+            return { promise: Promise.resolve({ getPage: async () => ({
+                getViewport: ({ scale }) => ({ width: 600 * scale, height: 840 * scale }),
+                render: () => { renders++; return { promise: Promise.resolve(), cancel() {} }; },
+                cleanup() {}
+            }), destroy: async () => { destroyed++; } }), destroy: async () => {} };
+        } };
+        global.document = { createElement: () => {
+            const canvas = { width: 0, height: 0, getContext: () => ({ drawImage() {} }),
+                toDataURL() { return `raster-${this.width}x${this.height}`; } };
+            canvases.push(canvas);
+            return canvas;
+        } };
+        await Ingestion.ingest({ file: { id: 'render-count', uploadPath: 'mock-pdf' }, questionRole: true,
+            helpers: { model: 'render-count-mock', parseQuestions: () => [],
+                request: async payload => {
+                    const number = (/第 (\d+) 题/.exec(payload.messages[0].content[0].text) || [])[1];
+                    return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({
+                        questions: [{ questionNumber: number, stem: `stem ${number}` }]
+                    }) } }] }) };
+                } } });
+        assert.equal(opens, 1);
+        assert.equal(renders, 1);
+        assert.equal(destroyed, 1);
+        assert.ok(canvases.every(canvas => canvas.width === 0 && canvas.height === 0));
+    } finally { Inspection.inspect = inspect; Object.assign(global, originals); }
 });
 
 // With a box per question, the request carries one question and one number: the model cannot mix two
@@ -270,5 +484,17 @@ test('a mixed page keeps the text it can read when the visual service is unavail
         assert.equal(result.visualCalls, 0);
         assert.ok(result.withheld.some(w => w.sourcePage === 1 && w.visualNeeded),
             'the page is still listed as needing visual review');
+    } finally { Inspection.inspect = inspect; }
+});
+
+test('an unresolved PDF glyph gap stays visible with a teacher-facing warning', async () => {
+    const inspect = Inspection.inspect;
+    try {
+        const pages = [page(1, [line('1. 前文 \uf02b 后文')], 'mixed')];
+        Inspection.inspect = async () => ({ pages, ...Inspection.segment(pages), timings: [] });
+        const result = await Ingestion.ingest({ file: { id: 'glyph-gap' }, questionRole: true,
+            helpers: { parseQuestions: text => [{ question: '1', stem: text }], parseSupport: () => ({}) } });
+        assert.match(result.questions[0].stem, /前文 \[\[PDF_UNMAPPED\]\] 后文/);
+        assert.ok(result.questions[0].warnings.some(warning => warning.includes('此处公式需视觉补全')));
     } finally { Inspection.inspect = inspect; }
 });
