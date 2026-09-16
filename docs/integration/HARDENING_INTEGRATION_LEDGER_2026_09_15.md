@@ -1348,6 +1348,22 @@ there are still empty, so the block that drops those answers sits later in the p
 produced from a realised key table and then either filtered against the question contract or merged
 away). That is the next step of this task, with the evidence above.
 
+Further narrowed (same round): 武汉四调's drafts carry **neither answers nor solutions** (0/19 for both),
+so the support parse itself produced nothing for that file - it is not an answer-filtering question. The
+file text does contain everything the parser needs, in this shape:
+
+```text
+82:  "《湖北省武汉市…数学试题》参考答案"      (title longer than the 12 characters the heading rule allows)
+83-108: "题号" / 1…10 / "答案" / C D C A A B D C BCD AD / "题号" / 11 / "答案" / BD   (cells, one per line)
+109: "1．C"  110: "【分析】…"  111+: "【详解】…"  114: "故选：C."
+115: "2．D"  …
+```
+
+so the next probe is a dump of `supportText`/`documentPart` as the ingest computes them for that file
+(the heading/boundary split is the only place left that can empty the support side). The answer-table
+reader of §25.3 is kept - it is what made 十二校一模's rows readable and it changes nothing else - and
+the drafts of all eleven groups are unchanged apart from the two recovered answers.
+
 ### 22.4 The visual check found a silent content loss, and the reader now refuses it (`ecbf36c`)
 
 Looking at group 4 (`周二晚测.docx`) page by page showed its question 8 as a piecewise definition
