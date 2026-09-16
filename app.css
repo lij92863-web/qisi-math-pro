@@ -2312,8 +2312,15 @@
 
         .qisi-review-preview-options {
             clear: both;
-            display: grid;
-            grid-template-columns: 1fr;
+            /* Options are packed by their own width instead of being forced one per row: short options
+               share a line, medium ones fit two per line, and a long option takes the line on its own.
+               Each option keeps its content width (flex: 0 0 auto) so a medium option wraps to the next
+               row rather than being squeezed into two lines. */
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            column-gap: 2.2em;
+            row-gap: 4px;
             width: 100%;
             min-width: 0;
             margin-top: 12px;
@@ -2326,9 +2333,10 @@
         .qisi-review-preview-option {
             display: flex;
             align-items: flex-start;
-            width: 100%;
+            flex: 0 0 auto;
+            max-width: 100%;
             min-width: 0;
-            margin: 0 0 7px;
+            margin: 0;
             line-height: 1.8;
         }
 
