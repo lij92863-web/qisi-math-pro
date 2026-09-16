@@ -64,55 +64,136 @@ material's own PDF export, rasterised by pdf.js).
 `VISUALLY_VERIFIED_ANSWERS_AND_SOLUTIONS_GROUP_2` — all twelve answers and solution mappings on the
 answer pages belong to the question they claim.
 
-## 4. Group 3 — `题目.docx` + `答案.docx` (batch verified only)
+## 4. Group 3 — `题目.docx` + `答案.docx` (visually verified, 2026-09-16 takeover round)
 
-This pair ships no PDF and the local LibreOffice conversion timed out during the session, so no page
-has been looked at: **nothing of group 3 is marked `VISUALLY_VERIFIED_*` yet.** The batch run is
-recorded in ledger §16.2 together with the two defects it exposed (a colon-less section header and an
-unlabelled answer value), both of which are now fixed and regression-tested.
+This pair ships no PDF. The pages were produced the same way as groups 1–2: local LibreOffice
+conversion (`artifacts/audit-baseline/render-docx-page.js`) → pdf.js rasterising → looked at. The
+conversion needs a **fresh** LibreOffice profile: with a stale `lo-profile` directory it hangs and the
+180 s timeout fires, with a new profile the same file converts in 5 s. Renders live in
+`artifacts/audit-baseline/rendered-g3/` (never committed).
 
-## 5. What this round does **not** claim
+`题目.docx` really paginates to 4 pages and `答案.docx` to 8, even though their own page footers say
+"共3页" / "共2页"; the footers are stale fields, so they are not evidence of page count. Question
+pages 1–3 and answer pages 1, 2, 5, 7, 8 were looked at (page 8 is the last of the answer file).
 
-## 6. Survey of the remaining groups (batch level only)
+| # | original page | draft | verdict |
+| --- | --- | --- | --- |
+| 1 | 已知数列 $\{a_n\}$ 是一个递增数列，满足 $a_n\in N^*$，$a_{a_n}=2n+1$，则 $a_4=$（选项 4/6/7/8） | stem identical except the trailing $a_4$, which is the MathType object the reader cannot resolve — the draft keeps `[[MTEF_UNRESOLVED:rId…]]`, options identical, answer B | `VISUALLY_VERIFIED_GROUP_3_Q1` except the $a_4$ formula (`NOT_RESOLVED_BY_DESIGN`, withheld) |
+| 2 | 全集 $U=R$，$A=\left\{x\middle|\frac{x+3}{x-1}\le0\right\}$，$B=\{x\mid 2+x-x^2>0\}$，则 $(C_UA)\cap B=$ | stem, all four options, answer B and 详解 identical (page 1 of the answer file, 故选：B) | `VISUALLY_VERIFIED_GROUP_3_Q2` |
+| 3 | $a_{n+1}=2a_n+1$，$b_n=2\log_2(1+a_n)-1$，求 $c_1+\dots+c_{20}$（选项 599/569/554/568） | stem, options, answer D and the 568 详解 identical | `VISUALLY_VERIFIED_GROUP_3_Q3` |
+| 4 | $z$ 对应 $(1,-2)$，求 $\frac{\bar z}{z+i}$ 的对应点 | stem, four coordinate options, answer C and the $-\frac12+\frac32i$ 详解 identical | `VISUALLY_VERIFIED_GROUP_3_Q4` |
+| 5 | $\triangle ABC$，$a=4\sqrt2$，$b=5$，$\cos A=-\frac35$，$\vec{BA}$ 在 $\vec{BC}$ 上的投影（选项在下一页） | stem, the four options (they really are on question page 2), answer B and the 详解 identical | `VISUALLY_VERIFIED_GROUP_3_Q5` |
+| 6 | 斐波那契“兔子数列”，$b_n=a_{n+1}^2-a_na_{n+2}$，求 $S_{2022}$（选项 −1/0/2021/2022） | stem, options, answer B and 详解 identical | `VISUALLY_VERIFIED_GROUP_3_Q6` |
+| 7 | $|\vec a|=3$，$|\vec b|=2$，$\left|\frac{\vec a}{|\vec a|}-\frac{\vec b}{|\vec b|}\right|=\left(\frac35,\frac45\right)$，求 $|\vec a-\vec b|$ | stem now carries both vectors and the bracketed pair as formulas (they were `MTEF_UNREADABLE` before this round), options, answer A and 详解 identical | `VISUALLY_VERIFIED_GROUP_3_Q7` |
+| 8 | 双曲线右焦点、斜率 $-\frac ab$ 的直线交渐近线于 $B,C$，$3\overrightarrow{FB}=\overrightarrow{FC}$，求离心率 | stem, options $\sqrt2/\sqrt3/3/2\sqrt3$, answer B and 详解 identical | `VISUALLY_VERIFIED_GROUP_3_Q8` |
+| 9 | $5\sin2\alpha+5\cos2\alpha+1=0$，求 $\tan\alpha$（多选） | stem, options $2/3/-\frac13/-\frac12$, answer BD and the $2\tan^2\alpha-5\tan\alpha-3=0$ 详解 identical | `VISUALLY_VERIFIED_GROUP_3_Q9` |
+| 10 | $z_1,z_2$ 为复数（多选） | stem identical; answer BD and the $z_1=a+bi,z_2=a-bi$ 详解 identical; the options carry an unresolvable formula, so the draft keeps the token and is withheld | `VISUALLY_VERIFIED_GROUP_3_Q10` except that option formula (`NOT_RESOLVED_BY_DESIGN`, withheld) |
+| 11 | $f(x)=\sin x-\sqrt3\cos x-m$ 最大值 3，平移后得 $h(x)$（多选） | stem identical, the four $h(x)$ options (初相、零点、单调区间、对称轴) identical, answer BC | `VISUALLY_VERIFIED_GROUP_3_Q11` |
+| 12 | $\triangle ABC$，$C=\frac{3\pi}4$，$c=2\sqrt2$，$\sin A\sin B=\frac18$，求面积 | stem identical, answer $\frac{\sqrt2}{2}$ and 详解 identical (answer page 7) | `VISUALLY_VERIFIED_GROUP_3_Q12` |
+| 13 | $\triangle ABC$，$AB=4$，$AC=1$，$P$ 在 $AB$ 上，$\frac12\left|\overrightarrow{AB}+4\overrightarrow{AC}\right|=2\sqrt3$，求 $\overrightarrow{PB}\cdot\overrightarrow{PC}$ 的最小值 | the `AB=4, AC=1` object is the unresolvable formula: the draft keeps the token in that spot and keeps the rest of the stem; answer $-\frac{49}{16}$ and the 详解 identical (answer pages 7–8) | `VISUALLY_VERIFIED_GROUP_3_Q13` except the $AB,AC$ formula (`NOT_RESOLVED_BY_DESIGN`, withheld) |
+| 14 | $f(x)=\frac1x+\sqrt{1-x}$ 的定义域 | stem identical, answer $(-\infty,0)\cup(0,1]$ and 详解 identical | `VISUALLY_VERIFIED_GROUP_3_Q14` |
+
+Answer table on answer page 1 reads `1 B 2 B 3 D 4 C 5 B 6 B 7 A 8 B 9 BD 10 BD 11 BC`, which is
+exactly the drafts' answers for 1–11; 12/13/14 are stated in their own 详解 headers as
+$\frac{\sqrt2}{2}$, $-\frac{49}{16}$, $(-\infty,0)\cup(0,1]$. Every 详解 header (`N. <answer>`) sits
+above the solution for that question, so no answer or solution is shifted.
+
+`VISUALLY_VERIFIED_ANSWERS_AND_SOLUTIONS_GROUP_3` — all 14 answers and all 14 solution mappings
+belong to the question they claim. No `WRONG MATCH` and no `SILENT WRONG CONTENT` were observed in this
+group; the three withheld questions are withheld because a formula in them is unreadable, and in each
+case the page shows exactly what that formula is (Q1 $a_4$; Q10 an option formula; Q13 `AB=4, AC=1`).
+
+The batch run itself is recorded in ledger §16.2 together with the two defects it exposed (a
+colon-less section header and an unlabelled answer value), both fixed and regression-tested.
+
+## 5. Group 4 — `周二晚测.docx` (visually verified, 2026-09-16 takeover round)
+
+One file, both roles: the paper carries its own answer table, and that table is **blank** on the page,
+so the 12 drafts having no answer at all is the faithful result, not a parsing defect. Renders:
+`artifacts/audit-baseline/rendered-g4/` (3 pages).
+
+| # | original page | draft | verdict |
+| --- | --- | --- | --- |
+| 1 | 集合 $A=\{y\mid y=\log_2x,x>1\}$、$B=\{y\mid y=\frac1{2^x},x>1\}$，求 $A\cap B$（选项四组） | stem and all four options identical | `VISUALLY_VERIFIED_GROUP_4_Q1` |
+| 2 | $f(x)=2^x+x$、$g(x)=\log_2x+x$、$h(x)=x^3+x$ 的零点大小（选项四组） | stem and options identical | `VISUALLY_VERIFIED_GROUP_4_Q2` |
+| 3 | 外接圆圆心 $O$，$2\overrightarrow{AO}=\overrightarrow{AB}+\overrightarrow{AC}$，$\left|\overrightarrow{OA}\right|=\left|\overrightarrow{AB}\right|$，求 $\overrightarrow{BA}$ 在 $\overrightarrow{BC}$ 上的投影 | stem and the four $\frac{\pm1}{4}\overrightarrow{BC}$ / $\frac{\pm\sqrt3}{4}\overrightarrow{BC}$ options identical | `VISUALLY_VERIFIED_GROUP_4_Q3` |
+| 4 | $\tan A,\tan B$ 是 $x^2+p(x+1)+1=0$ 的两根，求 $C$（选项 $\frac\pi4$、$\frac\pi3$、$\frac{2\pi}3$、$\frac{3\pi}4$） | stem identical, but the four options are written as MathType objects whose `A.`/`B.` labels live **inside** the formula, so they stay inline in the stem and the question is typed 解答题 with an empty option list | `MANUAL_REVIEW_GROUP_4_Q4` — content is present and not wrong, the structure is (missing option list + wrong type) |
+| 5 | $PO\perp\alpha$，$PA=PB=PC$，则 $O$ 是 $\triangle ABC$ 的（外心/内心/重心/垂心） | stem and the four options identical, figure token bound | `VISUALLY_VERIFIED_GROUP_4_Q5` |
+| 6 | 四棱锥 $P$-$ABCD$，求 $A$ 到平面 $PBC$ 的距离（选项 $\frac{3\sqrt{13}}{13}$ 等四个） | stem identical, same option-label-inside-formula shape as Q4 (inline options, typed 解答题) | `MANUAL_REVIEW_GROUP_4_Q6` |
+| 7 | $y=\sin(2x+\frac\pi3)$ 的图象变换（四个完整选项句子） | stem and the four option sentences identical | `VISUALLY_VERIFIED_GROUP_4_Q7` |
+| 8 | $f(x)=\begin{cases}x^2+2x-3,&x\le0\\-2+\ln x,&x>0\end{cases}$，$h(x)=f(x)-k$，判断四个说法 | the stem keeps `[[MTEF_UNRESOLVED:rId99]]` where the definition belongs, is `withheld` with `unresolved-formula`, and the four options are identical | `WITHHELD_GROUP_4_Q8` — see the defect below, which this round fixed |
+| 9 | 梯形 $ABCD$，$\overrightarrow{DM}\cdot\overrightarrow{DN}$（四个公式选项） | stem identical; like Q4/Q6 the option labels sit inside formulas, so the options stay inline and the question is typed 多选题 with an empty option list | `MANUAL_REVIEW_GROUP_4_Q9` |
+| 10 | 复数 $z_1=m+(4-m^2)i$，$z_2=2\cos\theta+(\lambda+3\sin\theta)i$，$z_1=z_2$，求 $\lambda$ | stem matches except the exponent: the page reads $4-m^2$, the draft reads `4-m2` | `WRONG_CONTENT_GROUP_4_Q10` (silent, small) — see the defect below |
+| 11 | 正方体 $ABCD$-$A_1B_1C_1D_1$，$E$ 是 $DD_1$ 中点，求 $BE$ 与平面 $ABB_1A_1$ 所成角的正弦值 | stem identical, figure token bound | `VISUALLY_VERIFIED_GROUP_4_Q11` |
+| 12 | 扇形 $OPQ$ 的内接矩形 $ABCD$，$\angle POC=\alpha$，求面积最大值 | stem identical, both blanks preserved | `VISUALLY_VERIFIED_GROUP_4_Q12` |
+
+### 5.1 The two defects this page-by-page pass found
+
+**A formula that had silently lost its inside (fixed in this round).** Question 8's page shows the
+two-case definition, but the draft held `$f\left(x\right)=\left\{\right.$` with no warning and no
+withheld flag. The two rows live in a PILE record *inside* the brace template
+(`zhou2/q/word/embeddings/oleObject51.bin`), so the template's own slot list is empty while the
+template carried content, and the reader reported `MTEF_RECONSTRUCTED_OK` for the empty shell. The
+reader now leaves such a template unresolved, so the question is withheld and the teacher sees the
+gap. Corpus-wide this changes exactly one stream (ledger §22.4).
+
+**A Word superscript run is flattened into plain digits (found, not fixed).** Question 10's page reads
+$(4-m^2)$; the draft reads `(4-m2)`. The exponent is not a MathType object at all — the DOCX writes it
+as an ordinary run with `<w:vertAlign w:val="superscript"/>` (`document.xml`, 36 `vertAlign`
+occurrences in this file), and the text layer flattens the formatting, so `m^2` and `z_1` become `m2`
+and `z1`. Nothing about it is ambiguous on the page, which is why it is recorded as a real
+`SILENT WRONG CONTENT` observation rather than as a missing-answer case. It belongs to the DOCX text
+extraction, not to the MTEF reader, and was **not** changed in this round: the extractor is shared by
+every group, so it needs its own before/after matrix run.
+
+### 5.2 What group 4 therefore contributes
+
+- Q1, Q2, Q3, Q5, Q7, Q11, Q12 are complete and correct.
+- Q4, Q6, Q9 are complete in content but structurally wrong (no option list, wrong type) because their
+  option labels are inside formulas; they need a teacher to re-type the options, and the review page
+  shows the text so nothing is hidden.
+- Q8 is withheld, with the reason and the token visible.
+- Q10 is the one silent wrong-content observation: a lost exponent, on a question that otherwise
+  matches. No answer is attached to the wrong question anywhere in this group (there are no answers at
+  all), so there is no `WRONG MATCH`.
+
+## 6. What this round does **not** claim
+
+## 7. Survey of the remaining groups (batch level only)
 
 **Update (same day, after the archive and MTEF fixes):** the local LibreOffice conversion works when
 it is allowed to spawn outside the sandbox, so the papers can be rendered. The first page of
 `题目.docx` was rendered and looked at, and its title is **2026年7月9日高中数学作业** — that is the
 paper the handoff lists as a separate, "missing" file, so the material list is complete after all
-(`题目.docx` + `答案.docx` *is* the 2026-07-09 homework).
+(`题目.docx` + `答案.docx` *is* the 2026-07-09 homework). That first page, and later the rest of the
+paper, are recorded as group 3 in section 4 above; the paper paginates to 4 pages, not the 3 its own
+page footer claims.
 
-Verified against that page for group 3, question 1-5:
-
-```text
-q1  递增数列 a(n), a(a(n))=2n+1, 求 a4        options 4/6/7/8      draft: answer B (6)      ✓
-q2  全集 U=R, (C_A)∩B                    options 四个区间组    draft: answer B           ✓
-q3  数列 a(n+1)=2a(n)+1, 求 c1+…+c20      options 599/569/554/568  draft: answer D (568)  ✓
-q4  z 在 (1,-2)，z̄/(z+i) 对应点            options 四组坐标      draft: answer C           ✓
-q5  a=4√2, b=5, cosA=-3/5, BA 在 BC 上投影                      draft: answer B           ✓
-```
-
-The stems and option sets on the page match the drafts; questions 1, 7, 10, 13 of this paper are the
-ones withheld for unresolved formulas (§16.2, §18.1).
-
-After the archive-policy fix of ledger §17 every remaining real file runs; none of them has been
-compared page by page yet, so nothing here is marked `VISUALLY_VERIFIED_*` except groups 1 and 2.
+After the archive-policy fix of ledger §17 every remaining real file runs. Groups 1–4 have now been
+compared page by page (sections 2–5) at `ecbf36c`; groups 5–11 have not, so nothing in them may be
+marked `VISUALLY_VERIFIED_*` yet.
 
 ```text
-高二.docx (full)                        review   51 questions   0 answers   5 withheld
-河北昌黎第一中学…数学试卷.docx           review   19            19          4
-广东佛山市第一中学…数学试题.docx         review   19            19          7
-广东深圳高级中学…数学试卷 (1).docx       review   19            18          4
-广东省十二所重点中学校…数学试题.docx     review   19            18          10
-湖北省武汉市…数学试题.docx               review   19            18          5
-题目+答案.docx                          review   14            14          4
-2026年7月9日高中数学作业.docx           not present in the materials folder
+group  file                                    batch    questions  answers  withheld
+G5     高二.docx (full)                         review   56         54       4
+G6     题目+答案.docx                            review   14         14       3
+G7     广东佛山市第一中学…数学试题.docx           review   19         19       6
+G8     广东深圳高级中学（集团）…数学试卷 (1).docx review   19         18       4
+G9     广东省十二所重点中学校…数学试题.docx        review   19         18       9
+G10    河北昌黎第一中学…数学试卷.docx             review   19         19       4
+G11    湖北省武汉市…数学试题.docx                 review   19          0       2
+G4     周二晚测.docx (single file)               review   12          0       1
+all     11 groups                                review   --         --      37
 ```
 
-Two things to look at next for these groups: the answer key of `高二.docx` (several answers per line)
-and the unresolved formulas that keep 4-10 questions per exam paper withheld.
+`G4` appears at the end because it is a single-file batch, not a question+answer pair. Every withheld
+question in all eleven groups carries its `MTEF_UNRESOLVED` token, so none of them is withheld
+without a visible reason. What is worth looking at next in groups 5–11: the answer key of `高二.docx`
+(several answers per line, and one duplicate marker), and the unresolved formulas that keep 2–9
+questions per exam paper withheld.
 
-- No other group has been looked at yet (the handoff's items 4 and 5), so nothing outside group 1 may
-  be marked `VISUALLY_VERIFIED_*`.
+- Groups 4–11 have not been looked at yet (the handoff's items 4 and 5), so nothing outside groups
+  1–3 may be marked `VISUALLY_VERIFIED_*`.
 - Two image facts are recorded as gaps, not as verified content:
   - question 4's 图乙 (the sector/圆台 diagram) is a WMF in the DOCX and is not bound to the draft, so
     the teacher sees the photo but not the diagram; the draft carries the standard
