@@ -1095,6 +1095,49 @@ RESULT: OK
 
 `npm run verify:safe` passes at 1368/1368 with the schema change in place.
 
+## 24. The six defects the teacher found in 周二晚测.docx (2026-09-16, fifteenth pass)
+
+The teacher reviewed the imported 周二晚测.docx in the review page and reported six concrete defects.
+They are fixed one by one, each with its own evidence, because they belong to different owners.
+
+### 24.1 A vector accent must cover its whole base (`c249e1b`)
+
+Question 3's options render as `\vec{BC}`, and the arrow covered the first letter only. The equation is
+not one character: MathType writes it as its *vector template* (selector 31) whose slot holds the whole
+base ("BC", "DM", "ABA"), and `\vec` is a fixed-width accent while `\overrightarrow` stretches over
+its content. The reader now writes a base wider than one atom as `\overrightarrow` and keeps `\vec`
+for a single letter (corpus: 61 streams change, all of them exactly this accent, no status changes).
+
+### 24.2 A Word superscript became a plainly wrong formula (this commit)
+
+The page of question 10 reads `z₁` and `m²`; the draft read `z1` and `m2`. The exponent is not a
+MathType object at all - the DOCX writes it as an ordinary run carrying
+`<w:vertAlign w:val="superscript"/>` - and the shared extraction layer read `<w:t>` only, so the
+formatting was flattened. The fix stays inside that one layer (`extractDocxTextWithMath` in
+`app.js`), and adds no second reader:
+
+- `markWordScriptRuns` marks an aligned run while the paragraph is still XML;
+- `attachWordScriptsAsInlineMath` turns the marker into inline LaTeX together with the run of formula
+  characters around it ("z" + sup "1" inside `z1=m+(4-m2)i(m` becomes `$z_{1}=m+(4-m^{2})i(m$`), so
+  neighbouring scripts are merged into one span instead of being wrapped twice;
+- a run too short to be a formula is left as plain text, a marker that never reached a base is dropped,
+  and an inline run that lands flush against an existing `$…$` segment is merged instead of leaving
+  `$$` (the latter also had to be handled in `normalizeMathTextForLatex`, which is the same layer).
+
+Baseline before the change (`artifacts/audit-baseline/probe-vertalign-baseline.cjs`): only
+`周二晚测.docx` uses aligned runs in the whole real-material set - **5 runs, all of them
+"letter + one digit"** (`z₁`, `m²`, `z₂`, `z₁`, `z₂`), so the blast radius is exactly that document.
+After the change: question 10's stem reads
+
+```text
+已知复数$z_{1}=m+(4-m^{2})i(m\in$ R)，$z_{2}=2cos$ θ+(λ+3sinθ)i(λ，θ$\in$ R）并且$z_{1}=z_{2}$，则λ的取值范围为_____.
+```
+
+and the G1–G11 matrix is unchanged (same draft counts, same answers, same 37 withheld), i.e. no other
+material and no plain number was promoted to an exponent. The remaining plain letters of that stem are
+the teacher's own unformatted Word text (no superscript, no MathType object); wrapping those would need
+a formula-extent guess, which is deliberately not done here.
+
 ### 22.4 The visual check found a silent content loss, and the reader now refuses it (`ecbf36c`)
 
 Looking at group 4 (`周二晚测.docx`) page by page showed its question 8 as a piecewise definition

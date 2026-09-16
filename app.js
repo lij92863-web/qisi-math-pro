@@ -2002,16 +2002,25 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     }
                     let text = protectedText;
                     text = normalizeSymbols(text);
+                    // A run that sits flush against an existing math segment (the "#{n}" of a Word
+                    // superscript ends right where "\in R" begins) would otherwise leave two touching
+                    // delimiters and read as "$$" once the segments are restored.
+                    let mergesWithMathSegment = false;
                     text = text.replace(mathRun, (match, offset, all) => {
                         const clean = match.trim();
                         if (!clean || /@@QISI_MATH_SEGMENT_\d+@@/.test(clean)) return match;
                         const before = all[offset - 1] || '';
                         const after = all[offset + match.length] || '';
                         if (before === '$' || after === '$') return match;
+                        if (/@@QISI_MATH_SEGMENT_\d+@@$/.test(all.slice(0, offset))
+                            || /^@@QISI_MATH_SEGMENT_\d+@@/.test(all.slice(offset + match.length))) {
+                            mergesWithMathSegment = true;
+                        }
                         if (/^[A-D]$/.test(clean)) return match;
                         return `$${clean}$`;
                     });
-                    return restoreLatexMathSegments(text, chunks);
+                    const restored = restoreLatexMathSegments(text, chunks);
+                    return mergesWithMathSegment ? restored.replace(/\$\$/g, '') : restored;
                 };
 
                 const repairCommonLatexOcrErrors = (value) => {
@@ -4022,6 +4031,93 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     return tokens;
                 };
 
+                // Word writes a superscript or subscript as an ordinary run that carries
+                // <w:vertAlign w:val="superscript|subscript"/>. The text pass below reads <w:t> only, so
+                // that formatting used to be flattened: on 周二晚测.docx question 10 the paper's
+                // "z₁ / m²" reached the draft as "z1 / m2" - a silently wrong formula. The two helpers
+                // here keep the meaning inside the *same* extraction layer (no second text reader):
+                // the aligned run is marked while the document is still XML, and the marker is turned
+                // into real inline math once the paragraph text is assembled.
+                const WORD_SCRIPT_MARKERS = Object.freeze({
+                    superscript: '\u00abSUP\u00bb',
+                    subscript: '\u00abSUB\u00bb',
+                    end: '\u00ab/S\u00bb'
+                });
+                const WORD_SCRIPT_MARKER_RE = /([0-9A-Za-z])\u00ab(SUP|SUB)\u00bb([^\u00ab]*)\u00ab\/S\u00bb/g;
+                const WORD_SCRIPT_MATH_CHAR_RE = /[0-9A-Za-z+\-=*/^_.()[\]{}]/;
+
+                const markWordScriptRuns = (paragraphXml = '') => String(paragraphXml || '').replace(
+                    /<w:r\b(?:(?!<\/w:r>)[\s\S])*?<w:vertAlign w:val="(superscript|subscript)"\s*\/>(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/g,
+                    (run, kind) => {
+                        const script = [...run.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)]
+                            .map(match => match[1]).join('').trim();
+                        if (!script) return '';
+                        return `<w:r><w:t xml:space="preserve">`
+                            + `${WORD_SCRIPT_MARKERS[kind]}${script}${WORD_SCRIPT_MARKERS.end}`
+                            + `</w:t></w:r>`;
+                    }
+                );
+
+                // The base character and the uninterrupted run of formula characters around it become
+                // one inline formula: "z" + sup "1" inside "z1=m+(4-m2)i(m" yields $z_{1}=m+(4-m^{2})i(m$.
+                // A run that carries no formula characters is left as ordinary text, and leftover
+                // markers are dropped, so a malformed document can never leak a marker into a draft.
+                const attachWordScriptsAsInlineMath = (text = '') => {
+                    const source = String(text || '');
+                    if (!source || !source.includes('\u00ab')) return source;
+
+                    const hits = [...source.matchAll(WORD_SCRIPT_MARKER_RE)].map(match => {
+                        const offset = match.index;
+                        const end = offset + match[0].length;
+                        let start = offset;
+                        while (start > 0 && WORD_SCRIPT_MATH_CHAR_RE.test(source[start - 1])) start -= 1;
+                        let stop = end;
+                        while (stop < source.length && WORD_SCRIPT_MATH_CHAR_RE.test(source[stop])) stop += 1;
+                        return { offset, end, start, stop, base: match[1], kind: match[2], script: match[3] };
+                    });
+
+                    // Neighbouring scripts that share one run of formula characters become a single
+                    // inline formula, so nothing is emitted twice and no fragment is re-wrapped.
+                    const spans = [];
+                    for (const hit of hits) {
+                        const previous = spans[spans.length - 1];
+                        if (previous && hit.start <= previous.stop) {
+                            previous.stop = Math.max(previous.stop, hit.stop);
+                            previous.hits.push(hit);
+                        } else {
+                            spans.push({ start: hit.start, stop: hit.stop, hits: [hit] });
+                        }
+                    }
+
+                    let output = '';
+                    let cursor = 0;
+                    for (const span of spans) {
+                        output += source.slice(cursor, span.start);
+                        let piece = '';
+                        let position = span.start;
+                        for (const hit of span.hits) {
+                            piece += source.slice(position, hit.offset);
+                            piece += `${hit.base}${hit.kind === 'SUP' ? '^' : '_'}{${hit.script}}`;
+                            position = hit.end;
+                        }
+                        piece += source.slice(position, span.stop);
+
+                        // Too short to be a formula: keep the plain text rather than dressing a stray
+                        // "+(" up as maths.
+                        const atoms = (piece.match(/[0-9A-Za-z]/g) || []).length;
+                        output += atoms >= 3 ? `$${piece}$` : piece;
+                        cursor = span.stop;
+                    }
+                    output += source.slice(cursor);
+
+                    // A marker that never reached a base is dropped: it must never leak into a draft.
+                    // Where an inline formula lands right next to an existing one ("$…(m$" + "$\in$ R)")
+                    // the two delimiters are collapsed into a single run rather than left as "$$".
+                    return output
+                        .replace(/\u00abSUP\u00bb|\u00abSUB\u00bb|\u00ab\/S\u00bb/g, '')
+                        .replace(/\$\$/g, '');
+                };
+
                 const extractDocxTextWithMath = (
                     xml,
                     imageRefsByRid = {},
@@ -4035,7 +4131,8 @@ ${JSON.stringify(questionSummaries, null, 2)}
                     const paragraphs = [];
                     const docxFormulas = [];
 
-                    body.replace(/<w:p[\s\S]*?>([\s\S]*?)<\/w:p>/g, (_, paragraph) => {
+                    body.replace(/<w:p[\s\S]*?>([\s\S]*?)<\/w:p>/g, (_, rawParagraph) => {
+                        const paragraph = markWordScriptRuns(rawParagraph);
                         const mathTokens = [];
 
                         const withMathTokens = paragraph.replace(
@@ -4095,7 +4192,9 @@ ${JSON.stringify(questionSummaries, null, 2)}
                             }
                         );
 
-                        const text = normalizeDocxExtractedText(parts.join(''));
+                        const text = attachWordScriptsAsInlineMath(
+                            normalizeDocxExtractedText(parts.join(''))
+                        );
                         if (text) paragraphs.push(text);
 
                         return '';
