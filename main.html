@@ -577,6 +577,9 @@
                                 <p v-for="(item, index) in activeBatch.withheldItems" :key="index">
                                     {{ item.sourcePage ? '第 ' + item.sourcePage + ' 页' : '文件内容' }}
                                     {{ item.questionNumbers?.length ? '｜题号 ' + item.questionNumbers.join('、') : '' }}：待人工核对
+                                    <span v-if="item.reason">｜原因：{{ item.reason }}</span>
+                                    <span v-if="item.region?.length">｜区域：[{{ item.region.join(', ') }}]</span>
+                                    <span v-if="item.errorCode">｜服务错误：{{ item.errorCode }}{{ item.message ? '（' + item.message + '）' : '' }}</span>
                                 </p>
                                 <figure v-for="page in activeBatch.ingestionSourcePages || []" :key="page.sourceFileId + ':' + page.pageNo">
                                     <figcaption>{{ page.sourceFileName }} · 原文件第 {{ page.pageNo }} 页</figcaption>
