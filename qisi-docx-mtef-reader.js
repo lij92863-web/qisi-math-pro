@@ -160,6 +160,17 @@
             cursor.diagnostics.push(`unsupported-template-${selector}`);
             return '';
         };
+        // A template that carried content records but whose content slot is empty renders as an empty
+        // shell. Real material does exactly that: the piecewise definition of 周二晚测.docx question 8
+        // keeps its two rows in a PILE inside a brace template, so the brace's own slot list is empty
+        // and `f(x)={ }` would lose both rows without a word. Nothing is guessed here - the equation is
+        // left unresolved, so the question is withheld and the teacher sees the gap.
+        const content = value => {
+            if (structural(rows).length && !String(value ?? '').trim()) {
+                cursor.diagnostics.push(`empty-template-slot-${selector}`);
+            }
+            return value || '';
+        };
         if (selector >= 0 && selector <= 8) {
             const fences = [
                 ['\\langle', '\\rangle'], ['(', ')'], ['\\{', '\\}'], ['[', ']'],
@@ -167,13 +178,13 @@
             ][selector];
             const left = variation & 1 ? fences[0] : '.';
             const right = variation & 2 ? fences[1] : '.';
-            return `\\left${left}${slots[0] || ''}\\right${right}`;
+            return `\\left${left}${content(slots[0])}\\right${right}`;
         }
         if (selector === 9) {
             const fences = ['(', ')', '[', ']'];
             const left = fences[variation & 0x03];
             const right = fences[(variation >> 4) & 0x03];
-            return `\\left${left}${slots[0] || ''}\\right${right}`;
+            return `\\left${left}${content(slots[0])}\\right${right}`;
         }
         if (selector === 10) {
             return variation & 1 && slots[1]

@@ -157,6 +157,50 @@ test('an unknown accent or an unknown modifier still fails closed', () => {
     assert.equal(unknownModifier.latex, '');
 });
 
+// The piecewise definition of 周二晚测.docx question 8 keeps its two rows in a PILE inside a brace
+// template, so the template's own slot list is empty while the template clearly carried content. The
+// reader used to emit `f(x)={ }` and drop both rows without a word; a question must not lose content
+// silently, so the equation is left unresolved instead.
+const mtefTemplate = (selector, variation, rows) => Buffer.concat([
+    Buffer.from([3, 0, selector, variation, 0]),
+    ...rows,
+    Buffer.from([0])
+]);
+const mtefWithRows = rows => Buffer.concat([
+    Buffer.from([5, 1, 0, 6, 9]),
+    Buffer.from('DSMT6\0', 'latin1'),
+    Buffer.from([0, 1, 0]),
+    ...rows,
+    Buffer.from([0, 0, 0])
+]);
+
+test('a template whose content never reached its slot is unresolved, not an empty shell', () => {
+    const plainChar = code => Buffer.from([2, 0, 0x88, code, 0]);
+    const lineOf = text => Buffer.concat([
+        Buffer.from([1, 0]),
+        ...[...text].map(character => plainChar(character.charCodeAt(0))),
+        Buffer.from([0])
+    ]);
+    const pile = Buffer.concat([
+        Buffer.from([4, 0, 0, 0]),
+        lineOf('a'),
+        lineOf('b'),
+        Buffer.from([0])
+    ]);
+
+    const shell = reader.classifyMtef(mtefWithRows([mtefTemplate(2, 1, [pile])]));
+    assert.equal(shell.status, 'unresolved', 'the empty brace must not be offered as the formula');
+    assert.equal(shell.latex, '');
+    assert.equal(shell.code, 'MTEF_UNSUPPORTED_STRUCTURE');
+
+    // The same template shape with its slot filled stays readable.
+    const filled = reader.classifyMtef(mtefWithRows([
+        mtefTemplate(2, 1, [lineOf('x')])
+    ]));
+    assert.equal(filled.status, 'extracted');
+    assert.equal(filled.latex, '\\left\\{x\\right.');
+});
+
 test('the equation is read out of a real OLE container', () => {
     const container = buildOleContainer(
         'Equation Native',
