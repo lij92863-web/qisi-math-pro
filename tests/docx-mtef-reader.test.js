@@ -5,6 +5,14 @@ const reader = require('../qisi-docx-mtef-reader.js');
 const oleReader = require('../qisi-docx-ole-reader.js');
 const { buildOleContainer, equationNativeStream } = require('./helpers/ole-container.js');
 
+test('known stale MathType payload stays unresolved when its Word preview disagrees', () => {
+    // G5 Q25: the OLE says [-1,1], but the rendered Word preview prints 9,10,11,x,y.
+    const payload = Buffer.from('050100060844534d543600001357696e416c6c4261736963436f6465506167657300110554696d6573204e657720526f6d616e00110353796d626f6c001105436f7572696572204e65770011044d54204578747261001357696e416c6c436f64655061676573001106cbcecce500120008212f458f442f4150f4100f475f4150f21f1e4150f4150f4100f445f425f48f425f4100f4100f435f4100f48f45f42a5f48f48f4100f4100f40f48f417f48f4100f412a5f445f45f45f45f45f410f0c0100010001020202020002000101010003000100040005000a1004000000000000426c61636b000f0101000200825b0002048612222d02008831000200822c0002008831000200825d000000', 'hex');
+    const result = reader.classifyMtef(payload);
+    assert.equal(result.status, 'unresolved');
+    assert.equal(result.code, 'MTEF_PREVIEW_CONFLICT');
+});
+
 test('MTEF subscript and superscript slots attach to the preceding base', () => {
     const char = c => Buffer.from([2, 0, 0x88, c.charCodeAt(0), 0]);
     const line = s => Buffer.concat([Buffer.from([1, 0]), ...[...s].map(char), Buffer.from([0])]);

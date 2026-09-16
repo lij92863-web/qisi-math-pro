@@ -460,6 +460,14 @@
         }
 
         if (parsed.structuralLatex && !parsed.diagnostics.length) {
+            // G5 Q25's embedded MathType payload says [-1,1], while its own Word preview visibly
+            // prints 9,10,11,x,y. The payload is stale; the exact known-bad bytes must be withheld.
+            // Match the payload, not a question number or the formula text (both can be legitimate).
+            if (value.length === 268 && parsed.structuralLatex === '[-1,1]') {
+                let hash = 2166136261;
+                for (const byte of value) hash = Math.imul(hash ^ byte, 16777619) >>> 0;
+                if (hash === 0x8d8b7467) return unresolved('MTEF_PREVIEW_CONFLICT');
+            }
             return {
                 status: 'extracted',
                 origin: 'reconstruction',
