@@ -1216,6 +1216,20 @@ line keeps the maths of option A with the "A." label missing, and C's label is m
 and D keep theirs (lines 39-42 of the extracted text). That is the older "option label inside a formula
 is dropped" defect of the text layer, not this one.
 
+### 24.5 Why question 8 shows `[[MTEF_UNRESOLVED:rId99]]` (answered, not expanded)
+
+The token is the fail-closed outcome, and it is *new today*: before §22.4 the same equation was
+reported as `MTEF_RECONSTRUCTED_OK` and the draft silently read `$f\left(x\right)=\left\{\right.$` - a
+piecewise definition with both of its rows gone and no warning on the question. Traced bytes
+(`docx-raw/zhou2/q/word/embeddings/oleObject51.bin`): the two rows live in a PILE record *inside* the
+brace template, so the template's own slot list is empty while the template carried content, and the
+reader now refuses to present the empty shell. Question 8 is therefore withheld with the token visible
+and cannot be admitted until a teacher fills it in.
+
+Per the owner's rule 3 of the 2026-09-16 instruction set, the remaining unsupported MTEF shapes stay
+`MTEF_UNRESOLVED`/`WITHHELD` rather than being chased to full coverage; the reader is only extended
+when real material shows `WRONG MATCH` or `SILENT WRONG CONTENT` again.
+
 ### 22.4 The visual check found a silent content loss, and the reader now refuses it (`ecbf36c`)
 
 Looking at group 4 (`周二晚测.docx`) page by page showed its question 8 as a piecewise definition
