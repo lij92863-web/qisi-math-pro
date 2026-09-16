@@ -18134,6 +18134,39 @@ ${source}`;
 
                         batchDebugLog('final', drafts.map(toBatchDebugQuestion));
                         drafts.forEach(window.Qisi.DocxIngestion.markImageGaps);
+
+                        // Evidence the ingestion could not use stays visible on the question itself: a
+                        // question whose answer was dropped because the answer key states two different
+                        // values names both values and asks for a human decision, instead of showing a
+                        // silently empty answer. Nothing is chosen and nothing is filled in.
+                        drafts.forEach(draft => {
+                            const number = normalizeQuestionKey(
+                                draft.questionNumber || draft.question || draft.order
+                            );
+
+                            (ingestionUnmatched || [])
+                                .filter(entry => entry
+                                    && entry.field === 'answer'
+                                    && entry.reason === 'conflicting-explicit-answers'
+                                    && normalizeQuestionKey(entry.question) === number)
+                                .forEach(entry => {
+                                    const values = [...new Set(
+                                        (entry.evidence || [])
+                                            .map(value => window.Qisi.Utils.cleanRecognizedText(value))
+                                            .filter(Boolean)
+                                    )];
+
+                                    if (!values.length) return;
+
+                                    window.Qisi.Utils.addWarningOnce(
+                                        draft,
+                                        `答案区对本题给出两个不一致的值（${values.join(' / ')}），系统未自动选择，请人工确认。`
+                                    );
+                                    draft.mergeWarnings = [
+                                        ...new Set([...(draft.mergeWarnings || []), 'answerConflict'])
+                                    ];
+                                });
+                        });
                         if (activeBatchCostStats) {
                             console.groupCollapsed('[BATCH_COST][summary]');
                             console.table([activeBatchCostStats]);
