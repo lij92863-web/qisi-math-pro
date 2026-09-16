@@ -1326,6 +1326,28 @@ G9 18 → 19). Draft counts, withheld counts (36), statuses and `verify:safe` (1
 Still queued from the same list: G11's key shape (19 answers unread), 佛山一模 question 3's missing
 options and question 17's three images, then the remaining per-question page pass.
 
+### 25.3 Task 2 of that queue: the key rows of a table that has header cells too
+
+武汉四调 states its key as a table whose rows are also split by header cells:
+
+```text
+83: "题号"   84: "1" … 93: "10"   94: "答案"   95: "C" … 104: "AD"
+105: "题号"  106: "11"  107: "答案"  108: "BD"
+…
+375: "题号 1 2 3 4 5 6 7 8 9 10"   376: "答案 C D C A A B D C BCD AD"
+377: "题号    11"                   378: "答案    BD"
+```
+
+The old rule took the *first* line starting with 题号 - the bare header cell `"题号"`, which carries no
+numbers - so the real rows were never read. The reader now takes every 题号/答案 row pair whose 题号 line
+actually carries the numbers, and looks for the table in the **whole document text** instead of only in
+the answer part, because a paper states its key at the end, after pages of 详解.
+
+Result: 十二校一模's key rows are read, and 武汉四调's table is now visible to the reader - the drafts
+there are still empty, so the block that drops those answers sits later in the pipeline (the answers are
+produced from a realised key table and then either filtered against the question contract or merged
+away). That is the next step of this task, with the evidence above.
+
 ### 22.4 The visual check found a silent content loss, and the reader now refuses it (`ecbf36c`)
 
 Looking at group 4 (`周二晚测.docx`) page by page showed its question 8 as a piecewise definition

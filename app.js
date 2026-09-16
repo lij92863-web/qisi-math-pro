@@ -5027,14 +5027,29 @@ const pushUniqueQuestionItem = (list, item, valueKey) => {
                         }, 'answer');
                     };
 
-                    const lines = answerPart.split(/\n+/).map(x => x.trim()).filter(Boolean);
-                    const qLine = lines.find(line => /^题号/.test(line));
-                    const aLine = lines.find(line => /^答案/.test(line));
+                    // The answer table of a paper sits wherever the paper put it - often at the very end,
+                    // after pages of 详解, which the answer/solution split cuts away. 武汉四调 states its
+                    // whole key in that tail ("题号 1 … 10" / "答案 C D C A A B D C BCD AD"), so the table
+                    // is looked for in the *whole* document text rather than only in the answer part the
+                    // splitter produces.
+                    const lines = source.split(/\n+/).map(x => x.trim()).filter(Boolean);
 
-                    if (qLine && aLine) {
-                        const qs = qLine.match(/[0-9０-９]{1,3}/g) || [];
-                        const as = aLine.match(/[A-DＡ-Ｄ]{1,4}/g) || [];
+                    // A key table may be written as one line per row ("题号 1 2 … 10" / "答案 C D …"), and
+                    // the same words may also appear as *header cells* on lines of their own ("题号",
+                    // "答案") - 武汉四调 has both. Only a line that carries the numbers, paired with a
+                    // nearby line that carries the letters, is a key row; every such row is read, so a
+                    // paper that splits its key into "1-10" and "11" keeps both halves.
+                    for (let index = 0; index < lines.length; index += 1) {
+                        if (!/^题号/.test(lines[index])) continue;
+                        const qs = lines[index].match(/[0-9０-９]{1,3}/g) || [];
+                        if (qs.length < 2) continue;
 
+                        const answerLine = lines
+                            .slice(index + 1, index + 4)
+                            .find(line => /^答案/.test(line) && (line.match(/[A-DＡ-Ｄ]{1,4}/g) || []).length);
+                        if (!answerLine) continue;
+
+                        const as = answerLine.match(/[A-DＡ-Ｄ]{1,4}/g) || [];
                         qs.forEach((q, idx) => addAnswer(q, as[idx] || '', 0.9));
                     }
 
