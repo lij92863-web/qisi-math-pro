@@ -1042,6 +1042,59 @@ accent or an unknown modifier still resolves to `unresolved`), so the fail-close
 - Section 5.3 (per-question visual ground truth for G4–G11, see §22.4 for groups 3 and 4) is the
   next step.
 
+## 23. The branch could not open the teacher's question bank at all (2026-09-16, fourteenth pass)
+
+Opening the app from this branch produced, in the browser:
+
+```text
+题库数据加载失败：VersionError The requested version (80) is less than the existing version (90).
+```
+
+This is not a code defect in the app: Dexie encodes its decimal schema versions as integers, so the
+message says "the page declares version 8, the bank on this origin is version 9", and IndexedDB
+refuses to open a bank at a *lower* version than the one it already has. Version 9 is declared by
+`codex/app-refactor-master-plan-r1` (`c59e4cb stage H2 add handout domain repository`), which adds
+three stores to the version-8 schema:
+
+```text
+handouts:          id, title, status, createdAt, updatedAt
+handoutAssets:     id, handoutId, sourceQuestionId, sourceImageId, createdAt
+handoutRevisions:  id, handoutId, revision, createdAt
+```
+
+The teacher's browser (127.0.0.1:3000, Edge profile) was upgraded to 9 by a run of that build on
+2026-09-15, so **every** build that stops at 8 — this branch and the `Desktop\题库系统` copy alike —
+could not open the bank afterwards. The failure was fail-closed (nothing was written), but it made the
+app unusable, which is why it is treated as an integration blocker rather than a cosmetic error.
+
+### 23.1 Fix: declare the same version 9, store for store
+
+`qisi-db.js` now declares `db.version(9).stores({...})` with the **identical** fourteen stores of the
+declaration that created the bank, including the three the handout line uses and this line does not
+yet. Two consequences, both deliberate:
+
+- opening an existing bank of version 9 performs **no upgrade at all** (same version, same schema), so
+  nothing is migrated, renamed or deleted, and the three stores keep whatever they hold;
+- a bank created by this build is byte-for-byte the schema the handout build expects, so the two lines
+  can keep sharing one profile instead of forking the teacher's data.
+
+`main.html` bumps the script cache-buster for that module (`?v=foundation-01` → `?v=schema-v9-01`) so a
+plain refresh really picks the new file up.
+
+### 23.2 Proof
+
+`artifacts/audit-baseline/probe-live-v9-bank.cjs` (local evidence, never committed) builds the bank at
+version 9 from a hand-written copy of the handout declaration — not from the code under test — puts one
+row in it, and then loads the app from the running server in that same browser profile:
+
+```text
+phase 1 (bank created at version 9): 14 tables including handouts/handoutAssets/handoutRevisions
+phase 2 (app opened the version-9 bank): appBooted true, probe row survived, dialogs []
+RESULT: OK
+```
+
+`npm run verify:safe` passes at 1368/1368 with the schema change in place.
+
 ### 22.4 The visual check found a silent content loss, and the reader now refuses it (`ecbf36c`)
 
 Looking at group 4 (`周二晚测.docx`) page by page showed its question 8 as a piecewise definition
