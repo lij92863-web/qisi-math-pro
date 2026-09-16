@@ -1,0 +1,151 @@
+(function (root, factory) {
+    const api = factory(root);
+    root.Qisi = root.Qisi || {};
+    root.Qisi.PdfInspection = api;
+    if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
+    'use strict';
+    const cache = new WeakMap();
+    const marker = /^\s*(?:第\s*)?([1-9](?:\s?\d){0,2})\s*(?:题)?[.．、]\s*(\S.*)$/;
+    const collectAnchors = (page, initialRole = 'question') => {
+        let role = initialRole;
+        return page.lines.flatMap(line => {
+        if (/^\s*(?:参考答案|答案|答案[与及和]解析|参考答案[与及和]解析)\s*[:：]?\s*$/.test(line.text)) { role = 'support'; return []; }
+        if (line.bbox[0] > page.width * 0.35) return [];
+        const question = line.text.match(marker);
+        const support = line.text.match(/^\s*([1-9]\d{0,2})\s*【\s*(?:答案|解析|详解)\s*】/);
+        if (!question && !support) return [];
+        if (support) role = 'support';
+        return [{ questionNumber: (question || support)[1].replace(/\s/g, ''), role,
+            page: page.pageNo, bbox: line.bbox, rawText: line.text }];
+        });
+    };
+    const groupLines = items => {
+        const rows = [];
+        for (const item of [...items].sort((a, b) => a.y - b.y || a.x - b.x)) {
+            let row = rows.find(r => Math.abs(r.y - item.y) <= Math.max(2, Math.min(r.height, item.height) * 0.3));
+            if (!row) { row = { y: item.y, height: item.height, items: [] }; rows.push(row); }
+            row.items.push(item);
+        }
+        return rows.map(row => {
+            row.items.sort((a, b) => a.x - b.x);
+            return { text: row.items.map(i => i.str).join(' '),
+                bbox: [Math.min(...row.items.map(i => i.x)), row.y,
+                    Math.max(...row.items.map(i => i.x + i.width)), row.y + row.height],
+                wideGap: row.items.some((item, i, all) => i > 0 && item.x - all[i - 1].x - all[i - 1].width > 100) };
+        });
+    };
+    const classify = ({ lines = [], imageCount = 0, vectorCount = 0, rotation = 0, hasSmallText = false }) => {
+        const text = lines.map(l => l.text).join('\n');
+        const meaningful = text.replace(/[\s\d.．、:：()（）]/g, '').length;
+        if (meaningful < 20) return { kind: 'scanned', reason: 'insufficient-text', text };
+        if (/[\uFFFD\uE000-\uF8FF]/.test(text)) return { kind: 'mixed', reason: 'unmapped-glyphs', text };
+        if (rotation % 180 !== 0) return { kind: 'mixed', reason: 'rotated-layout', text };
+        if (hasSmallText) return { kind: 'mixed', reason: 'possible-scripts-or-detached-text', text };
+        if (lines.some(l => l.wideGap)) return { kind: 'mixed', reason: 'columns-or-detached-text', text };
+        if (imageCount || vectorCount > 10) return { kind: 'mixed', reason: 'non-text-content', text };
+        return { kind: 'text', reason: 'text-geometry', text };
+    };
+    const segment = pages => {
+        const blocks = [];
+        const withheld = [];
+        let active = null;
+        let role = 'question';
+        let previousPage = 0;
+        for (const page of pages) {
+            if (page.pageNo !== previousPage + 1 || page.kind !== 'text') active = null;
+            previousPage = page.pageNo;
+            if (page.kind !== 'text') {
+                withheld.push({ sourcePage: page.pageNo, reason: page.reason, kind: page.kind });
+                continue;
+            }
+            for (const line of page.lines) {
+                const text = line.text.trim();
+                if (/^(?:参考答案|答案|答案[与及和]解析|参考答案[与及和]解析)\s*[:：]?$/.test(text)) {
+                    role = 'support'; active = null; continue;
+                }
+                // A margin page number can never establish or extend a question.
+                if (line.bbox[1] > page.height * 0.95 || line.bbox[3] < page.height * 0.035) continue;
+                const hit = text.match(marker);
+                if (hit) {
+                    active = { questionNumber: hit[1].replace(/\s/g, ''), role, text, sourcePages: [page.pageNo],
+                        regions: [{ page: page.pageNo, bbox: [...line.bbox] }] };
+                    blocks.push(active);
+                } else if (active) {
+                    active.text += `\n${text}`;
+                    if (!active.sourcePages.includes(page.pageNo)) active.sourcePages.push(page.pageNo);
+                    active.regions.push({ page: page.pageNo, bbox: [...line.bbox] });
+                }
+            }
+        }
+        const seen = new Set();
+        let previous = 0;
+        const safe = [];
+        for (const block of blocks) {
+            const key = `${block.role}:${block.questionNumber}`;
+            const n = Number(block.questionNumber);
+            if (seen.has(key) || (block.role === 'question' && n <= previous)) {
+                withheld.push({ questionNumber: block.questionNumber, reason: 'duplicate-or-backward-marker' });
+                // The first occurrence is ambiguous too. Keep raw evidence but publish neither.
+                for (let i = safe.length - 1; i >= 0; i--) if (`${safe[i].role}:${safe[i].questionNumber}` === key) safe.splice(i, 1);
+                continue;
+            }
+            seen.add(key);
+            if (block.role === 'question') previous = n;
+            safe.push(block);
+        }
+        return { blocks: safe, rawBlocks: blocks, withheld };
+    };
+    const inspect = (file, deps = {}) => {
+        const cached = cache.get(file);
+        if (cached?.uploadPath === file.uploadPath) return cached.promise;
+        const trace = root.Qisi.IngestionContext.createTrace(file.id);
+        const bounded = root.Qisi.IngestionContext.withTimeout;
+        const promise = (async () => {
+            const pdfjs = deps.pdfjs || root.pdfjsLib;
+            const bytes = await trace.measure('read', () => bounded(async () =>
+                new Uint8Array(await (await root.fetch(file.uploadPath)).arrayBuffer()), 15000, 'PDF_READ_TIMEOUT'));
+            const loading = pdfjs.getDocument({ data: bytes });
+            let pdf;
+            try {
+                pdf = await trace.measure('pdf-open', () => bounded(() => loading.promise, 15000, 'PDF_OPEN_TIMEOUT', () => loading.destroy()));
+                const numbers = root.Qisi.Utils.expandPageRange(file.pageRange, pdf.numPages);
+                const pages = [];
+                let role = 'question';
+                for (const pageNo of numbers) {
+                    try {
+                    const page = await bounded(() => pdf.getPage(pageNo), 15000, 'PDF_PAGE_TIMEOUT');
+                    const viewport = page.getViewport({ scale: 1 });
+                    const content = await trace.measure(`text:${pageNo}`, () => bounded(() => page.getTextContent(), 15000, 'PDF_TEXT_TIMEOUT'));
+                    const operators = await bounded(() => page.getOperatorList(), 15000, 'PDF_OPERATORS_TIMEOUT');
+                    const imageOps = new Set(['paintImageXObject', 'paintInlineImageXObject', 'paintImageMaskXObject', 'paintImageXObjectRepeat', 'paintImageMaskXObjectRepeat'].map(n => pdfjs.OPS[n]));
+                    const vectorOps = new Set(['stroke', 'fill', 'eoFill', 'fillStroke', 'eoFillStroke'].map(n => pdfjs.OPS[n]));
+                    const items = content.items.filter(i => i.str?.trim()).map(i => {
+                        const t = pdfjs.Util.transform(viewport.transform, i.transform);
+                        const height = Math.max(Math.abs(i.height || 0), 1);
+                        return { str: i.str, x: t[4], y: t[5] - height, width: i.width, height };
+                    });
+                    const lines = groupLines(items);
+                    const heights = items.map(i => i.height).sort((a, b) => a - b);
+                    const meta = { lines, imageCount: operators.fnArray.filter(n => imageOps.has(n)).length,
+                        vectorCount: operators.fnArray.filter(n => vectorOps.has(n)).length, rotation: page.rotate,
+                        hasSmallText: heights.length > 0 && heights[0] < heights[Math.floor(heights.length / 2)] * 0.78 };
+                    const inspected = { pageNo, width: viewport.width, height: viewport.height, ...meta, ...classify(meta) };
+                    inspected.anchors = collectAnchors(inspected, role);
+                    role = inspected.anchors.at(-1)?.role || role;
+                    pages.push(inspected);
+                    page.cleanup();
+                    } catch (error) {
+                        pages.push({ pageNo, kind: 'unresolved', reason: error.code || 'PDF_PAGE_READ_ERROR',
+                            lines: [], anchors: [], text: '', width: 0, height: 0, message: error.message });
+                    }
+                }
+                return { pages, ...segment(pages), timings: trace.stages, totalPages: pdf.numPages };
+            } finally { await (pdf ? pdf.destroy() : loading.destroy()); }
+        })();
+        cache.set(file, { uploadPath: file.uploadPath, promise });
+        promise.catch(() => { if (cache.get(file)?.promise === promise) cache.delete(file); });
+        return promise;
+    };
+    return { groupLines, classify, segment, collectAnchors, inspect };
+});

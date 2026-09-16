@@ -571,6 +571,18 @@
                                 </div>
                             </div>
 
+                            <details v-if="activeBatch.withheldItems?.length" class="batch-recognition-summary" data-testid="pdf-withheld-review">
+                                <summary>待核对原页：{{ activeBatch.withheldItems.length }} 项内容尚未形成可靠草稿</summary>
+                                <p>以下是原文件页面，供人工核对，不是已经提取的题目配图。未确认的内容不会自动入库。</p>
+                                <p v-for="(item, index) in activeBatch.withheldItems" :key="index">
+                                    {{ item.sourcePage ? '第 ' + item.sourcePage + ' 页' : '文件内容' }}
+                                    {{ item.questionNumbers?.length ? '｜题号 ' + item.questionNumbers.join('、') : '' }}：待人工核对
+                                </p>
+                                <figure v-for="page in activeBatch.ingestionSourcePages || []" :key="page.sourceFileId + ':' + page.pageNo">
+                                    <figcaption>{{ page.sourceFileName }} · 原文件第 {{ page.pageNo }} 页</figcaption>
+                                    <img :src="page.imageUrl" alt="待核对的 PDF 原页" loading="lazy" style="max-width:100%;height:auto">
+                                </figure>
+                            </details>
                             <div class="batch-recognition-summary">
                                 <div class="batch-recognition-summary-head">
                                     <strong>本次识别摘要</strong>
@@ -1542,6 +1554,8 @@
     <script src="./qisi-docx-numbering.js?v=1"></script>
     <script src="./qisi-ingestion-context.js?v=1"></script>
     <script src="./qisi-docx-ingestion.js?v=1"></script>
+    <script src="./qisi-pdf-inspection.js?v=1"></script>
+    <script src="./qisi-pdf-ingestion.js?v=1"></script>
     <script src="./qisi-batch-importer.js?v=foundation-01"></script>
     <script src="./qisi-support-parser.js?v=stage1a-support-parser-04"></script>
     <script src="./qisi-support-repair.js?v=stage1a-support-repair-01"></script>

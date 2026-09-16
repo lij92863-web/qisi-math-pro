@@ -14025,6 +14025,11 @@ ${source}`;
                             pageTextOriginal: itemPageTextOriginal,
                             sourceTextOriginal: itemSourceTextOriginal,
                             recognitionRaw: item.recognitionRaw || item,
+                            fieldEvidence: {
+                                ...(item.fieldEvidence || {}),
+                                ...(answer?.fieldEvidence?.answer ? { answer: answer.fieldEvidence.answer } : {}),
+                                ...(solution?.fieldEvidence?.solution ? { solution: solution.fieldEvidence.solution } : {})
+                            },
                             warnings,
                             confidence: item.confidence || 0.75,
                             duplicateStatus,
@@ -16210,6 +16215,9 @@ ${source}`;
 
                         const questionItems = [];
                         const ingestionUnmatched = [];
+                        const ingestionWithheld = [];
+                        const ingestionSourcePages = [];
+                        const ingestedFileIds = new Set();
                         const answerItems = [];
                         const solutionItems = [];
                         const fullItems = [];
@@ -16705,7 +16713,7 @@ ${source}`;
                                 authoritativeQuestionContract = {
                                     authoritative: true,
                                     evidence:
-                                        'docx-explicit-question-skeleton',
+                                        skeleton.evidence || 'docx-explicit-question-skeleton',
                                     questionNumbers,
                                     sourceFileId:
                                         file.id,
@@ -16819,6 +16827,7 @@ ${source}`;
                                 let pdfPageFallbackDrafts = [];
 
                                 if (file.fileType === 'docx') {
+                                    ingestedFileIds.add(file.id);
                                     const result = await window.Qisi.DocxIngestion.ingest({
                                         file, questionRole: hasQuestionRole,
                                         supportRole: hasAnswerOrSolutionRole, fullRole: isFullRole,
@@ -16843,6 +16852,38 @@ ${source}`;
                                         unmatchedEvidence: result.unmatched,
                                         errorMessage: result.unmatched.length ? '部分答案或解析的题号无法确认，请人工核对。' : '',
                                         updatedAt: Date.now()
+                                    });
+                                    await updateBatchProgress(batchId, baseProgress + fileProgressSpan, 'processing');
+                                    continue;
+                                }
+
+                                if (file.fileType === 'pdf') {
+                                    ingestedFileIds.add(file.id);
+                                    const result = await window.Qisi.PdfIngestion.ingest({
+                                        file, questionRole: hasQuestionRole, supportRole: hasAnswerOrSolutionRole, fullRole: isFullRole,
+                                        expectedNumbers: authoritativeQuestionContract?.questionNumbers || [], drafts: [...questionItems, ...fullItems],
+                                        helpers: {
+                                            parseQuestions: parseQuestionItemsFromText, parseSupport: parseAnswerAndSolutionItemsFromText,
+                                            model: getVisionModelsForMode(recognitionMode)[0],
+                                            request: payload => {
+                                                recordBatchCostCall('PDF 页面视觉转录');
+                                                return fetchWithTimeout(DASHSCOPE_CHAT_URL, {
+                                                    method: 'POST', headers: buildAiRequestHeaders(), body: JSON.stringify(payload)
+                                                }, 90000, 'PDF 页面转录');
+                                            }
+                                        }
+                                    });
+                                    if (hasQuestionRole && result.contract.authoritative) registerAuthoritativeQuestionContract({ file, skeleton: result.contract });
+                                    (isFullRole ? fullItems : questionItems).push(...result.questions);
+                                    answerItems.push(...result.answers); solutionItems.push(...result.solutions);
+                                    ingestionUnmatched.push(...result.unmatched); ingestionWithheld.push(...result.withheld);
+                                    ingestionSourcePages.push(...result.pageImages); rememberPageImages(result.pageImages, file);
+                                    await db.draftImportFiles.update(file.id, {
+                                        parseStatus: result.withheld.length || result.unmatched.length ? 'partial' : 'success',
+                                        ingestionTimings: [...result.inspection.timings, ...result.timings],
+                                        ingestionReport: { pages: result.inspection.pages, withheld: result.withheld, supportGate: result.supportGate,
+                                            visualCalls: result.visualCalls, cacheHits: result.cacheHits },
+                                        unmatchedEvidence: result.unmatched, updatedAt: Date.now()
                                     });
                                     await updateBatchProgress(batchId, baseProgress + fileProgressSpan, 'processing');
                                     continue;
@@ -17909,7 +17950,7 @@ ${source}`;
 
                         // 3. 最终视觉修复必须是写库前最后一次改题内容。
                         try {
-                            if (recognitionMode === 'cheap') {
+                            if (files.every(file => ingestedFileIds.has(file.id)) || recognitionMode === 'cheap') {
                                 console.log('[BATCH_COST][skip-final-repair] cheap 模式跳过最终视觉修复');
                             } else if (recognitionMode === 'standard') {
                                 const needOptionRepair = drafts.some(d => {
@@ -18066,7 +18107,7 @@ ${source}`;
                         })));
                         console.groupEnd();
 
-                        if (!drafts.length) {
+                        if (!drafts.length && !ingestionWithheld.length) {
                             console.error('[BATCH_DEBUG][no-drafts-before-save]', {
                                 batchId,
                                 questionItems: questionItems.length,
@@ -18120,8 +18161,10 @@ ${source}`;
                                 problemCount,
                                 unassignedImageCount: finalDraftImages.filter(img => img.status === 'unassigned').length,
                                 unmatchedAnswers: [...unmatched, ...ingestionUnmatched],
+                                withheldItems: ingestionWithheld,
+                                ingestionSourcePages,
                                 updatedAt: Date.now(),
-                                errorMessage: drafts.length ? '' : '没有识别到题目，请确认文件内容清晰，或重新上传 DOCX / PDF。'
+                                errorMessage: ingestionWithheld.length ? '部分 PDF 内容尚未形成可靠草稿，请展开待核对原页查看。' : ''
                             });
                         });
                         console.log('[BATCH_DEBUG][stage]', 'after bulkPut drafts');

@@ -1,5 +1,15 @@
 # Hardening integration ledger — `codex/app-refactor-master-plan-r1` against `origin/main` (2026-09-15)
 
+## 2026-09-16 PDF inspection stage
+
+`main` still enters rendering/vision before assessing PDF text. The integration adds
+`PdfInspection` and `PdfIngestion`: proved native numbers, usable-text parsing, bounded single-page
+visual requests, existing support sequence/field gates, retained raw evidence and a zero-draft
+withheld-page review state. app.js changes are orchestration and evidence persistence only.
+`verify:safe`, `verify:batch-safety`, and real-PDF-byte browser regression pass.
+No real paid model request was executed. Real visual quality is **not accepted yet**.
+See `PDF_INSPECTION_STAGE_2026_09_16.md` for limitations and newly discovered DOCX image loss.
+
 This ledger answers one question for every hardening behaviour fix: **what does `main` do today?**
 It is not a merge plan and it is not a per-file merge. The hardening branch
 `codex/app-refactor-master-plan-r1` (`68b7e5b`) was read as evidence only; nothing was merged from
