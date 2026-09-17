@@ -138,6 +138,52 @@
                 .filter(Boolean)
                 .map(Number);
 
+        // A support page prints the number beside the answer and beside the reasoning. When *every* item of
+        // both sequences carries that printed number, the mapping is proved by the page itself: item 7 is
+        // question 7 because the page says so, not because it happens to be the seventh row. A hole in such
+        // a file (the source really has no answer for question 2) therefore no longer invalidates the
+        // answers around it, which is what used to leave a whole answer key unattached. Everything that
+        // makes a *positional* mapping unsafe is still refused: an unlabelled item, a duplicate number, a
+        // number that jumps backwards, or a number outside the question file's contract.
+        const PAGE_LABEL_SOURCE = 'page-label';
+        const labelledSequence = (items = []) => {
+            const rows = (items || []).map((item, index) => ({
+                index,
+                raw: getItemQuestion(item),
+                value: Number(normalizeSupportQuestionNumber(getItemQuestion(item))) || 0,
+                labelled: item?.labeledBy === PAGE_LABEL_SOURCE
+            }));
+            return {
+                rows,
+                values: rows.map(row => row.value),
+                ok: rows.length > 0 && rows.every((row, index) =>
+                    row.labelled && row.value > 0 &&
+                    (index === 0 || row.value > rows[index - 1].value))
+            };
+        };
+        const buildLabelledAlignment = ({ answerItems = [], solutionItems = [], expectedValues = [] } = {}) => {
+            const answer = labelledSequence(answerItems);
+            const solution = labelledSequence(solutionItems);
+            const sequences = [answer, solution].filter(sequence => sequence.rows.length);
+            const values = sequences.flatMap(sequence => sequence.values);
+            // An answer row and a reasoning row for the same question are one question, not a duplicate:
+            // only a number that repeats inside its own field is ambiguous.
+            const duplicates = [...new Set(sequences.flatMap(sequence =>
+                sequence.values.filter((value, index, all) => all.indexOf(value) !== index)))];
+            const outOfRange = expectedValues.length
+                ? values.filter(value => !expectedValues.includes(value))
+                : [];
+            return {
+                ok: sequences.length > 0 && sequences.every(sequence => sequence.ok)
+                    && !duplicates.length && !outOfRange.length,
+                answer,
+                solution,
+                values,
+                duplicates,
+                outOfRange
+            };
+        };
+
         const buildSupportSequenceReport = ({
             answerItems = [],
             solutionItems = [],
@@ -380,6 +426,39 @@
             solutionItems = [],
             expectedQuestionNumbers = []
         } = {}) => {
+            const labelled = buildLabelledAlignment({
+                answerItems,
+                solutionItems,
+                expectedValues: normalizeExpected(expectedQuestionNumbers)
+            });
+            if (labelled.ok) {
+                const expectedValues = normalizeExpected(expectedQuestionNumbers);
+                return {
+                    reliable: true,
+                    mode: 'full',
+                    alignment: 'page-label',
+                    empty: false,
+                    invalidQuestions: [],
+                    duplicateQuestions: [],
+                    jumpBacks: [],
+                    gaps: expectedValues.filter(value => !labelled.values.includes(value)).map(String),
+                    outOfRangeNumbers: [],
+                    answerSolutionSetMismatch: false,
+                    prefixCutoffIndex: labelled.values.length,
+                    safeQuestionNumbers: [...new Set(labelled.values)].map(String),
+                    fusedQuestionNumbers: [],
+                    report: {
+                        ok: true,
+                        reasons: [],
+                        alignment: 'page-label',
+                        answerSequence: { rows: labelled.answer.rows, values: labelled.answer.values,
+                            invalidRows: [], duplicates: [], strictlyIncreasing: true },
+                        solutionSequence: { rows: labelled.solution.rows, values: labelled.solution.values,
+                            invalidRows: [], duplicates: [], strictlyIncreasing: true },
+                        expectedValues
+                    }
+                };
+            }
             const report =
                 buildSupportSequenceReport({
                     answerItems,
@@ -480,10 +559,13 @@
                 return {
                     reliable: true,
                     mode: 'full',
+                    alignment: validation.alignment || 'question-sequence',
                     safeAnswerItems: [...(answerItems || [])],
                     safeSolutionItems: [...(solutionItems || [])],
                     safeQuestionNumbers:
-                        report.answerSequence.values.map(String),
+                        validation.safeQuestionNumbers?.length
+                            ? validation.safeQuestionNumbers
+                            : report.answerSequence.values.map(String),
                     fusedQuestionNumbers: [],
                     fusedWarnings: [],
                     warnings: [],
@@ -538,6 +620,7 @@
         return {
             normalizeSupportQuestionNumber,
             normalizeSupportSequence,
+            buildLabelledAlignment,
             buildSupportSequenceReport,
             validatePdfSupportSequence,
             isSupportSequenceReliable,

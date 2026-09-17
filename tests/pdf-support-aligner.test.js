@@ -826,3 +826,43 @@ test(
         );
     }
 );
+
+// A support page prints the number beside each answer and each reasoning label. That mapping is proved by
+// the page, so a question the source left blank no longer fuses the answers around it - while everything
+// that makes a positional mapping unsafe (duplicates, a number that jumps backwards, an unlabelled row)
+// still refuses to open.
+test('answers printed under their own page labels align even when the source skips a number', () => {
+    const expected = ['1', '2', '3', '4'];
+    const labelled = number => ({ question: number, labeledBy: 'page-label' });
+    const aligned = alignPdfSupport({
+        answerItems: ['1', '3'].map(n => ({ ...labelled(n), answer: 'B' })),
+        solutionItems: expected.map(n => ({ ...labelled(n), solution: 'reasoning' })),
+        expectedQuestionNumbers: expected
+    });
+    assert.equal(aligned.mode, 'full');
+    assert.equal(aligned.alignment, 'page-label');
+    assert.deepEqual(aligned.safeAnswerItems.map(item => item.question), ['1', '3']);
+    assert.deepEqual(aligned.fusedQuestionNumbers, []);
+
+    const duplicate = alignPdfSupport({
+        answerItems: [{ ...labelled('2'), answer: 'B' }, { ...labelled('2'), answer: 'C' }],
+        solutionItems: [{ ...labelled('2'), solution: 'reasoning' }],
+        expectedQuestionNumbers: ['2']
+    });
+    assert.notEqual(duplicate.mode, 'full', 'a number that repeats inside its own field is ambiguous');
+
+    const jumpBack = alignPdfSupport({
+        answerItems: [{ ...labelled('3'), answer: 'B' }, { ...labelled('2'), answer: 'C' }],
+        solutionItems: [{ ...labelled('2'), solution: 'reasoning' }, { ...labelled('3'), solution: 'reasoning' }],
+        expectedQuestionNumbers: ['2', '3']
+    });
+    assert.equal(jumpBack.mode, 'fail-closed');
+
+    const unlabelled = alignPdfSupport({
+        answerItems: [{ question: '3', answer: 'B' }, { question: '2', answer: 'C' }],
+        solutionItems: [{ question: '2', solution: 'x' }, { question: '3', solution: 'y' }],
+        expectedQuestionNumbers: ['2', '3']
+    });
+    assert.equal(unlabelled.mode, 'fail-closed', 'a row without a printed number keeps the strict gate');
+});
+

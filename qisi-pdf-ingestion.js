@@ -26,6 +26,17 @@
     };
     const reviewLabel = code => code ? `${REVIEW_LABELS[code] || '需要人工核对'}（${code}）` : '';
     const key = item => String(item?.questionNumber || item?.question || '');
+    // The page's own labels. A support page says which field a line starts: the answer field is opened by
+    // 【答案】, the reasoning by 【详解】/【解析】/【解答】. Only what lies inside the label's own segment is
+    // read, so a number printed beside an answer can never hand the next question's text to this one.
+    const ANSWER_MARK = /【\s*答案\s*】/;
+    const SOLUTION_MARK = /【\s*(?:详解|解析|解答)\s*】/;
+    const stripLabel = (line, mark) => {
+        const at = String(line ?? '').search(mark);
+        if (at < 0) return String(line ?? '').trim();
+        const size = String(line).slice(at).match(mark)?.[0].length || 0;
+        return String(line).slice(at + size).trim();
+    };
     // A file's numbering is not all-or-nothing. What the page's own text layer proved stays usable, a hole
     // is reported as a missing number, and a duplicate / backward / unreadable anchor is recorded on its
     // own instead of taking away every identity in the file (owner's rule, 2026-09-17: 已被结构证明的
@@ -281,7 +292,8 @@
             parserSafeSolutionItems: aligned.safeSolutionItems, parserFusedQuestionNumbers: aligned.fusedQuestionNumbers
         });
         return { answers: controlled.effectiveAnswerItems, solutions: controlled.effectiveSolutionItems,
-            mode: aligned.mode, fusedQuestionNumbers: aligned.fusedQuestionNumbers, decisions: controlled.fieldDecisions,
+            mode: aligned.mode, alignment: aligned.alignment || 'question-sequence',
+            fusedQuestionNumbers: aligned.fusedQuestionNumbers, decisions: controlled.fieldDecisions,
             warnings: controlled.warnings };
     };
     const mergeVisualQuestion = (existing, visual, sectionType = '') => {
@@ -436,18 +448,63 @@
         // Explicit objective answers can be read even when surrounding formula glyphs cannot.
         // Every other support field remains under the sequence and evidence gates.
         if (supportRole || fullRole) {
-            const candidates = [];
-            for (const page of inspection.pages) for (const anchor of page.anchors) {
-                if (anchor.role !== 'support') continue;
-                const match = anchor.rawText.match(/^\s*([1-9]\d{0,2})\s*【\s*答案\s*】\s*([A-D](?:\s*[A-D]){0,3})\s*$/)
-                    || anchor.rawText.match(/^\s*([1-9]\d{0,2})\s*[.．、]\s*([A-D](?:\s*[A-D]){0,3})\s*$/);
-                if (match) candidates.push({ question: match[1], answer: match[2].replace(/\s/g, ''),
-                    sourceFileId: file.id, sourceFileName: file.filename, sourcePage: page.pageNo,
-                    fieldEvidence: { answer: { ...anchor, source: 'pdf-text', sourceFileId: file.id } } });
+            // Each support block starts at the number printed on the page, and the page itself labels the
+            // answer ("【答案】") and the reasoning ("【详解】/【解析】/【解答】"). The block therefore proves
+            // which question the answer belongs to; the field is only read inside the label's own segment,
+            // and a value that is truncated or still unmapped is left to the visual layer. Answers were
+            // previously read from the marker line alone, so a fill-in value, a solution, or a question
+            // whose answer field is blank on the page stopped the whole sequence gate.
+            const segmentsOf = block => {
+                const lines = String(block.text || '').split('\n').map(line => line.replace(/\s+/g, ' ').trim())
+                    .filter(Boolean);
+                const answerAt = lines.findIndex(line => ANSWER_MARK.test(line));
+                const solutionAt = lines.findIndex(line => SOLUTION_MARK.test(line));
+                return { lines, answerAt, solutionAt };
+            };
+            for (const block of (inspection.blocks || []).filter(b => b.role === 'support')) {
+                if (!supportContract.authoritative || !expected.includes(block.questionNumber)) continue;
+                const { lines, answerAt, solutionAt } = segmentsOf(block);
+                // Answer keys also come as a bare numbered row ("8. C") with no 【答案】 label. The number
+                // is still printed beside the answer, so it is the same page-proved identity.
+                const bareRow = (lines[0] || '').match(/^\s*([1-9]\d{0,2})\s*[.．、]?\s*([A-D](?:\s*[A-D]){0,3})\s*$/);
+                const bareAnswer = bareRow && bareRow[1] === block.questionNumber && !lines.some(line => ANSWER_MARK.test(line))
+                    ? bareRow[2].replace(/\s+/g, '') : '';
+                if (answerAt < 0 && solutionAt < 0 && !bareAnswer) continue;
+                const evidence = field => ({ source: 'pdf-text', sourceFileId: file.id, sourceFileName: file.filename,
+                    sourcePage: block.sourcePages[0], sourcePages: block.sourcePages, regions: block.regions,
+                    labeledBy: 'page-label', rawBlock: block.rawText || block.text, field });
+                if (bareAnswer) rawAnswers.push({ question: block.questionNumber, answer: bareAnswer,
+                    sourceFileId: file.id, sourceFileName: file.filename, sourcePage: block.sourcePages[0],
+                    labeledBy: 'page-label', fieldEvidence: { answer: evidence('answer') } });
+                else if (answerAt >= 0) {
+                    // The value is what the page prints on the answer label's own line. Rows that follow it
+                    // are the reasoning's layout (a fraction's rows often sit above the 【详解】 label), so
+                    // they are not part of the answer.
+                    const segment = lines.slice(answerAt, solutionAt > answerAt ? solutionAt : lines.length);
+                    const value = stripLabel(segment[0], ANSWER_MARK).replace(/\s+/g, '');
+                    const isLetters = /^[A-D](?:[A-D]){0,3}$/.test(value);
+                    // A fill-in answer is read only when it is one self-contained token and the next row is
+                    // not the rest of a stacked value (a numerator whose denominator follows). Anything else
+                    // is a formula the text layer cannot lay out, and stays withheld.
+                    const nextLine = (lines[answerAt + 1] || '').trim();
+                    const continues = /^[0-9]{1,4}$/.test(nextLine) || /^[0-9/.,]{1,6}$/.test(nextLine);
+                    const isFillInValue = segment.length === 1 && !continues
+                        && /^[0-9+\-−×÷/.,()√π]{1,12}$/.test(value) && /[0-9]/.test(value);
+                    if (isLetters || isFillInValue) rawAnswers.push({ question: block.questionNumber, answer: value,
+                        sourceFileId: file.id, sourceFileName: file.filename, sourcePage: block.sourcePages[0],
+                        labeledBy: 'page-label', fieldEvidence: { answer: evidence('answer') } });
+                    else result.unmatched.push({ question: block.questionNumber, field: 'answer',
+                        reason: segment.length > 1 ? 'pdf-support-answer-not-self-contained' : 'pdf-support-answer-unreadable',
+                        rawValue: segment.join(' | '), sourceFileId: file.id });
+                }
+                if (solutionAt >= 0) {
+                    const solution = [stripLabel(lines[solutionAt], SOLUTION_MARK), ...lines.slice(solutionAt + 1)]
+                        .filter(line => line !== '').join('\n').trim();
+                    if (solution) rawSolutions.push({ question: block.questionNumber,
+                        solution, sourceFileId: file.id, sourceFileName: file.filename, sourcePage: block.sourcePages[0],
+                        labeledBy: 'page-label', fieldEvidence: { solution: evidence('solution') } });
+                }
             }
-            if (supportContract.authoritative && supportContract.questionNumbers.every(n => expected.includes(n))) {
-                rawAnswers.push(...candidates);
-            } else result.unmatched.push(...candidates.map(c => ({ ...c, reason: 'unsafe-support-sequence' })));
             if (inspection.pages.every(p => p.kind === 'text')) {
                 const parsed = helpers.parseSupport(inspection.pages.map(p => p.text).join('\n'), file);
                 for (const field of ['answers', 'solutions']) for (const item of parsed[field] || []) {
@@ -456,6 +513,11 @@
                 }
             }
         }
+        // A support question whose answer and reasoning were both read under the page's own labels is already
+        // transcribed: the model can only repeat it. Skipping those regions is what takes the second half of a
+        // question + answer run's cost away, without giving up anything the page did not already prove.
+        const supportReadFromPage = new Set(rawAnswers.filter(item => item.labeledBy === 'page-label').map(key)
+            .filter(number => rawSolutions.some(item => key(item) === number && item.labeledBy === 'page-label')));
         let transportFailure = null;
         const renderScope = { rasters: new Map() };
         const renderImage = helpers.render || ((source, pageNo, stage, region) =>
@@ -465,10 +527,14 @@
             const supportOnly = (!questionRole && supportRole) || (fullRole &&
                 !page.anchors.some(a => a.role === 'question') && page.anchors.some(a => a.role === 'support'));
             const pageNumbers = (page.anchors || []).filter(a => a.role === (supportOnly ? 'support' : 'question')).map(key);
+            const targets = supportOnly
+                ? pageNumbers.filter(number => !supportReadFromPage.has(number))
+                : pageNumbers;
+            if (!targets.length) continue;
             const provenRegion = supportOnly ? null : questionRegionByPage.get(page.pageNo)?.bbox;
             const pageRegion = provenRegion && provenRegion.length === 4
                 ? provenRegion.map(Number) : [0, 0, page.width, page.height];
-            const plan = { sourceFileId: file.id, sourcePage: page.pageNo, questionNumbers: pageNumbers,
+            const plan = { sourceFileId: file.id, sourcePage: page.pageNo, questionNumbers: targets,
                 region: pageRegion, reason: page.reason,
                 status: 'withheld', visualNeeded: true };
             try {
@@ -476,7 +542,7 @@
                 result.pageImages.push({ sourceFileId: file.id, sourceFileName: file.filename, pageNo: page.pageNo, imageUrl: image.url });
                 // No independent number evidence means model output can only be an untrusted proposal.
                 const proven = supportOnly ? supportContract.authoritative && pageNumbers.every(n => expected.includes(n)) : questionContract.authoritative;
-                if (!proven || !pageNumbers.length || !helpers.request || transportFailure) {
+                if (!proven || !targets.length || !helpers.request || transportFailure) {
                     result.withheld.push({ ...plan, errorCode: transportFailure || 'VISUAL_REVIEW_REQUIRED' });
                     continue;
                 }
@@ -484,10 +550,10 @@
                 // and the number the text layer already proved: attribution stays with the program, and no
                 // neighbouring question or footer can reach the request.
                 const regionLookup = supportOnly ? supportRegionsByNumber : questionRegionsByNumber;
-                const regionItems = pageNumbers
+                const regionItems = targets
                     .map(number => ({ number, bbox: regionLookup.get(`${page.pageNo}:${number}`) }))
                     .filter(item => Array.isArray(item.bbox) && item.bbox.length === 4);
-                if (regionItems.length && regionItems.length === pageNumbers.length) {
+                if (regionItems.length && regionItems.length === targets.length) {
                     let regionFailure = '';
                     for (const item of regionItems) {
                         try {
@@ -573,7 +639,7 @@
                     }
                     continue;
                 }
-                const bytes = new TextEncoder().encode(image.url + helpers.model + JSON.stringify(pageNumbers) + ':' + supportOnly + ':' + VISUAL_SCHEMA_VERSION);
+                const bytes = new TextEncoder().encode(image.url + helpers.model + JSON.stringify(targets) + ':' + supportOnly + ':' + VISUAL_SCHEMA_VERSION);
                 const hash = Array.from(new Uint8Array(await root.crypto.subtle.digest('SHA-256', bytes))).map(n => n.toString(16).padStart(2, '0')).join('');
                 let pending = pageCache.get(hash);
                 if (!pending) {
@@ -582,13 +648,13 @@
                         continue;
                     }
                     result.visualCalls++;
-                    pending = trace.measure(`vision:${page.pageNo}`, () => root.Qisi.IngestionContext.withTimeout(() => requestVisual(image, pageNumbers, helpers), 90000, 'PDF_VISION_TIMEOUT'));
+                    pending = trace.measure(`vision:${page.pageNo}`, () => root.Qisi.IngestionContext.withTimeout(() => requestVisual(image, targets, helpers), 90000, 'PDF_VISION_TIMEOUT'));
                     pageCache.set(hash, pending);
                     pending.catch(() => pageCache.delete(hash));
                     if (pageCache.size > 32) pageCache.delete(pageCache.keys().next().value);
                 } else result.cacheHits++;
                 const raw = await pending;
-                const checked = acceptVisual(raw, pageNumbers, supportOnly);
+                const checked = acceptVisual(raw, targets, supportOnly);
                 if (checked.reason) { result.withheld.push({ ...plan, reason: checked.reason, rawEvidence: raw }); continue; }
                 for (const item of checked.accepted) {
                     if ((supportOnly ? crossSupport : crossQuestions).has(key(item))) {

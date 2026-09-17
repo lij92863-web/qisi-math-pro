@@ -156,6 +156,51 @@ test('a text layer proved unusable is replaced by the visual transcription, a us
     assert.deepEqual(withGap.conflicts, ['stem'], 'a reply that still carries a gap is not an improvement');
 });
 
+// A support file that prints its own answer and reasoning labels is read from the page, and one question
+// whose answer the source left blank no longer takes the whole answer key with it.
+test('support answers and solutions are read under the page labels, and a gap does not fuse the rest', async () => {
+    const inspect = Inspection.inspect;
+    try {
+        const p = page(1, [line('1 【答案】 B', 100), line('【详解】因为 A={0,1} ，故选 B', 130),
+            line('2 【答案】', 300), line('【详解】设正四棱台侧面的高为 h', 330),
+            line('3 【答案】 AC', 500), line('【解析】因为 ，所以选 AC', 530)], 'mixed');
+        Inspection.inspect = async () => ({ pages: [p], ...Inspection.segment([p]), timings: [] });
+        const result = await Ingestion.ingest({ file: { id: 'labelled-support' }, supportRole: true,
+            expectedNumbers: ['1', '2', '3'],
+            drafts: ['1', '2', '3'].map(n => ({ question: n, type: '单选题', options: ['a', 'b', 'c', 'd'] })),
+            helpers: { parseSupport: () => ({}), render: async () => ({ url: 'mock-page' }) } });
+        assert.deepEqual(result.answers.map(item => [item.question, item.answer]), [['1', 'B'], ['3', 'AC']]);
+        assert.equal(result.supportGate.mode, 'full', 'the page printed every number it used');
+        assert.equal(result.supportGate.alignment, 'page-label');
+        assert.deepEqual(result.supportGate.fusedQuestionNumbers, []);
+        assert.deepEqual(result.solutions.map(item => item.question), ['1', '2', '3']);
+        assert.match(result.solutions.find(item => item.question === '3').solution, /选 AC/);
+        assert.ok(result.unmatched.some(item => item.question === '2' && item.field === 'answer'),
+            'the blank answer field is reported, not invented');
+    } finally { Inspection.inspect = inspect; }
+});
+
+test('a stacked fill-in answer is withheld, and a question read from the page is not sent to the model', async () => {
+    const inspect = Inspection.inspect;
+    let calls = 0;
+    try {
+        const p = page(1, [line('1 【答案】 6', 100), line('【详解】以 A 为原点建立坐标系', 130),
+            line('2 【答案】 −', 300), line('13', 320), line('【详解】因为 所以', 340),
+            line('3 【答案】', 500), line('【详解】由题意设边长为', 520)], 'mixed');
+        Inspection.inspect = async () => ({ pages: [p], ...Inspection.segment([p]), timings: [] });
+        const result = await Ingestion.ingest({ file: { id: 'stacked-answer' }, supportRole: true,
+            expectedNumbers: ['1', '2', '3'],
+            drafts: ['1', '2', '3'].map(n => ({ question: n, type: '填空题', options: [] })),
+            helpers: { model: 'mock', parseSupport: () => ({}), render: async () => ({ url: 'mock-page' }),
+                request: async () => { calls += 1; throw Object.assign(new Error('transport'), { code: 'AI_PROXY_FETCH_FAILED' }); } } });
+        assert.deepEqual(result.answers.map(item => [item.question, item.answer]), [['1', '6']]);
+        assert.ok(result.unmatched.some(item => item.question === '2' && item.reason === 'pdf-support-answer-not-self-contained'),
+            'a value whose row continues below it is not a complete value');
+        assert.ok(result.unmatched.some(item => item.question === '3' && item.reason === 'pdf-support-answer-unreadable'));
+        assert.equal(calls, 1, `only the question the page could not answer is sent (calls=${calls})`);
+    } finally { Inspection.inspect = inspect; }
+});
+
 test('a separately assigned support PDF has support blocks and per-question regions', async () => {
     const inspect = Inspection.inspect;
     const asked = [];
@@ -188,9 +233,12 @@ test('an explicit support answer row is distinct from a solution conclusion', as
             expectedNumbers: ['8', '9'], drafts: [8, 9].map(n => ({ question: String(n), type: '单选题',
                 options: ['one', 'two', 'three', 'four'] })),
             helpers: { parseSupport: () => ({}), render: async () => ({ url: 'mock-page' }) } });
-        assert.deepEqual(result.answers, [], 'existing answer/solution sequence gate still fails closed');
-        assert.ok(result.unmatched.some(item => item.question === '8' && item.answer === 'C'),
-            'the explicit row remains a candidate with raw evidence for review');
+        // The row "8. C" prints both the number and the answer, so question 8 keeps its answer even though the
+        // page has no answer for question 9. Attaching by the number the page printed is not a positional
+        // guess - what the gate refuses is the *conclusion* of question 9's working line, below.
+        assert.deepEqual(result.answers.map(item => [item.question, item.answer]), [['8', 'C']]);
+        assert.equal(result.unmatched.some(item => item.question === '8' && item.answer), false,
+            'the explicit row is attached instead of being held back');
         assert.equal(result.unmatched.some(item => item.question === '9' && item.answer), false,
             'the solution conclusion never becomes an answer candidate');
     } finally { Inspection.inspect = inspect; }
