@@ -72,3 +72,32 @@ test('a band without a drawing reports that, and a band too small to hold one is
     const tiny = paint(paper(30, 20), [2, 2, 28, 18]);
     assert.equal(Figures.findFigureInBand({ image: tiny, textBoxes: [] }).reason, 'band-too-small');
 });
+
+// A question like "图甲…图乙…" carries two drawings. The union rectangle of both would swallow the space
+// between them, so blobs that are far apart become separate figures - and each still has to pass the same
+// edge, size and band-coverage rules on its own.
+test('two drawings far apart are two figures, and a drawing across the band edge is dropped alone', () => {
+    const image = paint(paper(600, 300), [40, 60, 200, 240]);
+    paint(image, [420, 60, 560, 240]);
+    const found = Figures.findFigureInBand({ image, textBoxes: [[210, 10, 410, 40]] });
+    assert.equal(found.accepted, true, found.reason);
+    assert.equal(found.figures.length, 2);
+    assert.deepEqual(found.figures.map(item => item.bbox), [[40, 60, 200, 240], [420, 60, 560, 240]]);
+    assert.deepEqual(found.bbox, [40, 60, 560, 240], 'the union is still reported as evidence');
+
+    const two = paint(paper(600, 300), [0, 60, 160, 240]);
+    paint(two, [420, 60, 560, 240]);
+    const mixed = Figures.findFigureInBand({ image: two, textBoxes: [[210, 10, 410, 40]] });
+    assert.equal(mixed.figures.length, 1, 'the drawing that reaches the band edge is refused');
+    assert.deepEqual(mixed.figures[0].bbox, [420, 60, 560, 240]);
+    assert.equal(mixed.reason, 'figure-touches-band-edge', 'the refusal is still reported');
+});
+
+test('strokes of one drawing that nearly touch are grouped into one figure', () => {
+    const image = paint(paper(400, 300), [100, 100, 160, 160]);
+    paint(image, [168, 100, 228, 160]);
+    const found = Figures.findFigureInBand({ image, textBoxes: [[20, 10, 380, 40]] });
+    assert.equal(found.figures.length, 1);
+    assert.deepEqual(found.figures[0].bbox, [100, 100, 228, 160]);
+    assert.equal(found.figures[0].components, 2);
+});

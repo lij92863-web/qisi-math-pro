@@ -458,6 +458,10 @@
                         }
                         const rasterBox = [left + found.bbox[0], top + found.bbox[1], left + found.bbox[2], top + found.bbox[3]];
                         evidence.bbox = figureExtract.bboxForRaster(rasterBox, canvas);
+                        evidence.figures = (found.figures || []).map(item => ({
+                            bbox: figureExtract.bboxForRaster([left + item.bbox[0], top + item.bbox[1],
+                                left + item.bbox[2], top + item.bbox[3]], canvas),
+                            inkPixels: item.inkPixels, components: item.components }));
                         evidence.questionBbox = figureExtract.bboxForRaster([left, top, right, bottom], canvas);
                         if (!pageImageByNumber.has(target.page)) {
                             pageImageByNumber.set(target.page, canvas.toDataURL('image/jpeg', 0.88));
@@ -520,8 +524,9 @@
             const figure = figureEvidenceByQuestion.get(block.questionNumber);
             result.questions.push({ ...items[0], type: block.type || '', answer: '', solution: '', sourceTrace: evidenceFor(block, 'pdf-text'),
                 sourcePage: block.sourcePages[0], sourcePages: block.sourcePages,
-                recognizedImages: figure?.accepted ? [{ image_bbox: figure.bbox, image_confidence: 0.8,
-                    image_description: '题目带内的图形（按文字层坐标自动裁剪）', page: figure.page }] : [],
+                recognizedImages: figure?.accepted ? (figure.figures?.length ? figure.figures : [figure])
+                    .map(item => ({ image_bbox: item.bbox, image_confidence: 0.8,
+                        image_description: '题目带内的图形（按文字层坐标自动裁剪）', page: figure.page })) : [],
                 question_bbox: figure?.accepted ? figure.questionBbox : [],
                 figureEvidence: figure || null,
                 sourcePageImage: figure?.accepted ? figure.pageImageUrl : undefined,

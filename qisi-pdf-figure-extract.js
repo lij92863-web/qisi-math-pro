@@ -30,6 +30,10 @@
         minComponentPixels: 64,
         // A figure narrower or shorter than this is a rule or a bracket, not a figure.
         minSize: 40,
+        // Blobs closer than this belong to the same drawing; further apart they are separate figures.
+        clusterGap: 24,
+        // A question rarely needs more than a few drawings, and every extra one costs a review decision.
+        maxFigures: 3,
         // A candidate covering more of the band than this is the question, not its figure.
         maxBandRatio: 0.72,
         // A text box owns the pixels inside it plus this slack (antialiasing spills over the box).
@@ -84,8 +88,7 @@
         const seen = new Uint8Array(pixelCount);
         const stack = [];
         let components = 0;
-        let left = width; let top = height; let right = -1; let bottom = -1;
-        let keptInk = 0;
+        const blobs = [];
         for (let start = 0; start < pixelCount; start += 1) {
             if (mask[start] !== 2 || seen[start]) continue;
             let size = 0;
@@ -108,31 +111,50 @@
             }
             if (size < settings.minComponentPixels) continue;
             components += 1;
-            keptInk += size;
-            if (minX < left) left = minX;
-            if (minY < top) top = minY;
-            if (maxX > right) right = maxX;
-            if (maxY > bottom) bottom = maxY;
+            blobs.push({ bbox: [minX, minY, maxX + 1, maxY + 1], inkPixels: size });
         }
-        if (!components || right < 0) {
+        if (!blobs.length) {
             return { accepted: false, reason: 'no-figure-ink', bbox: [], inkPixels, components: 0 };
         }
 
-        const boxWidth = right - left + 1;
-        const boxHeight = bottom - top + 1;
-        const result = { inkPixels, components, keptInk };
-        if (boxWidth < settings.minSize || boxHeight < settings.minSize) {
-            return { ...result, accepted: false, reason: 'figure-too-small', bbox: [] };
+        // Blobs that touch (or nearly touch) are one drawing: a diagram is often several strokes that do not
+        // overlap, and the vertex labels are text. Blobs further apart than clusterGap are separate figures -
+        // 甲乙 style questions carry two drawings, and one union rectangle would swallow the space between.
+        const gap = settings.clusterGap;
+        const near = (a, b) => a[0] - gap <= b[2] && b[0] - gap <= a[2]
+            && a[1] - gap <= b[3] && b[1] - gap <= a[3];
+        const clusters = [];
+        for (const blob of blobs.sort((a, b) => b.inkPixels - a.inkPixels)) {
+            const home = clusters.find(cluster => cluster.blobs.some(other => near(cluster.bbox, blob.bbox)));
+            if (home) {
+                home.blobs.push(blob);
+                home.inkPixels += blob.inkPixels;
+                home.bbox = [Math.min(home.bbox[0], blob.bbox[0]), Math.min(home.bbox[1], blob.bbox[1]),
+                    Math.max(home.bbox[2], blob.bbox[2]), Math.max(home.bbox[3], blob.bbox[3])];
+            } else {
+                clusters.push({ bbox: [...blob.bbox], inkPixels: blob.inkPixels, blobs: [blob] });
+            }
         }
-        if (boxWidth * boxHeight > width * height * settings.maxBandRatio) {
-            return { ...result, accepted: false, reason: 'candidate-covers-band', bbox: [] };
+
+        const figures = [];
+        let reason = '';
+        for (const cluster of clusters.slice(0, settings.maxFigures)) {
+            const [left, top, right, bottom] = cluster.bbox;
+            if (right - left < settings.minSize || bottom - top < settings.minSize) { reason = reason || 'figure-too-small'; continue; }
+            if ((right - left) * (bottom - top) > width * height * settings.maxBandRatio) { reason = reason || 'candidate-covers-band'; continue; }
+            // A drawing that reaches the band's edge may continue into the neighbouring question: ownership is
+            // not provable, so this drawing is dropped rather than cropped across a question boundary.
+            if (left === 0 || top === 0 || right === width || bottom === height) { reason = reason || 'figure-touches-band-edge'; continue; }
+            figures.push({ bbox: [...cluster.bbox], inkPixels: cluster.inkPixels, components: cluster.blobs.length });
         }
-        // A blob that reaches the band's edge may continue into the neighbouring question: ownership is not
-        // provable, so nothing is attached rather than a crop that might have taken the neighbour's drawing.
-        if (left === 0 || top === 0 || right === width - 1 || bottom === height - 1) {
-            return { ...result, accepted: false, reason: 'figure-touches-band-edge', bbox: [] };
+        if (!figures.length) {
+            return { accepted: false, reason: reason || 'no-figure-ink', bbox: [], inkPixels, components, figures: [] };
         }
-        return { ...result, accepted: true, reason: '', bbox: [left, top, right + 1, bottom + 1] };
+        const union = figures.reduce((box, figure) => [Math.min(box[0], figure.bbox[0]), Math.min(box[1], figure.bbox[1]),
+            Math.max(box[2], figure.bbox[2]), Math.max(box[3], figure.bbox[3])], figures[0].bbox);
+        // `reason` still carries what was refused on the way: an attached figure and a dropped neighbour are
+        // not exclusive, and the review page should see both.
+        return { accepted: true, reason, bbox: union, inkPixels, components, figures };
     };
 
     /**
