@@ -599,3 +599,28 @@ test('an unresolved PDF glyph gap stays visible with a teacher-facing warning', 
         assert.ok(result.questions[0].warnings.some(warning => warning.includes('此处公式需视觉补全')));
     } finally { Inspection.inspect = inspect; }
 });
+
+// The reasoning of a page that is not plain text is a partial: the visual reading of that page image takes
+// the field, the page text stays in evidence, and the question is still sent to the model instead of being
+// treated as already read.
+test('a reasoning the text layer could not lay out is replaced by the visual reading', async () => {
+    const inspect = Inspection.inspect;
+    let calls = 0;
+    try {
+        const p = page(1, [line('5 【答案】 D', 100), line('【详解】因为 + = 0 ，所以选 D', 130)], 'mixed');
+        Inspection.inspect = async () => ({ pages: [p], ...Inspection.segment([p]), timings: [] });
+        const result = await Ingestion.ingest({ file: { id: 'solution-replace' }, supportRole: true,
+            expectedNumbers: ['5'],
+            drafts: [{ question: '5', type: '单选题', options: ['a', 'b', 'c', 'd'] }],
+            helpers: { model: 'mock', parseSupport: () => ({}), render: async () => ({ url: 'mock-page' }),
+                request: async payload => { calls += 1;
+                    const number = (/第 (\d+) 题/.exec(payload.messages[0].content[0].text) || [])[1] || '5';
+                    return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({
+                        questions: [{ questionNumber: number, answer: '', solution: '$\\frac{\\vec{BA}\\cdot\\vec{AC}}{|\\vec{BC}|}=0$' }] }) } }] }) }; } } });
+        assert.equal(calls, 1, 'a partial reasoning is not treated as already read');
+        assert.match(String(result.solutions[0].solution), /\\frac/, 'the reading of the page takes the field');
+        assert.match(String(result.solutions[0].fieldEvidence.solution.replacedPageText), /因为/,
+            'the page text stays in evidence');
+        assert.match(result.solutions[0].warnings.join('\n'), /视觉转录/);
+    } finally { Inspection.inspect = inspect; }
+});

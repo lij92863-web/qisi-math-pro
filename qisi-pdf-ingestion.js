@@ -605,6 +605,9 @@
                             image_description: '解析带内的图形（按文字层坐标自动裁剪）' })) : [],
                         sourcePageImage: solutionFigure?.accepted ? solutionFigure.pageImageUrl : '',
                         figureEvidence: solutionFigure || null,
+                        // Same rule as the stem: a page that is not plain text leaves this as a safe partial,
+                        // so the visual transcription may replace it instead of being refused as a conflict.
+                        textLayerReliable: block.textLayerReliable !== false,
                         fieldEvidence: { solution: evidence('solution') } });
                 }
             }
@@ -620,7 +623,8 @@
         // transcribed: the model can only repeat it. Skipping those regions is what takes the second half of a
         // question + answer run's cost away, without giving up anything the page did not already prove.
         const supportReadFromPage = new Set(rawAnswers.filter(item => item.labeledBy === 'page-label').map(key)
-            .filter(number => rawSolutions.some(item => key(item) === number && item.labeledBy === 'page-label')));
+            .filter(number => rawSolutions.some(item => key(item) === number && item.labeledBy === 'page-label'
+                && item.textLayerReliable !== false)));
         let transportFailure = null;
         const renderImage = helpers.render || ((source, pageNo, stage, region) =>
             renderPage(source, pageNo, stage, region, renderScope));
@@ -715,7 +719,23 @@
                                     // reconstructed from a model reading, and a solution is taken as it is.
                                     if (entry.answer && !/^[A-D\s]+$/.test(entry.answer)
                                         && !rawAnswers.some(row => key(row) === key(entry))) rawAnswers.push(candidate);
-                                    if (typeof entry.solution === 'string' && entry.solution.trim()) rawSolutions.push(candidate);
+                                    if (typeof entry.solution === 'string' && entry.solution.trim()) {
+                                        // A reasoning the page itself could not lay out (stacked fractions and
+                                        // radicals) is a partial, not a transcription: the reading of the page
+                                        // image takes that field, the page text stays in evidence, and the draft
+                                        // keeps its review warning.
+                                        const at = rawSolutions.findIndex(row => key(row) === key(entry));
+                                        const previous = at >= 0 ? rawSolutions[at] : null;
+                                        if (previous && previous.textLayerReliable === false) {
+                                            // The number stays the page's own proof; only the text came from the image.
+                                            rawSolutions[at] = { ...candidate, labeledBy: previous.labeledBy,
+                                                fieldEvidence: { ...candidate.fieldEvidence,
+                                                    solution: { ...candidate.fieldEvidence?.solution,
+                                                        replacedPageText: previous.solution } },
+                                                warnings: [...new Set([...(candidate.warnings || []),
+                                                    '解析在 PDF 文本层中由多行拼成，已采用视觉转录，需人工核对。'])] };
+                                        } else rawSolutions.push(candidate);
+                                    }
                                 } else {
                                     const merged = mergeVisualQuestion(result.questions[existing], upgraded,
                                         questionTypeByNumber.get(item.number) || '');
@@ -773,7 +793,18 @@
                         // Native explicit labels take precedence. A missing native objective answer
                         // must not be reconstructed from a worked solution by a model.
                         if (item.answer && !/^[A-D\s]+$/.test(item.answer) && !rawAnswers.some(a => key(a) === key(item))) rawAnswers.push(candidate);
-                        if (typeof item.solution === 'string' && item.solution.trim()) rawSolutions.push(candidate);
+                        if (typeof item.solution === 'string' && item.solution.trim()) {
+                            const at = rawSolutions.findIndex(row => key(row) === key(item));
+                            const previous = at >= 0 ? rawSolutions[at] : null;
+                            if (previous && previous.textLayerReliable === false) {
+                                rawSolutions[at] = { ...candidate, labeledBy: previous.labeledBy,
+                                    fieldEvidence: { ...candidate.fieldEvidence,
+                                        solution: { ...candidate.fieldEvidence?.solution,
+                                            replacedPageText: previous.solution } },
+                                    warnings: [...new Set([...(candidate.warnings || []),
+                                        '解析在 PDF 文本层中由多行拼成，已采用视觉转录，需人工核对。'])] };
+                            } else rawSolutions.push(candidate);
+                        }
                     } else {
                         // The same question may already be there from this page's own text (a "mixed" page
                         // keeps its readable text as a safe partial draft). The transcription carries the
