@@ -1,9 +1,11 @@
 (function (root, factory) {
-    const api = factory(root);
+    const api = factory(root, (typeof module !== 'undefined' && module.exports)
+        ? require('./qisi-pdf-figure-extract.js')
+        : root?.Qisi?.PdfFigureExtract);
     root.Qisi = root.Qisi || {};
     root.Qisi.PdfIngestion = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root, figureExtract) {
     'use strict';
     const pageCache = new Map();
     const VISUAL_SCHEMA_VERSION = 'pdf-question-region-v3';
@@ -105,7 +107,7 @@
     };
     // A scope belongs to one ingest. The first crop opens the document; later crops reuse its page
     // raster. The standalone export owns and closes a temporary scope for callers outside ingest.
-    const renderPage = async (file, pageNo, trace, region, sharedScope) => {
+    const rasterOf = async (file, pageNo, trace, sharedScope) => {
         const scope = sharedScope || { rasters: new Map() };
         const bounded = root.Qisi.IngestionContext.withTimeout;
         try {
@@ -133,7 +135,13 @@
                 } catch (error) { canvas.width = canvas.height = 0; throw error; }
                 finally { page.cleanup?.(); }
             }
-            const { canvas, scale } = raster;
+            return raster;
+        } finally { if (!sharedScope) await closeRenderScope(scope); }
+    };
+    const renderPage = async (file, pageNo, trace, region, sharedScope) => {
+        const scope = sharedScope || { rasters: new Map() };
+        try {
+            const { canvas, scale } = await rasterOf(file, pageNo, trace, scope);
             const whole = () => ({ url: canvas.toDataURL('image/jpeg', 0.88), width: canvas.width, height: canvas.height });
             if (!Array.isArray(region) || region.length !== 4) return whole();
             const left = Math.max(0, Math.min(region[0], region[2]) * scale);
@@ -402,6 +410,66 @@
         const evidenceFor = (block, source) => ({ source, sourceFileId: file.id, sourceFileName: file.filename,
             sourcePage: block.sourcePages[0], sourcePages: block.sourcePages, regions: block.regions,
             rawBlock: block.rawText || block.text });
+        // The figure of a question is the ink inside its own band that no text box of that page covers: the
+        // band proves the ownership, the text boxes prove what is *not* drawn content. The band is scanned on
+        // the same rasterisation the vision crops use, so the rectangle handed to the review page is in the
+        // coordinates of the page image the review page will crop from. Nothing is guessed: a scan that
+        // cannot separate the drawing from the band is reported as a refusal, not as a crop.
+        const figureEvidenceByQuestion = new Map();
+        const collectQuestionFigures = async (blocks, pages, trace, sharedScope) => {
+            if (!figureExtract || typeof root.document === 'undefined' || !root.pdfjsLib) return;
+            // The review page crops the figure out of the question's own page image, so an accepted figure
+            // carries that page image with it. It is encoded once per page and shared by every question on it.
+            const pageImageByNumber = new Map();
+            for (const block of blocks) {
+                    const target = block.role !== 'question' || !questionRole ? null
+                        : (block.regionByPage || [])[0];
+                    if (!target) continue;
+                    const page = pages.find(item => item.pageNo === target.page) || null;
+                    if (!page || !page.lines?.length) continue;
+                    try {
+                        const { canvas, scale } = await rasterOf(file, target.page, trace, sharedScope);
+                        const left = Math.max(0, Math.floor(Math.min(target.bbox[0], target.bbox[2]) * scale));
+                        const top = Math.max(0, Math.floor(Math.min(target.bbox[1], target.bbox[3]) * scale));
+                        const right = Math.min(canvas.width, Math.ceil(Math.max(target.bbox[0], target.bbox[2]) * scale));
+                        const bottom = Math.min(canvas.height, Math.ceil(Math.max(target.bbox[1], target.bbox[3]) * scale));
+                        const width = right - left; const height = bottom - top;
+                        if (width < 32 || height < 32) continue;
+                        const image = canvas.getContext('2d').getImageData(left, top, width, height);
+                        const textBoxes = page.lines.map(lineBox => [
+                            Math.min(lineBox.bbox[0], lineBox.bbox[2]) * scale - left,
+                            Math.min(lineBox.bbox[1], lineBox.bbox[3]) * scale - top,
+                            Math.max(lineBox.bbox[0], lineBox.bbox[2]) * scale - left,
+                            Math.max(lineBox.bbox[1], lineBox.bbox[3]) * scale - top]);
+                        // Thresholds are stated in PDF points and converted with the page's own scale, so a
+                        // different paper size or raster scale does not change what counts as a figure.
+                        const found = figureExtract.findFigureInBand({ image, textBoxes, options: {
+                            minInkPixels: Math.round(220 * scale * scale),
+                            minComponentPixels: Math.round(9 * scale * scale),
+                            minSize: Math.round(16 * scale),
+                            textPadding: Math.max(1, Math.round(1.5 * scale))
+                        } });
+                        const evidence = { method: 'band-ink', page: target.page, band: [...target.bbox],
+                            scale: Number(scale.toFixed(3)), accepted: Boolean(found.accepted), reason: found.reason,
+                            inkPixels: found.inkPixels, components: found.components };
+                        if (!found.accepted) {
+                            figureEvidenceByQuestion.set(block.questionNumber, evidence);
+                            continue;
+                        }
+                        const rasterBox = [left + found.bbox[0], top + found.bbox[1], left + found.bbox[2], top + found.bbox[3]];
+                        evidence.bbox = figureExtract.bboxForRaster(rasterBox, canvas);
+                        evidence.questionBbox = figureExtract.bboxForRaster([left, top, right, bottom], canvas);
+                        if (!pageImageByNumber.has(target.page)) {
+                            pageImageByNumber.set(target.page, canvas.toDataURL('image/jpeg', 0.88));
+                        }
+                        evidence.pageImageUrl = pageImageByNumber.get(target.page);
+                        figureEvidenceByQuestion.set(block.questionNumber, evidence);
+                    } catch (error) {
+                        figureEvidenceByQuestion.set(block.questionNumber, { method: 'band-ink', page: target.page,
+                            accepted: false, reason: 'figure-scan-failed', message: error?.message || String(error) });
+                    }
+            }
+        };
         // Where each question actually sits on its page, taken from the block's own line boxes. The vision
         // plan and the review panel show that region instead of the whole page whenever the text layer could
         // prove it; a question without a provable box keeps the whole page.
@@ -431,6 +499,14 @@
                 supportRegionsByNumber.set(`${region.page}:${block.questionNumber}`, region.bbox);
             }
         }
+        // One raster scope for the whole ingest: the figure scan and the vision crops share each page's
+        // rasterisation instead of rendering the same page twice.
+        const renderScope = { rasters: new Map() };
+        if (questionRole) {
+            try { await collectQuestionFigures(inspection.blocks || [], inspection.pages, trace, renderScope); }
+            catch (error) { result.withheld.push({ sourceFileId: file.id, reason: 'figure-scan-failed',
+                message: error?.message || String(error) }); }
+        }
         if (questionRole) for (const block of inspection.blocks.filter(b => b.role === 'question')) {
             if (!questionContract.authoritative || !expected.includes(block.questionNumber)) continue;
             const items = helpers.parseQuestions(block.text, file, false);
@@ -441,8 +517,14 @@
             // visual transcription may replace it later; on a plain text page the text stays the authority.
             const textEvidence = { ...evidenceFor(block, 'pdf-text'),
                 textLayerReliable: block.textLayerReliable !== false };
+            const figure = figureEvidenceByQuestion.get(block.questionNumber);
             result.questions.push({ ...items[0], type: block.type || '', answer: '', solution: '', sourceTrace: evidenceFor(block, 'pdf-text'),
                 sourcePage: block.sourcePages[0], sourcePages: block.sourcePages,
+                recognizedImages: figure?.accepted ? [{ image_bbox: figure.bbox, image_confidence: 0.8,
+                    image_description: '题目带内的图形（按文字层坐标自动裁剪）', page: figure.page }] : [],
+                question_bbox: figure?.accepted ? figure.questionBbox : [],
+                figureEvidence: figure || null,
+                sourcePageImage: figure?.accepted ? figure.pageImageUrl : undefined,
                 fieldEvidence: { stem: { ...textEvidence }, options: { ...textEvidence } } });
         }
         // Explicit objective answers can be read even when surrounding formula glyphs cannot.
@@ -519,7 +601,6 @@
         const supportReadFromPage = new Set(rawAnswers.filter(item => item.labeledBy === 'page-label').map(key)
             .filter(number => rawSolutions.some(item => key(item) === number && item.labeledBy === 'page-label')));
         let transportFailure = null;
-        const renderScope = { rasters: new Map() };
         const renderImage = helpers.render || ((source, pageNo, stage, region) =>
             renderPage(source, pageNo, stage, region, renderScope));
         try {
