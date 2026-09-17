@@ -416,15 +416,20 @@
         // coordinates of the page image the review page will crop from. Nothing is guessed: a scan that
         // cannot separate the drawing from the band is reported as a refusal, not as a crop.
         const figureEvidenceByQuestion = new Map();
+        const figureEvidenceBySolution = new Map();
         const collectQuestionFigures = async (blocks, pages, trace, sharedScope) => {
             if (!figureExtract || typeof root.document === 'undefined' || !root.pdfjsLib) return;
             // The review page crops the figure out of the question's own page image, so an accepted figure
             // carries that page image with it. It is encoded once per page and shared by every question on it.
             const pageImageByNumber = new Map();
             for (const block of blocks) {
-                    const target = block.role !== 'question' || !questionRole ? null
-                        : (block.regionByPage || [])[0];
+                    // A question's own figure and the figure inside its reasoning are found the same way; only
+                    // their owner differs (the question band, or the support block's band).
+                    const role = block.role === 'question' ? (questionRole ? 'question' : '')
+                        : ((supportRole || fullRole) ? 'support' : '');
+                    const target = role ? (block.regionByPage || [])[0] : null;
                     if (!target) continue;
+                    const store = role === 'question' ? figureEvidenceByQuestion : figureEvidenceBySolution;
                     const page = pages.find(item => item.pageNo === target.page) || null;
                     if (!page || !page.lines?.length) continue;
                     try {
@@ -453,7 +458,7 @@
                             scale: Number(scale.toFixed(3)), accepted: Boolean(found.accepted), reason: found.reason,
                             inkPixels: found.inkPixels, components: found.components };
                         if (!found.accepted) {
-                            figureEvidenceByQuestion.set(block.questionNumber, evidence);
+                            store.set(block.questionNumber, evidence);
                             continue;
                         }
                         const rasterBox = [left + found.bbox[0], top + found.bbox[1], left + found.bbox[2], top + found.bbox[3]];
@@ -467,9 +472,9 @@
                             pageImageByNumber.set(target.page, canvas.toDataURL('image/jpeg', 0.88));
                         }
                         evidence.pageImageUrl = pageImageByNumber.get(target.page);
-                        figureEvidenceByQuestion.set(block.questionNumber, evidence);
+                        store.set(block.questionNumber, evidence);
                     } catch (error) {
-                        figureEvidenceByQuestion.set(block.questionNumber, { method: 'band-ink', page: target.page,
+                        store.set(block.questionNumber, { method: 'band-ink', page: target.page,
                             accepted: false, reason: 'figure-scan-failed', message: error?.message || String(error) });
                     }
             }
@@ -506,7 +511,7 @@
         // One raster scope for the whole ingest: the figure scan and the vision crops share each page's
         // rasterisation instead of rendering the same page twice.
         const renderScope = { rasters: new Map() };
-        if (questionRole) {
+        if (questionRole || supportRole || fullRole) {
             try { await collectQuestionFigures(inspection.blocks || [], inspection.pages, trace, renderScope); }
             catch (error) { result.withheld.push({ sourceFileId: file.id, reason: 'figure-scan-failed',
                 message: error?.message || String(error) }); }
@@ -587,9 +592,20 @@
                 if (solutionAt >= 0) {
                     const solution = [stripLabel(lines[solutionAt], SOLUTION_MARK), ...lines.slice(solutionAt + 1)]
                         .filter(line => line !== '').join('\n').trim();
+                    // A reasoning carries drawings of its own (the 正四棱台 of question 2 is drawn inside its
+                    // explanation). The same band scan finds them, and they travel on the solution item in the
+                    // shape the review page already binds: recognizedSolutionImages + the page they were
+                    // measured on.
+                    const solutionFigure = figureEvidenceBySolution.get(block.questionNumber);
                     if (solution) rawSolutions.push({ question: block.questionNumber,
                         solution, sourceFileId: file.id, sourceFileName: file.filename, sourcePage: block.sourcePages[0],
-                        labeledBy: 'page-label', fieldEvidence: { solution: evidence('solution') } });
+                        labeledBy: 'page-label',
+                        images: solutionFigure?.accepted ? (solutionFigure.figures || []).map(item => ({
+                            image_bbox: item.bbox, image_confidence: 0.8,
+                            image_description: '解析带内的图形（按文字层坐标自动裁剪）' })) : [],
+                        sourcePageImage: solutionFigure?.accepted ? solutionFigure.pageImageUrl : '',
+                        figureEvidence: solutionFigure || null,
+                        fieldEvidence: { solution: evidence('solution') } });
                 }
             }
             if (inspection.pages.every(p => p.kind === 'text')) {
