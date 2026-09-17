@@ -22,8 +22,11 @@
     'use strict';
 
     const DEFAULTS = {
-        // A pixel darker than this (0-255 luminance) is ink.
-        darkness: 200,
+        // How much darker than the band's own paper tone a pixel has to be to count as ink, and the window
+        // that keeps the result sane on a very dark or a very bright page.
+        contrast: 45,
+        minDarkness: 140,
+        maxDarkness: 230,
         // Ink below this many pixels is stray strokes, not a figure.
         minInkPixels: 900,
         // A connected blob smaller than this is noise (a dash, a stray dot, an antialiasing halo).
@@ -71,12 +74,25 @@
         }
 
         let inkPixels = 0;
+        // The band's own paper tone decides what "dark" means: the 90th percentile of its luminance is the
+        // background whether the page is bright white, washed out by a scan, or a light grey stock, and a
+        // drawing has to stand out from *that*. A fixed threshold would either lose pale drawings on a grey
+        // page or turn the texture of a washed-out scan into a figure.
+        const histogram = new Uint32Array(256);
+        for (let at = 0; at < pixelCount; at += 1) {
+            histogram[Math.round(luminanceAt(image.data, at * 4))] += 1;
+        }
+        let background = 255;
+        for (let value = 254; value >= 0; value -= 1) {
+            if (histogram[value] > histogram[background]) background = value;
+        }
+        const limit = clamp(background - settings.contrast, settings.minDarkness, settings.maxDarkness);
         for (let y = 0; y < height; y += 1) {
             const row = y * width;
             for (let x = 0; x < width; x += 1) {
                 const at = row + x;
                 if (mask[at] === 1) continue;
-                if (luminanceAt(image.data, at * 4) < settings.darkness) { mask[at] = 2; inkPixels += 1; }
+                if (luminanceAt(image.data, at * 4) < limit) { mask[at] = 2; inkPixels += 1; }
             }
         }
         if (inkPixels < settings.minInkPixels) {

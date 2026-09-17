@@ -101,3 +101,27 @@ test('strokes of one drawing that nearly touch are grouped into one figure', () 
     assert.deepEqual(found.figures[0].bbox, [100, 100, 228, 160]);
     assert.equal(found.figures[0].components, 2);
 });
+
+// The threshold follows the band's own paper tone, so a pale drawing on a bright page and a drawing on a
+// washed-out scan are both found, while the tone of that scan is not mistaken for ink.
+test('what counts as ink follows the background of the band itself', () => {
+    const pale = paper(400, 300);
+    for (let y = 100; y < 240; y += 1) for (let x = 100; x < 300; x += 1) {
+        const at = (y * pale.width + x) * 4;
+        pale.data[at] = 205; pale.data[at + 1] = 205; pale.data[at + 2] = 205;
+    }
+    assert.equal(Figures.findFigureInBand({ image: pale, textBoxes: [[20, 10, 380, 40]] }).accepted, true,
+        'a light grey drawing on white paper is a drawing');
+
+    const washed = { width: 400, height: 300, data: new Uint8ClampedArray(400 * 300 * 4) };
+    for (let at = 0; at < washed.data.length; at += 4) {
+        washed.data[at] = 214; washed.data[at + 1] = 214; washed.data[at + 2] = 214;
+    }
+    for (let y = 100; y < 240; y += 1) for (let x = 100; x < 300; x += 1) {
+        const at = (y * washed.width + x) * 4;
+        washed.data[at] = 120; washed.data[at + 1] = 120; washed.data[at + 2] = 120;
+    }
+    const found = Figures.findFigureInBand({ image: washed, textBoxes: [[20, 10, 380, 40]] });
+    assert.equal(found.accepted, true, found.reason);
+    assert.deepEqual(found.figures[0].bbox, [100, 100, 300, 240]);
+});
