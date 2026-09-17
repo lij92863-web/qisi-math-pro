@@ -147,11 +147,15 @@
         // number that jumps backwards, or a number outside the question file's contract.
         const PAGE_LABEL_SOURCE = 'page-label';
         const labelledSequence = (items = []) => {
-            const rows = (items || []).map((item, index) => ({
+            // Only rows that carry the number printed on the page take part in label alignment. A row that
+            // arrived from another source (a model reading, the whole-page parser) is not evidence *against*
+            // the printed numbers around it - it simply is not one of them, so it cannot switch the file back
+            // to positional guessing and take the printed answers down with it.
+            const rows = (items || []).filter(item => item?.labeledBy === PAGE_LABEL_SOURCE).map((item, index) => ({
                 index,
                 raw: getItemQuestion(item),
                 value: Number(normalizeSupportQuestionNumber(getItemQuestion(item))) || 0,
-                labelled: item?.labeledBy === PAGE_LABEL_SOURCE
+                labelled: true
             }));
             return {
                 rows,
@@ -556,12 +560,16 @@
                 validation.report;
 
             if (validation.mode === 'full') {
+                // With label alignment the safe set is exactly the rows whose number the page printed; a row
+                // from another source is not silently promoted to a page-proved one, and is reported instead.
+                const byLabel = validation.alignment === 'page-label';
+                const keep = item => !byLabel || item?.labeledBy === PAGE_LABEL_SOURCE;
                 return {
                     reliable: true,
                     mode: 'full',
                     alignment: validation.alignment || 'question-sequence',
-                    safeAnswerItems: [...(answerItems || [])],
-                    safeSolutionItems: [...(solutionItems || [])],
+                    safeAnswerItems: (answerItems || []).filter(keep),
+                    safeSolutionItems: (solutionItems || []).filter(keep),
                     safeQuestionNumbers:
                         validation.safeQuestionNumbers?.length
                             ? validation.safeQuestionNumbers
