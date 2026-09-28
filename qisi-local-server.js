@@ -9,6 +9,7 @@ const fsp = require('fs/promises');
 const { spawn } = require('child_process');
 const { createTempJobManager } = require('./qisi-temp-job-manager');
 const { createSecureLogger } = require('./qisi-secure-logger');
+const { instanceIdFor } = require('./qisi-local-instance');
 
 createSecureLogger(console).install();
 
@@ -479,6 +480,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
     service: 'qisi-local-server',
+    instanceId: instanceIdFor(ROOT),
     platform: process.platform,
     port: PORT
   });

@@ -62,7 +62,7 @@
 
             root.pdfjsLib.GlobalWorkerOptions.workerSrc =
                 root.pdfjsLib.GlobalWorkerOptions.workerSrc ||
-                'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+                './vendor/pdfjs/pdf.worker.min.js';
 
             let buffer;
             try {

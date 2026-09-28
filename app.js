@@ -4303,7 +4303,10 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     const originalHtmlContent = LatexPreview.computed.htmlContent;
                     LatexPreview.computed.htmlContent = function () {
                         return originalHtmlContent.call({
-                            ...this,
+                            // Vue component instances expose computed properties through accessors.
+                            // Spreading the instance reads htmlContent again and recurses.
+                            questionType: this.questionType,
+                            flowOptions: this.flowOptions,
                             content: window.Qisi.Utils.normalizeBareLatexForDisplayText(this.content),
                             options: window.Qisi.Utils.normalizeBareLatexForDisplayOptions(this.options),
                             images: this.images || []
