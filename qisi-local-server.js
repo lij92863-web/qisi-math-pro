@@ -1,7 +1,6 @@
 require('dotenv').config();
 
 const express = require('express');
-const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -10,6 +9,7 @@ const { spawn } = require('child_process');
 const { createTempJobManager } = require('./qisi-temp-job-manager');
 const { createSecureLogger } = require('./qisi-secure-logger');
 const { instanceIdFor } = require('./qisi-local-instance');
+const { isAllowedLocalHost, isAllowedLocalOrigin, publicRootAssets, isPublicAsset } = require('./qisi-local-http-boundary');
 
 createSecureLogger(console).install();
 
@@ -20,6 +20,7 @@ const CONVERTED_DIR = path.join(TMP_DIR, 'converted');
 const TOOLS_DIR = path.join(ROOT, 'tools');
 const PS_CONVERTER = path.join(TOOLS_DIR, 'convert-docx-to-pdf.ps1');
 const PORT = Number(process.env.PORT || 3000);
+const HOST = '127.0.0.1';
 const CONVERT_TIMEOUT_MS = Number(process.env.DOCX_CONVERT_TIMEOUT_MS || 120000);
 const CONVERTER_MODE = String(process.env.QISI_DOCX_CONVERTER || 'auto').toLowerCase();
 const DASHSCOPE_API_KEY = String(process.env.DASHSCOPE_API_KEY || '').trim();
@@ -42,7 +43,19 @@ const tempJobManager = createTempJobManager({
 const app = express();
 const aiJsonParser = express.json({ limit: AI_BODY_LIMIT, type: 'application/json' });
 
-app.use(cors({ origin: true, credentials: false }));
+app.use((req, res, next) => {
+  if (!isAllowedLocalHost(req.get('host'), PORT)) return res.sendStatus(403);
+  const origin = req.get('origin');
+  res.vary('Origin');
+  if (!isAllowedLocalOrigin(origin, PORT)) return res.sendStatus(403);
+  if (origin) res.set('Access-Control-Allow-Origin', origin);
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, X-Request-Id');
+    return res.sendStatus(204);
+  }
+  next();
+});
 
 app.get('/api/ai/health', (req, res) => {
   res.json({
@@ -159,6 +172,12 @@ app.post('/api/ai/ocr', aiJsonParser, (req, res) => {
 });
 
 app.use(express.json({ limit: '2mb' }));
+const rootAssets = publicRootAssets(fs.readFileSync(path.join(ROOT, 'main.html'), 'utf8'));
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  if (!isPublicAsset(req.path, rootAssets)) return res.sendStatus(404);
+  next();
+});
 app.use(express.static(ROOT, { extensions: ['html'], maxAge: 0, etag: false }));
 
 const storage = multer.diskStorage({
@@ -674,7 +693,7 @@ app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => 
 
 async function startServer() {
   await tempJobManager.cleanupExpired();
-  app.listen(PORT, () => {
+  app.listen(PORT, HOST, () => {
     console.log(`[qisi-local-server] running at http://localhost:${PORT}`);
     console.log(`[qisi-local-server] open http://localhost:${PORT}/main.html`);
     console.log(`[qisi-local-server] health check: http://localhost:${PORT}/api/health`);

@@ -49,6 +49,17 @@ test('arbitrary strings and Error messages cannot cross the log boundary', () =>
     assert.deepEqual(result, ['[QISI_LOG]', { stage: 'application' }]);
 });
 
+test('known runtime failure is diagnosable without emitting arbitrary error text', () => {
+    const result = sanitizeLogArgs(['[UI][failure]', new RangeError('Maximum call stack size exceeded')]);
+    assert.deepEqual(result, ['[QISI_LOG]', {
+        stage: 'UI.failure',
+        errorClass: 'RangeError',
+        reason: 'CALL_STACK_EXCEEDED'
+    }]);
+    const privateResult = sanitizeLogArgs(['[UI][failure]', new RangeError('PRIVATE_QUESTION_CONTENT')]);
+    assert.deepEqual(privateResult, ['[QISI_LOG]', { stage: 'UI.failure', errorClass: 'RangeError' }]);
+});
+
 test('installed console methods emit only sanitized arguments', () => {
     const emitted = [];
     const target = {};

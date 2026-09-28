@@ -82,7 +82,20 @@ test('real AppProxy batch submit writes an admitted question v2 transactionally'
         }, batchId);
 
         await callProxy(page, 'openBatchReview', batchId);
-        await callProxy(page, 'markDraftReviewed');
+        // Observe the committed UI state: Playwright can lose the awaited
+        // evaluate promise after this command has already persisted the review.
+        await page.evaluate(() => {
+            const proxy = window.Qisi.Runtime.getRuntimeDependency('AppProxy');
+            void proxy.markDraftReviewed();
+        });
+        await page.waitForFunction(id => {
+            const proxy = window.Qisi.Runtime.getRuntimeDependency('AppProxy');
+            return proxy.batchDraftQuestions.some(
+                draft => draft.id === id && draft.status === 'reviewed'
+            );
+        }, `${batchId}_q1`);
+        const reviewed = await getDbSnapshot(page);
+        assert.equal(reviewed.drafts.find(item => item.id === `${batchId}_q1`)?.status, 'reviewed');
         assert.equal(
             await callProxy(page, 'submitDraftQuestion', `${batchId}_q1`, true),
             true
