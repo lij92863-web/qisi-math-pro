@@ -12,6 +12,51 @@
         if (signal?.aborted) throw createError('PDF_SOURCES_ABORTED', 'AbortError');
     }
 
+    function planFullPdfPageRoles(layouts) {
+        if (!Array.isArray(layouts) || layouts.length < 2) return null;
+        const pages = [...layouts].sort((a, b) => a.pageNo - b.pageNo);
+        const pageNos = pages.map(page => Number(page?.pageNo));
+        if (pageNos.some(no => !Number.isInteger(no) || no < 1) ||
+            new Set(pageNos).size !== pageNos.length) return null;
+
+        const compact = text => String(text || '').replace(/[\s\u00a0]/g, '');
+        const supportHeading = text => {
+            const value = compact(text);
+            if (value.length > 140) return false;
+            const title = '(?:参考答案(?:及解析|与解析)?|答案解析|答案与解析)';
+            return new RegExp(`^(?:《[^》]{1,110}》|[^。！？]{1,70}试卷)?${title}[:：]?$`).test(value);
+        };
+        const blank = page =>
+            (page.lines || []).length === 0 &&
+            Number.isInteger(page.operatorCount) &&
+            page.operatorCount <= 3 &&
+            page.annotationCount === 0;
+        const headingIndex = pages.findIndex(page =>
+            (page.lines || []).some((line, index) =>
+                index < 6 && Number(line.ny1) < 240 && supportHeading(line.text)
+            )
+        );
+        if (headingIndex < 1) return null;
+
+        const before = pages.slice(0, headingIndex);
+        const hasQuestionEvidence = before.some(page =>
+            (page.lines || []).some(line =>
+                /^(?:第)?\d{1,3}(?:题)?[.．、:：)）]/.test(compact(line.text))
+            )
+        );
+        if (!hasQuestionEvidence) return null;
+
+        const questionPageNos = before.filter(page => !blank(page)).map(page => page.pageNo);
+        const supportPageNos = pages.slice(headingIndex)
+            .filter(page => !blank(page)).map(page => page.pageNo);
+        if (!questionPageNos.length || !supportPageNos.length) return null;
+        return Object.freeze({
+            questionPageNos: Object.freeze(questionPageNos),
+            supportPageNos: Object.freeze(supportPageNos),
+            boundaryPageNo: pages[headingIndex].pageNo
+        });
+    }
+
     async function processPdfSources(input = {}, ports = {}) {
         const batch = input.batch;
         const sources = Array.isArray(input.sources) ? input.sources : [];
@@ -120,6 +165,31 @@
                             const drafts = [];
                             const evidences = [];
                             const warnings = [];
+                            const pageRolePlans = new Map();
+                            const inspectLayout = ports.getEngineHelpers()
+                                ?.extractPdfLayoutWithPdfJs;
+                            if (typeof inspectLayout === 'function') {
+                                for (const source of questionSources.filter(ports.isFullRole)) {
+                                    assertActive(pdfSignal);
+                                    try {
+                                        const layouts = await inspectLayout(source, {
+                                            includeOperatorCount: true
+                                        });
+                                        const plan = planFullPdfPageRoles(layouts);
+                                        if (plan) pageRolePlans.set(String(source.id), plan);
+                                    } catch (error) {
+                                        assertActive(pdfSignal);
+                                        warnings.push('PDF 页面角色核查失败，沿用原页范围。');
+                                    }
+                                }
+                            }
+                            const sourceForRole = (source, role) => {
+                                const plan = pageRolePlans.get(String(source.id));
+                                if (!plan) return source;
+                                const pageNos = role === 'question'
+                                    ? plan.questionPageNos : plan.supportPageNos;
+                                return { ...source, pageRange: pageNos.join(',') };
+                            };
                             for (const source of questionSources) {
                                 if (pdfSignal?.aborted) {
                                     throw createError(
@@ -128,7 +198,7 @@
                                     );
                                 }
                                 const result = await ports.processQuestionSource({
-                                    source,
+                                    source: sourceForRole(source, 'question'),
                                     batch,
                                     expectedQuestionCount:
                                         batch.expectedQuestionCount || 0,
@@ -156,12 +226,12 @@
                                 .filter(Boolean);
                             for (const source of supportSources) {
                                 const pages = await ports.prepareSupportPages({
-                                    source,
+                                    source: sourceForRole(source, 'support'),
                                     reportStage: context.reportStage,
                                     signal: pdfSignal
                                 });
                                 const support = await ports.processSupportPages({
-                                    source,
+                                    source: sourceForRole(source, 'support'),
                                     pages,
                                     strict: true,
                                     expectedQuestionNumbers,
@@ -186,7 +256,7 @@
                                         id: `pdf-support:${source.id}:${index + 1}`,
                                         sourceFileId: source.id,
                                         sourceFileName: source.filename || '',
-                                        pageNo: index + 1,
+                                        pageNo: pages[index]?.pageNo || index + 1,
                                         roles: ports.getRoles(source),
                                         selectedSourceKind: 'ocrMarkdown',
                                         ocrMarkdown: text
@@ -220,7 +290,7 @@
         };
     }
 
-    const api = Object.freeze({ processPdfSources, createProductionImportRunner });
+    const api = Object.freeze({ processPdfSources, createProductionImportRunner, planFullPdfPageRoles });
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (root) {
         root.Qisi = root.Qisi || {};

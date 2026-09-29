@@ -144,6 +144,79 @@ test('PDF-only production coordinator adapter uses the shared source port', () =
     assert.match(app, /PdfCandidateProjection\s*\.projectPdfCandidates\s*\(/);
 });
 
+test('explicit answer heading separates question and support pages and skips a truly blank page', () => {
+    const layouts = [
+        { pageNo: 1, operatorCount: 100, lines: [{ text: '1．第一题', ny1: 40 }] },
+        { pageNo: 2, operatorCount: 50, lines: [{ text: '2．第二题', ny1: 40 }] },
+        { pageNo: 3, operatorCount: 3, annotationCount: 0, lines: [] },
+        { pageNo: 4, operatorCount: 70, lines: [{ text: '《某校数学试卷》参考答案', ny1: 40 }] },
+        { pageNo: 5, operatorCount: 50, lines: [{ text: '1．A', ny1: 40 }] }
+    ];
+    assert.deepEqual(Port.planFullPdfPageRoles(layouts), {
+        questionPageNos: [1, 2], supportPageNos: [4, 5], boundaryPageNo: 4
+    });
+    assert.equal(Port.planFullPdfPageRoles(layouts.slice(0, 2)), null);
+    assert.equal(Port.planFullPdfPageRoles([
+        { pageNo: 1, operatorCount: 100, lines: [{ text: '请参考答案中的方法', ny1: 40 }] },
+        { pageNo: 2, operatorCount: 50, lines: [{ text: '2．第二题', ny1: 40 }] }
+    ]), null);
+    assert.equal(Port.planFullPdfPageRoles([
+        { pageNo: 1, operatorCount: 100, lines: [{ text: '1．第一题', ny1: 40 }] },
+        { pageNo: 2, operatorCount: 50, lines: [{ text: '《某校数学试卷》参考答案', ny1: 500 }] }
+    ]), null);
+    assert.deepEqual(Port.planFullPdfPageRoles([
+        { pageNo: 1, operatorCount: 100, lines: [{ text: '1．第一题', ny1: 40 }] },
+        { pageNo: 2, operatorCount: 3, annotationCount: 1, lines: [] },
+        { pageNo: 3, operatorCount: 50, lines: [{ text: '参考答案', ny1: 40 }] }
+    ]).questionPageNos, [1, 2]);
+});
+
+test('full PDF routes each page range to its own producer and keeps original support page numbers', async () => {
+    const seen = { question: [], support: [], inspected: [] };
+    const source = { id: 'mixed', batchId: 'batch-1', fileType: 'pdf', roles: ['full'], pageRange: '' };
+    const runner = Port.createProductionImportRunner({
+        coordinator: {
+            runPdfImport: async (context, runnerPorts) => runnerPorts.processSources({
+                sources: context.sources, onPageProgress: () => {}
+            })
+        },
+        hasQuestionRole: item => item.roles.includes('question'),
+        isFullRole: item => item.roles.includes('full'),
+        hasAnswerRole: item => item.roles.includes('answer'),
+        hasSolutionRole: item => item.roles.includes('solution'),
+        getRoles: item => item.roles,
+        normalizeQuestionNumber: value => String(value || ''),
+        getEngineHelpers: () => ({
+            extractPdfLayoutWithPdfJs: async (item, options) => {
+                seen.inspected.push({ id: item.id, options });
+                return [
+                    { pageNo: 1, operatorCount: 100, lines: [{ text: '1．题干', ny1: 30 }] },
+                    { pageNo: 2, operatorCount: 3, annotationCount: 0, lines: [] },
+                    { pageNo: 3, operatorCount: 200, lines: [{ text: '《数学试卷》参考答案', ny1: 30 }] },
+                    { pageNo: 4, operatorCount: 100, lines: [{ text: '1．A', ny1: 30 }] }
+                ];
+            }
+        }),
+        processQuestionSource: async input => {
+            seen.question.push(input.source.pageRange);
+            return { questions: [{ id: 'q1', questionNumber: '1' }], check: { fatal: false, warningReasons: [] } };
+        },
+        prepareSupportPages: async input => {
+            seen.support.push(input.source.pageRange);
+            return [{ pageNo: 3 }, { pageNo: 4 }];
+        },
+        processSupportPages: async () => ({ rawTextPages: ['参考答案', '1．A'] }),
+        buildProjectionContext: () => ({}),
+        safePartialPipeline: { normalizePdfPipelineResult: () => ({ isSafePartial: true, isComplete: false }) }
+    });
+    const result = await runner({ batchId: 'batch-1', batch: { id: 'batch-1' }, sources: [source] });
+    assert.deepEqual(seen.question, ['1']);
+    assert.deepEqual(seen.support, ['3,4']);
+    assert.deepEqual(seen.inspected, [{ id: 'mixed', options: { includeOperatorCount: true } }]);
+    assert.deepEqual(result.evidences.map(item => item.pageNo), [3, 4]);
+    assert.equal(source.pageRange, '');
+});
+
 test('production runner owns PDF source roles, evidence, projection context, and safe partial', async () => {
     const runner = Port.createProductionImportRunner({
         coordinator: {

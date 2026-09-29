@@ -361,7 +361,7 @@
             return pageTexts.join('\n\n');
         };
 
-        const extractPdfLayoutWithPdfJs = async (file) => {
+        const extractPdfLayoutWithPdfJs = async (file, options = {}) => {
             if (!root.pdfjsLib) return [];
 
             root.pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -377,6 +377,12 @@
                 const page = await pdf.getPage(pageNo);
                 const viewport = page.getViewport({ scale: PDF_PROCESS_CONFIG.renderScale || 2 });
                 const content = await page.getTextContent();
+                const operatorCount = options.includeOperatorCount === true
+                    ? (await page.getOperatorList()).fnArray.length
+                    : undefined;
+                const annotationCount = options.includeOperatorCount === true
+                    ? (await page.getAnnotations({ intent: 'display' })).length
+                    : undefined;
 
                 const items = (content.items || [])
                     .map(item => {
@@ -447,6 +453,8 @@
                     pageNo,
                     width: viewport.width,
                     height: viewport.height,
+                    ...(operatorCount === undefined ? {} : { operatorCount }),
+                    ...(annotationCount === undefined ? {} : { annotationCount }),
                     lines: normalizedLines
                 });
             }
