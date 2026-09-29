@@ -258,6 +258,7 @@
             file,
             pages = [],
             onPageProgress = null,
+            evidenceOnly = false,
             signal
         }) => {
             const evidence = {
@@ -364,6 +365,8 @@
                             page.imageUrl,
                         rawText
                     });
+
+                    if (evidenceOnly) continue;
 
                     const localResult =
                         parseAnswerAndSolutionItemsFromText(
@@ -1458,6 +1461,7 @@
             pages = [],
             onPageProgress = null,
             strict = false,
+            evidenceOnly = false,
             expectedQuestionNumbers = [],
             requiredKinds = {
                 answers: true,
@@ -1481,6 +1485,7 @@
                     file,
                     pages,
                     onPageProgress,
+                    evidenceOnly,
                     signal
                 });
 
@@ -1515,36 +1520,38 @@
                     evidence.solutions || []
             };
 
-            try {
-                structured =
-                    await recognizeSupportDocumentFromEvidence({
-                        file,
-                        evidence,
-                        strict,
-                        expectedQuestionNumbers,
-                        requiredKinds,
-                        signal
-                    });
-            } catch (error) {
-                if (
-                    strict ||
-                    root.Qisi.Utils.isFatalQwenServiceError(error)
-                ) {
-                    throw error;
+            if (!evidenceOnly) {
+                try {
+                    structured =
+                        await recognizeSupportDocumentFromEvidence({
+                            file,
+                            evidence,
+                            strict,
+                            expectedQuestionNumbers,
+                            requiredKinds,
+                            signal
+                        });
+                } catch (error) {
+                    if (
+                        strict ||
+                        root.Qisi.Utils.isFatalQwenServiceError(error)
+                    ) {
+                        throw error;
+                    }
+
+                    console.warn(
+                        '[BATCH_DEBUG][support-document-structure-failed-keep-local]',
+                        {
+                            filename:
+                                file.filename,
+
+                            message:
+                                error?.message ||
+                                String(error)
+                        },
+                        error
+                    );
                 }
-
-                console.warn(
-                    '[BATCH_DEBUG][support-document-structure-failed-keep-local]',
-                    {
-                        filename:
-                            file.filename,
-
-                        message:
-                            error?.message ||
-                            String(error)
-                    },
-                    error
-                );
             }
 
             const result = {
@@ -1557,6 +1564,11 @@
                     (evidence.pages || [])
                         .map(page => page.rawText || '')
                         .filter(Boolean),
+                rawEvidencePages:
+                    (evidence.pages || []).map(page => ({
+                        pageNo: page.pageNo,
+                        rawText: page.rawText || ''
+                    })),
                 pageImages:
                     evidence.pageImages || [],
                 failedPages:

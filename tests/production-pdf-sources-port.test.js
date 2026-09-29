@@ -142,6 +142,10 @@ test('PDF-only production coordinator adapter uses the shared source port', () =
     assert.doesNotMatch(app, /Qisi\.PdfImportCoordinator\.runPdfImport\s*\(/);
     assert.doesNotMatch(app, /createPdfEngineProjectionContext\s*\(/);
     assert.match(app, /PdfCandidateProjection\s*\.projectPdfCandidates\s*\(/);
+    assert.match(
+        app,
+        /recognizeVisualSupportFromPreparedPages\(\{[\s\S]*?evidenceOnly:\s*input\.evidenceOnly/
+    );
 });
 
 test('explicit answer heading separates question and support pages and skips a truly blank page', () => {
@@ -172,7 +176,7 @@ test('explicit answer heading separates question and support pages and skips a t
 });
 
 test('full PDF routes each page range to its own producer and keeps original support page numbers', async () => {
-    const seen = { question: [], support: [], inspected: [] };
+    const seen = { question: [], support: [], inspected: [], evidenceOnly: [] };
     const source = { id: 'mixed', batchId: 'batch-1', fileType: 'pdf', roles: ['full'], pageRange: '' };
     const runner = Port.createProductionImportRunner({
         coordinator: {
@@ -205,7 +209,15 @@ test('full PDF routes each page range to its own producer and keeps original sup
             seen.support.push(input.source.pageRange);
             return [{ pageNo: 3 }, { pageNo: 4 }];
         },
-        processSupportPages: async () => ({ rawTextPages: ['参考答案', '1．A'] }),
+        processSupportPages: async input => {
+            seen.evidenceOnly.push(input.evidenceOnly);
+            return {
+                rawEvidencePages: [
+                    { pageNo: 3, rawText: '参考答案' },
+                    { pageNo: 4, rawText: '1．A' }
+                ]
+            };
+        },
         buildProjectionContext: () => ({}),
         safePartialPipeline: { normalizePdfPipelineResult: () => ({ isSafePartial: true, isComplete: false }) }
     });
@@ -214,7 +226,45 @@ test('full PDF routes each page range to its own producer and keeps original sup
     assert.deepEqual(seen.support, ['3,4']);
     assert.deepEqual(seen.inspected, [{ id: 'mixed', options: { includeOperatorCount: true } }]);
     assert.deepEqual(result.evidences.map(item => item.pageNo), [3, 4]);
+    assert.deepEqual(seen.evidenceOnly, [true]);
     assert.equal(source.pageRange, '');
+});
+
+test('PDF support evidence keeps its page number when an OCR text page is empty', async () => {
+    const runner = Port.createProductionImportRunner({
+        coordinator: {
+            runPdfImport: async (context, runnerPorts) => runnerPorts.processSources({
+                sources: context.sources
+            })
+        },
+        hasQuestionRole: item => item.roles.includes('question'),
+        isFullRole: item => item.roles.includes('full'),
+        hasAnswerRole: item => item.roles.includes('answer'),
+        hasSolutionRole: item => item.roles.includes('solution'),
+        getRoles: item => item.roles,
+        normalizeQuestionNumber: value => String(value || ''),
+        getEngineHelpers: () => ({}),
+        processQuestionSource: async () => ({
+            questions: [{ questionNumber: '1' }],
+            check: { fatal: false }
+        }),
+        prepareSupportPages: async () => [{ pageNo: 9 }, { pageNo: 10 }],
+        processSupportPages: async input => {
+            assert.equal(input.evidenceOnly, true);
+            return { rawEvidencePages: [{ pageNo: 10, rawText: '1．答案 A' }] };
+        },
+        buildProjectionContext: () => ({}),
+        safePartialPipeline: { normalizePdfPipelineResult: () => ({}) }
+    });
+    const result = await runner({
+        batchId: 'batch-1',
+        batch: { id: 'batch-1' },
+        sources: [
+            { id: 'question', roles: ['question'], fileType: 'pdf' },
+            { id: 'support', roles: ['answer'], fileType: 'pdf' }
+        ]
+    });
+    assert.deepEqual(result.evidences.map(item => item.pageNo), [10]);
 });
 
 test('production runner owns PDF source roles, evidence, projection context, and safe partial', async () => {

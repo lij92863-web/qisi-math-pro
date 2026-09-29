@@ -1916,7 +1916,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                                 recognizeVisualSupportFromPreparedPages({
                                     file: input.source,
                                     pages: input.pages,
-                                    strict: input.strict,
+                                    strict: input.strict, evidenceOnly: input.evidenceOnly,
                                     expectedQuestionNumbers:
                                         input.expectedQuestionNumbers,
                                     requiredKinds: input.requiredKinds,

@@ -234,6 +234,7 @@
                                     source: sourceForRole(source, 'support'),
                                     pages,
                                     strict: true,
+                                    evidenceOnly: true,
                                     expectedQuestionNumbers,
                                     requiredKinds: {
                                         answers: ports.hasAnswerRole(source) ||
@@ -251,15 +252,21 @@
                                         }),
                                     signal: pdfSignal
                                 });
-                                (support?.rawTextPages || []).forEach((text, index) => {
+                                const rawPages = Array.isArray(support?.rawEvidencePages)
+                                    ? support.rawEvidencePages
+                                    : (support?.rawTextPages || []).map((rawText, index) => ({
+                                        pageNo: pages[index]?.pageNo || index + 1,
+                                        rawText
+                                    }));
+                                rawPages.forEach((page, index) => {
                                     evidences.push({
                                         id: `pdf-support:${source.id}:${index + 1}`,
                                         sourceFileId: source.id,
                                         sourceFileName: source.filename || '',
-                                        pageNo: pages[index]?.pageNo || index + 1,
+                                        pageNo: page.pageNo,
                                         roles: ports.getRoles(source),
                                         selectedSourceKind: 'ocrMarkdown',
-                                        ocrMarkdown: text
+                                        ocrMarkdown: page.rawText
                                     });
                                 });
                             }
