@@ -6,6 +6,26 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
     'use strict';
 
+    // Display-only: do not overwrite raw URLs stored in draft/source evidence.
+    const displayImageUrl = value => {
+        if (typeof value !== 'string' || /[\x00-\x1f\x7f\\]/.test(value)) return '';
+        const url = value.trim();
+        if (!url) return '';
+        if (/^data:/i.test(url)) {
+            return /^data:image\/(?:png|jpe?g|gif|webp|bmp|svg\+xml|tiff?|x-icon|avif);base64,[A-Za-z0-9+/]*={0,2}$/i.test(url) ? url : '';
+        }
+        if (/^blob:/i.test(url)) {
+            const inner = url.slice(5);
+            if (/^null\/[a-z0-9-]+$/i.test(inner)) return url;
+            try { const parsed = new URL(inner); return /^https?:$/.test(parsed.protocol) && !parsed.username && !parsed.password ? url : ''; }
+            catch { return ''; }
+        }
+        try {
+            const parsed = new URL(url, 'http://qisi.local/');
+            return /^https?:$/.test(parsed.protocol) && !parsed.username && !parsed.password ? url : '';
+        } catch { return ''; }
+    };
+
     const extractGraphicRefs = (text) => [...new Set((String(text || '').match(/\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}/g) || [])
         .map(token => token.match(/\{([^}]+)\}/)?.[1])
         .filter(Boolean))];
@@ -51,6 +71,7 @@
 
 
     return Object.freeze({
+        displayImageUrl,
         extractGraphicRefs,
         normalizeInlineImageList,
         mergeImageListsById

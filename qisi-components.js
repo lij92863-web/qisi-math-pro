@@ -103,7 +103,8 @@
                 const id = String(rawId || '').trim();
                 const img = findImage(id);
 
-                if (!img?.url || img.displayable === false) {
+                const imageUrl = window.Qisi?.QuestionImagePolicy?.displayImageUrl(img?.url);
+                if (!imageUrl || img.displayable === false) {
                     return `<span class="latex-image-placeholder">[图片暂不可预览:${escapeHtmlLocal(id)}]</span>`;
                 }
 
@@ -115,7 +116,7 @@
 
                 return (
                     `<span class="qisi-preview-image ${placementClass}" data-image-id="${escapeHtmlLocal(id)}">` +
-                    `<img src="${escapeHtmlLocal(img.url)}" alt="题图" />` +
+                    `<img src="${escapeHtmlLocal(imageUrl)}" alt="题图" />` +
                     `</span>`
                 );
             };

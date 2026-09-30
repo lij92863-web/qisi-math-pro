@@ -4378,8 +4378,9 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     .replace(/'/g, '&#39;');
 
                 const printImageHtml = (img, align = 'center') => {
-                    if (!img?.url) return `<span class="missing-image">[图片未加载]</span>`;
-                    const src = escapeHtml(img.url);
+                    const imageUrl = window.Qisi.QuestionImagePolicy.displayImageUrl(img?.url);
+                    if (!imageUrl) return `<span class="missing-image">[图片未加载]</span>`;
+                    const src = escapeHtml(imageUrl);
                     const placement = align || img.align || 'center';
                     if (placement === 'flushleft') return `<img class="print-image float-left" src="${src}" alt="题图" />`;
                     if (placement === 'flushright') return `<img class="print-image float-right" src="${src}" alt="题图" />`;
