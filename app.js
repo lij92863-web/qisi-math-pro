@@ -4666,8 +4666,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
 <head>
 <meta charset="UTF-8" />
 <title>${escapeHtml(title)}</title>
-<link rel="stylesheet" href="https://unpkg.com/katex@0.16.8/dist/katex.min.css"/>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&display=swap">
+<link rel="stylesheet" href="${escapeHtml(new URL('./vendor/katex/katex.min.css', window.location.href).href)}"/>
 <style>
 body {
     font-family: ${examConfig.fontFamily === '霞鹜文楷' ? '"LXGW WenKai", "KaiTi", serif' : '"Noto Serif SC", "Source Han Serif SC", "Microsoft YaHei", "SimSun", serif'};

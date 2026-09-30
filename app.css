@@ -14,7 +14,7 @@
         }
         
         body { 
-            font-family: 'Inter', 'Noto Sans SC', sans-serif;
+            font-family: 'Inter', 'Noto Sans SC', 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
             background-color: var(--bg);
             color: var(--text);
             -webkit-font-smoothing: antialiased;
