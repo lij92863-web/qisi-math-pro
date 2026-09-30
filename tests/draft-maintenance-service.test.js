@@ -57,6 +57,17 @@ const createHarness = ({ ignorePatch = false, writeError = null } = {}) => {
             };
             return { version: command.expectedVersion + 1 };
         },
+        refreshDraftBatchStats: async command => {
+            if (writeError) throw writeError;
+            const counts = command.calculateStats(clone(state));
+            state.batch = {
+                ...state.batch,
+                ...(ignorePatch ? {} : counts),
+                updatedAt: command.updatedAt,
+                draftPersistence: { version: state.batch.draftPersistence.version + 1 }
+            };
+            return { counts, readback: { batch: clone(state.batch) } };
+        },
         deleteDraftBatch: async () => {
             deleted = true;
             return { deleted: true, idempotent: false };

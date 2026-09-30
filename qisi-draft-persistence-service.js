@@ -348,6 +348,40 @@
         return cloneValue(loaded);
     };
 
+    const refreshDraftBatchStats = async (command, repository) => {
+        requirePorts(repository, ['refreshDraftBatchStats']);
+        const batchId = requireId(command?.batchId, 'DRAFT_BATCH_ID_REQUIRED');
+        if (typeof command.calculateStats !== 'function') {
+            throw createError('DRAFT_PERSISTENCE_INPUT_INVALID');
+        }
+        assertActive(command.signal);
+        try {
+            return await withRepositoryLock(repository, () => repository.refreshDraftBatchStats(batchId, {
+                signal: command.signal,
+                buildUpdate: loaded => {
+                    const counts = command.calculateStats(loaded);
+                    const version = currentVersion(loaded.batch);
+                    return {
+                        counts,
+                        batchPatch: {
+                            ...counts,
+                            updatedAt: command.updatedAt,
+                            draftPersistence: {
+                                ...loaded.batch.draftPersistence,
+                                version: version + 1,
+                                idempotencyKey: `maintenance:stats:${batchId}:${version}`,
+                                signature: JSON.stringify(counts)
+                            }
+                        }
+                    };
+                }
+            }));
+        } catch (error) {
+            assertActive(command.signal);
+            rethrowOrWrap(error, 'DRAFT_PERSISTENCE_WRITE_FAILED');
+        }
+    };
+
     const validateAssociatedRows = (rows, batchId) => {
         if (!Array.isArray(rows)) {
             throw createError('DRAFT_PERSISTENCE_INPUT_INVALID');
@@ -654,6 +688,7 @@
         persistReviewImageCommand,
         reloadDraftBatch,
         reloadDraftReview,
+        refreshDraftBatchStats,
         deleteDraftBatch
     });
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

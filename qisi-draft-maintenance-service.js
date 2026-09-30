@@ -43,6 +43,7 @@
         const requiredPersistence = [
             'reloadDraftBatch',
             'persistReviewDraftBatch',
+            'refreshDraftBatchStats',
             'deleteDraftBatch'
         ];
         if (
@@ -131,19 +132,21 @@
         };
 
         const refreshBatchStats = async ({ batchId, signal } = {}) => {
-            const loaded = await load(batchId, signal);
-            const counts = countsFor(loaded);
-            const readback = await persistAndReadback({
-                batchId,
-                loaded,
-                drafts: loaded.questions,
-                images: loaded.images,
-                batchPatch: { ...counts, updatedAt: clock() },
-                idempotencyKey:
-                    `maintenance:stats:${batchId}:${versionOf(loaded.batch)}`,
-                signal
+            const id = String(batchId || '').trim();
+            if (!id) throw error('DRAFT_MAINTENANCE_INPUT_INVALID');
+            assertActive(signal);
+            const result = await persistence.refreshDraftBatchStats({
+                batchId: id, calculateStats: countsFor, updatedAt: clock(), signal
             });
-            return { counts, readback };
+            assertActive(signal);
+            for (const [key, value] of Object.entries(result.counts)) {
+                if (result.readback.batch?.[key] !== value) {
+                    throw error('DRAFT_MAINTENANCE_READBACK_MISMATCH', {
+                        batchId: id, field: key
+                    });
+                }
+            }
+            return result;
         };
 
         const dedupeBatchDrafts = async ({

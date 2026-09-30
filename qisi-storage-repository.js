@@ -412,6 +412,41 @@
             }),
             'r'
         );
+        const refreshDraftBatchStats = (batchId, { buildUpdate, signal }) => {
+            requireId(batchId, 'batch.id');
+            const assertActive = () => {
+                if (signal?.aborted) {
+                    throw Object.assign(new Error('DRAFT_PERSISTENCE_CANCELLED'), {
+                        name: 'AbortError'
+                    });
+                }
+            };
+            assertActive();
+            return transaction(
+                ['draftImportBatches', 'draftQuestions', 'draftImages'],
+                async () => {
+                    const batchTable = table('draftImportBatches');
+                    const batch = await batchTable.get(batchId);
+                    if (!batch) {
+                        throw new StorageRepositoryError(
+                            'draft-batch-not-found', 'DRAFT_BATCH_NOT_FOUND', { batchId }
+                        );
+                    }
+                    const questions = await table('draftQuestions')
+                        .where('batchId').equals(batchId).toArray();
+                    const images = await table('draftImages')
+                        .where('batchId').equals(batchId).toArray();
+                    assertActive();
+                    const { counts, batchPatch } = buildUpdate({ batch, questions, images });
+                    assertActive();
+                    await batchTable.update(batchId, clone(batchPatch));
+                    assertActive();
+                    const readback = await batchTable.get(batchId);
+                    assertActive();
+                    return { counts: clone(counts), readback: { batch: clone(readback) } };
+                }
+            );
+        };
         const loadDraftBatch = async batchId => ({
             batch: await get('draftImportBatches', batchId),
             files: await findBy('draftImportFiles', 'batchId', batchId),
@@ -934,7 +969,8 @@
             loadImageRecords,
             loadLibrary, saveQuestion, updateQuestion, softDeleteQuestion,
             restoreQuestion, listRecentTasks, saveDraft, loadDraft,
-            loadDraftBatch, loadDraftReview, createDraftBatch, persistReviewDraftBatch,
+            loadDraftBatch, loadDraftReview, refreshDraftBatchStats,
+            createDraftBatch, persistReviewDraftBatch,
             deleteDraftBatch,
             confirmDraftToQuestion,
             createBackup, restoreBackup

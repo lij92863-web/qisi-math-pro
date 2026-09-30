@@ -62,6 +62,10 @@
                         Qisi.DraftPersistenceService.reloadDraftReview(
                             batchId, draftId, storageRepository
                         ),
+                    refreshDraftBatchStats: command =>
+                        Qisi.DraftPersistenceService.refreshDraftBatchStats(
+                            command, storageRepository
+                        ),
                     deleteDraftBatch: (batchId, options) =>
                         Qisi.DraftPersistenceService.deleteDraftBatch(
                             batchId, storageRepository, options
