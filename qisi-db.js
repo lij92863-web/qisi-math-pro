@@ -97,6 +97,10 @@
             draftImages: 'id, batchId, questionId, status, createdAt'
         });
 
+        window.Qisi.QuestionIndexStorage.configure(db, {
+            policy: window.Qisi.QuestionDuplicatePolicy
+        });
+
         const getQuestionKnowledge = (q, type) => {
             if (!q) return '';
 

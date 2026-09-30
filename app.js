@@ -3479,7 +3479,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         const ok = confirm('这份题库数据可能已经导入过，是否继续？');
                         if (!ok) return;
                     }
-                    await importQuestionBankPackage(pendingImportPreview.value);
+                    await importQuestionBankPackage(toRaw(pendingImportPreview.value));
                 };
 
                 const importQuestionBankPackage = async (parsedPackage) => {

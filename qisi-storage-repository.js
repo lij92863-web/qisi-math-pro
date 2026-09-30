@@ -576,7 +576,7 @@
                 }
             ));
         };
-        const deleteDraftBatch = batchId => transaction(
+        const deleteDraftBatch = (batchId, { expectedVersion, signal } = {}) => transaction(
             [
                 'draftImportBatches',
                 'draftImportFiles',
@@ -584,7 +584,18 @@
                 'draftImages'
             ],
             async () => {
+                const assertActive = () => {
+                    if (signal?.aborted) throw Object.assign(new Error('DRAFT_PERSISTENCE_CANCELLED'), { name: 'AbortError' });
+                };
+                assertActive();
+                const current = await table('draftImportBatches').get(batchId);
+                const actualVersion = current?.draftPersistence?.version || 0;
+                if (Number.isInteger(expectedVersion) && actualVersion !== expectedVersion) {
+                    throw new StorageRepositoryError('version-mismatch', 'Draft batch persistence version changed.',
+                        { batchId, expectedVersion, actualVersion });
+                }
                 await table('draftImportBatches').delete(batchId);
+                assertActive();
                 for (const name of [
                     'draftImportFiles',
                     'draftQuestions',
@@ -594,6 +605,7 @@
                         .where('batchId')
                         .equals(batchId)
                         .delete();
+                    assertActive();
                 }
             }
         );
@@ -744,15 +756,30 @@
                         );
                     }
 
-                    const existingQuestions = await questionTable.toArray();
-                    const conflictingRequest = existingQuestions.find(question =>
-                        !question?.deletedAt &&
-                        (
-                            question?.admission?.requestId === requestId ||
-                            question?.admission?.idempotencyKey === idempotencyKey
-                        ) &&
-                        question?.admission?.draftId !== id
-                    );
+                    const indexed = ['duplicateCoreV2', 'duplicateStemV2', 'formalRequestId', 'formalIdempotencyKey']
+                        .every(key => questionTable.schema?.idxByName?.[key]) &&
+                        typeof duplicatePolicy.canonicalCoreFingerprint === 'function' &&
+                        typeof duplicatePolicy.canonicalStemFingerprint === 'function';
+                    let existingQuestions, conflictingRequest;
+                    if (indexed) {
+                        const requestMatches = await questionTable.where('formalRequestId').equals(requestId)
+                            .filter(question => question.admission?.draftId !== id).first();
+                        const keyMatches = await questionTable.where('formalIdempotencyKey').equals(idempotencyKey)
+                            .filter(question => question.admission?.draftId !== id).first();
+                        conflictingRequest = [requestMatches, keyMatches].filter(Boolean)
+                            .sort((left, right) => database.constructor.cmp(left.id, right.id))[0];
+                        const exact = await questionTable.where('duplicateCoreV2')
+                            .equals(duplicatePolicy.canonicalCoreFingerprint(fresh)).first();
+                        const stem = duplicatePolicy.canonicalStemFingerprint(fresh);
+                        const similar = !exact && stem ? await questionTable.where('duplicateStemV2').equals(stem).first() : null;
+                        existingQuestions = exact ? [exact] : similar ? [similar] : [];
+                    } else {
+                        // Older repository ports/schemas retain the same transaction-local scan.
+                        existingQuestions = await questionTable.toArray();
+                        conflictingRequest = existingQuestions.find(question => !question?.deletedAt &&
+                            (question?.admission?.requestId === requestId || question?.admission?.idempotencyKey === idempotencyKey) &&
+                            question?.admission?.draftId !== id);
+                    }
                     if (conflictingRequest) {
                         throw new StorageRepositoryError(
                             'idempotency-conflict',
@@ -903,17 +930,19 @@
                     });
 
                     if (fresh.batchId) {
-                        const drafts = await draftTable
-                            .where('batchId')
-                            .equals(fresh.batchId)
-                            .toArray();
-                        const submittedCount = drafts.filter(
-                            item => item.status === 'submitted'
-                        ).length;
+                        const submittedCount = draftTable.schema?.idxByName?.['[batchId+status]']
+                            ? await draftTable.where('[batchId+status]').equals([fresh.batchId, 'submitted']).count()
+                            : (await draftTable.where('batchId').equals(fresh.batchId).toArray())
+                                .filter(item => item.status === 'submitted').length;
+                        const batch = await batchTable.get(fresh.batchId);
+                        const batchVersion = batch?.draftPersistence?.version || 0;
                         await batchTable.update(fresh.batchId, {
                             submittedCount,
                             updatedAt: clockValue,
-                            lastAdmissionDecisionId: evaluated.decisionId
+                            lastAdmissionDecisionId: evaluated.decisionId,
+                            draftPersistence: { ...batch?.draftPersistence, version: batchVersion + 1,
+                                idempotencyKey: 'formal-commit:' + idempotencyKey,
+                                signature: JSON.stringify([id, formalId, actualVersion + 1]) }
                         });
                     }
 

@@ -118,8 +118,10 @@
         const normalize = value => String(value || '')
             .replace(/\s+/g, '')
             .toLowerCase();
-        return `${normalize(question?.stem)}__${(question?.options || [])
-            .map(normalize).join('|')}`;
+        const stem = normalize(question?.stem);
+        const options = (question?.options || []).map(normalize);
+        return !stem && !options.length ? ''
+            : 'qisi-library-core-v2:' + JSON.stringify([stem, options]);
     };
 
     const detectDuplicate = (
@@ -128,7 +130,7 @@
         fingerprint = defaultFingerprint
     ) => {
         const candidateKey = fingerprint(candidate);
-        if (!candidateKey || candidateKey === '__') return null;
+        if (!candidateKey || candidateKey === '__' || candidateKey === 'qisi-core-v2:["",[]]') return null;
         return (items || []).find(item =>
             item?.id !== candidate?.id && fingerprint(item) === candidateKey
         ) || null;

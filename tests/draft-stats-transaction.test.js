@@ -89,7 +89,7 @@ test('native statistics serialize with formal commit and never replace draft/ima
     assert.equal(result.secondCounts.reviewedCount, 0);
     assert.equal(result.secondCounts.status, 'completed');
     assert.equal(result.secondCounts.unassignedImageCount, 1);
-    assert.equal(result.firstVersion, 1); assert.equal(result.secondVersion, 2);
+    assert.equal(result.firstVersion, 1); assert.equal(result.secondVersion, 3); // stats + formal commit + stats each advance the batch.
     assert.equal(result.formalCount, 1); assert.equal(result.finalDraft.status, 'submitted');
     assert.equal(result.finalDraft.version, 2); assert.equal(result.finalDraft.submittedQuestionId, 'formal-1');
     assert.deepEqual(result.finalDraft, result.committedDraft);

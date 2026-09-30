@@ -30,6 +30,7 @@
   "supportAlignerOwner": "qisi-pdf-support-aligner.js",
   "supportParserOwner": "qisi-pdf-support-block-parser.js",
   "questionDuplicatePolicyOwner": "qisi-question-duplicate-policy.js",
+  "questionIndexStorageOwner": "qisi-question-index-storage.js",
   "docxProducerIdentityContractOwner": "qisi-docx-producer-identity-contract.js",
   "pdfSafePartialPipelineOwner": "qisi-pdf-safe-partial-pipeline.js",
   "routeBResearchOwner": "tests/pdf-answer-only-ai-pass.test.js",

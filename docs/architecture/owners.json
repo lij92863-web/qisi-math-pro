@@ -135,9 +135,16 @@
     {
       "ownerId": "question-duplicate-policy", "module": "qisi-question-duplicate-policy.js", "layer": 0,
       "responsibilities": ["formal-question-duplicate-admission-policy"],
-      "allowedCallers": ["question-repository"], "allowedDependencies": [],
+      "allowedCallers": ["question-repository", "question-index-storage"], "allowedDependencies": [],
       "forbiddenDependencies": ["ui-shell", "production-import-bridge", "formal-admission"],
       "productionEntry": true, "writeAuthority": "duplicate-decision-only", "status": "production"
+    },
+    {
+      "ownerId": "question-index-storage", "module": "qisi-question-index-storage.js", "layer": 1,
+      "responsibilities": ["atomic-derived-question-index-maintenance"],
+      "allowedCallers": [], "allowedDependencies": ["question-duplicate-policy"],
+      "forbiddenDependencies": ["ui-shell"], "productionEntry": true,
+      "writeAuthority": "derived-index-fields-only", "status": "production"
     },
     {
       "ownerId": "formal-admission", "module": "qisi-formal-admission-policy.js", "layer": 1,

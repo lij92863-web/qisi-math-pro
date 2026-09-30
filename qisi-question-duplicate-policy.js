@@ -43,9 +43,9 @@
         normalizeText(question?.stem || '');
     const coreFromStem = (question, stem) => {
         const options = Array.isArray(question?.options)
-            ? question.options.map(normalizeText).join('|')
-            : '';
-        return `${stem}__${options}`;
+            ? question.options.map(normalizeText)
+            : [];
+        return 'qisi-core-v2:' + JSON.stringify([stem, options]);
     };
     const canonicalCoreFingerprint = question =>
         coreFromStem(question, canonicalStemFingerprint(question));

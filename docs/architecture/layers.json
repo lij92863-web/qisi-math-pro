@@ -19,7 +19,7 @@
       "id": 1,
       "name": "policy-parser-storage-and-adapter",
       "ownerIds": [
-        "formal-admission", "question-repository", "support-aligner",
+        "formal-admission", "question-repository", "question-index-storage", "support-aligner",
         "ocr-qwen-adapter", "ocr-local-adapter", "performance-monitor",
         "browser-document-source", "browser-pdf-renderer", "page-question-parser",
         "question-content-policy", "support-text-parser", "recognition-structure-policy",

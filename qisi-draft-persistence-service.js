@@ -671,9 +671,16 @@
                 ) {
                     throw createError('DRAFT_PERSISTENCE_VERSION_CONFLICT');
                 }
-                await repository.deleteDraftBatch(batchId);
+                assertActive(options.signal);
+                await repository.deleteDraftBatch(batchId, {
+                    expectedVersion: currentVersion(existing), signal: options.signal
+                });
                 return immutable({ deleted: true, idempotent: false });
             } catch (error) {
+                assertActive(options.signal);
+                if (error?.code === 'version-mismatch') {
+                    throw createError('DRAFT_PERSISTENCE_VERSION_CONFLICT');
+                }
                 rethrowOrWrap(error, 'DRAFT_PERSISTENCE_DELETE_FAILED');
             }
         });

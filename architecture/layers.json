@@ -76,6 +76,12 @@
       "status": "production-wired"
     },
     {
+      "id": "question-index-storage", "file": "qisi-question-index-storage.js",
+      "layer": 1, "domainOwner": "questionIndexStorageOwner",
+      "publicApi": ["configure"], "allowedDependencies": ["question-duplicate-policy"],
+      "forbiddenDependencies": ["app-shell"], "status": "production-wired"
+    },
+    {
       "id": "formal-admission", "file": "qisi-formal-admission-policy.js",
       "layer": 1, "domainOwner": "formalAdmissionOwner",
       "publicApi": ["createAdmissionContext", "evaluateDraftAdmission", "buildQuestionV2"],

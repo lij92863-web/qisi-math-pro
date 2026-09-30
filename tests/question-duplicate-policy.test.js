@@ -54,7 +54,7 @@ test('malformed input fails closed', () => {
     );
 });
 
-test('one pass preserves first exact precedence, first similar fallback and legacy delimiters', () => {
+test('one pass preserves first exact precedence, first similar fallback and collision-free tuple delimiters', () => {
     const candidate = question({ stem: 's', options: ['one'], answer: 'A' });
     const similar = question({ id: 'similar-first', stem: 's', options: ['two'] });
     const exact = question({ id: 'exact-later', stem: 's', options: ['one'], answer: 'B' });
@@ -63,8 +63,32 @@ test('one pass preserves first exact precedence, first similar fallback and lega
     assert.equal(Policy.evaluate({ candidate, existingQuestions: rows }).matchedQuestionId, 'exact-later');
     assert.equal(Policy.evaluate({ candidate, existingQuestions: rows }).code, Policy.DECISIONS.ANSWER_CONFLICT);
     assert.equal(Policy.evaluate({ candidate, existingQuestions: [similar, { ...similar, id: 'similar-last' }] }).matchedQuestionId, 'similar-first');
-    // Legacy concatenation may collide across stem/options; retain its behavior in this optimization.
+    // Distinct normalized tuples must not match through legacy separator collisions.
     const collision = Policy.evaluate({ candidate: question({ stem: 'a__b', options: [] }), existingQuestions: [question({ stem: 'a', options: ['b__'] })] });
-    assert.equal(collision.code, Policy.DECISIONS.EXACT);
+    assert.equal(collision.code, Policy.DECISIONS.NONE);
     assert.deepEqual(rows, before);
+});
+
+test('tuple fingerprints preserve option boundaries and ignore old exported keys', () => {
+    const pairs = [
+        [{ stem: 'a__b', options: [] }, { stem: 'a', options: ['b__'] }],
+        [{ stem: 's', options: ['A|B', 'C'] }, { stem: 's', options: ['A', 'B|C'] }],
+        [{ stem: 's', options: [] }, { stem: 's', options: [''] }]
+    ];
+    for (const [left, right] of pairs) {
+        assert.notEqual(Policy.canonicalCoreFingerprint(left), Policy.canonicalCoreFingerprint(right));
+        assert.notEqual(Policy.evaluate({ candidate: { ...left, exportFingerprint: 'legacy__same' },
+            existingQuestions: [{ ...right, id: 'old-export', exportFingerprint: 'legacy__same' }] }).code, Policy.DECISIONS.EXACT);
+    }
+    assert.equal(Policy.canonicalCoreFingerprint(question()), Policy.canonicalCoreFingerprint(question({ stem: ' FIND $x$。 ' })));
+});
+
+test('library default and canonical injection reject separators and preserve empty-input behavior', () => {
+    const Library = require('../qisi-library-service.js');
+    for (const fingerprint of [undefined, Policy.canonicalCoreFingerprint]) {
+        assert.equal(Library.detectDuplicate({ id: 'new', stem: 'a__b', options: [] },
+            [{ id: 'old', stem: 'a', options: ['b__'] }], fingerprint), null);
+        assert.equal(Library.detectDuplicate({ id: 'new', stem: '', options: [] },
+            [{ id: 'old', stem: '', options: [] }], fingerprint), null);
+    }
 });

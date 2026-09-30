@@ -291,6 +291,10 @@
       "runtime": "browser"
     },
     {
+      "file": "qisi-question-index-storage.js",
+      "runtime": "browser"
+    },
+    {
       "file": "qisi-question-image-policy.js",
       "runtime": "browser"
     },
