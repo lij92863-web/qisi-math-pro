@@ -149,6 +149,8 @@
         }
         const zip = await JSZip.loadAsync(source);
         assertArchive(zip, createArchivePolicy(profile, overrides), input);
+        // Check payload CRC only after decompression sizes and paths pass the bounded policy.
+        if (profile === 'full-backup') return JSZip.loadAsync(source, { checkCRC32: true });
         return zip;
     };
 

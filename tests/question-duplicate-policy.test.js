@@ -53,3 +53,18 @@ test('malformed input fails closed', () => {
         error => error.code === 'DUPLICATE_POLICY_INPUT_INVALID'
     );
 });
+
+test('one pass preserves first exact precedence, first similar fallback and legacy delimiters', () => {
+    const candidate = question({ stem: 's', options: ['one'], answer: 'A' });
+    const similar = question({ id: 'similar-first', stem: 's', options: ['two'] });
+    const exact = question({ id: 'exact-later', stem: 's', options: ['one'], answer: 'B' });
+    const rows = [question({ ...exact, id: 'deleted', deletedAt: 1 }), similar, exact, question({ ...exact, id: 'exact-last', answer: 'A' })];
+    const before = structuredClone(rows);
+    assert.equal(Policy.evaluate({ candidate, existingQuestions: rows }).matchedQuestionId, 'exact-later');
+    assert.equal(Policy.evaluate({ candidate, existingQuestions: rows }).code, Policy.DECISIONS.ANSWER_CONFLICT);
+    assert.equal(Policy.evaluate({ candidate, existingQuestions: [similar, { ...similar, id: 'similar-last' }] }).matchedQuestionId, 'similar-first');
+    // Legacy concatenation may collide across stem/options; retain its behavior in this optimization.
+    const collision = Policy.evaluate({ candidate: question({ stem: 'a__b', options: [] }), existingQuestions: [question({ stem: 'a', options: ['b__'] })] });
+    assert.equal(collision.code, Policy.DECISIONS.EXACT);
+    assert.deepEqual(rows, before);
+});

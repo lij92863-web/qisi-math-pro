@@ -31,12 +31,6 @@
             'draftImages'
         ];
 
-        const REQUIRED_BACKUP_FILES = [
-            'manifest.json',
-            'tables/questions.json',
-            'tables/images.json'
-        ];
-
         const safeName = value =>
             String(value || 'item')
                 .replace(/[\\/:*?"<>|]/g, '_')
@@ -80,145 +74,146 @@
             }
         };
 
-        const verifyFullDatabaseBackupBlob = async blob => {
-            if (!(blob instanceof Blob)) {
-                throw new Error('Backup verification target is not a Blob');
-            }
-
-            if (!globalThis.JSZip) {
-                throw new Error('JSZip is not loaded; backup cannot be verified');
-            }
-
-            const zip = await globalThis.Qisi.ArchiveSecurity.load(
-                globalThis.JSZip,
-                blob,
-                'full-backup',
-                { name: blob?.name || '', type: blob?.type || '' }
-            );
-            const errors = [];
-            const warnings = [];
-
-            for (const path of REQUIRED_BACKUP_FILES) {
-                if (!zip.file(path)) {
-                    errors.push(`Missing required file: ${path}`);
+        const encodeBinaryFields = (row, table, rowIndex, zip, references) => {
+            const walk = (value, path = []) => {
+                if (path.length > 64) throw new Error('Backup metadata nesting limit exceeded');
+                if (value instanceof Blob) {
+                    const file = `image-blobs/extra-${table}-${rowIndex}-${references.length}.bin`;
+                    zip.file(file, value.arrayBuffer());
+                    references.push({ table, rowIndex, path, file, type: value.type, size: value.size });
+                    return null;
                 }
-            }
-
-            if (errors.length) {
-                return {
-                    ok: false,
-                    errors,
-                    warnings,
-                    checkedAt: new Date().toISOString()
-                };
-            }
-
-            let manifest;
-            let questions;
-            let images;
-
-            try {
-                manifest = await readZipJson(zip, 'manifest.json');
-                questions = await readZipJson(zip, 'tables/questions.json');
-                images = await readZipJson(zip, 'tables/images.json');
-            } catch (error) {
-                errors.push(error?.message || String(error));
-                return {
-                    ok: false,
-                    errors,
-                    warnings,
-                    checkedAt: new Date().toISOString()
-                };
-            }
-
-            if (manifest?.format !== 'qisi-full-backup') {
-                errors.push('manifest.format is invalid');
-            }
-
-            if (Number(manifest?.version) !== 1) {
-                errors.push(`Unsupported backup version: ${manifest?.version}`);
-            }
-
-            if (!Array.isArray(questions)) {
-                errors.push('tables/questions.json is not an array');
-            }
-
-            if (!Array.isArray(images)) {
-                errors.push('tables/images.json is not an array');
-            }
-
-            const missingBlobFiles = [];
-
-            for (const image of images || []) {
-                const blobFile = String(image?.blobFile || '').trim();
-
-                if (!blobFile) {
-                    warnings.push(`Image ${image?.id || 'unknown'} has no Blob file`);
-                    continue;
+                if (Array.isArray(value)) return value.map((item, index) => walk(item, [...path, String(index)]));
+                if (value && Object.getPrototypeOf(value) === Object.prototype) {
+                    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, walk(item, [...path, key])]));
                 }
-
-                if (!zip.file(blobFile)) {
-                    missingBlobFiles.push({
-                        imageId: image?.id || '',
-                        blobFile
-                    });
-                }
-            }
-
-            if (missingBlobFiles.length) {
-                errors.push(`${missingBlobFiles.length} image Blob files are missing`);
-            }
-
-            const expectedQuestionCount = Number(manifest?.tables?.questions?.count);
-
-            if (
-                Number.isFinite(expectedQuestionCount) &&
-                expectedQuestionCount !== questions.length
-            ) {
-                errors.push(
-                    `Question count mismatch: manifest=${expectedQuestionCount}, questions.json=${questions.length}`
-                );
-            }
-
-            const expectedImageCount = Number(manifest?.tables?.images?.count);
-
-            if (
-                Number.isFinite(expectedImageCount) &&
-                expectedImageCount !== images.length
-            ) {
-                errors.push(
-                    `Image count mismatch: manifest=${expectedImageCount}, images.json=${images.length}`
-                );
-            }
-
-            const actualBlobCount = images.filter(
-                image => image?.blobFile && zip.file(image.blobFile)
-            ).length;
-
-            const expectedBlobCount = Number(manifest?.tables?.images?.blobCount);
-
-            if (
-                Number.isFinite(expectedBlobCount) &&
-                expectedBlobCount !== actualBlobCount
-            ) {
-                errors.push(
-                    `Image Blob count mismatch: manifest=${expectedBlobCount}, actual=${actualBlobCount}`
-                );
-            }
-
-            return {
-                ok: errors.length === 0,
-                errors,
-                warnings,
-                checkedAt: new Date().toISOString(),
-                questionCount: Array.isArray(questions) ? questions.length : 0,
-                imageCount: Array.isArray(images) ? images.length : 0,
-                blobCount: actualBlobCount,
-                missingBlobFiles
+                return value;
             };
+            return walk(row);
         };
 
-        const exportFullDatabaseBackup = async db => {
+        const snapshotDatabase = async db => {
+            if (!db?.transaction || !db?.table) throw new Error('Missing transactional database instance');
+            const existing = new Set(db.tables.map(table => table.name));
+            if (!existing.has('questions') || !existing.has('images')) throw new Error('Required backup tables missing');
+            const names = TABLE_NAMES.filter(name => existing.has(name));
+            // Only IndexedDB reads run here; compression and Blob I/O run after it commits.
+            return db.transaction('r', names.map(name => db.table(name)), async () => {
+                const values = await Promise.all(names.map(name => db.table(name).toArray()));
+                return Object.fromEntries(names.map((name, index) => [name, values[index]]));
+            });
+        };
+
+        const inspectBackup = async blob => {
+            if (!(blob instanceof Blob)) throw new Error('Backup verification target is not a Blob');
+            if (!globalThis.JSZip) throw new Error('JSZip is not loaded; backup cannot be verified');
+            const zip = await globalThis.Qisi.ArchiveSecurity.load(globalThis.JSZip,
+                await blob.arrayBuffer(), 'full-backup', { name: blob.name || '', type: blob.type || '' });
+            const errors = [], warnings = [], missingBlobFiles = [], tables = {};
+            const manifest = await readZipJson(zip, 'manifest.json');
+            if (manifest?.format !== 'qisi-full-backup' || manifest?.version !== 1 ||
+                !manifest.tables || typeof manifest.tables !== 'object' || Array.isArray(manifest.tables)) {
+                throw new Error('Unsupported full backup manifest');
+            }
+            for (const required of ['questions', 'images']) {
+                if (!Object.hasOwn(manifest.tables, required)) errors.push(`Required table missing: ${required}`);
+            }
+            for (const name of Object.keys(manifest.tables)) {
+                if (!TABLE_NAMES.includes(name)) { errors.push(`Unknown backup table: ${name}`); continue; }
+                const rows = await readZipJson(zip, `tables/${name}.json`);
+                const count = manifest.tables[name]?.count;
+                if (!Array.isArray(rows) || !Number.isSafeInteger(count) || count < 0 || count !== rows.length) {
+                    errors.push(`Table count or shape mismatch: ${name}`); continue;
+                }
+                const ids = new Set();
+                for (const row of rows) {
+                    const validId = typeof row?.id === 'string' ? row.id.trim().length > 0 :
+                        typeof row?.id === 'number' && Number.isFinite(row.id);
+                    const key = typeof row?.id + ':' + row?.id;
+                    if (!row || typeof row !== 'object' || Array.isArray(row) || !validId || ids.has(key)) {
+                        errors.push(`Invalid or duplicate record ID: ${name}`); break;
+                    }
+                    ids.add(key);
+                }
+                tables[name] = rows;
+            }
+            for (const file of Object.values(zip.files)) {
+                const match = /^tables\/(.+)\.json$/.exec(file.name);
+                if (!file.dir && match && !Object.hasOwn(manifest.tables, match[1])) errors.push('Unlisted table file');
+            }
+            const images = tables.images || [], blobRefs = new Set();
+            for (const image of images) {
+                const file = image.blobFile || '';
+                if (!file) { warnings.push('Image record has no Blob file'); continue; }
+                if (typeof file !== 'string' || !/^image-blobs\/[a-zA-Z0-9._-]+\.(?:png|jpe?g|gif|webp|svg|bmp|bin)$/i.test(file) ||
+                    !zip.file(file) || blobRefs.has(file)) {
+                    missingBlobFiles.push({ imageId: image.id, blobFile: file }); continue;
+                }
+                blobRefs.add(file);
+                const bytes = await zip.file(file).async('uint8array');
+                if (!Number.isSafeInteger(image.blobSize) || image.blobSize !== bytes.byteLength ||
+                    typeof image.blobType !== 'string') errors.push('Image Blob metadata mismatch');
+            }
+            if (missingBlobFiles.length) errors.push('Missing, duplicate or invalid image Blob references');
+            if (manifest.tables.images?.blobCount !== blobRefs.size) errors.push('Image Blob count mismatch');
+            const fields = manifest.binaryFields || [];
+            if (!Array.isArray(fields) || (fields.length && manifest.binaryEncoding !== 'qisi.blob-fields.v1')) {
+                errors.push('Unsupported binary field encoding');
+            } else {
+                const paths = new Set();
+                for (const reference of fields) {
+                    const { table, rowIndex, path, file, type, size } = reference || {};
+                    let target = tables[table]?.[rowIndex];
+                    if (!TABLE_NAMES.includes(table) || !Number.isInteger(rowIndex) || rowIndex < 0 ||
+                        !Array.isArray(path) || !path.length || path.length > 64 ||
+                        !path.every(key => typeof key === 'string' && !['__proto__', 'constructor', 'prototype'].includes(key)) ||
+                        typeof file !== 'string' || !/^image-blobs\/[a-zA-Z0-9._-]+\.bin$/.test(file) ||
+                        !zip.file(file) || blobRefs.has(file) || typeof type !== 'string' || !Number.isSafeInteger(size) || size < 0) {
+                        errors.push('Invalid binary field reference'); continue;
+                    }
+                    for (const key of path.slice(0, -1)) {
+                        target = target && typeof target === 'object' && Object.hasOwn(target, key) ? target[key] : null;
+                    }
+                    const key = path.at(-1), identity = JSON.stringify([table, rowIndex, path]);
+                    if (!target || typeof target !== 'object' || !Object.hasOwn(target, key) || target[key] !== null || paths.has(identity)) {
+                        errors.push('Binary field target is invalid or duplicated'); continue;
+                    }
+                    if ((await zip.file(file).async('uint8array')).byteLength !== size) errors.push('Binary field size mismatch');
+                    paths.add(identity); blobRefs.add(file);
+                }
+            }
+            const verification = { ok: !errors.length, errors, warnings, checkedAt: new Date().toISOString(),
+                questionCount: tables.questions?.length || 0, imageCount: images.length,
+                blobCount: blobRefs.size, missingBlobFiles };
+            return { zip, manifest, tables, verification };
+        };
+
+        const verifyFullDatabaseBackupBlob = async blob => {
+            try { return (await inspectBackup(blob)).verification; }
+            catch (error) { return { ok: false, errors: [error?.code || error?.message || 'Backup validation failed'], warnings: [], checkedAt: new Date().toISOString() }; }
+        };
+
+        const readFullDatabaseBackupBlob = async blob => {
+            const result = await inspectBackup(blob);
+            if (!result.verification.ok) throw new Error('Full backup verification failed: ' + result.verification.errors.join('; '));
+            const tables = { ...result.tables };
+            for (const { table, rowIndex, path, file, type } of result.manifest.binaryFields || []) {
+                let target = tables[table][rowIndex];
+                for (const key of path.slice(0, -1)) target = target[key];
+                target[path.at(-1)] = new Blob([await result.zip.file(file).async('uint8array')], { type });
+            }
+            tables.images = await Promise.all(tables.images.map(async row => {
+                const { blobFile, blobType, blobSize, ...metadata } = row;
+                if (!blobFile) return metadata;
+                const bytes = await result.zip.file(blobFile).async('uint8array');
+                return { ...metadata, blob: new Blob([bytes], { type: blobType }) };
+            }));
+            return { backup: { schemaVersion: 'qisi.storage.v1', createdAt: result.manifest.exportedAt, tables },
+                manifest: result.manifest, verification: result.verification,
+                absentTables: TABLE_NAMES.filter(name => !Object.hasOwn(tables, name)) };
+        };
+
+        const createFullDatabaseBackup = async db => {
             if (!db) {
                 throw new Error('Missing database instance');
             }
@@ -228,30 +223,31 @@
             }
 
             const zip = new globalThis.JSZip();
+            const binaryFields = [];
 
             const manifest = {
                 format: 'qisi-full-backup',
                 version: 1,
                 exportedAt: new Date().toISOString(),
                 databaseName: db.name || '',
-                tables: {}
+                tables: {},
+                binaryEncoding: 'qisi.blob-fields.v1', binaryFields
             };
 
-            const existingNames = new Set(
-                db.tables.map(table => table.name)
-            );
+            const snapshot = await snapshotDatabase(db);
+            const existingNames = new Set(Object.keys(snapshot));
 
             for (const tableName of TABLE_NAMES) {
                 if (!existingNames.has(tableName)) {
                     continue;
                 }
 
-                const rows = await db.table(tableName).toArray();
+                const rows = snapshot[tableName];
 
                 if (tableName !== 'images') {
                     zip.file(
                         `tables/${tableName}.json`,
-                        JSON.stringify(rows, null, 2)
+                        JSON.stringify(rows.map((row, index) => encodeBinaryFields(row, tableName, index, zip, binaryFields)), null, 2)
                     );
 
                     manifest.tables[tableName] = {
@@ -263,7 +259,7 @@
 
                 const imageRows = [];
 
-                for (const record of rows) {
+                for (const [index, record] of rows.entries()) {
                     const { blob, ...metadata } = record;
                     const next = {
                         ...metadata,
@@ -272,16 +268,16 @@
 
                     if (blob instanceof Blob) {
                         const extension = mimeExtension(blob.type);
-                        const blobFile = `image-blobs/${safeName(record.id)}.${extension}`;
+                        const blobFile = `image-blobs/${safeName(record.id)}-${index}.${extension}`;
 
-                        zip.file(blobFile, blob);
+                        zip.file(blobFile, blob.arrayBuffer());
 
                         next.blobFile = blobFile;
                         next.blobType = blob.type || '';
                         next.blobSize = blob.size || 0;
                     }
 
-                    imageRows.push(next);
+                    imageRows.push(encodeBinaryFields(next, tableName, index, zip, binaryFields));
                 }
 
                 zip.file(
@@ -300,14 +296,15 @@
                 JSON.stringify(manifest, null, 2)
             );
 
-            const blob = await zip.generateAsync({
-                type: 'blob',
+            const bytes = await zip.generateAsync({
+                type: 'uint8array',
                 compression: 'DEFLATE',
                 compressionOptions: {
                     level: 6
                 }
             });
 
+            const blob = new Blob([bytes], { type: 'application/zip' });
             const verification = await verifyFullDatabaseBackupBlob(blob);
 
             console.log('[QISI_BACKUP][verification]', verification);
@@ -320,27 +317,17 @@
 
             const filename = `qisi-full-backup-${Date.now()}.zip`;
 
-            downloadBlob(blob, filename);
-
-            localStorage.setItem(
-                'qisi_last_full_backup_at',
-                String(Date.now())
-            );
-
-            localStorage.setItem(
-                'qisi_last_full_backup_report',
-                JSON.stringify(verification)
-            );
-
             manifest.verification = verification;
             manifest.filename = filename;
+            return { blob, filename, manifest, snapshot };
+        };
 
-            console.log('[QISI_BACKUP][created]', {
-                filename,
-                manifest
-            });
-
-            return manifest;
+        const exportFullDatabaseBackup = async db => {
+            const result = await createFullDatabaseBackup(db);
+            downloadBlob(result.blob, result.filename);
+            localStorage.setItem('qisi_last_full_backup_at', String(Date.now()));
+            localStorage.setItem('qisi_last_full_backup_report', JSON.stringify(result.manifest.verification));
+            return result.manifest;
         };
 
         const getLastFullBackupReport = () => {
@@ -367,6 +354,10 @@
         };
 
         return {
+            TABLE_NAMES: Object.freeze([...TABLE_NAMES]),
+            snapshotDatabase,
+            createFullDatabaseBackup,
+            readFullDatabaseBackupBlob,
             exportFullDatabaseBackup,
             verifyFullDatabaseBackupBlob,
             getLastFullBackupReport,

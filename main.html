@@ -9,9 +9,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
     <script src="./vendor/tailwind/tailwind.js" integrity="sha384-igm5BeiBt36UU4gqwWS7imYmelpTsZlQ45FZf+XBn9MuJbn4nQr7yx1yFydocC/K" crossorigin="anonymous"></script>
     <!-- 运行时依赖已于 2026-07-24 本地化到 ./vendor/（原走 unpkg CDN，易因网络中断导致初始化失败） -->
-    <link rel="stylesheet" href="./vendor/katex/katex.min.css" integrity="sha384-GvrOXuhMATgEsSwCs4smul74iXGOixntILdUW9XmUC6+HX0sLNAK3q71HotJqlAn" crossorigin="anonymous">
-    <script src="./vendor/katex/katex.min.js" integrity="sha384-cpW21h6RZv/phavutF+AuVYrr+dA8xD9zs6FwLpaCct6O9ctzYFfFr4dgmgccOTx" crossorigin="anonymous"></script>
-    <script src="./vendor/katex/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="./vendor/katex/katex.min.css" integrity="sha384-nH0MfJ44wi1dd7w6jinlyBgljjS8EJAh2JBoRad8a3VDw2K69vfaaqm4WnR+gXtA" crossorigin="anonymous">
+    <script src="./vendor/katex/katex.min.js" integrity="sha384-CwjPRVHTvLiMBFjEoij+QZViMV5rhTOIp7CJzl24JEqpRDA1sJFHVXXLURktbYYp" crossorigin="anonymous"></script>
+    <script src="./vendor/katex/contrib/auto-render.min.js" integrity="sha384-bjyGPfbij8/NDKJhSGZNP/khQVgtHUE5exjm4Ydllo42FwIgYsdLO2lXGmRBf5Mz" crossorigin="anonymous"></script>
     <script src="./vendor/vue/vue.global.prod.js" integrity="sha384-bkD9qcJiDlQRpeIQtZSHgyQEMvRBzmOI9lw2SZHkLOrliAdnLtxNIucoEAVG9QVA" crossorigin="anonymous"></script>
     <link rel="stylesheet" href="./vendor/vue-virtual-scroller/vue-virtual-scroller.css" integrity="sha384-PIWxQLH13FE3yKn8YrBWCcBRMkCKr2xW0XcqY9sNVhmihrqyXrdsWrcjZdqlnaWg" crossorigin="anonymous">
     <script src="./vendor/vue-virtual-scroller/vue-virtual-scroller.min.js" integrity="sha384-asaCxaI3GxogQlKm59ynOPR3hwB7hNOTYipFrlNUHdRM0BOQs5BRO8ix8clxlj6p" crossorigin="anonymous"></script>
@@ -193,7 +193,8 @@
 
     <!-- [组件5]: 主应用布局 -->
     <template id="app-tpl">
-        <div class="app-container">
+        <div v-if="backupStatus.restoring" role="status" class="fixed inset-0 z-[100] bg-white/90 flex items-center justify-center text-lg">正在保护当前数据并恢复备份，请等待完成。</div>
+        <div class="app-container" :inert="backupStatus.restoring">
             <aside class="sidebar">
                 <div class="flex items-center gap-3 px-2 mb-8 mt-2">
                     <div class="w-8 h-8 bg-[#1a73e8] rounded-xl flex items-center justify-center text-white shadow-sm">
@@ -214,6 +215,34 @@
             </aside>
 
             <main class="main-content custom-scrollbar">
+                <section v-if="view === 'library'" class="mb-4 p-4 rounded-xl border border-gray-200 bg-white" data-testid="backup-workspace">
+                    <h2 class="font-bold text-sm mb-2">备份与恢复</h2>
+                    <p class="text-xs text-gray-500 mb-3">选择本地文件夹后，本次打开软件期间自动备份有变化的数据，连续修改会合并处理。重新打开软件需重新选择文件夹；恢复操作覆盖当前数据库，请先核对内容。</p>
+                    <div class="flex flex-wrap gap-2 text-sm">
+                        <button class="border rounded px-3 py-1" @click="backupWorkspace.downloadBackup" :disabled="backupStatus.busy || backupStatus.reading">下载完整备份</button>
+                        <button class="border rounded px-3 py-1" @click="backupWorkspace.chooseFolder" :disabled="backupStatus.busy || backupStatus.reading">选择备份文件夹</button>
+                        <button v-if="backupStatus.folderReady" class="border rounded px-3 py-1" @click="backupWorkspace.backupNow" :disabled="backupStatus.busy || backupStatus.reading">立即备份到文件夹</button>
+                        <button v-if="backupStatus.automatic" class="border rounded px-3 py-1" @click="backupWorkspace.pauseAutomatic">暂停自动备份</button>
+                        <label class="border rounded px-3 py-1 cursor-pointer">选择备份恢复<input type="file" accept=".zip,application/zip" class="hidden" data-testid="restore-file" :disabled="backupStatus.busy || backupStatus.reading" @change="backupWorkspace.inspectRestoreFile($event.target.files[0]); $event.target.value = ''" /></label>
+                    </div>
+                    <p class="text-xs mt-2">自动备份：{{ backupStatus.automatic ? '已开启' : '未开启' }}<span v-if="backupStatus.folderReady"> ｜ 文件夹：{{ backupStatus.folderName }}</span><span v-if="backupStatus.pendingChanges"> ｜ 有新变化待备份</span></p>
+                    <p v-if="backupStatus.lastBackupAt" class="text-xs mt-1">最近保存：{{ new Date(backupStatus.lastBackupAt).toLocaleString() }} ｜ {{ backupStatus.lastSavedFile }}</p>
+                    <p v-if="backupStatus.busy || backupStatus.reading" class="text-xs mt-2">正在处理，请稍候。</p>
+                    <p v-if="backupStatus.notice" class="text-xs text-blue-700 mt-2" role="status">{{ backupStatus.notice }}</p>
+                    <p v-if="backupStatus.error" class="text-xs text-red-700 mt-2" role="alert">{{ backupStatus.error }}</p>
+                    <div v-if="backupStatus.preview" class="mt-3 p-3 border rounded bg-gray-50" data-testid="restore-preview">
+                        <p class="text-sm">待恢复：{{ backupStatus.preview.filename }} ｜ {{ backupStatus.preview.questionCount }} 道题、{{ backupStatus.preview.imageCount }} 条图片记录</p>
+                        <p class="text-xs mt-1">备份时间：{{ backupStatus.preview.exportedAt }}</p>
+                        <p v-if="backupStatus.preview.absentTables.length" class="text-xs mt-1 text-red-700">这是较早版本的备份；其中未包含的 {{ backupStatus.preview.absentTables.length }} 类数据将被清空。</p>
+                        <p v-if="backupStatus.preview.warningCount" class="text-xs mt-1 text-red-700">有 {{ backupStatus.preview.warningCount }} 条图片记录缺少二进制文件，请核对备份来源。</p>
+                        <label class="block text-xs mt-2"><input type="checkbox" v-model="backupStatus.confirmOverwrite" data-testid="restore-consent" /> 我已核对备份，确认覆盖当前数据库，知道备份未包含的数据会被清空。</label>
+                        <label class="block text-xs mt-2">输入“恢复备份”确认：<input class="border rounded p-1" v-model="backupStatus.confirmWord" data-testid="restore-word" /></label>
+                        <p class="text-xs mt-2">恢复前会先把当前数据保存到所选文件夹。请关闭其他窗口中的编辑操作；若检测到新变化，将取消恢复。</p>
+                        <button class="border rounded px-3 py-1 mt-2 text-sm" @click="backupWorkspace.restoreSelected" :disabled="backupStatus.busy || backupStatus.reading || !backupStatus.folderReady || !backupStatus.confirmOverwrite || backupStatus.confirmWord !== '恢复备份'" data-testid="restore-confirm">保护当前数据并恢复</button>
+                        <button class="border rounded px-3 py-1 mt-2 ml-2 text-sm" @click="backupWorkspace.cancelRestore" :disabled="backupStatus.busy || backupStatus.reading">取消恢复</button>
+                    </div>
+                </section>
+
                 <!-- ================= 录题视图 ================= -->
                 <div v-show="view === 'entry'" class="entry-layout animate-slide-up">
                     <div class="entry-main-card flex-1 bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex flex-col relative">
@@ -1520,12 +1549,13 @@
     <script>window.Qisi.SecureLogger.createSecureLogger(console).install();</script>
     <script src="./qisi-config.js?v=foundation-01"></script>
     <script src="./qisi-runtime.js?v=foundation-01"></script>
-    <script src="./qisi-archive-security.js?v=post-r2-correction-r1-archive-security-01"></script>
+    <script src="./qisi-archive-security.js?v=backup-crc-01"></script>
     <script src="./qisi-docx-producer-identity-contract.js?v=docx-producer-identity-r1-01"></script>
     <script src="./qisi-recognition-contracts.js?v=closure-r2-contracts-01"></script>
     <script src="./qisi-formal-admission-policy.js?v=post-r2-correction-r1-admission-01"></script>
-    <script src="./qisi-question-duplicate-policy.js?v=program-c-corrective-r1-duplicate-01"></script>
-    <script src="./qisi-storage-repository.js?v=closure-r2-storage-01"></script>
+    <script src="./qisi-question-duplicate-policy.js?v=duplicate-single-pass-01"></script>
+    <script src="./qisi-backup-snapshot-policy.js?v=storage-single-pass-01"></script>
+    <script src="./qisi-storage-repository.js?v=protected-restore-01"></script>
     <script src="./qisi-batch-formal-submit.js?v=post-r2-correction-r1-submit-01"></script>
     <script src="./qisi-utils.js?v=foundation-01"></script>
     <script src="./qisi-library-service.js?v=closure-r2-library-01"></script>
@@ -1553,7 +1583,7 @@
     <script src="./qisi-ocr-shadow-mode.js?v=closure-r2-ocr-shadow-01"></script>
     <script src="./qisi-performance-monitor.js?v=closure-r2-performance-01"></script>
     <script src="./qisi-db.js?v=stage9-duplicate-owner-01"></script>
-    <script src="./qisi-backup.js?v=foundation-01"></script>
+    <script src="./qisi-backup.js?v=consistent-backup-01"></script>
     <script src="./qisi-components.js?v=image-url-boundary-01"></script>
     <script src="./qisi-file-dispatcher.js?v=white-fix-3"></script>
     <script src="./qisi-batch-importer.js?v=foundation-01"></script>
@@ -1577,8 +1607,8 @@
     <script src="./qisi-production-import-bridge.js?v=app-shell-r3-production-import-bridge-01"></script>
     <script src="./qisi-normal-ui-import-controller.js?v=app-shell-r3-c2-11-01"></script>
     <script src="./qisi-docx-pipeline.js?v=bmr9-docx-helpers-01"></script>
-    <script src="./qisi-browser-document-source.js?v=app-shell-r3-c2-12-01"></script>
-    <script src="./qisi-browser-pdf-renderer.js?v=app-shell-r3-c2-12-01"></script>
+    <script src="./qisi-browser-document-source.js?v=pdf-no-font-eval-01"></script>
+    <script src="./qisi-browser-pdf-renderer.js?v=pdf-no-font-eval-01"></script>
     <script src="./qisi-question-content-policy.js?v=app-shell-r3-c2-12-01"></script>
     <script src="./qisi-question-image-policy.js?v=image-url-boundary-01"></script>
     <script src="./qisi-page-question-parser.js?v=app-shell-r3-c2-12-01"></script>
@@ -1592,6 +1622,7 @@
     <script src="./qisi-ui-events.js?v=bmr5-question-gap-warning-01"></script>
     <script src="./qisi-review-draft-state.js?v=bmr3-review-draft-01"></script>
     <script src="./qisi-review-draft-normalization-policy.js?v=app-shell-r3-c2-12-01"></script>
-    <script src="./app.js?v=image-url-boundary-01"></script>
+    <script src="./qisi-backup-workspace.js?v=backup-commit-events-01"></script>
+    <script src="./app.js?v=backup-commit-events-01"></script>
 </body>
 </html>

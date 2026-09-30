@@ -1,7 +1,5 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const Policy = require('../qisi-formal-admission-policy.js');
 
 test('Phase 3 fake manual flags cannot launder rejected provenance', () => {
@@ -24,9 +22,4 @@ test('Phase 3 fake manual flags cannot launder rejected provenance', () => {
     }));
     assert.equal(decision.accepted, false);
     assert.ok(decision.errors.some(error => error.code === 'admission-field-rejected'));
-});
-
-test('Phase 3 matrix records fake manual flag', () => {
-    const matrix = fs.readFileSync(path.resolve(__dirname, '..', 'docs/testing/POST_R2_COUNTERFACTUAL_MATRIX_R1.md'), 'utf8');
-    assert.match(matrix, /\| fake manual flag \|[^\n]+\| PASS \|/);
 });

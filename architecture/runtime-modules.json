@@ -15,6 +15,14 @@
       "runtime": "browser"
     },
     {
+      "file": "qisi-backup-snapshot-policy.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-backup-workspace.js",
+      "runtime": "browser"
+    },
+    {
       "file": "qisi-backup.js",
       "runtime": "browser"
     },

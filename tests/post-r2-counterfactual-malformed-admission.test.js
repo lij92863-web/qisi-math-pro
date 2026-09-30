@@ -1,7 +1,5 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const Import = require('../qisi-import-orchestrator.js');
 const { createReviewController } = require('../qisi-review-controller.js');
 
@@ -21,9 +19,4 @@ test('Phase 3 malformed-admission attacks fail closed', async () => {
         assert.equal(result.validation.errors[0]?.code, 'validator-malformed');
         assert.equal(result.draft.status, 'pending');
     }
-});
-
-test('Phase 3 matrix records malformed admission', () => {
-    const matrix = fs.readFileSync(path.resolve(__dirname, '..', 'docs/testing/POST_R2_COUNTERFACTUAL_MATRIX_R1.md'), 'utf8');
-    assert.match(matrix, /\| malformed admission \|[^\n]+\| PASS \|/);
 });

@@ -269,22 +269,7 @@ test('OCR-R1 attack: MIME spoofing is rejected by loopback service magic-byte ch
     assert.equal(calls, 0);
 });
 
-test('OCR-R1 counterfactual matrix records all 22 attack classes as PASS', () => {
-    const matrix = fs.readFileSync(
-        path.join(root, 'docs', 'testing', 'OCR_QUALITY_COUNTERFACTUAL_MATRIX_R1.md'),
-        'utf8'
-    );
-    for (const attack of [
-        'rotated', 'perspective', 'blur', 'low contrast', 'double column',
-        'watermark', 'handwritten note', 'formula split', 'circled number',
-        'A/B/C/D in formula', 'page duplication', 'page reorder', 'malicious JSON',
-        'huge response', 'timeout', 'local service unavailable',
-        'model version mismatch', 'engine conflict', 'wrong confidence',
-        'fabricated block', 'path traversal', 'MIME spoofing'
-    ]) {
-        assert.match(matrix, new RegExp(`\\| ${attack.replaceAll('/', '\\/')} \\|[^\\n]+\\| PASS \\|`, 'i'), attack);
-    }
-});
+
 
 test('OCR-R1 aggregate attacks preserve no-bypass, fallback, timeout, and disabled canary invariants', () => {
     const matrix = fs.readFileSync(

@@ -3199,6 +3199,19 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     return issues;
                 };
 
+                const backupStatus = reactive({});
+                const backupWorkspace = Qisi.BackupWorkspace.createBackupWorkspace({
+                    database: db, backup: Qisi.Backup, repository: storageRepository,
+                    supported: typeof window.showDirectoryPicker === 'function',
+                    mutationEvents: Dexie.on('storagemutated'),
+                    pickDirectory: options => window.showDirectoryPicker(options),
+                    withFileLock: work => navigator.locks.request('qisi-backup-files', work),
+                    recordReport: (time, report) => { safeStorage.set('qisi_last_full_backup_at', String(time)); safeStorage.setJson('qisi_last_full_backup_report', report); },
+                    onRestored: () => window.location.reload()
+                }, backupStatus);
+                backupWorkspace.start();
+                Vue.onUnmounted(backupWorkspace.dispose);
+
                 const downloadQuestionMetadataBackup = async () => {
                     const storedQuestions = await db.questions.toArray();
                     const payload = {
@@ -4957,7 +4970,7 @@ Promise.all([imageReady, fontReady]).then(() => {
                 installLatexDisplayNormalizer();
 
                 return {
-                    view, questions, filteredQuestions, cart, currentPage, 
+                    backupWorkspace, backupStatus, view, questions, filteredQuestions, cart, currentPage,
                     totalPages: computed(() =>
                         libraryService.paginate(
                             filteredQuestions.value,

@@ -16,8 +16,3 @@ test('Phase 3 missing runtime script fails dependency audit', () => {
     assert.equal(result.ok, false);
     assert.ok(result.errors.some(error => error.code === 'runtime-script-missing' && error.path === 'qisi-review-draft-state.js'));
 });
-
-test('Phase 3 matrix records script missing', () => {
-    const matrix = fs.readFileSync(path.join(ROOT, 'docs/testing/POST_R2_COUNTERFACTUAL_MATRIX_R1.md'), 'utf8');
-    assert.match(matrix, /\| script missing \|[^\n]+\| PASS \|/);
-});

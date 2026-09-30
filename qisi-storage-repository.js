@@ -4,12 +4,18 @@
             ? require('./qisi-question-duplicate-policy.js')
             : null
     );
-    const api = factory(duplicatePolicy);
+    const snapshotPolicy = root?.Qisi?.BackupSnapshotPolicy || (
+        typeof module !== 'undefined' && module.exports ? require('./qisi-backup-snapshot-policy.js') : null
+    );
+    const api = factory(duplicatePolicy, snapshotPolicy, work => {
+        if (!root.Dexie?.waitFor) throw new Error('Transactional backup comparison is unavailable');
+        return root.Dexie.waitFor(work);
+    });
     root.Qisi = root.Qisi || {};
     root.Qisi.StorageRepository = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (
-    defaultDuplicatePolicy
+    defaultDuplicatePolicy, defaultSnapshotPolicy, defaultSnapshotWaitFor
 ) {
     'use strict';
 
@@ -181,7 +187,8 @@
         {
             clock = () => Date.now(),
             admission = {},
-            duplicatePolicy = defaultDuplicatePolicy
+            duplicatePolicy = defaultDuplicatePolicy,
+            waitFor = defaultSnapshotWaitFor
         } = {}
     ) => {
         if (!database || typeof database.table !== 'function') {
@@ -692,9 +699,7 @@
                         );
                     }
 
-                    const existingQuestions = clone(
-                        await questionTable.toArray()
-                    );
+                    const existingQuestions = await questionTable.toArray();
                     const conflictingRequest = existingQuestions.find(question =>
                         !question?.deletedAt &&
                         (
@@ -890,9 +895,19 @@
                 tables
             };
         };
-        const restoreBackup = async backup => {
+        const restoreBackup = async (backup, { expectedSnapshot } = {}) => {
             const normalized = validateBackup(backup);
             await transaction(BACKUP_TABLES, async () => {
+                if (expectedSnapshot !== undefined) {
+                    if (!isRecord(expectedSnapshot) || Object.keys(expectedSnapshot).length !== BACKUP_TABLES.length ||
+                        BACKUP_TABLES.some(name => !Array.isArray(expectedSnapshot[name]))) {
+                        throw new StorageRepositoryError('corrupt-data', 'A complete safety snapshot is required.');
+                    }
+                    const values = await Promise.all(BACKUP_TABLES.map(name => table(name).toArray()));
+                    const current = Object.fromEntries(BACKUP_TABLES.map((name, index) => [name, values[index]]));
+                    try { await waitFor(defaultSnapshotPolicy.assertSameSnapshot(expectedSnapshot, current)); }
+                    catch (cause) { throw new StorageRepositoryError('restore-conflict', 'Current data changed or could not be compared; restoration cancelled.', { causeCode: cause?.code || '' }); }
+                }
                 for (const name of BACKUP_TABLES) {
                     const target = table(name);
                     await target.clear();

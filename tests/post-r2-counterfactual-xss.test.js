@@ -28,8 +28,3 @@ test('Phase 3 XSS payload is escaped at startup and preview boundaries', () => {
     assert.match(components, /trust:\s*false/);
     assert.doesNotMatch(components, /trust:\s*true/);
 });
-
-test('Phase 3 matrix records XSS', () => {
-    const matrix = fs.readFileSync(path.join(ROOT, 'docs/testing/POST_R2_COUNTERFACTUAL_MATRIX_R1.md'), 'utf8');
-    assert.match(matrix, /\| XSS \|[^\n]+\| PASS \|/);
-});

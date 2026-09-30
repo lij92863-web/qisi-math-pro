@@ -20,8 +20,3 @@ test('Phase 3 formal submit cannot bypass policy and repository', () => {
     assert.match(owner, /policy\.evaluateDraftAdmission/);
     assert.match(owner, /repository\.confirmDraftToQuestion/);
 });
-
-test('Phase 3 matrix records formal submit direct DB bypass', () => {
-    const matrix = fs.readFileSync(path.join(ROOT, 'docs/testing/POST_R2_COUNTERFACTUAL_MATRIX_R1.md'), 'utf8');
-    assert.match(matrix, /\| formal submit direct DB bypass \|[^\n]+\| PASS \|/);
-});

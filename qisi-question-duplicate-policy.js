@@ -41,13 +41,14 @@
         .toLowerCase();
     const canonicalStemFingerprint = question =>
         normalizeText(question?.stem || '');
-    const canonicalCoreFingerprint = question => {
-        const stem = canonicalStemFingerprint(question);
+    const coreFromStem = (question, stem) => {
         const options = Array.isArray(question?.options)
             ? question.options.map(normalizeText).join('|')
             : '';
         return `${stem}__${options}`;
     };
+    const canonicalCoreFingerprint = question =>
+        coreFromStem(question, canonicalStemFingerprint(question));
     const canonicalAnswer = question => normalizeText(question?.answer || '');
 
     const evaluate = ({ candidate, existingQuestions = [] } = {}) => {
@@ -61,29 +62,26 @@
             error.code = 'DUPLICATE_POLICY_INPUT_INVALID';
             throw error;
         }
-        const active = existingQuestions.filter(question =>
-            question && typeof question === 'object' && !question.deletedAt
-        );
-        const coreFingerprint = canonicalCoreFingerprint(candidate);
         const stemFingerprint = canonicalStemFingerprint(candidate);
-        const exact = active.find(question =>
-            canonicalCoreFingerprint(question) === coreFingerprint
-        );
+        const coreFingerprint = coreFromStem(candidate, stemFingerprint);
         let code = DECISIONS.NONE;
         let match = null;
-        if (exact) {
-            const candidateAnswer = canonicalAnswer(candidate);
-            const existingAnswer = canonicalAnswer(exact);
-            code = candidateAnswer && existingAnswer &&
-                candidateAnswer !== existingAnswer
-                ? DECISIONS.ANSWER_CONFLICT
-                : DECISIONS.EXACT;
-            match = exact;
-        } else if (stemFingerprint) {
-            match = active.find(question =>
-                canonicalStemFingerprint(question) === stemFingerprint
-            ) || null;
-            if (match) code = DECISIONS.SIMILAR;
+        for (const question of existingQuestions) {
+            if (!question || typeof question !== 'object' || question.deletedAt) continue;
+            const stem = canonicalStemFingerprint(question);
+            if (coreFromStem(question, stem) === coreFingerprint) {
+                const candidateAnswer = canonicalAnswer(candidate);
+                const existingAnswer = canonicalAnswer(question);
+                code = candidateAnswer && existingAnswer && candidateAnswer !== existingAnswer
+                    ? DECISIONS.ANSWER_CONFLICT : DECISIONS.EXACT;
+                match = question;
+                break;
+            }
+            // Keep the first stem match, but any later exact match takes precedence.
+            if (!match && stemFingerprint && stem === stemFingerprint) {
+                match = question;
+                code = DECISIONS.SIMILAR;
+            }
         }
         return immutable({
             schemaVersion: 'qisi.question-duplicate-decision.r1',

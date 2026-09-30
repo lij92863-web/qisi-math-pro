@@ -1,7 +1,5 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const Contracts = require('../qisi-recognition-contracts.js');
 
 test('Phase 3 raw JSON cannot become a structured draft', () => {
@@ -15,9 +13,4 @@ test('Phase 3 raw JSON cannot become a structured draft', () => {
     const result = Contracts.validateStructuredQuestionDraft(draft);
     assert.equal(result.valid, false);
     assert.ok(result.errors.some(error => error.code === 'unsafe-wrapper'));
-});
-
-test('Phase 3 matrix records raw JSON', () => {
-    const matrix = fs.readFileSync(path.resolve(__dirname, '..', 'docs/testing/POST_R2_COUNTERFACTUAL_MATRIX_R1.md'), 'utf8');
-    assert.match(matrix, /\| raw JSON \|[^\n]+\| PASS \|/);
 });

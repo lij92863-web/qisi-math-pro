@@ -312,7 +312,7 @@
                 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
             const buffer = await (await dataUrlToBlob(file.uploadPath)).arrayBuffer();
-            const pdf = await root.pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
+            const pdf = await root.pdfjsLib.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false }).promise;
             const pages = root.Qisi.Utils.expandPageRange(file.pageRange, pdf.numPages);
             const pageTexts = [];
 
@@ -369,7 +369,7 @@
                 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
             const buffer = await (await dataUrlToBlob(file.uploadPath)).arrayBuffer();
-            const pdf = await root.pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
+            const pdf = await root.pdfjsLib.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false }).promise;
             const pages = root.Qisi.Utils.expandPageRange(file.pageRange, pdf.numPages);
             const layouts = [];
 

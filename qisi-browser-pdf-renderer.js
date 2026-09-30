@@ -78,7 +78,7 @@
 
             let pdf;
             try {
-                pdf = await root.pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
+                pdf = await root.pdfjsLib.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false }).promise;
             } catch (error) {
                 console.warn('[BATCH_DEBUG][pdf-render] worker 模式失败，尝试 disableWorker', {
                     filename,
@@ -88,7 +88,8 @@
                 try {
                     pdf = await root.pdfjsLib.getDocument({
                         data: new Uint8Array(buffer.slice(0)),
-                        disableWorker: true
+                        disableWorker: true,
+                        isEvalSupported: false
                     }).promise;
                 } catch (fallbackError) {
                     console.error('[BATCH_DEBUG][pdf-render-failed] PDF.js 无法打开文件', {
