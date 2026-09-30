@@ -16,6 +16,11 @@
             ? require('./qisi-pdf-support-block-parser.js')
             : null
     );
+    const productionOcrBlockParser = root?.Qisi?.PdfOcrSupportParser || (
+        typeof module !== 'undefined' && module.exports
+            ? require('./qisi-pdf-ocr-support-parser.js')
+            : null
+    );
     const productionAligner = root?.Qisi?.PdfSupportAligner || (
         typeof module !== 'undefined' && module.exports
             ? require('./qisi-pdf-support-aligner.js')
@@ -762,6 +767,7 @@
         engineResult = {},
         controlledWriteOwner,
         blockParser,
+        ocrBlockParser = null,
         aligner,
         decisionId = '',
         routeContext = {}
@@ -809,12 +815,16 @@
                 text
             };
         }).filter(page => page.text);
+        const evidenceParser = supportEvidences.length &&
+            supportEvidences.every(evidence => evidence.selectedSourceKind === 'ocrMarkdown') &&
+            typeof ocrBlockParser?.parsePdfSupportBlocks === 'function'
+                ? ocrBlockParser : blockParser;
         const supportFile = supportSources[0] || {
             id: cleanString(supportEvidences[0]?.sourceFileId),
             filename: cleanString(supportEvidences[0]?.sourceFileName)
         };
         const parserGate = controlledWriteOwner.buildPdfSupportParserGate({
-            parsePdfSupportBlocks: blockParser.parsePdfSupportBlocks,
+            parsePdfSupportBlocks: evidenceParser.parsePdfSupportBlocks,
             alignPdfSupport: aligner.alignPdfSupport,
             file: supportFile,
             expectedQuestionNumbers,
@@ -887,6 +897,7 @@
                 engineResult: input.engineResult,
                 controlledWriteOwner: productionControlledWrite,
                 blockParser: productionBlockParser,
+                ocrBlockParser: productionOcrBlockParser,
                 aligner: productionAligner,
                 decisionId: `pdf-cw:${batchId}:bridge`,
                 routeContext: {

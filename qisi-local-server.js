@@ -9,6 +9,8 @@ const { spawn } = require('child_process');
 const { createTempJobManager } = require('./qisi-temp-job-manager');
 const { createSecureLogger } = require('./qisi-secure-logger');
 const { instanceIdFor } = require('./qisi-local-instance');
+const { createAiRequestLimiter, networkFailureCode } = require('./qisi-local-ai-request-policy');
+const { assertDocxUploadType, validateDocxPackage } = require('./qisi-docx-upload-policy');
 const { isAllowedLocalHost, isAllowedLocalOrigin, publicRootAssets, isPublicAsset } = require('./qisi-local-http-boundary');
 
 createSecureLogger(console).install();
@@ -41,6 +43,7 @@ const tempJobManager = createTempJobManager({
 });
 
 const app = express();
+const aiRequestLimiter = createAiRequestLimiter();
 const aiJsonParser = express.json({ limit: AI_BODY_LIMIT, type: 'application/json' });
 
 app.use((req, res, next) => {
@@ -101,7 +104,15 @@ async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
     });
   }
 
+  const lease = aiRequestLimiter.acquire();
+  if (!lease.ok) {
+    res.set('Retry-After', String(lease.retryAfter));
+    return res.status(429).json({ ok: false, code: lease.code,
+      error: 'Local AI request limit reached. Please retry later.' });
+  }
   const controller = new AbortController();
+  const abortOnClose = () => { if (!res.writableEnded) controller.abort(); };
+  res.once('close', abortOnClose);
   const timer = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
   const bodyText = JSON.stringify(req.body);
   const model = validation.model;
@@ -143,23 +154,27 @@ async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
     return res.send(responseBuffer);
   } catch (error) {
     const aborted = error?.name === 'AbortError';
+    const causeCode = aborted ? 'REQUEST_ABORTED' : networkFailureCode(error);
     console.error('[AI_PROXY][error]', {
       requestId,
       stage: `${routeName}.error`,
       engine: model,
       durationMs: Date.now() - startedAt,
-      code: aborted ? 'AI_PROXY_TIMEOUT' : 'AI_PROXY_FETCH_FAILED'
+      code: aborted ? 'AI_PROXY_TIMEOUT' : `AI_PROXY_FETCH_FAILED:${causeCode}`
     });
 
     return res.status(aborted ? 504 : 502).json({
       ok: false,
       code: aborted ? 'AI_PROXY_TIMEOUT' : 'AI_PROXY_FETCH_FAILED',
+      causeCode,
       error: aborted
         ? `DashScope upstream request timed out after ${AI_REQUEST_TIMEOUT_MS}ms.`
-        : 'DashScope upstream request failed.'
+        : `DashScope upstream connection failed (${causeCode}).`
     });
   } finally {
     clearTimeout(timer);
+    res.removeListener('close', abortOnClose);
+    lease.release();
   }
 }
 
@@ -178,7 +193,7 @@ app.use((req, res, next) => {
   if (!isPublicAsset(req.path, rootAssets)) return res.sendStatus(404);
   next();
 });
-app.use(express.static(ROOT, { extensions: ['html'], maxAge: 0, etag: false }));
+app.use(express.static(ROOT, { extensions: ['html'], maxAge: 0, etag: true }));
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
@@ -192,6 +207,10 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
+  fileFilter: (req, file, callback) => {
+    try { assertDocxUploadType(file); callback(null, true); }
+    catch (error) { callback(error); }
+  },
   limits: { fileSize: 80 * 1024 * 1024 }
 });
 
@@ -638,6 +657,7 @@ app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => 
       });
     }
 
+    await validateDocxPackage(await fsp.readFile(uploaded.path), uploaded);
     const pdfPath = await convertDocxToPdf(uploaded.path, cleanupJob);
     const pdfBuffer = await fsp.readFile(pdfPath);
     const pdfHeader = pdfBuffer.slice(0, 5).toString('latin1');
@@ -669,9 +689,11 @@ app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => 
       code: error?.code || 'DOCX_CONVERT_FAILED'
     });
 
-    res.status(500).json({
+    const unsafeInput = /^DOCX_UPLOAD_|^ARCHIVE_/.test(error?.code || '');
+    res.status(unsafeInput ? 400 : 500).json({
       ok: false,
-      error: error.message || String(error),
+      error: unsafeInput ? 'DOCX文件格式或安全校验未通过。' : error.message || String(error),
+      code: error?.code || 'DOCX_CONVERT_FAILED',
       detail: {
         file: uploaded?.originalname || '',
         server: 'qisi-local-server',
@@ -689,6 +711,15 @@ app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => 
   } finally {
     await tempJobManager.cleanupRequest(cleanupJob);
   }
+});
+
+app.use((error, req, res, next) => {
+  if (res.headersSent) return next(error);
+  const code = error?.code === 'LIMIT_FILE_SIZE' ? 'UPLOAD_SIZE_LIMIT'
+    : error?.code === 'DOCX_UPLOAD_TYPE_INVALID' ? error.code
+      : error instanceof SyntaxError ? 'INVALID_JSON_BODY' : 'LOCAL_SERVICE_FAILURE';
+  res.status(code === 'UPLOAD_SIZE_LIMIT' ? 413 : code === 'LOCAL_SERVICE_FAILURE' ? 500 : 400)
+    .json({ ok: false, code, error: 'Local request validation failed.' });
 });
 
 async function startServer() {

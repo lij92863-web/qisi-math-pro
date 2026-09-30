@@ -1,2 +1,3 @@
 *.pdf binary
 vendor/** -text
+.githooks/* text eol=lf

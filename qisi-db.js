@@ -117,26 +117,12 @@
             return q.meta?.knowledge || q.knowledge || '';
         };
 
-        const normalizeCompareText = (text) => String(text || '')
-            .replace(/\\left|\\right/g, '')
-            .replace(/\s+/g, '')
-            .replace(/[，。；：、,.．]/g, '')
-            .replace(/[（）]/g, match => match === '（' ? '(' : ')')
-            .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
-            .toLowerCase();
-
-        const normalizeOptionsForCompare = (options) => {
-            if (!Array.isArray(options)) return '';
-            return options.map(opt => normalizeCompareText(opt)).join('|');
-        };
-
-        const questionCoreFingerprint = (q) => {
-            const stem = normalizeCompareText(q?.stem || '');
-            const options = normalizeOptionsForCompare(q?.options || []);
-            return `${stem}__${options}`;
-        };
-
-        const questionStemFingerprint = (q) => normalizeCompareText(q?.stem || '');
+        // The duplicate policy is loaded before the database in main.html.
+        const normalizeCompareText = window.Qisi.QuestionDuplicatePolicy.normalizeText;
+        const normalizeOptionsForCompare = options => Array.isArray(options)
+            ? options.map(normalizeCompareText).join('|') : '';
+        const questionCoreFingerprint = window.Qisi.QuestionDuplicatePolicy.canonicalCoreFingerprint;
+        const questionStemFingerprint = window.Qisi.QuestionDuplicatePolicy.canonicalStemFingerprint;
         const hasText = (text) => String(text || '').trim().length > 0;
         const sameTextLoose = (a, b) => normalizeCompareText(a) === normalizeCompareText(b);
 

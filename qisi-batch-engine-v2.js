@@ -1143,7 +1143,10 @@
                 draft.sourceTrace?.pageIndex ||
                 1;
 
-            const key = `${sourceFileId || 'file'}::${pageNo}`;
+            const baseKey = `${sourceFileId || 'file'}::${pageNo}`;
+            // Distinct image coordinate systems on one page must not share crops.
+            const key = `${baseKey}::${draft.sourceTrace?.boundary?.coordinateSpace === 'boundary-composite'
+                ? `boundary-${draft.questionNumber || draft.order}` : 'original'}`;
 
             if (!groups.has(key)) {
                 groups.set(key, {
@@ -1681,8 +1684,20 @@
             );
             throwIfCancelled(signal);
 
+            const boundaryOwner = ports.pdfQuestionBoundary || globalThis.Qisi?.PdfQuestionBoundary || (
+                typeof module !== 'undefined' && module.exports
+                    ? require('./qisi-pdf-question-boundary.js') : null
+            );
+            const boundaryResult = file.fileType === 'pdf' && !file.convertedFromDocx && boundaryOwner
+                ? await boundaryOwner.reconstructQuestionBoundaries(
+                    { file, pages, pageResults, signal }, ports)
+                : null;
+            throwIfCancelled(signal);
+            if (boundaryResult) for (const item of boundaryResult.items) {
+                item.recognizedImages = ports.collectValidFigures(item);
+            }
             let items = ports.mergeQuestionItems(
-                pageResults.flat().filter(Boolean)
+                boundaryResult ? boundaryResult.items : pageResults.flat().filter(Boolean)
             );
             console.log('[BATCH_TIME][strict-initial-recognition]', {
                 filename: file.filename,
@@ -1847,6 +1862,10 @@
                 questions: items,
                 pageImages,
                 check,
+                ...(boundaryResult ? { boundaryDiagnostics: {
+                    diagnostics: boundaryResult.diagnostics, fragments: boundaryResult.fragments,
+                    warnings: boundaryResult.warnings
+                } } : {}),
                 pageRecognitionSummary: [...pageRecognitionSummary].sort(
                     (left, right) =>
                         Number(left.pageNo || 0) - Number(right.pageNo || 0)

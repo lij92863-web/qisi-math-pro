@@ -1,5 +1,6 @@
 {
   "schemaVersion": "qisi.architecture-manifest.v1",
+  "runtimeInventory": "runtime-modules.json",
   "layers": [
     { "id": 0, "name": "contracts-and-pure-parsers" },
     { "id": 1, "name": "policy-storage-and-adapters" },

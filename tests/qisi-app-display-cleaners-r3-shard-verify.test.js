@@ -1,12 +1,14 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
+const ROOT = path.resolve(__dirname, '..');
 
 const { verifyShard } = require('../scripts/bm-a4-r3-shard-verify');
 
 describe('bm-a4-r3-shard-verify', () => {
     it('tool exists', () => {
-        assert.equal(fs.existsSync('scripts/bm-a4-r3-shard-verify.js'), true);
+        assert.equal(fs.existsSync(path.join(ROOT, 'scripts/bm-a4-r3-shard-verify.js')), true);
     });
 
     it('historical shard cannot run after C2-12 wrapper retirement', () => {
@@ -29,23 +31,27 @@ describe('bm-a4-r3-shard-verify', () => {
     });
 
     it('fails blocked callsite replacement', () => {
-        assert.ok(true);
+        const result = verifyShard('fixture', { replacements: [{ helper: 'cleanDisplayTextForBatchSave', blocked: true }] });
+        assert.equal(result.ok, false);
+        assert.ok(result.errors.includes('blocked callsite replacement'));
     });
 
     it('fails wrapper removal', () => {
-        const qisiSource = fs.readFileSync('qisi-utils.js', 'utf8');
+        const qisiSource = fs.readFileSync(path.join(ROOT, 'qisi-utils.js'), 'utf8');
         const result = verifyShard('R3-S001', { qisiUtilsBaseline: qisiSource + '\n// tampered' });
         assert.equal(result.ok, false);
         assert.ok(result.errors.some(e => e.includes('qisi-utils')));
     });
 
     it('fails qisi-utils diff', () => {
-        const qisiSource = fs.readFileSync('qisi-utils.js', 'utf8');
+        const qisiSource = fs.readFileSync(path.join(ROOT, 'qisi-utils.js'), 'utf8');
         const result = verifyShard('R3-S001', { qisiUtilsBaseline: qisiSource + ' ' });
         assert.equal(result.ok, false);
     });
 
     it('fails unknown replacement', () => {
-        assert.ok(true);
+        const result = verifyShard('fixture', { replacements: [{ helper: 'unknownHelper' }] });
+        assert.equal(result.ok, false);
+        assert.ok(result.errors.includes('unknown replacement helper'));
     });
 });

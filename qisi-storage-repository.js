@@ -286,51 +286,51 @@
         ) => {
             const input = clone(question);
             const id = requireId(input?.id, 'question.id');
-            const existing = await get('questions', id);
-            if (
-                existing && confirmationToken &&
-                existing.storageMeta?.confirmationToken === confirmationToken
-            ) {
-                return { question: existing, idempotent: true };
-            }
-            if (existing && !allowUpdate) {
-                throw new StorageRepositoryError(
-                    'duplicate-id', `Question ${id} already exists.`, { id }
-                );
-            }
-            if (
-                existing && expectedUpdatedAt !== undefined &&
-                existing.updatedAt !== expectedUpdatedAt
-            ) {
-                throw new StorageRepositoryError(
-                    'write-conflict',
-                    `Question ${id} changed in another writer.`,
-                    { id, expectedUpdatedAt, actualUpdatedAt: existing.updatedAt }
-                );
-            }
-            const now = clock();
-            const next = {
-                ...input,
-                createdAt: existing?.createdAt ?? input.createdAt ?? now,
-                updatedAt: now,
-                storageMeta: {
-                    ...(isRecord(existing?.storageMeta)
-                        ? existing.storageMeta
-                        : {}),
-                    ...(isRecord(input.storageMeta) ? input.storageMeta : {}),
-                    ...(confirmationToken ? { confirmationToken } : {})
+            return transaction(['questions', 'images'], async tx => {
+                const existing = await tx.get('questions', id);
+                if (
+                    existing && confirmationToken &&
+                    existing.storageMeta?.confirmationToken === confirmationToken
+                ) {
+                    return { question: existing, idempotent: true };
                 }
-            };
-            delete next.deletedAt;
-            delete next.deletedBy;
-            await transaction(['questions', 'images'], async tx => {
+                if (existing && !allowUpdate) {
+                    throw new StorageRepositoryError(
+                        'duplicate-id', `Question ${id} already exists.`, { id }
+                    );
+                }
+                if (
+                    existing && expectedUpdatedAt !== undefined &&
+                    existing.updatedAt !== expectedUpdatedAt
+                ) {
+                    throw new StorageRepositoryError(
+                        'write-conflict',
+                        `Question ${id} changed in another writer.`,
+                        { id, expectedUpdatedAt, actualUpdatedAt: existing.updatedAt }
+                    );
+                }
+                const now = clock();
+                const next = {
+                    ...input,
+                    createdAt: existing?.createdAt ?? input.createdAt ?? now,
+                    updatedAt: now,
+                    storageMeta: {
+                        ...(isRecord(existing?.storageMeta)
+                            ? existing.storageMeta
+                            : {}),
+                        ...(isRecord(input.storageMeta) ? input.storageMeta : {}),
+                        ...(confirmationToken ? { confirmationToken } : {})
+                    }
+                };
+                delete next.deletedAt;
+                delete next.deletedBy;
                 for (const image of imageRecords) {
                     requireId(image?.id, 'image.id');
                     await tx.put('images', image);
                 }
                 await tx.put('questions', next);
+                return { question: clone(next), idempotent: false };
             });
-            return { question: clone(next), idempotent: false };
         };
 
         const updateQuestion = async (
@@ -339,26 +339,28 @@
             { expectedUpdatedAt } = {}
         ) => {
             requireId(id);
-            const existing = await get('questions', id);
-            if (!existing) {
-                throw new StorageRepositoryError(
-                    'not-found', `Question ${id} was not found.`, { id }
-                );
-            }
-            if (
-                expectedUpdatedAt !== undefined &&
-                existing.updatedAt !== expectedUpdatedAt
-            ) {
-                throw new StorageRepositoryError(
-                    'write-conflict',
-                    `Question ${id} changed in another writer.`,
-                    { id, expectedUpdatedAt, actualUpdatedAt: existing.updatedAt }
-                );
-            }
-            const next = { ...existing, ...clone(patch), updatedAt: clock() };
-            next.id = id;
-            await put('questions', next);
-            return clone(next);
+            return transaction(['questions'], async tx => {
+                const existing = await tx.get('questions', id);
+                if (!existing) {
+                    throw new StorageRepositoryError(
+                        'not-found', `Question ${id} was not found.`, { id }
+                    );
+                }
+                if (
+                    expectedUpdatedAt !== undefined &&
+                    existing.updatedAt !== expectedUpdatedAt
+                ) {
+                    throw new StorageRepositoryError(
+                        'write-conflict',
+                        `Question ${id} changed in another writer.`,
+                        { id, expectedUpdatedAt, actualUpdatedAt: existing.updatedAt }
+                    );
+                }
+                const next = { ...existing, ...clone(patch), updatedAt: clock() };
+                next.id = id;
+                await tx.put('questions', next);
+                return clone(next);
+            });
         };
 
         const softDeleteQuestion = async (id, deletedBy = 'user') => {

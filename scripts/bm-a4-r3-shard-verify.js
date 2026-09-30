@@ -44,6 +44,15 @@ function verifyShard(shardId, options = {}) {
         }
     }
 
+    // Historical migration tools still need real rejection checks.
+    if (Array.isArray(options.replacements)) for (const replacement of options.replacements) {
+        if (replacement?.blocked === true) errors.push('blocked callsite replacement');
+        if (!['cleanDisplayTextForBatchSave', 'cleanDisplayOptionsForBatchSave',
+            'addWarningOnce', 'cleanDisplayFieldsOnly'].includes(replacement?.helper)) {
+            errors.push('unknown replacement helper');
+        }
+    }
+
     // Read shard doc if exists
     const shardDocPath = `docs/refactor/BM_AUTO_A4_R3_SHARD_${shardId}.md`;
     const shardDocExists = fs.existsSync(path.resolve(__dirname, '..', shardDocPath));

@@ -1,15 +1,17 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
+const ROOT = path.resolve(__dirname, '..');
 const { rankCallsite, rankAll, RISK_PATTERNS } = require('../scripts/bm-a4-r3-candidate-ranker');
 
-const appLines = fs.readFileSync('app.js', 'utf8').split('\n');
+const appLines = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8').split('\n');
 // C2-12 retired the final app-owned display-cleaner wrapper callsites.
 const EXPECTED_REMAINING_CALLSITES = 0;
 
 describe('bm-a4-r3-candidate-ranker', () => {
-    it('tool exists', () => { assert.equal(fs.existsSync('scripts/bm-a4-r3-candidate-ranker.js'), true); });
-    it('controlled-write always blocks', () => { const r = rankCallsite({ helper: 'cleanDisplayTextForBatchSave', line: 13156, text: 'x' }, appLines); if (r.risks.controlledWrite) assert.equal(r.decision, 'ALWAYS_BLOCK'); else assert.ok(true); });
+    it('tool exists', () => { assert.equal(fs.existsSync(path.join(ROOT, 'scripts/bm-a4-r3-candidate-ranker.js')), true); });
+    it('controlled-write always blocks', () => { const r = rankCallsite({ helper: 'cleanDisplayTextForBatchSave', line: 1, text: 'x' }, ['const finalAnswer = controlledWrite(value);']); assert.equal(r.risks.controlledWrite, true); assert.equal(r.decision, 'ALWAYS_BLOCK'); assert.equal(r.replacementAllowed, false); });
     it('unknown defers', () => { const r = rankCallsite({ helper: 'cleanDisplayTextForBatchSave', line: 1, text: 'x' }, ['const preview = cleanDisplayTextForBatchSave(text);']); assert.ok(r.decision === 'DEFER' || r.risks.unknown); });
     it('display-only ranks high', () => { const r = rankCallsite({ helper: 'cleanDisplayTextForBatchSave', line: 2144, text: 'x' }, appLines); assert.ok(r.score >= 60 || r.decision !== 'BLOCK_UNTIL_MANUAL'); });
     it('support attachment ranks low', () => { const r = rankCallsite({ helper: 'cleanDisplayTextForBatchSave', line: 2819, text: 'x' }, appLines); if (r.risks.supportAttachment) assert.ok(r.score < 85); });

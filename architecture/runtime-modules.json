@@ -1,0 +1,390 @@
+{
+  "schemaVersion": "qisi.runtime-file-inventory.v1",
+  "authority": "Current runtime file coverage; existing layer catalogs remain distinct architectural views.",
+  "modules": [
+    {
+      "file": "app.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-app-facade.js",
+      "runtime": "dormant"
+    },
+    {
+      "file": "qisi-archive-security.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-backup.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-batch-context-service.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-batch-engine-v2.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-batch-formal-submit.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-batch-importer.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-batch-orchestrator.js",
+      "runtime": "dormant"
+    },
+    {
+      "file": "qisi-browser-document-source.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-browser-pdf-renderer.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-candidate-normalizer.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-components.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-config.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-db.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-docx-converter.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-docx-import-coordinator.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-docx-pipeline.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-docx-producer-identity-contract.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-docx-upload-policy.js",
+      "runtime": "node"
+    },
+    {
+      "file": "qisi-docx-vision-reconciler.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-draft-maintenance-service.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-draft-persistence-service.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-export-service.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-file-dispatcher.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-formal-admission-policy.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-import-diagnostics.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-import-equivalence-normalizer.js",
+      "runtime": "dormant"
+    },
+    {
+      "file": "qisi-import-orchestrator.js",
+      "runtime": "dormant"
+    },
+    {
+      "file": "qisi-import-state-machine.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-import-validation-service.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-injected-import-path.js",
+      "runtime": "dormant"
+    },
+    {
+      "file": "qisi-legacy-batch-run-coordinator.js",
+      "runtime": "dormant"
+    },
+    {
+      "file": "qisi-library-service.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-local-ai-request-policy.js",
+      "runtime": "node"
+    },
+    {
+      "file": "qisi-local-http-boundary.js",
+      "runtime": "node"
+    },
+    {
+      "file": "qisi-local-instance.js",
+      "runtime": "node"
+    },
+    {
+      "file": "qisi-local-server.js",
+      "runtime": "node"
+    },
+    {
+      "file": "qisi-normal-ui-import-controller.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-ocr-adapter-contract.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-ocr-candidate-selection-policy.js",
+      "runtime": "dormant"
+    },
+    {
+      "file": "qisi-ocr-engine-registry.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-ocr-local-adapter.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-ocr-qwen-adapter.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-ocr-reading-order.js",
+      "runtime": "dormant"
+    },
+    {
+      "file": "qisi-ocr-shadow-mode.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-ocr-structure-extractor.js",
+      "runtime": "dormant"
+    },
+    {
+      "file": "qisi-page-question-parser.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-pdf-answer-extraction-quality.js",
+      "runtime": "dormant"
+    },
+    {
+      "file": "qisi-pdf-answer-only-extraction.js",
+      "runtime": "dormant"
+    },
+    {
+      "file": "qisi-pdf-candidate-projection.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-pdf-import-coordinator.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-pdf-ocr-support-parser.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-pdf-question-boundary.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-pdf-safe-partial-pipeline.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-pdf-support-aligner.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-pdf-support-block-parser.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-pdf-support-controlled-write.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-performance-monitor.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-production-docx-source-port.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-production-docx-vision-source-port.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-production-import-bridge.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-production-import-output-port.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-production-import-route-policy.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-production-import-status-port.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-production-pdf-sources-port.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-production-review-validator.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-question-content-policy.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-question-duplicate-policy.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-question-image-policy.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-qwen-vision-source-port.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-recognition-contracts.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-recognition-structure-policy.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-review-controller.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-review-draft-builder.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-review-draft-normalization-policy.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-review-draft-state.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-review-view-model.js",
+      "runtime": "dormant"
+    },
+    {
+      "file": "qisi-review-workflow-service.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-runtime.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-secure-logger.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-solution-quality-policy.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-source-role-classifier.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-storage-facade.js",
+      "runtime": "dormant"
+    },
+    {
+      "file": "qisi-storage-repository.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-strict-question-policy.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-support-latex-policy.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-support-parser.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-support-repair.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-support-text-parser.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-temp-job-manager.js",
+      "runtime": "node"
+    },
+    {
+      "file": "qisi-ui-events.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-ui-renderer.js",
+      "runtime": "dormant"
+    },
+    {
+      "file": "qisi-utils.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-visual-question-source.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-visual-support-source.js",
+      "runtime": "browser"
+    }
+  ]
+}

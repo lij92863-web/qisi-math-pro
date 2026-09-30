@@ -1,5 +1,6 @@
 {
   "schemaVersion": "qisi.program-c-layers.r3",
+  "runtimeInventory": "../../architecture/runtime-modules.json",
   "layers": [
     {
       "id": 0,
