@@ -15,6 +15,10 @@ test('reviewed batch submit is partial, retryable, and per-item idempotent', asy
             batch: { id: 'batch-1' }, files: [], images: [],
             questions: structuredClone(drafts)
         }),
+        reloadDraftReview: async (_batchId, draftId) => ({
+            batch: { id: 'batch-1' }, images: [],
+            draft: structuredClone(drafts.find(item => item.id === draftId))
+        }),
         persistReviewDraftCommand: async () => {
             throw new Error('not used');
         }

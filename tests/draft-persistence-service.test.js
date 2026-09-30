@@ -168,3 +168,34 @@ test('production paths use the service and the owner has no formal authority', (
     );
     assert.doesNotMatch(implementation, /\bdb\.|indexedDB|Dexie/);
 });
+
+test('targeted review rejects cross-batch drafts and misbound image evidence', async () => {
+    const valid = { batch: { id: 'b1' }, draft: { id: 'd1', batchId: 'b1', version: 1 }, images: [{ id: 'i1', batchId: 'b1', questionId: 'd1' }] };
+    for (const loaded of [
+        { ...valid, batch: { id: 'other' } },
+        { ...valid, draft: { id: 'd1', batchId: 'other' } },
+        { ...valid, draft: { id: 'other', batchId: 'b1' } },
+        { ...valid, images: [{ id: 'i1', batchId: 'other', questionId: 'd1' }] },
+        { ...valid, images: [{ id: 'i1', batchId: 'b1', questionId: 'other' }] }
+    ]) {
+        await assert.rejects(Persistence.reloadDraftReview('b1', 'd1', {
+            loadDraftReview: async () => loaded
+        }), error => error.code === 'DRAFT_PERSISTENCE_ASSOCIATION_INVALID');
+    }
+    const result = await Persistence.reloadDraftReview('b1', 'd1', { loadDraftReview: async () => valid });
+    result.draft.version = 2;
+    assert.equal(valid.draft.version, 1);
+});
+
+test('targeted review preserves missing draft and normalizes missing batch/storage failure', async () => {
+    const result = await Persistence.reloadDraftReview('b1', 'gone', {
+        loadDraftReview: async () => ({ batch: { id: 'b1' }, draft: undefined, images: [] })
+    });
+    assert.equal(result.draft, undefined);
+    await assert.rejects(Persistence.reloadDraftReview('b1', 'd1', {
+        loadDraftReview: async () => ({ batch: undefined, draft: undefined, images: [] })
+    }), error => error.code === 'DRAFT_BATCH_NOT_FOUND');
+    await assert.rejects(Persistence.reloadDraftReview('b1', 'd1', {
+        loadDraftReview: async () => { throw Object.assign(new Error('aborted'), { name: 'AbortError' }); }
+    }), error => error.code === 'DRAFT_PERSISTENCE_RELOAD_FAILED' && error.causeCode === 'AbortError');
+});

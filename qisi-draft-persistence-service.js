@@ -323,6 +323,31 @@
         return cloneValue(loaded);
     };
 
+    const reloadDraftReview = async (batchIdValue, draftIdValue, repository) => {
+        requirePorts(repository, ['loadDraftReview']);
+        const batchId = requireId(batchIdValue, 'DRAFT_BATCH_ID_REQUIRED');
+        const draftId = requireId(draftIdValue);
+        let loaded;
+        try {
+            loaded = await repository.loadDraftReview(batchId, draftId);
+        } catch (error) {
+            throw createError(
+                'DRAFT_PERSISTENCE_RELOAD_FAILED',
+                error?.code || error?.name || 'storage-failure'
+            );
+        }
+        if (!loaded?.batch) throw createError('DRAFT_BATCH_NOT_FOUND');
+        if (
+            loaded.batch.id !== batchId ||
+            (loaded.draft && (loaded.draft.id !== draftId || loaded.draft.batchId !== batchId)) ||
+            !Array.isArray(loaded.images) ||
+            loaded.images.some(row => row?.batchId !== batchId || row?.questionId !== draftId)
+        ) {
+            throw createError('DRAFT_PERSISTENCE_ASSOCIATION_INVALID');
+        }
+        return cloneValue(loaded);
+    };
+
     const validateAssociatedRows = (rows, batchId) => {
         if (!Array.isArray(rows)) {
             throw createError('DRAFT_PERSISTENCE_INPUT_INVALID');
@@ -628,6 +653,7 @@
         persistReviewDraftCommand,
         persistReviewImageCommand,
         reloadDraftBatch,
+        reloadDraftReview,
         deleteDraftBatch
     });
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

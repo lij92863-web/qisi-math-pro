@@ -24,8 +24,17 @@ const createHarness = ({
             questionId: 'draft-1', status: 'bound', url: 'data:image/png;base64,AA=='
         }]
     };
+    const reads = { batch: 0, review: 0 };
     const persistence = {
-        reloadDraftBatch: async () => clone(state),
+        reloadDraftBatch: async () => { reads.batch += 1; return clone(state); },
+        reloadDraftReview: async (_batchId, draftId) => {
+            reads.review += 1;
+            return clone({
+                batch: state.batch,
+                draft: state.questions.find(item => item.id === draftId),
+                images: state.images.filter(item => item.questionId === draftId)
+            });
+        },
         persistReviewDraftCommand: async command => {
             const index = state.questions.findIndex(item =>
                 item.id === command.draft.id
@@ -74,7 +83,7 @@ const createHarness = ({
         dataUrlToBlob: async value => `blob:${value}`,
         clock: () => 100
     });
-    return { service, state: () => clone(state), formalCalls };
+    return { service, state: () => clone(state), formalCalls, reads };
 };
 
 test('confirm reloads fresh draft, persists confirmation, and verifies readback', async () => {
@@ -86,6 +95,7 @@ test('confirm reloads fresh draft, persists confirmation, and verifies readback'
     assert.equal(result.accepted, true);
     assert.equal(result.draft.status, 'reviewed');
     assert.equal(result.draft.version, 2);
+    assert.deepEqual(harness.reads, { batch: 0, review: 2 });
 });
 
 test('confirm rejects stale and submitted drafts without mutation', async () => {
@@ -163,4 +173,15 @@ test('cancellation and formal readback mismatch fail closed', async () => {
         }),
         error => error.code === 'REVIEW_WORKFLOW_READBACK_MISMATCH'
     );
+});
+
+test('deleted draft is rejected before confirmation or formal submission', async () => {
+    const harness = createHarness();
+    for (const operation of ['confirmDraft', 'submitDraft']) {
+        await assert.rejects(harness.service[operation]({
+            batchId: 'batch-1', draftId: 'deleted-draft', expectedDraftVersion: 1
+        }), error => error.code === 'REVIEW_WORKFLOW_DRAFT_NOT_FOUND');
+    }
+    assert.equal(harness.formalCalls.length, 0);
+    assert.deepEqual(harness.reads, { batch: 0, review: 2 });
 });

@@ -402,6 +402,16 @@
             return put('draftQuestions', { ...clone(draft), updatedAt: clock() });
         };
         const loadDraft = id => get('draftQuestions', requireId(id));
+        const loadDraftReview = (batchId, draftId) => transaction(
+            ['draftImportBatches', 'draftQuestions', 'draftImages'],
+            async () => ({
+                batch: clone(await table('draftImportBatches').get(batchId)),
+                draft: clone(await table('draftQuestions').get(draftId)),
+                images: clone(await table('draftImages').where('questionId')
+                    .equals(draftId).toArray())
+            }),
+            'r'
+        );
         const loadDraftBatch = async batchId => ({
             batch: await get('draftImportBatches', batchId),
             files: await findBy('draftImportFiles', 'batchId', batchId),
@@ -924,7 +934,7 @@
             loadImageRecords,
             loadLibrary, saveQuestion, updateQuestion, softDeleteQuestion,
             restoreQuestion, listRecentTasks, saveDraft, loadDraft,
-            loadDraftBatch, createDraftBatch, persistReviewDraftBatch,
+            loadDraftBatch, loadDraftReview, createDraftBatch, persistReviewDraftBatch,
             deleteDraftBatch,
             confirmDraftToQuestion,
             createBackup, restoreBackup

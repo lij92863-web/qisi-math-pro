@@ -7,7 +7,7 @@
     {
       "name": "runBatchRecognition",
       "file": "app.js",
-      "range": [2035, 2045],
+      "range": [2039, 2049],
       "class": "A",
       "allowedCalls": [
         "normalUiImportController.isRunning",
@@ -25,7 +25,7 @@
     {
       "name": "refreshBatchStats",
       "file": "app.js",
-      "range": [2606, 2611],
+      "range": [2610, 2615],
       "class": "A",
       "allowedCalls": ["draftMaintenanceService.refreshBatchStats"],
       "forbiddenCalls": [
@@ -37,7 +37,7 @@
     {
       "name": "markDraftReviewed",
       "file": "app.js",
-      "range": [2623, 2645],
+      "range": [2627, 2649],
       "class": "A",
       "allowedCalls": [
         "saveActiveDraftQuestion",
@@ -56,7 +56,7 @@
     {
       "name": "submitDraftQuestion",
       "file": "app.js",
-      "range": [2647, 2684],
+      "range": [2651, 2688],
       "class": "A",
       "allowedCalls": [
         "saveActiveDraftQuestion",
@@ -79,7 +79,7 @@
     {
       "name": "openBatchSubmitSummary",
       "file": "app.js",
-      "range": [2686, 2692],
+      "range": [2690, 2696],
       "class": "A",
       "allowedCalls": ["reviewWorkflowService.prepareReviewedBatch"],
       "forbiddenCalls": [
@@ -91,7 +91,7 @@
     {
       "name": "dedupeActiveBatchDraftsNow",
       "file": "app.js",
-      "range": [2705, 2721],
+      "range": [2709, 2725],
       "class": "A",
       "allowedCalls": [
         "showBatchToast",
@@ -108,7 +108,7 @@
     {
       "name": "cleanupActiveBatchDisplayPollution",
       "file": "app.js",
-      "range": [2732, 2744],
+      "range": [2736, 2748],
       "class": "A",
       "allowedCalls": [
         "alert",
@@ -126,7 +126,7 @@
     {
       "name": "confirmBatchSubmit",
       "file": "app.js",
-      "range": [2751, 2765],
+      "range": [2755, 2769],
       "class": "A",
       "allowedCalls": [
         "reviewWorkflowService.submitReviewedBatch",
@@ -144,7 +144,7 @@
     {
       "name": "deleteBatchImport",
       "file": "app.js",
-      "range": [2767, 2771],
+      "range": [2771, 2775],
       "class": "A",
       "allowedCalls": [
         "confirm",

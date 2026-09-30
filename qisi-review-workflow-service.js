@@ -42,6 +42,7 @@
         if (
             !persistence ||
             typeof persistence.reloadDraftBatch !== 'function' ||
+            typeof persistence.reloadDraftReview !== 'function' ||
             typeof persistence.persistReviewDraftCommand !== 'function' ||
             typeof reviewController?.confirm !== 'function' ||
             typeof validateDraft !== 'function' ||
@@ -66,13 +67,11 @@
                 throw error('REVIEW_WORKFLOW_INPUT_INVALID');
             }
             assertActive(signal);
-            const loaded = await persistence.reloadDraftBatch(
-                normalizedBatchId
+            const loaded = await persistence.reloadDraftReview(
+                normalizedBatchId, normalizedDraftId
             );
             assertActive(signal);
-            const draft = loaded.questions.find(
-                item => item.id === normalizedDraftId
-            );
+            const draft = loaded.draft;
             if (!draft) throw error('REVIEW_WORKFLOW_DRAFT_NOT_FOUND');
             if (
                 Number.isInteger(expectedDraftVersion) &&
