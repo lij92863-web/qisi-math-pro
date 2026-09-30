@@ -11,6 +11,7 @@ const { createSecureLogger } = require('./qisi-secure-logger');
 const { instanceIdFor } = require('./qisi-local-instance');
 const { createAiRequestLimiter, networkFailureCode } = require('./qisi-local-ai-request-policy');
 const { assertDocxUploadType, validateDocxPackage } = require('./qisi-docx-upload-policy');
+const { postDashScope } = require('./qisi-local-https-transport');
 const { isAllowedLocalHost, isAllowedLocalOrigin, publicRootAssets, isPublicAsset } = require('./qisi-local-http-boundary');
 
 createSecureLogger(console).install();
@@ -128,8 +129,8 @@ async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
       engine: model
     });
 
-    const upstream = await fetch(upstreamUrl, {
-      method: 'POST',
+    const upstream = await postDashScope({
+      url: upstreamUrl,
       headers: {
         Authorization: `Bearer ${DASHSCOPE_API_KEY}`,
         'Content-Type': 'application/json'
@@ -137,9 +138,8 @@ async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
       body: bodyText,
       signal: controller.signal
     });
-
-    const responseBuffer = Buffer.from(await upstream.arrayBuffer());
-    const contentType = upstream.headers.get('content-type') || 'application/json; charset=utf-8';
+    const responseBuffer = upstream.buffer;
+    const contentType = upstream.contentType;
 
     console.log('[AI_PROXY][response]', {
       requestId,

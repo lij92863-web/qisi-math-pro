@@ -20,6 +20,9 @@ const warningMarkers = [
 const allowedFiles = new Set([
     'app.js',
     'qisi-local-server.js',
+    // Production transport validates the fixed host; default tests inject a mock request.
+    'qisi-local-https-transport.js',
+    'tests/local-https-transport.test.js',
     'scripts/smoke-ai-proxy.js',
     'scripts/smoke-ai-vision-proxy.js',
     'scripts/verify-no-real-ai.js',

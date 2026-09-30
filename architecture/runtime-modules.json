@@ -147,6 +147,10 @@
       "runtime": "node"
     },
     {
+      "file": "qisi-local-https-transport.js",
+      "runtime": "node"
+    },
+    {
       "file": "qisi-local-instance.js",
       "runtime": "node"
     },
