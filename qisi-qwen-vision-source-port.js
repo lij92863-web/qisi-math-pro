@@ -40,6 +40,17 @@ ${expectedQuestionCount ? `人工预计题数 ${expectedQuestionCount} 仅供参
 
 ${repairInfo ? `需要重点修复：\n${repairInfo}` : ''}`;
 
+    // A provider-side 4xx (except 408) is a protocol-level rejection: the request
+    // was refused before it could run, so it can never have been accepted.
+    // Recording it as "submission unknown" hides the cause and permanently locks
+    // the source, which is why an invalid key used to brick a whole exam.
+    // 5xx and 408 stay unknown: the provider may have processed part of them.
+    const rejectionEvidence = status => {
+        const code = Number(status || 0);
+        const rejected = code >= 400 && code < 500 && code !== 408;
+        return rejected ? { definitelyNotSubmitted: true, submissionAccepted: false } : {};
+    };
+
     const createPdfWindowRecognizer = ({ transport }) => async ({ model, pages = [], crops = [], prompt, systemPrompt, responseFormat, maxTokens, timeoutMs, requestId, signal }) => {
         const content = [{ type: 'text', text: prompt }];
         for (const page of pages) content.push({ type: 'text', text: `原始 PDF 第 ${page.pageNo} 页` }, { type: 'image_url', image_url: { url: page.url } });
@@ -49,7 +60,7 @@ ${repairInfo ? `需要重点修复：\n${repairInfo}` : ''}`;
             body: JSON.stringify({ model, temperature: 0, enable_thinking: false, max_tokens: maxTokens, response_format: responseFormat || { type: 'json_object' }, messages: [...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []), { role: 'user', content }] })
         }, timeoutMs, 'PDF V1 多页结构化识别');
         const raw = await response.json();
-        if (!response.ok) throw Object.assign(new Error(raw.error?.message || (typeof raw.error === 'string' ? raw.error : raw.message) || 'PDF_V1_API_FAILED'), { code: raw.error?.code || raw.code || 'PDF_V1_API_FAILED', status: response.status, rawResponse: raw, details: { error: raw.error, causeCode: raw.causeCode, requestId: raw.request_id || raw.id } });
+        if (!response.ok) throw Object.assign(new Error(raw.error?.message || (typeof raw.error === 'string' ? raw.error : raw.message) || 'PDF_V1_API_FAILED'), { code: raw.error?.code || raw.code || 'PDF_V1_API_FAILED', status: response.status, rawResponse: raw, details: { error: raw.error, causeCode: raw.causeCode, requestId: raw.request_id || raw.id }, ...rejectionEvidence(response.status) });
         const choice = raw.choices?.[0];
         if (choice?.message?.refusal || typeof choice?.message?.content !== 'string') throw Object.assign(new Error('PDF_V1_EMPTY_OR_REFUSED'), { externalResponseReceived: true, rawResponse: raw });
         return { text: choice.message.content, model: raw.model || model, finishReason: choice.finish_reason, usage: raw.usage || {}, responseId: raw.id || '', rawResponse: raw };

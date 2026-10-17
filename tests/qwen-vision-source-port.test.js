@@ -162,3 +162,43 @@ test('document OCR source preserves cancellation and owns manual OCR prompt', as
     assert.equal(manualRequest.task, 'structured-ocr');
     assert.match(manualRequest.prompt, /数学题/);
 });
+
+test('a provider 401 is recorded as a definite rejection, never as an unknown submission', async () => {
+    const recognize = SourcePort.createPdfWindowRecognizer({
+        transport: {
+            request: async () => ({
+                ok: false,
+                status: 401,
+                json: async () => ({ error: { code: 'invalid_api_key', message: 'Incorrect API key provided.' } })
+            })
+        }
+    });
+    await assert.rejects(
+        recognize({ model: 'm', pages: [{ pageNo: 1, url: 'data:image/jpeg;base64,x' }], prompt: 'p' }),
+        error => {
+            assert.equal(error.status, 401);
+            assert.equal(error.definitelyNotSubmitted, true);
+            assert.equal(error.submissionAccepted, false);
+            return true;
+        }
+    );
+});
+
+test('a provider 5xx stays uncertain because the work may have been accepted', async () => {
+    const recognize = SourcePort.createPdfWindowRecognizer({
+        transport: {
+            request: async () => ({
+                ok: false,
+                status: 502,
+                json: async () => ({ error: { code: 'upstream_error', message: 'bad gateway' } })
+            })
+        }
+    });
+    await assert.rejects(
+        recognize({ model: 'm', pages: [{ pageNo: 1, url: 'data:image/jpeg;base64,x' }], prompt: 'p' }),
+        error => {
+            assert.equal(error.definitelyNotSubmitted, undefined);
+            return true;
+        }
+    );
+});

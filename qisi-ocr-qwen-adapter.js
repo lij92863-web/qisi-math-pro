@@ -126,9 +126,10 @@
         ])
     });
 
-    const createTaskError = (code, message) => {
+    const createTaskError = (code, message, extra) => {
         const error = new Error(message);
         error.code = code;
+        if (extra) Object.assign(error, extra);
         return error;
     };
 
@@ -189,7 +190,10 @@
             const status = Number(response?.status || 0);
             throw createTaskError(
                 'QWEN_PROXY_HTTP_FAILED',
-                `Qwen proxy failed with HTTP ${status || 'unknown'}.`
+                `Qwen proxy failed with HTTP ${status || 'unknown'}.`,
+                // Provider-side 4xx other than 408 refuses the request outright,
+                // so the submission cannot have been accepted.
+                { status, ...(status >= 400 && status < 500 && status !== 408 ? { definitelyNotSubmitted: true, submissionAccepted: false } : {}) }
             );
         };
 

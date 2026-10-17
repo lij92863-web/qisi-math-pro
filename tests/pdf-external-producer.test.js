@@ -73,3 +73,16 @@ test('typed math is repaired in place and already-typeset fields are never rewri
  const result=await h.run();
  assert.deepEqual(seen,['已知 x^2=1，求 x。']);assert.equal(result.drafts[0].stem,'已修复');assert.equal(result.drafts[1].stem,'Question 2');
 });
+
+test('a provider rejection never locks the source, so a corrected key allows a rerun',async()=>{
+ let attempts=0;
+ const reject=()=>{attempts+=1;throw Object.assign(Error('Incorrect API key provided.'),{code:'invalid_api_key',status:401,definitelyNotSubmitted:true,submissionAccepted:false});};
+ const h=harness({execute:async()=>reject()});
+ await assert.rejects(h.run());
+ assert.equal(attempts,1);
+ const task=h.file.pdfExternalEvidence.tasks.at(-1);
+ assert.equal(task.state,'rejected');
+ assert.equal(task.attempts.at(-1).state,'rejected');
+ await assert.rejects(h.run());
+ assert.equal(attempts,2);
+});
