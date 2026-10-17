@@ -2,620 +2,1589 @@
   "schemaVersion": "qisi.architecture-manifest.v1",
   "runtimeInventory": "runtime-modules.json",
   "layers": [
-    { "id": 0, "name": "contracts-and-pure-parsers" },
-    { "id": 1, "name": "policy-storage-and-adapters" },
-    { "id": 2, "name": "application-services" },
-    { "id": 3, "name": "workflow-composition" },
-    { "id": 4, "name": "ui-shell" }
+    {
+      "id": 0,
+      "name": "contracts-and-pure-parsers"
+    },
+    {
+      "id": 1,
+      "name": "policy-storage-and-adapters"
+    },
+    {
+      "id": 2,
+      "name": "application-services"
+    },
+    {
+      "id": 3,
+      "name": "workflow-composition"
+    },
+    {
+      "id": 4,
+      "name": "ui-shell"
+    }
   ],
   "modules": [
     {
-      "id": "secure-logger", "file": "qisi-secure-logger.js",
-      "layer": 0, "domainOwner": "secureLoggerOwner",
-      "publicApi": ["createSecureLogger", "sanitizeLogArgs"],
-      "allowedDependencies": [], "forbiddenDependencies": ["app-shell", "storage-repository"],
-      "status": "production-wired"
-    },
-    {
-      "id": "archive-security", "file": "qisi-archive-security.js",
-      "layer": 0, "domainOwner": "archiveSecurityOwner",
-      "publicApi": ["createArchivePolicy", "validateArchive", "load"],
-      "allowedDependencies": [], "forbiddenDependencies": ["app-shell", "storage-repository"],
-      "status": "production-wired"
-    },
-    {
-      "id": "recognition-contracts", "file": "qisi-recognition-contracts.js",
-      "layer": 0, "domainOwner": "recognitionContractsOwner",
-      "publicApi": ["createRecognitionCandidate", "validateStructuredDraft", "validateQuestionV2"],
-      "allowedDependencies": [], "forbiddenDependencies": ["app-shell", "storage-repository"],
-      "status": "production-wired"
-    },
-    {
-      "id": "ocr-adapter-contract", "file": "qisi-ocr-adapter-contract.js",
-      "layer": 0, "domainOwner": "ocrAdapterContractOwner",
-      "publicApi": ["validateInput", "validateResponse", "mapTransportError"],
-      "allowedDependencies": [], "forbiddenDependencies": ["app-shell", "storage-repository"],
-      "status": "production-wired"
-    },
-    {
-      "id": "ocr-reading-order", "file": "qisi-ocr-reading-order.js",
-      "layer": 0, "domainOwner": "ocrReadingOrderOwner",
-      "publicApi": ["validateBlock", "orderBlocks"],
-      "allowedDependencies": [], "forbiddenDependencies": ["app-shell", "storage-repository"],
-      "status": "scaffold"
-    },
-    {
-      "id": "ocr-structure-extractor", "file": "qisi-ocr-structure-extractor.js",
-      "layer": 1, "domainOwner": "ocrStructureExtractorOwner",
-      "publicApi": ["extractQuestionStructures"],
-      "allowedDependencies": ["ocr-reading-order"],
-      "forbiddenDependencies": ["app-shell", "storage-repository", "formal-admission"],
-      "status": "scaffold"
-    },
-    {
-      "id": "ocr-candidate-selection", "file": "qisi-ocr-candidate-selection-policy.js",
-      "layer": 1, "domainOwner": "ocrCandidateSelectionOwner",
-      "publicApi": ["evaluateCandidate", "selectProductionCandidate"],
+      "id": "secure-logger",
+      "file": "qisi-secure-logger.js",
+      "layer": 0,
+      "domainOwner": "secureLoggerOwner",
+      "publicApi": [
+        "createSecureLogger",
+        "sanitizeLogArgs"
+      ],
       "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "storage-repository", "formal-admission"],
-      "status": "scaffold"
-    },
-    {
-      "id": "support-parser", "file": "qisi-pdf-support-block-parser.js",
-      "layer": 0, "domainOwner": "supportParserOwner",
-      "publicApi": ["parsePdfSupportBlocks"],
-      "allowedDependencies": [], "forbiddenDependencies": ["app-shell", "storage-repository"],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
       "status": "production-wired"
     },
     {
-      "id": "question-duplicate-policy", "file": "qisi-question-duplicate-policy.js",
-      "layer": 0, "domainOwner": "questionDuplicatePolicyOwner",
-      "publicApi": ["DECISIONS", "canonicalCoreFingerprint", "canonicalStemFingerprint", "evaluate"],
+      "id": "archive-security",
+      "file": "qisi-archive-security.js",
+      "layer": 0,
+      "domainOwner": "archiveSecurityOwner",
+      "publicApi": [
+        "createArchivePolicy",
+        "validateArchive",
+        "load"
+      ],
       "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "production-import-bridge"],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
       "status": "production-wired"
     },
     {
-      "id": "question-index-storage", "file": "qisi-question-index-storage.js",
-      "layer": 1, "domainOwner": "questionIndexStorageOwner",
-      "publicApi": ["configure"], "allowedDependencies": ["question-duplicate-policy"],
-      "forbiddenDependencies": ["app-shell"], "status": "production-wired"
-    },
-    {
-      "id": "formal-admission", "file": "qisi-formal-admission-policy.js",
-      "layer": 1, "domainOwner": "formalAdmissionOwner",
-      "publicApi": ["createAdmissionContext", "evaluateDraftAdmission", "buildQuestionV2"],
-      "allowedDependencies": ["recognition-contracts"],
-      "forbiddenDependencies": ["app-shell", "storage-repository"],
+      "id": "recognition-contracts",
+      "file": "qisi-recognition-contracts.js",
+      "layer": 0,
+      "domainOwner": "recognitionContractsOwner",
+      "publicApi": [
+        "createRecognitionCandidate",
+        "validateStructuredDraft",
+        "validateQuestionV2"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
       "status": "production-wired"
     },
     {
-      "id": "storage-repository", "file": "qisi-storage-repository.js",
-      "layer": 1, "domainOwner": "storageRepositoryOwner",
-      "publicApi": ["createRepository", "deleteMany", "confirmDraftToQuestion", "createDraftBatch", "persistReviewDraftBatch"],
-      "allowedDependencies": ["recognition-contracts", "question-duplicate-policy"],
-      "forbiddenDependencies": ["app-shell"], "status": "production-wired"
-    },
-    {
-      "id": "support-aligner", "file": "qisi-pdf-support-aligner.js",
-      "layer": 1, "domainOwner": "supportAlignerOwner",
-      "publicApi": ["alignPdfSupport"], "allowedDependencies": ["support-parser"],
-      "forbiddenDependencies": ["app-shell", "storage-repository"],
+      "id": "ocr-adapter-contract",
+      "file": "qisi-ocr-adapter-contract.js",
+      "layer": 0,
+      "domainOwner": "ocrAdapterContractOwner",
+      "publicApi": [
+        "validateInput",
+        "validateResponse",
+        "mapTransportError"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
       "status": "production-wired"
     },
     {
-      "id": "ocr-qwen-adapter", "file": "qisi-ocr-qwen-adapter.js",
-      "layer": 1, "domainOwner": "qwenAdapterOwner",
-      "publicApi": ["createQwenProxyTransport", "createQwenTaskClient", "createQwenAdapter"], "allowedDependencies": ["recognition-contracts", "ocr-adapter-contract"],
-      "forbiddenDependencies": ["formal-admission", "storage-repository"],
-      "status": "production-wired"
-    },
-    {
-      "id": "ocr-local-adapter", "file": "qisi-ocr-local-adapter.js",
-      "layer": 1, "domainOwner": "localAdapterOwner",
-      "publicApi": ["createLocalAdapter"], "allowedDependencies": ["recognition-contracts", "ocr-adapter-contract"],
-      "forbiddenDependencies": ["formal-admission", "storage-repository"],
+      "id": "ocr-reading-order",
+      "file": "qisi-ocr-reading-order.js",
+      "layer": 0,
+      "domainOwner": "ocrReadingOrderOwner",
+      "publicApi": [
+        "validateBlock",
+        "orderBlocks"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
       "status": "scaffold"
     },
     {
-      "id": "local-ocr-service", "file": "local-ocr/server.js",
-      "layer": 1, "domainOwner": "localOcrServiceOwner",
-      "publicApi": ["createLocalOcrService", "createUnavailableEngine"],
-      "allowedDependencies": ["ocr-adapter-contract"],
-      "forbiddenDependencies": ["formal-admission", "storage-repository", "app-shell"],
+      "id": "ocr-structure-extractor",
+      "file": "qisi-ocr-structure-extractor.js",
+      "layer": 1,
+      "domainOwner": "ocrStructureExtractorOwner",
+      "publicApi": [
+        "extractQuestionStructures"
+      ],
+      "allowedDependencies": [
+        "ocr-reading-order"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "formal-admission"
+      ],
       "status": "scaffold"
     },
     {
-      "id": "performance-monitor", "file": "qisi-performance-monitor.js",
-      "layer": 1, "domainOwner": "performanceMonitorOwner",
-      "publicApi": ["createPerformanceMonitor"], "allowedDependencies": [],
-      "forbiddenDependencies": ["formal-admission", "storage-repository"],
+      "id": "ocr-candidate-selection",
+      "file": "qisi-ocr-candidate-selection-policy.js",
+      "layer": 1,
+      "domainOwner": "ocrCandidateSelectionOwner",
+      "publicApi": [
+        "evaluateCandidate",
+        "selectProductionCandidate"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "formal-admission"
+      ],
       "status": "scaffold"
     },
     {
-      "id": "library-service", "file": "qisi-library-service.js",
-      "layer": 2, "domainOwner": "libraryServiceOwner",
-      "publicApi": ["createLibraryService"], "allowedDependencies": ["storage-repository"],
-      "forbiddenDependencies": ["app-shell"], "status": "production-wired"
-    },
-    {
-      "id": "review-controller", "file": "qisi-review-controller.js",
-      "layer": 2, "domainOwner": "reviewControllerOwner",
-      "publicApi": ["createReviewController"], "allowedDependencies": [],
-      "forbiddenDependencies": ["storage-repository", "app-shell"],
+      "id": "question-duplicate-policy",
+      "file": "qisi-question-duplicate-policy.js",
+      "layer": 0,
+      "domainOwner": "questionDuplicatePolicyOwner",
+      "publicApi": [
+        "DECISIONS",
+        "canonicalCoreFingerprint",
+        "canonicalStemFingerprint",
+        "evaluate"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "production-import-bridge"
+      ],
       "status": "production-wired"
     },
     {
-      "id": "production-review-validator", "file": "qisi-production-review-validator.js",
-      "layer": 2, "domainOwner": "productionReviewValidatorOwner",
-      "publicApi": ["createProductionReviewValidator"],
-      "allowedDependencies": ["formal-admission"],
-      "forbiddenDependencies": ["storage-repository", "app-shell"],
+      "id": "question-index-storage",
+      "file": "qisi-question-index-storage.js",
+      "layer": 1,
+      "domainOwner": "questionIndexStorageOwner",
+      "publicApi": [
+        "configure"
+      ],
+      "allowedDependencies": [
+        "question-duplicate-policy"
+      ],
+      "forbiddenDependencies": [
+        "app-shell"
+      ],
       "status": "production-wired"
     },
     {
-      "id": "export-service", "file": "qisi-export-service.js",
-      "layer": 2, "domainOwner": "exportServiceOwner",
-      "publicApi": ["createExportService"], "allowedDependencies": ["storage-repository"],
-      "forbiddenDependencies": ["app-shell"], "status": "production-wired"
+      "id": "formal-admission",
+      "file": "qisi-formal-admission-policy.js",
+      "layer": 1,
+      "domainOwner": "formalAdmissionOwner",
+      "publicApi": [
+        "createAdmissionContext",
+        "evaluateDraftAdmission",
+        "buildQuestionV2"
+      ],
+      "allowedDependencies": [
+        "recognition-contracts"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
+      "status": "production-wired"
     },
     {
-      "id": "import-coordinator", "file": "qisi-import-orchestrator.js",
-      "layer": 2, "domainOwner": "importCoordinatorScaffoldOwner",
-      "publicApi": ["createImportOrchestrator"],
-      "allowedDependencies": ["recognition-contracts"],
-      "forbiddenDependencies": ["app-shell", "storage-repository"],
+      "id": "storage-repository",
+      "file": "qisi-storage-repository.js",
+      "layer": 1,
+      "domainOwner": "storageRepositoryOwner",
+      "publicApi": [
+        "createRepository",
+        "deleteMany",
+        "confirmDraftToQuestion",
+        "createDraftBatch",
+        "persistReviewDraftBatch"
+      ],
+      "allowedDependencies": [
+        "recognition-contracts",
+        "question-duplicate-policy"
+      ],
+      "forbiddenDependencies": [
+        "app-shell"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "support-aligner",
+      "file": "qisi-pdf-support-aligner.js",
+      "layer": 1,
+      "domainOwner": "supportAlignerOwner",
+      "publicApi": [
+        "alignPdfSupport"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "ocr-qwen-adapter",
+      "file": "qisi-ocr-qwen-adapter.js",
+      "layer": 1,
+      "domainOwner": "qwenAdapterOwner",
+      "publicApi": [
+        "createQwenProxyTransport",
+        "createQwenTaskClient",
+        "createQwenAdapter"
+      ],
+      "allowedDependencies": [
+        "recognition-contracts",
+        "ocr-adapter-contract"
+      ],
+      "forbiddenDependencies": [
+        "formal-admission",
+        "storage-repository"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "ocr-local-adapter",
+      "file": "qisi-ocr-local-adapter.js",
+      "layer": 1,
+      "domainOwner": "localAdapterOwner",
+      "publicApi": [
+        "createLocalAdapter"
+      ],
+      "allowedDependencies": [
+        "recognition-contracts",
+        "ocr-adapter-contract"
+      ],
+      "forbiddenDependencies": [
+        "formal-admission",
+        "storage-repository"
+      ],
+      "status": "scaffold"
+    },
+    {
+      "id": "local-ocr-service",
+      "file": "local-ocr/server.js",
+      "layer": 1,
+      "domainOwner": "localOcrServiceOwner",
+      "publicApi": [
+        "createLocalOcrService",
+        "createUnavailableEngine"
+      ],
+      "allowedDependencies": [
+        "ocr-adapter-contract"
+      ],
+      "forbiddenDependencies": [
+        "formal-admission",
+        "storage-repository",
+        "app-shell"
+      ],
+      "status": "scaffold"
+    },
+    {
+      "id": "performance-monitor",
+      "file": "qisi-performance-monitor.js",
+      "layer": 1,
+      "domainOwner": "performanceMonitorOwner",
+      "publicApi": [
+        "createPerformanceMonitor"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "formal-admission",
+        "storage-repository"
+      ],
+      "status": "scaffold"
+    },
+    {
+      "id": "library-service",
+      "file": "qisi-library-service.js",
+      "layer": 2,
+      "domainOwner": "libraryServiceOwner",
+      "publicApi": [
+        "createLibraryService"
+      ],
+      "allowedDependencies": [
+        "storage-repository"
+      ],
+      "forbiddenDependencies": [
+        "app-shell"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "review-controller",
+      "file": "qisi-review-controller.js",
+      "layer": 2,
+      "domainOwner": "reviewControllerOwner",
+      "publicApi": [
+        "createReviewController"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "storage-repository",
+        "app-shell"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "production-review-validator",
+      "file": "qisi-production-review-validator.js",
+      "layer": 2,
+      "domainOwner": "productionReviewValidatorOwner",
+      "publicApi": [
+        "createProductionReviewValidator"
+      ],
+      "allowedDependencies": [
+        "formal-admission"
+      ],
+      "forbiddenDependencies": [
+        "storage-repository",
+        "app-shell"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "export-service",
+      "file": "qisi-export-service.js",
+      "layer": 2,
+      "domainOwner": "exportServiceOwner",
+      "publicApi": [
+        "createExportService"
+      ],
+      "allowedDependencies": [
+        "storage-repository"
+      ],
+      "forbiddenDependencies": [
+        "app-shell"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "import-coordinator",
+      "file": "qisi-import-orchestrator.js",
+      "layer": 2,
+      "domainOwner": "importCoordinatorScaffoldOwner",
+      "publicApi": [
+        "createImportOrchestrator"
+      ],
+      "allowedDependencies": [
+        "recognition-contracts"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
       "status": "deprecated"
     },
     {
-      "id": "legacy-batch-run", "file": "qisi-legacy-batch-run-coordinator.js",
-      "layer": 2, "domainOwner": "legacyBatchRunOwner",
-      "publicApi": ["createLegacyBatchRunCoordinator"], "allowedDependencies": [],
-      "forbiddenDependencies": ["formal-admission"], "status": "deprecated"
-    },
-    {
-      "id": "injected-import-path", "file": "qisi-injected-import-path.js",
-      "layer": 2, "domainOwner": "injectedImportPathOwner",
-      "publicApi": ["createInjectedImportPath"],
-      "allowedDependencies": ["storage-repository", "import-diagnostics"],
-      "forbiddenDependencies": ["app-shell", "formal-admission"],
+      "id": "legacy-batch-run",
+      "file": "qisi-legacy-batch-run-coordinator.js",
+      "layer": 2,
+      "domainOwner": "legacyBatchRunOwner",
+      "publicApi": [
+        "createLegacyBatchRunCoordinator"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "formal-admission"
+      ],
       "status": "deprecated"
     },
     {
-      "id": "ocr-registry", "file": "qisi-ocr-engine-registry.js",
-      "layer": 2, "domainOwner": "ocrRegistryOwner",
-      "publicApi": ["createRegistry"],
-      "allowedDependencies": ["ocr-qwen-adapter", "ocr-local-adapter"],
-      "forbiddenDependencies": ["formal-admission", "storage-repository"],
+      "id": "injected-import-path",
+      "file": "qisi-injected-import-path.js",
+      "layer": 2,
+      "domainOwner": "injectedImportPathOwner",
+      "publicApi": [
+        "createInjectedImportPath"
+      ],
+      "allowedDependencies": [
+        "storage-repository",
+        "import-diagnostics"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission"
+      ],
+      "status": "deprecated"
+    },
+    {
+      "id": "ocr-registry",
+      "file": "qisi-ocr-engine-registry.js",
+      "layer": 2,
+      "domainOwner": "ocrRegistryOwner",
+      "publicApi": [
+        "createRegistry"
+      ],
+      "allowedDependencies": [
+        "ocr-qwen-adapter",
+        "ocr-local-adapter"
+      ],
+      "forbiddenDependencies": [
+        "formal-admission",
+        "storage-repository"
+      ],
       "status": "scaffold"
     },
     {
-      "id": "controlled-write", "file": "qisi-pdf-support-controlled-write.js",
-      "layer": 2, "domainOwner": "controlledWriteOwner",
-      "publicApi": ["buildPdfSupportFieldLevelControlledWrite"],
-      "allowedDependencies": ["support-parser", "support-aligner"],
-      "forbiddenDependencies": ["app-shell", "storage-repository"],
-      "status": "production-wired"
+      "id": "controlled-write",
+      "file": "qisi-pdf-support-controlled-write.js",
+      "layer": 2,
+      "domainOwner": "controlledWriteOwner",
+      "publicApi": [
+        "buildPdfSupportFieldLevelControlledWrite"
+      ],
+      "allowedDependencies": [
+        "support-aligner"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
+      "status": "deprecated"
     },
     {
-      "id": "ocr-shadow-mode", "file": "qisi-ocr-shadow-mode.js",
-      "layer": 3, "domainOwner": "shadowModeOwner",
-      "publicApi": ["compareCandidates", "runShadow", "runMeasuredShadow"],
-      "allowedDependencies": ["ocr-registry", "performance-monitor"],
-      "forbiddenDependencies": ["formal-admission", "storage-repository"],
+      "id": "ocr-shadow-mode",
+      "file": "qisi-ocr-shadow-mode.js",
+      "layer": 3,
+      "domainOwner": "shadowModeOwner",
+      "publicApi": [
+        "compareCandidates",
+        "runShadow",
+        "runMeasuredShadow"
+      ],
+      "allowedDependencies": [
+        "ocr-registry",
+        "performance-monitor"
+      ],
+      "forbiddenDependencies": [
+        "formal-admission",
+        "storage-repository"
+      ],
       "status": "scaffold"
     },
     {
-      "id": "batch-formal-submit", "file": "qisi-batch-formal-submit.js",
-      "layer": 3, "domainOwner": "batchFormalSubmitOwner",
-      "publicApi": ["createBatchFormalSubmit"],
-      "allowedDependencies": ["formal-admission", "storage-repository", "import-state-machine"],
-      "forbiddenDependencies": ["app-shell"], "status": "production-wired"
-    },
-    {
-      "id": "draft-maintenance", "file": "qisi-draft-maintenance-service.js",
-      "layer": 3, "domainOwner": "draftMaintenanceOwner",
-      "publicApi": ["createDraftMaintenanceService"],
-      "allowedDependencies": ["draft-persistence-service"],
-      "forbiddenDependencies": ["production-import-bridge", "formal-admission", "controlled-write"],
+      "id": "batch-formal-submit",
+      "file": "qisi-batch-formal-submit.js",
+      "layer": 3,
+      "domainOwner": "batchFormalSubmitOwner",
+      "publicApi": [
+        "createBatchFormalSubmit"
+      ],
+      "allowedDependencies": [
+        "formal-admission",
+        "storage-repository",
+        "import-state-machine"
+      ],
+      "forbiddenDependencies": [
+        "app-shell"
+      ],
       "status": "production-wired"
     },
     {
-      "id": "review-workflow", "file": "qisi-review-workflow-service.js",
-      "layer": 3, "domainOwner": "reviewWorkflowOwner",
-      "publicApi": ["createReviewWorkflowService"],
-      "allowedDependencies": ["draft-persistence-service", "review-controller", "batch-formal-submit", "draft-maintenance"],
-      "forbiddenDependencies": ["production-import-bridge", "controlled-write"],
+      "id": "draft-maintenance",
+      "file": "qisi-draft-maintenance-service.js",
+      "layer": 3,
+      "domainOwner": "draftMaintenanceOwner",
+      "publicApi": [
+        "createDraftMaintenanceService"
+      ],
+      "allowedDependencies": [
+        "draft-persistence-service"
+      ],
+      "forbiddenDependencies": [
+        "production-import-bridge",
+        "formal-admission",
+        "controlled-write"
+      ],
       "status": "production-wired"
     },
     {
-      "id": "route-b-research", "file": "tests/pdf-answer-only-ai-pass.test.js",
-      "layer": 3, "domainOwner": "routeBResearchOwner",
-      "publicApi": ["runAnswerOnlyAiPass"],
-      "allowedDependencies": ["controlled-write"],
-      "forbiddenDependencies": ["app-shell", "storage-repository"],
+      "id": "review-workflow",
+      "file": "qisi-review-workflow-service.js",
+      "layer": 3,
+      "domainOwner": "reviewWorkflowOwner",
+      "publicApi": [
+        "createReviewWorkflowService"
+      ],
+      "allowedDependencies": [
+        "draft-persistence-service",
+        "review-controller",
+        "batch-formal-submit",
+        "draft-maintenance"
+      ],
+      "forbiddenDependencies": [
+        "production-import-bridge",
+        "controlled-write"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "route-b-research",
+      "file": "tests/pdf-answer-only-ai-pass.test.js",
+      "layer": 3,
+      "domainOwner": "routeBResearchOwner",
+      "publicApi": [
+        "runAnswerOnlyAiPass"
+      ],
+      "allowedDependencies": [
+        "controlled-write"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
       "status": "research-only"
     },
     {
-      "id": "import-equivalence-normalizer", "file": "qisi-import-equivalence-normalizer.js",
-      "layer": 0, "domainOwner": "importEquivalenceNormalizerOwner",
-      "publicApi": ["RESULTS", "canonicalizeImportSnapshot", "compareImportSnapshots"],
+      "id": "import-equivalence-normalizer",
+      "file": "qisi-import-equivalence-normalizer.js",
+      "layer": 0,
+      "domainOwner": "importEquivalenceNormalizerOwner",
+      "publicApi": [
+        "RESULTS",
+        "canonicalizeImportSnapshot",
+        "compareImportSnapshots"
+      ],
       "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository",
+        "route-b-research"
+      ],
       "status": "deprecated"
     },
     {
-      "id": "import-state-machine", "file": "qisi-import-state-machine.js",
-      "layer": 2, "domainOwner": "importStateMachineOwner",
-      "publicApi": ["STATES", "TRANSITIONS", "createImportStateMachine"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository"],
-      "status": "production-wired"
-    },
-    {
-      "id": "qwen-vision-source-port", "file": "qisi-qwen-vision-source-port.js",
-      "layer": 2, "domainOwner": "qwenVisionSourcePortOwner",
-      "publicApi": ["buildStrictQuestionPrompt", "createProductionOcrRuntime", "createStrictQuestionPageRecognizer", "createDocumentOcrSource"],
-      "allowedDependencies": ["ocr-qwen-adapter", "docx-producer-identity-contract"],
-      "forbiddenDependencies": ["formal-admission", "storage-repository", "app-shell"],
-      "status": "production-wired"
-    },
-    {
-      "id": "docx-producer-identity-contract", "file": "qisi-docx-producer-identity-contract.js",
-      "layer": 1, "domainOwner": "docxProducerIdentityContractOwner",
-      "publicApi": ["resolveIdentity", "validateCanonicalIdentity", "buildDocxVisionControlledWriteDecision", "projectDocxVisionCandidate", "applyDocxVisionSupportField", "projectDeterministicDocxCandidate", "compareCanonicalDocxCandidates"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
-      "status": "production-wired"
-    },
-    {
-      "id": "pdf-safe-partial-pipeline", "file": "qisi-pdf-safe-partial-pipeline.js",
-      "layer": 1, "domainOwner": "pdfSafePartialPipelineOwner",
-      "publicApi": ["normalizePdfPipelineResult", "assertSafePartialInvariants", "attachPdfPageTrace", "attachSinglePdfPageTrace"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
-      "status": "production-wired"
-    },
-    {
-      "id": "batch-context-service", "file": "qisi-batch-context-service.js",
-      "layer": 2, "domainOwner": "batchContextServiceOwner",
-      "publicApi": ["createBatchContext", "loadBatchAndFiles"],
-      "allowedDependencies": ["storage-repository"],
-      "forbiddenDependencies": ["app-shell", "formal-admission"],
-      "status": "production-wired"
-    },
-    {
-      "id": "source-role-classifier", "file": "qisi-source-role-classifier.js",
-      "layer": 2, "domainOwner": "sourceRoleClassifierOwner",
-      "publicApi": ["DECLARED_ROLES", "classifySourceRoles"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository"],
-      "status": "production-wired"
-    },
-    {
-      "id": "production-import-status-port", "file": "qisi-production-import-status-port.js",
-      "layer": 2, "domainOwner": "productionImportStatusPortOwner",
-      "publicApi": ["reportProgress", "reportImportFailure"],
-      "allowedDependencies": ["storage-repository"],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "controlled-write", "route-b-research"],
-      "status": "production-wired"
-    },
-    {
-      "id": "production-import-output-port", "file": "qisi-production-import-output-port.js",
-      "layer": 2, "domainOwner": "productionImportOutputPortOwner",
-      "publicApi": ["projectImportOutput", "countMeaningfulOptions"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "controlled-write", "route-b-research"],
-      "status": "production-wired"
-    },
-    {
-      "id": "docx-converter", "file": "qisi-docx-converter.js",
-      "layer": 1, "domainOwner": "docxConverterOwner",
-      "publicApi": ["createDocxToPdfConverter"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "controlled-write", "route-b-research"],
-      "status": "production-wired"
-    },
-    {
-      "id": "docx-vision-reconciler", "file": "qisi-docx-vision-reconciler.js",
-      "layer": 1, "domainOwner": "docxVisionReconcilerOwner",
-      "publicApi": ["createDocxVisionReconciler"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "controlled-write", "route-b-research"],
-      "status": "production-wired"
-    },
-    {
-      "id": "production-docx-source-port", "file": "qisi-production-docx-source-port.js",
-      "layer": 2, "domainOwner": "productionDocxSourcePortOwner",
-      "publicApi": ["parseDocxSource", "createProductionImportRunner"],
-      "allowedDependencies": ["docx-producer-identity-contract"],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
-      "status": "production-wired"
-    },
-    {
-      "id": "production-docx-vision-source-port", "file": "qisi-production-docx-vision-source-port.js",
-      "layer": 2, "domainOwner": "productionDocxVisionSourcePortOwner",
-      "publicApi": ["runDocxVision", "runDocxVisionShadow", "runDocxVisionProduction", "createQuestionSourceProducer", "createSupportSourceProducer", "createProductionImportRunner"],
-      "allowedDependencies": ["docx-producer-identity-contract"],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
-      "status": "production-wired"
-    },
-    {
-      "id": "batch-engine-v2", "file": "qisi-batch-engine-v2.js",
-      "layer": 2, "domainOwner": "batchEngineV2Owner",
-      "publicApi": ["processBatchV2", "splitQuestionBlocksV2", "parseOptionsV2", "buildQuestionBlocksFromEvidenceV2", "createStrictVisualPreparedPagesRecognizer", "createStrictVisualQuestionProducer"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
-      "status": "production-wired"
-    },
-    {
-      "id": "docx-import-coordinator", "file": "qisi-docx-import-coordinator.js",
-      "layer": 2, "domainOwner": "docxImportCoordinatorOwner",
-      "publicApi": ["runDocxImport"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository"],
-      "status": "production-wired"
-    },
-    {
-      "id": "production-pdf-sources-port", "file": "qisi-production-pdf-sources-port.js",
-      "layer": 2, "domainOwner": "productionPdfSourcesPortOwner",
-      "publicApi": ["processPdfSources", "createProductionImportRunner"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "controlled-write", "support-aligner", "support-parser", "route-b-research"],
-      "status": "production-wired"
-    },
-    {
-      "id": "pdf-import-coordinator", "file": "qisi-pdf-import-coordinator.js",
-      "layer": 2, "domainOwner": "pdfImportCoordinatorOwner",
-      "publicApi": ["runPdfImport"],
-      "allowedDependencies": ["controlled-write", "support-aligner", "support-parser"],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
-      "status": "production-wired"
-    },
-    {
-      "id": "pdf-candidate-projection", "file": "qisi-pdf-candidate-projection.js",
-      "layer": 2, "domainOwner": "pdfCandidateProjectionOwner",
-      "publicApi": ["FIELDS", "PdfCandidateProjectionError", "mergeControlledWriteDecisions", "createPdfEngineProjectionContext", "createProductionProjectionContextBuilder", "projectPdfCandidate", "projectPdfCandidates", "compareCanonicalPdfCandidates"],
-      "allowedDependencies": ["controlled-write", "support-aligner", "support-parser"],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
-      "status": "production-wired"
-    },
-    {
-      "id": "candidate-normalizer", "file": "qisi-candidate-normalizer.js",
-      "layer": 2, "domainOwner": "candidateNormalizerOwner",
-      "publicApi": ["normalizeCandidates"],
-      "allowedDependencies": ["recognition-contracts", "support-aligner", "pdf-safe-partial-pipeline", "production-review-validator"],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "controlled-write", "route-b-research"],
-      "status": "production-wired"
-    },
-    {
-      "id": "import-validation-service", "file": "qisi-import-validation-service.js",
-      "layer": 3, "domainOwner": "importValidationServiceOwner",
-      "publicApi": ["validateImportDrafts", "createProductionValidationPorts"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "route-b-research"],
-      "status": "production-wired"
-    },
-    {
-      "id": "review-draft-builder", "file": "qisi-review-draft-builder.js",
-      "layer": 2, "domainOwner": "reviewDraftBuilderOwner",
-      "publicApi": ["buildReviewDrafts"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "controlled-write", "route-b-research"],
-      "status": "production-wired"
-    },
-    {
-      "id": "draft-persistence-service", "file": "qisi-draft-persistence-service.js",
-      "layer": 2, "domainOwner": "draftPersistenceServiceOwner",
-      "publicApi": ["createDraftBatch", "persistDraftBatch", "persistReviewDraftBatch", "persistReviewDraftCommand", "persistReviewImageCommand", "reloadDraftBatch", "deleteDraftBatch"],
-      "allowedDependencies": ["storage-repository"],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "controlled-write", "route-b-research"],
-      "status": "production-wired"
-    },
-    {
-      "id": "import-diagnostics", "file": "qisi-import-diagnostics.js",
-      "layer": 2, "domainOwner": "importDiagnosticsOwner",
-      "publicApi": ["createImportDiagnostics"],
-      "allowedDependencies": ["secure-logger"],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "controlled-write", "route-b-research"],
-      "status": "production-wired"
-    },
-    {
-      "id": "production-import-route-policy", "file": "qisi-production-import-route-policy.js",
-      "layer": 1, "domainOwner": "productionImportRoutePolicyOwner",
-      "publicApi": ["PRODUCER_IDENTITIES", "ProductionImportRoutePolicyError", "resolveProductionImportRoute"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "storage-repository", "formal-admission", "controlled-write", "route-b-research"],
-      "status": "production-wired"
-    },
-    {
-      "id": "production-import-bridge", "file": "qisi-production-import-bridge.js",
-      "layer": 3, "domainOwner": "productionImportBridgeOwner",
-      "publicApi": ["REQUIRED_PORTS", "ProductionImportBridgeError", "createProductionImportBridge"],
-      "allowedDependencies": [
-        "import-state-machine", "batch-context-service", "source-role-classifier", "production-import-route-policy",
-        "production-import-status-port", "production-import-output-port",
-        "production-docx-source-port", "production-docx-vision-source-port", "batch-engine-v2", "docx-import-coordinator",
-        "production-pdf-sources-port", "pdf-import-coordinator",
-        "pdf-candidate-projection",
-        "candidate-normalizer", "import-validation-service", "review-draft-builder",
-        "draft-persistence-service", "import-diagnostics"
+      "id": "import-state-machine",
+      "file": "qisi-import-state-machine.js",
+      "layer": 2,
+      "domainOwner": "importStateMachineOwner",
+      "publicApi": [
+        "STATES",
+        "TRANSITIONS",
+        "createImportStateMachine"
       ],
-      "forbiddenDependencies": ["app-shell", "formal-admission", "storage-repository", "controlled-write", "route-b-research"],
-      "status": "production-wired"
-    },
-    {
-      "id": "normal-ui-import-controller", "file": "qisi-normal-ui-import-controller.js",
-      "layer": 4, "domainOwner": "normalUiImportControllerOwner",
-      "publicApi": ["NormalUiImportControllerError", "createNormalUiImportController"],
-      "allowedDependencies": ["production-import-bridge"],
-      "forbiddenDependencies": ["formal-admission", "storage-repository", "controlled-write", "route-b-research"],
-      "status": "production-wired"
-    },
-    {
-      "id": "utils", "file": "qisi-utils.js",
-      "layer": 0, "domainOwner": "utilsOwner",
-      "publicApi": ["cleanRecognizedText", "tokenizeLatexSource"],
       "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "storage-repository"],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository"
+      ],
       "status": "production-wired"
     },
     {
-      "id": "question-image-policy", "file": "qisi-question-image-policy.js",
-      "layer": 0, "domainOwner": "questionImagePolicyOwner",
-      "publicApi": ["extractGraphicRefs", "normalizeInlineImageList", "mergeImageListsById"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "storage-repository"],
-      "status": "production-wired"
-    },
-    {
-      "id": "solution-quality-policy", "file": "qisi-solution-quality-policy.js",
-      "layer": 0, "domainOwner": "solutionQualityPolicyOwner",
-      "publicApi": ["solutionLooksBroken", "solutionQualityIssue", "solutionMatchesQuestionContext"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "storage-repository"],
-      "status": "production-wired"
-    },
-    {
-      "id": "support-latex-policy", "file": "qisi-support-latex-policy.js",
-      "layer": 0, "domainOwner": "supportLatexPolicyOwner",
-      "publicApi": ["createSupportLatexPolicy"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "storage-repository"],
-      "status": "production-wired"
-    },
-    {
-      "id": "support-document-parser", "file": "qisi-support-parser.js",
-      "layer": 0, "domainOwner": "supportDocumentParserOwner",
-      "publicApi": ["buildSupportDocument", "parseExplicitSupportBlocks", "validateSupportCoverage"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "storage-repository"],
-      "status": "production-wired"
-    },
-    {
-      "id": "support-repair", "file": "qisi-support-repair.js",
-      "layer": 0, "domainOwner": "supportRepairOwner",
-      "publicApi": ["buildSupportRepairPlan", "applySupportRepairsFillOnly", "tryRepairedCandidate"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "storage-repository"],
-      "status": "production-wired"
-    },
-    {
-      "id": "browser-document-source", "file": "qisi-browser-document-source.js",
-      "layer": 1, "domainOwner": "browserDocumentSourceOwner",
-      "publicApi": ["createBrowserDocumentSource"],
-      "allowedDependencies": ["utils"],
-      "forbiddenDependencies": ["app-shell", "storage-repository", "formal-admission"],
-      "status": "production-wired"
-    },
-    {
-      "id": "browser-pdf-renderer", "file": "qisi-browser-pdf-renderer.js",
-      "layer": 1, "domainOwner": "browserPdfRendererOwner",
-      "publicApi": ["createBrowserPdfRenderer"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "storage-repository", "formal-admission"],
-      "status": "production-wired"
-    },
-    {
-      "id": "page-question-parser", "file": "qisi-page-question-parser.js",
-      "layer": 1, "domainOwner": "pageQuestionParserOwner",
-      "publicApi": ["createPageQuestionParser"],
-      "allowedDependencies": ["utils"],
-      "forbiddenDependencies": ["app-shell", "storage-repository"],
-      "status": "production-wired"
-    },
-    {
-      "id": "question-content-policy", "file": "qisi-question-content-policy.js",
-      "layer": 1, "domainOwner": "questionContentPolicyOwner",
-      "publicApi": ["createQuestionContentPolicy"],
-      "allowedDependencies": ["utils"],
-      "forbiddenDependencies": ["app-shell", "storage-repository"],
-      "status": "production-wired"
-    },
-    {
-      "id": "support-text-parser", "file": "qisi-support-text-parser.js",
-      "layer": 1, "domainOwner": "supportTextParserOwner",
-      "publicApi": ["createSupportTextParser"],
-      "allowedDependencies": ["utils"],
-      "forbiddenDependencies": ["app-shell", "storage-repository"],
-      "status": "production-wired"
-    },
-    {
-      "id": "recognition-structure-policy", "file": "qisi-recognition-structure-policy.js",
-      "layer": 1, "domainOwner": "recognitionStructurePolicyOwner",
-      "publicApi": ["createRecognitionStructurePolicy"],
-      "allowedDependencies": ["utils", "question-content-policy"],
-      "forbiddenDependencies": ["app-shell", "storage-repository"],
-      "status": "production-wired"
-    },
-    {
-      "id": "review-draft-state", "file": "qisi-review-draft-state.js",
-      "layer": 1, "domainOwner": "reviewDraftStateOwner",
-      "publicApi": ["summarizeDraftStatus", "appendImageTokensToStemForV2"],
-      "allowedDependencies": ["utils"],
-      "forbiddenDependencies": ["app-shell", "storage-repository", "formal-admission"],
-      "status": "production-wired"
-    },
-    {
-      "id": "review-draft-normalization", "file": "qisi-review-draft-normalization-policy.js",
-      "layer": 1, "domainOwner": "reviewDraftNormalizationOwner",
-      "publicApi": ["createReviewDraftNormalizationPolicy"],
-      "allowedDependencies": ["utils", "question-content-policy", "solution-quality-policy"],
-      "forbiddenDependencies": ["app-shell", "storage-repository", "formal-admission"],
-      "status": "production-wired"
-    },
-    {
-      "id": "strict-question-policy", "file": "qisi-strict-question-policy.js",
-      "layer": 1, "domainOwner": "strictQuestionPolicyOwner",
-      "publicApi": ["createStrictQuestionPolicy"],
-      "allowedDependencies": [],
-      "forbiddenDependencies": ["app-shell", "storage-repository", "formal-admission"],
-      "status": "production-wired"
-    },
-    {
-      "id": "visual-question-source", "file": "qisi-visual-question-source.js",
-      "layer": 2, "domainOwner": "visualQuestionSourceOwner",
-      "publicApi": ["createVisualQuestionSource"],
-      "allowedDependencies": ["ocr-qwen-adapter"],
-      "forbiddenDependencies": ["app-shell", "storage-repository", "formal-admission"],
-      "status": "production-wired"
-    },
-    {
-      "id": "visual-support-source", "file": "qisi-visual-support-source.js",
-      "layer": 2, "domainOwner": "visualSupportSourceOwner",
-      "publicApi": ["createVisualSupportSource"],
-      "allowedDependencies": ["ocr-qwen-adapter"],
-      "forbiddenDependencies": ["app-shell", "storage-repository", "formal-admission"],
-      "status": "production-wired"
-    },
-    {
-      "id": "app-shell", "file": "app.js", "layer": 4,
-      "domainOwner": "appShellOwner", "publicApi": ["App.setup"],
+      "id": "qwen-vision-source-port",
+      "file": "qisi-qwen-vision-source-port.js",
+      "layer": 2,
+      "domainOwner": "qwenVisionSourcePortOwner",
+      "publicApi": [
+        "buildStrictQuestionPrompt",
+        "createProductionOcrRuntime",
+        "createStrictQuestionPageRecognizer",
+        "createDocumentOcrSource"
+      ],
       "allowedDependencies": [
-        "recognition-contracts", "formal-admission", "storage-repository",
-        "library-service", "review-controller", "production-review-validator",
-        "export-service", "production-import-bridge", "normal-ui-import-controller",
+        "ocr-qwen-adapter",
+        "docx-producer-identity-contract"
+      ],
+      "forbiddenDependencies": [
+        "formal-admission",
+        "storage-repository",
+        "app-shell"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "docx-producer-identity-contract",
+      "file": "qisi-docx-producer-identity-contract.js",
+      "layer": 1,
+      "domainOwner": "docxProducerIdentityContractOwner",
+      "publicApi": [
+        "resolveIdentity",
+        "validateCanonicalIdentity",
+        "buildDocxVisionControlledWriteDecision",
+        "projectDocxVisionCandidate",
+        "applyDocxVisionSupportField",
+        "projectDeterministicDocxCandidate",
+        "compareCanonicalDocxCandidates"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "pdf-safe-partial-pipeline",
+      "file": "qisi-pdf-safe-partial-pipeline.js",
+      "layer": 1,
+      "domainOwner": "pdfSafePartialPipelineOwner",
+      "publicApi": [
+        "attachPdfPageTrace",
+        "attachSinglePdfPageTrace"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "batch-context-service",
+      "file": "qisi-batch-context-service.js",
+      "layer": 2,
+      "domainOwner": "batchContextServiceOwner",
+      "publicApi": [
+        "createBatchContext",
+        "loadBatchAndFiles"
+      ],
+      "allowedDependencies": [
+        "storage-repository"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "source-role-classifier",
+      "file": "qisi-source-role-classifier.js",
+      "layer": 2,
+      "domainOwner": "sourceRoleClassifierOwner",
+      "publicApi": [
+        "DECLARED_ROLES",
+        "classifySourceRoles"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "production-import-status-port",
+      "file": "qisi-production-import-status-port.js",
+      "layer": 2,
+      "domainOwner": "productionImportStatusPortOwner",
+      "publicApi": [
+        "reportProgress",
+        "reportImportFailure"
+      ],
+      "allowedDependencies": [
+        "storage-repository"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "controlled-write",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "production-import-output-port",
+      "file": "qisi-production-import-output-port.js",
+      "layer": 2,
+      "domainOwner": "productionImportOutputPortOwner",
+      "publicApi": [
+        "projectImportOutput",
+        "countMeaningfulOptions"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository",
+        "controlled-write",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "docx-converter",
+      "file": "qisi-docx-converter.js",
+      "layer": 1,
+      "domainOwner": "docxConverterOwner",
+      "publicApi": [
+        "createDocxToPdfConverter"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository",
+        "controlled-write",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "docx-vision-reconciler",
+      "file": "qisi-docx-vision-reconciler.js",
+      "layer": 1,
+      "domainOwner": "docxVisionReconcilerOwner",
+      "publicApi": [
+        "createDocxVisionReconciler"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository",
+        "controlled-write",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "production-docx-source-port",
+      "file": "qisi-production-docx-source-port.js",
+      "layer": 2,
+      "domainOwner": "productionDocxSourcePortOwner",
+      "publicApi": [
+        "parseDocxSource",
+        "createProductionImportRunner"
+      ],
+      "allowedDependencies": [
+        "docx-producer-identity-contract"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "production-docx-vision-source-port",
+      "file": "qisi-production-docx-vision-source-port.js",
+      "layer": 2,
+      "domainOwner": "productionDocxVisionSourcePortOwner",
+      "publicApi": [
+        "runDocxVision",
+        "runDocxVisionShadow",
+        "runDocxVisionProduction",
+        "createQuestionSourceProducer",
+        "createSupportSourceProducer",
+        "createProductionImportRunner"
+      ],
+      "allowedDependencies": [
+        "docx-producer-identity-contract"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "batch-engine-v2",
+      "file": "qisi-batch-engine-v2.js",
+      "layer": 2,
+      "domainOwner": "batchEngineV2Owner",
+      "publicApi": [
+        "createStrictVisualPreparedPagesRecognizer",
+        "createStrictVisualQuestionProducer"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "docx-import-coordinator",
+      "file": "qisi-docx-import-coordinator.js",
+      "layer": 2,
+      "domainOwner": "docxImportCoordinatorOwner",
+      "publicApi": [
+        "runDocxImport"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "candidate-normalizer",
+      "file": "qisi-candidate-normalizer.js",
+      "layer": 2,
+      "domainOwner": "candidateNormalizerOwner",
+      "publicApi": [
+        "normalizeCandidates"
+      ],
+      "allowedDependencies": [
+        "recognition-contracts",
+        "support-aligner",
+        "pdf-safe-partial-pipeline",
+        "production-review-validator"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository",
+        "controlled-write",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "import-validation-service",
+      "file": "qisi-import-validation-service.js",
+      "layer": 3,
+      "domainOwner": "importValidationServiceOwner",
+      "publicApi": [
+        "validateImportDrafts",
+        "createProductionValidationPorts"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "review-draft-builder",
+      "file": "qisi-review-draft-builder.js",
+      "layer": 2,
+      "domainOwner": "reviewDraftBuilderOwner",
+      "publicApi": [
+        "buildReviewDrafts"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository",
+        "controlled-write",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "draft-persistence-service",
+      "file": "qisi-draft-persistence-service.js",
+      "layer": 2,
+      "domainOwner": "draftPersistenceServiceOwner",
+      "publicApi": [
+        "createDraftBatch",
+        "persistDraftBatch",
+        "persistReviewDraftBatch",
+        "persistReviewDraftCommand",
+        "persistReviewImageCommand",
+        "reloadDraftBatch",
+        "deleteDraftBatch"
+      ],
+      "allowedDependencies": [
+        "storage-repository"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "controlled-write",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "import-diagnostics",
+      "file": "qisi-import-diagnostics.js",
+      "layer": 2,
+      "domainOwner": "importDiagnosticsOwner",
+      "publicApi": [
+        "createImportDiagnostics"
+      ],
+      "allowedDependencies": [
+        "secure-logger"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository",
+        "controlled-write",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "production-import-route-policy",
+      "file": "qisi-production-import-route-policy.js",
+      "layer": 1,
+      "domainOwner": "productionImportRoutePolicyOwner",
+      "publicApi": [
+        "PRODUCER_IDENTITIES",
+        "ProductionImportRoutePolicyError",
+        "resolveProductionImportRoute"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "formal-admission",
+        "controlled-write",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "production-import-bridge",
+      "file": "qisi-production-import-bridge.js",
+      "layer": 3,
+      "domainOwner": "productionImportBridgeOwner",
+      "publicApi": [
+        "REQUIRED_PORTS",
+        "ProductionImportBridgeError",
+        "createProductionImportBridge"
+      ],
+      "allowedDependencies": [
         "import-state-machine",
-        "batch-formal-submit", "question-duplicate-policy", "review-workflow",
-        "draft-maintenance", "ocr-registry",
-        "ocr-local-adapter", "ocr-shadow-mode", "performance-monitor",
-        "pdf-safe-partial-pipeline", "archive-security",
-        "secure-logger", "batch-context-service", "source-role-classifier", "production-import-route-policy",
-        "production-import-status-port", "production-import-output-port",
-        "docx-converter", "docx-vision-reconciler",
-        "production-docx-source-port", "production-docx-vision-source-port", "docx-import-coordinator",
-        "production-pdf-sources-port", "pdf-import-coordinator", "candidate-normalizer",
-        "pdf-candidate-projection",
-        "import-validation-service", "review-draft-builder",
-        "draft-persistence-service", "import-diagnostics", "qwen-vision-source-port",
-        "utils", "question-image-policy", "solution-quality-policy",
-        "support-latex-policy", "support-document-parser", "support-repair",
-        "browser-document-source", "browser-pdf-renderer", "page-question-parser",
-        "question-content-policy", "support-text-parser", "recognition-structure-policy",
-        "review-draft-state", "review-draft-normalization", "strict-question-policy",
-        "visual-question-source", "visual-support-source"
+        "batch-context-service",
+        "source-role-classifier",
+        "production-import-route-policy",
+        "production-import-status-port",
+        "production-import-output-port",
+        "production-docx-source-port",
+        "production-docx-vision-source-port",
+        "batch-engine-v2",
+        "docx-import-coordinator",
+        "candidate-normalizer",
+        "import-validation-service",
+        "review-draft-builder",
+        "draft-persistence-service",
+        "import-diagnostics",
+        "pdf-multimodal-contract"
       ],
-      "forbiddenDependencies": ["route-b-research", "controlled-write", "support-aligner", "support-parser", "ocr-qwen-adapter"],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository",
+        "controlled-write",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "normal-ui-import-controller",
+      "file": "qisi-normal-ui-import-controller.js",
+      "layer": 4,
+      "domainOwner": "normalUiImportControllerOwner",
+      "publicApi": [
+        "NormalUiImportControllerError",
+        "createNormalUiImportController"
+      ],
+      "allowedDependencies": [
+        "production-import-bridge"
+      ],
+      "forbiddenDependencies": [
+        "formal-admission",
+        "storage-repository",
+        "controlled-write",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "utils",
+      "file": "qisi-utils.js",
+      "layer": 0,
+      "domainOwner": "utilsOwner",
+      "publicApi": [
+        "cleanRecognizedText",
+        "tokenizeLatexSource"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "question-image-policy",
+      "file": "qisi-question-image-policy.js",
+      "layer": 0,
+      "domainOwner": "questionImagePolicyOwner",
+      "publicApi": [
+        "extractGraphicRefs",
+        "normalizeInlineImageList",
+        "mergeImageListsById"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "solution-quality-policy",
+      "file": "qisi-solution-quality-policy.js",
+      "layer": 0,
+      "domainOwner": "solutionQualityPolicyOwner",
+      "publicApi": [
+        "solutionLooksBroken",
+        "solutionQualityIssue",
+        "solutionMatchesQuestionContext"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "support-latex-policy",
+      "file": "qisi-support-latex-policy.js",
+      "layer": 0,
+      "domainOwner": "supportLatexPolicyOwner",
+      "publicApi": [
+        "createSupportLatexPolicy"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "support-document-parser",
+      "file": "qisi-support-parser.js",
+      "layer": 0,
+      "domainOwner": "supportDocumentParserOwner",
+      "publicApi": [
+        "buildSupportDocument",
+        "parseExplicitSupportBlocks",
+        "validateSupportCoverage"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "support-repair",
+      "file": "qisi-support-repair.js",
+      "layer": 0,
+      "domainOwner": "supportRepairOwner",
+      "publicApi": [
+        "buildSupportRepairPlan",
+        "applySupportRepairsFillOnly",
+        "tryRepairedCandidate"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "browser-document-source",
+      "file": "qisi-browser-document-source.js",
+      "layer": 1,
+      "domainOwner": "browserDocumentSourceOwner",
+      "publicApi": [
+        "createBrowserDocumentSource"
+      ],
+      "allowedDependencies": [
+        "utils"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "browser-pdf-renderer",
+      "file": "qisi-browser-pdf-renderer.js",
+      "layer": 1,
+      "domainOwner": "browserPdfRendererOwner",
+      "publicApi": [
+        "createBrowserPdfRenderer"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "page-question-parser",
+      "file": "qisi-page-question-parser.js",
+      "layer": 1,
+      "domainOwner": "pageQuestionParserOwner",
+      "publicApi": [
+        "createPageQuestionParser"
+      ],
+      "allowedDependencies": [
+        "utils"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "question-content-policy",
+      "file": "qisi-question-content-policy.js",
+      "layer": 1,
+      "domainOwner": "questionContentPolicyOwner",
+      "publicApi": [
+        "createQuestionContentPolicy"
+      ],
+      "allowedDependencies": [
+        "utils"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "support-text-parser",
+      "file": "qisi-support-text-parser.js",
+      "layer": 1,
+      "domainOwner": "supportTextParserOwner",
+      "publicApi": [
+        "createSupportTextParser"
+      ],
+      "allowedDependencies": [
+        "utils"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "recognition-structure-policy",
+      "file": "qisi-recognition-structure-policy.js",
+      "layer": 1,
+      "domainOwner": "recognitionStructurePolicyOwner",
+      "publicApi": [
+        "createRecognitionStructurePolicy"
+      ],
+      "allowedDependencies": [
+        "utils",
+        "question-content-policy"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "review-draft-state",
+      "file": "qisi-review-draft-state.js",
+      "layer": 1,
+      "domainOwner": "reviewDraftStateOwner",
+      "publicApi": [
+        "summarizeDraftStatus",
+        "appendImageTokensToStemForV2"
+      ],
+      "allowedDependencies": [
+        "utils"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "review-draft-normalization",
+      "file": "qisi-review-draft-normalization-policy.js",
+      "layer": 1,
+      "domainOwner": "reviewDraftNormalizationOwner",
+      "publicApi": [
+        "createReviewDraftNormalizationPolicy"
+      ],
+      "allowedDependencies": [
+        "utils",
+        "question-content-policy",
+        "solution-quality-policy"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "strict-question-policy",
+      "file": "qisi-strict-question-policy.js",
+      "layer": 1,
+      "domainOwner": "strictQuestionPolicyOwner",
+      "publicApi": [
+        "createStrictQuestionPolicy"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "visual-question-source",
+      "file": "qisi-visual-question-source.js",
+      "layer": 2,
+      "domainOwner": "visualQuestionSourceOwner",
+      "publicApi": [
+        "createVisualQuestionSource"
+      ],
+      "allowedDependencies": [
+        "ocr-qwen-adapter"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "visual-support-source",
+      "file": "qisi-visual-support-source.js",
+      "layer": 2,
+      "domainOwner": "visualSupportSourceOwner",
+      "publicApi": [
+        "createVisualSupportSource"
+      ],
+      "allowedDependencies": [
+        "ocr-qwen-adapter"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "app-shell",
+      "file": "app.js",
+      "layer": 4,
+      "domainOwner": "appShellOwner",
+      "publicApi": [
+        "App.setup"
+      ],
+      "allowedDependencies": [
+        "recognition-contracts",
+        "formal-admission",
+        "storage-repository",
+        "library-service",
+        "review-controller",
+        "production-review-validator",
+        "export-service",
+        "production-import-bridge",
+        "normal-ui-import-controller",
+        "import-state-machine",
+        "batch-formal-submit",
+        "question-duplicate-policy",
+        "review-workflow",
+        "draft-maintenance",
+        "ocr-registry",
+        "ocr-local-adapter",
+        "ocr-shadow-mode",
+        "performance-monitor",
+        "pdf-safe-partial-pipeline",
+        "archive-security",
+        "secure-logger",
+        "batch-context-service",
+        "source-role-classifier",
+        "production-import-route-policy",
+        "production-import-status-port",
+        "production-import-output-port",
+        "docx-converter",
+        "docx-vision-reconciler",
+        "production-docx-source-port",
+        "production-docx-vision-source-port",
+        "docx-import-coordinator",
+        "candidate-normalizer",
+        "import-validation-service",
+        "review-draft-builder",
+        "draft-persistence-service",
+        "import-diagnostics",
+        "qwen-vision-source-port",
+        "utils",
+        "question-image-policy",
+        "solution-quality-policy",
+        "support-latex-policy",
+        "support-document-parser",
+        "support-repair",
+        "browser-document-source",
+        "browser-pdf-renderer",
+        "page-question-parser",
+        "question-content-policy",
+        "support-text-parser",
+        "recognition-structure-policy",
+        "review-draft-state",
+        "review-draft-normalization",
+        "strict-question-policy",
+        "visual-question-source",
+        "visual-support-source"
+      ],
+      "forbiddenDependencies": [
+        "route-b-research",
+        "controlled-write",
+        "support-aligner",
+        "support-parser",
+        "ocr-qwen-adapter"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "docx-ole-reader",
+      "file": "qisi-docx-ole-reader.js",
+      "layer": 0,
+      "domainOwner": "docxOleReaderOwner",
+      "publicApi": [
+        "extractMtefFromOle"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "docx-mtef-reader",
+      "file": "qisi-docx-mtef-reader.js",
+      "layer": 1,
+      "domainOwner": "docxMtefReaderOwner",
+      "publicApi": [
+        "classifyMtef"
+      ],
+      "allowedDependencies": [
+        "docx-ole-reader"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "docx-formula-source",
+      "file": "qisi-docx-formula-source.js",
+      "layer": 2,
+      "domainOwner": "docxFormulaSourceOwner",
+      "publicApi": [
+        "expand"
+      ],
+      "allowedDependencies": [
+        "docx-ole-reader",
+        "docx-mtef-reader"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "mathtype-local-service",
+      "file": "qisi-mathtype-local-service.js",
+      "layer": 2,
+      "domainOwner": "mathTypeLocalServiceOwner",
+      "publicApi": [
+        "createNativeTranslator"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission",
+        "storage-repository",
+        "route-b-research"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "pdf-multimodal-contract",
+      "file": "qisi-pdf-multimodal-contract.js",
+      "layer": 1,
+      "domainOwner": "pdfMultimodalContractOwner",
+      "publicApi": [
+        "parseResponse",
+        "groupProposals",
+        "canonicalDraft",
+        "validateCanonical",
+        "reviewProblem",
+        "editorSource",
+        "chooseCandidate"
+      ],
+      "allowedDependencies": [
+        "docx-producer-identity-contract"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "pdf-multimodal-producer",
+      "file": "qisi-pdf-multimodal-producer.js",
+      "layer": 2,
+      "domainOwner": "pdfMultimodalProducerOwner",
+      "publicApi": [
+        "createProducer",
+        "windows"
+      ],
+      "allowedDependencies": [
+        "pdf-multimodal-contract",
+        "docx-producer-identity-contract"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "support-document-parser",
+        "support-repair",
+        "ocr-structure-extractor"
+      ],
+      "status": "deprecated"
+    },
+    {
+      "id": "pdf-external-contract",
+      "file": "qisi-pdf-external-contract.js",
+      "layer": 1,
+      "domainOwner": "pdfExternalContractOwner",
+      "publicApi": [
+        "validateWireResult",
+        "buildDrafts",
+        "validateCanonical",
+        "reviewProblem",
+        "acknowledgeTaskIssues",
+        "retainReviewDrafts",
+        "schemaErrors"
+      ],
+      "allowedDependencies": [
+        "support-aligner",
+        "docx-producer-identity-contract"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "support-document-parser",
+        "support-repair"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "pdf-external-provider",
+      "file": "qisi-pdf-external-provider.js",
+      "layer": 2,
+      "domainOwner": "pdfExternalProviderOwner",
+      "publicApi": [
+        "createExecutor"
+      ],
+      "allowedDependencies": [
+        "pdf-external-contract",
+        "pdf-page-evidence"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "pdf-external-producer",
+      "file": "qisi-pdf-external-producer.js",
+      "layer": 2,
+      "domainOwner": "pdfExternalProducerOwner",
+      "publicApi": [
+        "createProducer",
+        "tasks"
+      ],
+      "allowedDependencies": [
+        "pdf-external-contract",
+        "pdf-external-provider",
+        "docx-producer-identity-contract",
+        "pdf-page-evidence"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "support-document-parser",
+        "support-repair",
+        "ocr-structure-extractor"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "pdf-page-evidence",
+      "file": "qisi-pdf-page-evidence.js",
+      "layer": 1,
+      "domainOwner": "pdfPageEvidenceOwner",
+      "publicApi": [
+        "prepareTask",
+        "projectResponse",
+        "restore",
+        "cropBox"
+      ],
+      "allowedDependencies": [
+        "pdf-external-contract"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "support-document-parser",
+        "support-repair"
+      ],
       "status": "production-wired"
     }
   ]

@@ -1,0 +1,398 @@
+{
+  "scope": [
+    "N3",
+    "N4",
+    "N5",
+    "N6",
+    "N7",
+    "N8",
+    "N9",
+    "N10",
+    "N11",
+    "N12",
+    "N13",
+    "N14",
+    "N15",
+    "N16",
+    "N17",
+    "N18",
+    "N22",
+    "N23",
+    "N25",
+    "N26",
+    "N27",
+    "N28",
+    "N29",
+    "N30",
+    "N31",
+    "N32",
+    "N33",
+    "N34",
+    "N35",
+    "N36",
+    "N37",
+    "N38",
+    "N41",
+    "N42",
+    "N43",
+    "N44",
+    "N45",
+    "N46",
+    "N47",
+    "N48",
+    "N49",
+    "N50",
+    "N51",
+    "N52",
+    "N53",
+    "N54",
+    "N55",
+    "N56"
+  ],
+  "items": [
+    {
+      "id": "N3",
+      "status": "修复/改进",
+      "evidence": "汇总行 ABCDAB 被贪婪切成 ABCD/AB，产生错位。现在仅接受明确、递增、等长的单标签单元行，歧义整行拒绝，不捏造 0.9 置信度。",
+      "change": "qisi-support-text-parser.js",
+      "verification": "findings-integrity-regressions：6题配对、缺格、重复号"
+    },
+    {
+      "id": "N4",
+      "status": "修复/改进",
+      "evidence": "65 MiB 自建备份原先因 ARCHIVE_ENTRY_SIZE_LIMIT 自验证失败。私有自验证仅对当前函数生成的 ZIP 免资源限额，仍检查结构、路径、计数、二进制引用和 CRC；外来读取维持原限额。",
+      "change": "qisi-backup.js",
+      "verification": "65 MiB 前后对照；高压缩比回归及外来拒绝"
+    },
+    {
+      "id": "N5",
+      "status": "修复/改进",
+      "evidence": "答案/解析/题型/选项/全部元数据纳入脏标记；读取不存在字段以保证 Vue 新增属性也触发计算。来源标签写 meta.source，保留来源证据对象；年份等写入 meta 保持正式投影。显式放弃恢复题干/源码/元数据。",
+      "change": "qisi-review-draft-state.js；app.js；main.html",
+      "verification": "隔离浏览器：仅改元数据→脏→保存→确认；来源证据不变；失败后显式放弃"
+    },
+    {
+      "id": "N6",
+      "status": "修复/改进",
+      "evidence": "未保存编辑会阻止刷新/关闭并请求浏览器原生确认，组件卸载移除监听。保留手动保存模式。",
+      "change": "app.js",
+      "verification": "隔离浏览器 beforeunload defaultPrevented=true"
+    },
+    {
+      "id": "N7",
+      "status": "修复/改进",
+      "evidence": "删除保存失败后覆盖编辑器的自动重载。DB 事务不变，输入留在内存并显示错误，可重试或显式放弃。",
+      "change": "app.js",
+      "verification": "现有浏览器回归：输入保留、DB 原值、零正式写入，显式放弃可恢复"
+    },
+    {
+      "id": "N8",
+      "status": "修复/改进",
+      "evidence": "去重前明确确认重复草稿及人工修改会被删除；确认后先保存当前未保存编辑，保存失败中止去重。",
+      "change": "app.js",
+      "verification": "AST/命令错误探针；原维护与并发测试"
+    },
+    {
+      "id": "N9",
+      "status": "修复/改进",
+      "evidence": "确认、汇总、去重、清理、整批提交、删除的六个处理器统一在原处理器中显示操作错误，服务/事务/顺序保持原样。",
+      "change": "app.js",
+      "verification": "六个真实函数：原版异常外溢→新版 MOCK_FAILURE 提示"
+    },
+    {
+      "id": "N10",
+      "status": "修复/改进",
+      "evidence": "PDF 块、PDF 页、DOCX 题号要求明确边界，拒绝 2x、年份、3.14/1.5；保留已有包装标签兼容和四位以上正安全整数。",
+      "change": "qisi-pdf-support-block-parser.js；qisi-page-question-parser.js；qisi-batch-importer.js",
+      "verification": "坏例拒绝；原 PDF 包装标记全部通过；DOCX稳定门禁"
+    },
+    {
+      "id": "N11",
+      "status": "修复/改进",
+      "evidence": "DOCX 支持第N题和一至九十九的明确中文题号；已知栏目标题不当作题号，不猜测超出词表的中文数字。",
+      "change": "qisi-batch-importer.js",
+      "verification": "第3题、一、二十一、1234.；中文选择题标题；1)3x"
+    },
+    {
+      "id": "N12",
+      "status": "修复/改进",
+      "evidence": "移除对齐器和块解析器的第二次全角数字替换；未为了常量拼写差异另建工具层。",
+      "change": "qisi-pdf-support-aligner.js；qisi-pdf-support-block-parser.js",
+      "verification": "全角/四位题号、完整导入链和冻结 SHA 验证"
+    },
+    {
+      "id": "N13",
+      "status": "修复/改进",
+      "evidence": "两处 6133 字符乱码占位改成同一前缀的可读占位；警告直接查该前缀；未转换占位会被原内容校验拒绝。原始 DOCX 不变。",
+      "change": "qisi-batch-importer.js；qisi-utils.js",
+      "verification": "真实占位函数：6133→16字符，WMF识别为待转换"
+    },
+    {
+      "id": "N14",
+      "status": "非功能缺陷/设计约束",
+      "evidence": "主 UI 使用 production runner 的 produceEngineResult；processBatchV2 同时是受测试保护的兼容 fallback API。浏览器加载的模块还提供主链使用的 helpers；不能因主路径不用某函数删除整模块或切换链路。",
+      "change": "无业务修改",
+      "verification": "production-pdf-sources-port 两种端口；生产路由/等价/架构门禁"
+    },
+    {
+      "id": "N15",
+      "status": "非功能缺陷/设计约束",
+      "evidence": "未被 main 加载的21个自有文件已完整分类为14个 dormant、7个 Node 模块。页面未加载不等于死代码；未调用的公开兼容函数不造成当前失败。",
+      "change": "无业务修改",
+      "verification": "完整 runtime inventory 与 main 对照；运行角色校验通过"
+    },
+    {
+      "id": "N16",
+      "status": "修复/改进",
+      "evidence": "唯一复现的编辑热点由 app 的二次扫描移入已有 ReviewDraftState，使用反向 DP 达到最长连续标签序列的全局最优及线性时间。其余批量热点不痛或为隔离快照所需，不改安全对齐/快照架构。",
+      "change": "qisi-review-draft-state.js；app.js",
+      "verification": "独立穷举21845组、旧四选项输出逐个一致、六选项正例、同环境中位基准"
+    },
+    {
+      "id": "N17",
+      "status": "非功能缺陷/设计约束",
+      "evidence": "canonicalReviewHandoff 表示可以交给人工评审，不表示可以正式入库。缺字段保留 safe-partial/manualReviewRequired，正式入库另有类型/字段/provenance/教师确认门禁。",
+      "change": "无业务修改",
+      "verification": "DOCX身份/正式准入/浏览器 safe-partial 拒绝测试"
+    },
+    {
+      "id": "N18",
+      "status": "修复/改进",
+      "evidence": "evaluated 自报标记不再单独授予字段；必须有 strict accepted 或已有字段级 controlled-write 证据，也不信任自报 acceptedFields。",
+      "change": "qisi-docx-producer-identity-contract.js",
+      "verification": "自报 evaluated+acceptedFields 拒绝；现有30个身份测试"
+    },
+    {
+      "id": "N22",
+      "status": "修复/改进",
+      "evidence": "空识别项不再被过滤掉；原始证据与题号保留，增加明确警告，由原生产边界/评审校验决定可接受性。",
+      "change": "qisi-recognition-structure-policy.js",
+      "verification": "原空项消失→新版保留1项+警告；严格来源禁止合成题号/拆题"
+    },
+    {
+      "id": "N23",
+      "status": "修复/改进",
+      "evidence": "报告把辅助语义警告当成所有权门禁，结论不成立：证据不足不等于已证明串题，不应据此清空解析。另发现长上下文 map(cleanRecognizedText) 未绑定会崩溃，已改为原 Utils 的函数。",
+      "change": "qisi-solution-quality-policy.js",
+      "verification": "长上下文执行不再 ReferenceError；准入仍由题号/来源/字段证据决定"
+    },
+    {
+      "id": "N25",
+      "status": "修复/改进",
+      "evidence": "同题号多片段合并不再取最大 confidence，改为最小值，避免弱证据被强证据掩盖。该值是保守分数，不声称是校准后的概率。",
+      "change": "qisi-strict-question-policy.js",
+      "verification": "0.9与0.2合并：原0.9→新0.2"
+    },
+    {
+      "id": "N26",
+      "status": "修复/改进",
+      "evidence": "部分备份只替换显式存在的表；显式空数组仍清空，缺表保留。事务及完整安全快照并发比较不变；恢复界面文案同步。",
+      "change": "qisi-storage-repository.js；main.html",
+      "verification": "缺 images/templates 保留；显式 questions=[] 清空；原冲突/回滚测试"
+    },
+    {
+      "id": "N27",
+      "status": "修复/改进",
+      "evidence": "备份增加11个业务偏好键的白名单，包括草稿、试卷车、教师名和模板；不收集凭据。旧备份无偏好时保留现状；恢复先保存安全备份，偏好写失败不触 DB，DB失败回滚偏好，成功重载 UI。",
+      "change": "qisi-backup.js；qisi-backup-workspace.js",
+      "verification": "偏好往返、凭据排除、旧档不擦除、DB冲突回滚、成功恢复"
+    },
+    {
+      "id": "N28",
+      "status": "修复/改进",
+      "evidence": "取消静默 slice(0,24000)。超限明确报错并要求拆分，在 AI 端口调用前停止；原文件/原文证据继续保留。",
+      "change": "qisi-visual-support-source.js",
+      "verification": "24001字符：原截断后调用 mock→新报 LIMIT 且mock调用0"
+    },
+    {
+      "id": "N29",
+      "status": "修复/改进",
+      "evidence": "支持已有 Blob、本机 blob URL、已存 DB 图片字节；无法取得字节时在正式写入前明确失败，绝不静默少图，不去抓取远程 URL。",
+      "change": "qisi-review-workflow-service.js；app.js",
+      "verification": "单题图片字节提交；缺图错误且正式调用0；现有浏览器入库"
+    },
+    {
+      "id": "N30",
+      "status": "非功能缺陷/设计约束",
+      "evidence": "该函数是展示列表过滤，不修改输入；不支持展示的图片仍可从保留的原 DOCX/原文件证据回溯。N13已恢复其明确占位/告警，不应把 WMF 当作可显示 PNG 入库。",
+      "change": "无图片过滤架构修改",
+      "verification": "displayable=false 的原对象及 rawEvidence 保持不变；原始文件保留路径"
+    },
+    {
+      "id": "N31",
+      "status": "修复/改进",
+      "evidence": "客观题识别统一支持选择/select，不能把选择题绕过标签校验当非客观题。",
+      "change": "qisi-pdf-support-controlled-write.js",
+      "verification": "选择题数值2→B"
+    },
+    {
+      "id": "N32",
+      "status": "修复/改进",
+      "evidence": "契约允许 A-F，与受控写入一致；编辑预览、源码拆分和保存保留 E/F。",
+      "change": "qisi-recognition-contracts.js；qisi-review-draft-state.js；app.js",
+      "verification": "六选项 F 契约通过、编辑六选项保留、原五选项截断断言修正"
+    },
+    {
+      "id": "N33",
+      "status": "修复/改进",
+      "evidence": "直判与结构壳标签也按选项顺序排序，BA统一AB。",
+      "change": "qisi-pdf-support-controlled-write.js",
+      "verification": "直接BA与已支持结构壳 }_{BA}→AB"
+    },
+    {
+      "id": "N34",
+      "status": "修复/改进",
+      "evidence": "投影取值字段与写入层对齐，接受 legacy content 与 analysis。",
+      "change": "qisi-pdf-candidate-projection.js",
+      "verification": "真实私有取值函数：原空→新A/S；原投影/所有权测试"
+    },
+    {
+      "id": "N35",
+      "status": "修复/改进",
+      "evidence": "草稿只使用显式完整题号；重复题号整组拒绝，不后写覆盖，不用数组位置借选项；垃圾题号片段不能被截取成身份。",
+      "change": "qisi-pdf-support-controlled-write.js",
+      "verification": "缺号、重复号拒绝；唯一真实号选项匹配正确"
+    },
+    {
+      "id": "N36",
+      "status": "非功能缺陷/设计约束",
+      "evidence": "构造器可以创建未填完的草稿结构；sourceId/type/stem本来也需要调用者填入。没有证据时保持sourceOrder=null并让校验拒绝，优于凭空造1。",
+      "change": "无业务修改",
+      "verification": "契约空/非法草稿拒绝及提供正序号有效草稿正例"
+    },
+    {
+      "id": "N37",
+      "status": "修复/改进",
+      "evidence": "offset未落入任何range时返回null，不再借最后一页充当来源证据。",
+      "change": "qisi-support-parser.js",
+      "verification": "首段之前、页间空隙、末尾边界均null；范围内页码正确"
+    },
+    {
+      "id": "N38",
+      "status": "非功能缺陷/设计约束",
+      "evidence": "报告自己说明目前不会触发。Git证明v9与v2指纹同批引入；升级及creating/updating hooks重建索引，恢复走hooks。未改指纹版本、不操作生产DB、不加零命中全表扫倒退原性能。以后改指纹须同步DB迁移。",
+      "change": "无索引/架构修改",
+      "verification": "12ad757提交；question-index-storage；原生索引事务/恢复/防重复测试"
+    },
+    {
+      "id": "N41",
+      "status": "修复/改进",
+      "evidence": "页码必须正安全整数；拒绝3.14、0-3、倒置/不安全范围；循环上界受实际总页数约束。",
+      "change": "qisi-utils.js",
+      "verification": "无效页码拒绝；2-4,6正确"
+    },
+    {
+      "id": "N42",
+      "status": "修复/改进",
+      "evidence": "移除无来源的尾部标签匹配及泛化是/为锚点；保留明确答案/故选/应选和纯标签输入。工具虽休眠也不再从几何记号造答案。",
+      "change": "qisi-utils.js",
+      "verification": "三角形ABC、选项罗列、不带锚尾部拒绝；明确答案正例"
+    },
+    {
+      "id": "N43",
+      "status": "修复/改进",
+      "evidence": "休眠分派器现在保存明确给出的第三个DOCX/PDF解析文件，不切换生产路由。",
+      "change": "qisi-file-dispatcher.js",
+      "verification": "三文件计划保留第三文件"
+    },
+    {
+      "id": "N44",
+      "status": "非功能缺陷/设计约束",
+      "evidence": "pre-commit必然失败是旧基线结论。实际钩子依次运行runtime、app-shell及verify:safe，本轮均通过；未执行真实提交。",
+      "change": "保留钩子",
+      "verification": "对应真实命令均绿；无commit/push"
+    },
+    {
+      "id": "N45",
+      "status": "修复/改进",
+      "evidence": "禁止真实AI静态检查移到verify:safe首位，后续check/test失败也不会短路跳过它。",
+      "change": "package.json（仅验证命令）",
+      "verification": "最终日志第一关no-real-ai通过"
+    },
+    {
+      "id": "N46",
+      "status": "修复/改进",
+      "evidence": "保留9个重要函数的范围/调用约束，增加其完整AST摘要及全文件节点/函数数量预算，缺预算也拒绝。本次授权的小UI胶水逐一复核并登记。",
+      "change": "scripts/verify-app-shell-architecture.js；责任矩阵",
+      "verification": "末端新函数拒绝、函数体变化拒绝、原app通过"
+    },
+    {
+      "id": "N47",
+      "status": "修复/改进",
+      "evidence": "app移出白名单；服务器和传输的已审查标记行精确约束；识别同一行静态字符串拼接。额外自动生成白名单提议被自动审批拒绝，未执行，保留这个更严格版本。",
+      "change": "scripts/verify-no-real-ai.js",
+      "verification": "app直接/拼接调用标记及server新增标记全部拒绝；默认门禁通过"
+    },
+    {
+      "id": "N48",
+      "status": "修复/改进",
+      "evidence": "恒真键名Set断言换成模块owner/id/file各自唯一性，现有owner映射逐项检查保留。",
+      "change": "tests/architecture-manifest.test.js",
+      "verification": "真实清单全部通过；断言会检出重复分派"
+    },
+    {
+      "id": "N49",
+      "status": "修复/改进",
+      "evidence": "默认verify:safe纳入verify:batch-safety，后者包括DOCX稳定、PDF已知坏样本、no-real-ai和批量mock。",
+      "change": "package.json（仅验证命令）",
+      "verification": "最终默认门禁实际执行三条稳定链"
+    },
+    {
+      "id": "N50",
+      "status": "修复/改进",
+      "evidence": "用户后续明确要求消除三个裸脚本：Config不再加载期解构Vue；Components延后到setup取Vue；App在DOMContentLoaded后通过Runtime.boot启动。保持现有组件/配置内容与九个核心业务函数AST。",
+      "change": "qisi-config.js；qisi-components.js；app.js；runtime门禁及精确责任矩阵登记",
+      "verification": "旧代码Vue未定义失败；24种配置/组件/APP/Vue顺序全绿；真实隔离浏览器将三入口移到Vue之前仍挂载成功"
+    },
+    {
+      "id": "N51",
+      "status": "修复/改进",
+      "evidence": "DB比较和指纹函数改为调用时委托唯一QuestionDuplicatePolicy，索引hook注入同一组委托，不在加载期捕获缺失策略。没有备用算法；调用时仍缺依赖则拒绝，保留v9字段与所有事务/升级。",
+      "change": "qisi-db.js；db-fingerprint-owner回归；runtime门禁",
+      "verification": "DB先于策略加载后正常执行比较和索引；未加载策略调用会拒绝；真实浏览器DB早于策略加载后实际creating hook产生正确v2指纹"
+    },
+    {
+      "id": "N52",
+      "status": "修复/改进",
+      "evidence": "导出保留可移植图片来源/裁剪元数据，去除运行时URL/Blob；缺字节时停止导出；导入缺图文件时报错且没有写库；往返保留 metadata。",
+      "change": "qisi-export-service.js；app.js",
+      "verification": "bbox/source/mime往返计划；原导出测试；缺图显式检查"
+    },
+    {
+      "id": "N53",
+      "status": "修复/改进",
+      "evidence": "失效选题ID保留并显示数量及移除入口；打印停止，避免静默少题。恢复题目后原ID可继续匹配，未改成另一个快照数据库。",
+      "change": "app.js；main.html",
+      "verification": "当前题目/ID对照及print前置检查；原组卷/打印测试"
+    },
+    {
+      "id": "N54",
+      "status": "修复/改进",
+      "evidence": "不存在的字体名称改为明确系统字体选择及系统回退，不下载字体。打印公式失败同时保留转义后的原公式。打印使用独立文档内联样式本身不是缺陷；页眉页脚是布局增强建议。",
+      "change": "app.js；app.css；main.html",
+      "verification": "实际CSS/字体文件盘点；原打印/LaTeX/注入防护测试"
+    },
+    {
+      "id": "N55",
+      "status": "非功能缺陷/设计约束",
+      "evidence": "缺CSP是事实，但未发现现有输入绕过escapeHtml/KaTeX trust:false与图片URL过滤。CSP需配合Vue编译器、内联启动及打印设计验证，不为假设风险直接加会使页面白屏的策略。",
+      "change": "无CSP架构修改",
+      "verification": "现有显示注入防护、图片URL边界、SRI/离线浏览器测试"
+    },
+    {
+      "id": "N56",
+      "status": "非功能缺陷/设计约束",
+      "evidence": "文件极小不构成功能错误，两个门面都已登记dormant且未加载到主页面。保留明确的兼容入口，不为了行数改所有权。",
+      "change": "无业务修改",
+      "verification": "runtime inventory/main对照与架构唯一owner校验"
+    }
+  ],
+  "completedAt": "2026-10-01",
+  "counts": {
+    "verified": 48,
+    "repairsOrImprovements": 39,
+    "nonDefectsOrConstraints": 9,
+    "pending": 0
+  },
+  "followupReport": "ai/FINDINGS_LOADING_FOLLOWUP_2026-10-01.md"
+}

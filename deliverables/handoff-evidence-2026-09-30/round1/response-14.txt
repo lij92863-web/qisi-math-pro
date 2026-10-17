@@ -1,0 +1,62 @@
+{
+  "answers": [
+    {
+      "questionNumber": "1",
+      "answer": "D"
+    },
+    {
+      "questionNumber": "2",
+      "answer": "A"
+    },
+    {
+      "questionNumber": "3",
+      "answer": "B"
+    },
+    {
+      "questionNumber": "4",
+      "answer": "A"
+    },
+    {
+      "questionNumber": "5",
+      "answer": "C"
+    },
+    {
+      "questionNumber": "6",
+      "answer": "D"
+    },
+    {
+      "questionNumber": "7",
+      "answer": "C"
+    },
+    {
+      "questionNumber": "8",
+      "answer": "D"
+    },
+    {
+      "questionNumber": "9",
+      "answer": "AB"
+    },
+    {
+      "questionNumber": "10",
+      "answer": "BCD"
+    },
+    {
+      "questionNumber": "11",
+      "answer": "BC"
+    }
+  ],
+  "solutions": [
+    {
+      "questionNumber": "1",
+      "solution": "【分析】根据复数代数形式的除法运算化简 $z$，再计算其模即可。\\n\\n【详解】因为 $z(1+i)=2i$，所以 $z=\\dfrac{2i}{1+i}=\\dfrac{2i(1-i)}{(1+i)(1-i)}=1+i$，\\n\\n所以 $|z|=\\sqrt{1^2+1^2}=\\sqrt{2}$．\\n\\n故选：D"
+    },
+    {
+      "questionNumber": "2",
+      "solution": "【分析】若函数 $y=\\tan(x+\\varphi)$ 的图象关于 $\\left(\\dfrac{\\pi}{4},0\\right)$ 对称，根据正切函数的对称性可得 $\\varphi=-\\dfrac{\\pi}{4}+\\dfrac{k\\pi}{2}(k\\in\\mathbb{Z})$，再根据充分、必要条件结合包含关系分析求解．\\n\\n【详解】若函数 $y=\\tan(x+\\varphi)$ 的图象关于 $\\left(\\dfrac{\\pi}{4},0\\right)$ 对称，\\n\\n则 $\\dfrac{\\pi}{4}+\\varphi=\\dfrac{k\\pi}{2}(k\\in\\mathbb{Z})$，解得 $\\varphi=-\\dfrac{\\pi}{4}+\\dfrac{k\\pi}{2}(k\\in\\mathbb{Z})$，\\n\\n因为 $\\left\\{\\varphi\\mid\\varphi=-\\dfrac{\\pi}{4}+k\\pi,k\\in\\mathbb{Z}\\right\\}$ 是 $\\left\\{\\varphi\\mid\\varphi=-\\dfrac{\\pi}{4}+\\dfrac{k\\pi}{2},k\\in\\mathbb{Z}\\right\\}$ 的真子集，\\n\\n所以“$\\varphi=-\\dfrac{\\pi}{4}+k\\pi(k\\in\\mathbb{Z})$”是“函数 $y=\\tan(x+\\varphi)$ 的图象关于 $\\left(\\dfrac{\\pi}{4},0\\right)$ 对称”的充分不必要条件．\\n\\n故选：A．"
+    },
+    {
+      "questionNumber": "3",
+      "solution": "【分析】根据集合元素的互异性及并集的概念求解即可．\\n\\n【详解】根据集合元素的互异性可知，$a\\neq1$，$a\\neq-2$．\\n\\n因为 $A\\cup B$ 含有 4 个元素，所以 $A\\cap B$ 仅含有 1 个元素，\\n\\n若 $a^2\\in A$，则 $a^2=1$ 或 $a^2=a$，所以 $a=0$ 或 $a=\\pm1$．\\n\\n若 $-1\\in A$，则 $a=-1$．\\n\\n结合集合元素的互异性可知 $a=0$ 或 $a=-1$．\\n\\n当 $a=0$ 时，$A=\\{-2,1,0\\}$，$B=\\{-1,0\\}$，$A\\cup B=\\{-2,-1,0,1\\}$，符合题意．"
+    }
+  ]
+}

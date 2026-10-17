@@ -36,6 +36,9 @@ const ATTACK_FIELDS = [
 ];
 
 test('Phase 6A counterfactual matrix is complete and safety-clean', () => {
+    const retirement = json('architecture/pdf-v1-retired-files.json');
+    assert.equal(retirement.schemaVersion, 'qisi.pdf-v1-retired-files.v1');
+    const retired = new Map(retirement.files.map(item => [item.file, item]));
     const matrix = json(
         'docs/testing/PROGRAM_C_PHASE6_COUNTERFACTUAL_ATTACK_MATRIX_R3.json'
     );
@@ -59,7 +62,18 @@ test('Phase 6A counterfactual matrix is complete and safety-clean', () => {
         assert.equal(attack.leakage, 0, attack.attackId);
         assert.ok(Array.isArray(attack.evidence) && attack.evidence.length);
         for (const evidence of attack.evidence) {
-            assert.ok(fs.existsSync(path.join(ROOT, evidence)), evidence);
+            if (retired.has(evidence)) {
+                const record = retired.get(evidence);
+                assert.match(record.beforeSha256, /^[a-f0-9]{64}$/);
+                assert.ok(record.reason);
+                assert.equal(fs.existsSync(path.join(ROOT, evidence)), false, evidence);
+                assert.ok(record.replacementEvidence.length);
+                for (const replacement of record.replacementEvidence) {
+                    assert.ok(fs.existsSync(path.join(ROOT, replacement)), replacement);
+                }
+            } else {
+                assert.ok(fs.existsSync(path.join(ROOT, evidence)), evidence);
+            }
         }
     }
 });
@@ -80,13 +94,12 @@ test('Phase 6D closure benchmark smoke covers every non-browser scenario', () =>
         '79fea1e1cad0c682c42539dd575370f3919f1d05'
     );
     assert.equal(result.fixtureCandidateTransport, false);
-    assert.equal(result.comparisons.length, 11);
+    assert.equal(result.comparisons.length, 10);
     assert.deepEqual(
         new Set(result.comparisons.map(item => item.name)),
         new Set([
             'docx-deterministic',
             'docx-vision',
-            'pdf-safe-partial',
             'review-draft-build-100',
             'review-draft-build-300',
             'confirm',

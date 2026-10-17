@@ -1,0 +1,31 @@
+{
+  "root": "C:/Users/Administrator/Desktop/题库系统",
+  "origin": "http://127.0.0.1:3000",
+  "paidCalls": 0,
+  "nativeIndexedDB": true,
+  "isolatedBrowserContext": true,
+  "result": {
+    "stats": {
+      "reviewedCount": 0,
+      "submittedCount": 1,
+      "problemCount": 0,
+      "unassignedImageCount": 1,
+      "status": "completed"
+    },
+    "batchVersion": 2,
+    "customMetadata": "keep",
+    "draftStatus": "submitted",
+    "draftVersion": 2,
+    "submittedQuestionId": "formal-desktop",
+    "formalCount": 1,
+    "formalCore": "qisi-core-v2:[\"questionstem\",[\"one\",\"two\",\"three\",\"four\"]]",
+    "expectedCore": "qisi-core-v2:[\"questionstem\",[\"one\",\"two\",\"three\",\"four\"]]",
+    "staleCodes": [
+      "DRAFT_PERSISTENCE_VERSION_CONFLICT",
+      "DRAFT_PERSISTENCE_IDEMPOTENCY_CONFLICT"
+    ],
+    "missingCode": "DRAFT_BATCH_NOT_FOUND",
+    "imagesUnchanged": true,
+    "filesUnchanged": true
+  }
+}

@@ -25,15 +25,16 @@ PDF/AI/OCR changes must not break DOCX+DOCX.
 
 ## 3. PDF support safety principle
 
-PDF support alignment has only three acceptable outcomes:
+PDF support alignment has four acceptable outcomes (D-1 authorized by the user on 2026-10-01):
 
 1. `full`: all expected question numbers are reliable and aligned.
 2. `prefix`: only the reliable prefix is attached; the rest is fused/withheld.
 3. `fail-closed`: no answer/solution is attached automatically.
+4. `subset`: identical strictly increasing answer/solution numbers inside explicit expected numbers may resume after a shared gap; missing questions stay withheld and review remains required.
 
 Forbidden outcomes:
 
-- Attach after a missing number.
+- Resume after a one-sided gap, or without validating both entire sequences against explicit expected numbers.
 - Attach after jump-back.
 - Attach after duplicate question number.
 - Attach answer and solution when their question sequences disagree.

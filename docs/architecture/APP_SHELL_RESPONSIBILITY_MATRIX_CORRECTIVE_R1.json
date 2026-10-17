@@ -7,7 +7,10 @@
     {
       "name": "runBatchRecognition",
       "file": "app.js",
-      "range": [2043, 2053],
+      "range": [
+        1964,
+        1974
+      ],
       "class": "A",
       "allowedCalls": [
         "normalUiImportController.isRunning",
@@ -20,43 +23,58 @@
         "draftPersistenceService.persistReviewDraftBatch",
         "batchFormalSubmit.submit"
       ],
-      "owner": "UI Shell"
+      "owner": "UI Shell",
+      "astSha256": "d8920653f788259cf0fbd6af580fee3b330cff8482823f155a221410514a6b91"
     },
     {
       "name": "refreshBatchStats",
       "file": "app.js",
-      "range": [2614, 2619],
+      "range": [
+        2602,
+        2607
+      ],
       "class": "A",
-      "allowedCalls": ["draftMaintenanceService.refreshBatchStats"],
+      "allowedCalls": [
+        "draftMaintenanceService.refreshBatchStats"
+      ],
       "forbiddenCalls": [
         "draftPersistenceService.reloadDraftBatch",
         "draftPersistenceService.persistReviewDraftBatch"
       ],
-      "owner": "UI Shell"
+      "owner": "UI Shell",
+      "astSha256": "61a2cf4897e3c2190609d864314c6bded6cc83e4711bd14a52b030f664c473ea"
     },
     {
       "name": "markDraftReviewed",
       "file": "app.js",
-      "range": [2631, 2653],
+      "range": [
+        2619,
+        2647
+      ],
       "class": "A",
       "allowedCalls": [
         "saveActiveDraftQuestion",
         "reviewWorkflowService.confirmDraft",
         "alert",
         "loadBatchImportData",
-        "showBatchToast"
+        "showBatchToast",
+        "window.Qisi.ReviewDraftState.snapshotDraftEditorFields"
       ],
       "forbiddenCalls": [
         "draftPersistenceService.reloadDraftBatch",
         "draftPersistenceService.persistReviewDraftBatch",
         "batchFormalSubmit.submit"
       ],
-      "owner": "UI Shell"
+      "owner": "UI Shell",
+      "astSha256": "0d79408ac4355d46fd7819b2f1557fc9129a57d56a891b75c43cf8bdfbd6cdc7"
     },
     {
       "name": "submitDraftQuestion",
       "file": "app.js",
-      "range": [2655, 2692],
+      "range": [
+        2649,
+        2686
+      ],
       "class": "A",
       "allowedCalls": [
         "saveActiveDraftQuestion",
@@ -74,41 +92,58 @@
         "draftPersistenceService.persistReviewDraftBatch",
         "batchFormalSubmit.submit"
       ],
-      "owner": "UI Shell"
+      "owner": "UI Shell",
+      "astSha256": "9e9419eaf8340ce7c1e9bd19a9913d4f64244082e9b5222d070aba3aa083007d"
     },
     {
       "name": "openBatchSubmitSummary",
       "file": "app.js",
-      "range": [2694, 2700],
+      "range": [
+        2688,
+        2699
+      ],
       "class": "A",
-      "allowedCalls": ["reviewWorkflowService.prepareReviewedBatch"],
+      "allowedCalls": [
+        "reviewWorkflowService.prepareReviewedBatch",
+        "showBatchToast"
+      ],
       "forbiddenCalls": [
         "draftPersistenceService.reloadDraftBatch",
         "batchFormalSubmit.submit"
       ],
-      "owner": "UI Shell"
+      "owner": "UI Shell",
+      "astSha256": "8c86d8be228888ea179edb14cfbaf17006c23c7d8bc8e1581d7dbc25b3befd29"
     },
     {
       "name": "dedupeActiveBatchDraftsNow",
       "file": "app.js",
-      "range": [2713, 2729],
+      "range": [
+        2712,
+        2735
+      ],
       "class": "A",
       "allowedCalls": [
         "showBatchToast",
         "draftMaintenanceService.dedupeBatchDrafts",
-        "loadBatchImportData"
+        "loadBatchImportData",
+        "confirm",
+        "saveActiveDraftQuestion"
       ],
       "forbiddenCalls": [
         "batchFinalGateDedupeDrafts",
         "draftPersistenceService.reloadDraftBatch",
         "draftPersistenceService.persistReviewDraftBatch"
       ],
-      "owner": "UI Shell"
+      "owner": "UI Shell",
+      "astSha256": "aa8b25ff95f2450ca82aad9c477abb31b1841254305dc75a82f06d9728de5925"
     },
     {
       "name": "cleanupActiveBatchDisplayPollution",
       "file": "app.js",
-      "range": [2740, 2752],
+      "range": [
+        2746,
+        2763
+      ],
       "class": "A",
       "allowedCalls": [
         "alert",
@@ -121,12 +156,16 @@
         "draftPersistenceService.reloadDraftBatch",
         "draftPersistenceService.persistReviewDraftBatch"
       ],
-      "owner": "UI Shell"
+      "owner": "UI Shell",
+      "astSha256": "85cd915d0017faa9f4a958aad6652f4d11df3c11cac89ff78fdc7aafe346afd7"
     },
     {
       "name": "confirmBatchSubmit",
       "file": "app.js",
-      "range": [2759, 2773],
+      "range": [
+        2770,
+        2789
+      ],
       "class": "A",
       "allowedCalls": [
         "reviewWorkflowService.submitReviewedBatch",
@@ -139,24 +178,33 @@
         "batchFormalSubmit.submit",
         "draftPersistenceService.persistReviewDraftBatch"
       ],
-      "owner": "UI Shell"
+      "owner": "UI Shell",
+      "astSha256": "e07cd09f68bff7cafec56e3a5e328ef63bd6c8d906c72f5a0ae75af39ed77c38"
     },
     {
       "name": "deleteBatchImport",
       "file": "app.js",
-      "range": [2775, 2779],
+      "range": [
+        2791,
+        2800
+      ],
       "class": "A",
       "allowedCalls": [
         "confirm",
         "draftMaintenanceService.deleteDraftBatch",
-        "openBatchList"
+        "openBatchList",
+        "showBatchToast"
       ],
       "forbiddenCalls": [
         "draftPersistenceService.deleteDraftBatch",
         "storageRepository.delete",
         "db.transaction"
       ],
-      "owner": "UI Shell"
+      "owner": "UI Shell",
+      "astSha256": "4e3fcb1800b16c616c491c307c70dff6a6f75a4a9dbdc967de40eb9df7b536ac"
     }
-  ]
+  ],
+  "reviewedAstNodeCount": 27901,
+  "reviewedFunctionCount": 586,
+  "reviewEvidence": "ai/FINDINGS_ALL_REPAIR_2026-10-01.md: N5-N9, N16, N27, N46, N52-N54 user-authorized bounded glue; N50 user-requested closure and deferred startup: ai/FINDINGS_LOADING_FOLLOWUP_2026-10-01.md; all nine original AST hashes preserved; role-only normal UI default restored: ai/DOCX_AUTO_ROUTE_REPAIR_2026-10-01.md; nine hashes preserved; PDF V1 bounded producer/faithful review/source glue: ai/CODEX_TASK_PDF_MULTIMODAL_V1.md; nine AST hashes independently matched; PDF V1 bounded producer/faithful review/source glue: ai/CODEX_TASK_PDF_MULTIMODAL_V1.md; nine AST hashes independently matched; PDF V1 next-round old entry retirement: ai/PDF_V1_NEXT_ROUND_EXECUTION_2026-10-03.md; original nine AST hashes preserved; user-directed software-only PDF V2 composition and review dispatch: ai/CODEX_TASK_PDF_EXTERNAL_V2_SOFTWARE_CHAIN_2026-10-13.md; all nine AST hashes checked unchanged"
 }

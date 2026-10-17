@@ -14,7 +14,7 @@ const required = [
     'library-service', 'review-controller', 'export-service',
     'import-coordinator', 'ocr-registry', 'ocr-qwen-adapter',
     'ocr-local-adapter', 'local-ocr-service', 'ocr-shadow-mode', 'performance-monitor',
-    'controlled-write', 'support-aligner', 'support-parser', 'app-shell'
+    'controlled-write', 'support-aligner', 'pdf-multimodal-contract', 'app-shell'
 ];
 
 test('architecture manifest covers required modules with complete metadata', () => {
@@ -41,7 +41,9 @@ test('architecture manifest covers required modules with complete metadata', () 
         );
         assert.equal(owners[item.domainOwner], item.file, item.domainOwner);
     }
-    assert.equal(new Set(Object.keys(owners)).size, Object.keys(owners).length);
+    assert.equal(new Set(layers.modules.map(item => item.domainOwner)).size, layers.modules.length, 'each module has one distinct owner');
+    assert.equal(new Set(layers.modules.map(item => item.id)).size, layers.modules.length, 'module IDs are unique');
+    assert.equal(new Set(layers.modules.map(item => item.file)).size, layers.modules.length, 'owner files are unique');
 });
 
 test('manifest dependencies are present, acyclic, and never point upward', () => {

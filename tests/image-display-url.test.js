@@ -13,7 +13,7 @@ test('display policy permits existing image sources and rejects unsafe schemes w
 function owners(){
  const utils=require('../qisi-utils');
  const context=vm.createContext({window:{Qisi:{QuestionImagePolicy:policy,Utils:utils}},URL,console,tokenizeLatexSource:utils.tokenizeLatexSource});
- vm.runInContext(fs.readFileSync(path.join(root,'qisi-components.js'),'utf8')+'\nthis.preview=renderLatexPreviewHtml;',context);
+ vm.runInContext(fs.readFileSync(path.join(root,'qisi-components.js'),'utf8')+'\nthis.preview=Qisi.Components.renderLatexPreviewHtml;',context);
  const source=fs.readFileSync(path.join(root,'app.js'),'utf8');
  const start=source.indexOf('                const escapeHtml = (text)');
  const end=source.indexOf('                const applyPrintWritingRules',start);

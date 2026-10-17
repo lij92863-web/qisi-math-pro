@@ -53,15 +53,15 @@ test('support repair regression tests import the production JSON/LaTeX repair', 
     assert.equal(typeof production.hasUnescapedLatexCommandInJsonString, 'function');
 });
 
-test('batch smoke exercises production parser, aligner, and controlled-write owners', () => {
+test('batch smoke exercises the current PDF contract and exact identity owner', () => {
     const source = fs.readFileSync(
         path.join(TEST_ROOT, 'batch-smoke-mock.test.js'),
         'utf8'
     );
 
-    assert.match(source, /require\(['"]\.\.\/qisi-pdf-support-block-parser\.js['"]\)/);
-    assert.match(source, /require\(['"]\.\.\/qisi-pdf-support-aligner\.js['"]\)/);
-    assert.match(source, /require\(['"]\.\.\/qisi-pdf-support-controlled-write\.js['"]\)/);
+    assert.match(source, /require\(['"]\.\.\/qisi-pdf-multimodal-contract\.js['"]\)/);
+    assert.match(source, /require\(['"]\.\.\/qisi-docx-producer-identity-contract\.js['"]\)/);
+    assert.doesNotMatch(source, /qisi-pdf-support-(?:block-parser|controlled-write)/);
     assert.doesNotMatch(source, /node scripts\/pdf-master-browser-runner\.js real-run/);
 });
 

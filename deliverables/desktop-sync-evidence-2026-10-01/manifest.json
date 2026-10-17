@@ -1,0 +1,279 @@
+{
+  "source": "C:/Users/Administrator/.codex/worktrees/desktop-recovery/题库系统",
+  "desktop": "C:/Users/Administrator/Desktop/题库系统",
+  "base": "092bae4",
+  "head": "f05cffb1578e1707184a40a708dcde4979d51f42",
+  "old": "da4fd0039b9b3611479bc2758c9b8fb851cc4e53",
+  "files": [
+    {
+      "status": "M",
+      "file": "app.js",
+      "oldSha256": "1560bba1572752630b84daca87f692f258ea76e818786ee0b604afe809c00371",
+      "newSha256": "58a8af328433fccbdde83a8473375b7589ad83fbbc1a119ae6c3d17005731c4f",
+      "deployedSha256": "4988a6fb571e1df13f625d64a469b06a0d9c79dea94772b11de46bd9925bebb7"
+    },
+    {
+      "status": "M",
+      "file": "architecture/runtime-modules.json",
+      "oldSha256": "84d409f73f66d39541afc67356468e61b895b3ed7071f078d67dc2899511f7e1",
+      "newSha256": "485a6939a63f7da5b22e805d2edc724cb2ada8a13cad9f79d01fb3a68007c46e"
+    },
+    {
+      "status": "M",
+      "file": "main.html",
+      "oldSha256": "a71eb63da3fc521422c76561411a13230c96d94f52036fc25cec19527a70987c",
+      "newSha256": "7f806805a331a08fcb9b7f324137d9e5b40c381ef4d647b1ed1f612b4ff75d52"
+    },
+    {
+      "status": "M",
+      "file": "package-lock.json",
+      "oldSha256": "230ed4781b58ca4670a04400aba3ea1b0f16a25f9c49b4960c501536848d9f33",
+      "newSha256": "cfd03e2600962e620aaaaa931b5d876eeb1a79f01cbf4ce4c745e249e4535d31"
+    },
+    {
+      "status": "M",
+      "file": "package.json",
+      "oldSha256": "603e3f8c4830906dbdddd8061fbc32bc98cb39a0d6a4976b7683c1b379dd1e5d",
+      "newSha256": "e6c72f490172813cf3ea9d119f944ab045e50bab15dad4304177f5c76a88faf1"
+    },
+    {
+      "status": "M",
+      "file": "qisi-archive-security.js",
+      "oldSha256": "c3a73e67fd24ddb9293870f6bd15bc9dfe82a042b36007da9c38d823338710e5",
+      "newSha256": "3d345ddc7c4deaf391ce87366eb6b9e30743195634880204e8679a10b36eac19"
+    },
+    {
+      "status": "A",
+      "file": "qisi-backup-snapshot-policy.js",
+      "oldSha256": null,
+      "newSha256": "7d2ae01628bed3a9ec45b46b26268fff4408f152e0c4128738a501c54109b37e"
+    },
+    {
+      "status": "A",
+      "file": "qisi-backup-workspace.js",
+      "oldSha256": null,
+      "newSha256": "edb5b8a8322d45595aadc45a847043a46949950b901e14b2e772dc272f17e869"
+    },
+    {
+      "status": "M",
+      "file": "qisi-backup.js",
+      "oldSha256": "d8f5c76ee9f8e73d60bd883db05c66b2289de14304fa14b9bc8fd796282f56a8",
+      "newSha256": "a696a223ff3d10de96c94d1c28635d85a0b7bcf18b39440bb514385bea318399"
+    },
+    {
+      "status": "M",
+      "file": "qisi-browser-document-source.js",
+      "oldSha256": "64f51794013ca4987933b0f1837867c0f2b3e7023173cb30ecac25871957d7f9",
+      "newSha256": "5417c0720301e4357e01acc51583b5052893b5e54d972f25d1e3118154c6a9d0"
+    },
+    {
+      "status": "M",
+      "file": "qisi-browser-pdf-renderer.js",
+      "oldSha256": "a5513c0f26ef90abc60fd63f0bfce834e2c41f50d9c527cc1ced9a9c26fd4a4b",
+      "newSha256": "936dd02a0fa4eccb0f9356a91242ac691dc0c07163698cf31bf16bc6c202a6af"
+    },
+    {
+      "status": "M",
+      "file": "qisi-question-duplicate-policy.js",
+      "oldSha256": "07aa9afecab48d23f10ed3621c3babf6e38fa1b89537d67a082a43e1c0ab580b",
+      "newSha256": "4b276d793518b56d7c4160a63eab06b5d3d3e45956d57227e45c02e05e29136d"
+    },
+    {
+      "status": "M",
+      "file": "qisi-storage-repository.js",
+      "oldSha256": "3acfe951a6224e1f3c06c9f431cf78504df973fe234537d330890435734a3e49",
+      "newSha256": "b1d9bc73d5558926515cca94cf92bc104df75f1b89e5f2930fcd8b35b9cc2e23"
+    },
+    {
+      "status": "A",
+      "file": "tests/backup-recovery-core.test.js",
+      "oldSha256": null,
+      "newSha256": "4537ea0752d0f7b2a97eae3c09b74ec6471a0f110de425eec1593987f86ee984"
+    },
+    {
+      "status": "A",
+      "file": "tests/backup-restore-guard.test.js",
+      "oldSha256": null,
+      "newSha256": "63baaffc28cb3a4ba3d66691b58af278cd0b06ff77301b8f90bb9059fd969e5f"
+    },
+    {
+      "status": "A",
+      "file": "tests/backup-workspace-browser.test.js",
+      "oldSha256": null,
+      "newSha256": "4d51a1248e1cc44ca838e83a284eeba28f52074ed4d4ddae6d010eea77278640"
+    },
+    {
+      "status": "A",
+      "file": "tests/backup-workspace.test.js",
+      "oldSha256": null,
+      "newSha256": "46fc44eb57d610420f48b2a240a28b428744a3d4aa87616bb9384d0da09eea69"
+    },
+    {
+      "status": "M",
+      "file": "tests/ocr-quality-counterfactual-attacks.test.js",
+      "oldSha256": "4735f49b8970909adb4eafc42827f4ddd9452bb8cffbd4feb10aeaf52401ad6e",
+      "newSha256": "02aec98b4dcfae362e3ebdaa3122b005553141a6aa8e90c793fceb6180b2ea6d"
+    },
+    {
+      "status": "D",
+      "file": "tests/ocr-quality-final-report.test.js",
+      "oldSha256": "6e48ef7148c0e5bcbbb06f4f266135d29a346ce5d2b099b7af5a0b1d67781ea0",
+      "newSha256": null
+    },
+    {
+      "status": "A",
+      "file": "tests/pdf-font-eval-boundary.test.js",
+      "oldSha256": null,
+      "newSha256": "5cbb8f3b188c6aa19d5686e11f298361fd62b16b3e6123d24d92b6e15541b9b3"
+    },
+    {
+      "status": "M",
+      "file": "tests/post-r2-code-quality-audit.test.js",
+      "oldSha256": "16398d19fac8bc9e8f3c408283d7cfb16e24cb6e6f4478b0ffd6f7566eb5d4d3",
+      "newSha256": "78f11ad2180d93ecad30632168d1b5e4ecc072c605c6eb922ddedec62e9324c4"
+    },
+    {
+      "status": "M",
+      "file": "tests/post-r2-counterfactual-duplicate-submit.test.js",
+      "oldSha256": "d49e93a8b822abc295c7be454f024897674e0a0e92d29eeb617eca3ce0b733cb",
+      "newSha256": "562ac7d3cd9091fbdbdd584ccee4d45a9e97529df4a165de64b579f35b9d73d0"
+    },
+    {
+      "status": "M",
+      "file": "tests/post-r2-counterfactual-fake-manual-flag.test.js",
+      "oldSha256": "1081aad26fd6075d7ad59b574116defb38613393ce431d0ac42e10ebbf025db9",
+      "newSha256": "ac066e7cbfad3b86a77a8841308f851303e8d5c3d1f410615ea2491e078a5fdb"
+    },
+    {
+      "status": "M",
+      "file": "tests/post-r2-counterfactual-formal-db-bypass.test.js",
+      "oldSha256": "17ed61930bc5052b02f71b11be7713f7e34616262a8178fcb3a1fcd921d3a7d4",
+      "newSha256": "5877ce348737e8827fde76d7af51e4b8eba92539aa00e32bef3bdad0d55a55a7"
+    },
+    {
+      "status": "M",
+      "file": "tests/post-r2-counterfactual-local-ocr-path.test.js",
+      "oldSha256": "c210f02e38b5d7868f5c6a8f7f3e6753bdf53367c198eaf3f01a50c80d48055f",
+      "newSha256": "f3ba6b0e3a66a9ef27fad4efeb8157050fa7eb0cc7690390cdf7f2c7489a25e1"
+    },
+    {
+      "status": "M",
+      "file": "tests/post-r2-counterfactual-malformed-admission.test.js",
+      "oldSha256": "16c509a856d4ff01b65af0197f60c07a070a9ee9f370101c1add7ae822e07da9",
+      "newSha256": "b30632c92f7d55b807fe9f2db524c1df623c99cb31f880931bac0a71e0de7080"
+    },
+    {
+      "status": "M",
+      "file": "tests/post-r2-counterfactual-ownership-rewind.test.js",
+      "oldSha256": "c81accf543ee0d53649e36069f177dfc5cb7d0220e72c7ee7bdba65634154a33",
+      "newSha256": "83d551054f60a0fac4f160af32f3bbdb3d8ccf709ee47bd77985f199e73caba8"
+    },
+    {
+      "status": "M",
+      "file": "tests/post-r2-counterfactual-package-schema-injection.test.js",
+      "oldSha256": "adac8752c5d75193c06d3b5f8ae1bce06478a91893134460d4642059d020a08d",
+      "newSha256": "54afc32f1d84ef6d710e1e5d10bcafe972a30bb587c4c2379c03625d089c91a6"
+    },
+    {
+      "status": "M",
+      "file": "tests/post-r2-counterfactual-path-traversal.test.js",
+      "oldSha256": "9da5c77c700de7ab95b2b807a0351a29135e0762452ffc87ee2541b8d75ce3d1",
+      "newSha256": "119ac8de6e0eb43405f2d195a63ebbe8bcbc824d5c015c401d76e57f8cee64f9"
+    },
+    {
+      "status": "M",
+      "file": "tests/post-r2-counterfactual-raw-json.test.js",
+      "oldSha256": "ea64be599d3a6382d630bbdd72a104eb71d052f40defd135b45f5b85ea019f50",
+      "newSha256": "65c7e4649b559919a4af4b2b936c42ef73a9e5066033f042b2254d80d5922d60"
+    },
+    {
+      "status": "M",
+      "file": "tests/post-r2-counterfactual-rejected-ai-confirm.test.js",
+      "oldSha256": "1aba3504ed4fbfb7e914df831a601f21a9949c37673cc1e056c56df4c0c56c16",
+      "newSha256": "6cd982d476aa254c0ecf8a7f810b410d8c46de562a4946c7e97b599ab1e48279"
+    },
+    {
+      "status": "M",
+      "file": "tests/post-r2-counterfactual-script-missing.test.js",
+      "oldSha256": "4369f98e223c3205ac77fe79650ee3d1bf9ad0214b1489aa2cee94e2c5a47b12",
+      "newSha256": "e4832e0849e134b70882de63f396dcb2587f0caaacf321342cc0cbfd43c99d82"
+    },
+    {
+      "status": "M",
+      "file": "tests/post-r2-counterfactual-stale-draft.test.js",
+      "oldSha256": "dd834f3a06dfde071f1b2a3d09b7b33a92b3f4729eb0671871dd4dffad74b9df",
+      "newSha256": "7d6b5cd220219ed612c67f1ffdcce51a319b3ccd9e6d11d3dc00858e107d842f"
+    },
+    {
+      "status": "M",
+      "file": "tests/post-r2-counterfactual-transaction-abort.test.js",
+      "oldSha256": "7b22863c0b2da290fc0a738170e24059f78448c5b523de6ac7f881c272e082d8",
+      "newSha256": "f500ce1afba6d50e0171bf0b9b6106b6e486cd4faa5d38d69e30ba15e613b3d0"
+    },
+    {
+      "status": "M",
+      "file": "tests/post-r2-counterfactual-two-tab-race.test.js",
+      "oldSha256": "1a7b6d62a07373eaf4be014e01fabf6142809a7b55a89c67d8d34700ca804dc4",
+      "newSha256": "3007b8020e3b36590dab30ad490f964dd897d1801403d313ea8899bdf21baa49"
+    },
+    {
+      "status": "M",
+      "file": "tests/post-r2-counterfactual-validator-missing.test.js",
+      "oldSha256": "6774a662131f00d57b1299b3d5b3a0a92a5d7a5436ac4018f3bbe3a4e0dd3efd",
+      "newSha256": "3ef91eddfcb672dd590d0ae251607f4394595fdce1c33101a1eff571427e1bce"
+    },
+    {
+      "status": "M",
+      "file": "tests/post-r2-counterfactual-validator-throws.test.js",
+      "oldSha256": "9f9afc90605ad8cb179148ac5b6b42ee6c699cf6cd3da2c6c9908dd9a16cc169",
+      "newSha256": "6fa0fa544eb00118a6891ba104a67d9ec15964e25d07442b2842c624fbc0b63a"
+    },
+    {
+      "status": "M",
+      "file": "tests/post-r2-counterfactual-xss.test.js",
+      "oldSha256": "aea5aca214604ead63f6efda635747eaf0a9693fed95a94de515db6eed89c9bf",
+      "newSha256": "a0695f4e916ea117b6218ec45857e908ce49d551926b9fbf421b63b566f72b01"
+    },
+    {
+      "status": "M",
+      "file": "tests/post-r2-counterfactual-zip-bomb.test.js",
+      "oldSha256": "8f40a4d5849fcea2ab760c5170dc799d91b54ac6fb771809cac081df2ae17749",
+      "newSha256": "244b5a290ba89c175b034a81e0a0843e119796d15e3f4f8927f95b2c7809c17c"
+    },
+    {
+      "status": "M",
+      "file": "tests/question-duplicate-policy.test.js",
+      "oldSha256": "70108ce22a534b2fad1f294dd51681df76983fc2df32be93341dd336857cf0bf",
+      "newSha256": "7ad9cc4cb960f3d1d0c1e47736a416b23ffe9cb7896899ad5dc233b7eb03740e"
+    },
+    {
+      "status": "A",
+      "file": "tests/upload-dependency-compatibility.test.js",
+      "oldSha256": null,
+      "newSha256": "36e80b3ec012ff8a82b11febc865c14ae007ffedac519dfa556e7d4af2f0e49e"
+    },
+    {
+      "status": "M",
+      "file": "vendor/katex/contrib/auto-render.min.js",
+      "oldSha256": "9cb8dacfc086c2966c9ec4ba54f4a2dc43b7cbe2b33cec1a2743d886c7fb47a7",
+      "newSha256": "e5372d199bcdae8b4de71d0f7ceba72a4ba12774a27c60a6f1f77d03b3228ee4"
+    },
+    {
+      "status": "M",
+      "file": "vendor/katex/katex.min.css",
+      "oldSha256": "df9ef84e97d38557de02183e238f8ddfd10988b37741492e12c3157bc856011e",
+      "newSha256": "0289a02cf451a44dd73add683a09644252363871ac11713a647b732cee8b1ee3"
+    },
+    {
+      "status": "M",
+      "file": "vendor/katex/katex.min.js",
+      "oldSha256": "d4f0ea25c4ccb7986b229d6427794b7063cf3209b0376cf5a64bfc4dd7918c95",
+      "newSha256": "a29d2961d3146de5949d78ac7c1a9d93ae54955bad22a6db4fbe836e88e8bf48"
+    }
+  ],
+  "ledgerHashes": {
+    "round1": "879a8cefe25cd139529149e000f06f22c9da778d60237e2b021d5ad3194b26ec",
+    "round2": "2b8489db3273c29423950150af27802cf12f7acc01bb59cca84c37d64ef12779"
+  },
+  "whitespaceCorrection": "app.js:4973 trailing space removed, no behavior change"
+}

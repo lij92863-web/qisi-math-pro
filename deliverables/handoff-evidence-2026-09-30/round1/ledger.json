@@ -1,0 +1,470 @@
+[
+  {
+    "attempt": 1,
+    "kind": "question",
+    "page": 1,
+    "model": "qwen3-vl-plus",
+    "endpoint": "chat",
+    "status": "ok",
+    "startedAt": "2026-09-29T17:27:06.586Z",
+    "httpStatus": 200,
+    "durationMs": 33981,
+    "code": "AI_PROXY_OK",
+    "summary": {
+      "textLength": 3323,
+      "jsonValid": true,
+      "questionCount": 7,
+      "questionNumbers": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7"
+      ],
+      "stemLengths": [
+        46,
+        130,
+        73,
+        73,
+        169,
+        164,
+        49
+      ],
+      "optionCounts": [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "latexDelimitedFields": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  {
+    "attempt": 2,
+    "kind": "question",
+    "page": 2,
+    "model": "qwen3-vl-plus",
+    "endpoint": "chat",
+    "status": "ok",
+    "startedAt": "2026-09-29T17:28:38.044Z",
+    "httpStatus": 200,
+    "durationMs": 25224,
+    "code": "AI_PROXY_OK",
+    "summary": {
+      "textLength": 2026,
+      "jsonValid": true,
+      "questionCount": 3,
+      "questionNumbers": [
+        "8",
+        "9",
+        "10"
+      ],
+      "stemLengths": [
+        118,
+        238,
+        120
+      ],
+      "optionCounts": [
+        4,
+        4,
+        2
+      ],
+      "latexDelimitedFields": [
+        1,
+        1,
+        2
+      ]
+    }
+  },
+  {
+    "attempt": 3,
+    "kind": "question",
+    "page": 3,
+    "model": "qwen3-vl-plus",
+    "endpoint": "chat",
+    "status": "ok",
+    "startedAt": "2026-09-29T17:29:40.841Z",
+    "httpStatus": 200,
+    "durationMs": 23908,
+    "code": "AI_PROXY_OK",
+    "summary": {
+      "textLength": 2095,
+      "jsonValid": true,
+      "questionCount": 4,
+      "questionNumbers": [
+        "11",
+        "12",
+        "13",
+        "14"
+      ],
+      "stemLengths": [
+        248,
+        65,
+        101,
+        228
+      ],
+      "optionCounts": [
+        4,
+        0,
+        0,
+        0
+      ],
+      "latexDelimitedFields": [
+        3,
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  {
+    "attempt": 4,
+    "kind": "question",
+    "page": 4,
+    "model": "qwen3-vl-plus",
+    "endpoint": "chat",
+    "status": "ok",
+    "startedAt": "2026-09-29T17:30:43.248Z",
+    "httpStatus": 200,
+    "durationMs": 18744,
+    "code": "AI_PROXY_OK",
+    "summary": {
+      "textLength": 1432,
+      "jsonValid": true,
+      "questionCount": 2,
+      "questionNumbers": [
+        "15",
+        "16"
+      ],
+      "stemLengths": [
+        387,
+        144
+      ],
+      "optionCounts": [
+        0,
+        0
+      ],
+      "latexDelimitedFields": [
+        1,
+        0
+      ]
+    }
+  },
+  {
+    "attempt": 5,
+    "kind": "question",
+    "page": 5,
+    "model": "qwen3-vl-plus",
+    "endpoint": "chat",
+    "status": "ok",
+    "startedAt": "2026-09-29T17:31:20.578Z",
+    "httpStatus": 200,
+    "durationMs": 16609,
+    "code": "AI_PROXY_OK",
+    "summary": {
+      "textLength": 1012,
+      "jsonValid": true,
+      "questionCount": 2,
+      "questionNumbers": [
+        "(1)(2)",
+        "17"
+      ],
+      "stemLengths": [
+        369,
+        80
+      ],
+      "optionCounts": [
+        0,
+        0
+      ],
+      "latexDelimitedFields": [
+        1,
+        1
+      ]
+    }
+  },
+  {
+    "attempt": 6,
+    "kind": "question",
+    "page": 6,
+    "model": "qwen3-vl-plus",
+    "endpoint": "chat",
+    "status": "ok",
+    "startedAt": "2026-09-29T17:31:59.567Z",
+    "httpStatus": 200,
+    "durationMs": 18767,
+    "code": "AI_PROXY_OK",
+    "summary": {
+      "textLength": 1171,
+      "jsonValid": true,
+      "questionCount": 2,
+      "questionNumbers": [
+        "未编号",
+        "18"
+      ],
+      "stemLengths": [
+        150,
+        202
+      ],
+      "optionCounts": [
+        0,
+        0
+      ],
+      "latexDelimitedFields": [
+        1,
+        1
+      ]
+    }
+  },
+  {
+    "attempt": 7,
+    "kind": "question",
+    "page": 7,
+    "model": "qwen3-vl-plus",
+    "endpoint": "chat",
+    "status": "ok",
+    "startedAt": "2026-09-29T17:32:29.588Z",
+    "httpStatus": 200,
+    "durationMs": 10707,
+    "code": "AI_PROXY_OK",
+    "summary": {
+      "textLength": 684,
+      "jsonValid": true,
+      "questionCount": 1,
+      "questionNumbers": [
+        "19"
+      ],
+      "stemLengths": [
+        324
+      ],
+      "optionCounts": [
+        0
+      ],
+      "latexDelimitedFields": [
+        1
+      ]
+    }
+  },
+  {
+    "attempt": 8,
+    "kind": "support",
+    "page": 9,
+    "model": "qwen-vl-ocr-latest",
+    "endpoint": "ocr",
+    "status": "ok",
+    "startedAt": "2026-09-29T17:32:53.588Z",
+    "httpStatus": 200,
+    "durationMs": 9569,
+    "code": "AI_PROXY_OK",
+    "summary": {
+      "textLength": 1762,
+      "numberedLines": 0,
+      "answerMarkers": 4,
+      "solutionMarkers": 3
+    }
+  },
+  {
+    "attempt": 9,
+    "kind": "support",
+    "page": 14,
+    "model": "qwen-vl-ocr-latest",
+    "endpoint": "ocr",
+    "status": "ok",
+    "startedAt": "2026-09-29T17:33:53.650Z",
+    "httpStatus": 200,
+    "durationMs": 6976,
+    "code": "AI_PROXY_OK",
+    "summary": {
+      "textLength": 1334,
+      "numberedLines": 0,
+      "answerMarkers": 2,
+      "solutionMarkers": 2
+    }
+  },
+  {
+    "attempt": 10,
+    "kind": "support-markdown",
+    "page": 9,
+    "model": "qwen-vl-ocr-latest",
+    "endpoint": "chat",
+    "status": "ok",
+    "startedAt": "2026-09-29T17:34:46.316Z",
+    "httpStatus": 200,
+    "durationMs": 7490,
+    "code": "AI_PROXY_OK",
+    "summary": {
+      "textLength": 1531,
+      "numberedLines": 3,
+      "answerMarkers": 2,
+      "solutionMarkers": 3
+    }
+  },
+  {
+    "attempt": 11,
+    "kind": "support-markdown",
+    "page": 14,
+    "model": "qwen-vl-ocr-latest",
+    "endpoint": "chat",
+    "status": "ok",
+    "startedAt": "2026-09-29T17:35:21.617Z",
+    "httpStatus": 200,
+    "durationMs": 10798,
+    "code": "AI_PROXY_OK",
+    "summary": {
+      "textLength": 1213,
+      "numberedLines": 3,
+      "answerMarkers": 2,
+      "solutionMarkers": 2
+    }
+  },
+  {
+    "attempt": 12,
+    "kind": "support-markdown",
+    "page": 10,
+    "model": "qwen-vl-ocr-latest",
+    "endpoint": "chat",
+    "status": "ok",
+    "startedAt": "2026-09-29T17:36:29.608Z",
+    "httpStatus": 200,
+    "durationMs": 9629,
+    "code": "AI_PROXY_OK",
+    "summary": {
+      "textLength": 1298,
+      "numberedLines": 3,
+      "answerMarkers": 0,
+      "solutionMarkers": 2
+    }
+  },
+  {
+    "attempt": 13,
+    "kind": "support-markdown",
+    "page": 16,
+    "model": "qwen-vl-ocr-latest",
+    "endpoint": "chat",
+    "status": "ok",
+    "startedAt": "2026-09-29T17:38:03.132Z",
+    "httpStatus": 200,
+    "durationMs": 9518,
+    "code": "AI_PROXY_OK",
+    "summary": {
+      "textLength": 2288,
+      "numberedLines": 1,
+      "answerMarkers": 1,
+      "solutionMarkers": 1
+    }
+  },
+  {
+    "attempt": 14,
+    "kind": "support-structured",
+    "page": 9,
+    "model": "qwen3-vl-plus",
+    "endpoint": "chat",
+    "status": "ok",
+    "startedAt": "2026-09-29T17:39:10.707Z",
+    "httpStatus": 200,
+    "durationMs": 27378,
+    "code": "AI_PROXY_OK",
+    "summary": {
+      "textLength": 2154,
+      "jsonValid": true,
+      "answerNumbers": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11"
+      ],
+      "solutionNumbers": [
+        "1",
+        "2",
+        "3"
+      ],
+      "answerLengths": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        2,
+        3,
+        2
+      ],
+      "solutionLengths": [
+        155,
+        665,
+        299
+      ]
+    }
+  },
+  {
+    "attempt": 15,
+    "kind": "support-structured",
+    "page": 14,
+    "model": "qwen3-vl-plus",
+    "endpoint": "chat",
+    "status": "ok",
+    "startedAt": "2026-09-29T17:39:57.357Z",
+    "httpStatus": 200,
+    "durationMs": 17438,
+    "code": "AI_PROXY_OK",
+    "summary": {
+      "textLength": 1097,
+      "jsonValid": true,
+      "answerNumbers": [
+        "12",
+        "13",
+        "14"
+      ],
+      "solutionNumbers": [
+        "12",
+        "13",
+        "14"
+      ],
+      "answerLengths": [
+        34,
+        4,
+        9
+      ],
+      "solutionLengths": [
+        327,
+        250,
+        9
+      ]
+    }
+  },
+  {
+    "attempt": 16,
+    "kind": "support-structured",
+    "page": 16,
+    "model": "qwen3-vl-plus",
+    "endpoint": "chat",
+    "status": "error",
+    "startedAt": "2026-09-29T17:40:47.943Z",
+    "httpStatus": 502,
+    "durationMs": 10687,
+    "code": "AI_PROXY_FETCH_FAILED",
+    "halt": true
+  }
+]

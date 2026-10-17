@@ -1,0 +1,12 @@
+[
+  {
+    "name": "tests/storage-repository.test.js",
+    "before": "724ca7ff0861d843ac098efc64499c171713dc906d03e6d179a84e03eb3c57fb",
+    "after": "9bab8f40d95509b7f2b8ed79a2470351dce8da0446323c2b5206a69d39377fd9"
+  },
+  {
+    "name": "tests/draft-persistence-service.test.js",
+    "before": "8f339cd87c33d83d8ac4c21fbccccf2eb01957e78f9a8ca919774fab7bf98e3a",
+    "after": "1d6c8fcdabc155da96b6790f8909ddd2dfc49daa102ddf51aa7536c9111e7baf"
+  }
+]

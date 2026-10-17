@@ -1,0 +1,133 @@
+{
+  "date": "2026-10-01",
+  "root": "C:/Users/Administrator/Desktop/题库系统",
+  "origin": "http://127.0.0.1:3000",
+  "isolatedBrowser": true,
+  "paidCalls": 0,
+  "errors": [],
+  "consoleErrors": [],
+  "blockedRequests": [],
+  "navigation": [
+    {
+      "name": "新题目录入",
+      "active": true
+    },
+    {
+      "name": "批量录题",
+      "active": true
+    },
+    {
+      "name": "题库与检索",
+      "active": true
+    },
+    {
+      "name": "智能组卷台",
+      "active": true
+    },
+    {
+      "name": "个人管理",
+      "active": true
+    },
+    {
+      "name": "极客排版配置",
+      "active": true
+    }
+  ],
+  "sri": [
+    {
+      "url": "http://127.0.0.1:3000/vendor/tailwind/tailwind.js",
+      "valid": true
+    },
+    {
+      "url": "http://127.0.0.1:3000/vendor/katex/katex.min.css",
+      "valid": true
+    },
+    {
+      "url": "http://127.0.0.1:3000/vendor/katex/katex.min.js",
+      "valid": true
+    },
+    {
+      "url": "http://127.0.0.1:3000/vendor/katex/contrib/auto-render.min.js",
+      "valid": true
+    },
+    {
+      "url": "http://127.0.0.1:3000/vendor/vue/vue.global.prod.js",
+      "valid": true
+    },
+    {
+      "url": "http://127.0.0.1:3000/vendor/vue-virtual-scroller/vue-virtual-scroller.css",
+      "valid": true
+    },
+    {
+      "url": "http://127.0.0.1:3000/vendor/vue-virtual-scroller/vue-virtual-scroller.min.js",
+      "valid": true
+    },
+    {
+      "url": "http://127.0.0.1:3000/vendor/dexie/dexie.min.js",
+      "valid": true
+    },
+    {
+      "url": "http://127.0.0.1:3000/vendor/jszip/jszip.min.js",
+      "valid": true
+    },
+    {
+      "url": "http://127.0.0.1:3000/vendor/pdfjs/pdf.min.js",
+      "valid": true
+    },
+    {
+      "url": "http://127.0.0.1:3000/vendor/lucide/lucide.min.js",
+      "valid": true
+    }
+  ],
+  "http": [
+    {
+      "url": "/qisi-backup-snapshot-policy.js",
+      "status": 200
+    },
+    {
+      "url": "/qisi-backup-workspace.js",
+      "status": 200
+    },
+    {
+      "url": "/qisi-local-server.js",
+      "status": 404
+    },
+    {
+      "url": "/package.json",
+      "status": 404
+    },
+    {
+      "url": "/.env",
+      "status": 404
+    },
+    {
+      "url": "/tmp/uploads/private.docx",
+      "status": 404
+    },
+    {
+      "foreignOrigin": 403
+    },
+    {
+      "etagRevalidate": 304
+    }
+  ],
+  "modules": {
+    "vue": "3.4.27",
+    "katex": "0.16.47",
+    "backup": "function",
+    "snapshot": "object",
+    "workspace": "function",
+    "pdf": "3.11.174"
+  },
+  "backup": {
+    "filename": "qisi-full-backup-1790786827332.zip",
+    "bytes": 1933,
+    "preview": true,
+    "confirmDisabled": true
+  },
+  "print": {
+    "stylesheet": "http://127.0.0.1:3000/vendor/katex/katex.min.css",
+    "mathCount": 3,
+    "ready": true
+  }
+}

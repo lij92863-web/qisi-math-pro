@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "qisi.pdf-freeze-approved-repairs.v1",
+  "hashAlgorithm": "sha256 with LF line endings",
+  "note": "Exact user-authorized repairs only. Unlisted files keep each historical baseline; changed listed content requires fresh review and registration.",
+  "approvedFiles": {
+    "qisi-pdf-support-block-parser.js": {
+      "contentSha256": "5123a83c63aea6908cccd3a446557bf84d2043fd36b41755e8b75e0020bcbcf7",
+      "authorizedAt": "2026-10-01",
+      "reason": "N1 and D-1: empty expected set withholds output; original sequence validity survives filtered items. Also reviewed for the user-authorized 48-item continuation.",
+      "evidence": "ai/FINDINGS_ALL_REPAIR_2026-10-01.md"
+    },
+    "qisi-pdf-support-controlled-write.js": {
+      "contentSha256": "221135ff4aab39b5baab85adeee4cebcd50d2e5bc1383380dc459933676b8c5e",
+      "authorizedAt": "2026-10-01",
+      "reason": "N2: empty normalized answer cannot become an option label. Also reviewed for the user-authorized 48-item continuation.",
+      "evidence": "ai/FINDINGS_ALL_REPAIR_2026-10-01.md"
+    },
+    "qisi-pdf-support-aligner.js": {
+      "contentSha256": "7170e08afa4f5beca74071790dc913c5057260b69ca51801b175f1f888203d4b",
+      "authorizedAt": "2026-10-01",
+      "reason": "D-1, first-round issue 5 (aligner only), and partial N12: only matching monotone expected subsets with complete source validation can resume; normalize whole identifiers once. Also reviewed for the user-authorized 48-item continuation.",
+      "evidence": "ai/FINDINGS_ALL_REPAIR_2026-10-01.md"
+    },
+    "qisi-pdf-candidate-projection.js": {
+      "contentSha256": "3b24d1f445036f5aa29102c3fbf12deff56f379c3951d43d1b9c40664348e8ef",
+      "authorizedAt": "2026-10-02",
+      "reason": "User-requested global PDF failure repair: explicit question-only sources validate their own ordered identities and withhold all support fields. Declared support still uses unchanged parser/sequence gates. Four normal-UI producer counterexamples reproduced before/after.",
+      "evidence": "ai/IMPORT_GLOBAL_AUDIT_REPAIR_2026-10-02.md"
+    },
+    "qisi-pdf-ocr-support-parser.js": {
+      "contentSha256": "fec68a8a38edd893661eb5d48b8bb49dad43fa98f301fed7fc4f0ab52be410f8",
+      "authorizedAt": "2026-10-02",
+      "reason": "Actual paid support OCR preserves explicit n【答案】 and inline labels; tokenize outside math with original line coordinates, consume printed identities only, accept a terminal explicit 故选 statement for an empty answer. No implicit enumerate, positional or semantic attachment. Conflicting explicit final choice versus answer/table is withheld.",
+      "evidence": "ai/IMPORT_GLOBAL_AUDIT_REPAIR_2026-10-02.md"
+    }
+  }
+}

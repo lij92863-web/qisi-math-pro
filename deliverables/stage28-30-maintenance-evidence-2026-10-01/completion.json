@@ -1,0 +1,203 @@
+{
+  "date": "2026-10-01",
+  "completed": [
+    "other-batch-write-concurrency",
+    "formal-index-and-draft-count-performance",
+    "collision-free-fingerprint-and-old-ZIP-compatibility"
+  ],
+  "shenzhenWholePaperPassed": false,
+  "paidCalls": 0,
+  "qwenRound2": {
+    "used": 4,
+    "remaining": 16,
+    "haltUnchanged": true
+  },
+  "repositories": [
+    {
+      "root": "C:/Users/Administrator/.codex/worktrees/desktop-recovery/题库系统",
+      "branch": "codex/desktop-recovery",
+      "head": "216696963d7cfb1d68baa3f01ae634bf87e326c2",
+      "status": ""
+    },
+    {
+      "root": "C:/Users/Administrator/Desktop/题库系统",
+      "branch": "stage/program-c-corrective-r1",
+      "head": "71dfe18770e5161a19d38c07842d0ab865f20c92",
+      "status": "?? .workbuddy/\n?? deliverables/\n?? 启动奇思数学.bat"
+    },
+    {
+      "root": "E:/备份/题库系统",
+      "branch": "codex/integration-main-hardening",
+      "head": "ef2ad10c16cf4743573d1f3352a164ed91c9d995",
+      "status": ""
+    }
+  ],
+  "programCommits": {
+    "source": [
+      "cc11be9d8b67d4b7eaa2741995993c41ffb2481b",
+      "f74aa1a7cd9d617d813ae4d991aa687b06655ce9"
+    ],
+    "desktop": "12ad7570e7c36c387e2c0b6d6c576c723313ebc2"
+  },
+  "programFiles": [
+    {
+      "name": "qisi-question-duplicate-policy.js",
+      "sha256": "d25db01c5aa2b3f2b73c75f00e04ee2fb7b377df522dc993e4fab16f07dabe10"
+    },
+    {
+      "name": "qisi-library-service.js",
+      "sha256": "21608268adaffcd0d4d6d535f7bac8ba65353f9dd726f7e9a5594fd07c8c38cf"
+    },
+    {
+      "name": "qisi-question-index-storage.js",
+      "sha256": "f240312d81c807b78276f53186358c9ecc8d824781eb5925dd701df99c8d9082"
+    },
+    {
+      "name": "qisi-db.js",
+      "sha256": "f55f632206f04dd812c72c28b2d08701d11a0c014310ce597a7430543efca7f4"
+    },
+    {
+      "name": "qisi-storage-repository.js",
+      "sha256": "b884d1738aece6a7467c044e046e2dea664b3ae61b78772caade9ab455d8577d"
+    },
+    {
+      "name": "qisi-draft-persistence-service.js",
+      "sha256": "e99ec1bbc0492b8a490c9cc0507710752edc8f7a2166106c675d1eb217e86ebb"
+    },
+    {
+      "name": "main.html",
+      "sha256": "bd1ea2ff63f15fa9f9bb2be72d04f4ee6ce04515c751557a9bb90b6bb27a18fb"
+    },
+    {
+      "name": "architecture/runtime-modules.json",
+      "sha256": "5d66ea5b5356652848192734f6bd92260f5c37dd7d7bc99a80df0f615d30c37f"
+    },
+    {
+      "name": "architecture/layers.json",
+      "sha256": "6d33f27a3a691da617c3339791dbd99d99be982f94bd966bf22145f08e851c24"
+    },
+    {
+      "name": "docs/architecture/owners.json",
+      "sha256": "f6ef4bc21b52d6bf71b1fb19d243458b26b2b10c3868654e7d4fe4189370b581"
+    },
+    {
+      "name": "docs/architecture/layers.json",
+      "sha256": "6edbc01aa73f02226e62ab766968478be343549ae0316914de304f3e8fd3fe96"
+    },
+    {
+      "name": "tests/question-duplicate-policy.test.js",
+      "sha256": "990f5cc57230588712e452c57b958fcc9c9a1f88a9b3c6210acea490ab01ea92"
+    },
+    {
+      "name": "tests/draft-stats-transaction.test.js",
+      "sha256": "4c3df2559a5116fd24ee2dc4baea430fe2cccf52c06a879184e8592b41a22279"
+    },
+    {
+      "name": "tests/question-index-transaction.test.js",
+      "sha256": "15eef6d6e36ac4f4977ed533bc07aa9612bcb6728ca0cfb61c2530364796e02c"
+    },
+    {
+      "name": "architecture/owners.json",
+      "sha256": "60174612d110da35f210a1eaef49f834baf8523eec0dfae9dcab08bed23f0b87"
+    },
+    {
+      "name": "tests/db-fingerprint-owner.test.js",
+      "sha256": "59a5cc950ec6e6890a3ef168c51cf24af99e03aa4f3e8de29acc47aff6d15846"
+    },
+    {
+      "name": "app.js",
+      "sha256": "6a271cb5f86846c06dddba339e142aeb72e57d10a4249dbe5304ba37bc96c536"
+    },
+    {
+      "name": "tests/e2e/legacy-fingerprint-package.test.js",
+      "sha256": "dc759ef3bcc4950c12a82de8677e5c3e3fb8f2b12833d54d7adca4c669b3473b"
+    }
+  ],
+  "reportSha256": "dd78a73b5fccb331eb56b419cd554d273a8d811b2af782ae2f1bd86def8ae252",
+  "ledgers": [
+    {
+      "name": "round1",
+      "sha256": "879a8cefe25cd139529149e000f06f22c9da778d60237e2b021d5ad3194b26ec"
+    },
+    {
+      "name": "round2",
+      "sha256": "2b8489db3273c29423950150af27802cf12f7acc01bb59cca84c37d64ef12779"
+    }
+  ],
+  "health": {
+    "ok": true,
+    "service": "qisi-local-server",
+    "instanceId": "ce044d1cda2d2ce316ce",
+    "platform": "win32",
+    "port": 3000
+  },
+  "http": [
+    {
+      "name": "main.html",
+      "status": 200,
+      "sha256": "bd1ea2ff63f15fa9f9bb2be72d04f4ee6ce04515c751557a9bb90b6bb27a18fb"
+    },
+    {
+      "name": "app.js",
+      "status": 200,
+      "sha256": "6a271cb5f86846c06dddba339e142aeb72e57d10a4249dbe5304ba37bc96c536"
+    },
+    {
+      "name": "qisi-question-duplicate-policy.js",
+      "status": 200,
+      "sha256": "d25db01c5aa2b3f2b73c75f00e04ee2fb7b377df522dc993e4fab16f07dabe10"
+    },
+    {
+      "name": "qisi-library-service.js",
+      "status": 200,
+      "sha256": "21608268adaffcd0d4d6d535f7bac8ba65353f9dd726f7e9a5594fd07c8c38cf"
+    },
+    {
+      "name": "qisi-question-index-storage.js",
+      "status": 200,
+      "sha256": "f240312d81c807b78276f53186358c9ecc8d824781eb5925dd701df99c8d9082"
+    },
+    {
+      "name": "qisi-db.js",
+      "status": 200,
+      "sha256": "f55f632206f04dd812c72c28b2d08701d11a0c014310ce597a7430543efca7f4"
+    },
+    {
+      "name": "qisi-storage-repository.js",
+      "status": 200,
+      "sha256": "b884d1738aece6a7467c044e046e2dea664b3ae61b78772caade9ab455d8577d"
+    },
+    {
+      "name": "qisi-draft-persistence-service.js",
+      "status": 200,
+      "sha256": "e99ec1bbc0492b8a490c9cc0507710752edc8f7a2166106c675d1eb217e86ebb"
+    }
+  ],
+  "verification": {
+    "tests": 1764,
+    "failed": 0,
+    "batchMock": 20,
+    "gates": [
+      "source-safe-complete.log",
+      "source-doc-safe.log",
+      "desktop-program-commit-final.log",
+      "desktop-doc-commit-final.log"
+    ],
+    "batchSafety": true
+  },
+  "migration": {
+    "agentOpenedUserProfile": false,
+    "fixtureUpgradeValidated": true,
+    "version": 9,
+    "nextNormalAppOpenUpgradesIndexes": true,
+    "existingWindowsNeedRefresh": true
+  },
+  "preservedFailures": [
+    "source-safe-initial.log: owner and VM dependency adaptation",
+    "baseline-native-races.log: old code incorrectly accepts three stale writers",
+    "legacy-package-before.log and desktop-acceptance-debug2.log: existing Vue proxy import clone failure",
+    "workflow-debug2.log: measurement callback adaptation",
+    "desktop-program-commit.log: old static allowlist during service restart, stable rerun passed",
+    "desktop-doc-initial-failure.log: evidence .test.js copies accidentally discovered, archived as .txt, real tests retained"
+  ]
+}

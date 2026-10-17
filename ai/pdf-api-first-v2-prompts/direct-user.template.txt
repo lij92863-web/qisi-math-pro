@@ -1,0 +1,9 @@
+执行直接视觉转写。下面 JSON 是本次可信任务配置；其后的附件是原文材料。
+request_metadata:
+{{REQUEST_METADATA_JSON}}
+
+result_schema:
+{{RESULT_SCHEMA_MIN_JSON}}
+
+每张图前的标签指定 source_id 和原 page；附件排列不改变原页号。阅读所有指定页，按 system 规则返回完整 JSON。document_role=question 仅提取试题；support 提取实际存在的答案/解析；full 分别提取三条流。角色仅限定预期用途，不授权你编造缺失字段；若材料与角色冲突，保存异常内容并警告。
+本次输入边界以 metadata 为准。不要用未提供的前后页或训练记忆补内容。不能为了缩短输出删去原文；如内容容量不足，明确报告问题，调用方也会独立检查服务的截断状态。

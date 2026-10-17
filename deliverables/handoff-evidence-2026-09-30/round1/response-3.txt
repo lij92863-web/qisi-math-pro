@@ -1,0 +1,68 @@
+{
+  "questions": [
+    {
+      "questionNumber": "11",
+      "type": "多选题",
+      "stem": "如图所示为杨辉三角，是二项式系数在三角形中的一种几何排列，第 $n$ 行的第 $r$ 个数可以表示为 $C_n^r$（$n\\ge1$ 时）．我国南宋数学家杨辉 1261 年所著的《详解九章算法》一书中就已经出现了这个表，这是我国数学史上的一个伟大成就．同学们开展了数学探究，则下列命题正确的有（ ）\n\n第0行　　　　　1\n第1行　　　　　1　1\n第2行　　　　1　2　1\n第3行　　　1　3　3　1\n第4行　　1　4　6　4　1\n第5行　1　5　10　10　5　1\n⋮　　　　　　　⋮\n第$n$行",
+      "options": {
+        "A": "第 2026 行共有 2026 个数",
+        "B": "从第 4 行起到第 19 行，每一行的第 4 个数字之和为 $C_{20}^4-1$",
+        "C": "第 48 行的所有数字之和被 7 除的余数为 1",
+        "D": "去除所有为 1 的项，依次构成数列 $2,3,3,4,4,5,10,10,5,\\cdots$，则此数列前 135 项的和为 $2^{18}-52$"
+      },
+      "answer": "",
+      "solution": "",
+      "isFragment": false,
+      "question_bbox": [148, 152, 842, 608],
+      "images": []
+    },
+    {
+      "questionNumber": "12",
+      "type": "填空题",
+      "stem": "与双曲线 $x^2 - \\frac{y^2}{4} = 1$ 有共同渐近线，且过点 $M(2,2)$ 的双曲线方程为______．",
+      "options": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": ""
+      },
+      "answer": "",
+      "solution": "",
+      "isFragment": false,
+      "question_bbox": [148, 642, 770, 682],
+      "images": []
+    },
+    {
+      "questionNumber": "13",
+      "type": "填空题",
+      "stem": "已知数列 $\\{a_n\\}$ 的前 $n$ 项和为 $S_n$，若 $nS_{n+1} - (n+1)S_n = 2(n^2 + n)$，且 $a_1 = 2$，则 $S_n = $ ________．",
+      "options": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": ""
+      },
+      "answer": "",
+      "solution": "",
+      "isFragment": false,
+      "question_bbox": [148, 732, 770, 788],
+      "images": []
+    },
+    {
+      "questionNumber": "14",
+      "type": "填空题",
+      "stem": "在三角形 $ABC$ 中，$\\angle BAC = \\frac{2\\pi}{3}$，$\\overline{BD} = \\overline{DE} = \\overline{EC}$，设 $\\angle BAD = \\alpha_1$，$\\angle DAE = \\alpha_2$，$\\angle EAC = \\alpha_3$，则 $\\frac{\\sin\\alpha_2}{\\sin\\alpha_1 \\sin\\alpha_3} = $ ________．",
+      "options": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": ""
+      },
+      "answer": "",
+      "solution": "",
+      "isFragment": false,
+      "question_bbox": [148, 832, 842, 892],
+      "images": []
+    }
+  ]
+}

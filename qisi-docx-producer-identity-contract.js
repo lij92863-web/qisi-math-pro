@@ -23,7 +23,9 @@
         DOCX_DETERMINISTIC: 'docx-deterministic-import',
         DOCX_VISION: 'docx-rendered-to-pdf-vision',
         PDF_DETERMINISTIC: 'pdf-deterministic-import',
-        PDF_VISION: 'pdf-vision-controlled-write'
+        PDF_VISION: 'pdf-vision-controlled-write',
+        PDF_MULTIMODAL: 'pdf-multimodal-v1',
+        PDF_EXTERNAL: 'pdf-external-v2'
     });
     const DOCX_VISION_TRANSITIONS = Object.freeze([
         Object.freeze({ code: 'docx-selected', reason: 'source-manifest-docx-selected' }),
@@ -241,7 +243,7 @@
             validateTransitionOrder(route, DOCX_DETERMINISTIC_TRANSITIONS, errors);
         }
         if (source?.format === 'pdf' && producer?.mode === 'vision-ai') {
-            if (producer.routeId !== ROUTES.PDF_VISION || producer.deterministic !== false) {
+            if (![ROUTES.PDF_VISION, ROUTES.PDF_MULTIMODAL, ROUTES.PDF_EXTERNAL].includes(producer.routeId) || producer.deterministic !== false) {
                 errors.push(errorOf('pdf-vision-identity-invalid', 'producer',
                     'PDF vision producer identity is invalid.'));
             }
@@ -264,10 +266,10 @@
         }
         if (value?.supportSources !== undefined) {
             const supportSources = value.supportSources;
+            const pdfV1 = source?.format === 'pdf' && producer?.mode === 'vision-ai' && [ROUTES.PDF_MULTIMODAL, ROUTES.PDF_EXTERNAL].includes(producer?.routeId);
             if (
                 !Array.isArray(supportSources) ||
-                producer?.mode !== 'deterministic-docx' ||
-                source?.format !== 'docx'
+                (!pdfV1 && (producer?.mode !== 'deterministic-docx' || source?.format !== 'docx'))
             ) {
                 errors.push(errorOf(
                     'support-source-manifest-invalid',
@@ -281,7 +283,7 @@
                     if (
                         !String(support?.sourceId || '').trim() ||
                         support.sourceId === source?.sourceId ||
-                        support.format !== 'docx' ||
+                        support.format !== (pdfV1 ? 'pdf' : 'docx') ||
                         ids.has(support.sourceId) ||
                         !roles.length ||
                         roles.some(role =>
@@ -381,7 +383,7 @@
         return immutable({
             ...strict,
             accepted: strict.accepted === true ||
-                candidate.controlledWrite?.evaluated === true,
+                (candidate.controlledWrite?.evaluated === true && provenFields.length > 0),
             decisionId: strict.decisionId ||
                 candidate.controlledWrite?.decisionId || '',
             sourceId: strict.sourceId ||
@@ -389,8 +391,7 @@
                 candidate.sourceDocxFileId ||
                 candidate.sourceFileId || '',
             fields: stableStrings([
-                ...(strict.fields || []),
-                ...(candidate.controlledWrite?.acceptedFields || []),
+                ...(strict.accepted === true ? strict.fields || [] : []),
                 ...provenFields
             ]),
             engine: strict.engine || strict.model ||
@@ -573,6 +574,9 @@
         );
         const output = clone(candidate);
         output[field] = clone(value);
+        if (input.support?.answerEvidence) output.sourceTrace = {
+            ...(output.sourceTrace || {}), supportAnswerEvidence: clone(input.support.answerEvidence)
+        };
         output.fieldProvenance = {
             ...(output.fieldProvenance || {}),
             [field]: provenanceEntry({
@@ -673,12 +677,10 @@
         const producer = clone(candidate.producer);
         const output = clone(candidate);
         output[field] = clone(value);
-        output.supportSources = [
-            ...(output.supportSources || []).filter(item =>
-                item.sourceId !== source.sourceId
-            ),
-            { ...source, roles }
-        ];
+        output.supportSources = source.sourceId === output.source.sourceId
+            ? (output.supportSources || [])
+            : [...(output.supportSources || []).filter(item => item.sourceId !== source.sourceId),
+                { ...source, roles }];
         output.fieldProvenance = {
             ...(output.fieldProvenance || {}),
             [field]: provenanceEntry({
@@ -692,10 +694,31 @@
                 reasonCode: 'docx-support-exact-question-match',
                 evidenceRef:
                     `docx:${source.sourceId}:question:${candidateQuestion}:field:${field}`,
-                producerBoundary:
-                    'docx-deterministic-support-to-candidate'
+                producerBoundary: source.sourceId === output.source.sourceId
+                    ? 'docx-deterministic-source-to-candidate'
+                    : 'docx-deterministic-support-to-candidate'
             })
         };
+        if (Array.isArray(input.support?.images) && input.support.images.length) {
+            const images = input.support.images.map(image => ({ ...clone(image),
+                sourceFileId: source.sourceId, position: field }));
+            output.images = [...new Map([...(output.images || []), ...images]
+                .map(image => [image.id, image])).values()];
+            output.fieldProvenance.images = provenanceEntry({
+                field: 'images', kind: 'deterministic-source', source: output.source, producer,
+                page: input.support.sourcePage || 1, blockIds: input.support.blockIds || [],
+                accepted: false, reasonCode: 'docx-aggregate-image-evidence',
+                evidenceRef: 'docx:' + output.source.sourceId + ':images:' + output.images.map(image => image.id).join(','),
+                producerBoundary: 'docx-deterministic-source-to-candidate'
+            });
+        }
+        if (Array.isArray(input.support?.images) && input.support.images.length) {
+            output.fieldProvenance.images.imageEvidence = output.images.map(image => ({
+                imageId: image.id, sourceId: image.sourceFileId || output.source.sourceId,
+                field: image.position === 'answer' ? 'answer' : image.position === 'solution' ? 'solution' : 'stem',
+                evidenceRef: 'docx:' + (image.sourceFileId || output.source.sourceId) + ':rid:' + image.rid
+            }));
+        }
         const updatedIdentity = validateCanonicalIdentity(output);
         if (!updatedIdentity.valid) {
             throw fail('DOCX_PRODUCER_IDENTITY_INVALID', updatedIdentity);

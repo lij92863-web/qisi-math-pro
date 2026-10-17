@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>奇思数学 Pro 深度审计 · 2026-10-17</title>
+<style>
+  :root{
+    --ink:#1a1d24; --ink-2:#3d434f; --ink-3:#6b7280; --line:#e3e6ec;
+    --bg:#fbfcfe; --card:#ffffff; --accent:#2f5bd7; --accent-soft:#eef3ff;
+    --risk:#c0392b; --risk-soft:#fdf0ee; --ok:#1d7a4c; --ok-soft:#eef8f2;
+    --warn:#9a6a00; --warn-soft:#fdf6e7;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:0 0 80px; background:var(--bg); color:var(--ink);
+    font-family:"Source Han Sans SC","Noto Sans SC","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    font-size:15px; line-height:1.78; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:960px; margin:0 auto; padding:0 28px}
+  header{padding:56px 0 30px; border-bottom:1px solid var(--line); margin-bottom:38px}
+  .kicker{font-size:12.5px; letter-spacing:.14em; color:var(--accent); font-weight:700; text-transform:uppercase}
+  h1{font-size:31px; line-height:1.3; margin:12px 0 14px; letter-spacing:-.01em}
+  .meta{display:flex; flex-wrap:wrap; gap:8px 20px; font-size:13px; color:var(--ink-3)}
+  .meta b{color:var(--ink-2); font-weight:600}
+  .verdict{
+    margin:26px 0 0; padding:20px 24px; background:var(--accent-soft);
+    border-left:4px solid var(--accent); border-radius:0 10px 10px 0; font-size:15.5px;
+  }
+  .verdict p{margin:0}
+  .verdict p + p{margin-top:10px}
+  h2{font-size:22px; margin:54px 0 8px; letter-spacing:-.01em; padding-bottom:10px; border-bottom:2px solid var(--ink); display:inline-block}
+  h2 .num{color:var(--accent); font-variant-numeric:tabular-nums; margin-right:10px}
+  h3{font-size:16.5px; margin:30px 0 10px; color:var(--ink)}
+  .lede{color:var(--ink-2); font-size:15px; margin:14px 0 20px}
+  p{margin:12px 0}
+  .grid{display:grid; gap:14px; margin:22px 0}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:760px){.g3,.g2{grid-template-columns:1fr}}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px 20px}
+  .card h4{margin:0 0 8px; font-size:14px; letter-spacing:.02em}
+  .card p{margin:0; font-size:13.5px; color:var(--ink-2); line-height:1.7}
+  .tag{display:inline-block; font-size:11.5px; font-weight:700; padding:2px 8px; border-radius:20px; margin-bottom:10px}
+  .t-ok{background:var(--ok-soft); color:var(--ok)}
+  .t-risk{background:var(--risk-soft); color:var(--risk)}
+  .t-warn{background:var(--warn-soft); color:var(--warn)}
+  table{width:100%; border-collapse:collapse; margin:20px 0; font-size:13.5px; background:var(--card)}
+  th,td{padding:11px 13px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top}
+  th{background:#f5f7fb; font-size:12.5px; font-weight:700; color:var(--ink-2); letter-spacing:.02em}
+  td.n{font-variant-numeric:tabular-nums; white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  .big{font-size:26px; font-weight:700; letter-spacing:-.02em; font-variant-numeric:tabular-nums}
+  .metric{display:flex; align-items:baseline; gap:8px; margin-bottom:6px}
+  .metric small{color:var(--ink-3); font-size:12.5px}
+  ol,ul{margin:14px 0; padding-left:22px}
+  li{margin:9px 0; color:var(--ink-2)}
+  li b{color:var(--ink)}
+  .quote{border-left:3px solid var(--line); padding:4px 0 4px 16px; color:var(--ink-3); font-size:13.5px; margin:16px 0}
+  .p0,.p1,.p2{border-radius:12px; padding:18px 22px; margin:16px 0; border:1px solid var(--line); background:var(--card)}
+  .p0{border-left:4px solid var(--risk)}
+  .p1{border-left:4px solid var(--warn)}
+  .p2{border-left:4px solid var(--accent)}
+  .p0 h4,.p1 h4,.p2 h4{margin:0 0 10px; font-size:15px; display:flex; align-items:center; gap:10px}
+  .badge{font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px; background:#eef1f6; color:var(--ink-2)}
+  .p0 .badge{background:var(--risk-soft); color:var(--risk)}
+  .p1 .badge{background:var(--warn-soft); color:var(--warn)}
+  .p2 .badge{background:var(--accent-soft); color:var(--accent)}
+  .p0 ul,.p1 ul,.p2 ul{margin:8px 0 0}
+  .foot{margin-top:60px; padding-top:22px; border-top:1px solid var(--line); font-size:12.5px; color:var(--ink-3)}
+  .score-row{display:flex; align-items:center; gap:14px; padding:12px 0; border-bottom:1px dashed var(--line)}
+  .score-row:last-child{border-bottom:none}
+  .score-label{flex:1; font-size:14px}
+  .score-bar{width:150px; height:7px; background:#eef1f6; border-radius:4px; overflow:hidden}
+  .score-bar i{display:block; height:100%; background:var(--accent); border-radius:4px}
+  .score-val{width:52px; text-align:right; font-variant-numeric:tabular-nums; font-weight:700; font-size:14px}
+  .note{font-size:12.5px; color:var(--ink-3); margin-top:8px}
+  strong.hl{background:linear-gradient(transparent 62%, #ffe9a8 62%); padding:0 2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">Deep Audit · PDF Recognition Focus</div>
+  <h1>奇思数学 Pro 深度审计<br>为什么 PDF 识别率上不去，以及接下来该怎么改</h1>
+  <div class="meta">
+    <span>审计日期 <b>2026-10-17</b></span>
+    <span>代码规模 <b>39,190 行 / 104 个模块</b></span>
+    <span>自动化检查 <b>1,810 项全绿</b></span>
+    <span>评价口径 <b>自用工具</b></span>
+  </div>
+
+  <div class="verdict">
+    <p><b>一句话结论：</b>这套软件真正的短板不是"识别得不准"，而是<b>识别流程一旦有一页出问题，整卷就报废</b>。而且到今天为止，<strong class="hl">没有任何一个能算出"识别率"的东西</strong>——1,810 项检查全部只验证"格式对不对"，没有一项验证"题目识别得对不对"。</p>
+    <p>所以现在的状况是：你在为一件<b>还没有刻度尺</b>的事情投入精力。先造尺子，再谈优化。</p>
+  </div>
+</header>
+
+<h2><span class="num">01</span>体检结论：三种状态并存</h2>
+<p class="lede">把这 39,000 行代码按"老师今天能不能用"分成三类，比按模块分类有用得多。</p>
+
+<div class="grid g3">
+  <div class="card">
+    <span class="tag t-ok">能用 · 且可靠</span>
+    <h4>Word 双文件导入</h4>
+    <p>试卷 + 答案（或答案解析合订）Word 文件，本地确定性解析，走完整评审后入库。这是你目前唯一稳定入口，今天就能录题。</p>
+  </div>
+  <div class="card">
+    <span class="tag t-risk">用不了</span>
+    <h4>PDF 整卷识别</h4>
+    <p>代码写完了，但总开关是关着的，软件里也没有任何界面能打开它。现在上传 PDF 会在几秒内失败，屏幕上只显示一串英文错误码。</p>
+  </div>
+  <div class="card">
+    <span class="tag t-warn">半成品</span>
+    <h4>识别质量度量</h4>
+    <p>244 项 PDF 相关检查，全部用假数据；真实样卷（深圳卷 21 页）从没被任何测试引用。质量好坏没有任何数字记录。</p>
+  </div>
+</div>
+
+<h3>最刺眼的一组数字</h3>
+<table>
+  <thead><tr><th>指标</th><th class="n">实测值</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td>自动化检查总数</td><td class="n">1,810 项全绿</td><td>对应 270 个测试文件，一次跑完约 3 分钟</td></tr>
+    <tr><td>其中给"识别质量"打分的</td><td class="n">0 项</td><td>协议校验器里明写 <code>semanticQuality: 'not-evaluated'</code>，还有测试专门锁住这个行为</td></tr>
+    <tr><td>PDF 相关检查</td><td class="n">244 项 / 20 个文件</td><td>全部用合成假数据，0 个真实 PDF 文件</td></tr>
+    <tr><td>真实样卷被引用次数</td><td class="n">0 次</td><td>手上两份真实 PDF（326KB + 243KB）没有任何测试读过</td></tr>
+    <tr><td>整卷成功跑完的次数</td><td class="n">0 次</td><td>三次尝试都中断在网络层，没有一份完整产物</td></tr>
+  </tbody>
+</table>
+
+<h2><span class="num">02</span>先说好消息：这套 PDF 流程的设计是对的</h2>
+<p class="lede">在你关心的问题上，方向选对了，而且选得比大多数商业题库软件都严谨。这一点值得明确肯定。</p>
+
+<p>它现在的做法不是"把整卷丢给 AI 让它一次吐 JSON"——那种做法在 10 月中旬已经实测失败：5 次请求，<b>0 次通过校验</b>，还出现了跨题错挂、长证明漏掉、表格丢失、16 个裁图全部错位。</p>
+
+<p>改成的新流程是四道工序：</p>
+<div class="grid g2" style="margin-top:18px">
+  <div class="card"><h4>① 逐页忠实转写</h4><p>一页一次，只做"抄写"，不许解题、不许概括、不许补字。看不懂就写"无法辨认"。</p></div>
+  <div class="card"><h4>② 逐页定位图形</h4><p>单独一次调用，只找图、表、空间数阵的位置，不转写文字。防止"文字写了一堆、图丢了"。</p></div>
+  <div class="card"><h4>③ 纯文本整理分题</h4><p>拿到全部页的文字，负责分题、跨页接续、答案归属。这一步看不到图，是刻意的隔离。</p></div>
+  <div class="card"><h4>④ 独立视觉复核</h4><p>另起一次调用，拿着原页和候选答案逐条对照，专门找"漏了什么"，不许相信对方自报完整。</p></div>
+</div>
+
+<p>这四道工序加上题号连续性门禁、失败即停、原始响应全留存——<b>这套骨架是正确方向</b>。问题不在骨架，在于<span style="color:var(--risk);font-weight:600">每个关节都被焊死了</span>。</p>
+
+<h2><span class="num">03</span>五个真瓶颈：不是"识别不准"，是"跑不完"</h2>
+<p class="lede">以下按对结果的实际杀伤力排序。前三个是"整卷归零"级别，后两个是"逐字错认"级别。</p>
+
+<table>
+  <thead>
+    <tr><th style="width:22%">现象</th><th style="width:30%">真正原因</th><th style="width:26%">后果</th><th style="width:22%">杀伤力</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><b>一页坏了，整卷没了</b></td>
+      <td>21 页被当成一个整体任务。任何一页转写失败、格式不合规、复核异常，都会让整卷停止，并且不再产出任何草稿。</td>
+      <td>20 页识别得再好也等于零。老师拿到的结果是"失败"。而且失败的判定发生在写草稿之前。</td>
+      <td class="n">★★★★★</td>
+    </tr>
+    <tr>
+      <td><b>一次网络抖动，这份卷子永久报废</b></td>
+      <td>请求发出前先记一笔"已提交"，一旦没收到回执，这笔记录永久保留在文件上。下次再跑，程序看到这条记录直接停，连前面的好页也不复用。</td>
+      <td>换批次、换文件才可能绕开。对不会改代码的人来说，等于这份 PDF 在这台电脑上作废了。</td>
+      <td class="n">★★★★★</td>
+    </tr>
+    <tr>
+      <td><b>复核发现问题，也只是发现问题</b></td>
+      <td>复核判"不通过"后，代码里其实写好了"带着意见重读一遍"的工序，但这条通路<b>从来没有被调用过</b>。</td>
+      <td>复核只能挑错，不能修错。挑出来的错最后全落到你手上。</td>
+      <td class="n">★★★★</td>
+    </tr>
+    <tr>
+      <td><b>小字号公式被认错</b></td>
+      <td>页面按 144dpi 出图、JPEG 压到 0.86，而且这张图发出去时<b>没有声明最小像素</b>（同一套代码里另一条识别路径是声明了的）。更糟的是渲染失败会自动降级，最低降到约 72dpi 再送进模型——那张图连人眼都吃力。</td>
+      <td>角符号、λ、根号、不等号这类细笔画符号系统性误读，正是之前实测记录里出现的那批错误。</td>
+      <td class="n">★★★★</td>
+    </tr>
+    <tr>
+      <td><b>跨页表格、跨页图注会断</b></td>
+      <td>转写每页只产出一段文字，整理阶段完全看不到图。代码里没有任何"把两页的表格拼起来"的机制。</td>
+      <td>跨页的分布列表、跨页的解析会在两页各留半张，或者干脆只剩一半。</td>
+      <td class="n">★★★</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>还有一个"看不见"的盲区</h3>
+<p>题号连续性检查的"应该有哪些题"，来源是<b>模型自己返回的题目列表</b>。也就是说：如果模型把第 3、7、12 题整段漏掉，检查会认为"本来就只有这些题"，顺利通过。唯一能兜住的是最后那次视觉复核——而它和识别用的是<b>同一个模型、同一个盲区</b>。</p>
+
+<h2><span class="num">04</span>为什么"识别率"现在无法回答</h2>
+<p class="lede">这是整份审计里我最想让你记住的一条。</p>
+
+<p>你问"识别率怎么样"。诚实的回答是：<b>没人知道，包括写这些代码的那些 AI。</b></p>
+<p>因为要算识别率，必须有两样东西：一份<b>人工校对过的标准答案</b>，和一个<b>逐字比对的程序</b>。这两样在项目里都不存在。现有的 244 项 PDF 检查，比的都是"JSON 字段齐不齐、题号连不连续、图 ID 有没有对上"——这些只能证明<b>格式合法</b>，不能证明<b>内容正确</b>。审计记录里甚至专门写了一句话：格式合法的假数据也能拿到"完整"状态。</p>
+
+<div class="quote">
+这也是为什么会有"越改越不敢用"的感觉：每次改动之后，你只能靠肉眼翻几十页草稿来判断好坏，没有数字，就没有信心。
+</div>
+
+<h2><span class="num">05</span>优化路线：先造尺子，再修关节</h2>
+<p class="lede">下面每条都写了"改什么"和"怎么验收"。验收标准刻意写得不需要懂代码。</p>
+
+<div class="p0">
+  <h4><span class="badge">P0 先做</span>造一把尺子：3 页金标小样</h4>
+  <ul>
+    <li><b>做什么：</b>从深圳卷里挑 3 页——一页选择、一页填空、一页含表格的解答题。人工逐字校对成标准答案（题目、选项、答案、解析、图归属），存成一份可反复使用的小样。</li>
+    <li><b>再做什么：</b>写一个打分器，跑一次输出一张表：题目数对不对、题号对不对、题干字符相似度、答案命中率、解析要点命中率、图归属对不对。</li>
+    <li><b>怎么验收：</b>以后任何改动，<b>5 分钟内能说出"这次比上次好了几个点、坏了几个点"</b>。做不到就不许改。</li>
+    <li><b>为什么这条排第一：</b>没有它，后面所有优化都是感觉。这条做完，你才第一次能自己判断"AI 到底把活干好没好"。</li>
+  </ul>
+</div>
+
+<div class="p0">
+  <h4><span class="badge">P0 紧接着</span>把"整卷归零"改成"坏页隔离"</h4>
+  <ul>
+    <li>单页失败不再终止整卷：坏页内容进"待处理区"并标出原页，好页照常生成草稿。</li>
+    <li>"提交状态未知"从永久锁死改成<b>人工确认后继续</b>：你在界面上看一眼，确认那次请求没被受理，就允许续跑，并且只补没跑完的页（现有缓存机制本来就支持，只是被这条锁挡在前面）。</li>
+    <li><b>怎么验收：</b>故意拔网线跑到一半，恢复网络后能接着跑完，不重复扣费。</li>
+  </ul>
+</div>
+
+<div class="p1">
+  <h4><span class="badge">P1 三天内</span>三处直接提升字形准确率</h4>
+  <ul>
+    <li><b>提高出图分辨率：</b>144dpi → 216dpi 左右，并明确告诉模型图片的最小像素（这套代码的另一条路径已经这么干了，照抄即可）。</li>
+    <li><b>砍掉降级：</b>渲染失败就报错，不许默默降到 72dpi 喂给模型。宁可告诉你"这页渲染失败，请换页"，也不要给出一个看起来成功、实际全是错字的结果。</li>
+    <li><b>复核换成不同家族模型：</b>识别和复核用同一个模型，等于让同一个人检查自己的卷子。</li>
+    <li><b>怎么验收：</b>金标小样上，公式符号错误数下降。</li>
+  </ul>
+</div>
+
+<div class="p1">
+  <h4><span class="badge">P1</span>让复核能修，不只是能骂</h4>
+  <ul>
+    <li>复核判"不通过"时，带着它的具体意见重读一次（最多 1 次），而不是把问题原样丢给你。代码里这条路已经写好了，只是没人走。</li>
+  </ul>
+</div>
+
+<div class="p2">
+  <h4><span class="badge">P2 再谈</span>支持"试卷 + 答案 + 解析"三个文件</h4>
+  <ul>
+    <li>现在最多允许一个答案/解析类附件。也就是说"答案.pdf + 解析.pdf"分开的三个文件会被直接拒绝——<b>而界面文案却写着"可以一次上传题目 + 答案 + 解析"</b>，这是明确的言行不一。</li>
+    <li>两个 PDF 或者一份含答案的合订 PDF 是支持的。所以短期内先把文案改对，避免你自己踩。</li>
+  </ul>
+</div>
+
+<div class="p2">
+  <h4><span class="badge">P2</span>把报错翻译回人话</h4>
+  <ul>
+    <li>代码里写了大量中文提示（比如"PDF识别服务待配置，提供接口后再启用"），但错误向上传递时被统一替换成英文代码，<b>你永远看不到那句中文</b>。这是最便宜的一处修改，改完能省掉大量"到底怎么了"的困惑。</li>
+  </ul>
+</div>
+
+<h2><span class="num">06</span>评分（按"自用工具"口径）</h2>
+<p class="lede">不按商业产品标准扣分——你不做交付、不接多用户，那些分不该扣。</p>
+
+<div class="card" style="padding:14px 22px">
+  <div class="score-row"><div class="score-label">数据安全与失败即停</div><div class="score-bar"><i style="width:95%"></i></div><div class="score-val">9.5</div></div>
+  <div class="score-row"><div class="score-label">Word 双文件导入（今天能用的那条）</div><div class="score-bar"><i style="width:90%"></i></div><div class="score-val">9.0</div></div>
+  <div class="score-row"><div class="score-label">人工评审与入库把关</div><div class="score-bar"><i style="width:95%"></i></div><div class="score-val">9.5</div></div>
+  <div class="score-row"><div class="score-label">PDF 流程设计思路</div><div class="score-bar"><i style="width:85%"></i></div><div class="score-val">8.5</div></div>
+  <div class="score-row"><div class="score-label">PDF 实际可用性（能否跑完整卷）</div><div class="score-bar"><i style="width:35%"></i></div><div class="score-val">3.5</div></div>
+  <div class="score-row"><div class="score-label">识别质量可度量性</div><div class="score-bar"><i style="width:15%"></i></div><div class="score-val">1.5</div></div>
+  <div class="score-row"><div class="score-label">失败后的提示与可恢复性</div><div class="score-bar"><i style="width:30%"></i></div><div class="score-val">3.0</div></div>
+  <div class="score-row"><div class="score-label">代码可维护性（注释 0.7%）</div><div class="score-bar"><i style="width:40%"></i></div><div class="score-val">4.0</div></div>
+  <div style="padding:16px 0 4px; border-top:1px solid var(--line); margin-top:10px; display:flex; justify-content:space-between; align-items:baseline">
+    <span style="font-size:14px; color:var(--ink-3)">加权（自用口径）</span>
+    <span class="big" style="color:var(--accent)">7.4 / 10</span>
+  </div>
+  <p class="note">对比 10 月 1 日的 7.9：不是退步，是这次把 PDF 链条拆开看了。骨架比上次判断的更好，落地程度比上次判断的更差。</p>
+</div>
+
+<h2><span class="num">07</span>你现在最该做的三件事</h2>
+<ol>
+  <li><b>今天就开始录题，用 Word。</b>Word 双文件链是稳的，有真实文件级验证。你在等 PDF "重构完"，但那一天不会自己到来——项目记录里排着四件"仍未完成"，完成一件又会长出两件。</li>
+  <li><b>录满 50 道之前，不要再碰 PDF 的架构。</b>50 道真实题目会给你一张只有你能开出的问题清单，它比任何代码评审都准。空库里讨论索引和性能，是在解决想象中的问题。</li>
+  <li><b>每次录完点一次"下载完整备份"。</b>题库只存在这台电脑的这个浏览器里；自动备份必须先手动选文件夹，而且重开浏览器就失效。不选文件夹，等于零备份。</li>
+</ol>
+
+<h2><span class="num">08</span>附：本次核实过的事实</h2>
+<p class="lede">下面这些不是推测，是逐条读过代码或跑过命令确认的，可以拿去复核。</p>
+<table>
+  <thead><tr><th style="width:44%">事实</th><th>核实方式</th></tr></thead>
+  <tbody>
+    <tr><td>PDF 识别总开关为关闭状态；全应用没有模型/密钥/开关的任何设置界面</td><td>读配置默认值 + 全页面搜索表单控件</td></tr>
+    <tr><td>本机已配置识别服务凭据（环境变量非空），所以一旦开关打开、网络正常，理论上即可运行</td><td>检查环境文件存在且有值</td></tr>
+    <tr><td>任何一次"提交状态未知"会永久阻止该文件再次识别，且记录持久化在导入文件上</td><td>读主流程前置检查 + 持久化调用</td></tr>
+    <tr><td>整卷 21 页 = 44 次模型调用（每页 2 次 + 整理 1 次 + 复核 1 次），实测单页成本约 0.0009 元</td><td>读任务切分逻辑 + 历史实测账本</td></tr>
+    <tr><td>页面按 144dpi、JPEG 0.86 出图；失败重试阶梯为 2.0→1.6→1.2→1.0</td><td>读渲染配置与重试数组</td></tr>
+    <tr><td>PDF 识别请求未声明最小/最大像素，而同文件另一条识别路径声明了</td><td>对比两处请求体构造</td></tr>
+    <tr><td>复核"不通过"时不会重读，修订工序从未被调用</td><td>全仓库搜索调用点：0 处</td></tr>
+    <tr><td>错误提示被统一替换为英文代码，中文文案在界面上永远不出现</td><td>读错误归一化函数 + 界面提示来源</td></tr>
+    <tr><td>三个 PDF（卷/答案/解析分开）被路由层直接拒绝；两个 PDF 支持</td><td>读路由策略的附件数量判定</td></tr>
+    <tr><td>安全门禁连跑一次：1,810 项通过、0 失败，耗时约 3 分 06 秒</td><td>实际执行完整验证</td></tr>
+  </tbody>
+</table>
+
+<div class="foot">
+  审计对象：奇思数学 Pro（本地优先题库系统）· 分支 stage/program-c-corrective-r1 · 工作区有 245 处未提交变更、23 个已删除文件<br>
+  本次审计为只读：未修改任何代码、未提交、未调用任何真实识别接口、未触碰题库数据。
+</div>
+
+</div>
+</body>
+</html>

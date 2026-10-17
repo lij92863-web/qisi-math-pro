@@ -1,0 +1,285 @@
+{
+  "schemaVersion": "qisi.pdf-v1-retired-files.v1",
+  "authorization": "ai/CODEX_TASK_PDF_MULTIMODAL_V1.md",
+  "sourceBaseline": "local-run-artifacts/pdf-v1-next-round-2026-10-03/baseline.json",
+  "sourceHead": "71dfe18770e5161a19d38c07842d0ab865f20c92",
+  "purpose": "Audit metadata only; historical evidence is preserved and no longer requires retired implementations to execute.",
+  "files": [
+    {
+      "file": "qisi-pdf-candidate-projection.js",
+      "beforeSha256": "3ddd99d4f45f13c25cd47c3da35e984a2096a978a815b62a64e0ea5fd6fde169",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "qisi-pdf-import-coordinator.js",
+      "beforeSha256": "7a2b16e8caac14de344b6f60bbcc69827c6bd3238ad3c270416fcb71fd889a5e",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "qisi-pdf-ocr-support-parser.js",
+      "beforeSha256": "404633b3872fbdd4dcb75045e5bbf30b2446a1d50aaad8e6868b2aa380ce90e1",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "qisi-pdf-question-boundary.js",
+      "beforeSha256": "b6c2a5c6cf83dc067d7aa262593dfa31939dcc8246538fa32ca6de137e1629f8",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "qisi-pdf-support-block-parser.js",
+      "beforeSha256": "5123a83c63aea6908cccd3a446557bf84d2043fd36b41755e8b75e0020bcbcf7",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "qisi-production-pdf-sources-port.js",
+      "beforeSha256": "564af38428df36befa7114703fc6f1bd715ce7a54e9f9073bc6c86f0be71c829",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "tests/pdf-answer-path-trace.test.js",
+      "beforeSha256": "2e763fdebc4516081fb3172080502ba30bd5fcb309a21d159159667123bb6aad",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "tests/pdf-bridge-shadow-equivalence.test.js",
+      "beforeSha256": "ad415f036a992c00633b61b443f1b44e276b3b6275f17c543f4f83084727993d",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "tests/pdf-candidate-projection-characterization.test.js",
+      "beforeSha256": "6c50ba3fa62089d56732511dd122c5a75ef74d3415b113c6e18b31ce653a166a",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "tests/pdf-candidate-projection-invariants.test.js",
+      "beforeSha256": "5a5cda796d9a3ea188714912a1a84336e4d9fe24713e29d4c8c2623d169f6a41",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "tests/pdf-candidate-projection-known-bad.test.js",
+      "beforeSha256": "7fe0a3a4969ba0e904f460ab66121cf1e6122690c8b1c4fae3aa81b6f0fc12ed",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "tests/pdf-candidate-projection.test.js",
+      "beforeSha256": "ff3f3469dfea65d7e29cebe2bf69e798ed87e128085d548e13de2b880c73a7a3",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "tests/pdf-canonical-comparator-provenance.test.js",
+      "beforeSha256": "3909f9269efb9e91213fb8e2069c7ddd0d4d351485a6383bd2136963d68f3e4d",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "tests/pdf-controlled-write-conflict.test.js",
+      "beforeSha256": "55f15f912d22b7f36483b5c68c7881b1f61e989548d606712b5ab876f492a593",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "tests/pdf-import-coordinator.test.js",
+      "beforeSha256": "67bc9268d15453b56c9e178e687ae763e25ec0e9756d170033692e10972a611c",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "tests/pdf-ocr-support-parser.test.js",
+      "beforeSha256": "45e08baf0a5e1aade2b307eaf17de905095d0215dad218b1e7bea44d39d164b1",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "tests/pdf-ocr-support-projection.test.js",
+      "beforeSha256": "70bff05dbd1d588ea869df27d1c87ff3edd79d67592f335acb5e611d5c488b1f",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "tests/pdf-question-boundary.test.js",
+      "beforeSha256": "97af3b346ac35a9a6a621b935f1a832d566af92efd3c82a94181562e72164562",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "tests/pdf-real-case.test.js",
+      "beforeSha256": "e6fb36b960b49d4dac27168083548c6526fe63a87ee7b9a7cf6f8f4fd2ca8924",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "tests/pdf-support-block-parser.test.js",
+      "beforeSha256": "865ec4d0cd2e40b91f7a47604aeb660f2aa456fa70d2e555bb39d0d95c0cdb5b",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "tests/pdf-support-controlled-write-answer-ownership.test.js",
+      "beforeSha256": "2f96b08cf268746c78963f79f425251fe6670a30cd5ccc470864f8e7d916bc23",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "tests/pdf-support-source-ambiguity.test.js",
+      "beforeSha256": "31b7f3c279aca5ec276f24fb435c89711116d94409a29f19ec8b34575bb6abd2",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    },
+    {
+      "file": "tests/production-pdf-sources-port.test.js",
+      "beforeSha256": "1b28a33ea65c95358f0584055ec04253f874cddf56cf33d3fbc0de907b5820c4",
+      "reason": "Dedicated legacy PDF implementation or its pure implementation tests retired after V1 replacement; raw before bytes preserved outside product runtime.",
+      "replacementEvidence": [
+        "tests/pdf-multimodal-v1.test.js",
+        "tests/production-import-bridge.test.js",
+        "tests/batch-smoke-mock.test.js",
+        "tests/pdf-projection-single-owner.test.js",
+        "tests/e2e/pdf-projection-browser-shadow.test.js"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>奇思数学 Pro · 代码全面体检报告</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #f4f6f9;
+    color: #1a2233;
+    font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+    line-height: 1.7;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 36px 22px 80px; }
+
+  header { border-bottom: 3px solid #d8dee9; padding-bottom: 22px; margin-bottom: 30px; }
+  h1 { font-size: 27px; margin: 0 0 6px; letter-spacing: .5px; }
+  .sub { color: #6b7689; font-size: 14px; }
+  .sub code { background: #e8ecf3; padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+
+  .hero {
+    display: flex; gap: 28px; align-items: center;
+    background: #fff; border: 1px solid #e2e7f0; border-radius: 16px;
+    padding: 26px 30px; margin-bottom: 30px;
+    box-shadow: 0 2px 14px rgba(30,45,80,.05);
+  }
+  .bigscore { text-align: center; min-width: 170px; }
+  .bigscore .num { font-size: 66px; font-weight: 700; color: #e08c2e; line-height: 1; }
+  .bigscore .num small { font-size: 24px; color: #a8b2c4; font-weight: 500; }
+  .bigscore .lbl { font-size: 13px; color: #7b8699; margin-top: 6px; }
+  .verdict h2 { font-size: 19px; margin: 0 0 10px; color: #16233a; }
+  .verdict p { margin: 0 0 10px; font-size: 15px; color: #3d4a61; }
+  .verdict strong { color: #c2651a; }
+
+  h2.sec {
+    font-size: 19px; margin: 40px 0 16px; padding-left: 11px;
+    border-left: 4px solid #4a6cf0; color: #16233a;
+  }
+  .note { font-size: 13px; color: #6b7689; margin: -8px 0 16px; }
+
+  .panels { display: flex; gap: 22px; flex-wrap: wrap; }
+  .card {
+    background: #fff; border: 1px solid #e2e7f0; border-radius: 14px;
+    padding: 18px 20px; box-shadow: 0 1px 8px rgba(30,45,80,.04);
+  }
+  .radar-box { flex: 0 0 400px; }
+  .bars-box { flex: 1 1 460px; min-width: 340px; }
+
+  .bar-row { display: flex; align-items: center; gap: 11px; margin-bottom: 9px; font-size: 14px; }
+  .bar-row .name { width: 128px; flex: none; color: #2e3a52; }
+  .bar-row .track { flex: 1; height: 17px; background: #eef1f6; border-radius: 9px; overflow: hidden; }
+  .bar-row .fill { height: 100%; border-radius: 9px; }
+  .bar-row .val { width: 34px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  table { width: 100%; border-collapse: collapse; background: #fff; font-size: 14px; }
+  th, td { border: 1px solid #e4e9f2; padding: 11px 13px; text-align: left; vertical-align: top; }
+  th { background: #f0f3f9; font-weight: 600; color: #2b3854; }
+  td.score { text-align: center; font-weight: 700; width: 52px; font-variant-numeric: tabular-nums; }
+  tr:nth-child(even) td { background: #fbfcfe; }
+
+  .find { display: flex; gap: 13px; padding: 15px 17px; border-radius: 11px; margin-bottom: 11px; background: #fff; border: 1px solid #e2e7f0; }
+  .find .tag { flex: none; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; height: fit-content; margin-top: 2px; white-space: nowrap; }
+  .p0 { background: #fde8e6; color: #b3261e; }
+  .p1 { background: #fdf1e0; color: #a35a10; }
+  .p2 { background: #e9f0fb; color: #2a4f9a; }
+  .good { background: #e5f5ec; color: #17663a; }
+  .find .body { font-size: 14.5px; }
+  .find .body b { display: block; margin-bottom: 3px; color: #16233a; font-size: 15px; }
+  .find .body span { color: #4a566d; }
+  .ev { font-family: Consolas, Menlo, monospace; font-size: 12px; color: #6b7689; word-break: break-all; margin-top: 5px; display: block; }
+
+  .goodbox { background: #fff; border: 1px solid #cfe8d9; border-radius: 14px; padding: 20px 24px; }
+  .goodbox ul { margin: 0; padding-left: 20px; }
+  .goodbox li { margin-bottom: 9px; font-size: 14.5px; color: #33405a; }
+
+  footer { margin-top: 44px; padding-top: 18px; border-top: 1px solid #dde3ec; font-size: 12.5px; color: #8892a4; }
+  @media (max-width: 900px) { .radar-box { flex: 1 1 100%; } .hero { flex-direction: column; align-items: flex-start; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>奇思数学 Pro · 代码全面体检报告</h1>
+    <div class="sub">
+      体检日期 2026-09-28 &nbsp;·&nbsp; 版本 <code>stage/program-c-corrective-r1</code> &nbsp;·&nbsp;
+      规模 89 个模块 / 34,654 行核心代码 / 231 个测试文件 / 403 篇文档 &nbsp;·&nbsp; 全程零修改，只读体检
+    </div>
+  </header>
+
+  <div class="hero">
+    <div class="bigscore">
+      <div class="num">5.6<small>/10</small></div>
+      <div class="lbl">综合评分 · C+</div>
+    </div>
+    <div class="verdict">
+      <h2>一句话结论</h2>
+      <p><strong>你的"业务脑子"是专业级的，但"工程脚手架"已经开始遮住你的眼睛。</strong></p>
+      <p>不夸张地说，这个项目对"宁可没有答案、也不能挂错答案"的坚持，比很多商业软件都强——PDF 对齐的三态判定（完整／只给前缀／直接放弃）写得干净克制，还有成体系的"喂坏数据必须拒绝"的反面测试。</p>
+      <p>但另一方面：官方合格线 <code>verify:safe</code> <strong>现在是红灯</strong>（1649 过 / 24 挂），我却发现有一个真实存在的 bug 被项目自己的日志脱敏机制伪装成了无害字样，藏在耸肩可见的地方——<strong>你花了大力气建的"安全习惯"，正在让自己看不见问题。</strong></p>
+    </div>
+  </div>
+
+  <h2 class="sec">十项维度打分</h2>
+  <div class="note">左侧雷达图看整体形状：左上方向是你的强项（业务判定），右下方向是塌方区。</div>
+  <div class="panels">
+    <div class="card radar-box">
+      <svg id="radar" viewBox="0 0 400 400" width="100%"></svg>
+    </div>
+    <div class="card bars-box" id="bars"></div>
+  </div>
+
+  <h2 class="sec">每一分是怎么来的</h2>
+  <table>
+    <thead>
+      <tr><th>维度</th><th class="score">分</th><th>关键证据</th><th>说人话</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>业务安全设计</b></td><td class="score" style="color:#12864a">9</td>
+        <td>宪法明文列出 7 条禁止挂载条件；PDF 只允许 <code>full/prefix/fail-closed</code> 三态</td>
+        <td>你定下的最高原则"挂错答案比没答案更糟"，不只是写在文档里，是真的落到了代码和测试</td>
+      </tr>
+      <tr>
+        <td><b>核心算法质量</b></td><td class="score" style="color:#1c9955">8</td>
+        <td><code>qisi-pdf-support-aligner.js</code> 三态分支清晰，无语义猜测，无关键词硬猜</td>
+        <td>最关键的那段代码写得像教科书，这是整个项目的定海神针</td>
+      </tr>
+      <tr>
+        <td><b>测试有效性</b></td><td class="score" style="color:#c8890f">6</td>
+        <td>95.5% 模块有测试；B/C 两链有硬反面测试；但约 30% 用例不验证任何行为</td>
+        <td>数量管够、核心区域质量高，但掺了水——有些测试在检查"文档里写了什么字"</td>
+      </tr>
+      <tr>
+        <td><b>数据可靠性</b></td><td class="score" style="color:#c8890f">6</td>
+        <td>Dexie v8，v2→v7 迁移链完整；但无唯一索引、无自动备份、恢复功能没接界面</td>
+        <td>升级不丢数据这点做得好；但"万一手滑删了怎么找回"这条路还没通</td>
+      </tr>
+      <tr>
+        <td><b>性能与依赖</b></td><td class="score" style="color:#c8890f">6</td>
+        <td>实测首屏 1.5 秒、101 个请求、4.2MB；静态资源被设成 <code>maxAge:0, etag:false</code></td>
+        <td>够用，不卡。但每次刷新都要重新下载 4.2MB、重发 101 个请求，等于每次开软件都把全部依赖重新装一遍</td>
+      </tr>
+      <tr>
+        <td><b>工程门禁与流程</b></td><td class="score" style="color:#c8720f">5</td>
+        <td>有真 AST 门禁；但<b>无任何 git 钩子</b>；<code>verify-diff-scope</code> 提交后必过</td>
+        <td>规矩立得像模像样，但守门的机器人要么不在岗，要么能被绕过去</td>
+      </tr>
+      <tr>
+        <td><b>安全性</b></td><td class="score" style="color:#c8720f">5</td>
+        <td>服务监听全部网卡 + 无鉴权 + CORS 任意来源 + 静态托管整个项目根目录</td>
+        <td>你在自己电脑上用没事；一旦连了咖啡馆/学校办公室 WiFi，同网段的人能读你的题（详见下方）</td>
+      </tr>
+      <tr>
+        <td><b>架构与模块划分</b></td><td class="score" style="color:#c0392b">4</td>
+        <td>上帝模块 2053 行 56 函数；两份架构清单互相打架；18 个模块是"黑户"</td>
+        <td>房间太多了，而且有两份门牌号码表，还不一致</td>
+      </tr>
+      <tr>
+        <td><b>代码可维护性</b></td><td class="score" style="color:#c0392b">4</td>
+        <td>指纹算法、题号规范化、选项分割各写了两遍；app.js 仍藏着业务逻辑</td>
+        <td>改一个地方常常得改两处，久了就会漏——这是未来最贵的债</td>
+      </tr>
+      <tr>
+        <td><b>文档治理</b></td><td class="score" style="color:#a5281c">3</td>
+        <td>403 篇文档 1.6MB，一半带 R1/R2/R3 波次后缀；存在两套互相矛盾的架构清单</td>
+        <td>这些大多不是给你看的，是 AI 干活留下的工单回执，已经堆成山</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="note">
+    为了确保结论可靠，所有判断均基于实际运行与静态核查，未依赖任何推测。
+  </div>
+
+  <h2 class="sec">必须现在知道的三个事</h2>
+
+  <div class="find">
+    <span class="tag p0">紧急</span>
+    <div class="body">
+      <b>1. 每次打开软件，后台都在抛一个"栈溢出"错误，但你看不见</b>
+      <span>我用浏览器实测：页面加载时 Vue 必抛 <code>RangeError: Maximum call stack size exceeded</code>（公式预览组件的响应式计算陷入无限递归）。好消息是它被 Vue 兜住了、<b>软件照常能用</b>（我截图确认界面完整，25 个按钮全在）。坏消息是：你项目里的"安全日志器"会把原始报错脱敏成 <code>[QISI_LOG] {stage: application}</code>——真话被洗成了废话。这就是一连串端到端测试挂掉的直接原因。</span>
+      <span class="ev">实测链路：app.js:5046 Vue 错误钩子 → qisi-secure-logger.js:64 脱敏 → 控制台只剩 {stage: application}（桩件绕过脱敏后还原真实报文）</span>
+    </div>
+  </div>
+
+  <div class="find">
+    <span class="tag p0">紧急</span>
+    <div class="body">
+      <b>2. 官方合格线现在是红灯：1649 通过 / 24 失败 / 19 取消，8 分 48 秒</b>
+      <span>你项目规矩里写的最终验收命令 <code>npm run verify:safe</code>，此刻是<b>不通过</b>的。失败集中在两处：一是上面那个栈溢出（17 个浏览器测试受牵连），二是 7 个"基准迁移门禁"测试因为在 Windows 回收站删除文件的环节失败。后者是环境问题，前者是真 bug。<b>这意味着过去一段时间里，"测试过了"这个承诺事实上是不成立的。</b></span>
+      <span class="ev">node --test --test-concurrency=1 → EXIT=1 · # tests 1692 · # pass 1649 · # fail 24 · # cancelled 19</span>
+    </div>
+  </div>
+
+  <div class="find">
+    <span class="tag p0">紧急</span>
+    <div class="body">
+      <b>3. 本地服务等于把整台电脑敞开——但你大概只在家用，所以一直没出事</b>
+      <span>三条证据叠在一起比较严重：<code>qisi-local-server.js:675</code> 没有指定监听地址（默认监听<b>所有网卡</b>，而项目里另外两个服务都老老实实写了 127.0.0.1，说明这里是漏写）；<code>:44</code> 跨域设置成"允许任何来源"；<code>:161</code> 把<b>整个项目根目录</b>做成静态托管（源码、上传的题目文档、转换产物都能被匿名下载）。全部接口没有任何口令。结论：<b>只在自己一台电脑离线用时无碍；一旦接入公用网络，同网段任何人可读你的题库。</b></span>
+      <span class="ev">qisi-local-server.js:675 app.listen(PORT, …) · :44 cors({origin:true}) · :161 express.static(ROOT) — 对比 local-ocr/server.js:318 显式绑定 localhost</span>
+    </div>
+  </div>
+
+  <h2 class="sec">其余重要发现</h2>
+
+  <div class="find">
+    <span class="tag p1">高</span>
+    <div class="body">
+      <b>vendor 目录（2.9MB）没有进版本库，等于这份保险没有真正生效</b>
+      <span>你把依赖从网站 CDN 换成本地 <code>vendor/</code> 了——这是非常正确的改进（断网也能用，还加了完整性校验）。但是：<code>vendor/</code>、这次改的 <code>main.html</code>、还有 <code>open-app.cmd</code> 都<b>还没有提交保存</b>，而 <code>.gitignore</code> 也没排除 vendor。<b>后果：一旦硬盘出问题、误删或换台电脑恢复代码，软件会直接打不开（依赖不在版本库里）。</b></span>
+      <span class="ev">git status: M main.html · M open-app.cmd · ?? vendor/（未跟踪且未被忽略，2.9MB）</span>
+    </div>
+  </div>
+
+  <div class="find">
+    <span class="tag p1">高</span>
+    <div class="body">
+      <b>两份"架构清单"互相打架，18 个模块没人管</b>
+      <span>根目录 <code>architecture/</code>（登记 74 个模块、5 层）和 <code>docs/architecture/</code>（登记 68 个、6 层）是两套不同格式，并<b>被不同测试各自依赖</b>——任何读到一半的人都会拿到残缺印象。磁盘上实际有 89 个模块，也就是说有 18 个（含 1001 行的 <code>qisi-batch-importer.js</code>、662 行的 <code>qisi-docx-pipeline.js</code>）压根不在清单上，不受门禁保护。</span>
+      <span class="ev">architecture/layers.json (qisi.architecture-manifest.v1, 5层74模块) vs docs/architecture/layers.json (qisi.program-c-layers.r3, 6层68模块)</span>
+    </div>
+  </div>
+
+  <div class="find">
+    <span class="tag p1">高</span>
+    <div class="body">
+      <b>大约三成测试其实不验证任何行为</b>
+      <span>有 24 个测试文件在断言"markdown 文档里写了什么字"（改一下报告文字就能通过），有测试在读源码做正则、甚至读别的测试文件；还有 3 处赤裸裸的 <code>assert.ok(true)</code> 空壳、66 处"自己写 PASS 再断言写着 PASS"。它们挤在 <code>npm test</code> 里，会<strong>稀释真实信号</strong>——红灯多了，真红灯就没人看了。</span>
+      <span class="ev">tests/ocr-quality-final-report.test.js:27 断言 md 含 "i5-12400F" · tests/qisi-app-display-cleaners-r3-shard-verify.test.js:31 it('…', () =&gt; assert.ok(true))</span>
+    </div>
+  </div>
+
+  <div class="find">
+    <span class="tag p1">高</span>
+    <div class="body">
+      <b>守门机器人不在岗，或能被绕过去</b>
+      <span><code>.git/hooks/</code> 里<b>一个生效钩子都没有</b>（改完代码不用过任何检查就能提交）。<code>verify-diff-scope</code> 只看"未提交改动"，<b>提交后两处皆空，必然打印通过</b>。<code>verify-no-real-ai</code> 的白名单恰好包含 <code>app.js</code> 和 <code>qisi-local-server.js</code>——最可能真调 AI 的两个文件被豁免。另有两个"稳定链校验脚本"其实是 17 行、22 行的转发壳。</span>
+      <span class="ev">scripts/verify-diff-scope.js 仅读 git diff 与 git diff --cached · scripts/verify-docx-stable.js 全文 17 行 · .git/hooks/ 无自定义钩子</span>
+    </div>
+  </div>
+
+  <div class="find">
+    <span class="tag p2">中</span>
+    <div class="body">
+      <b>403 篇文档已失控：真正值钱的只有 7 篇</b>
+      <span>403 篇共 1.6MB，其中 201 篇文件名带 <code>_R1/_R2/_R3/BATCH_001</code> 之类的波次后缀，155 篇不到 3KB——这是 AI 干活的工单回执，不是给人看的说明书。<code>docs/refactor</code> 里甚至有 26 篇叫 <code>BM_AUTO_A4_R3_CONT_BATCH_007</code> 的机器流水。<b>真正有价值的：<code>ai/</code> 下那 7 篇规矩 + 一个真做代码结构校验的脚本。</b>建议其余整体归档冻结。</span>
+      <span class="ev">docs/ 403篇 1,618,314字符 · docs/refactor 214篇 · 归档区 docs/archive 只有一个 274 字节的 README（制度从未执行）</span>
+    </div>
+  </div>
+
+  <div class="find">
+    <span class="tag p2">中</span>
+    <div class="body">
+      <b>几个"上帝模块"和重复代码，是未来最贵的债</b>
+      <span><code>qisi-batch-engine-v2.js</code> 一个文件 2053 行、56 个函数，同时管分题、DOCX/PDF 证据、图片、批处理、视觉识别。另外指纹算法在 <code>qisi-db.js</code> 和 <code>qisi-question-duplicate-policy.js</code> 各写了一遍；题号规范化、选项分割也各写两遍。<b>表现上你现在看不出毛病，但它决定了半年后改一个小需求要付多少代价。</b></span>
+      <span class="ev">重复指纹算法：qisi-db.js:120-139 ≈ qisi-question-duplicate-policy.js:33-50 · 上帝模块：qisi-batch-engine-v2.js 2053行/56函数</span>
+    </div>
+  </div>
+
+  <div class="find">
+    <span class="tag p2">中</span>
+    <div class="body">
+      <b>数据库缺少"最后一道保险"</b>
+      <span>题目表没有唯一约束，去重是在内存里比对的——<b>并发批量导入时，两个批次各自读到对方写入前的快照，可能产生重复题</b>。另外没有定时自动备份（只有"最近是否备份过"的提醒），备份恢复功能做了但<b>没有接到界面上</b>，普通用户够不着。</span>
+      <span class="ev">qisi-storage-repository.js:891 restoreBackup 仅被测试引用 · qisi-question-duplicate-policy.js:53-96 纯内存比对，DB 无唯一索引</span>
+    </div>
+  </div>
+
+  <h2 class="sec">做得好的地方（这些真的很扎实）</h2>
+  <div class="goodbox">
+    <ul>
+      <li><b>安全理念落地了，不是口号。</b>"不确定就放弃，绝不硬挂"这条原则，在宪法里写了，在代码里实现了，还有专门的"喂坏数据必须拒绝"测试看着它。这在同类项目里很少见。</li>
+      <li><b>核心算法干净。</b>答案／解析的匹配必须序号集合一致、不允许跳号重号重排、不允许靠"长得像"或关键词（三角形、向量、sin）猜——这几条硬规则写得很克制。</li>
+      <li><b>防注入做得扎实。</b>唯一有风险的富文本出口做了转义再渲染（禁止执行脚本），全项目未出现 <code>eval</code>、<code>new Function</code>。恶意 Word 文档灌不进脚本。</li>
+      <li><b>依赖不再看天吃饭。</b>把 Vue / KaTeX / pdf.js 等从公网 CDN 搬到本地，并加了完整性校验——断网也能开，这一步做对了（只差提交保存）。</li>
+      <li><b>有一道真正动真格的门禁。</b><code>verify-app-shell-architecture.js</code> 用语法树解析真实校验 app.js 的行号、允许/禁止调用，不是摆设。</li>
+      <li><b>事故复盘写得很专业。</b>历史文档里有一份"会话丢失后的取证恢复审计"，如实记录了当时"状态文档说已验收、而提交记录证明没有"的矛盾，并做了纠正。<b>有自我纠错的记录，说明这套体系是有羞耻心的。</b></li>
+    </ul>
+  </div>
+
+  <h2 class="sec">给你的行动清单（按优先级）</h2>
+  <table>
+    <thead><tr><th style="width:88px">优先级</th><th>做什么</th><th>为什么现在就要做</th></tr></thead>
+    <tbody>
+      <tr><td><b style="color:#b3261e">立刻</b></td><td>把未提交的改动保存好，<b>尤其是 vendor 目录</b></td><td>这 2.9MB 依赖没进版本库，等于没上保险；换台电脑就会白屏</td></tr>
+      <tr><td><b style="color:#b3261e">立刻</b></td><td>修掉公式预览的栈溢出，并把安全日志器改成"重要错误别脱敏"</td><td>日志脱敏本来为防泄密，结果连 bug 一起藏了——这是最需要吸收的教训</td></tr>
+      <tr><td><b style="color:#b3261e">立刻</b></td><td>服务改成只监听 127.0.0.1，跨域改白名单，静态目录收窄</td><td>三行改动，换来"连公用网也不怕"</td></tr>
+      <tr><td><b style="color:#a35a10">近期</b></td><td>把 30% 的"文档/源码自审"类测试挪出主测试命令</td><td>红灯要稀缺才有威慑力，否则真 bug 混在里面没人理</td></tr>
+      <tr><td><b style="color:#a35a10">近期</b></td><td>加一个 git 提交钩子，让跨界改动在提交那一刻就被拦下</td><td>现在改完代码不经任何检查就能提交</td></tr>
+      <tr><td><b style="color:#a35a10">近期</b></td><td>合并两份架构清单，给 18 个黑户模块补登记</td><td>不登记就没人看着，改坏了也没人报警</td></tr>
+      <tr><td><b style="color:#2a4f9a">中期</b></td><td>401 篇历史文档整体归档冻结，只留 ai/ 下 7 篇 + index</td><td>降低噪音，让下一个接手的 AI 别再被误导</td></tr>
+      <tr><td><b style="color:#2a4f9a">中期</b></td><td>给题目表加去重索引，并把"备份恢复"接到界面上</td><td>这是丢数据风险最大的两个缺口</td></tr>
+    </tbody>
+  </table>
+
+  <footer>
+    本报告的每一条结论都附带了文件路径与行号证据，可自行复核。核心手段：完整跑通全部 1692 个测试用例（8 分 48 秒）、真实浏览器加载页面并绕过日志脱敏抓取原始报错、四路并行静态审查。
+    <br>体检过程<b>未修改任何一行代码</b>，工作树保持原样。
+  </footer>
+
+</div>
+
+<script>
+const dims = [
+  ["业务安全设计", 9],
+  ["核心算法质量", 8],
+  ["测试有效性", 6],
+  ["数据可靠性", 6],
+  ["性能与依赖", 6],
+  ["工程门禁", 5],
+  ["安全性", 5],
+  ["架构划分", 4],
+  ["可维护性", 4],
+  ["文档治理", 3]
+];
+
+const colorOf = v => v >= 8 ? "#12864a" : v >= 6 ? "#c8890f" : v >= 5 ? "#d2761c" : "#c0392b";
+
+// ---- bars ----
+const bars = document.getElementById("bars");
+bars.innerHTML = dims.map(([n, v]) => {
+  const w = (v / 10) * 100;
+  return `<div class="bar-row">
+      <div class="name">${n}</div>
+      <div class="track"><div class="fill" style="width:${w}%;background:${colorOf(v)}"></div></div>
+      <div class="val" style="color:${colorOf(v)}">${v}</div>
+    </div>`;
+}).join("")
+ + `<div style="margin-top:14px;font-size:13px;color:#6b7689;line-height:1.6">
+      绿色 ≥8 分：强项，是世界级水准的部分<br>
+      橙色 5–6 分：能用，但有明确缺口需要补<br>
+      红色 ≤4 分：塌方区，是未来成本的主要来源</div>`;
+
+// ---- radar ----
+const svg = document.getElementById("radar");
+const cx = 200, cy = 200, R = 138, N = dims.length;
+const pt = (i, r) => {
+  const a = -Math.PI / 2 + (2 * Math.PI * i) / N;
+  return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+};
+const ring = r => {
+  const d = Array.from({ length: N }, (_, i) => pt(i, r).join(",")).join(" ");
+  return `<polygon points="${d}" fill="none" stroke="#dde3ec" stroke-width="1"/>`;
+};
+let out = [4, 3, 2, 1].map(r => ring(R * r / 4)).join("");
+
+for (let i = 0; i < N; i++) {
+  const [x, y] = pt(i, R);
+  out += `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="#e4e9f2" stroke-width="1"/>`;
+}
+
+const poly = dims.map(([n, v], i) => pt(i, R * v / 10).join(",")).join(" ");
+out += `<polygon points="${poly}" fill="#4a6cf0" fill-opacity="0.18" stroke="#4a6cf0" stroke-width="2"/>`;
+
+const dots = dims.map(([n, v], i) => {
+  const [x, y] = pt(i, R * v / 10);
+  return `<circle cx="${x}" cy="${y}" r="3.6" fill="${colorOf(v)}"/>`;
+}).join("");
+out += dots;
+
+const labels = dims.map(([n, v], i) => {
+  const [x, y] = pt(i, R + 26);
+  let anchor = "middle";
+  if (x > cx + 12) anchor = "start";
+  if (x < cx - 12) anchor = "end";
+  return `<text x="${x}" y="${y + 4}" font-size="12" fill="#48546b" text-anchor="${anchor}">${n}
+    <tspan fill="${colorOf(v)}" font-weight="700"> ${v}</tspan></text>`;
+}).join("");
+
+svg.innerHTML = out + labels
+  + `<text x="${cx}" y="${cy - R - 14}" font-size="12" fill="#a8b2c4" text-anchor="middle">满分 10</text>`;
+</script>
+</body>
+</html>

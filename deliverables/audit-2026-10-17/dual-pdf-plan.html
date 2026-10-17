@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>双 PDF 攻坚方案 · 试卷 + 答案/解析</title>
+<style>
+  :root{
+    --ink:#1a1d24; --ink2:#3d434f; --ink3:#6b7280; --line:#e3e6ec;
+    --accent:#2f5bd7; --soft:#eef3ff; --risk:#c0392b; --rsoft:#fdf0ee;
+    --warn:#9a6a00; --wsoft:#fdf6e7; --ok:#1d7a4c; --osoft:#eef8f2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:0 0 70px;background:#fbfcfe;color:var(--ink);
+    font-family:"Source Han Sans SC","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
+    font-size:15px;line-height:1.8;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:900px;margin:0 auto;padding:0 26px}
+  header{padding:52px 0 26px;border-bottom:1px solid var(--line);margin-bottom:32px}
+  .kicker{font-size:12px;letter-spacing:.14em;color:var(--accent);font-weight:700}
+  h1{font-size:29px;line-height:1.32;margin:12px 0 12px;letter-spacing:-.01em}
+  .sub{color:var(--ink3);font-size:13.5px}
+  .core{margin:24px 0 0;padding:20px 24px;background:var(--soft);border-left:4px solid var(--accent);border-radius:0 10px 10px 0}
+  .core p{margin:0;font-size:15.5px}
+  .core p+p{margin-top:10px}
+  h2{font-size:21px;margin:46px 0 6px;padding-bottom:9px;border-bottom:2px solid var(--ink);display:inline-block}
+  h2 span{color:var(--accent);margin-right:9px;font-variant-numeric:tabular-nums}
+  h3{font-size:16px;margin:26px 0 8px}
+  p{margin:12px 0}
+  .lede{color:var(--ink2);margin:14px 0 18px}
+  .stage{border:1px solid var(--line);border-radius:12px;background:#fff;padding:20px 22px;margin:18px 0}
+  .stage.a{border-left:4px solid var(--risk)}
+  .stage.b{border-left:4px solid var(--warn)}
+  .stage.c{border-left:4px solid var(--accent)}
+  .stage h4{margin:0 0 4px;font-size:16px;display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;background:#eef1f6;color:var(--ink2)}
+  .stage.a .pill{background:var(--rsoft);color:var(--risk)}
+  .stage.b .pill{background:var(--wsoft);color:var(--warn)}
+  .stage.c .pill{background:var(--soft);color:var(--accent)}
+  .why{font-size:13.5px;color:var(--ink3);margin:6px 0 12px}
+  ul{margin:10px 0;padding-left:21px}
+  li{margin:8px 0;color:var(--ink2)}
+  li b{color:var(--ink)}
+  table{width:100%;border-collapse:collapse;margin:18px 0;font-size:13.5px;background:#fff}
+  th,td{padding:11px 13px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{background:#f5f7fb;font-size:12.5px;font-weight:700;color:var(--ink2)}
+  tr:last-child td{border-bottom:none}
+  .check{background:#fff;border:1px solid var(--line);border-radius:12px;padding:6px 22px;margin:16px 0}
+  .check div.one{padding:13px 0;border-bottom:1px dashed var(--line);display:flex;gap:12px;align-items:flex-start}
+  .check div.one:last-child{border-bottom:none}
+  .mark{flex:0 0 22px;height:22px;border-radius:50%;background:var(--osoft);color:var(--ok);
+    font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:3px}
+  .mark.bad{background:var(--rsoft);color:var(--risk)}
+  .q{font-size:14px}
+  .q b{display:block;margin-bottom:2px}
+  .q span{color:var(--ink3);font-size:13px}
+  .note{font-size:12.5px;color:var(--ink3);margin-top:10px}
+  code{background:#f2f4f8;padding:1px 5px;border-radius:4px;font-size:13px}
+  .foot{margin-top:52px;padding-top:20px;border-top:1px solid var(--line);font-size:12.5px;color:var(--ink3)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">Dual-PDF · 攻坚方案</div>
+  <h1>试卷 PDF + 答案/解析 PDF<br>怎么才能稳定出结果</h1>
+  <div class="sub">2026-10-17 · 仅围绕双 PDF，不涉及 Word</div>
+
+  <div class="core">
+    <p><b>核心判断：双 PDF 的难点不在"识别"，在"对齐"。</b></p>
+    <p>两份文件之间只有<b>题号</b>这一条线连着。而题号恰恰是最容易被 PDF 排版破坏的东西——续页没题号、跳号、重号、答案解析重新编号。所以"识别率"上不去，一半原因是输入质量，一半原因是这条线太细。</p>
+  </div>
+</header>
+
+<h2><span>01</span>先看清现在的三步断点</h2>
+<p class="lede">双 PDF 现在跑一遍，会在三个地方断掉。断在哪一步，决定了你看到什么。</p>
+
+<table>
+  <thead><tr><th style="width:26%">断点</th><th style="width:40%">现在的行为</th><th>你看到的结果</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>① 任意一页失败</b></td>
+      <td>整份文件被当成一个整体任务，一页转写失败、格式不合规、复核异常，整份停止，不产出任何草稿。</td>
+      <td>「识别失败」，一道题都没有</td>
+    </tr>
+    <tr>
+      <td><b>② 有一次请求没回执</b></td>
+      <td>这条记录永久留在文件上，之后每次重跑都直接停，连已经成功的页也不再复用。</td>
+      <td>这份 PDF 在这台电脑上基本失效</td>
+    </tr>
+    <tr>
+      <td><b>③ 答案题号缺一个</b></td>
+      <td>答案序列必须"从第 1 题开始严丝合缝对下去"，中间缺一个号，后面全部作废（不是只废那一题）。</td>
+      <td>后面十几题的答案全丢，但不会挂错</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>第三点是当下最要命的一条：高考答案卷里"第 5 题答案只在解析里出现""解答题分小问没写大题号"这类情况很常见。现在的规则是<b>一旦对不齐就整段放弃</b>——安全，但等于白干。</p>
+
+<h2><span>02</span>三层解决：先跑得完，再挂得住，最后才谈准</h2>
+
+<div class="stage a">
+  <h4>第一层：让它跑得完 <span class="pill">前提</span></h4>
+  <p class="why">这一层不改任何识别逻辑，只改"失败了怎么办"。没有这一层，后面两层根本没法验收，因为你永远看不到结果。</p>
+  <ul>
+    <li><b>坏页隔离</b>：某一页失败，只把这一页内容标成"待处理"，其余页照常出草稿。屏幕上会明确写"第 12 页失败，其余 18 页已完成"。</li>
+    <li><b>未知提交可人工放行</b>：跑完停下来时给你一个明确的操作——"我确认这次请求没有成功，继续"。点一下，只补没跑完的页，已经拿到的结果不重复付费。</li>
+    <li><b>复核不过就重读一次</b>：复核挑出问题后，带着它的具体意见重读一遍（最多一次），而不是把问题原样丢给你。这条流程代码里本来就写好了，只是从来没被调用。</li>
+  </ul>
+</div>
+
+<div class="stage b">
+  <h4>第二层：让答案挂得住 <span class="pill">关键</span></h4>
+  <p class="why">现在挂答案只靠题号一条证据。改成三条证据交叉验证，任何一条对不上就不挂——错挂比没有更糟。</p>
+  <ul>
+    <li><b>证据一 · 题号</b>：保留现有规则（必须递增、必须在试卷题号内）。</li>
+    <li><b>证据二 · 答案形状</b>：选择题答案必须是 A/B/C/D 字母或合法多选组合；填空题答案不能是孤立字母；解答题解析过短（例如不足 20 字）判为缺失。这条纯机械校验，一点不猜语义。</li>
+    <li><b>证据三 · 题干指纹</b>：整理答案文件时，把试卷的"题号 + 题型 + 题干开头十几个字"一起给模型。它读解析时能对照"这道是不是那道题"，而不是只认数字。不确定就投进待归属区，不许硬挂。</li>
+    <li><b>独立对齐复核</b>：两份都整理完之后，再单独跑一次<b>纯文本</b>比对：左边题干开头，右边解析开头，逐题判"匹配 / 不匹配 / 不确定"。只判不改，成本很低。</li>
+  </ul>
+  <p class="note">原则不变：三条证据全过才挂。任何一条缺失 → 这一题标"待核对答案"，其余题照常出。这就是把"整段放弃"换成"逐题放弃"。</p>
+</div>
+
+<div class="stage c">
+  <h4>第三层：提升每个字的识别质量 <span class="pill">直接涨点</span></h4>
+  <p class="why">这一层跟双 PDF 无关，但对两份文件同时生效，而且是最便宜的一次改动。</p>
+  <ul>
+    <li><b>出图从 144dpi 提到 216dpi 左右</b>，并明确告诉模型图片的最小像素（同一套代码里另一条识别路径已经这么干了，照抄即可）。</li>
+    <li><b>砍掉降级</b>：渲染失败就报错，不许默默降到 72dpi 再送进模型。一张 A4 在 72dpi 下只有 595×842 像素，小字号根号、角符号、λ 必错。</li>
+    <li><b>复核换一个模型</b>：现在识别和复核是同一个模型，等于自己检查自己。换一个不同家族的模型做复核，哪怕只在复核时用。</li>
+  </ul>
+</div>
+
+<h2><span>03</span>顺序怎么排</h2>
+<p class="lede">不建议一次全改。按"每改一层，你都能看出变化"来排。</p>
+
+<table>
+  <thead><tr><th style="width:12%">批次</th><th style="width:44%">改什么</th><th>改完你能看到什么</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>第一批</b></td>
+      <td>第一层（坏页隔离 + 人工放行 + 复核后重读）</td>
+      <td>第一次拿到"部分成功"的结果，而不是永远"失败"</td>
+    </tr>
+    <tr>
+      <td><b>第二批</b></td>
+      <td>第三层的分辨率与像素声明</td>
+      <td>逐字错误（符号、上下标）明显减少</td>
+    </tr>
+    <tr>
+      <td><b>第三批</b></td>
+      <td>第二层（三条证据 + 独立对齐复核）</td>
+      <td>答案缺失变成"逐题标记"，不再是整段丢失</td>
+    </tr>
+    <tr>
+      <td><b>第四批</b></td>
+      <td>顺带修：三件套（卷/答案/解析分开）支持 + 报错改成人话</td>
+      <td>不再出现"界面写着可以传三个、实际直接被拒"</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2><span>04</span>验收：这四个场景你自己就能判断</h2>
+<p class="lede">不需要看代码。跑完看一眼结果对不对，就知道改到位没有。</p>
+
+<div class="check">
+  <div class="one">
+    <div class="mark">A</div>
+    <div class="q"><b>拿一份 19 题的卷子，配一份只有前 11 题答案的答案文件</b>
+      <span>应该出 19 道草稿：11 道带答案，8 道明确标"缺答案"。而不是整卷失败，也不是 8 道挂上别人的答案。</span></div>
+  </div>
+  <div class="one">
+    <div class="mark bad">B</div>
+    <div class="q"><b>故意配错答案（拿另一份卷子的答案文件）</b>
+      <span>应该 0 道挂上，全部标"不匹配、待核对"。这是最重要的一条——错挂一道，整库的可信度就没了。</span></div>
+  </div>
+  <div class="one">
+    <div class="mark">C</div>
+    <div class="q"><b>跑到一半断网</b>
+      <span>恢复网络后能接着跑完，前面已经识别好的页不重跑、不重复扣费。</span></div>
+  </div>
+  <div class="one">
+    <div class="mark">D</div>
+    <div class="q"><b>某一页是扫描件或图片质量差</b>
+      <span>其余页正常出草稿，只有这一页被单独列出来让你处理，而不是整卷作废。</span></div>
+  </div>
+</div>
+
+<h2><span>05</span>有一个前提必须先说清</h2>
+<p>只要"识别对不对"没有一把尺子，上面每一批改完你都只能靠翻草稿判断好坏，改了两轮之后连自己都说不清是哪次变好的。</p>
+<p>所以第一批动工的同时，会顺手做两件小事：从你手上那份真实卷子里挑 <b>1 页试卷 + 对应 1 页答案</b>，你人工校一遍当标准答案；再配一个对比打分的程序。以后每批改完，一句话就能看到"这次挂错 0 道、答案命中 11/19、题干字对率 98%"。</p>
+<p class="note">这件事只需要你校一页，工作量很小，但它是后面所有优化的判断依据。</p>
+
+<div class="foot">
+  本方案只涉及双 PDF 路线（试卷 + 答案/解析）。<br>
+  未修改任何代码；确认后按批次实施，每批独立验证。
+</div>
+
+</div>
+</body>
+</html>

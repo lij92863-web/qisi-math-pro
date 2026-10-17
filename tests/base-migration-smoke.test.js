@@ -4,10 +4,48 @@ const test =
 const assert =
     require('node:assert/strict');
 
+const {
+    spawnSync
+} =
+    require('node:child_process');
+
+const path =
+    require('node:path');
+
 test(
     'BM02 smoke: DOCX+DOCX stable mock passes',
     () => {
-        require('./batch-smoke-mock.test.js');
+        // The DOCX+DOCX stable mock lives in its own test file and must run in a
+        // separate process.
+        //
+        // Previously this test `require()`d that file directly. Because this
+        // callback is synchronous, node:test registered the required file's
+        // subtests inside this test and then cancelled all of them as
+        // `cancelledByParent` (the parent returned before they finished),
+        // which surfaced as `subtestsFailed` and made `npm test` exit non-zero.
+        //
+        // That single failure was enough to block every commit in this
+        // repository, because `.githooks/pre-commit` runs `verify:safe`.
+        // Running the mock in its own process keeps the same coverage and the
+        // same intent without nesting one test file inside another.
+        const result =
+            spawnSync(
+                process.execPath,
+                [
+                    '--test',
+                    path.join(__dirname, 'batch-smoke-mock.test.js')
+                ],
+                {
+                    stdio: 'inherit',
+                    shell: false
+                }
+            );
+
+        assert.equal(
+            result.status,
+            0,
+            'DOCX+DOCX stable mock must pass in its own process'
+        );
     }
 );
 

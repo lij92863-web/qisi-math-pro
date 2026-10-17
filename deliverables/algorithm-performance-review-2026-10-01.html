@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>奇思数学 Pro · 算法与性能专项评审（2026-10-01）</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1f2328; --ink2:#57606a; --ink3:#8c959f;
+    --line:#e4e7eb; --accent:#2f6feb; --good:#1a7f37; --mid:#9a6700; --low:#bc4c00; --bad:#cf222e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Microsoft YaHei","PingFang SC","Hiragino Sans GB","Source Han Sans SC",system-ui,sans-serif;
+    line-height:1.75;font-size:15px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:40px 28px 80px}
+  header{text-align:center;padding:32px 0 26px;border-bottom:2px solid var(--line);margin-bottom:30px}
+  h1{font-size:25px;margin:0 0 8px;letter-spacing:.5px}
+  .sub{color:var(--ink2);font-size:13.5px}
+  h2{font-size:19px;margin:44px 0 16px;padding-left:12px;border-left:4px solid var(--accent)}
+  h3{font-size:16px;margin:24px 0 10px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:22px 24px;margin-bottom:14px}
+  .lead{font-size:16px;line-height:1.9}
+  .verdict{background:#f0f5ff;border:1px solid #d3e0f7;border-radius:12px;padding:20px 24px;margin-bottom:8px}
+  .verdict p{margin:0 0 10px}
+  .verdict p:last-child{margin-bottom:0}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:14px}
+  th,td{padding:12px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
+  th{background:#f2f4f7;font-size:12.5px;color:var(--ink2);font-weight:600;letter-spacing:.3px}
+  tr:last-child td{border-bottom:none}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .good{color:var(--good);font-weight:600}
+  .mid{color:var(--mid);font-weight:600}
+  .low{color:var(--low);font-weight:600}
+  .bad{color:var(--bad);font-weight:600}
+  .tag{font-size:12px;padding:2px 9px;border-radius:20px;background:#eef1f5;color:var(--ink2);white-space:nowrap}
+  .tag.ok{background:#e6f4ea;color:#1a7f37}
+  .tag.warn{background:#fdf3e2;color:#9a6700}
+  .tag.bad{background:#fdeced;color:#cf222e}
+  .plain{color:var(--ink)}
+  .plain::before{content:"人话 · ";color:var(--accent);font-weight:600}
+  code{background:#f2f4f7;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:13px;
+    font-family:Consolas,"Cascadia Mono",Menlo,monospace}
+  ul{margin:8px 0;padding-left:22px;color:var(--ink2)}
+  li{margin:5px 0}
+  .score-row{display:flex;align-items:center;gap:14px;margin:10px 0}
+  .score-row .lab{flex:0 0 200px;font-weight:600;font-size:14.5px}
+  .score-row .tr{flex:1;height:10px;background:#eceff3;border-radius:5px;overflow:hidden}
+  .score-row .tr i{display:block;height:100%;border-radius:5px}
+  .score-row .v{flex:0 0 46px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+  .bg-good{background:#2da44e}.bg-mid{background:#d29922}.bg-low{background:#e16f24}
+  .callout{border-left:4px solid var(--accent);background:#f7f9fc;border-radius:8px;padding:14px 18px;margin:14px 0}
+  .callout.warn{border-left-color:#d29922;background:#fdfaf3}
+  .callout.bad{border-left-color:#cf222e;background:#fdf5f5}
+  .callout.good{border-left-color:#1a7f37;background:#f4faf5}
+  .callout p{margin:4px 0}
+  .kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0}
+  .kpi div{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 14px;text-align:center}
+  .kpi b{display:block;font-size:23px;color:var(--accent);line-height:1.25}
+  .kpi span{font-size:12.5px;color:var(--ink2)}
+  @media (max-width:720px){.kpi{grid-template-columns:1fr}.score-row .lab{flex:0 0 130px}}
+  .footer{margin-top:52px;padding-top:20px;border-top:1px solid var(--line);color:var(--ink3);font-size:12.5px;text-align:center}
+  .mono{font-family:Consolas,"Cascadia Mono",Menlo,monospace;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>算法与性能专项评审</h1>
+  <div class="sub">奇思数学 Pro &nbsp;·&nbsp; 2026 年 10 月 1 日 &nbsp;·&nbsp; 基于代码逐行阅读 + 独立基准实测</div>
+</header>
+
+<div class="verdict">
+  <p class="lead"><b>结论：算法写得比你想象的更讲究，但性能优化的方向找偏了。</b></p>
+  <p>算法层面：核心的"挂答案"逻辑用的是<b>三态判定 + 保守锁步扫描</b>——不猜、不跳、不重同步。这是正确的做法，而且是主动放弃了覆盖率换来的安全性。</p>
+  <p>性能层面：项目过去两轮优化<b>都是真的、也都有效</b>（有实测、有反例、有对照），但矛头指错了地方。真正的瓶颈不在数据库读取，在<b>一段完全可以避免的重复计算</b>。我实测：优化之后还能再快 <b>15～16 倍</b>。</p>
+</div>
+
+<h2>一、评分</h2>
+<div class="card">
+  <div class="score-row"><div class="lab">算法设计质量</div><div class="tr"><i class="bg-good" style="width:92%"></i></div><div class="v good">9.2</div></div>
+  <div class="score-row"><div class="lab">算法实现质量</div><div class="tr"><i class="bg-mid" style="width:80%"></i></div><div class="v mid">8.0</div></div>
+  <div class="score-row"><div class="lab">已做的性能优化</div><div class="tr"><i class="bg-good" style="width:86%"></i></div><div class="v good">8.6</div></div>
+  <div class="score-row"><div class="lab">优化的方向判断</div><div class="tr"><i class="bg-low" style="width:60%"></i></div><div class="v low">6.0</div></div>
+  <div class="score-row"><div class="lab">性能现状（规模适应性）</div><div class="tr"><i class="bg-low" style="width:65%"></i></div><div class="v low">6.5</div></div>
+  <div class="score-row"><div class="lab">剩余优化空间</div><div class="tr"><i class="bg-mid" style="width:72%"></i></div><div class="v mid">还有 15 倍</div></div>
+</div>
+
+<h2>二、你有哪些"算法"</h2>
+<div class="card">
+  <p class="plain">项目里真正称得上算法的东西有五处，其中前两处是核心，其余三处是辅助。这份清单本身就说明这套东西不是"把界面拼起来"而已。</p>
+  <table style="margin-top:14px">
+    <thead><tr><th>算法</th><th>做什么</th><th>成熟度</th></tr></thead>
+    <tbody>
+      <tr><td><b>序列对齐</b></td><td>把答案文件、解析文件里的题号，跟试卷的题号对起来；对不齐就拒绝挂接</td><td><span class="tag ok">核心 · 设计优秀</span></td></tr>
+      <tr><td><b>题目查重指纹</b></td><td>把题干和选项归一化成一个"指纹"，判断新题是重复、相似、还是答案冲突</td><td><span class="tag ok">核心 · 实现线性</span></td></tr>
+      <tr><td>DOCX 生产者身份对账</td><td>核对一份试卷和它的答案是不是同一来源、同一批次</td><td><span class="tag">辅助</span></td></tr>
+      <tr><td>OCR 结构恢复</td><td>从识别结果里还原阅读顺序、筛选候选、抽取结构</td><td><span class="tag">辅助</span></td></tr>
+      <tr><td>备份快照一致性</td><td>恢复前逐字节比对内容，防止"同名不同内容"被覆盖</td><td><span class="tag">辅助</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2>三、算法好在哪</h2>
+
+<div class="card">
+  <h3>1. 它做的是"三态判定"，不是"对/错"二选一</h3>
+  <p class="plain">普通程序只有两种结果：挂上、或者不挂。这套东西有三种：全部挂上、只挂靠得住的前半段、一个都不挂。中间那一档是关键——它让程序在"我拿不准"的时候还有一个体面的退路，而不是被迫二选一。</p>
+  <p class="ev" style="color:#8c959f;font-size:13.5px">实测：一套 30 题的完整卷子判定为"全部挂上"；一旦有缺口立刻降为"只挂前半段"或"一个都不挂"，绝不会硬着头皮挂上去。</p>
+</div>
+
+<div class="card">
+  <h3>2. 它拒绝"变聪明"</h3>
+  <p class="plain">这套对齐逻辑是"锁步扫描"：两个序列并排往前走，每一步必须三方一致（答案、解析、期望题号），只要有一处对不上就立刻停下。它<b>不跳号、不回退重找、不按内容相似度猜</b>。别人做这种功能第一反应是加模糊匹配提高覆盖率，这里反过来——主动放弃覆盖率换"绝不错挂"。</p>
+  <p class="plain">这一点值得单独表扬：<b>克制比聪明难。</b>尤其它是 AI 写出来的，说明你把规矩立在了前面。</p>
+</div>
+
+<div class="card">
+  <h3>3. 查重指纹"出错的方向是安全的"</h3>
+  <p class="plain">指纹用两个符号拼起来，理论上有碰撞的可能（已知、已记录、未修）。但关键在<b>碰撞的后果</b>：碰撞会让两道不同的题看起来像同一道，程序于是就<b>拒绝导入</b>。也就是说，最坏情况是"误拒"，不是"误挂"。多拒一道你手动补一下就行，误挂一道可能整个学期都发现不了。</p>
+  <p class="ev" style="color:#8c959f;font-size:13.5px">实测：查重算法本身是严格线性的——题库 1 千道时单次 5.8 毫秒，1 万道 54 毫秒，5 万道 249 毫秒，比例约 1 : 9.4 : 43，基本等比增长，没有意外的平方级退化。写得很干净。</p>
+</div>
+
+<h2>四、算法上的三个具体问题</h2>
+
+<div class="callout warn">
+  <p><b>① 一票否决太刚：中间漏一题，后面全丢</b> <span class="tag warn">设计取舍，不是 bug</span></p>
+  <p class="plain">我做了一个真实场景测试：一套 19 题的卷子，答案文件里<b>只有第 7 题缺失</b>（现实中很常见——"图略""略"），其余 18 题完整。</p>
+  <p><b>结果：只有第 1～6 题被自动挂上，第 7～19 题（13 道）全部被扣住不挂。</b>即使只是答案缺了、解析完整，结果一模一样。</p>
+  <p class="plain">这解释了为什么"深圳整卷"迟迟验收不过：不是识别不准，是这套算法对任何缺口都零容忍。安全是对的，但代价是<b>现实世界的卷子很难拿到高覆盖率</b>。</p>
+  <p><b>要不要改？这是个决定，不是修 bug。</b>如果哪天你想提高 PDF 覆盖率，安全改法的形状是：允许跨过缺口继续，但要求"续接点必须三方自证一致"（答案、解析、期望题号同时对上）才继续——这样仍然不猜、不靠相似度。但这会改动你自己立的第一条规矩，得你点头。</p>
+</div>
+
+<div class="callout warn">
+  <p><b>② 题号解析只认最多三位数字</b> <span class="tag warn">低概率，方向安全</span></p>
+  <p class="plain">解析题号的规则是"取字符串里第一段 1～3 位数字"。实测：</p>
+  <p class="mono" style="color:#57606a">"1000" → 变成 "100"　　"2023年第5题" → 变成 "202"　　"第12题" → "12" ✓　　"１２" → "12" ✓</p>
+  <p class="plain">正常情况下题号就 1～30，碰不到这个边界。但如果识别结果里混进了年份之类的东西，就会解析出一个巨大的假题号，导致序列对不上而丢掉整卷。后果仍然是"少挂"而不是"错挂"，所以不算危险，但属于埋着的小石头。</p>
+</div>
+
+<div class="callout warn">
+  <p><b>③ 几个平方级写法</b> <span class="tag ok">实测无害，不要动</span></p>
+  <p class="plain">序列对齐里有几处"在大数组里反复查找"的写法，严格算起来是平方级。我实测了：<b>30 题 0.83 毫秒，1000 题 4.8 毫秒，5000 题 12.3 毫秒。</b>真实的卷子才二三十题，这点开销可以忽略。</p>
+  <p class="plain"><b>建议：一个字都别改。</b>这是安全关键代码，性能早就够用，动它只有风险没有收益。这一点要特别说明——不是所有"看起来不优雅"的代码都值得优化，分清楚哪个该动、哪个不该动，本身就是水平。</p>
+</div>
+
+<h2>五、性能优化：做过的事，是真的</h2>
+
+<div class="card">
+  <p class="plain">过去几轮的性能工作质量很高，记录里带原始采样、带反例、带失败日志，这在个人项目里极少见。摘录三次关键优化的实测：</p>
+
+  <h3>第一轮：把"正式提交时的整库扫描"从反复扫改成单次扫</h3>
+  <table>
+    <thead><tr><th>场景</th><th class="num">优化前</th><th class="num">优化后</th></tr></thead>
+    <tbody>
+      <tr><td>题库 1000 道 · 一次确认 20 道</td><td class="num">6.141 ms</td><td class="num good">2.999 ms</td></tr>
+      <tr><td>题库 10000 道 · 一次确认 20 道</td><td class="num">61.789 ms</td><td class="num good">29.507 ms</td></tr>
+    </tbody>
+  </table>
+
+  <h3>第二轮：审核页面不再反复重载整批文件</h3>
+  <table>
+    <thead><tr><th>场景</th><th class="num">优化前</th><th class="num">优化后</th><th>整批重载次数</th></tr></thead>
+    <tbody>
+      <tr><td>题库 1000 道 · 草稿 400 条</td><td class="num">2557.3 ms</td><td class="num good">1527.9 ms</td><td class="mono">43 次 → 3 次</td></tr>
+      <tr><td>题库 10000 道 · 草稿 400 条</td><td class="num">4294.6 ms</td><td class="num good">3044.0 ms</td><td class="mono">43 次 → 3 次</td></tr>
+    </tbody>
+  </table>
+
+  <h3>第三轮：统计刷新不再重写全部草稿</h3>
+  <table>
+    <thead><tr><th>场景</th><th class="num">优化前</th><th class="num">优化后</th><th>草稿重写行数</th></tr></thead>
+    <tbody>
+      <tr><td>题库 1000 道 · 草稿 400 条</td><td class="num">1767.6 ms</td><td class="num good">468.1 ms</td><td class="mono">800 行 → 0 行</td></tr>
+      <tr><td>题库 10000 道 · 草稿 400 条</td><td class="num">3460.7 ms</td><td class="num good">1349.7 ms</td><td class="mono">800 行 → 0 行</td></tr>
+    </tbody>
+  </table>
+  <p class="ev" style="color:#8c959f;font-size:13.5px">以上数据来自项目自身记录，每一轮都在真实浏览器 + 真实数据库上跑过对照，并保留了优化前失败的日志。可信度高。</p>
+</div>
+
+<h2>六、性能优化：真正的大头还没动</h2>
+
+<div class="callout bad">
+  <p><b>瓶颈找错了：不是数据库读得太多，是同一件事算得太多遍。</b></p>
+</div>
+
+<div class="card">
+  <p class="plain">我顺着"确认一道题入库"这条最热的路径读代码，发现每确认一道题，程序会做两件事：把整个题库读进来，然后<b>把题库里每一道题的题干和选项，从零重新算一遍指纹</b>。题库有 1 万道，就重算 1 万次；确认 20 道，就重算 20 万次。而每次"算指纹"要跑六遍正则替换。</p>
+  <p class="plain">问题在于：<b>这些指纹根本不会变。</b>同一道题，昨天算的和今天算的一模一样。每确认一道题就把整个题库重算一遍，等于每收一份作业都把全校名单重抄一遍。</p>
+
+  <h3>实测：把指纹预先算好一次，能快多少</h3>
+  <table>
+    <thead><tr><th>题库规模</th><th class="num">当前做法</th><th class="num">预先算好</th><th class="num">提速</th></tr></thead>
+    <tbody>
+      <tr><td>1000 道 · 确认 20 道</td><td class="num">90.2 ms</td><td class="num">5.5 ms</td><td class="num good">16 倍</td></tr>
+      <tr><td>10000 道 · 确认 20 道</td><td class="num">958.3 ms</td><td class="num">60.2 ms</td><td class="num good">16 倍</td></tr>
+      <tr><td>50000 道 · 确认 20 道</td><td class="num">4737.8 ms</td><td class="num">313.9 ms</td><td class="num good">15 倍</td></tr>
+    </tbody>
+  </table>
+  <p class="ev" style="color:#8c959f;font-size:13.5px">上表只统计查重算法本身的耗时，不含数据库读写。预先算好一次的成本也是线性的（1 万道约 62 毫秒），但它只付一次，而不是每道题付一次。</p>
+
+  <div class="callout">
+    <p><b>关键对照：</b>项目自己实测"确认 20 道题的完整边界耗时"在题库 1 万道时是 <b>1030 毫秒</b>；而我单独测查重算法本身（不含任何数据库操作）就已经要 <b>958 毫秒</b>。</p>
+    <p class="plain">也就是说，那 1030 毫秒里，绝大部分不是"读数据库慢"，而是这段<b>纯粹可以省掉的计算</b>。之前两轮优化都在砍数据库读取次数——方向对、也确实有收益，但砍的不是最大的那一块。</p>
+  </div>
+
+  <h3>这项优化特殊在哪</h3>
+  <ul>
+    <li><b>零语义风险</b>：不改变任何判定结果，只是"算一次"和"算一万次"的区别。所有安全门禁、所有既有测试的预期都不需要改一个字。</li>
+    <li><b>不牺牲并发正确性</b>：项目之前明确拒绝"跨事务缓存"（怕拿到过期的题库状态而误判），这个顾虑是对的。但指纹可以在<b>同一次事务内</b>算一遍、给这一批题共用，完全不跨越事务边界，不违反那条原则。</li>
+    <li><b>收益随题库增长而放大</b>：现在题库小感觉不到，等长到几万道，这是"能不能忍"的区别。</li>
+  </ul>
+</div>
+
+<h2>七、结论与建议</h2>
+
+<div class="verdict">
+  <p><b>算法：8.7 / 10。</b>设计层面接近优秀——三态判定、保守锁步、拒绝变聪明、出错方向安全。这是整套系统里技术含量最高、也最对得起"不许挂错答案"这条底线的地方。<b>建议：不要为了性能去动它。</b></p>
+
+  <p><b>性能：6.5 / 10。</b>已做的优化是真的、有证据、有效果；但最大的一块（重复计算指纹）没被发现，方向判断偏了。<b>补齐之后可以到 8 分以上。</b></p>
+
+  <p><b>三条建议，按性价比排序：</b></p>
+  <p>① <b>把指纹改成"一次事务内算一遍"</b>——约 15～16 倍提速，零语义风险，不动任何安全逻辑。这是目前投入产出比最高的改动。</p>
+  <p>② <b>算法层面优先做"缺口续接"设计，而不是继续压榨性能</b>——PDF 覆盖率低的根因是"漏一题丢全部"，这是产品能力问题，比快几毫秒重要得多。但它涉及改动你自己立的第一条规矩，需要你先拍板。</p>
+  <p>③ <b>把题号解析的三位限制放宽</b>——顺手的事，防御未来识别结果里混进年份。</p>
+
+  <p><b>最后一句：</b>这个项目最难得的地方不是没有缺点，而是<b>它自己知道自己的缺点</b>——性能短板、指纹碰撞、PDF 覆盖率不足，全都被自己测出来、写进报告、标了"未完成"。愿意承认未完成，比假装完成强太多。</p>
+</div>
+
+<div class="footer">
+  本报告基于 2026-10-01 的代码逐行阅读与独立基准实测生成。所有基准测试脚本运行于 Node 22.22.2，使用项目自身的算法模块，未修改项目任何文件。<br>
+  性能对照数据中，第五节的数字引自项目既有验收记录，第六节的数字为本次独立实测。
+</div>
+
+</div>
+</body>
+</html>

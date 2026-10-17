@@ -13,7 +13,7 @@
         maxDuration: 86400000
     });
     const SAFE_TOKEN = /^[a-zA-Z0-9_.:-]{1,80}$/;
-    const SAFE_ENGINE = /^(?:browser|docx|local|mock|ocr|paddle|pdf|qwen|tesseract)[a-zA-Z0-9_.:-]{0,71}$/i;
+    const SAFE_ENGINE = /^(?:browser|docx|external|glm|local|mineru|mock|ocr|paddle|pdf|qwen|tesseract)[a-zA-Z0-9_.:-]{0,71}$/i;
     const ALLOWED_STAGES = new Set([
         'started',
         'context-loaded',
@@ -40,11 +40,17 @@
         'readback-verified',
         'cancelled',
         'failed',
+        'pdf-v1-window-start',
+        'pdf-v1-canonical-produced',
+        'pdf-v1-contract-validated',
+        'pdf-external-task-start',
+        'pdf-external-canonical-produced',
+        'pdf-external-contract-validated',
         'unknown-stage'
     ]);
     const ALLOWED_COUNTS = new Set([
         'files', 'pages', 'candidates', 'selected', 'validated', 'drafts',
-        'accepted', 'rejected', 'warnings', 'errors', 'processed', 'total'
+        'accepted', 'rejected', 'warnings', 'errors', 'processed', 'total', 'task', 'totalTasks', 'unassigned'
     ]);
     const KNOWN_ERROR_CODES = new Set([
         'mock-transport-invalid',

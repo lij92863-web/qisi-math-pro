@@ -1,0 +1,27 @@
+$\begin{array}{|c|c|c|c|c|c|c|c|c|c|c|c|}\hline\text { 题号 } & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & 10 \\\hline\text { 答案 } & \mathrm{D} & \mathrm{A} & \mathrm{B} & \mathrm{A} & \mathrm{C} & \mathrm{D} & \mathrm{C} & \mathrm{D} & \mathrm{AB} & \mathrm{BCD} \\\hline\text { 题号 } & 11 & & & & & & & & & \\\hline\text { 答案 } & \mathrm{BC} & & & & & & & & & \\\hline\end{array}$
+
+1. D
+
+【分析】根据复数代数形式的除法运算化简 $z$，再计算其模即可。
+
+【详解】因为 $z(1+i)=2i$，所以 $z=\frac{2i}{1+i}=\frac{2i(1-i)}{(1+i)(1-i)}=1+i$，所以 $|z|=\sqrt{1^2+1^2}=\sqrt{2}$。
+
+故选：D
+
+2. A
+
+【分析】若函数 $y=\tan(x+\varphi)$ 的图象关于 $\left(\frac{\pi}{4}, 0\right)$ 对称，根据正切函数的对称性可得 $\varphi=-\frac{\pi}{4}+\frac{k \pi}{2}(k \in \mathbf{Z})$，再根据充分、必要条件结合包含关系分析求解。
+
+【详解】若函数 $y=\tan(x+\varphi)$ 的图象关于 $\left(\frac{\pi}{4}, 0\right)$ 对称，则 $\frac{\pi}{4}+\varphi=\frac{k \pi}{2}(k \in \mathbf{Z})$，解得 $\varphi=-\frac{\pi}{4}+\frac{k \pi}{2}(k \in \mathbf{Z})$，因为 $\left\{\begin{array}{l}\varphi=-\frac{\pi}{4}+k \pi, k \in \mathbf{Z} \\ \text { 是 }\left\{\begin{array}{l}\varphi=-\frac{\pi}{4}+\frac{k \pi}{2}, k \in \mathbf{Z}\end{array}\right.\end{array}\right.$ 的真子集，所以“$\varphi=-\frac{\pi}{4}+k \pi(k \in \mathbf{Z})$”是“函数 $y=\tan(x+\varphi)$ 的图象关于 $\left(\frac{\pi}{4}, 0\right)$ 对称”的充分不必要条件。
+
+故选：A.
+
+3. B
+
+【分析】根据集合元素的互异性及并集的概念求解即可。
+
+【详解】根据集合元素的互异性可知，$a \neq 1, a \neq-2$。因为 $A \cup B$ 含有 4 个元素，所以 $A \cap B$ 仅含有 1 个元素，若 $a^2 \in A$，则 $a^2=1$ 或 $a^2=a$，所以 $a=0$ 或 $a= \pm 1$。若 $-1 \in A$，则 $a=-1$。
+
+结合集合元素的互异性可知 $a=0$ 或 $a=-1$。
+
+当 $a=0$ 时，$A=\{-2,1,0\}$，$B=\{-1,0\}$，$A \cup B=\{-2,-1,0,1\}$，符合题意。

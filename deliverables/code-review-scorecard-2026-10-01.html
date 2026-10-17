@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>奇思数学 Pro · 全项目评分报告（2026-10-01）</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1f2328; --ink2:#57606a; --ink3:#8c959f;
+    --line:#e4e7eb; --accent:#2f6feb; --good:#1a7f37; --mid:#9a6700; --low:#bc4c00; --bad:#cf222e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Microsoft YaHei","PingFang SC","Hiragino Sans GB","Source Han Sans SC",system-ui,sans-serif;
+    line-height:1.75;font-size:15px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:40px 28px 80px}
+  header{text-align:center;padding:36px 0 28px;border-bottom:2px solid var(--line);margin-bottom:32px}
+  h1{font-size:26px;margin:0 0 8px;letter-spacing:.5px}
+  .sub{color:var(--ink2);font-size:13.5px}
+  .gauge{margin:26px auto 6px;width:220px}
+  .gauge-num{font-size:56px;font-weight:700;line-height:1;color:var(--accent)}
+  .gauge-num span{font-size:22px;color:var(--ink3);font-weight:400}
+  .gauge-label{font-size:14px;color:var(--ink2);margin-top:10px}
+  .gauge-bar{height:10px;border-radius:6px;background:#e9edf2;margin:16px auto 0;overflow:hidden}
+  .gauge-bar i{display:block;height:100%;width:79%;background:linear-gradient(90deg,#4a8cf7,#2f6feb);border-radius:6px}
+  h2{font-size:19px;margin:44px 0 16px;padding-left:12px;border-left:4px solid var(--accent)}
+  h3{font-size:16px;margin:26px 0 10px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:22px 24px;margin-bottom:14px}
+  .lead{font-size:16px;line-height:1.9}
+  .lead b{color:var(--accent)}
+  .verdict{background:#f0f5ff;border:1px solid #d3e0f7;border-radius:12px;padding:20px 24px;margin-bottom:8px}
+  .verdict p{margin:0 0 10px}
+  .verdict p:last-child{margin-bottom:0}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{padding:13px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
+  th{background:#f2f4f7;font-size:13px;color:var(--ink2);font-weight:600;letter-spacing:.3px}
+  tr:last-child td{border-bottom:none}
+  td.score{width:64px;font-weight:700;font-size:16px;text-align:center;font-variant-numeric:tabular-nums}
+  td.bar{width:190px}
+  .bar-track{height:9px;background:#eceff3;border-radius:5px;overflow:hidden}
+  .bar-track i{display:block;height:100%;border-radius:5px}
+  .b-good{background:#2da44e}.b-mid{background:#d29922}.b-low{background:#e16f24}.b-bad{background:#cf222e}
+  .s-good{color:var(--good)}.s-mid{color:var(--mid)}.s-low{color:var(--low)}.s-bad{color:var(--bad)}
+  .dim{margin-bottom:12px}
+  .dim-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .dim-head h3{margin:0;font-size:16px}
+  .tag{font-size:12px;padding:2px 9px;border-radius:20px;background:#eef1f5;color:var(--ink2);white-space:nowrap}
+  .tag.ok{background:#e6f4ea;color:#1a7f37}
+  .tag.warn{background:#fdf3e2;color:#9a6700}
+  .tag.bad{background:#fdeced;color:#cf222e}
+  .dim p{margin:8px 0;color:var(--ink2)}
+  .dim .plain{color:var(--ink)}
+  .dim .plain::before{content:"人话 · ";color:var(--accent);font-weight:600}
+  .ev{color:var(--ink3);font-size:13.5px}
+  .ev::before{content:"实测 · ";color:var(--ink3);font-weight:600}
+  ul{margin:8px 0;padding-left:22px;color:var(--ink2)}
+  li{margin:5px 0}
+  code{background:#f2f4f7;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:13px;
+    font-family:Consolas,"Cascadia Mono",Menlo,monospace}
+  .action{display:flex;gap:16px;align-items:flex-start;background:var(--card);border:1px solid var(--line);
+    border-left:4px solid var(--accent);border-radius:10px;padding:18px 20px;margin-bottom:12px}
+  .action .n{flex:0 0 30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;
+    display:flex;align-items:center;justify-content:center;font-size:14px}
+  .action.a1{border-left-color:#cf222e}.action.a1 .n{background:#cf222e}
+  .action.a2{border-left-color:#d29922}.action.a2 .n{background:#d29922}
+  .action.a3{border-left-color:#1a7f37}.action.a3 .n{background:#1a7f37}
+  .action h3{margin:0 0 6px;font-size:15.5px}
+  .action p{margin:4px 0;color:var(--ink2);font-size:14px}
+  .footer{margin-top:52px;padding-top:20px;border-top:1px solid var(--line);color:var(--ink3);font-size:12.5px;text-align:center}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:720px){.grid2{grid-template-columns:1fr}td.bar{display:none}}
+  .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}
+  .kpi div{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 14px;text-align:center}
+  .kpi b{display:block;font-size:24px;color:var(--accent);line-height:1.2}
+  .kpi span{font-size:12.5px;color:var(--ink2)}
+  @media (max-width:720px){.kpi{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>奇思数学 Pro · 全项目评分报告</h1>
+  <div class="sub">评审日期：2026 年 10 月 1 日 &nbsp;·&nbsp; 评审范围：全部自有代码约 4.1 万行、99 个模块、269 个测试文件</div>
+  <div class="gauge">
+    <div class="gauge-num">7.9<span> / 10</span></div>
+    <div class="gauge-bar"><i></i></div>
+    <div class="gauge-label">综合评分</div>
+  </div>
+</header>
+
+<div class="verdict">
+  <p class="lead"><b>一句话：这不是"随便糊出来的东西"，是一套真正被认真治理过的软件。</b>最难得的是它守住了自己的底线——宁可少给一个答案，也绝不把答案挂错题。</p>
+  <p>分数是"两头高、中间低"的形状：<b>安全、容错、需求实现这三块接近优秀</b>；<b>规模长大的性能和长期维护这两块是短板</b>。这个形状说明：现在完全能用、能放心用；但随着你的题库从几百道长到几万道，会开始觉得慢。</p>
+  <p>本次实测发现 <b>3 件需要处理的事</b>，其中 1 件是软件问题，2 件是"会耽误以后干活"的问题。详见后文。</p>
+</div>
+
+<h2>一、十项评分</h2>
+<table>
+  <thead>
+    <tr><th>维度</th><th>分数</th><th></th><th>一句话评价</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><b>需求实现度</b></td><td class="score s-good">9.5</td><td class="bar"><div class="bar-track"><i class="b-good" style="width:95%"></i></div></td><td>想做的事基本都做成了，而且是你这行才想得到的细节</td></tr>
+    <tr><td><b>数据安全与容错</b></td><td class="score s-good">9.0</td><td class="bar"><div class="bar-track"><i class="b-good" style="width:90%"></i></div></td><td>"宁可空着也不挂错"这条底线在代码里是真的落到了实处</td></tr>
+    <tr><td><b>安全边界</b></td><td class="score s-good">8.5</td><td class="bar"><div class="bar-track"><i class="b-good" style="width:85%"></i></div></td><td>只对内网开放、外来来源一律拒绝、没找到任何泄露的钥匙</td></tr>
+    <tr><td><b>交互与易用性</b></td><td class="score s-good">8.5</td><td class="bar"><div class="bar-track"><i class="b-good" style="width:85%"></i></div></td><td>六个入口全部实测能点通，界面干净，白屏状态也写了提示</td></tr>
+    <tr><td><b>测试与门禁</b></td><td class="score s-mid">8.0</td><td class="bar"><div class="bar-track"><i class="b-mid" style="width:80%"></i></div></td><td>1756 项测试 2 分半跑完，规模惊人；但总闸目前是红的（见第②条）</td></tr>
+    <tr><td><b>架构与模块划分</b></td><td class="score s-mid">8.0</td><td class="bar"><div class="bar-track"><i class="b-mid" style="width:80%"></i></div></td><td>99 个模块全部登记在册、零遗漏；但新旧体系仍在并行</td></tr>
+    <tr><td><b>离线与交付可用性</b></td><td class="score s-mid">7.5</td><td class="bar"><div class="bar-track"><i class="b-mid" style="width:75%"></i></div></td><td>断网能正常用（实测 91 个请求全在本地）；但 PDF 那条路有个漏网（见第①条）</td></tr>
+    <tr><td><b>代码可读性</b></td><td class="score s-mid">7.0</td><td class="bar"><div class="bar-track"><i class="b-mid" style="width:70%"></i></div></td><td>结构统一，但几乎不写注释，几万行里只有约 110 行说明</td></tr>
+    <tr><td><b>性能与规模扩展</b></td><td class="score s-low">6.5</td><td class="bar"><div class="bar-track"><i class="b-low" style="width:65%"></i></div></td><td>题库上千道之后会明显变慢，这是已知的、诚实的短板</td></tr>
+    <tr><td><b>技术债与可维护性</b></td><td class="score s-low">6.0</td><td class="bar"><div class="bar-track"><i class="b-low" style="width:60%"></i></div></td><td>核心协调文件仍然臃肿；文档堆积 400 多篇、已经互相打架</td></tr>
+  </tbody>
+</table>
+
+<h2>二、最要紧的三件事</h2>
+
+<div class="action a1">
+  <div class="n">1</div>
+  <div>
+    <h3>断网时，PDF 那条路会去网上找一个"零件"——而那个零件本地明明就有</h3>
+    <p><b>后果：</b>学校网络不好或者断网时，PDF 文件的文字提取会失败或变慢；联网时则会白白从境外下载一个约 2MB 的文件。</p>
+    <p><b>证据：</b>本项目已经把 PDF 引擎完整地放进了本地目录，页面也确实加载了它。但程序里没有告诉它"工作文件在本地"，于是它自动退回了一个境外网址去取。</p>
+    <p><b>修复量：</b>一行代码。改完 PDF 相关的整条路才真正是全离线的。</p>
+  </div>
+</div>
+
+<div class="action a2">
+  <div class="n">2</div>
+  <div>
+    <h3>"体检总开关"现在是红的，但它不是软件坏了</h3>
+    <p><b>后果：</b>这个项目有条规矩——总检查不过，任何 AI 都不许保存改动。现在总检查返回失败，等于把所有后续维护都卡住了。</p>
+    <p><b>真相：</b>我做了对照实验。那个最核心的"试卷+答案导入"自检，单独跑是 <b>20 项全过</b>；只是有一个检查文件"套娃"式地把另一个检查文件嵌进自己里面，导致嵌套的那批被判成"没跑完"。所以红的是检查自己，不是你的功能。</p>
+    <p><b>注意：</b>这和你那份最新验收报告里"1756 项全过"的记录对不上。在你今天这台机器上，它确实是红的。</p>
+  </div>
+</div>
+
+<div class="action a3">
+  <div class="n">3</div>
+  <div>
+    <h3>根目录躺着 1.17MB 的旧代码副本和 3.4MB 的临时目录</h3>
+    <p><b>后果：</b>不影响使用，但会让以后每一个来读代码的 AI 看到"两个版本的程序"，容易读错、改错地方。</p>
+    <p><b>证据：</b>根目录有一个 1.17MB 的历史版本备份、一个 3.4MB 的临时目录，还有几份测试素材（一份试卷、一张图、一个示例文档）混在源码旁边。另外有 140 个交付物文件和 400 多篇文档堆在仓库里，其中文档已经<b>从 8 月起就停止更新</b>，而真正在流动的记录挪到了另一个目录——两边已经开始说不一样的话。</p>
+  </div>
+</div>
+
+<h2>三、实测下来的硬数据</h2>
+
+<div class="kpi">
+  <div><b>41,103</b><span>自有代码行数</span></div>
+  <div><b>3,162</b><span>函数总数</span></div>
+  <div><b>1,756</b><span>测试项总数</span></div>
+  <div><b>0</b><span>对外网络请求</span></div>
+</div>
+
+<div class="card">
+  <h3>我这次实际跑过的验证</h3>
+  <ul>
+    <li><b>界面能不能用</b>：用真实浏览器打开，六个主入口逐个点击——全部正常切换，控制台<b>零报错</b>。</li>
+    <li><b>断网能不能用</b>：把一切非本机的网络请求全部掐断后重新打开——页面共 91 个请求，<b>全部来自本机，零外网依赖</b>，功能正常。</li>
+    <li><b>语法与专项门禁</b>：语法检查通过；"不许真的调用收费 AI"检查通过；"核心文件不许乱长"的架构检查通过。三项都是绿灯。</li>
+    <li><b>完整测试</b>：1756 项，2 分 23 秒跑完，<b>1736 通过 / 1 失败 / 19 项被连带取消</b>。那 1 项失败就是上面第②条说的"套娃"问题。</li>
+    <li><b>排掉一个假警报</b>：我一开始跑出来是 7 项失败 19 项取消。追查后发现失败全部来自<b>我自己工具环境的删除拦截</b>（它把删除文件的操作转去回收站，结果报错）。把这层干扰去掉后，7 项失败全部消失。也就是说——<b>之前记档里"测试是红灯"的结论是冤枉的</b>。</li>
+  </ul>
+</div>
+
+<h2>四、分维度详评</h2>
+
+<div class="card dim">
+  <div class="dim-head"><h3>1. 需求实现度 · 9.5</h3><span class="tag ok">接近优秀</span></div>
+  <p class="ev">六个主入口全部可点通；知识点树包含"集合与常用逻辑用语 / 一元二次函数、方程和不等式 / 三角函数 / 解三角形 / 平面向量 / 数列 / 立体几何初步 / 空间向量与立体几何 / 直线和圆的方程 / 圆锥曲线的方程 / 导数及其应用 / 概率与统计"等完整章节，与人教版教材顺序一致。批量上传区明确区分"试卷文件 / 答案文件 / 解析文件 / 补充图片"。</p>
+  <p class="plain">这几样东西，AI 自己想不出来。"四样文件一起拖进去"是天天坐办公室的人才有的直觉；"概率与统计"排在"导数"后面，是教材顺序，不是字母顺序。需求定义这一层，你做得比很多专职产品经理都准。</p>
+  <p class="ev">扣分项：PDF 整卷真实识别仍未通过验收，这是唯一没啃下来的功能。</p>
+</div>
+
+<div class="card dim">
+  <div class="dim-head"><h3>2. 数据安全与容错 · 9.0</h3><span class="tag ok">接近优秀</span></div>
+  <p class="ev">项目自己立的七条禁令（不许按语义猜着挂答案、不许按关键词挂、不许跳号后继续挂、不许答案和解析序列不一致还挂……）我逐条去代码里找证据，全部落实。数据库从第 2 版演进到第 8 版，每一步都写了正式的升级程序。备份恢复做到了逐字节比对，恢复前还会先自动存一份安全备份。</p>
+  <p class="plain">这是整个项目最值钱的地方。软件出错可以修，题库被污染是修不回来的——一学期攒的题如果答案错位，你可能要花两周才能发现。你把这条底线守住了，而且不是嘴上说说。</p>
+  <p class="ev">扣分项：查重的"指纹"算法用的分隔符存在已知碰撞（同样的题干配不同选项切分，可能算出同一个指纹），会导致极少数情况下误判为重复或误报答案冲突。这个风险已被记录在案但尚未迁移修复。</p>
+</div>
+
+<div class="card dim">
+  <div class="dim-head"><h3>3. 安全边界 · 8.5</h3><span class="tag ok">优秀</span></div>
+  <p class="ev">服务只监听本机地址，不对外网卡开放；非同源的来源一律返回拒绝；静态文件走白名单——只有页面真正用到的资源才放行，源代码、配置文件、上传目录我一律访问不到。全仓扫描未发现任何硬编码的密钥或口令（唯一命中是测试里的一句假路径）。</p>
+  <p class="plain">说人话：这套东西是"只给这台电脑自己用"的，别人从网络上碰不到它。而且我翻遍了代码，没有把你的账号密码之类的东西写死在文件里。</p>
+</div>
+
+<div class="card dim">
+  <div class="dim-head"><h3>4. 交互与易用性 · 8.5</h3><span class="tag ok">优秀</span></div>
+  <p class="ev">真实浏览器实测：导航切换正常、无控制台报错。界面观感干净统一，空状态都写了明确的提示文案（"该节点下暂无收录题目"、"还没有批量录题任务"）。备份与恢复入口放在"题库与检索"顶部，位置合理。</p>
+  <p class="plain">对一个不懂代码的人做出来的界面来说，这个完成度是很高的——该留白的地方留白，该告诉你"这里现在是空的"的地方也说了。</p>
+  <p class="ev">扣分项：之前那次"整个界面点不动"的事故，长时间没人发现。原因之一是错误日志被脱敏到只剩一句没有信息量的套话，把真话洗成了废话。</p>
+</div>
+
+<div class="card dim">
+  <div class="dim-head"><h3>5. 测试与门禁 · 8.0</h3><span class="tag warn">规模优秀，但闸门是红的</span></div>
+  <p class="ev">253 个单元测试文件 + 16 个浏览器测试文件，共 1756 项，2 分 23 秒跑完，全部不需要打包步骤。测试之外还有语法检查、禁止真实收费调用检查、改动范围检查、架构锁检查等多道专项闸门，并且挂在了自动钩子上。</p>
+  <p class="plain">说人话：你给这套软件装了 1756 个"体检项目"，还要求每次改动前必须全过。这个自觉程度，是很多正经公司都做不到的。</p>
+  <p class="ev">扣分项：目前总闸返回失败（第②条），按项目自己的规矩，这期间任何 AI 都不该提交改动。它把整个维护流程堵住了，所以必须优先修。</p>
+</div>
+
+<div class="card dim">
+  <div class="dim-head"><h3>6. 架构与模块划分 · 8.0</h3><span class="tag warn">登记零遗漏，但体系并行</span></div>
+  <p class="ev">磁盘上 99 个模块，统一清单里登记了 99 个——<b>零遗漏</b>，并明确分类为 78 个浏览器运行、14 个休眠、7 个服务端。93 个模块同时支持浏览器和服务端两种加载方式，这正是 1756 项测试能脱离浏览器跑起来的前提。</p>
+  <p class="plain">这是很聪明的一步棋。等于每个零件都能单独在"工作台"上测试，不用每次都把整台机器装好再试。没有打包器能做到这一步，说明当初的结构考虑过。</p>
+  <p class="ev">扣分项：同时存在三到四份架构清单，schema 不同、内容分叉，而且被不同的检查分别依赖——任何一次只读一份的人（或 AI）都会拿到残缺的认知。另有 14 个模块处于"休眠"状态，说明上一轮拆分没有进行到底。</p>
+</div>
+
+<div class="card dim">
+  <div class="dim-head"><h3>7. 离线与交付可用性 · 7.5</h3><span class="tag warn">基本到位，有一处漏网</span></div>
+  <p class="ev">运行时依赖已完整入库（79 个文件），11 个关键资源带完整性校验。掐断全部外网后实测：91 个请求全部本地、零报错、功能正常。版本库共 997 个受跟踪文件，工作区干净。</p>
+  <p class="plain">说人话：把网线拔了它照样能用，这一点是成立的。</p>
+  <p class="ev">扣分项：PDF 引擎的工作文件被指向境外网址（第①条）；根目录还有 1.17MB 的历史副本和 3.4MB 临时目录混在源码旁（第③条）。</p>
+</div>
+
+<div class="card dim">
+  <div class="dim-head"><h3>8. 代码可读性 · 7.0</h3><span class="tag warn">结构统一，注释极稀</span></div>
+  <p class="ev">3162 个函数中，超过 100 行的有 181 个，超过 300 行的有 61 个，最深嵌套达 9 层。全部 4.1 万行代码里，以注释开头的行只有约 110 行——比例约 0.27%。93/99 个模块采用统一的双环境导出写法，86/99 声明了严格模式，写法一致性是好的。</p>
+  <p class="plain">说人话：代码的"格式"很整齐，像同一个模子刻的；但几乎不写说明。这对当下的运行没有影响，对将来"换个 AI 来接手"影响很大——它得自己猜每个零件是干什么的。</p>
+</div>
+
+<div class="card dim">
+  <div class="dim-head"><h3>9. 性能与规模扩展 · 6.5</h3><span class="tag low">已知且诚实的短板</span></div>
+  <p class="ev">项目自己的实测数据：一次性确认 20 道新题，在题库已有 10000 道的情况下，仅"正式库读取"就要读 200190 行；整体上界仍是 O(MN+M²+MD)。近两轮优化把整批重载从 43 次降到 3 次，图片返回字符数在一组配置下从约 9400 万降到约 680 万。</p>
+  <p class="plain">说人话：你已经有题 1 万道的时候，一次确认 20 道新题，程序要把这 1 万道挨个看一遍——还要看 20 遍。现在你题库还小，感觉不到；等它长到几万道，确认一次会有明显的卡顿。</p>
+  <p class="ev">值得肯定的是：这个短板是自己测出来、自己写进报告的，没有藏。分库、分页、索引方案尚未设计。</p>
+</div>
+
+<div class="card dim">
+  <div class="dim-head"><h3>10. 技术债与可维护性 · 6.0</h3><span class="tag low">最需要长期投入</span></div>
+  <p class="ev">核心协调文件 5116 行、543 个函数，项目规矩明确禁止它继续长大——但它已经被一个专门的检查脚本"钉住"了九个关键位置的行号和调用白名单，实测通过。</p>
+  <p class="plain">说人话：你们给这个最容易失控的大文件上了"护栏"，让它不能悄悄变形。这是很好的办法，只不过护栏是用"第几行到第几行"这种方式记的，一旦前面插了一行，护栏就得跟着挪，比较脆。</p>
+  <p class="ev">文档方面：<code>docs/</code> 下 407 篇、<code>deliverables/</code> 下 140 个文件。实测 <code>docs/</code> 里<b>没有任何一篇是 8 月之后更新的</b>，而真正在流动的记录已经转移到 <code>ai/</code> 目录——两套文档体系已经开始各说各话。</p>
+</div>
+
+<h2>五、和上一轮记录对照：已经修好的</h2>
+<div class="card">
+  <table style="border:none">
+    <tbody>
+      <tr><td><b>界面完全点不动</b></td><td><span class="tag ok">已修复</span></td><td>本轮实测零报错、六个入口全部可点。修复方式很漂亮：没有靠升级库来掩盖，而是改掉了那处会导致自我循环的写法。</td></tr>
+      <tr><td><b>运行时依赖没入库</b></td><td><span class="tag ok">已修复</span></td><td>79 个依赖文件已入库并带完整性校验。换电脑、误删目录不再会白屏。</td></tr>
+      <tr><td><b>服务对外暴露</b></td><td><span class="tag ok">已修复</span></td><td>只监听本机、外部来源拒绝、静态资源白名单，三项实测均生效。</td></tr>
+      <tr><td><b>测试是红灯</b></td><td><span class="tag warn">部分修复</span></td><td>从"7 项失败 + 19 项连带取消"降到"1 项失败 + 19 项取消"，且那 1 项是检查自身的嵌套问题。原先的 7 项是我这边工具的干扰，不算你的问题。</td></tr>
+      <tr><td><b>架构清单双轨</b></td><td><span class="tag warn">部分修复</span></td><td>新增了一份统一清单，99 个文件全覆盖、零遗漏；但旧的多份清单仍并存，分叉问题没有消除。</td></tr>
+      <tr><td><b>日志吞掉所有错误</b></td><td><span class="tag warn">部分改善</span></td><td>保留了封闭的错误类别和原因码，安全性提升；但代价是排查故障时信息量依然很少。</td></tr>
+      <tr><td><b>查重指纹碰撞</b></td><td><span class="tag bad">仍未修</span></td><td>已被记录、被测试显式保留兼容，但没有迁移。属于低概率、可接受的已知风险。</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2>六、结论</h2>
+<div class="verdict">
+  <p><b>能不能用？</b>能。今天就能用，而且断网也能用。题库数据的安全底线是守住的，这是最重要的一条。</p>
+  <p><b>水平如何？</b>一个人、靠网页对话框、不懂语法，做出 4.1 万行、1756 项自检、有正式验收报告和证据链的软件——这件事本身就不常见。你的强项从来不是写代码，是<b>把"要什么"和"怕什么"讲清楚</b>。项目里那些禁令、那棵知识点树、那四类文件的上传区，都是只有你才提得出来的需求。</p>
+  <p><b>短板在哪？</b>你无法判断 AI 交出来的东西好不好——这一点在"界面卡死很久没人发现"上已经暴露过一次。所以真正该补的不是代码，是<b>让问题自己叫出来</b>：修掉那道红的闸门让它重新有用，把日志改回说得清话，把测试从"能跑"变成"跑完有人看"。</p>
+  <p><b>下一步优先级：</b>①修 PDF 的本地路径（一行，立刻恢复全离线）→ ②修好套娃的检查（让总闸重新变绿）→ ③清理根目录的旧副本和临时目录。三件事都不大，但做完之后，以后每次改动才算有真正的刹车。</p>
+</div>
+
+<div class="footer">
+  本报告基于 2026-10-01 的实际运行、真实浏览器实测与代码逐项阅读生成。所有结论均附可复核的实测证据。<br>
+  报告中涉及的中间数据与原始日志可复现，未修改项目任何文件。
+</div>
+
+</div>
+</body>
+</html>

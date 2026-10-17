@@ -2,93 +2,51 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-
+const vm = require('node:vm');
 const ROOT = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(ROOT, file), 'utf8');
+const retired = [
+    'qisi-production-pdf-sources-port.js', 'qisi-pdf-import-coordinator.js',
+    'qisi-pdf-candidate-projection.js', 'qisi-pdf-ocr-support-parser.js',
+    'qisi-pdf-question-boundary.js', 'qisi-pdf-support-block-parser.js'
+];
 
-test('PDF candidate projection has one production owner and one browser-loaded API', () => {
-    const owner = read('qisi-pdf-candidate-projection.js');
+test('PDF V2 has one active producer and retired entry files cannot be loaded', () => {
     const main = read('main.html');
-    const owners = JSON.parse(read('architecture/owners.json'));
-    const manifest = JSON.parse(read('architecture/layers.json'));
-    const entry = manifest.modules.find(item => item.id === 'pdf-candidate-projection');
-
-    assert.equal(owners.pdfCandidateProjectionOwner, 'qisi-pdf-candidate-projection.js');
-    assert.equal(entry.file, 'qisi-pdf-candidate-projection.js');
-    assert.equal(entry.status, 'production-wired');
-    assert.deepEqual(entry.publicApi, [
-        'FIELDS',
-        'PdfCandidateProjectionError',
-        'mergeControlledWriteDecisions',
-        'createPdfEngineProjectionContext',
-        'createProductionProjectionContextBuilder',
-        'projectPdfCandidate',
-        'projectPdfCandidates',
-        'compareCanonicalPdfCandidates'
-    ]);
-    assert.match(owner, /function projectPdfCandidate\s*\(/);
-    assert.match(owner, /function compareCanonicalPdfCandidates\s*\(/);
-    assert.match(owner, /function mergeControlledWriteDecisions\s*\(/);
-    assert.match(owner, /row\.provenance\s*=\s*provenanceEntry\s*\(\{/);
-    assert.match(owner, /acceptedItemMaps\s*=\s*\{/);
-    assert.match(owner, /createError\('controlled-write-conflict'\)/);
-    assert.ok(main.indexOf('qisi-pdf-candidate-projection.js') >
-        main.indexOf('qisi-pdf-support-controlled-write.js'));
-    assert.ok(main.indexOf('qisi-pdf-candidate-projection.js') < main.indexOf('app.js'));
-});
-
-test('legacy and Bridge production paths delegate projection without local builders', () => {
-    const app = read('app.js');
-    const bridge = read('qisi-production-import-bridge.js');
-    const pdfPort = read('qisi-production-pdf-sources-port.js');
-    const engine = read('qisi-batch-engine-v2.js');
-
-    assert.match(app, /Qisi\.PdfCandidateProjection\s*\.projectPdfCandidates\s*\(/);
-    assert.match(bridge, /ports\.projectPdfCandidates\s*\(/);
-    assert.match(bridge, /'projectPdfCandidates'/);
-    assert.doesNotMatch(app, /pdfSupportFieldWarningsByQuestion/);
-    assert.doesNotMatch(app, /fieldProvenance\s*:\s*\{/);
-    assert.doesNotMatch(app, /const\s+supportLevel|supportLevel\s*:\s*['"`]/);
-    assert.doesNotMatch(
-        app,
-        /const\s+manualReviewRequired|manualReviewRequired\s*:\s*(?:true|false)/
-    );
-    assert.doesNotMatch(bridge, /fieldProvenance\s*[:=]/);
-    assert.doesNotMatch(bridge, /supportLevel\s*[:=]/);
-    assert.doesNotMatch(bridge, /manualReviewRequired\s*[:=]/);
-    assert.doesNotMatch(bridge, /buildPdfSupportFieldLevelControlledWrite/);
-    assert.doesNotMatch(
-        bridge,
-        /controlledWrite(?:Decision)?\s*(?:\|\||\?\?)/
-    );
-    assert.match(pdfPort, /deferPdfCandidateProjection:\s*true/);
-    assert.match(
-        engine,
-        /helpers\.deferPdfCandidateProjection\s*!==\s*true/
-    );
-});
-
-test('no second PDF projection implementation appears in production files', () => {
-    const productionFiles = fs.readdirSync(ROOT)
-        .filter(file => /^(?:app|qisi-.*)\.js$/.test(file))
-        .filter(file => file !== 'qisi-pdf-candidate-projection.js');
-    const prohibited = [
-        /function\s+(?:build|create)PdfFieldProvenance/i,
-        /function\s+(?:derive|build)PdfSupportLevel/i,
-        /function\s+(?:derive|build)PdfManualReviewRequired/i,
-        /(?:const|let|var)\s+pdf\w*Provenance\s*=/i,
-        /(?:const|let|var)\s+pdf\w*SupportLevel\s*=/i,
-        /(?:const|let|var)\s+pdf\w*ManualReviewRequired\s*=/i,
-        /compareCanonicalPdfCandidates\s*=|function\s+compareCanonicalPdfCandidates/,
-        /function\s+mergeControlledWriteDecisions\s*\(/,
-        /(?:const|let|var)\s+acceptedItemMaps\s*=/,
-        /controlled-write-conflict/
-    ];
-
-    for (const file of productionFiles) {
-        const source = read(file);
-        for (const pattern of prohibited) {
-            assert.doesNotMatch(source, pattern, `${file}: ${pattern}`);
-        }
+    const layers = JSON.parse(read('architecture/layers.json')).modules;
+    const runtime = JSON.parse(read('architecture/runtime-modules.json')).modules;
+    for (const file of retired) {
+        assert.equal(fs.existsSync(path.join(ROOT, file)), false, file);
+        assert.equal(main.includes(file), false, file);
+        assert.equal(layers.some(m => m.file === file), false, file);
+        assert.equal(runtime.some(m => m.file === file), false, file);
     }
+    assert.equal(main.includes('./qisi-pdf-multimodal-producer.js'), false);
+    assert.equal(main.split('./qisi-pdf-external-producer.js').length - 1, 1);
+    assert.equal(main.includes('qisi-pdf-support-controlled-write.js'), false);
+    assert.equal(layers.find(m => m.id === 'pdf-multimodal-producer').status, 'deprecated');
+    assert.equal(layers.find(m => m.id === 'pdf-external-producer').status, 'production-wired');
+    assert.ok(main.indexOf('qisi-pdf-external-contract.js') < main.indexOf('qisi-pdf-external-producer.js'));
+});
+
+test('V2 Bridge and app have no legacy projection or implicit fallback', () => {
+    const app = read('app.js'), bridge = read('qisi-production-import-bridge.js');
+    assert.doesNotMatch(app + bridge, /PdfCandidateProjection|ports\.projectPdfCandidates/);
+    assert.match(app, /PdfExternalProducer\.createProducer/);
+    assert.doesNotMatch(app, /PdfMultimodalProducer\.createProducer/);
+    assert.match(bridge, /pdf-v1-protocol-required/);
+    assert.match(bridge, /PdfExternalContract[\s\S]*?validateCanonical/);
+    assert.doesNotMatch(bridge, /fallbackToLegacy|runLegacyImport|buildPdfSupportFieldLevelControlledWrite/);
+});
+
+test('shared DOCX engine exports only its two active visual factories', () => {
+    const source = read('qisi-batch-engine-v2.js');
+    const sandbox = { window: {} };
+    vm.runInNewContext(source, sandbox);
+    assert.deepEqual(Object.keys(sandbox.window.QisiBatchEngineV2), [
+        'createStrictVisualPreparedPagesRecognizer', 'createStrictVisualQuestionProducer'
+    ]);
+    assert.equal(Object.hasOwn(sandbox.window, '__qisiBatchV2SelfTest'), false);
+    assert.doesNotMatch(source, /processBatchV2|splitQuestionBlocksV2|parseOptionsV2|chooseEvidenceSourceTextV2|buildAutoFigureDraftImagesV2/);
+    assert.match(read('app.js'), /QisiBatchEngineV2\.createStrictVisualQuestionProducer/);
 });

@@ -1,0 +1,12 @@
+{
+  "metadata": {"sources":[{"source_id":"s1","scope_id":"exam1","document_role":"full","allowed_streams":["questions","answers","solutions"],"total_pages":3,"input_pages":[1,2,3],"output_pages":[2,3],"context_only_pages":[1]}],"assets":[]},
+  "transcript": {"transcript_version":"pdf-page-evidence-v1","pages":[
+    {"source_id":"s1","page":1,"state":"content","blocks":[{"kind":"text","text":"40. 上一题的原文，仅供上下文。","bbox":null,"issues":[]}],"issues":[]},
+    {"source_id":"s1","page":2,"state":"content","blocks":[
+      {"kind":"text","text":"41. 已知 $x^2=1$。答案：$x=\\pm1$。\n【前置完整证明】原文第一步。原文第二步。","bbox":null,"issues":[]},
+      {"kind":"table","text":"$$\\begin{array}{c|cc}X&1&2\\\\P&\\frac12&\\frac12\\end{array}$$","bbox":null,"issues":[]},
+      {"kind":"figure","text":"","bbox":[0.1,0.2,0.4,0.5],"issues":[]}
+    ],"issues":[]},
+    {"source_id":"s1","page":3,"state":"content","blocks":[{"kind":"text","text":"上一页证明的尾段：故结论成立。\n【另一处详解】（1）略。\n没有可见题号的下一段：完整保留，归属交给结构模型。","bbox":null,"issues":[]}],"issues":[]}
+  ],"warnings":[]}
+}

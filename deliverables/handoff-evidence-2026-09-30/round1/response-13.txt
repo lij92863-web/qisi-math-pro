@@ -1,0 +1,37 @@
+$$= 3 2 \left( \frac { \sqrt { 3 } } { 2 } \sin \theta + \frac { 1 } { 2 } \cos \theta \right) \left( \frac { \sqrt { 3 } } { 2 } \cos \theta - \frac { 1 } { 2 } \sin \theta \right) + 3 2 \left( \frac { \sqrt { 3 } } { 2 } \sin \theta + \frac { 1 } { 2 } \cos \theta \right) \sin \theta$$
+
+$$= 3 2 \left( \frac { 1 } { 2 } \sin \theta \cos \theta + \frac { \sqrt { 3 } } { 4 } \cos ^ { 2 } \theta - \frac { \sqrt { 3 } } { 4 } \sin ^ { 2 } \theta + \frac { \sqrt { 3 } } { 2 } \sin ^ { 2 } \theta + \frac { 1 } { 2 } \sin \theta \cos \theta \right) = 1 6 \sin 2 \theta + 8 \sqrt { 3 } ,$$
+
+$\because \frac { \pi } { 1 2 } \leq \theta \leq \frac { \pi } { 6 } , \therefore \frac { \pi } { 6 } \leq 2 \theta \leq \frac { \pi } { 3 } , \therefore$ 当 $\theta = \frac { \pi } { 1 2 }$ 时, $A B + B C$ 取得最小值 $8 + 8 \sqrt { 3 }$.
+
+故设置 $\theta = \frac { \pi } { 1 2 }$ 时, 制造路灯灯柱 $A B$ 与灯杆 $B C$ 所用材料的总长度最小, 最小值为 $8 + 8 \sqrt { 3 }$ 米.
+
+16. (1) $\frac { 1 } { 5 }$
+
+(2)抽取的两个模型的外观和内饰均为不同色是一等奖; 外观和内饰均为同色是二等奖; 外观同色但内饰不同色, 或内饰同色但外观不同色是三等奖,
+
+奖金额 $X$ 的分布列:
+
+| $X$ | 600 | 300 | 150 |
+| --- | --- | --- | --- |
+| $P$ | $\frac { 4 } { 2 5 }$ | $\frac { 4 9 } { 1 5 0 }$ | $\frac { 7 7 } { 1 5 0 }$ |
+
+$E(X) = 2 7 1$
+
+【分析】(1) 由古典概率计算公式及条件概率公式即可求解;
+
+(2) 分别求出三种结果对应的概率, 比较大小, 确定对应的概率, 求出分布列, 利用期望公式进行计算即可.
+
+【详解】(1) 由数表知, $P(A B) = \frac { 2 } { 2 5 }$, $P(A) = \frac { 8 + 2 } { 2 5 } = \frac { 2 } { 5 }$, $P(B \mid A) = \frac { P(A B) } { P(A) } = \frac { 1 } { 5 }$.
+
+(2) 设事件 $C$: 外观和内饰均为同色, 事件 $D$: 外观内饰都异色, 事件 $E$: 仅外观或仅内饰同色, 依题意,
+
+$P(C) = \frac { C _ { 8 } ^ { 2 } + C _ { 1 2 } ^ { 2 } + C _ { 2 } ^ { 2 } + C _ { 3 } ^ { 2 } } { C _ { 2 5 } ^ { 2 } } = \frac { 4 9 } { 1 5 0 } ; R(D) = \frac { C _ { 8 } ^ { 1 } \cdot C _ { 3 } ^ { 1 } + C _ { 1 2 } ^ { 1 } \cdot C _ { 2 } ^ { 1 } } { C _ { 2 5 } ^ { 2 } } = \frac { 2 4 + 2 4 } { 3 0 0 } = \frac { 4 8 } { 3 0 0 } = \frac { 4 } { 2 5 }$
+
+$P(E) = \frac { C _ { 8 } ^ { 1 } \cdot C _ { 1 2 } ^ { 1 } + C _ { 1 2 } ^ { 1 } \cdot C _ { 3 } ^ { 1 } + C _ { 8 } ^ { 1 } \cdot C _ { 1 2 } ^ { 1 } + C _ { 1 2 } ^ { 1 } \cdot C _ { 3 } ^ { 1 } } { C _ { 2 5 } ^ { 2 } } = \frac { 7 7 } { 1 5 0 }$ 则 $P(E) > P(C) > P(D)$,
+
+因此抽取的两个模型的外观和内饰均为不同色是一等奖; 外观和内饰均为同色是二等奖; 外观同色但内饰不同色, 或内饰同色但外观不同色是三等奖,
+
+奖金额 $X$ 的可能值为: $600, 300, 150$, 奖金额 $X$ 的分布列:
+
+答案第 8 页, 共 13 页

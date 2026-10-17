@@ -1,6 +1,9 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const acorn = require('acorn');
+const crypto = require('node:crypto');
+const astHash = node => crypto.createHash('sha256').update(JSON.stringify(node, (key, value) =>
+    ['start', 'end', 'loc', 'raw'].includes(key) ? undefined : value)).digest('hex');
 
 const ROOT = path.resolve(__dirname, '..');
 const APP_PATH = path.join(ROOT, 'app.js');
@@ -161,7 +164,7 @@ function verifyCompositionOnlyUses(ast, errors) {
 }
 
 function verifyAppShellArchitecture(options = {}) {
-    const appSource = fs.readFileSync(options.appPath || APP_PATH, 'utf8');
+    const appSource = options.appSource ?? fs.readFileSync(options.appPath || APP_PATH, 'utf8');
     const matrix = JSON.parse(fs.readFileSync(
         options.matrixPath || MATRIX_PATH,
         'utf8'
@@ -177,6 +180,12 @@ function verifyAppShellArchitecture(options = {}) {
     });
     const definitions = collectDefinitions(ast);
     const errors = [];
+    if (!Number.isSafeInteger(matrix.reviewedAstNodeCount) || !Number.isSafeInteger(matrix.reviewedFunctionCount)) errors.push('Missing reviewed app AST budget');
+    let nodeCount = 0, allFunctionCount = 0;
+    walk(ast, node => { nodeCount++; if (FUNCTION_TYPES.has(node.type)) allFunctionCount++; });
+    if (nodeCount > matrix.reviewedAstNodeCount || allFunctionCount > matrix.reviewedFunctionCount) {
+        errors.push('app.js grew outside its reviewed AST/function budget');
+    }
     const requiredOwners = new Set([
         'production-import-route-policy',
         'question-duplicate-policy',
@@ -198,6 +207,7 @@ function verifyAppShellArchitecture(options = {}) {
             continue;
         }
         const definition = matches[0];
+        if (astHash(definition) !== item.astSha256) errors.push(item.name + ' differs from its reviewed function AST');
         const range = [definition.loc.start.line, definition.loc.end.line];
         if (range[0] !== item.range[0] || range[1] !== item.range[1]) {
             errors.push(`${item.name} range ${range.join('-')} != ${item.range.join('-')}`);
@@ -244,7 +254,7 @@ if (require.main === module) {
 }
 
 module.exports = {
-    calleePath,
+    calleePath, astHash,
     directCalls,
     verifyAppShellArchitecture
 };

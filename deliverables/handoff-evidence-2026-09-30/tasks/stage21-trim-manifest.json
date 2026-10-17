@@ -1,0 +1,111 @@
+{
+  "changes": [
+    "tests/ocr-quality-counterfactual-attacks.test.js",
+    "tests/ocr-quality-final-report.test.js",
+    "tests/post-r2-code-quality-audit.test.js",
+    "tests/post-r2-counterfactual-duplicate-submit.test.js",
+    "tests/post-r2-counterfactual-fake-manual-flag.test.js",
+    "tests/post-r2-counterfactual-formal-db-bypass.test.js",
+    "tests/post-r2-counterfactual-local-ocr-path.test.js",
+    "tests/post-r2-counterfactual-malformed-admission.test.js",
+    "tests/post-r2-counterfactual-ownership-rewind.test.js",
+    "tests/post-r2-counterfactual-package-schema-injection.test.js",
+    "tests/post-r2-counterfactual-path-traversal.test.js",
+    "tests/post-r2-counterfactual-raw-json.test.js",
+    "tests/post-r2-counterfactual-rejected-ai-confirm.test.js",
+    "tests/post-r2-counterfactual-script-missing.test.js",
+    "tests/post-r2-counterfactual-stale-draft.test.js",
+    "tests/post-r2-counterfactual-transaction-abort.test.js",
+    "tests/post-r2-counterfactual-two-tab-race.test.js",
+    "tests/post-r2-counterfactual-validator-missing.test.js",
+    "tests/post-r2-counterfactual-validator-throws.test.js",
+    "tests/post-r2-counterfactual-xss.test.js",
+    "tests/post-r2-counterfactual-zip-bomb.test.js"
+  ],
+  "removed": [
+    {
+      "file": "ocr-quality-counterfactual-attacks.test.js",
+      "label": "OCR-R1 counterfactual matrix records all 22 attack classes as PASS"
+    },
+    {
+      "file": "ocr-quality-final-report.test.js",
+      "count": 5
+    },
+    {
+      "file": "post-r2-code-quality-audit.test.js",
+      "label": "Phase 4 report covers every required audit dimension"
+    },
+    {
+      "file": "post-r2-counterfactual-duplicate-submit.test.js",
+      "label": "Phase 3 matrix records duplicate submit"
+    },
+    {
+      "file": "post-r2-counterfactual-fake-manual-flag.test.js",
+      "label": "Phase 3 matrix records fake manual flag"
+    },
+    {
+      "file": "post-r2-counterfactual-formal-db-bypass.test.js",
+      "label": "Phase 3 matrix records formal submit direct DB bypass"
+    },
+    {
+      "file": "post-r2-counterfactual-local-ocr-path.test.js",
+      "label": "Phase 3 matrix records local OCR arbitrary path"
+    },
+    {
+      "file": "post-r2-counterfactual-malformed-admission.test.js",
+      "label": "Phase 3 matrix records malformed admission"
+    },
+    {
+      "file": "post-r2-counterfactual-ownership-rewind.test.js",
+      "label": "Phase 3 matrix records ownership rewind"
+    },
+    {
+      "file": "post-r2-counterfactual-package-schema-injection.test.js",
+      "label": "Phase 3 matrix records package schema injection"
+    },
+    {
+      "file": "post-r2-counterfactual-path-traversal.test.js",
+      "label": "Phase 3 matrix records path traversal"
+    },
+    {
+      "file": "post-r2-counterfactual-raw-json.test.js",
+      "label": "Phase 3 matrix records raw JSON"
+    },
+    {
+      "file": "post-r2-counterfactual-rejected-ai-confirm.test.js",
+      "label": "Phase 3 matrix records rejected AI field only confirm"
+    },
+    {
+      "file": "post-r2-counterfactual-script-missing.test.js",
+      "label": "Phase 3 matrix records script missing"
+    },
+    {
+      "file": "post-r2-counterfactual-stale-draft.test.js",
+      "label": "Phase 3 matrix records stale draft"
+    },
+    {
+      "file": "post-r2-counterfactual-transaction-abort.test.js",
+      "label": "Phase 3 matrix records transaction abort"
+    },
+    {
+      "file": "post-r2-counterfactual-two-tab-race.test.js",
+      "label": "Phase 3 matrix records two-tab race"
+    },
+    {
+      "file": "post-r2-counterfactual-validator-missing.test.js",
+      "label": "Phase 3 matrix records the missing-validator attack evidence"
+    },
+    {
+      "file": "post-r2-counterfactual-validator-throws.test.js",
+      "label": "Phase 3 matrix records the throwing-validator attack evidence"
+    },
+    {
+      "file": "post-r2-counterfactual-xss.test.js",
+      "label": "Phase 3 matrix records XSS"
+    },
+    {
+      "file": "post-r2-counterfactual-zip-bomb.test.js",
+      "label": "Phase 3 matrix records ZIP bomb"
+    }
+  ]
+}

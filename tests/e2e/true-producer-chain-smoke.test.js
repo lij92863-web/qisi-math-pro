@@ -114,25 +114,18 @@ test('true producer smoke enters DOCX conversion and vision adapter', {
     }
 });
 
-test('true producer smoke enters PDF projection and controlled-write', {
+const pdfQuestion = (question_no='1', stem='Production question 1.') => ({question_no,type:'single',stem,options:['First','Second','Third','Fourth'].map((text,i)=>({label:String.fromCharCode(65+i),text})),figures:[],source_pages:[1],status:'complete',warnings:[]});
+const pdfAnswer = (question_no='1',answer='A',status='complete') => ({question_no,answer,figures:[],source_pages:[1],status,warnings:[]});
+const pdfSolution = (question_no='1',solution='First is correct.') => ({question_no,solution,figures:[],source_pages:[1],status:'complete',warnings:[]});
+const pdfResponse=(questions=[],answers=[],solutions=[])=>({value:{questions,answers,solutions}});
+test('true producer smoke enters PDF V2 structured canonical validation', {
     timeout: 120000
 }, async () => {
     const harness = await startBrowserApp(32318);
     try {
         await clearE2eData(harness.page);
         const engine = await installBrowserEngineInjection(harness.page, {
-            responses: [
-                { value: { questions: [{
-                    questionNumber: '1', type: '\u5355\u9009\u9898',
-                    stem: 'Prove the PDF production statement.',
-                    options: {
-                        A: 'First', B: 'Second', C: 'Third', D: 'Fourth'
-                    },
-                    answer: '', solution: '', images: [], isFragment: false,
-                    question_bbox: [0, 0, 1000, 1000]
-                }] } },
-                '1. \u3010\u7b54\u6848\u3011A\n\u3010\u89e3\u6790\u3011Alpha is correct by the supplied evidence.'
-            ]
+            responses: [pdfResponse([pdfQuestion('1','Prove the PDF production statement.')],[pdfAnswer()],[pdfSolution('1','Alpha is correct by the supplied evidence.')])]
         });
         const result = await createImportThroughUi(harness.page, {
             producerMode: 'pdf',
@@ -154,15 +147,16 @@ test('true producer smoke enters PDF projection and controlled-write', {
         assert.equal(drafts.length, 1);
         assert.equal(drafts[0].answer, 'A');
         assert.match(drafts[0].solution, /Alpha is correct/);
-        assert.equal(drafts[0].controlledWrite?.evaluated, true);
+        assert.equal(drafts[0].fieldProvenance.stem.controlledWriteAccepted, true);
         const stages = (await readImportStageTrace(
             harness.page,
             result.batchId
         )).map(event => event.stage);
-        assert.ok(stages.includes('page-rendered'));
-        assert.ok(stages.includes('ocr-adapter-called'));
-        assert.ok(stages.includes('pdf-projection-entered'));
-        assert.ok(stages.includes('controlled-write-evaluated'));
+        assert.equal(stages.includes('page-rendered'), false);
+        assert.equal(stages.includes('ocr-adapter-called'), false);
+        assert.equal(stages.includes('pdf-projection-entered'), false);
+        assert.equal(stages.includes('controlled-write-evaluated'), false);
+        assert.ok(stages.includes('pdf-external-contract-validated'));
         assert.equal(engine.realApiCalled, false);
     } finally {
         await harness.close();

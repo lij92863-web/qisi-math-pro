@@ -1,0 +1,4 @@
+# Stage 23 desktop sync and acceptance
+User explicitly authorizes exact stage 15–22 deployment to C desktop, dependencies, isolated acceptance, scoped commit, then audit report update.
+Allowed program files: manifest.json exact 44 paths including one D; app.js only existing verified 14 additions/1 deletion glue; node_modules replacement after external backup. Reports: existing ai/DESKTOP_AUDIT_RECHECK_2026-09-30.md and deliverables recheck mirror. No E runtime edits, no .env, production database, original materials, ledger changes, real AI/OCR, broad refactor or cleanup. Preserve original untracked items.
+Acceptance: verify:safe, batch-safety, architecture/runtime, diff-scope, actual port3000 isolated browser resources/navigation/SRI/errors. Stop on new user changes, unknown process, out-of-scope failures or rejected escalation.

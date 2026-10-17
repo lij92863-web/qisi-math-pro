@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -230,9 +230,9 @@
                     <div v-if="backupStatus.preview" class="mt-3 p-3 border rounded bg-gray-50" data-testid="restore-preview">
                         <p class="text-sm">待恢复：{{ backupStatus.preview.filename }} ｜ {{ backupStatus.preview.questionCount }} 道题、{{ backupStatus.preview.imageCount }} 条图片记录</p>
                         <p class="text-xs mt-1">备份时间：{{ backupStatus.preview.exportedAt }}</p>
-                        <p v-if="backupStatus.preview.absentTables.length" class="text-xs mt-1 text-red-700">这是较早版本的备份；其中未包含的 {{ backupStatus.preview.absentTables.length }} 类数据将被清空。</p>
+                        <p v-if="backupStatus.preview.absentTables.length" class="text-xs mt-1 text-red-700">这是较早版本的备份；其中未包含的 {{ backupStatus.preview.absentTables.length }} 类数据将保留当前内容。</p>
                         <p v-if="backupStatus.preview.warningCount" class="text-xs mt-1 text-red-700">有 {{ backupStatus.preview.warningCount }} 条图片记录缺少二进制文件，请核对备份来源。</p>
-                        <label class="block text-xs mt-2"><input type="checkbox" v-model="backupStatus.confirmOverwrite" data-testid="restore-consent" /> 我已核对备份，确认覆盖当前数据库，知道备份未包含的数据会被清空。</label>
+                        <label class="block text-xs mt-2"><input type="checkbox" v-model="backupStatus.confirmOverwrite" data-testid="restore-consent" /> 我已核对备份，确认覆盖当前数据库，未包含的数据表保留；备份内的个人设置会同步恢复。</label>
                         <label class="block text-xs mt-2">输入“恢复备份”确认：<input class="border rounded p-1" v-model="backupStatus.confirmWord" data-testid="restore-word" /></label>
                         <p class="text-xs mt-2">恢复前会先把当前数据保存到所选文件夹。请关闭其他窗口中的编辑操作；若检测到新变化，将取消恢复。</p>
                         <button class="border rounded px-3 py-1 mt-2 text-sm" @click="backupWorkspace.restoreSelected" :disabled="backupStatus.busy || backupStatus.reading || !backupStatus.folderReady || !backupStatus.confirmOverwrite || backupStatus.confirmWord !== '恢复备份'" data-testid="restore-confirm">保护当前数据并恢复</button>
@@ -551,7 +551,6 @@
                                     <div class="batch-meta-group">
                                         <strong>基础属性</strong>
                                         <div class="batch-form-grid five">
-                                            <label>识别方式<select id="batch-producer-mode" v-model="batchCreateProducerMode"><option value="">请选择明确识别方式</option><option value="docx-vision">DOCX 视觉识别</option><option value="docx-deterministic">DOCX 稳定解析</option><option value="pdf">PDF 视觉识别</option></select></label>
                                             <label>学科<select v-model="batchDefaultMeta.subject"><option>数学</option></select></label>
                                             <label>题型<select v-model="batchDefaultMeta.defaultType"><option value="">请选择题型</option><option>单选题</option><option>多选题</option><option>填空题</option><option>解答题</option><option>证明题</option></select></label>
                                             <label>年级<select v-model="batchDefaultMeta.grade"><option value="">请选择年级</option><option>高一</option><option>高二</option><option>高三</option><option>初一</option><option>初二</option><option>初三</option></select></label>
@@ -601,6 +600,10 @@
                             </div>
 
                             <div class="batch-recognition-summary">
+                                <details v-if="activeBatch.importWarnings?.length" open>
+                                    <summary>部分页面未完成或内容待核对，请查看原 PDF</summary>
+                                    <p v-for="(warning, index) in activeBatch.importWarnings" :key="index">{{ warning }}</p>
+                                </details>
                                 <div class="batch-recognition-summary-head">
                                     <strong>本次识别摘要</strong>
                                     <span>只读统计，不影响确认和提交</span>
@@ -619,6 +622,15 @@
                                 </div>
                             </div>
 
+                            <div v-if="activePdfUnassigned.length" class="batch-warning">
+                                <details><summary>有 {{ activePdfUnassigned.length }} 段原文待确定归属，内容已保留</summary>
+                                    <div v-for="(fragment, i) in activePdfUnassigned" :key="i">
+                                        <strong>{{ fragment.sourceFileName }} · 原第 {{ fragment.source_pages.join('、') }} 页</strong>
+                                        <p>{{ fragment.reason }}</p><pre>{{ fragment.text }}</pre>
+                                        <button class="material-light-btn" @click="openPdfSource({sourceFileId: fragment.source_id, sourcePage: fragment.source_pages[0]})">对照原 PDF</button>
+                                    </div>
+                                </details>
+                            </div>
                             <div class="batch-review-grid">
                                 <aside class="batch-question-nav">
                                     <div class="batch-filter-tabs">
@@ -653,7 +665,7 @@
                                     <div class="batch-editor-card">
                                         <h2>题库与来源</h2>
                                         <div class="batch-form-grid">
-                                            <label>来源<input v-model="activeDraftQuestion.source" /></label>
+                                            <label>来源<input v-model="activeDraftSourceLabel" /></label>
                                             <label>省份<input v-model="activeDraftQuestion.province" /></label>
                                             <label>标签<input :value="(activeDraftQuestion.tags || []).join(',')" @input="activeDraftQuestion.tags = $event.target.value.split(',').map(x => x.trim()).filter(Boolean)" /></label>
                                             <label>系统知识点<select v-model="activeDraftQuestion.systemKnowledge"><option value="">不选择</option><option v-for="node in flatSystemKnowledge" :key="node.id" :value="node.name">{{ node.path }}</option></select></label>
@@ -661,6 +673,67 @@
                                         </div>
                                     </div>
 
+                                    <div v-if="activeDraftQuestion.pdfExternal?.taskProblems.length" class="batch-editor-card">
+                                        <strong>来源范围需要检查</strong>
+                                        <div v-for="(problem, i) in activeDraftQuestion.pdfExternal.taskProblems" :key="i">{{ problem }}</div>
+                                        <button class="material-light-btn" :disabled="activeDraftQuestion.status === 'submitted' || activeDraftQuestion.pdfExternal.taskIssuesAcknowledged" @click="acknowledgePdfTaskIssues">已对照原页，确认本题范围</button>
+                                    </div>
+                                    <div v-if="activePdfReviewPanel" class="batch-editor-card pdf-model-review" data-testid="pdf-model-review">
+                                        <h2>原页与模型候选核对 · 第 {{ activeDraftQuestion.questionNumber }} 题</h2>
+                                        <p>{{ activePdfReviewPanel.humanLabel }}。复核意见针对原模型候选，修改后的内容仍需人工确认。</p>
+                                        <div class="pdf-model-review-grid">
+                                            <section class="pdf-model-review-sources">
+                                                <h3>来源原页</h3>
+                                                <div v-for="(source,i) in activePdfReviewPanel.sources" :key="i" class="pdf-model-review-source">
+                                                    <span>{{ source.sourceFileName || source.filename }} · 第 {{ source.pageNo }} 页</span>
+                                                    <img :src="source.url" :alt="'来源原页 '+source.pageNo" loading="lazy" />
+                                                    <button class="material-light-btn" @click="openPdfSource({...source,sourcePage:source.pageNo})">打开原 PDF 对照</button>
+                                                </div>
+                                            </section>
+                                            <section class="pdf-model-review-candidates">
+                                                <div v-for="field in activePdfReviewPanel.fields" :key="field.field" class="pdf-model-review-field" :data-field="field.field">
+                                                    <h3>{{ field.label }}候选</h3>
+                                                    <p v-if="!field.candidates.length">原文尚未提供对应候选，请人工核对。</p>
+                                                    <article v-for="candidate in field.candidates" :key="candidate.index" class="pdf-model-review-candidate">
+                                                        <strong>{{ candidate.reviewLabel }}</strong>
+                                                        <p>{{ candidate.sourceName }} · 第 {{ candidate.sourcePages.join('、') }} 页</p>
+                                                        <div v-for="(issue,i) in candidate.issues" :key="i" class="pdf-model-review-issue">
+                                                            <p>{{ issue.detail }} · 第 {{ issue.source_pages.join('、') }} 页</p>
+                                                            <button class="material-light-btn" @click="openPdfSource({sourceFileId:issue.sourceFileId,sourcePage:issue.source_pages[0]})">对照问题原页</button>
+                                                        </div>
+                                                        <p v-for="(issue,i) in candidate.sourceIssues" :key="'source-'+i">原文问题：{{ issue }}</p>
+                                                        <p v-for="(issue,i) in candidate.resourceIssues" :key="'image-'+i">图片需要人工处理：{{ issue }}</p>
+                                                        <details open>
+                                                            <summary>完整候选内容</summary>
+                                                            <latex-preview v-if="field.field==='question'" :content="candidate.stem" :images="candidate.images" :flow-options="false"></latex-preview>
+                                                            <div v-for="option in candidate.options" :key="option.label"><span>{{ option.label }}.</span><latex-preview :content="option.text" :images="candidate.images"></latex-preview></div>
+                                                            <latex-preview v-if="field.field!=='question'" :content="candidate.text" :images="candidate.images"></latex-preview>
+                                                        </details>
+                                                        <button class="material-light-btn pdf-model-review-adopt" :disabled="!candidate.canAdopt || activeDraftEditorDirty" @click="choosePdfCandidate(field.field,candidate.index)">已核对原页，采用此{{ field.label }}候选</button>
+                                                    </article>
+                                                </div>
+                                            </section>
+                                        </div>
+                                        <p v-if="activeDraftEditorDirty">请先保存或放弃当前未保存编辑，再采用候选。</p>
+                                        <div v-for="(finding,i) in activePdfReviewPanel.findings" :key="i" class="pdf-model-review-issue">
+                                            <strong>{{ finding.label }}<template v-if="finding.sourcePage"> · 第 {{ finding.sourcePage }} 页</template></strong><p>{{ finding.detail }}</p><p>{{ finding.text }}</p>
+                                            <button v-if="finding.sourceFileId && finding.sourcePage" class="material-light-btn" @click="openPdfSource(finding)">打开对应原页</button>
+                                        </div>
+                                        <details v-if="activePdfReviewPanel.summaries.length"><summary>模型复核说明</summary><p v-for="(summary,i) in activePdfReviewPanel.summaries" :key="i">{{ summary }}</p></details>
+                                    </div>
+                                    <div v-else-if="pdfDraftMeta(activeDraftQuestion)" class="batch-editor-card">
+                                        <strong>PDF · 按原题号 {{ activeDraftQuestion.questionNumber }} 审核</strong>
+                                        <div v-for="field in ['question','answer','solution']" :key="field">
+                                            <span>{{ field === 'question' ? '题目' : field === 'answer' ? '答案' : '解析' }}：{{ pdfDraftMeta(activeDraftQuestion).states[field] }}</span>
+                                            <details v-if="['conflict','partial','unreadable','rejected'].includes(pdfDraftMeta(activeDraftQuestion).states[field])">
+                                                <summary>对照来源页，人工选择或修改</summary>
+                                                <div v-for="(candidate, idx) in pdfDraftMeta(activeDraftQuestion).candidates[field]" :key="idx">
+                                                    <pre style="white-space:pre-wrap">{{ candidate.item }}</pre>
+                                                    <button class="material-light-btn" @click="choosePdfCandidate(field,idx)">采用此候选（仍需核对和确认）</button>
+                                                </div>
+                                            </details>
+                                        </div>
+                                    </div>
                                     <div class="batch-editor-card content">
                                         <div class="batch-content-tabs">
                                             <button @click="activeDraftTab='stem'" :class="{active: activeDraftTab==='stem'}">题目内容</button>
@@ -722,7 +795,7 @@
                                                     v-show="String(opt || '').trim() !== ''"
                                                     :key="idx"
                                                     class="qisi-review-preview-option">
-                                                    <span class="qisi-review-preview-option-label">{{ String.fromCharCode(65 + idx) }}.</span>
+                                                    <span class="qisi-review-preview-option-label">{{ activeDraftEditorPreview.optionLabels?.[idx] || String.fromCharCode(65 + idx) }}.</span>
                                                     <span class="qisi-review-preview-option-content">
                                                         <latex-preview :content="opt" :images="activeDraftPreviewImages"></latex-preview>
                                                     </span>
@@ -742,7 +815,8 @@
                                         <div v-for="img in activeDraftRealQuestionImages" :key="img.id" class="batch-image-item">
                                             <img :src="img.url" />
                                             <div>
-                                                <span>来源页码：{{ img.sourcePage || '无' }}｜置信度：{{ Math.round((img.confidence || 0) * 100) }}%</span>
+                                                <span v-if="pdfDraftMeta(activeDraftQuestion)">{{ img.sourceFileName || img.filename }} · 第 {{ img.sourcePage }} 页 · {{ img.position || '来源整页' }}</span>
+                                                <span v-else>来源页码：{{ img.sourcePage || '无' }}｜置信度：{{ Math.round((img.confidence || 0) * 100) }}%</span>
                                                 <span>状态：{{ img.status === 'bound' ? '已绑定' : img.status === 'need_confirm' ? '待确认' : '低置信度' }}</span>
                                             </div>
                                             <div class="batch-image-actions">
@@ -769,11 +843,13 @@
                                         <div v-for="img in activeDraftSourcePageImages" :key="img.id" class="batch-image-item">
                                             <img :src="img.url" />
                                             <div>
-                                                <span>来源页码：{{ img.sourcePage || '无' }}｜置信度：{{ Math.round((img.confidence || 0) * 100) }}%</span>
+                                                <span v-if="pdfDraftMeta(activeDraftQuestion)">{{ img.sourceFileName || img.filename }} · 第 {{ img.sourcePage }} 页 · {{ img.position || '来源整页' }}</span>
+                                                <span v-else>来源页码：{{ img.sourcePage || '无' }}｜置信度：{{ Math.round((img.confidence || 0) * 100) }}%</span>
                                                 <span>状态：来源整页图</span>
                                             </div>
                                             <div class="batch-image-actions">
                                                 <button class="material-light-btn" @click="openSourcePageCrop(img)">重新裁剪</button>
+                                                <button v-if="pdfDraftMeta(activeDraftQuestion)" class="material-light-btn" @click="openPdfSource(img)">查看原 PDF</button>
                                             </div>
                                         </div>
                                     </div>
@@ -818,6 +894,12 @@
                                 </div>
                             </div>
 
+                            <label v-if="pdfDraftMeta(activeDraftQuestion)">裁图归属
+                                <select v-model="cropState.belongsTo">
+                                    <option value="stem">题干</option><option v-for="label in pdfDraftMeta(activeDraftQuestion).optionLabels" :key="label" :value="'option:'+label">选项 {{ label }}</option>
+                                    <option value="answer">答案</option><option value="solution">解析</option>
+                                </select>
+                            </label>
                             <div class="batch-crop-actions">
                                 <span>
                                     当前框选：
@@ -1312,7 +1394,7 @@
                         <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
                             <div>
                                 <h1 class="text-[20px] font-black text-gray-900">快速组卷</h1>
-                                <div class="text-[12px] font-bold text-gray-400 mt-1">已选 {{cart.length}} 题，总分 {{cartQuestionsOrdered.reduce((s,q)=>s+Number(examQuestionMeta[q.id]?.points||0),0)}} 分</div>
+                                <div class="text-[12px] font-bold text-gray-400 mt-1">已选 {{cart.length}} 题<span v-if="missingCartQuestionIds.length" class="text-red-600">（{{missingCartQuestionIds.length}} 题已不存在，请核对）</span>，总分 {{cartQuestionsOrdered.reduce((s,q)=>s+Number(examQuestionMeta[q.id]?.points||0),0)}} 分</div>
                             </div>
                             <div class="flex gap-2">
                                 <button @click="resetExamOrder" class="px-3 py-1.5 border border-gray-200 rounded text-[12px] font-bold text-gray-600 hover:bg-gray-50">重置排序</button>
@@ -1393,7 +1475,7 @@
                             </div>
                             <div class="space-y-1.5">
                                 <label class="config-label">字体</label>
-                                <select class="input-base" v-model="examConfig.fontFamily"><option>思源宋体</option><option>霞鹜文楷</option></select>
+                                <select class="input-base" v-model="examConfig.fontFamily"><option value="思源宋体">系统宋体</option><option value="霞鹜文楷">系统楷体</option></select>
                             </div>
                             <div class="space-y-1.5">
                                 <label class="config-label">主题色</label>
@@ -1516,6 +1598,8 @@
                         <p class="text-[12px] font-medium tracking-widest text-gray-400">尚未添加试题</p>
                     </div>
                     <div v-else class="space-y-2">
+                        <p v-if="missingCartQuestionIds.length" class="text-red-600">有 {{missingCartQuestionIds.length}} 道已选题目不存在，请核对试卷车；打印和导出已暂停。</p>
+                        <button v-for="id in missingCartQuestionIds" :key="id" @click="toggleCart(id)" class="text-red-600">移除失效选题 {{ id }}</button>
                         <div v-for="(q, idx) in cartQuestions" :key="q.id" class="bg-white border border-gray-200 rounded-lg p-2.5 relative group hover:border-red-200 hover:shadow-sm transition-colors">
                             <div class="flex justify-between items-center mb-1.5">
                                 <span class="text-[11px] font-bold text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded">{{idx+1}}. {{q?.type}}</span>
@@ -1544,12 +1628,12 @@
     </template>
     <script src="./qisi-secure-logger.js?v=post-r2-correction-r1-secure-log-01"></script>
     <script>window.Qisi.SecureLogger.createSecureLogger(console).install();</script>
-    <script src="./qisi-config.js?v=foundation-01"></script>
+    <script src="./qisi-config.js?v=pdf-external-v2-20261013"></script>
     <script src="./qisi-runtime.js?v=foundation-01"></script>
     <script src="./qisi-archive-security.js?v=backup-crc-01"></script>
-    <script src="./qisi-docx-producer-identity-contract.js?v=docx-producer-identity-r1-01"></script>
+    <script src="./qisi-docx-producer-identity-contract.js?v=pdf-external-v2-20261013"></script>
     <script src="./qisi-recognition-contracts.js?v=closure-r2-contracts-01"></script>
-    <script src="./qisi-formal-admission-policy.js?v=post-r2-correction-r1-admission-01"></script>
+    <script src="./qisi-formal-admission-policy.js?v=pdf-external-v2-20261013"></script>
     <script src="./qisi-question-duplicate-policy.js?v=tuple-index-v2-01"></script>
     <script src="./qisi-question-index-storage.js?v=tuple-index-v2-01"></script>
     <script src="./qisi-backup-snapshot-policy.js?v=storage-single-pass-01"></script>
@@ -1558,25 +1642,23 @@
     <script src="./qisi-utils.js?v=foundation-01"></script>
     <script src="./qisi-library-service.js?v=tuple-index-v2-01"></script>
     <script src="./qisi-production-review-validator.js?v=post-r2-correction-r1-review-validation-01"></script>
-    <script src="./qisi-review-controller.js?v=closure-r2-review-01"></script>
+    <script src="./qisi-review-controller.js?v=pdf-external-v2-20261013"></script>
     <script src="./qisi-export-service.js?v=closure-r2-export-01"></script>
     <script src="./qisi-batch-context-service.js?v=app-shell-r3-batch-context-01"></script>
     <script src="./qisi-source-role-classifier.js?v=app-shell-r3-source-role-01"></script>
     <script src="./qisi-production-import-route-policy.js?v=program-c-corrective-r1-route-policy-01"></script>
     <script src="./qisi-production-import-status-port.js?v=app-shell-r3-import-status-port-01"></script>
-    <script src="./qisi-production-import-output-port.js?v=app-shell-r3-import-output-port-01"></script>
+    <script src="./qisi-production-import-output-port.js?v=pdf-external-v2-20261013"></script>
     <script src="./qisi-docx-converter.js?v=app-shell-r3-docx-converter-01"></script>
     <script src="./qisi-docx-vision-reconciler.js?v=app-shell-r3-docx-reconciler-01"></script>
     <script src="./qisi-production-docx-source-port.js?v=app-shell-r3-docx-source-port-01"></script>
     <script src="./qisi-production-docx-vision-source-port.js?v=docx-producer-identity-r1-01"></script>
     <script src="./qisi-docx-import-coordinator.js?v=app-shell-r3-docx-coordinator-01"></script>
-    <script src="./qisi-production-pdf-sources-port.js?v=app-shell-r3-pdf-sources-port-01"></script>
-    <script src="./qisi-pdf-import-coordinator.js?v=app-shell-r3-pdf-coordinator-01"></script>
-    <script src="./qisi-import-diagnostics.js?v=app-shell-r3-import-diagnostics-01"></script>
+    <script src="./qisi-import-diagnostics.js?v=pdf-external-v2-20261013"></script>
     <script src="./qisi-ocr-adapter-contract.js?v=ocr-quality-r1-adapter-contract-01"></script>
     <script src="./qisi-ocr-engine-registry.js?v=closure-r2-ocr-registry-01"></script>
     <script src="./qisi-ocr-qwen-adapter.js?v=closure-r2-ocr-qwen-01"></script>
-    <script src="./qisi-qwen-vision-source-port.js?v=app-shell-r3-qwen-source-01"></script>
+    <script src="./qisi-qwen-vision-source-port.js?v=pdf-external-v2-20261013"></script>
     <script src="./qisi-ocr-local-adapter.js?v=closure-r2-ocr-local-01"></script>
     <script src="./qisi-ocr-shadow-mode.js?v=closure-r2-ocr-shadow-01"></script>
     <script src="./qisi-performance-monitor.js?v=closure-r2-performance-01"></script>
@@ -1584,29 +1666,32 @@
     <script src="./qisi-backup.js?v=consistent-backup-01"></script>
     <script src="./qisi-components.js?v=image-url-boundary-01"></script>
     <script src="./qisi-file-dispatcher.js?v=white-fix-3"></script>
+    <script src="./qisi-docx-ole-reader.js?v=local-mtef-20261001"></script>
+    <script src="./qisi-docx-mtef-reader.js?v=local-mtef-20261001"></script>
+    <script src="./qisi-docx-formula-source.js?v=local-mtef-20261001"></script>
     <script src="./qisi-batch-importer.js?v=foundation-01"></script>
-    <script src="./qisi-pdf-question-boundary.js?v=stage6-boundary-01"></script>
-    <script src="./qisi-batch-engine-v2.js?v=stage6-boundary-01"></script>
+    <script src="./qisi-batch-engine-v2.js?v=pdf-v1-retirement-20261003"></script>
     <script src="./qisi-support-parser.js?v=stage1a-support-parser-04"></script>
     <script src="./qisi-support-repair.js?v=stage1a-support-repair-01"></script>
     <script src="./qisi-candidate-normalizer.js?v=app-shell-r3-candidate-normalizer-01"></script>
     <script src="./qisi-pdf-support-aligner.js?v=stageC5A-pdf-support-aligner-01"></script>
-    <script src="./qisi-pdf-support-block-parser.js?v=stageC7E-block-parser-01"></script>
-    <script src="./qisi-pdf-support-controlled-write.js?v=stageC7T-field-write-01"></script>
-    <script src="./qisi-pdf-ocr-support-parser.js?v=stage5-ocr-support-01"></script>
-    <script src="./qisi-pdf-candidate-projection.js?v=stage5-ocr-support-01"></script>
-    <script src="./qisi-pdf-safe-partial-pipeline.js?v=bmr8-pdf-page-trace-01"></script>
-    <script src="./qisi-import-validation-service.js?v=app-shell-r3-import-validation-01"></script>
+    <script src="./qisi-pdf-safe-partial-pipeline.js?v=pdf-v1-retirement-20261003"></script>
+    <script src="./qisi-import-validation-service.js?v=pdf-v1-retirement-20261003"></script>
     <script src="./qisi-review-draft-builder.js?v=app-shell-r3-review-draft-builder-01"></script>
     <script src="./qisi-draft-persistence-service.js?v=tuple-index-v2-01"></script>
     <script src="./qisi-draft-maintenance-service.js?v=atomic-batch-stats-01"></script>
     <script src="./qisi-review-workflow-service.js?v=targeted-review-read-01"></script>
     <script src="./qisi-import-state-machine.js?v=app-shell-r3-c2-11-01"></script>
-    <script src="./qisi-production-import-bridge.js?v=app-shell-r3-production-import-bridge-01"></script>
+    <script src="./qisi-pdf-multimodal-contract.js?v=pdf-v1-20261002"></script>
+    <script src="./qisi-pdf-external-contract.js?v=pdf-external-v2-20261013"></script>
+    <script src="./qisi-pdf-page-evidence.js?v=qwen-staged-20261014"></script>
+    <script src="./qisi-pdf-external-provider.js?v=pdf-external-v2-20261013"></script>
+    <script src="./qisi-pdf-external-producer.js?v=pdf-external-v2-20261013"></script>
+    <script src="./qisi-production-import-bridge.js?v=pdf-external-v2-20261013"></script>
     <script src="./qisi-normal-ui-import-controller.js?v=app-shell-r3-c2-11-01"></script>
     <script src="./qisi-docx-pipeline.js?v=bmr9-docx-helpers-01"></script>
     <script src="./qisi-browser-document-source.js?v=pdf-no-font-eval-01"></script>
-    <script src="./qisi-browser-pdf-renderer.js?v=pdf-no-font-eval-01"></script>
+    <script src="./qisi-browser-pdf-renderer.js?v=pdf-external-v2-20261013"></script>
     <script src="./qisi-question-content-policy.js?v=app-shell-r3-c2-12-01"></script>
     <script src="./qisi-question-image-policy.js?v=image-url-boundary-01"></script>
     <script src="./qisi-page-question-parser.js?v=app-shell-r3-c2-12-01"></script>
@@ -1619,8 +1704,8 @@
     <script src="./qisi-strict-question-policy.js?v=app-shell-r3-c2-12-01"></script>
     <script src="./qisi-ui-events.js?v=bmr5-question-gap-warning-01"></script>
     <script src="./qisi-review-draft-state.js?v=bmr3-review-draft-01"></script>
-    <script src="./qisi-review-draft-normalization-policy.js?v=app-shell-r3-c2-12-01"></script>
+    <script src="./qisi-review-draft-normalization-policy.js?v=pdf-external-v2-20261013"></script>
     <script src="./qisi-backup-workspace.js?v=backup-commit-events-01"></script>
-    <script src="./app.js?v=tuple-index-v2-01"></script>
+    <script src="./app.js?v=pdf-external-v2-20261013"></script>
 </body>
 </html>

@@ -106,3 +106,10 @@ test('all production archive readers are wired through the security owner', () =
         'archive security loads before archive consumers'
     );
 });
+
+test('standard DOCX customXml parts remain bounded and cannot carry executable or traversing entries',()=>{
+    const policy=createArchivePolicy('office-document');
+    assert.equal(validateArchive(zip([entry('customXml/item1.xml',20,100),entry('customXml/_rels/item1.xml.rels',20,100)]),policy).ok,true);
+    assert.equal(validateArchive(zip([entry('customXml/run.js',20,100)]),policy).code,'ARCHIVE_ENTRY_NOT_ALLOWED');
+    assert.equal(validateArchive(zip([entry('customXml/item1.xml',20,100,{unsafeOriginalName:'../item1.xml'})]),policy).code,'ARCHIVE_PATH_TRAVERSAL');
+});

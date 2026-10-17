@@ -61,7 +61,10 @@
                 copy.images = Array.isArray(copy.images)
                     ? copy.images.filter(image => image?.id).map(image => {
                         imageIds.add(image.id);
+                        // Retain portable source/crop metadata; runtime URLs and bytes live outside JSON.
+                        const { url, blob, ...metadata } = image;
                         return {
+                            ...metadata,
                             id: image.id,
                             align: image.align || 'center',
                             file: `images/${image.id}.png`

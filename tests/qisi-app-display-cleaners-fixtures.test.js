@@ -83,8 +83,9 @@ describe('cleanDisplayOptionsForBatchSave fixtures', () => {
         assert.deepEqual(norm(helpers.cleanDisplayOptionsForBatchSave(['A', 'B'])), ['A', 'B', '', '']);
     });
 
-    it('[A4:options:extra-options] extra options beyond four are ignored', () => {
-        assert.deepEqual(norm(helpers.cleanDisplayOptionsForBatchSave(['A', 'B', 'C', 'D', 'E'])), ['A', 'B', 'C', 'D']);
+    it('[A4:options:extra-options] extra options beyond four are preserved', () => {
+        // N40: the repair must preserve the fifth option; the old fixture encoded data loss.
+        assert.deepEqual(norm(helpers.cleanDisplayOptionsForBatchSave(['A', 'B', 'C', 'D', 'E'])), ['A', 'B', 'C', 'D', 'E']);
     });
 
     it('[A4:options:plain] plain options are cleaned', () => {

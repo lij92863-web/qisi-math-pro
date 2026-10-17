@@ -1,0 +1,151 @@
+{
+  "date": "2026-10-01",
+  "source": "C:/Users/Administrator/.codex/worktrees/desktop-recovery/题库系统",
+  "desktop": "C:/Users/Administrator/Desktop/题库系统",
+  "sourceBase": "e522a7098e6fa3373c8fd4cb6c3851d528322d13",
+  "sourceCommit": "cc11be9d8b67d4b7eaa2741995993c41ffb2481b",
+  "desktopBase": "21ac97fb005fd78c215a6fcd916acc4bf61f0493",
+  "paidCalls": 0,
+  "ledgers": [
+    {
+      "round": "round1",
+      "file": "C:\\Users\\Administrator\\Desktop\\题库系统\\deliverables\\handoff-evidence-2026-09-30\\round1\\ledger.json",
+      "sha256": "879a8cefe25cd139529149e000f06f22c9da778d60237e2b021d5ad3194b26ec"
+    },
+    {
+      "round": "round2",
+      "file": "C:\\Users\\Administrator\\Desktop\\题库系统\\deliverables\\handoff-evidence-2026-09-30\\round2\\ledger.json",
+      "sha256": "2b8489db3273c29423950150af27802cf12f7acc01bb59cca84c37d64ef12779"
+    }
+  ],
+  "files": [
+    {
+      "status": "M",
+      "name": "architecture/layers.json",
+      "originalBlob": "d9e6c03bf7a86ac0a18e993fd821091f87fb02df",
+      "beforeSha256": "05b639c0450817f98a374097a7b7b45f01f9bb5079e7a77bfd38864f1151d2c0",
+      "sourceSha256": "6d33f27a3a691da617c3339791dbd99d99be982f94bd966bf22145f08e851c24",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage28-maintenance\\desktop-before\\architecture\\layers.json"
+    },
+    {
+      "status": "M",
+      "name": "architecture/owners.json",
+      "originalBlob": "e3c179b270fe701880ecd7b84c801fcea24d8966",
+      "beforeSha256": "0cbdc930150441cf6f8b768130a02460a7622f8daa39fa982a64a27646dcb9d5",
+      "sourceSha256": "60174612d110da35f210a1eaef49f834baf8523eec0dfae9dcab08bed23f0b87",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage28-maintenance\\desktop-before\\architecture\\owners.json"
+    },
+    {
+      "status": "M",
+      "name": "architecture/runtime-modules.json",
+      "originalBlob": "87e8c0d963072fd141ddc0718afac77b7c4fb66b",
+      "beforeSha256": "485a6939a63f7da5b22e805d2edc724cb2ada8a13cad9f79d01fb3a68007c46e",
+      "sourceSha256": "5d66ea5b5356652848192734f6bd92260f5c37dd7d7bc99a80df0f615d30c37f",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage28-maintenance\\desktop-before\\architecture\\runtime-modules.json"
+    },
+    {
+      "status": "M",
+      "name": "docs/architecture/layers.json",
+      "originalBlob": "0402b4ede269683fa2ecad260e19b3c358071f24",
+      "beforeSha256": "f3009e6b3cf133127e0eb35b8f53caf9a230951ceaeeebf9213750ecfbacb389",
+      "sourceSha256": "6edbc01aa73f02226e62ab766968478be343549ae0316914de304f3e8fd3fe96",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage28-maintenance\\desktop-before\\docs\\architecture\\layers.json"
+    },
+    {
+      "status": "M",
+      "name": "docs/architecture/owners.json",
+      "originalBlob": "a54d498fe50eb4acb945a08501e6f41e7c629b8d",
+      "beforeSha256": "43ee9ebf62dc536ada56467af240b97948112e44adc99fc38ce4f0ac8e094cb3",
+      "sourceSha256": "f6ef4bc21b52d6bf71b1fb19d243458b26b2b10c3868654e7d4fe4189370b581",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage28-maintenance\\desktop-before\\docs\\architecture\\owners.json"
+    },
+    {
+      "status": "M",
+      "name": "main.html",
+      "originalBlob": "5d94973272c75525c25f1a09c82d68abc6f84b6f",
+      "beforeSha256": "6625c64dbb8c1a38af4e9dd8abb768f8ccc13860bd477a9602a6cfdc5f27dd8d",
+      "sourceSha256": "947545226844ef572e8cd384e00ffa396d3ca6f85f4179efbb57c7aa8bbd6cb8",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage28-maintenance\\desktop-before\\main.html"
+    },
+    {
+      "status": "M",
+      "name": "qisi-db.js",
+      "originalBlob": "14dc12bd234e2e0cdad6f3718b500fe540121232",
+      "beforeSha256": "7440717818e158d447f0ea61d81a629c778893b92a6253a9e194929296c79dd6",
+      "sourceSha256": "f55f632206f04dd812c72c28b2d08701d11a0c014310ce597a7430543efca7f4",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage28-maintenance\\desktop-before\\qisi-db.js"
+    },
+    {
+      "status": "M",
+      "name": "qisi-draft-persistence-service.js",
+      "originalBlob": "2863da86ec8d12d7f38d183dea3a4078adf3d07d",
+      "beforeSha256": "010d8bd5c40d1e8360c14a1314b160f102c50285b5afc76ec992c4571131d937",
+      "sourceSha256": "e99ec1bbc0492b8a490c9cc0507710752edc8f7a2166106c675d1eb217e86ebb",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage28-maintenance\\desktop-before\\qisi-draft-persistence-service.js"
+    },
+    {
+      "status": "M",
+      "name": "qisi-library-service.js",
+      "originalBlob": "90c1a2714870dd3ab78f6c62696b573283c22f95",
+      "beforeSha256": "8e5030a85e88830aa15d0da472200f7c0eb2f29cb9110c04ca358c483da8bcac",
+      "sourceSha256": "21608268adaffcd0d4d6d535f7bac8ba65353f9dd726f7e9a5594fd07c8c38cf",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage28-maintenance\\desktop-before\\qisi-library-service.js"
+    },
+    {
+      "status": "M",
+      "name": "qisi-question-duplicate-policy.js",
+      "originalBlob": "b5bf5f26ef8be897e9d45148a0f8774ec7f3bf4a",
+      "beforeSha256": "4b276d793518b56d7c4160a63eab06b5d3d3e45956d57227e45c02e05e29136d",
+      "sourceSha256": "d25db01c5aa2b3f2b73c75f00e04ee2fb7b377df522dc993e4fab16f07dabe10",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage28-maintenance\\desktop-before\\qisi-question-duplicate-policy.js"
+    },
+    {
+      "status": "A",
+      "name": "qisi-question-index-storage.js",
+      "originalBlob": null,
+      "beforeSha256": null,
+      "sourceSha256": "f240312d81c807b78276f53186358c9ecc8d824781eb5925dd701df99c8d9082",
+      "backup": null
+    },
+    {
+      "status": "M",
+      "name": "qisi-storage-repository.js",
+      "originalBlob": "4f21dc719020ead1e670114915e1d243e362917d",
+      "beforeSha256": "6881df43103cdccfadb54944f133e0bca829e1b249da4c81ac8375f519b7588a",
+      "sourceSha256": "b884d1738aece6a7467c044e046e2dea664b3ae61b78772caade9ab455d8577d",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage28-maintenance\\desktop-before\\qisi-storage-repository.js"
+    },
+    {
+      "status": "M",
+      "name": "tests/db-fingerprint-owner.test.js",
+      "originalBlob": "4f8e7ebc41763e4b3220885ed1e7a4b451809971",
+      "beforeSha256": "b49f72a8ab5a98c98c5148777e693735e9e424980c059a366b528d914450f334",
+      "sourceSha256": "59a5cc950ec6e6890a3ef168c51cf24af99e03aa4f3e8de29acc47aff6d15846",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage28-maintenance\\desktop-before\\tests\\db-fingerprint-owner.test.js"
+    },
+    {
+      "status": "M",
+      "name": "tests/draft-stats-transaction.test.js",
+      "originalBlob": "fd5c0a875a8dc00be1aa57544da3473b591295bf",
+      "beforeSha256": "7d8a318300ac53eebca3668538be24103ea09023926e803a65940828c585940e",
+      "sourceSha256": "4c3df2559a5116fd24ee2dc4baea430fe2cccf52c06a879184e8592b41a22279",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage28-maintenance\\desktop-before\\tests\\draft-stats-transaction.test.js"
+    },
+    {
+      "status": "M",
+      "name": "tests/question-duplicate-policy.test.js",
+      "originalBlob": "e64c84100775df22f0d31dab99aa5e6611a73c59",
+      "beforeSha256": "7ad9cc4cb960f3d1d0c1e47736a416b23ffe9cb7896899ad5dc233b7eb03740e",
+      "sourceSha256": "990f5cc57230588712e452c57b958fcc9c9a1f88a9b3c6210acea490ab01ea92",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage28-maintenance\\desktop-before\\tests\\question-duplicate-policy.test.js"
+    },
+    {
+      "status": "A",
+      "name": "tests/question-index-transaction.test.js",
+      "originalBlob": null,
+      "beforeSha256": null,
+      "sourceSha256": "15eef6d6e36ac4f4977ed533bc07aa9612bcb6728ca0cfb61c2530364796e02c",
+      "backup": null
+    }
+  ]
+}

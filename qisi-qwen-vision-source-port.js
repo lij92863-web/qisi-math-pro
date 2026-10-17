@@ -40,6 +40,21 @@ ${expectedQuestionCount ? `人工预计题数 ${expectedQuestionCount} 仅供参
 
 ${repairInfo ? `需要重点修复：\n${repairInfo}` : ''}`;
 
+    const createPdfWindowRecognizer = ({ transport }) => async ({ model, pages = [], crops = [], prompt, systemPrompt, responseFormat, maxTokens, timeoutMs, requestId, signal }) => {
+        const content = [{ type: 'text', text: prompt }];
+        for (const page of pages) content.push({ type: 'text', text: `原始 PDF 第 ${page.pageNo} 页` }, { type: 'image_url', image_url: { url: page.url } });
+        for (const crop of crops) content.push({ type: 'text', text: `实际裁图：${JSON.stringify({ asset_id: crop.asset_id, placements: crop.placements, item_id: crop.item_id, placement_id: crop.placement_id, source_id: crop.source_id, page: crop.page, field: crop.field, option_label: crop.option_label })}` }, { type: 'image_url', image_url: { url: crop.url } });
+        const response = await transport.request('chat', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId || 'pdf-v1' }, signal,
+            body: JSON.stringify({ model, temperature: 0, enable_thinking: false, max_tokens: maxTokens, response_format: responseFormat || { type: 'json_object' }, messages: [...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []), { role: 'user', content }] })
+        }, timeoutMs, 'PDF V1 多页结构化识别');
+        const raw = await response.json();
+        if (!response.ok) throw Object.assign(new Error(raw.error?.message || (typeof raw.error === 'string' ? raw.error : raw.message) || 'PDF_V1_API_FAILED'), { code: raw.error?.code || raw.code || 'PDF_V1_API_FAILED', status: response.status, rawResponse: raw, details: { error: raw.error, causeCode: raw.causeCode, requestId: raw.request_id || raw.id } });
+        const choice = raw.choices?.[0];
+        if (choice?.message?.refusal || typeof choice?.message?.content !== 'string') throw Object.assign(new Error('PDF_V1_EMPTY_OR_REFUSED'), { externalResponseReceived: true, rawResponse: raw });
+        return { text: choice.message.content, model: raw.model || model, finishReason: choice.finish_reason, usage: raw.usage || {}, responseId: raw.id || '', rawResponse: raw };
+    };
+
     const requiredFunctions = (ports, names) => {
         for (const name of names) {
             if (typeof ports?.[name] !== 'function') {
@@ -92,6 +107,7 @@ ${repairInfo ? `需要重点修复：\n${repairInfo}` : ''}`;
         return Object.freeze({
             taskClient,
             documentOcrSource,
+            requestPdfWindow: createPdfWindowRecognizer({ transport }),
             requestText: options => taskClient.chatText(options)
         });
     };
@@ -315,7 +331,8 @@ ${repairInfo ? `需要重点修复：\n${repairInfo}` : ''}`;
         };
 
         const recognizeDocumentText = async (imageUrl, signal) => {
-            const tasks = ['document_parsing', 'advanced_recognition'];
+            // Preserve printed question numbers; document_parsing may replace them with implicit LaTeX enumerate items.
+            const tasks = ['text_recognition'];
             let lastError = null;
             for (const task of tasks) {
                 try {
@@ -406,7 +423,7 @@ ${repairInfo ? `需要重点修复：\n${repairInfo}` : ''}`;
         });
     };
 
-    return Object.freeze({
+    return Object.freeze({ createPdfWindowRecognizer,
         buildStrictQuestionPrompt,
         createProductionOcrRuntime,
         createStrictQuestionPageRecognizer,

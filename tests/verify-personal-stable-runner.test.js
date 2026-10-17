@@ -7,7 +7,7 @@ const Runner = require('../scripts/verify-personal-stable.js');
 
 const ROOT = path.resolve(__dirname, '..');
 
-test('personal-stable runner has the required fixed sixteen-suite order', () => {
+test('personal-stable runner has the fixed current-suite order after PDF retirement', () => {
     assert.deepEqual(Runner.suites.map(suite => suite.name), [
         'syntax/check',
         'all Node tests',
@@ -16,9 +16,8 @@ test('personal-stable runner has the required fixed sixteen-suite order', () => 
         'DOCX stable',
         'PDF known-bad',
         'Route B hold',
-        'controlled-write ownership',
-        'browser runner preflight',
-        'browser runner dry-run',
+        'current PDF contract and external raw-order ownership',
+        'normal UI PDF persistence without retired parsers',
         'no-real-ai',
         'app-shell AST gate',
         'production reachability',
@@ -33,8 +32,9 @@ test('runner cannot invoke a real AI/OCR gate', () => {
         `${suite.command} ${suite.args.join(' ')}`
     ).join('\n');
     assert.doesNotMatch(commands, /real-run|test:ai-proxy|test:ai-vision-proxy/);
-    assert.match(commands, /pdf-master-browser-runner\.js preflight/);
-    assert.match(commands, /pdf-master-browser-runner\.js dry-run/);
+    assert.doesNotMatch(commands, /pdf-master-browser-runner\.js/);
+    assert.match(commands, /--test tests\/pdf-multimodal-v1\.test\.js tests\/pdf-external-evaluation\.test\.js/);
+    assert.match(commands, /--test tests\/e2e\/pdf-projection-browser-shadow\.test\.js/);
 });
 
 test('runner parses TAP counters and publishes every mandatory safety counter', () => {

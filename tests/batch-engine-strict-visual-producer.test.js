@@ -18,7 +18,7 @@ test.afterEach(() => {
     delete global.window;
 });
 
-test('strict visual producer preserves PDF/image preparation and rejects unsupported sources', async () => {
+test('shared DOCX visual producer preserves converted PDF/image preparation and rejects unsupported sources', async () => {
     const engine = loadEngine();
     const renderCalls = [];
     const producer = engine.createStrictVisualQuestionProducer({
@@ -32,7 +32,7 @@ test('strict visual producer preserves PDF/image preparation and rejects unsuppo
         now: () => 10
     });
 
-    const pdf = { id: 'pdf-1', filename: 'paper.pdf', fileType: 'pdf' };
+    const pdf = { id: 'pdf-1', filename: 'paper.pdf', fileType: 'pdf', convertedFromDocx: true };
     assert.deepEqual(await producer.preparePages(pdf), [
         { pageNo: 1, url: 'data:image/jpeg;base64,page' }
     ]);
@@ -56,7 +56,7 @@ test('strict visual producer preserves file-level payload, timing, and diagnosti
     const recognitionCalls = [];
     const clock = [100, 145];
     const source = {
-        id: 'pdf-1', filename: 'paper.pdf', fileType: 'pdf', roles: ['question']
+        id: 'pdf-1', filename: 'paper.pdf', fileType: 'pdf', convertedFromDocx: true, roles: ['question']
     };
     const expectedResult = {
         questions: [{ questionNumber: '1' }],
@@ -116,7 +116,7 @@ test('strict visual producer keeps failures fail-closed and diagnostics retain i
 
     await assert.rejects(
         producer.processQuestionFile({
-            file: { filename: 'bad.pdf', fileType: 'pdf' },
+            file: { filename: 'bad.pdf', fileType: 'pdf', convertedFromDocx: true },
             batch: { id: 'batch-1' }
         }),
         error => error === stable
@@ -149,7 +149,7 @@ test('strict visual producer propagates cancellation and never recognizes after 
 
     await assert.rejects(
         producer.processQuestionFile({
-            file: { filename: 'cancelled.pdf', fileType: 'pdf' },
+            file: { filename: 'cancelled.pdf', fileType: 'pdf', convertedFromDocx: true },
             batch: { id: 'batch-1' },
             signal: controller.signal
         }),
@@ -178,7 +178,7 @@ test('strict visual producer forwards the active signal to prepared-page recogni
     });
 
     await producer.processQuestionFile({
-        file: { filename: 'active.pdf', fileType: 'pdf' },
+        file: { filename: 'active.pdf', fileType: 'pdf', convertedFromDocx: true },
         batch: { id: 'batch-1' },
         signal: controller.signal
     });

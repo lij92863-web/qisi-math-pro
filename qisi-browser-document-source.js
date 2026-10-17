@@ -438,6 +438,9 @@
 
                     return {
                         text,
+                        tokens: sorted.map(item => ({ text: item.str,
+                            bbox: [item.x1 / viewport.width, item.y1 / viewport.height,
+                                item.x2 / viewport.width, item.y2 / viewport.height].map(value => Math.round(value * 1000)) })),
                         x1,
                         y1,
                         x2,

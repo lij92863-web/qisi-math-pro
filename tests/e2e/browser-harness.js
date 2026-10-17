@@ -214,6 +214,8 @@ const startBrowserApp = async (port, { fault = '' } = {}) => {
                 );
             }
             if (selectedFault === 'controlled-write-missing') {
+                trap(window.Qisi, 'PdfExternalContract', owner => Object.freeze({ ...owner, validateCanonical() { throw new Error('COUNTERFACTUAL_PDF_EXTERNAL_CONTRACT_FAILURE'); } }));
+                trap(window.Qisi, 'PdfMultimodalContract', owner => Object.freeze({ ...owner, validateCanonical() { throw new Error('COUNTERFACTUAL_PDF_V1_CONTRACT_FAILURE'); } }));
                 trap(window.Qisi, 'PdfSupportControlledWrite', owner =>
                     Object.freeze({
                         ...owner,
@@ -546,8 +548,21 @@ const createImportThroughUi = async (page, input) => {
         }
         await modal.locator('.flex.justify-end .material-primary-btn').click();
     }
-    await page.locator('#batch-producer-mode')
-        .selectOption(producerMode);
+    // Explicit fixture producers are injected only in this isolated test browser.
+    // Ordinary UI imports omit producerMode and exercise the restored default.
+    if (producerMode) {
+        await page.evaluate(mode => {
+            const policy = window.Qisi.ProductionImportRoutePolicy;
+            window.Qisi.ProductionImportRoutePolicy = Object.freeze({
+                ...policy,
+                selectNormalUiProducerMode(classification) {
+                    policy.selectNormalUiProducerMode(classification);
+                    window.Qisi.ProductionImportRoutePolicy = policy;
+                    return mode;
+                }
+            });
+        }, producerMode);
+    }
     if (Number.isInteger(input?.expectedQuestionCount)) {
         await page.locator('input[type="number"][placeholder*="0"]')
             .first()

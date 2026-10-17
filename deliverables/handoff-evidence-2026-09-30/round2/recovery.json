@@ -1,0 +1,18 @@
+{
+  "previousRecovery": {
+    "previousRecovery": {
+      "evidence": "Verified three free TLS probes: https-default, https-no-pool, fetch all HTTP404; stage12 f210c2f safe1753/20. Connectivity is intermittent; this is one diagnostic POST, not a retry loop.",
+      "resolvedThroughAttempt": 1,
+      "historicalFailedAttemptPreserved": true,
+      "recoveredAt": "2026-09-30T07:53:55.2375862Z"
+    },
+    "historicalFailedAttemptPreserved": true,
+    "evidence": "User explicitly resumed on Sep30; free certificate-verified HTTPS GET returned404. One diagnostic POST only, stop again on502/504.",
+    "recoveredAt": "2026-09-30T11:41:21.6282098Z",
+    "resolvedThroughAttempt": 2
+  },
+  "resolvedThroughAttempt": 3,
+  "historicalFailedAttemptPreserved": true,
+  "recoveredAt": "2026-09-30T11:43:19.2107563Z",
+  "evidence": "Attempt3 never reached upstream: local service unavailable. Restarted desktop server, both local health endpoints confirmed. One actual upstream check only."
+}

@@ -1,0 +1,96 @@
+{
+  "date": "2026-10-01",
+  "roots": [
+    {
+      "root": "C:/Users/Administrator/.codex/worktrees/desktop-recovery/题库系统",
+      "head": "e522a7098e6fa3373c8fd4cb6c3851d528322d13",
+      "branch": "codex/desktop-recovery",
+      "trackedStatus": ""
+    },
+    {
+      "root": "C:/Users/Administrator/Desktop/题库系统",
+      "head": "21ac97fb005fd78c215a6fcd916acc4bf61f0493",
+      "branch": "stage/program-c-corrective-r1",
+      "trackedStatus": ""
+    },
+    {
+      "root": "E:/备份/题库系统",
+      "head": "ef2ad10c16cf4743573d1f3352a164ed91c9d995",
+      "branch": "codex/integration-main-hardening",
+      "trackedStatus": ""
+    }
+  ],
+  "program": {
+    "source": "cef9a635ef0ce010362ba55a2ce1a3f8c4c99cb5",
+    "desktop": "26ef211f43136080734c4b1527912907f6c0c219"
+  },
+  "verifiedFiles": [
+    {
+      "name": "app.js",
+      "sha256": "a6788c7d8995ef44bc3131143ec3b63d4fab8f9436cadab8948a26f48e153ae3"
+    },
+    {
+      "name": "docs/architecture/APP_SHELL_RESPONSIBILITY_MATRIX_CORRECTIVE_R1.json",
+      "sha256": "839dc6c9312db6136b5f004dd8568eda1558c0c941aed81c1459242457c5fba6"
+    },
+    {
+      "name": "main.html",
+      "sha256": "6625c64dbb8c1a38af4e9dd8abb768f8ccc13860bd477a9602a6cfdc5f27dd8d"
+    },
+    {
+      "name": "qisi-draft-maintenance-service.js",
+      "sha256": "1e4b42f2f371797411dccd4f8926108ed086aa69b47b30acd5249d70ec1032f0"
+    },
+    {
+      "name": "qisi-draft-persistence-service.js",
+      "sha256": "010d8bd5c40d1e8360c14a1314b160f102c50285b5afc76ec992c4571131d937"
+    },
+    {
+      "name": "qisi-storage-repository.js",
+      "sha256": "6881df43103cdccfadb54944f133e0bca829e1b249da4c81ac8375f519b7588a"
+    },
+    {
+      "name": "tests/draft-maintenance-service.test.js",
+      "sha256": "f0c16b8925f1028a5fb46d994a245ce17b828ac76f3838be36f3872c87a6ef6b"
+    },
+    {
+      "name": "tests/draft-stats-transaction.test.js",
+      "sha256": "7d8a318300ac53eebca3668538be24103ea09023926e803a65940828c585940e"
+    }
+  ],
+  "reportSha256": "2692d507bdf2d910fbe20ccae5d0c007d79249549dd8ad24604e499bf97ac7c3",
+  "ledgersUnchanged": true,
+  "paidCalls": 0,
+  "round2Used": 4,
+  "round2Remaining": 16,
+  "round2HaltPreserved": true,
+  "shenzhenFullPaperAccepted": false,
+  "healthStatus": 200,
+  "http": [
+    {
+      "name": "main.html",
+      "status": 200,
+      "sha256": "6625c64dbb8c1a38af4e9dd8abb768f8ccc13860bd477a9602a6cfdc5f27dd8d"
+    },
+    {
+      "name": "app.js",
+      "status": 200,
+      "sha256": "a6788c7d8995ef44bc3131143ec3b63d4fab8f9436cadab8948a26f48e153ae3"
+    },
+    {
+      "name": "qisi-storage-repository.js",
+      "status": 200,
+      "sha256": "6881df43103cdccfadb54944f133e0bca829e1b249da4c81ac8375f519b7588a"
+    },
+    {
+      "name": "qisi-draft-persistence-service.js",
+      "status": 200,
+      "sha256": "010d8bd5c40d1e8360c14a1314b160f102c50285b5afc76ec992c4571131d937"
+    },
+    {
+      "name": "qisi-draft-maintenance-service.js",
+      "status": 200,
+      "sha256": "1e4b42f2f371797411dccd4f8926108ed086aa69b47b30acd5249d70ec1032f0"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "sourceCommit": "f74aa1a7cd9d617d813ae4d991aa687b06655ce9",
+  "paidCalls": 0,
+  "entries": [
+    {
+      "name": "app.js",
+      "beforeSha256": "a6788c7d8995ef44bc3131143ec3b63d4fab8f9436cadab8948a26f48e153ae3",
+      "sourceSha256": "6a271cb5f86846c06dddba339e142aeb72e57d10a4249dbe5304ba37bc96c536",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage28-maintenance\\desktop-package-before\\app.js"
+    },
+    {
+      "name": "main.html",
+      "beforeSha256": "947545226844ef572e8cd384e00ffa396d3ca6f85f4179efbb57c7aa8bbd6cb8",
+      "sourceSha256": "bd1ea2ff63f15fa9f9bb2be72d04f4ee6ce04515c751557a9bb90b6bb27a18fb",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage28-maintenance\\desktop-package-before\\main.html"
+    },
+    {
+      "name": "tests/e2e/legacy-fingerprint-package.test.js",
+      "beforeSha256": null,
+      "sourceSha256": "dc759ef3bcc4950c12a82de8677e5c3e3fb8f2b12833d54d7adca4c669b3473b",
+      "backup": null
+    }
+  ]
+}

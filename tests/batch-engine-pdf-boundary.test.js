@@ -33,14 +33,11 @@ async function run(file) {
         return { result, calls };
     } finally { delete global.window; delete require.cache[enginePath]; }
 }
-test('PDF engine replaces only a validated boundary and preserves composite figure coordinates', async () => {
-    const { result, calls } = await run({ id: 'pdf', filename: 'paper.pdf', fileType: 'pdf' });
-    assert.equal(calls.length, 3);
-    assert.match(calls[2].repairInfo, /仅重建第16题/);
-    assert.deepEqual(result.questions.map(x => x.questionNumber), ['16', '17']);
-    assert.equal(result.questions[0].sourcePageImage, 'composite');
-    assert.equal(result.questions[0].recognizedImages[0].bbox[1], 500);
-    assert.equal(result.boundaryDiagnostics.fragments.length, 1);
+test('native PDF cannot call the shared DOCX recognizer after retirement', async () => {
+    await assert.rejects(
+        run({ id: 'pdf', filename: 'paper.pdf', fileType: 'pdf' }),
+        error => error.code === 'PDF_V1_PRODUCER_REQUIRED'
+    );
 });
 test('DOCX and converted DOCX bypass all PDF boundary processing', async () => {
     for (const file of [{ fileType: 'docx' }, { fileType: 'pdf', convertedFromDocx: true }]) {

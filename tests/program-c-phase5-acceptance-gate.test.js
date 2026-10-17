@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
+const { verifyFrozenPdfFiles } = require('../scripts/verify-frozen-pdf-files.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const BASELINE = '84e1b8a70f8a927345b8b3f55189585ec61d37ec';
@@ -45,22 +45,19 @@ test('current browser evidence uses real files and the normal UI production entr
     assert.doesNotMatch(docx + pdf, /prebuiltCandidates|finalCandidates/);
 });
 
-test('PDF canonical comparator protects source, producer, route, provenance, and decisions', () => {
-    const source = read('qisi-pdf-candidate-projection.js');
+test('current PDF contract retains source, producer, provenance and exact identity boundaries', () => {
+    const source = read('qisi-pdf-multimodal-contract.js');
     const required = [
-        'source.sourceId', 'source.format', 'source.sourceOrder',
-        'producer.mode', 'producer.routeId', 'producer.routeReason',
-        'producer.engine', 'route.identity', 'route.transitions',
+        'source.sourceId', 'producer.engine',
         'fieldProvenance', 'producerBoundary',
-        'controlledWrite.decisionId', 'acceptedFields', 'rejectedFields',
-        'supportLevel', 'manualReviewRequired',
-        'validation.schemaValid', 'validation.sequenceValid',
-        'validation.ownershipValid', 'rawEvidenceRefs'
+        'controlledWriteDecisionId', 'controlledWriteAccepted',
+        'validateCanonicalIdentity', 'questionKey(batchId, draft.questionNumber)',
+        'draft.pdfV1.examId === batchId'
     ];
-    for (const token of required) assert.match(source, new RegExp(token.replace('.', '\\.')));
+    for (const token of required) assert.ok(source.includes(token), token);
 });
 
-test('Phase 5 frozen PDF files remain unchanged after the later C2-11 cutover', () => {
+test('Phase 5 frozen PDF files match baseline or exact user-approved repairs', () => {
     const frozen = [
         'qisi-pdf-support-controlled-write.js',
         'qisi-pdf-support-aligner.js',
@@ -69,12 +66,8 @@ test('Phase 5 frozen PDF files remain unchanged after the later C2-11 cutover', 
         'qisi-pdf-answer-extraction-quality.js',
         'scripts/pdf-master-browser-runner.js'
     ];
-    const changed = execFileSync(
-        'git',
-        ['diff', '--name-only', BASELINE, '--', ...frozen],
-        { cwd: ROOT, encoding: 'utf8' }
-    ).trim();
-    assert.equal(changed, '');
+    // User approved exact N1/N2/D-1 repairs on 2026-10-01, not a blanket freeze exemption.
+    assert.deepEqual(verifyFrozenPdfFiles(frozen, BASELINE), []);
 });
 
 test('Phase 5 browser and acceptance gates contain no hidden skip or todo', () => {

@@ -47,7 +47,7 @@
                 'application/x-zip-compressed'
             ],
             allowedEntry: path =>
-                /^(?:\[Content_Types\]\.xml|_rels\/\.rels|(?:word|xl|docProps)\/[a-zA-Z0-9._/-]+\.(?:xml|rels|png|jpe?g|gif|webp|svg|bmp|emf|wmf|bin|vml))$/i.test(path)
+                /^(?:\[Content_Types\]\.xml|_rels\/\.rels|(?:word|xl|docProps|customXml)\/[a-zA-Z0-9._/-]+\.(?:xml|rels|png|jpe?g|gif|webp|svg|bmp|emf|wmf|bin|vml))$/i.test(path)
         }
     };
 

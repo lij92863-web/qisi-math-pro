@@ -105,13 +105,15 @@ describe('bm-a4-r3-ownership-audit', () => {
     it('removed PDF support projection cannot return as an app callsite', () => {
         const app = appLines.join('\n');
         const owner = fs.readFileSync(
-            'qisi-pdf-candidate-projection.js',
+            'qisi-pdf-external-contract.js',
             'utf8'
         );
         assert.doesNotMatch(app, /pdfSupportFusedWarnings/);
         assert.doesNotMatch(app, /pdfSupportFieldWarningsByQuestion/);
-        assert.match(app, /PdfCandidateProjection\s*\.projectPdfCandidates\s*\(/);
-        assert.match(owner, /function\s+projectPdfCandidate\s*\(/);
+        assert.doesNotMatch(app, /PdfCandidateProjection\s*\.projectPdfCandidates\s*\(/);
+        assert.match(app, /PdfExternalProducer\.createProducer/);
+        assert.doesNotMatch(app, /PdfMultimodalProducer\.createProducer/);
+        assert.match(owner, /function\s+buildDrafts\s*\(/);
     });
 
     it('answer/solution ownership context blocked', () => {

@@ -55,13 +55,14 @@ test('review and OCR boundaries cannot bypass controlled-write', () => {
         assert.doesNotMatch(source, /eligibleForControlledWrite\s*:\s*true/, file);
     }
     const app = read('app.js');
-    const projection = read('qisi-pdf-candidate-projection.js');
+    const projection = read('qisi-pdf-multimodal-contract.js');
     assert.doesNotMatch(app, /PdfSupportControlledWrite/);
     assert.match(
         projection,
-        /productionControlledWrite[\s\S]*buildPdfSupportFieldLevelControlledWrite/
+        /function validateCanonical[\s\S]*validateCanonicalIdentity/
     );
-    assert.match(projection, /buildPdfSupportFieldLevelControlledWrite/);
+    assert.match(projection, /controlledWriteAccepted: accepted/);
+    assert.doesNotMatch(read('qisi-production-import-bridge.js'), /projectPdfCandidates/);
     assert.doesNotMatch(app, /(?:const|function)\s+buildPdfSupportFieldLevelControlledWrite/);
     assert.doesNotMatch(app, /qisi-answer-only-ai-pass|AnswerOnlyAiPass/);
 });

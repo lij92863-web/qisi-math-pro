@@ -30,10 +30,11 @@ const question = (number = '1', overrides = {}) => ({
     ...overrides
 });
 const rawQuestions = questions => ({ value: { questions } });
-const fullPdfResponses = (overrides = {}) => [
-    rawQuestions([question('1', overrides.question)]),
-    overrides.support || '1. 【答案】A\n【解析】First is correct.'
-];
+const pdfQuestion = (question_no='1', stem='Production question 1.') => ({question_no,type:'single',stem,options:['First','Second','Third','Fourth'].map((text,i)=>({label:String.fromCharCode(65+i),text})),figures:[],source_pages:[1],status:'complete',warnings:[]});
+const pdfAnswer = (question_no='1',answer='A',status='complete') => ({question_no,answer,figures:[],source_pages:[1],status,warnings:[]});
+const pdfSolution = (question_no='1',solution='First is correct.') => ({question_no,solution,figures:[],source_pages:[1],status:'complete',warnings:[]});
+const pdfResponse=(questions=[],answers=[],solutions=[])=>({value:{questions,answers,solutions}});
+const fullPdfResponses = (overrides = {}) => [pdfResponse([pdfQuestion('1',overrides.question?.stem || 'Production question 1.')],[pdfAnswer()],[pdfSolution('1',overrides.solution || 'First is correct.')])];
 
 const batchRows = (snapshot, batchId) => ({
     batch: snapshot.batches.find(row => row.id === batchId),
@@ -85,7 +86,7 @@ const assertImportSafety = ({ snapshot, batchId, engine, allowFormal = false }) 
         }
         if (
             draft.source?.format === 'pdf' &&
-            draft.controlledWrite?.evaluated !== true
+            draft.producer?.routeId !== 'pdf-external-v2' || Object.values(draft.fieldProvenance || {}).some(p => p.status === 'controlled-write' && (!p.controlledWriteAccepted || !p.controlledWriteDecisionId))
         ) controlledWriteBypass += 1;
     }
     assert.equal(wrongAttachment, 0);
@@ -173,10 +174,24 @@ test('normal UI production matrix executes seventeen true producer scenarios', {
         assert.equal(batchRows(full.snapshot, full.batchId).batch.status, 'review');
         assert.equal(batchRows(full.snapshot, full.batchId).drafts[0].answer, 'A');
         await assertOrderedStages(harness.page, full.batchId, [
-            'page-rendered', 'ocr-adapter-called', 'parser-entered',
-            'pdf-projection-entered', 'controlled-write-evaluated',
+            'pdf-external-task-start', 'pdf-external-canonical-produced', 'pdf-external-contract-validated',
             'validation-complete', 'draft-persisted', 'readback-verified'
         ]);
+        const beforeRepeat = batchRows(full.snapshot, full.batchId);
+        const callsBeforeRepeat = engine.calls.length;
+        await callProxy(harness.page, 'openBatchReview', full.batchId);
+        const acceptRepeat = dialog => dialog.accept();
+        harness.page.on('dialog', acceptRepeat);
+        try { await callProxy(harness.page, 'rerunActiveBatchRecognition'); }
+        finally { harness.page.off('dialog', acceptRepeat); }
+        const repeatedFull = batchRows(await getDbSnapshot(harness.page), full.batchId);
+        assert.equal(repeatedFull.batch.status, 'review');
+        assert.equal(repeatedFull.batch.draftPersistence.version, beforeRepeat.batch.draftPersistence.version + 1);
+        assert.notEqual(repeatedFull.batch.draftPersistence.idempotencyKey, beforeRepeat.batch.draftPersistence.idempotencyKey);
+        assert.equal(engine.calls.length, callsBeforeRepeat, 'successful windows are reused without model requests');
+        assert.equal(displayText(repeatedFull.drafts[0]), displayText(beforeRepeat.drafts[0]));
+        assert.equal(repeatedFull.drafts[0].manualConfirmed, false);
+        assert.equal(repeatedFull.questions.length, 0);
 
         const partial = await run({
             name: '4 PDF safe-partial', producerMode: 'pdf',
@@ -185,8 +200,8 @@ test('normal UI production matrix executes seventeen true producer scenarios', {
                 pdf('pdf-solution.pdf', ['answer', 'solution'])
             ],
             responses: [
-                rawQuestions([question('1')]),
-                '1. 【答案】A\n【解析】Only safe controlled support is attached.'
+                pdfResponse([pdfQuestion()]),
+                pdfResponse([], [pdfAnswer()], [pdfSolution('1', 'Only structured support is attached.')])
             ]
         });
         const partialRows = batchRows(partial.snapshot, partial.batchId);
@@ -196,7 +211,7 @@ test('normal UI production matrix executes seventeen true producer scenarios', {
             JSON.stringify({ partialRows, calls: engine.calls.slice(-4) })
         );
         assert.ok(partialRows.drafts.some(draft =>
-            ['prefix', 'safe-partial'].includes(draft.supportLevel)
+            draft.producer.routeId === 'pdf-external-v2' && draft.fieldProvenance.answer.controlledWriteAccepted
         ));
 
         const knownBad = await run({
@@ -205,7 +220,7 @@ test('normal UI production matrix executes seventeen true producer scenarios', {
                 pdf('pdf-question.pdf', ['question']),
                 pdf('known-bad-ownership.pdf', ['answer'])
             ],
-            responses: [rawQuestions([question('1')]), '2. 【答案】B']
+            responses: [pdfResponse([pdfQuestion()]), pdfResponse([], [pdfAnswer('2','B')])]
         });
         const knownRows = batchRows(knownBad.snapshot, knownBad.batchId);
         assert.ok(['failed', 'review'].includes(knownRows.batch.status));
@@ -218,8 +233,8 @@ test('normal UI production matrix executes seventeen true producer scenarios', {
                 pdf('conflict.pdf', ['answer'])
             ],
             responses: [
-                rawQuestions([question('1')]),
-                '1. 【答案】A\n1. 【答案】B'
+                pdfResponse([pdfQuestion()]),
+                pdfResponse([], [pdfAnswer('1','A'),pdfAnswer('1','B')])
             ]
         });
         const conflictRows = batchRows(conflict.snapshot, conflict.batchId);
@@ -232,8 +247,8 @@ test('normal UI production matrix executes seventeen true producer scenarios', {
                 pdf('ambiguity.pdf', ['answer'])
             ],
             responses: [
-                rawQuestions([question('1')]),
-                '1. Deliberately ambiguous support without an answer label.'
+                pdfResponse([pdfQuestion()]),
+                pdfResponse([], [pdfAnswer('1','','unreadable')])
             ]
         });
         const ambiguityRows = batchRows(ambiguity.snapshot, ambiguity.batchId);
@@ -254,7 +269,7 @@ test('normal UI production matrix executes seventeen true producer scenarios', {
             files: [pdf('formula-rich.pdf', ['full'])],
             responses: fullPdfResponses({
                 question: { stem: 'Evaluate $\\int_0^1 x^2 dx$.' },
-                support: '1. 【答案】A\n【解析】Use $\\sqrt{x^2}=|x|$.'
+                solution: 'Use $\\sqrt{x^2}=|x|$.'
             })
         });
         const formulaDraft = batchRows(formula.snapshot, formula.batchId).drafts[0];
@@ -425,7 +440,7 @@ test('normal UI production matrix executes seventeen true producer scenarios', {
         assert.equal(batchRows(snapshot, pending.batchId).drafts.length, 1);
         assert.equal(duplicateEngine.calls.filter(call =>
             call.endpoint !== '/api/ai/health'
-        ).length, 2);
+        ).length, 1);
         evidence.push({ name: '11 duplicate click',
             ...assertImportSafety({
                 snapshot, batchId: pending.batchId, engine: duplicateEngine

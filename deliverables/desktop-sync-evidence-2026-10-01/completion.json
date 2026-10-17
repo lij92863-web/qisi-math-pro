@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-01",
+  "repos": [
+    {
+      "root": "C:\\Users\\Administrator\\Desktop\\题库系统",
+      "head": "f337b9614aee6054358849599c3b3ee506cb954d",
+      "branch": "stage/program-c-corrective-r1",
+      "status": "?? .workbuddy/\n?? deliverables/\n?? \"\\345\\220\\257\\345\\212\\250\\345\\245\\207\\346\\200\\235\\346\\225\\260\\345\\255\\246.bat\""
+    },
+    {
+      "root": "C:/Users/Administrator/.codex/worktrees/desktop-recovery/题库系统",
+      "head": "64f0c91b0c59a7de47a4bce4288a78c26459c16c",
+      "branch": "codex/desktop-recovery",
+      "status": ""
+    },
+    {
+      "root": "E:/备份/题库系统",
+      "head": "ef2ad10c16cf4743573d1f3352a164ed91c9d995",
+      "branch": "codex/integration-main-hardening",
+      "status": ""
+    }
+  ],
+  "sourceDeploymentFilesMatched": 44,
+  "originalAuditSha256": "4d7924d9a1e4c19c3ef29a6b250b8ae848710332e5a4509fdb8c895109122650",
+  "reportSha256": "c760cd586422bb908a6f503203243233b1128a22ce65a52c0d1b123ea1da8435",
+  "remainingRound2": 16,
+  "haltPreserved": true,
+  "newPaidCalls": 0,
+  "versions": {
+    "express": "4.22.3",
+    "multer": "2.4.0",
+    "katex": "0.16.47"
+  }
+}

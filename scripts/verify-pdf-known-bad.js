@@ -5,7 +5,9 @@ const result = spawnSync(
     [
         '--test',
         'tests/pdf-support-aligner.test.js',
-        'tests/pdf-support-block-parser.test.js',
+        'tests/pdf-multimodal-v1.test.js',
+        'tests/production-import-bridge.test.js',
+        'tests/pdf-projection-single-owner.test.js',
         'tests/batch-smoke-mock.test.js'
     ],
     {

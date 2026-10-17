@@ -130,3 +130,35 @@ test('production final gates delegate to the shared output owner', () => {
     assert.doesNotMatch(app, /const batchFinalGateMergeCandidateIntoBest\s*=/);
     assert.doesNotMatch(app, /const batchFinalGateRebindDraftImages\s*=/);
 });
+
+test('legacy PDF identity cannot reach the DOCX scoring merger', () => {
+    for (const identity of [
+        { source: { format: 'pdf' } },
+        { source: { mode: 'pdf-ai' } },
+        { producer: { routeId: 'pdf-deterministic-import' } },
+        { producer: { routeId: 'pdf-vision-controlled-write' } }
+    ]) assert.throws(() => OutputPort.projectImportOutput({ drafts: [{
+        id: 'retired', questionNumber: '1', stem: 'old PDF text', ...identity
+    }] }, helpers), e => e.code === 'PRODUCTION_IMPORT_PDF_V1_REQUIRED');
+});
+
+test('V1 PDF fields bypass the legacy cleaner and scoring merger exactly', () => {
+    const C = require('../qisi-pdf-multimodal-contract.js');
+    const I = require('../qisi-docx-producer-identity-contract.js');
+    const q = C.canonicalDraft(C.groupProposals([{
+        field: 'question', source: { sourceId: 'pdf', format: 'pdf', filename: 'q.pdf' },
+        model: 'offline-fixture', evidence: [], item: {
+            question_no: '16', type: 'single', stem: '原式 $2^{n-\\frac12}$',
+            options: [{ label: 'A', text: ' $\\sin x$  ' }, { label: 'B', text: '$x = 1$' }],
+            figures: [], source_pages: [1], status: 'complete', warnings: []
+        }
+    }], 'exam')[0], { batchId: 'exam', now: 1, identityContract: I });
+    const before = structuredClone(q);
+    const output = OutputPort.projectImportOutput({ drafts: [q], draftImages: [] }, {
+        cleanText() { throw Error('legacy cleaner called'); },
+        cleanOptions() { throw Error('legacy option cleaner called'); }
+    });
+    assert.deepEqual(output.drafts, [before]);
+    assert.deepEqual(q, before);
+    assert.equal(output.drafts[0].options.length, 2);
+});

@@ -1,0 +1,5 @@
+# Stage16 protected restoration concurrency
+
+Allowed: qisi-backup-snapshot-policy.js, qisi-storage-repository.js (optional guarded restore only), main.html (policy load before repository and cache version), architecture/runtime-modules.json, tests/backup-restore-guard.test.js. No schema migration, live data restore, app rewrite or AI calls. Continuous user authorization applies.
+
+Before a future UI restore, current state is captured in one readonly snapshot and written to a user-chosen folder. In the existing restore readwrite transaction, compare all current records with that saved snapshot, including exact Blob bytes in bounded chunks; reject any intervening change before clear/bulkPut. Dexie.waitFor keeps the transaction live during Blob I/O. Existing unguarded legacy API remains for compatibility; new UI must pass a complete expected snapshot. Metadata linear comparison, binary work linear in bytes, fixed 1MiB chunks; no digest collision assumption. Tests: changed fields, same-length altered Blob, actual native IndexedDB transaction lifetime and rollback. Full safe scope before commit.

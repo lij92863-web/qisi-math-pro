@@ -60,7 +60,7 @@ test('prepared-page recognizer preserves trace, progress, validation, and result
     const engine = loadEngine();
     const progress = [];
     const recognizer = engine.createStrictVisualPreparedPagesRecognizer(ports());
-    const file = { id: 'pdf-1', filename: 'paper.pdf', fileType: 'pdf' };
+    const file = { id: 'pdf-1', filename: 'paper.pdf', fileType: 'pdf', convertedFromDocx: true };
     const result = await recognizer({
         file,
         batch: { id: 'batch-1' },
@@ -108,7 +108,7 @@ test('prepared-page recognizer fails closed for missing pages and fatal validati
     }));
     await assert.rejects(
         fatal({
-            file: { id: 'pdf-1', filename: 'bad.pdf', fileType: 'pdf' },
+            file: { id: 'pdf-1', filename: 'bad.pdf', fileType: 'pdf', convertedFromDocx: true },
             pages: [{ pageNo: 1, url: 'page-1' }]
         }),
         /整页视觉识别发生致命错误：sequence-invalid/
@@ -150,7 +150,7 @@ test('prepared-page recognizer keeps targeted repair inside the engine owner', a
         }
     }));
     const result = await recognizer({
-        file: { id: 'pdf-1', filename: 'repair.pdf', fileType: 'pdf' },
+        file: { id: 'pdf-1', filename: 'repair.pdf', fileType: 'pdf', convertedFromDocx: true },
         pages: [{ pageNo: 1, url: 'page-1' }]
     });
 
@@ -179,7 +179,7 @@ test('prepared-page recognizer rejects late results after cancellation', async (
 
     await assert.rejects(
         recognizer({
-            file: { id: 'pdf-1', filename: 'cancel.pdf', fileType: 'pdf' },
+            file: { id: 'pdf-1', filename: 'cancel.pdf', fileType: 'pdf', convertedFromDocx: true },
             pages: [{ pageNo: 1, url: 'page-1' }],
             signal: controller.signal
         }),
@@ -206,7 +206,7 @@ test('prepared-page recognizer stops before transport for a pre-aborted signal',
 
     await assert.rejects(
         recognizer({
-            file: { id: 'pdf-1', filename: 'cancel.pdf', fileType: 'pdf' },
+            file: { id: 'pdf-1', filename: 'cancel.pdf', fileType: 'pdf', convertedFromDocx: true },
             pages: [{ pageNo: 1, url: 'page-1' }],
             signal: controller.signal
         }),

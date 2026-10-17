@@ -48,7 +48,9 @@
             );
             const retryPrefix =
                 `normal-ui:${batchId}:source:${sourceVersion ?? 0}:draft:`;
-            const reusableRequestId = batch.status === 'review' &&
+            const mayReuseCommittedRequest = typeof ports.canReuseCommittedRequest !== 'function' ||
+                ports.canReuseCommittedRequest(batch);
+            const reusableRequestId = mayReuseCommittedRequest && batch.status === 'review' &&
                 previousRequestId.startsWith(retryPrefix)
                 ? previousRequestId
                 : '';
@@ -78,6 +80,17 @@
             return result;
         }
 
+        function executeLocked(batchId, options, activity) {
+            const locks = ports.lockManager || root?.navigator?.locks;
+            if (typeof locks?.request !== 'function') return execute(batchId, options, activity);
+            return locks.request(`qisi-normal-import:${batchId}`, { mode: 'exclusive', ifAvailable: true }, lock => {
+                if (!lock) throw fail('IMPORT_RUNNING_IN_ANOTHER_WINDOW');
+                if (activity.controller.signal.aborted) throw fail('IMPORT_CANCELLED');
+                // Read current source/version and retain exclusivity through persistence and readback.
+                return execute(batchId, options, activity);
+            });
+        }
+
         function run(batchIdValue, options = {}) {
             const batchId = String(batchIdValue || '').trim();
             if (!batchId) return Promise.reject(
@@ -87,7 +100,7 @@
             const controller = new AbortController();
             const activity = { controller, cancelable: true, promise: null };
             setBusy({ batchId, busy: true });
-            const promise = execute(batchId, options, activity)
+            const promise = executeLocked(batchId, options, activity)
                 .catch(error => {
                     const normalized = error?.code === 'IMPORT_CANCELLED'
                         ? fail('IMPORT_CANCELLED')
@@ -95,7 +108,7 @@
                             stableCode(error?.code || 'NORMAL_UI_IMPORT_FAILED'),
                             error?.causeCode || error?.code || error?.name
                         );
-                    notifyFailure({ batchId, code: normalized.code });
+                    notifyFailure({ batchId, code: normalized.code, message: normalized.code === 'IMPORT_RUNNING_IN_ANOTHER_WINDOW' ? '此任务正在另一个窗口处理中，请等待完成后再查看。' : normalized.code });
                     throw normalized;
                 })
                 .finally(() => {

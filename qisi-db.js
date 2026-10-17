@@ -97,8 +97,11 @@
             draftImages: 'id, batchId, questionId, status, createdAt'
         });
 
+        const normalizeCompareText = (...args) => window.Qisi.QuestionDuplicatePolicy.normalizeText(...args);
+        const questionCoreFingerprint = (...args) => window.Qisi.QuestionDuplicatePolicy.canonicalCoreFingerprint(...args);
+        const questionStemFingerprint = (...args) => window.Qisi.QuestionDuplicatePolicy.canonicalStemFingerprint(...args);
         window.Qisi.QuestionIndexStorage.configure(db, {
-            policy: window.Qisi.QuestionDuplicatePolicy
+            policy: { canonicalCoreFingerprint: questionCoreFingerprint, canonicalStemFingerprint: questionStemFingerprint }
         });
 
         const getQuestionKnowledge = (q, type) => {
@@ -121,12 +124,8 @@
             return q.meta?.knowledge || q.knowledge || '';
         };
 
-        // The duplicate policy is loaded before the database in main.html.
-        const normalizeCompareText = window.Qisi.QuestionDuplicatePolicy.normalizeText;
         const normalizeOptionsForCompare = options => Array.isArray(options)
             ? options.map(normalizeCompareText).join('|') : '';
-        const questionCoreFingerprint = window.Qisi.QuestionDuplicatePolicy.canonicalCoreFingerprint;
-        const questionStemFingerprint = window.Qisi.QuestionDuplicatePolicy.canonicalStemFingerprint;
         const hasText = (text) => String(text || '').trim().length > 0;
         const sameTextLoose = (a, b) => normalizeCompareText(a) === normalizeCompareText(b);
 

@@ -124,3 +124,31 @@ test('PDF support ambiguity remains fail closed in the route owner', () => {
             error.causeCode === 'pdf-support-source-ambiguous'
     );
 });
+
+
+test('normal UI selects local DOCX XML and PDF automatically from declared file roles', () => {
+    for (const [fileType, expected] of [['docx', 'docx-deterministic'], ['pdf', 'pdf']]) {
+        for (const manifest of [
+            [source('full', fileType, ['full'], 1)],
+            [source('question', fileType, ['question'], 1),
+             source('support', fileType, ['answer', 'solution'], 2),
+             source('figure', 'image', ['supplemental_image'], 3)]
+        ]) {
+            const classification = Roles.classifySourceRoles(manifest);
+            const mode = Policy.selectNormalUiProducerMode(classification);
+            assert.equal(mode, expected);
+            assert.equal(select({ producerMode: mode, manifest }).producerIdentity, expected);
+        }
+    }
+});
+
+test('normal UI does not invent a producer for mixed, unsupported, or questionless sources', () => {
+    for (const manifest of [
+        [source('question', 'docx', ['question'], 1), source('support', 'pdf', ['answer'], 2)],
+        [source('text', 'text', ['full'], 1)],
+        [source('support', 'docx', ['answer'], 1)]
+    ]) {
+        assert.throws(() => Policy.selectNormalUiProducerMode(Roles.classifySourceRoles(manifest)),
+            error => error.code === 'PRODUCTION_IMPORT_SOURCE_UNSUPPORTED');
+    }
+});

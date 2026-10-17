@@ -114,15 +114,16 @@
         };
         const supportRoles = source => {
             const roles = roleSet(source);
-            return ['answer', 'solution'].filter(role => roles.has(role));
+            return roles.has('full') ? ['answer', 'solution']
+                : ['answer', 'solution'].filter(role => roles.has(role));
         };
 
-        const parseSupportSource = async (source, batch, signal) => {
+        const parseSupportSource = async (source, batch, signal, importer) => {
             if (typeof ports.parseSupportText !== 'function') {
                 throw createError('DOCX_SUPPORT_PARSER_REQUIRED');
             }
             assertActive(signal);
-            const parsed = await ports.importer.parseDocxFile(source, {
+            const parsed = await importer.parseDocxFile(source, {
                 batch,
                 defaultMeta: batch.defaultMeta || defaultMeta(),
                 helpers: {
@@ -134,26 +135,65 @@
             if (!parsed || !Array.isArray(parsed.drafts)) {
                 throw createError('DOCX_SUPPORT_RESULT_MALFORMED');
             }
-            const text = parsed.drafts.map(draft =>
-                draft.rawBlock || draft.renderableText || draft.stem || ''
+            const text = parsed.supportText || parsed.drafts.map(draft =>
+                draft.renderableText || draft.rawBlock || draft.stem || ''
             ).filter(Boolean).join('\n');
-            const result = ports.parseSupportText(text, source);
+            // Word support often has a bare number followed immediately by an explicit label.
+            // Anchor it before any leading image token; formula digits are never scanned as identity.
+            const labeledText = parsed.supportSectionDeclared ? text.replace(
+                /(^|\n)([0-9０-９]+)\.\s*((?:\$[^$]+\$\s*)+)(?=\n【(?:分析|解析|详解|解答)】)/g,
+                '$1$2. 【答案】$3') : text;
+            const anchored = labeledText.replace(/(^|\n)(\s*(?:\[\[IMAGE:[^\]]+\]\]\s*)*)([0-9０-９]+)\s*(?=【(?:答案|参考答案|解析|详解|解答)】)/g,
+                '$1$3. $2');
+            const result = ports.parseSupportText(anchored, source);
+            const answerSlots = [...anchored.matchAll(/(?:^|\n)\s*([0-9０-９]+)\.\s*(?:\[\[IMAGE:[^\]]+\]\]\s*)*【(?:答案|参考答案)】([^\n]*)/g)];
+            if (answerSlots.length) {
+                // An empty explicit answer stays empty; digits in a solution cannot fill it.
+                const explicitQuestions = new Set(answerSlots.map(slot => normalizeQuestionNumber(slot[1])));
+                const unlabelledAnswers = result.answers.filter(item =>
+                    !explicitQuestions.has(normalizeQuestionNumber(item.questionNumber || item.question)));
+                result.answers = [...unlabelledAnswers, ...answerSlots.flatMap(slot => slot[2].trim()
+                    ? ports.parseSupportText(slot[1] + '. 【答案】' + slot[2], source).answers
+                        .filter(item => normalizeQuestionNumber(item.questionNumber || item.question) === normalizeQuestionNumber(slot[1]))
+                    : [])];
+            }
+            for (const slot of answerSlots.filter(row => !row[2].trim())) {
+                const question = normalizeQuestionNumber(slot[1]);
+                const matches = result.solutions.filter(item =>
+                    normalizeQuestionNumber(item.questionNumber || item.question) === question);
+                if (matches.length !== 1) continue;
+                const conclusion = String(matches[0].solution || '').trim()
+                    .match(/(?:故选|应选)\s*[:：]\s*([A-D]{1,4})[。．.]?\s*$/);
+                if (!conclusion) continue;
+                const explicit = ports.parseSupportText(question + '. 【答案】' + conclusion[1], source).answers;
+                result.answers.push(...explicit.filter(item =>
+                    normalizeQuestionNumber(item.questionNumber || item.question) === question)
+                    .map(item => ({ ...item, answerEvidence: {
+                        kind: 'explicit-final-choice', sourceFileId: source.id,
+                        questionNumber: question, rawStatement: conclusion[0],
+                        rawSupportText: anchored
+                    } })));
+            }
             if (!result || !Array.isArray(result.answers) ||
                 !Array.isArray(result.solutions)) {
                 throw createError('DOCX_SUPPORT_RESULT_MALFORMED');
             }
-            return result;
+            return { ...result, images: parsed.supportImages || [] };
         };
 
         return async function runProductionDocxImport(context = {}, signal) {
             const batch = context.batch || {};
+            const parsedSources = new Map();
+            const importer = { parseDocxFile(source, options) {
+                if (!parsedSources.has(source.id)) parsedSources.set(source.id,
+                    ports.importer.parseDocxFile(source, { ...options, signal }));
+                return parsedSources.get(source.id);
+            } };
             const sources = Array.isArray(context.sources)
                 ? context.sources
                 : [];
             const questionSources = sources.filter(isQuestionSource);
-            const supportSources = sources.filter(source =>
-                !isQuestionSource(source) && supportRoles(source).length
-            );
+            const supportSources = sources.filter(source => supportRoles(source).length);
             if (!questionSources.length) {
                 throw createError('DOCX_QUESTION_SOURCE_REQUIRED');
             }
@@ -171,7 +211,7 @@
                         makeBatchId: makeId
                     }
                 }, {
-                    importer: ports.importer,
+                    importer,
                     convertDraft: (draft, index) => ({
                         ...draft,
                         id: draft.id || makeId('dq'),
@@ -210,7 +250,7 @@
             const unmatchedAnswers = [];
             for (const source of supportSources) {
                 const roles = supportRoles(source);
-                const parsed = await parseSupportSource(source, batch, signal);
+                const parsed = await parseSupportSource(source, batch, signal, importer);
                 const groups = [
                     ['answer', parsed.answers],
                     ['solution', parsed.solutions]
@@ -242,7 +282,9 @@
                                 field,
                                 support: {
                                     ...item,
-                                    questionNumber: question
+                                    questionNumber: question,
+                                    images: parsed.images.filter(image =>
+                                        String(item[field] || '').includes('[[IMAGE:' + image.id + ']]'))
                                 },
                                 source: {
                                     sourceId: source.id,
@@ -257,6 +299,7 @@
                                 },
                                 roles
                             });
+
                     }
                 }
             }

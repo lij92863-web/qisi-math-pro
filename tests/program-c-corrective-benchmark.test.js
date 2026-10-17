@@ -29,7 +29,10 @@ test('corrective benchmark compares the fixed RC2 tree without candidate fixture
     assert.equal(result.sameBrowser, true);
     assert.equal(result.realApiCalled, false);
     assert.equal(result.fixtureCandidateTransport, false);
-    assert.equal(result.comparisons.length, 11);
+    assert.equal(result.comparisons.length, 10);
+    assert.equal(result.comparisons.some(item => item.name === 'pdf-safe-partial'), false);
+    assert.equal(result.comparisons.some(item => item.name === 'docx-deterministic'), true);
+    assert.equal(result.comparisons.some(item => item.name === 'docx-vision'), true);
     result.comparisons.forEach(item => {
         assert.equal(item.blocker, false, item.name);
         assert.equal(item.failureCount, 0, item.name);

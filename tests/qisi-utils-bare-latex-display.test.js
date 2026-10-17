@@ -50,3 +50,11 @@ test('BMR7: normalizeBareLatexForDisplayOptions preserves non-array input', () =
     assert.deepEqual(normalizeBareLatexForDisplayOptions(['\\sqrt{2}', 'plain']), ['$\\sqrt{2}$', 'plain']);
     assert.equal(normalizeBareLatexForDisplayOptions(null), null);
 });
+
+
+test('N39: math protection restores block delimiters literally', () => {
+    const utils = require('../qisi-utils.js');
+    const source = '$$\\frac{1}{2}$$';
+    const protectedMath = utils.protectLatexMathSegments(source);
+    assert.equal(utils.restoreLatexMathSegments(protectedMath.protectedText, protectedMath.chunks), source);
+});

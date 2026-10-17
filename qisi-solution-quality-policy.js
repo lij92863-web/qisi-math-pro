@@ -26,7 +26,9 @@
         const source = root.Qisi.Utils.cleanRecognizedText(text);
         const tags = new Set();
         if (/复数|虚部|实部|共轭|(?:^|[^a-zA-Z])i(?:$|[^a-zA-Z])/.test(source)) tags.add('complex');
-        if (/向量|\\vec|\\overrightarrow|\\cdot|·|点积|数量积|共线|线性表示/.test(source)) tags.add('vector');
+        if (/向量|\\vec|\\overrightarrow|点积|数量积|共线|线性表示/.test(source) ||
+            /\\overline\{[A-Z]{2}\}\s*\\cdot\s*\\overline\{[A-Z]{2}\}/.test(source) ||
+            /(?<![A-Za-z])[A-Z]{2}\s*(?:·|\\cdot)\s*[A-Z]{2}(?![A-Za-z])/.test(source)) tags.add('vector');
         if (/圆台|棱台|棱锥|棱柱|表面积|侧棱|侧面积|体积|正四棱台|三棱锥/.test(source)) tags.add('solid');
         if (/终边|象限|sin\\?alpha|cos\\?alpha|\\alpha|点P\s*[\(（]/.test(source)) tags.add('terminal-trig');
         if (/四边形|ABCD|平行四边形|梯形/.test(source)) tags.add('quadrilateral');
@@ -56,14 +58,15 @@
     const solutionMatchesQuestionContext = (stem, options, solution) => {
         const cleanSolution = root.Qisi.Utils.cleanRecognizedText(solution);
         if (!cleanSolution || cleanSolution.length < 18) return true;
-        const context = [stem, ...(Array.isArray(options) ? options : [])].map(cleanRecognizedText).join('\n');
+        const context = [stem, ...(Array.isArray(options) ? options : [])].map(root.Qisi.Utils.cleanRecognizedText).join('\n');
         if (!context.trim()) return true;
         const contextTags = mathDomainTags(context);
         const solutionTags = mathDomainTags(cleanSolution);
         const strongTags = [...contextTags].filter(tag => tag !== 'triangle-trig' || contextTags.size === 1);
         const hasStrongContextMismatch = strongTags.length && !strongTags.some(tag => solutionTags.has(tag));
-        const hasDifferentStrongSolution = [...solutionTags].some(tag => tag !== 'triangle-trig' && strongTags.length && !contextTags.has(tag));
-        if (hasStrongContextMismatch || hasDifferentStrongSolution) return false;
+        // A valid solution can use another domain (e.g. monotonicity in a sequence proof).
+        // Reject disjoint context evidence, not every additional mathematical technique.
+        if (hasStrongContextMismatch) return false;
         const contextAnchors = extractAnchorTokens(context);
         const solutionAnchors = new Set(extractAnchorTokens(cleanSolution));
         const sharedAnchors = contextAnchors.filter(token => solutionAnchors.has(token));

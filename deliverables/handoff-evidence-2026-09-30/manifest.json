@@ -1,0 +1,254 @@
+{
+  "createdAt": "2026-09-30T13:58:02.921Z",
+  "sourceHead": "f05cffb1578e1707184a40a708dcde4979d51f42",
+  "desktopHead": "da4fd0039b9b3611479bc2758c9b8fb851cc4e53",
+  "documentSha256": "ca936f571c366ff6ebb6742f650d3224e76172aaa09c351c8dee7b69afd4a045",
+  "records": [
+    {
+      "file": "round1/ledger.json",
+      "bytes": 8656,
+      "sha256": "879a8cefe25cd139529149e000f06f22c9da778d60237e2b021d5ad3194b26ec"
+    },
+    {
+      "file": "round1/page-1.jpg",
+      "bytes": 102512,
+      "sha256": "8e71a83978866b6edb689928dacf0c6e4c62125f4481a9b6a76a96a5e8f13dcd"
+    },
+    {
+      "file": "round1/page-10.jpg",
+      "bytes": 89988,
+      "sha256": "12a1c0fce6a30671a8c72687c1efd4cb563fd544a5e8cd5a6e1d0dcc55a5d376"
+    },
+    {
+      "file": "round1/page-14.jpg",
+      "bytes": 91808,
+      "sha256": "2f3480cbfcc84a59afe0bee857ce46f570dfea873528771dc9c5176c2858a68f"
+    },
+    {
+      "file": "round1/page-16.jpg",
+      "bytes": 116782,
+      "sha256": "d43aa50cb452b3cb6b6247a99141f95db525c82e21377f297033c1bd21197b85"
+    },
+    {
+      "file": "round1/page-2.jpg",
+      "bytes": 108661,
+      "sha256": "4545a1cf304a2ff022e23ee130455d14156250f713f1892a73d2fa06040be0bf"
+    },
+    {
+      "file": "round1/page-3.jpg",
+      "bytes": 88833,
+      "sha256": "633086a2ee1a852434011692a8011d066228bc152bc1dd0c993ff67e55d6cfd6"
+    },
+    {
+      "file": "round1/page-4.jpg",
+      "bytes": 68430,
+      "sha256": "3682372b18d3d782f07834516cbf71c37a6012bbfb956e272e841e904afe7764"
+    },
+    {
+      "file": "round1/page-5.jpg",
+      "bytes": 86121,
+      "sha256": "57f4eb9db4842b4c650cb343c0a266bbc4532a2bf876c27a0424824ab37c3197"
+    },
+    {
+      "file": "round1/page-6.jpg",
+      "bytes": 51843,
+      "sha256": "ad8fdb89c1ced3b380db0d7e29311860a12f17b92339d4d30392308e17fea1a6"
+    },
+    {
+      "file": "round1/page-7.jpg",
+      "bytes": 37717,
+      "sha256": "0308feb6cf1733a3a42ba4c5a19798414780bf5e5d5cb120d72aba91e448b078"
+    },
+    {
+      "file": "round1/page-9.jpg",
+      "bytes": 107193,
+      "sha256": "407120b93ca0da2ca9b13e78d4823f9ad37f372070f6ab428327e8f1f05ea775"
+    },
+    {
+      "file": "round1/response-1.txt",
+      "bytes": 3897,
+      "sha256": "4bfcafeb5e807899991bfd2bfe75d835c0532b82b4b42ada26e226567a2e97d4"
+    },
+    {
+      "file": "round1/response-10.txt",
+      "bytes": 2041,
+      "sha256": "63bd0f77da8e0b00d87e03959e3652ab57aa8d64dac9268397ce0b270fe7cfff"
+    },
+    {
+      "file": "round1/response-11.txt",
+      "bytes": 1779,
+      "sha256": "49f16c4e0c5df8e1c3eefe81c6297118e0efb0e800738b2ad8a7ca2b0b5129b0"
+    },
+    {
+      "file": "round1/response-12.txt",
+      "bytes": 1768,
+      "sha256": "2062213fb3094b86db6c5d81d6b849999ac76e943c0e0993d312fb5ae173abe7"
+    },
+    {
+      "file": "round1/response-13.txt",
+      "bytes": 2876,
+      "sha256": "bb0b27c2356e8af5e8067461b9bfe0268b5730b4ca589df6e0236eb99f0fe62b"
+    },
+    {
+      "file": "round1/response-14.txt",
+      "bytes": 2652,
+      "sha256": "ecb355ef543555855e764b7392718d15f1384d3f6984711ed5d5bb2dd618d1f0"
+    },
+    {
+      "file": "round1/response-15.txt",
+      "bytes": 1297,
+      "sha256": "728df106e76fca5da26d0c15cf3bd17b5eb78370f59c0a8e3ea19db391dbbc6f"
+    },
+    {
+      "file": "round1/response-2.txt",
+      "bytes": 2800,
+      "sha256": "1dbe10dfd092a7165d18be2cfbf942b8109b2abfb53d86d2dd6179ecb9f3b814"
+    },
+    {
+      "file": "round1/response-3.txt",
+      "bytes": 2699,
+      "sha256": "c7c2a399914d6262383e4e9559e8f5078b454f93126e97b77481101906649ae3"
+    },
+    {
+      "file": "round1/response-4.txt",
+      "bytes": 1920,
+      "sha256": "691b01047d067c3436a4e1ad89ee8b6e3e0c1004344995e18f968db711ef2fa4"
+    },
+    {
+      "file": "round1/response-5.txt",
+      "bytes": 1704,
+      "sha256": "f0bdcb6382b8ac44f390a47294657ced1ab36b348037a6d9f775d2c5c6d031ff"
+    },
+    {
+      "file": "round1/response-6.txt",
+      "bytes": 1535,
+      "sha256": "2d681bf5029ebdb711f30bdcad06f256d93db12ad7331fe3b19c5e48f4578b7b"
+    },
+    {
+      "file": "round1/response-7.txt",
+      "bytes": 758,
+      "sha256": "bda5a760ae35a9fa2814b25c74efa05d91aa7aea0dd37362621d140bb1c7af84"
+    },
+    {
+      "file": "round1/response-8.txt",
+      "bytes": 2350,
+      "sha256": "029600dbf60e77b25c97b789f17803a0a9b867806d509dbf893e886349ed9db5"
+    },
+    {
+      "file": "round1/response-9.txt",
+      "bytes": 1816,
+      "sha256": "395db3e5a8d69b52c8b49e494bae30efbeb59d44aa94eca028c8fc6548dddef8"
+    },
+    {
+      "file": "round2/ledger.json",
+      "bytes": 1151,
+      "sha256": "2b8489db3273c29423950150af27802cf12f7acc01bb59cca84c37d64ef12779"
+    },
+    {
+      "file": "round2/page-10.jpg",
+      "bytes": 89988,
+      "sha256": "12a1c0fce6a30671a8c72687c1efd4cb563fd544a5e8cd5a6e1d0dcc55a5d376"
+    },
+    {
+      "file": "round2/page-11.jpg",
+      "bytes": 87205,
+      "sha256": "025658be12dbe104cee64bf30ef9ed2f8eb95f316f63532252f75dced2a1baf4"
+    },
+    {
+      "file": "round2/recovery.json",
+      "bytes": 1003,
+      "sha256": "4bc943ca373dd1022b8c204e1e08743f5ffebd72c66d546a12c4d9a22f010a03"
+    },
+    {
+      "file": "offline/boundary-q10.jpg",
+      "bytes": 44976,
+      "sha256": "8ed626ac5ed87dda6a12691974b3607fca4af72b56a1c62db474436bd489d766"
+    },
+    {
+      "file": "offline/boundary-q16.jpg",
+      "bytes": 110661,
+      "sha256": "1de1f4bff173e207a48a7591e90edafce1631414945211cb365c35d2c83c30f0"
+    },
+    {
+      "file": "offline/boundary-q17.jpg",
+      "bytes": 49606,
+      "sha256": "5d1778c89d703c78242f57258826bc49257f872960d35a4d7e02051347476d43"
+    },
+    {
+      "file": "offline/metrics.json",
+      "bytes": 1897,
+      "sha256": "33648a3f4a78b9e92e413b82f45fe0b70cb9e630c88f90e41e7a3839a8e8ff8d"
+    },
+    {
+      "file": "verification/stage22-safe.log",
+      "bytes": 175328,
+      "sha256": "d60dd89cb1a4849f8ccefe39e66d0aa79a04b63b548dfd2dd952d13707dac0cd"
+    },
+    {
+      "file": "verification/stage22-batch.log",
+      "bytes": 9701,
+      "sha256": "756fedb64abab0944d53ec1e45f00fbc4eac0016bd4ff627bb76457ce470fe66"
+    },
+    {
+      "file": "verification/duplicate-metrics.json",
+      "bytes": 292,
+      "sha256": "bf52d9cc2b2cae3003e9f0099e5b8e032377edd949e1a200286bf21b92bca4fb"
+    },
+    {
+      "file": "verification/backup-write-metrics.json",
+      "bytes": 665,
+      "sha256": "8f79549bf8142d5b9a5859f52048739da2c9aeef5332b84b2e76fdae1e96ffb6"
+    },
+    {
+      "file": "verification/final-npm-audit.json",
+      "bytes": 384,
+      "sha256": "bd4d9925533cb22c354cfec361d3a21ccbe3f0731df179ba21323e9cb148d9d4"
+    },
+    {
+      "file": "tasks/continuous-user-scope.md",
+      "bytes": 2329,
+      "sha256": "b45066f72dbbf19aae069126cc13bab9cc3edf87cf7460b4c95367eb91847169"
+    },
+    {
+      "file": "tasks/stage17.md",
+      "bytes": 2126,
+      "sha256": "900921b28e84346d467702ffa8d17ce03dd0785117fabc056cfb9dc0787127bc"
+    },
+    {
+      "file": "tasks/stage18.md",
+      "bytes": 780,
+      "sha256": "2ef5c97cee143f40e5e2c9414fdc0333ba41105ada4f378d4d6dd0abbf94d87e"
+    },
+    {
+      "file": "tasks/stage19.md",
+      "bytes": 1612,
+      "sha256": "7a0a7bd097252f3ffbe61e4bc64d96c3ad634f20520980b96cb16244fc7c69d7"
+    },
+    {
+      "file": "tasks/stage20.md",
+      "bytes": 725,
+      "sha256": "653da9f19723e3a8ac3ca75a417e252202f4474d531548f93d720c0bf3cc250b"
+    },
+    {
+      "file": "tasks/stage21.md",
+      "bytes": 573,
+      "sha256": "18bbdd21a13d28a788c9c41a718c2e27ebd0c2198082273a14216e2b2014148d"
+    },
+    {
+      "file": "tasks/stage21-trim-manifest.json",
+      "bytes": 4083,
+      "sha256": "9a1e1a7a0fa61e1b0c435fd520e1f44f23e657fd3e2dd18d790b0a10df737d08"
+    },
+    {
+      "file": "tasks/stage22.md",
+      "bytes": 811,
+      "sha256": "e736ce2e9de0869e2627e6c3eb2270252b4d6d7cfb41824317d4eaa89bdc11a0"
+    },
+    {
+      "file": "tasks/stage16.md",
+      "bytes": 1107,
+      "sha256": "2482baf37d7c33c281098a0dda9a4143f3f2666cfc80ae50183b41ab8d564b09"
+    }
+  ],
+  "missing": []
+}

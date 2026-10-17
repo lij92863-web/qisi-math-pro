@@ -16,10 +16,6 @@
         contracts: root?.Qisi?.RecognitionContracts || (
             typeof module !== 'undefined' && module.exports
                 ? require('./qisi-recognition-contracts.js') : null
-        ),
-        safePartialPipeline: root?.Qisi?.PdfSafePartialPipeline || (
-            typeof module !== 'undefined' && module.exports
-                ? require('./qisi-pdf-safe-partial-pipeline.js') : null
         )
     });
 
@@ -124,28 +120,18 @@
         const contracts = dependencies.contracts ||
             productionDependencies.contracts;
         const reviewValidator = dependencies.reviewValidator;
-        const safePartialPipeline = dependencies.safePartialPipeline ||
-            productionDependencies.safePartialPipeline;
         if (
             typeof supportAligner?.validatePdfSupportSequence !== 'function' ||
             typeof contracts?.createStructuredQuestionDraft !== 'function' ||
             typeof contracts?.validateStructuredQuestionDraft !== 'function' ||
-            typeof reviewValidator?.validate !== 'function' ||
-            typeof safePartialPipeline?.assertSafePartialInvariants !== 'function'
+            typeof reviewValidator?.validate !== 'function'
         ) throw createError('IMPORT_PRODUCTION_VALIDATION_DEPENDENCY_REQUIRED');
 
         const canonicalPdf = draft =>
             draft.source?.format === 'pdf' ||
-            draft.producer?.routeId === 'pdf-vision-controlled-write';
-        const reviewablePartial = draft =>
-            (
-                draft.source?.mode === 'pdf-ai' ||
-                draft.producer?.routeId === 'pdf-vision-controlled-write'
-            ) &&
-            ['prefix', 'safe-partial'].includes(draft.supportLevel) &&
-            draft.manualReviewRequired === true &&
-            draft.controlledWrite?.evaluated === true &&
-            draft.validation?.ownershipValid === true;
+            draft.source?.mode === 'pdf-ai' ||
+            String(draft.producer?.routeId || '').startsWith('pdf-');
+        const rejectedPdf = () => ({ valid: false, errors: [{ code: 'pdf-v1-producer-required' }], warnings: [] });
         const hasValue = value => Array.isArray(value)
             ? value.length > 0
             : typeof value === 'string'
@@ -160,6 +146,7 @@
             );
 
         const validateOwnership = (draft, { context, index }) => {
+            if (canonicalPdf(draft)) return rejectedPdf();
             const canonicalFormat = String(draft.source?.format || '');
             const requiredFileType = ['docx', 'pdf'].includes(canonicalFormat)
                 ? canonicalFormat
@@ -178,36 +165,12 @@
                     warnings: []
                 };
             }
-            if (
-                canonicalPdf(draft) &&
-                (
-                    draft.validation?.ownershipValid !== true ||
-                    draft.supportLevel === 'rejected'
-                )
-            ) {
-                return {
-                    valid: false,
-                    errors: [{ code: 'wrong-attachment' }],
-                    warnings: []
-                };
-            }
             const result = reviewValidator.validate({
                 ...draft,
                 id: draft.id || `validation-draft-${index + 1}`,
                 version: Number.isInteger(draft.version) ? draft.version : 1
             });
             const acceptedMissing = reviewableMissingFields(draft, result);
-            const acceptedPartial =
-                reviewablePartial(draft) &&
-                result.errors.length > 0 &&
-                result.errors.every(error => {
-                    const status = draft.fieldProvenance?.[error.field]?.status;
-                    return [
-                        'admission-field-rejected',
-                        'admission-required-field-missing'
-                    ].includes(error.code) &&
-                        ['rejected', 'missing'].includes(status);
-                });
             const supportDecisions = Array.isArray(
                 draft.controlledWrite?.supportDecisions
             ) ? draft.controlledWrite.supportDecisions : [];
@@ -230,9 +193,9 @@
                     );
                 });
             return {
-                valid: result.valid || acceptedMissing || acceptedPartial ||
+                valid: result.valid || acceptedMissing ||
                     reviewableDocxSupport,
-                errors: acceptedMissing || acceptedPartial || reviewableDocxSupport
+                errors: acceptedMissing || reviewableDocxSupport
                     ? [] : result.errors,
                 warnings: result.warnings || []
             };
@@ -240,17 +203,7 @@
 
         const ports = {
             validateSequence(drafts, { context }) {
-                const invalidCanonicalPdf = drafts.some(draft =>
-                    canonicalPdf(draft) &&
-                    draft.validation?.sequenceValid !== true
-                );
-                if (invalidCanonicalPdf) {
-                    return {
-                        valid: false,
-                        errors: [{ code: 'sequence-invalid' }],
-                        warnings: []
-                    };
-                }
+                if (drafts.some(canonicalPdf)) return rejectedPdf();
                 const expected = context.expectedQuestionNumbers || [];
                 if (!expected.length) {
                     return { valid: true, errors: [], warnings: [] };
@@ -264,7 +217,7 @@
                     expectedQuestionNumbers: expected
                 });
                 const valid = result.mode === 'full' || (
-                    result.mode === 'prefix' &&
+                    ['prefix', 'subset'].includes(result.mode) &&
                     result.safeQuestionNumbers.length === drafts.length
                 );
                 return {
@@ -274,16 +227,7 @@
                 };
             },
             validateSchema(draft, { index }) {
-                if (
-                    canonicalPdf(draft) &&
-                    draft.validation?.schemaValid !== true
-                ) {
-                    return {
-                        valid: false,
-                        errors: [{ code: 'schema-invalid' }],
-                        warnings: []
-                    };
-                }
+                if (canonicalPdf(draft)) return rejectedPdf();
                 const structured = contracts.createStructuredQuestionDraft({
                     sourceId: draft.source?.sourceId || '',
                     sourceOrder: Number.isInteger(draft.order)
@@ -301,15 +245,7 @@
                     rawEvidence: draft.rawText ?? null
                 });
                 const result = contracts.validateStructuredQuestionDraft(structured);
-                const errors = (result.errors || []).filter(error => {
-                    const field = error.field || error.path;
-                    return !(
-                        reviewablePartial(draft) &&
-                        ['rejected', 'missing'].includes(
-                            draft.fieldProvenance?.[field]?.status
-                        )
-                    );
-                });
+                const errors = result.errors || [];
                 return {
                     valid: errors.length === 0,
                     errors,
@@ -318,44 +254,11 @@
             },
             validateOwnership,
             validateSafePartial(draft) {
-                if (draft.source?.mode !== 'pdf-ai' && !canonicalPdf(draft)) {
-                    return { valid: true, errors: [], warnings: [] };
-                }
-                const complete = draft.supportLevel === 'full';
-                const validPartial =
-                    ['prefix', 'safe-partial'].includes(draft.supportLevel) &&
-                    draft.manualReviewRequired === true &&
-                    draft.validation?.sequenceValid === true &&
-                    draft.validation?.ownershipValid === true;
-                if (complete) {
-                    return { valid: true, errors: [], warnings: [] };
-                }
-                try {
-                    safePartialPipeline.assertSafePartialInvariants({
-                        isComplete: !validPartial
-                    });
-                } catch (_error) {
-                    return {
-                        valid: false,
-                        errors: [{ code: 'pdf-safe-partial-invalid' }],
-                        warnings: []
-                    };
-                }
+                if (canonicalPdf(draft)) return rejectedPdf();
                 return { valid: true, errors: [], warnings: [] };
             },
             validateControlledWriteEvidence(draft, input) {
-                const ownership = validateOwnership(draft, input);
-                if (
-                    ownership.valid && canonicalPdf(draft) &&
-                    draft.controlledWrite?.evaluated !== true
-                ) {
-                    return {
-                        valid: false,
-                        errors: [{ code: 'controlled-write-missing' }],
-                        warnings: []
-                    };
-                }
-                return ownership;
+                return validateOwnership(draft, input);
             }
         };
         return Object.freeze(ports);

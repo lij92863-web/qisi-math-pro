@@ -114,10 +114,13 @@
                 acquired = true; state.restoring = true; const selected = candidate;
                 const safety = await backupToFolder('before-restore');
                 if (!safety.ok) return safety;
-                await ports.repository.restoreBackup(selected.backup, { expectedSnapshot: safety.result.snapshot });
+                const rollbackPreferences = selected.preferences === undefined ? () => {} :
+                    ports.backup.restorePreferences(selected.preferences);
+                try { await ports.repository.restoreBackup(selected.backup, { expectedSnapshot: safety.result.snapshot }); }
+                catch (cause) { rollbackPreferences(); throw cause; }
                 restored = true;
                 cancelRestore(); state.notice = '备份恢复完成。'; pauseAutomatic();
-                await ports.onRestored?.(); return { ok: true };
+                await ports.onRestored?.(selected.preferences !== undefined); return { ok: true };
             } catch (error) { if (restored) { state.notice = '数据已恢复，请手动刷新页面。'; return { ok: true, refreshRequired: true }; } return reportFailure(error); }
             finally { if (acquired) state.restoring = false; schedule(); }
         }

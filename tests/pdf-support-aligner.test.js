@@ -141,7 +141,7 @@ test(
 );
 
 test(
-    'validator returns prefix for missing middle number',
+    'D-1 validator resumes after a shared middle gap',
     () => {
         const result =
             validatePdfSupportSequence({
@@ -153,9 +153,10 @@ test(
                     [1, 2, 3, 4, 5]
             });
 
-        assert.equal(result.mode, 'prefix');
-        assert.deepEqual(result.safeQuestionNumbers, ['1', '2']);
-        assert.deepEqual(result.fusedQuestionNumbers, ['3', '4', '5']);
+        // User-authorized D-1 rule change, 2026-10-01: identical shared gaps resume.
+        assert.equal(result.mode, 'subset');
+        assert.deepEqual(result.safeQuestionNumbers, ['1', '2', '4', '5']);
+        assert.deepEqual(result.fusedQuestionNumbers, ['3']);
         assert.deepEqual(result.gaps, ['3']);
         assert.ok(
             result.report.reasons.includes(
@@ -166,7 +167,7 @@ test(
 );
 
 test(
-    'aligner follows validator prefix result',
+    'aligner follows validator shared-gap subset result',
     () => {
         const answerItems =
             makeItems([1, 2, 4, 5]);
@@ -200,7 +201,7 @@ test(
 );
 
 test(
-    'aligner follows validator fail-closed result',
+    'D-1 aligner resumes when both files omit the first question',
     () => {
         const answerItems =
             makeItems([2, 3, 4]);
@@ -221,9 +222,10 @@ test(
                 expectedQuestionNumbers
             });
 
-        assert.equal(validator.mode, 'fail-closed');
+        // User-authorized D-1 also permits a shared opening gap.
+        assert.equal(validator.mode, 'subset');
         assert.equal(aligned.mode, validator.mode);
-        assert.deepEqual(aligned.safeAnswerItems, []);
+        assert.deepEqual(aligned.safeQuestionNumbers, ['2', '3', '4']);
         assert.deepEqual(
             aligned.fusedQuestionNumbers,
             validator.fusedQuestionNumbers
@@ -300,7 +302,7 @@ test(
 );
 
 test(
-    'prefix 1 then missing 2 only returns question 1',
+    'D-1 shared missing 2 withholds only question 2',
     () => {
         const result =
             alignPdfSupport({
@@ -309,18 +311,19 @@ test(
                 expectedQuestionNumbers: [1, 2, 3, 4, 5, 6]
             });
 
-        assert.equal(result.mode, 'prefix');
+        // User-authorized D-1; one-sided gaps and structural anomalies remain unchanged.
+        assert.equal(result.mode, 'subset');
         assert.deepEqual(
             result.safeAnswerItems.map(item => item.question),
-            ['1']
+            ['1', '3', '4', '5', '6']
         );
         assert.deepEqual(
             result.safeSolutionItems.map(item => item.question),
-            ['1']
+            ['1', '3', '4', '5', '6']
         );
         assert.deepEqual(
             result.fusedQuestionNumbers,
-            ['2', '3', '4', '5', '6']
+            ['2']
         );
         assert.ok(
             result.report.reasons.includes(
@@ -826,3 +829,30 @@ test(
         );
     }
 );
+
+
+test('D-1: the 19-question shared gap retains 18 exact pairs', () => {
+    const expected = Array.from({ length: 19 }, (_, index) => index + 1);
+    const present = expected.filter(number => number !== 7);
+    const aligned = alignPdfSupport({
+        answerItems: makeItems(present), solutionItems: makeItems(present),
+        expectedQuestionNumbers: expected
+    });
+    assert.equal(aligned.mode, 'subset');
+    assert.equal(aligned.reliable, false);
+    assert.deepEqual(aligned.safeQuestionNumbers, present.map(String));
+    assert.deepEqual(aligned.fusedQuestionNumbers, ['7']);
+});
+
+
+test('First-round issue 5 (aligner): question identifiers are complete numbers, never fragments of prose', () => {
+    assert.equal(normalizeSupportQuestionNumber('1000'), '1000');
+    for (const source of ['x3', '2023年第5题', '2x+1=0']) {
+        assert.equal(normalizeSupportQuestionNumber(source), '');
+    }
+    const result = alignPdfSupport({
+        answerItems: makeItems([1, 'x3']), solutionItems: makeItems([1, 'x3']),
+        expectedQuestionNumbers: [1, 2, 3]
+    });
+    assert.deepEqual(result.safeQuestionNumbers, ['1']);
+});

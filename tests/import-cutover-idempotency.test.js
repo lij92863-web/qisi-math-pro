@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const Controller = require('../qisi-normal-ui-import-controller.js');
+const RoutePolicy = require('../qisi-production-import-route-policy.js');
 const { createHarness } = require('./helpers/production-import-harness.js');
 
 test('a lost UI response retries the committed request without rerunning producer or persistence', async () => {
@@ -59,4 +60,25 @@ test('an idempotent request fails closed if committed readback identity is incon
     );
     assert.equal(harness.metrics.producerCalls, 0);
     assert.equal(harness.metrics.persistenceCalls, 0);
+});
+
+test('completed PDF rerecognition creates a new draft request while explicit idempotent retries keep their identity', async () => {
+    assert.equal(RoutePolicy.canReuseNormalUiCommittedRequest({ producerMode: 'docx-deterministic' }), true);
+    assert.equal(RoutePolicy.canReuseNormalUiCommittedRequest({ producerMode: 'docx-vision' }), true);
+    const previous = 'normal-ui:pdf-batch:source:1:draft:1';
+    const inputs = [];
+    const controller = Controller.createNormalUiImportController({
+        canReuseCommittedRequest: RoutePolicy.canReuseNormalUiCommittedRequest,
+        loadBatch: async () => ({ id: 'pdf-batch', producerMode: 'pdf', sourceVersion: 1, status: 'review', draftPersistence: { version: 1, idempotencyKey: previous } }),
+        bridge: { run: async input => {
+            inputs.push(input);
+            return { mode: 'production', state: { state: 'WAITING_CONFIRMATION' }, readback: { batch: { id: input.batchId }, questions: [] } };
+        } },
+        applyReviewModel: async () => {}
+    });
+    await controller.run('pdf-batch');
+    assert.equal(inputs[0].requestId, 'normal-ui:pdf-batch:source:1:draft:2');
+    await controller.run('pdf-batch', { requestId: previous });
+    assert.equal(inputs[1].requestId, previous);
+    assert.equal(inputs.every(input => input.expectedSourceVersion === 1), true);
 });

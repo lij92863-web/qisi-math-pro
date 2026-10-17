@@ -75,7 +75,19 @@
       "runtime": "browser"
     },
     {
+      "file": "qisi-docx-formula-source.js",
+      "runtime": "browser"
+    },
+    {
       "file": "qisi-docx-import-coordinator.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-docx-mtef-reader.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-docx-ole-reader.js",
       "runtime": "browser"
     },
     {
@@ -167,6 +179,10 @@
       "runtime": "node"
     },
     {
+      "file": "qisi-mathtype-local-service.js",
+      "runtime": "node"
+    },
+    {
       "file": "qisi-normal-ui-import-controller.js",
       "runtime": "browser"
     },
@@ -215,20 +231,24 @@
       "runtime": "dormant"
     },
     {
-      "file": "qisi-pdf-candidate-projection.js",
+      "file": "qisi-pdf-external-contract.js",
       "runtime": "browser"
     },
     {
-      "file": "qisi-pdf-import-coordinator.js",
+      "file": "qisi-pdf-external-producer.js",
       "runtime": "browser"
     },
     {
-      "file": "qisi-pdf-ocr-support-parser.js",
+      "file": "qisi-pdf-external-provider.js",
       "runtime": "browser"
     },
     {
-      "file": "qisi-pdf-question-boundary.js",
+      "file": "qisi-pdf-multimodal-contract.js",
       "runtime": "browser"
+    },
+    {
+      "file": "qisi-pdf-multimodal-producer.js",
+      "runtime": "dormant"
     },
     {
       "file": "qisi-pdf-safe-partial-pipeline.js",
@@ -239,12 +259,8 @@
       "runtime": "browser"
     },
     {
-      "file": "qisi-pdf-support-block-parser.js",
-      "runtime": "browser"
-    },
-    {
       "file": "qisi-pdf-support-controlled-write.js",
-      "runtime": "browser"
+      "runtime": "dormant"
     },
     {
       "file": "qisi-performance-monitor.js",
@@ -275,10 +291,6 @@
       "runtime": "browser"
     },
     {
-      "file": "qisi-production-pdf-sources-port.js",
-      "runtime": "browser"
-    },
-    {
       "file": "qisi-production-review-validator.js",
       "runtime": "browser"
     },
@@ -291,11 +303,11 @@
       "runtime": "browser"
     },
     {
-      "file": "qisi-question-index-storage.js",
+      "file": "qisi-question-image-policy.js",
       "runtime": "browser"
     },
     {
-      "file": "qisi-question-image-policy.js",
+      "file": "qisi-question-index-storage.js",
       "runtime": "browser"
     },
     {
@@ -400,6 +412,10 @@
     },
     {
       "file": "qisi-visual-support-source.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-pdf-page-evidence.js",
       "runtime": "browser"
     }
   ]

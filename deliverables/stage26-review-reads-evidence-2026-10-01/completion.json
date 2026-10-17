@@ -1,0 +1,104 @@
+{
+  "date": "2026-10-01",
+  "roots": [
+    {
+      "root": "C:/Users/Administrator/.codex/worktrees/desktop-recovery/题库系统",
+      "head": "c6ce988926dd80c6a7bed218083939ff9cc98dce",
+      "branch": "codex/desktop-recovery",
+      "trackedStatus": ""
+    },
+    {
+      "root": "C:/Users/Administrator/Desktop/题库系统",
+      "head": "87c0c674132be63d661c10634c0e4eb522f9f550",
+      "branch": "stage/program-c-corrective-r1",
+      "trackedStatus": ""
+    },
+    {
+      "root": "E:/备份/题库系统",
+      "head": "ef2ad10c16cf4743573d1f3352a164ed91c9d995",
+      "branch": "codex/integration-main-hardening",
+      "trackedStatus": ""
+    }
+  ],
+  "program": {
+    "source": "4229d23d0c2dc07a30e7edb8424f531b593b2413",
+    "desktop": "f41027cf3e4f7a43bea7c48a41a9f90256789a9c"
+  },
+  "verifiedFiles": [
+    {
+      "name": "app.js",
+      "sha256": "b157d0c638ed4bc2d0d0214f65cdeb17c55b605b2a28034905ff0800b3909f2c"
+    },
+    {
+      "name": "main.html",
+      "sha256": "5e7b0f50c009c4c806a3ddb3c817f5255efe6269277b7663303412178ea3dcdc"
+    },
+    {
+      "name": "qisi-storage-repository.js",
+      "sha256": "f25c6ddc280be65f64be8d3f5ed43d452a05b42f7f5c35785531d6d35a7134b4"
+    },
+    {
+      "name": "qisi-draft-persistence-service.js",
+      "sha256": "c7fecf8fb945f21bea4a8d8027a194aecf93a940fd9826cbd60115c1746b6a81"
+    },
+    {
+      "name": "qisi-review-workflow-service.js",
+      "sha256": "befce37afd40ef46acf8f321e19603bd095ee6c6f75dbfab3529bbfb28dc05ac"
+    },
+    {
+      "name": "docs/architecture/APP_SHELL_RESPONSIBILITY_MATRIX_CORRECTIVE_R1.json",
+      "sha256": "515b17eba113422f549c45f8b458df11c0b98a47a77584cace3bcd9ec07c2749"
+    },
+    {
+      "name": "tests/storage-repository.test.js",
+      "sha256": "9bab8f40d95509b7f2b8ed79a2470351dce8da0446323c2b5206a69d39377fd9"
+    },
+    {
+      "name": "tests/draft-persistence-service.test.js",
+      "sha256": "1d6c8fcdabc155da96b6790f8909ddd2dfc49daa102ddf51aa7536c9111e7baf"
+    },
+    {
+      "name": "tests/review-workflow-service.test.js",
+      "sha256": "7adf21fb30503c0784bfed0abaaf5b3ffbb58a2cc1157d1cdd3856d18823eedb"
+    },
+    {
+      "name": "tests/reviewed-batch-submit-idempotency.test.js",
+      "sha256": "052522a9c21aea537ff4b9cb626158ef77f46cb32186ed9593187fe00d963393"
+    }
+  ],
+  "reportSha256": "d699b202366fb97f8719651d124d643b9eee4bc265cbc1183c5a63a9f9d01ae4",
+  "ledgersUnchanged": true,
+  "paidCalls": 0,
+  "round2Used": 4,
+  "round2Remaining": 16,
+  "round2HaltPreserved": true,
+  "shenzhenFullPaperAccepted": false,
+  "healthStatus": 200,
+  "http": [
+    {
+      "name": "main.html",
+      "status": 200,
+      "sha256": "5e7b0f50c009c4c806a3ddb3c817f5255efe6269277b7663303412178ea3dcdc"
+    },
+    {
+      "name": "app.js",
+      "status": 200,
+      "sha256": "b157d0c638ed4bc2d0d0214f65cdeb17c55b605b2a28034905ff0800b3909f2c"
+    },
+    {
+      "name": "qisi-storage-repository.js",
+      "status": 200,
+      "sha256": "f25c6ddc280be65f64be8d3f5ed43d452a05b42f7f5c35785531d6d35a7134b4"
+    },
+    {
+      "name": "qisi-draft-persistence-service.js",
+      "status": 200,
+      "sha256": "c7fecf8fb945f21bea4a8d8027a194aecf93a940fd9826cbd60115c1746b6a81"
+    },
+    {
+      "name": "qisi-review-workflow-service.js",
+      "status": 200,
+      "sha256": "befce37afd40ef46acf8f321e19603bd095ee6c6f75dbfab3529bbfb28dc05ac"
+    }
+  ]
+}

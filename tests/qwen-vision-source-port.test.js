@@ -85,15 +85,16 @@ test('missing ports, malformed source, and cancellation fail closed', async () =
 test('document OCR source owns task selection and markdown fallback', async () => {
     const ocrCalls = [];
     const warnings = [];
+    let failDocument = false;
     const source = SourcePort.createDocumentOcrSource({
         ocrText: async options => {
             ocrCalls.push(options.ocrTask);
-            if (options.ocrTask === 'document_parsing') {
+            if (options.ocrTask === 'document_parsing' || failDocument) {
                 throw Object.assign(new Error('unavailable'), {
                     code: 'FIXTURE_UNAVAILABLE'
                 });
             }
-            return { text: 'advanced recognition text' };
+            return { text: 'number-preserving text' };
         },
         chatText: async () => {
             throw Object.assign(new Error('unavailable'), {
@@ -107,12 +108,15 @@ test('document OCR source owns task selection and markdown fallback', async () =
 
     assert.equal(
         await source.recognizeDocumentText('data:image/png;base64,x'),
-        'advanced recognition text'
+        'number-preserving text'
     );
     assert.deepEqual(ocrCalls, [
-        'document_parsing',
-        'advanced_recognition'
+        'text_recognition'
     ]);
+    failDocument = true;
+    await assert.rejects(source.recognizeDocumentText('data:image/png;base64,x'), error => error.code === 'FIXTURE_UNAVAILABLE');
+    assert.deepEqual(ocrCalls, ['text_recognition', 'text_recognition']);
+    assert.deepEqual(warnings, ['QWEN_DOCUMENT_OCR_TASK_FAILED']);
     ocrCalls.length = 0;
     assert.equal(
         await source.recognizePageMarkdown('data:image/png;base64,x'),

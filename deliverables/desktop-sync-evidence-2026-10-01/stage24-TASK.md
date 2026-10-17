@@ -1,0 +1,4 @@
+# Stage 24 offline interface and print resources
+Confirmed failure: actual port3000 isolated browser blocks Google font CSS and logs resource error. Print template also references remote font and mismatched KaTeX0.16.8 CSS.
+Allowed: main.html remove3 remote font links; app.css Windows system fallback; app.js openPrintWindow replace remote KaTeX link with absolute same-origin existing0.16.47 CSS and remove Google font link, trim existing glue trailing space. No new algorithms, app business logic, schema or test expectations. Exact source and desktop backups/SHA manifest preserved.
+Required: isolated actual navigation/backup/SRI/print/math/no-external-request acceptance; verify:safe, batch-safety, architecture/runtime/diff scope; scoped commits. No real AI/OCR, no production IndexedDB, no E changes, no ledger edits.

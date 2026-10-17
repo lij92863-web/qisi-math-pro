@@ -1,0 +1,30 @@
+{
+  "answers": [
+    {
+      "questionNumber": "12",
+      "answer": "\\frac{x^2}{3} - \\frac{y^2}{12} = 1"
+    },
+    {
+      "questionNumber": "13",
+      "answer": "2n^2"
+    },
+    {
+      "questionNumber": "14",
+      "answer": "2\\sqrt{3}"
+    }
+  ],
+  "solutions": [
+    {
+      "questionNumber": "12",
+      "solution": "【分析】\n设双曲线方程为 $x^2 - \\frac{y^2}{4} = k$，利用双曲线过点 $(2,2)$，求出 $k$，即可得出双曲线方程。\n\n【详解】\n设双曲线方程为 $x^2 - \\frac{y^2}{4} = k, k \\ne 0$，\n\n$\\because$ 双曲线过点 $(2,2)$，$\\therefore 2^2 - \\frac{2^2}{4} = k$，\n\n$\\therefore k = 3$，\n\n故所求双曲线方程为：$x^2 - \\frac{y^2}{4} = 3$，即 $\\frac{x^2}{3} - \\frac{y^2}{12} = 1$，\n\n故答案为：$\\frac{x^2}{3} - \\frac{y^2}{12} = 1$"
+    },
+    {
+      "questionNumber": "13",
+      "solution": "【详解】0 因为 $nS_{n+1} - (n+1)S_n = 2(n^2 + n) \\Rightarrow \\frac{S_{n+1}}{n+1} - \\frac{S_n}{n} = 2$，\n\n所以数列 $\\left\\{\\frac{S_n}{n}\\right\\}$ 是以 $\\frac{S_1}{1} = \\frac{a_1}{1} = 2$ 为首项，2 为公差的等差数列，\n\n所以 $\\frac{S_n}{n} = 2 + 2(n-1) = 2n \\Rightarrow S_n = 2n^2$。"
+    },
+    {
+      "questionNumber": "14",
+      "solution": "2\\sqrt{3}"
+    }
+  ]
+}

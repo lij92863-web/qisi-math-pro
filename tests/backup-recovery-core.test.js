@@ -58,3 +58,22 @@ test('draft images and nested binary fields roundtrip instead of becoming empty 
  const corrupt=await mutate(blob,async zip=>{const m=JSON.parse(await zip.file('manifest.json').async('text'));m.binaryFields[0].path=['__proto__','polluted'];zip.file('manifest.json',JSON.stringify(m));});
  await assert.rejects(()=>Backup.readFullDatabaseBackupBlob(corrupt));assert.equal({}.polluted,undefined);
 });
+
+
+test('N4 own high-compression backups self-verify while external archive limits remain active',async()=>{
+ const rows=data();rows.questions[0].stem='x'.repeat(1024*1024);
+ const created=await Backup.createFullDatabaseBackup(db(rows));
+ assert.equal(created.manifest.verification.ok,true);
+ assert.equal((await Backup.verifyFullDatabaseBackupBlob(created.blob)).ok,false);
+});
+test('N27 preference allowlist roundtrips and can roll back without exporting credentials',async()=>{
+ const old=globalThis.localStorage,values=new Map([['qisi_teacher_name','Teacher'],['qisi_exam_cart','["q1"]'],['secret-key','never-export']]);
+ globalThis.localStorage={getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)};
+ try{
+  const created=await Backup.createFullDatabaseBackup(db(data())),decoded=await Backup.readFullDatabaseBackupBlob(created.blob);
+  assert.equal(decoded.preferences.qisi_teacher_name,'Teacher');assert.equal(Object.hasOwn(decoded.preferences,'secret-key'),false);
+  values.set('qisi_teacher_name','Other');const undo=Backup.restorePreferences(decoded.preferences);
+  assert.equal(values.get('qisi_teacher_name'),'Teacher');assert.equal(values.get('secret-key'),'never-export');undo();assert.equal(values.get('qisi_teacher_name'),'Other');
+  Backup.restorePreferences(undefined);assert.equal(values.get('qisi_teacher_name'),'Other');
+ }finally{if(old===undefined)delete globalThis.localStorage;else globalThis.localStorage=old;}
+});

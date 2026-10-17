@@ -1,0 +1,62 @@
+{
+  "questions": [
+    {
+      "questionNumber": "8",
+      "type": "单选题",
+      "stem": "在平面直角坐标系 $xOy$ 内，若直线 $l: x + y + m = 0$ 绕原点 $O$ 逆时针旋转 $90^\\circ$ 后与圆 $C: (x-1)^2 + (y-2)^2 = 1$ 有公共点，则实数 $m$ 的取值范围是（ ）",
+      "options": {
+        "A": "\\left[-\\sqrt{3}-1, \\sqrt{3}-1\\right]",
+        "B": "\\left[-1, \\sqrt{2}+1\\right]",
+        "C": "\\left[-1, \\sqrt{3}+1\\right]",
+        "D": "\\left[-\\sqrt{2}-1, \\sqrt{2}-1\\right]"
+      },
+      "answer": "",
+      "solution": "",
+      "isFragment": false,
+      "question_bbox": [147, 89, 792, 217],
+      "images": []
+    },
+    {
+      "questionNumber": "9",
+      "type": "多选题",
+      "stem": "从某校高一和高二年级分别随机抽取 100 名学生进行知识竞赛，按得分（满分 100 分）绘制如图所示的频率分布直方图，根据频率分布直方图，并用频率估计概率记高一年级学生得分平均数的估计值为 $x$，高二年级学生得分中位数与平均数的估计值分别为 $y$，$z$。从高一和高二年级各随机抽取一名学生，记事件 $M=$“高一年级学生得分不低于 60 分，高二年级学生得分不低于 80 分”，事件 $N=$“高一年级学生得分不低于 80 分，高二年级学生得分不低于 60 分”则（ ）",
+      "options": {
+        "A": "x < z",
+        "B": "y > z",
+        "C": "事件 M，N 互斥",
+        "D": "P(M) = P(N)"
+      },
+      "answer": "",
+      "solution": "",
+      "isFragment": false,
+      "question_bbox": [147, 262, 850, 440],
+      "images": [
+        {
+          "image_bbox": [147, 452, 731, 608],
+          "image_description": "两个频率分布直方图：左图为高一年级学生得分（横轴30-100分，纵轴频率/组距），右图为高二年级学生得分（同横轴，纵轴频率/组距）",
+          "image_confidence": 0.95
+        }
+      ]
+    },
+    {
+      "questionNumber": "10",
+      "type": "单选题",
+      "stem": "如图，在直三棱柱 $ABC - A_1B_1C_1$ 中，$AB = AC = AA_1 = 2$，$AB \\perp AC$，点 $P$、$Q$、$M$、$N$ 分别是 $BB_1$、$CC_1$、$AA_1$、$BC$ 的中点，则（ ）",
+      "options": {
+        "A": "P、Q、M、N 四点共面",
+        "B": "线段 $BC_1$ 为直三棱柱 $ABC - A_1B_1C_1$ 外接球"
+      },
+      "answer": "",
+      "solution": "",
+      "isFragment": false,
+      "question_bbox": [147, 659, 844, 714],
+      "images": [
+        {
+          "image_bbox": [147, 729, 360, 866],
+          "image_description": "直三棱柱 ABC-A₁B₁C₁ 的立体示意图，标注了点 P（BB₁中点）、Q（CC₁中点）、M（AA₁中点）、N（BC中点）",
+          "image_confidence": 0.94
+        }
+      ]
+    }
+  ]
+}

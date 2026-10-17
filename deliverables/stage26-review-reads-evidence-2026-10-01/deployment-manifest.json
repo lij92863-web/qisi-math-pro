@@ -1,0 +1,93 @@
+{
+  "date": "2026-10-01",
+  "source": "C:/Users/Administrator/.codex/worktrees/desktop-recovery/题库系统",
+  "desktop": "C:/Users/Administrator/Desktop/题库系统",
+  "sourceBase": "64f0c91b0c59a7de47a4bce4288a78c26459c16c",
+  "sourceCommit": "4229d23d0c2dc07a30e7edb8424f531b593b2413",
+  "desktopBase": "f337b9614aee6054358849599c3b3ee506cb954d",
+  "paidCalls": 0,
+  "ledgers": [
+    {
+      "round": "round1",
+      "file": "C:\\Users\\Administrator\\Desktop\\题库系统\\deliverables\\handoff-evidence-2026-09-30\\round1\\ledger.json",
+      "sha256": "879a8cefe25cd139529149e000f06f22c9da778d60237e2b021d5ad3194b26ec"
+    },
+    {
+      "round": "round2",
+      "file": "C:\\Users\\Administrator\\Desktop\\题库系统\\deliverables\\handoff-evidence-2026-09-30\\round2\\ledger.json",
+      "sha256": "2b8489db3273c29423950150af27802cf12f7acc01bb59cca84c37d64ef12779"
+    }
+  ],
+  "files": [
+    {
+      "name": "app.js",
+      "originalBlob": "5208dd55bd548406ae4e62129b64c82ab97bfd81",
+      "sourceSha256": "b157d0c638ed4bc2d0d0214f65cdeb17c55b605b2a28034905ff0800b3909f2c",
+      "desktopBeforeSha256": "2070b93aa76ab1a8a4e0580138c8b9a22df8c66569f8b31a1c825847cdd034fe",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage26-review-reads\\desktop-before\\app.js"
+    },
+    {
+      "name": "main.html",
+      "originalBlob": "a95b70b913be183a0a6c6828997ff8f2bf85c60e",
+      "sourceSha256": "5e7b0f50c009c4c806a3ddb3c817f5255efe6269277b7663303412178ea3dcdc",
+      "desktopBeforeSha256": "b464d2728af9b39d3c8d0d8a472c11960955972f84c04d65ccb53f67fb8ddb2c",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage26-review-reads\\desktop-before\\main.html"
+    },
+    {
+      "name": "qisi-storage-repository.js",
+      "originalBlob": "e4437b2f54cecd5af1e32e42cd712a2e5911a4d3",
+      "sourceSha256": "f25c6ddc280be65f64be8d3f5ed43d452a05b42f7f5c35785531d6d35a7134b4",
+      "desktopBeforeSha256": "b1d9bc73d5558926515cca94cf92bc104df75f1b89e5f2930fcd8b35b9cc2e23",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage26-review-reads\\desktop-before\\qisi-storage-repository.js"
+    },
+    {
+      "name": "qisi-draft-persistence-service.js",
+      "originalBlob": "7317eff7a6b2120be2210e926373894e1f803595",
+      "sourceSha256": "c7fecf8fb945f21bea4a8d8027a194aecf93a940fd9826cbd60115c1746b6a81",
+      "desktopBeforeSha256": "473061504e9aafb9deee6dbc9d57a625a6b6f73c93951890c5f6563acfc89e1e",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage26-review-reads\\desktop-before\\qisi-draft-persistence-service.js"
+    },
+    {
+      "name": "qisi-review-workflow-service.js",
+      "originalBlob": "e9947328e462ad052c18038473cc0c6cb839fe12",
+      "sourceSha256": "befce37afd40ef46acf8f321e19603bd095ee6c6f75dbfab3529bbfb28dc05ac",
+      "desktopBeforeSha256": "b711eb1c0c0029b10c717d9e4cd84f224bce5ee86c5d0bdb28471a7cfac34b8d",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage26-review-reads\\desktop-before\\qisi-review-workflow-service.js"
+    },
+    {
+      "name": "docs/architecture/APP_SHELL_RESPONSIBILITY_MATRIX_CORRECTIVE_R1.json",
+      "originalBlob": "e62214bddd202666d3032606ebe959a030d71c73",
+      "sourceSha256": "515b17eba113422f549c45f8b458df11c0b98a47a77584cace3bcd9ec07c2749",
+      "desktopBeforeSha256": "b481ab79200483fb7564d3dd6a44e816ff4c799fafe964a7500c03e7cccff96d",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage26-review-reads\\desktop-before\\docs\\architecture\\APP_SHELL_RESPONSIBILITY_MATRIX_CORRECTIVE_R1.json"
+    },
+    {
+      "name": "tests/storage-repository.test.js",
+      "originalBlob": "976bbedc2dcca330d2a0e12d6e17e92636bce0d4",
+      "sourceSha256": "9bab8f40d95509b7f2b8ed79a2470351dce8da0446323c2b5206a69d39377fd9",
+      "desktopBeforeSha256": "724ca7ff0861d843ac098efc64499c171713dc906d03e6d179a84e03eb3c57fb",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage26-review-reads\\desktop-before\\tests\\storage-repository.test.js"
+    },
+    {
+      "name": "tests/draft-persistence-service.test.js",
+      "originalBlob": "80e75c888cbf9b35d2823420ffb1bffaab84c2bd",
+      "sourceSha256": "1d6c8fcdabc155da96b6790f8909ddd2dfc49daa102ddf51aa7536c9111e7baf",
+      "desktopBeforeSha256": "4f9ac85cf93401812aec8130da4c6a378bf3296c79df2521e199bd657df4ea0d",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage26-review-reads\\desktop-before\\tests\\draft-persistence-service.test.js"
+    },
+    {
+      "name": "tests/review-workflow-service.test.js",
+      "originalBlob": "247b1bfc85ca636a5c45780812a33ee88a061cd7",
+      "sourceSha256": "7adf21fb30503c0784bfed0abaaf5b3ffbb58a2cc1157d1cdd3856d18823eedb",
+      "desktopBeforeSha256": "50bc2ad669281bd55819222dee94d48f4a122769d653e587ec15d2505e707e71",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage26-review-reads\\desktop-before\\tests\\review-workflow-service.test.js"
+    },
+    {
+      "name": "tests/reviewed-batch-submit-idempotency.test.js",
+      "originalBlob": "8e5f7f2217db2845ca86aafd7a95c1be10fef550",
+      "sourceSha256": "052522a9c21aea537ff4b9cb626158ef77f46cb32186ed9593187fe00d963393",
+      "desktopBeforeSha256": "c3e060938e78e0b7245742b9fe4b32104bbac13a9b43b03c5a4576730b1e84bd",
+      "backup": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\qisi-stage26-review-reads\\desktop-before\\tests\\reviewed-batch-submit-idempotency.test.js"
+    }
+  ]
+}

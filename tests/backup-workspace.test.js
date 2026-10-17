@@ -44,3 +44,13 @@ test('restoration requires explicit consent and a completed safety archive; conf
  await h.workspace.chooseFolder();h.ports.conflict=true;const result=await h.workspace.restoreSelected();assert.equal(result.code,'restore-conflict');assert.equal(h.restored,0);assert.ok(h.state.preview);assert.match(h.state.error,/变化/);
  h.ports.conflict=false;assert.equal((await h.workspace.restoreSelected()).ok,true);assert.equal(h.restored,1);assert.equal(h.state.preview,null);assert.ok([...h.files.keys()].some(name=>name.includes('before-restore')));
 });
+
+
+test('N27 preferences roll back on DB restore failure and survive a successful restore',async()=>{
+ const h=harness(),read=h.ports.backup.readFullDatabaseBackupBlob;let value='current',rollbacks=0;
+ h.ports.backup.readFullDatabaseBackupBlob=async()=>({...await read(),preferences:{qisi_teacher_name:'restored'}});
+ h.ports.backup.restorePreferences=p=>{const previous=value;value=p.qisi_teacher_name;return ()=>{value=previous;rollbacks++;}};
+ await h.workspace.chooseFolder();await h.workspace.inspectRestoreFile({name:'fixture.zip'});h.state.confirmWord='恢复备份';h.state.confirmOverwrite=true;
+ h.ports.conflict=true;assert.equal((await h.workspace.restoreSelected()).ok,false);assert.equal(value,'current');assert.equal(rollbacks,1);
+ h.ports.conflict=false;assert.equal((await h.workspace.restoreSelected()).ok,true);assert.equal(value,'restored');assert.equal(rollbacks,1);
+});

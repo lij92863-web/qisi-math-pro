@@ -37,6 +37,7 @@
         refreshBatchStats,
         mergeImages,
         dataUrlToBlob,
+        resolveImageRecords = async () => [],
         clock = () => Date.now()
     } = {}) => {
         if (
@@ -171,13 +172,15 @@
             const records = [];
             for (const image of combined) {
                 assertActive(signal);
-                if (String(image?.url || '').startsWith('data:')) {
-                    records.push({
-                        id: image.id,
-                        blob: await dataUrlToBlob(image.url),
-                        createdAt: clock()
-                    });
+                let blob = image.blob;
+                if (!(blob instanceof Blob) && /^(?:data:|blob:)/.test(String(image?.url || ''))) {
+                    blob = await dataUrlToBlob(image.url);
                 }
+                if (!(blob instanceof Blob)) {
+                    blob = (await resolveImageRecords([image.id])).find(row => row.id === image.id)?.blob;
+                }
+                if (!(blob instanceof Blob)) throw error('REVIEW_IMAGE_BYTES_REQUIRED');
+                records.push({ id: image.id, blob, createdAt: clock() });
             }
             return records;
         };

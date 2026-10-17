@@ -1,0 +1,20 @@
+[
+  "qisi-question-duplicate-policy.js",
+  "qisi-library-service.js",
+  "qisi-question-index-storage.js",
+  "qisi-db.js",
+  "qisi-storage-repository.js",
+  "qisi-draft-persistence-service.js",
+  "main.html",
+  "architecture/runtime-modules.json",
+  "architecture/layers.json",
+  "docs/architecture/owners.json",
+  "docs/architecture/layers.json",
+  "tests/question-duplicate-policy.test.js",
+  "tests/draft-stats-transaction.test.js",
+  "tests/question-index-transaction.test.js",
+  "architecture/owners.json",
+  "tests/db-fingerprint-owner.test.js",
+  "app.js",
+  "tests/e2e/legacy-fingerprint-package.test.js"
+]

@@ -1,0 +1,122 @@
+{
+  "questions": [
+    {
+      "questionNumber": "1",
+      "type": "单选题",
+      "stem": "复数 $z$ 满足 $z(1+i)=2i$，其中 $i$ 为虚数单位，则 $|z|=$（ ）",
+      "options": {
+        "A": "2",
+        "B": "2\\sqrt{2}",
+        "C": "1",
+        "D": "\\sqrt{2}"
+      },
+      "answer": "",
+      "solution": "",
+      "isFragment": false,
+      "question_bbox": [140, 198, 795, 236],
+      "images": []
+    },
+    {
+      "questionNumber": "2",
+      "type": "单选题",
+      "stem": "\"$\\varphi = -\\frac{\\pi}{4} + k\\pi \\,(k \\in \\mathbb{Z})$\"是“函数 $y = \\tan(x + \\varphi)$ 的图象关于 $\\left(\\frac{\\pi}{4}, 0\\right)$ 对称”的（ ）",
+      "options": {
+        "A": "充分不必要条件",
+        "B": "必要不充分条件",
+        "C": "充要条件",
+        "D": "既不充分也不必要条件"
+      },
+      "answer": "",
+      "solution": "",
+      "isFragment": false,
+      "question_bbox": [140, 242, 795, 292],
+      "images": []
+    },
+    {
+      "questionNumber": "3",
+      "type": "单选题",
+      "stem": "设集合 $A = \\{-2, 1, a\\}$，$B = \\{-1, a^2\\}$，若 $A \\cup B$ 含有 4 个元素，则 $a =$（ ）",
+      "options": {
+        "A": "-1",
+        "B": "0",
+        "C": "1",
+        "D": "2"
+      },
+      "answer": "",
+      "solution": "",
+      "isFragment": false,
+      "question_bbox": [140, 298, 795, 336],
+      "images": []
+    },
+    {
+      "questionNumber": "4",
+      "type": "单选题",
+      "stem": "已知函数 $f(x) = e^x + a e^{-x} \\,(a \\in \\mathbb{R})$ 的图象关于原点对称，则 $f(a) =$（ ）",
+      "options": {
+        "A": "\\frac{1}{e} - e",
+        "B": "1",
+        "C": "e - \\frac{1}{e}",
+        "D": "e + \\frac{1}{e}"
+      },
+      "answer": "",
+      "solution": "",
+      "isFragment": false,
+      "question_bbox": [140, 342, 795, 380],
+      "images": []
+    },
+    {
+      "questionNumber": "5",
+      "type": "单选题",
+      "stem": "如图，平行四边形 $OABC$ 中，$OA = 5, OC = 4$，作如下图所示网格，使得每个小平行四边形都是菱形，若 $\\overrightarrow{OA} \\cdot \\overrightarrow{OC} = -10$，则 $\\overrightarrow{CD} \\cdot \\overrightarrow{PQ} =$（ ）",
+      "options": {
+        "A": "\\frac{15}{2}",
+        "B": "-\\frac{9}{2}",
+        "C": "-\\frac{7}{2}",
+        "D": "\\frac{7}{2}"
+      },
+      "answer": "",
+      "solution": "",
+      "isFragment": false,
+      "question_bbox": [140, 386, 850, 692],
+      "images": [
+        {
+          "image_bbox": [140, 568, 382, 662],
+          "image_description": "平行四边形OABC及其内部网格示意图，标有点C、B、Q、D、O、P、A及向量箭头",
+          "image_confidence": 0.95
+        }
+      ]
+    },
+    {
+      "questionNumber": "6",
+      "type": "单选题",
+      "stem": "抛物线有如下光学性质：平行于抛物线对称轴的光线，经过抛物线上的一点反射后，反射光线经过抛物线的焦点．过点 $P\\left(2\\sqrt{2}, 5\\right)$ 且平行于 $y$ 轴的一条光线射向抛物线 $C: x^2 = 4y$ 上的 $A$ 点，经过反射后的反射光线与 $C$ 相交于点 $B$，则 $|AB| =$（ ）",
+      "options": {
+        "A": "\\frac{7}{2}",
+        "B": "9",
+        "C": "36",
+        "D": "\\frac{9}{2}"
+      },
+      "answer": "",
+      "solution": "",
+      "isFragment": false,
+      "question_bbox": [140, 698, 795, 774],
+      "images": []
+    },
+    {
+      "questionNumber": "7",
+      "type": "单选题",
+      "stem": "函数 $f(x) = 2 + \\ln x$ 与函数 $g(x) = e^x$ 公切线的斜率为（ ）",
+      "options": {
+        "A": "e^2",
+        "B": "e",
+        "C": "1 \\text{ 或 } e",
+        "D": "1 \\text{ 或 } e^2"
+      },
+      "answer": "",
+      "solution": "",
+      "isFragment": false,
+      "question_bbox": [140, 780, 620, 818],
+      "images": []
+    }
+  ]
+}

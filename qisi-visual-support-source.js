@@ -70,7 +70,12 @@
                         .filter(Boolean)
                 );
 
-            const source = root.Qisi.Utils.cleanRecognizedText(text).slice(0, 24000);
+            const source = root.Qisi.Utils.cleanRecognizedText(text);
+            if (source.length > 24000) {
+                const error = new Error('答案解析材料超过单次识别长度，请拆分材料后重试。');
+                error.code = 'SUPPORT_TEXT_LENGTH_LIMIT';
+                throw error;
+            }
             if (!source || source.length < 8) return { answers: [], solutions: [] };
             const prompt = `你是高中数学答案解析提取助手。请从材料中提取每道题的答案和解析，并输出严格 JSON。
 

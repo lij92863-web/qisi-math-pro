@@ -434,3 +434,26 @@ test('repository atomically preserves canonical DOCX vision identity', async () 
     assert.equal(result.question.route.identity, 'docx-rendered-to-pdf-vision');
     assert.equal(Contracts.validateQuestionV2(result.question).valid, true);
 });
+
+test('DOCX support figure evidence admits only its bound source and exact field token', () => {
+    const draft = Contract.applyDeterministicDocxSupportField({
+        candidate: deterministic({solution:''}), field: 'solution',
+        support: { questionNumber: '1', solution: 'Proof [[IMAGE:figure-1]]',
+            images: [{id:'figure-1',rid:'rId1',url:'data:image/png;base64,AA=='}] },
+        source: {...source(),sourceId:'docx-support-1'}, roles:['solution']
+    });
+    const evaluate = value => Policy.evaluateDraftAdmission(value, admissionContext(value));
+    assert.equal(evaluate(draft).accepted,true,JSON.stringify(evaluate(draft).errors));
+    for (const mutate of [value => value.solution='Proof',
+        value => value.fieldProvenance.images.imageEvidence[0].sourceId='foreign-source']) {
+        const altered=structuredClone(draft);mutate(altered);
+        assert.ok(codes(evaluate(altered)).includes('admission-producer-provenance-invalid'));
+    }
+});
+
+test('an unconverted DOCX equation cannot be admitted as confirmed text', () => {
+    const draft=deterministic({stem:'Known [DOCX不可显示图片:公式:rId1]'});
+    const result=Policy.evaluateDraftAdmission(draft,admissionContext(draft));
+    assert.equal(result.accepted,false);
+    assert.ok(result.errors.some(error=>error.code==='admission-field-rejected'&&error.field==='stem'));
+});

@@ -31,6 +31,7 @@
         const clock = ports.clock;
 
         const validateDraftContentForReview = (q) => {
+            if ((root.Qisi.PdfExternalContract?.isExternal(q) || root.Qisi.PdfMultimodalContract?.isV1(q))) return (q.pdfExternal ? root.Qisi.PdfExternalContract : root.Qisi.PdfMultimodalContract).reviewProblem(q);
             if (!String(q?.stem || '').trim()) return '题干为空，请先补充题干。';
             if (!String(q?.type || '').trim()) return '题型为空，请先选择题型。';
             if ([q.stem, ...(Array.isArray(q.options) ? q.options : []), q.answer, q.solution].some(root.Qisi.Utils.hasUnconvertedImagePlaceholder)) {
@@ -49,6 +50,7 @@
 
         const normalizeDraftQuestionBeforeSave = (q) => {
             if (!q) return false;
+            if ((root.Qisi.PdfExternalContract?.isExternal(q) || root.Qisi.PdfMultimodalContract?.isV1(q))) { q.updatedAt = clock(); return false; }
 
             if (typeof batchDebugLog === 'function' && typeof toBatchDebugQuestion === 'function') {
                 batchDebugLog('before-save', toBatchDebugQuestion(q));
@@ -77,12 +79,15 @@
             root.Qisi.Utils.cleanDisplayFieldsOnly(q);
 
             // DOCX 新导入器已经从原始 document.xml 建立选项；用户编辑后也不能再从 rawBlock 恢复旧内容。
-            if (!q.userEdited && q.sourceTrace?.source !== 'docx-importer') {
+            const structuredPdf = q.sourceTrace?.source === 'strict-visual-page-qwen' &&
+                q.sourceTrace?.strictProtocol?.accepted === true;
+            if (!q.userEdited && !structuredPdf && q.sourceTrace?.source !== 'docx-importer') {
                 extractOptionsFromCurrentBlockOnly(q);
             }
 
             // 3. 只做最轻量题型归一，不自动补选项、不自动拆选项
-            q.type = normalizeQuestionType(
+            q.type = structuredPdf && /^(单选题|多选题|填空题|解答题|证明题)$/.test(q.type)
+                ? q.type : normalizeQuestionType(
                 q.type,
                 q.stem,
                 q.options,
@@ -138,6 +143,7 @@
 
         const draftQuestionProblems = (q) => {
             if (!q) return [];
+            if ((root.Qisi.PdfExternalContract?.isExternal(q) || root.Qisi.PdfMultimodalContract?.isV1(q))) return [...new Set([...(q.warnings || []), (q.pdfExternal ? root.Qisi.PdfExternalContract : root.Qisi.PdfMultimodalContract).reviewProblem(q)].filter(Boolean))];
             const problems = [];
             if ((q.warnings || []).length) problems.push(...q.warnings);
             if (!root.Qisi.Utils.cleanRecognizedText(q.stem)) problems.push('题干为空，请先补充题干。');

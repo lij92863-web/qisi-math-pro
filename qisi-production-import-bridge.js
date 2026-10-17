@@ -8,7 +8,6 @@
         'resolveProductionRoute',
         'runDocxImport',
         'runPdfImport',
-        'projectPdfCandidates',
         'normalizeCandidates',
         'projectImportOutput',
         'validateCandidates',
@@ -151,24 +150,13 @@
                 causeCode: 'source-result-malformed'
             });
         }
-        let drafts = result.drafts;
+        const drafts = result.drafts;
         if (route === 'pdf') {
-            const safe = result.safePartialCandidates;
-            if (
-                !Array.isArray(safe) ||
-                safe.length !== result.drafts.length ||
-                safe.some(candidate =>
-                    !isRecord(candidate) ||
-                    candidate.isSafePartial !== true ||
-                    candidate.isComplete !== false ||
-                    !isRecord(candidate.draft)
-                )
-            ) {
+            if (!['pdf-multimodal-v1','pdf-external-v2'].includes(result.pdfProtocol)) {
                 throw createError('PRODUCTION_IMPORT_RESULT_MALFORMED', {
-                    causeCode: 'pdf-safe-partial-malformed'
+                    causeCode: 'pdf-v1-protocol-required'
                 });
             }
-            drafts = safe.map(candidate => candidate.draft);
         }
         if (
             !drafts.length ||
@@ -505,59 +493,19 @@
                         reportStage: event => diagnostics.record(event)
                     }, signal);
                     sourceDrafts('pdf', data.sourceResult);
-                    diagnostics.record({
-                        stage: 'parser-entered',
-                        engine: data.producerIdentity
-                    });
-                    const projectionContext = data.sourceResult?.projectionContext;
-                    if (!isRecord(projectionContext)) {
-                        throw createError('PRODUCTION_IMPORT_RESULT_MALFORMED', {
-                            causeCode: 'pdf-projection-input-missing'
-                        });
-                    }
-                    diagnostics.record({
-                        stage: 'pdf-projection-entered',
-                        engine: data.producerIdentity
-                    });
-                    const projectedDrafts = sameLengthDrafts(
-                        await ports.projectPdfCandidates(projectionContext, {
-                            batchId,
-                            batch: data.loaded.batch,
-                            batchContext: data.loaded.batchContext,
-                            sources: data.sources,
-                            signal
-                        }),
-                        data.sourceResult.drafts,
-                        'pdf-projection-result-malformed'
+                    (data.sourceResult.pdfProtocol === 'pdf-external-v2' ? root.Qisi.PdfExternalContract : root.Qisi.PdfMultimodalContract).validateCanonical(
+                        data.sourceResult.drafts, batchId,
+                        root.Qisi.DocxProducerIdentityContract
                     );
-                    data.sourceResult = {
-                        ...data.sourceResult,
-                        drafts: projectedDrafts,
-                        safePartialCandidates: data.sourceResult.safePartialCandidates
-                            .map((candidate, index) => ({
-                                ...candidate,
-                                draft: projectedDrafts[index]
-                            }))
-                    };
                     diagnostics.record({
-                        stage: 'controlled-write-evaluated',
-                        counts: { candidates: projectedDrafts.length }
-                    });
-                    const drafts = sourceDrafts('pdf', data.sourceResult);
-                    diagnostics.record({
-                        stage: 'candidates-produced',
-                        engine: 'pdf',
+                        stage: data.sourceResult.pdfProtocol === 'pdf-external-v2' ? 'pdf-external-contract-validated' : 'pdf-v1-contract-validated',
                         counts: { candidates: data.sourceResult.drafts.length }
-                    });
-                    diagnostics.record({
-                        stage: 'prefix-selected',
-                        counts: { selected: drafts.length }
                     });
                 }),
                 normalized: command(async ({ signal }) => {
                     assertActive(signal);
                     const rawDrafts = sourceDrafts(data.route, data.sourceResult);
-                    const value = await ports.normalizeCandidates(rawDrafts, {
+                    const value = ['pdf-multimodal-v1','pdf-external-v2'].includes(data.sourceResult.pdfProtocol) ? rawDrafts : await ports.normalizeCandidates(rawDrafts, {
                         batchId,
                         route: data.route,
                         batchContext: data.loaded.batchContext,
@@ -592,7 +540,9 @@
                 }),
                 'validation-complete': command(async ({ signal }) => {
                     assertActive(signal);
-                    const value = await ports.validateCandidates(
+                    const value = ['pdf-multimodal-v1','pdf-external-v2'].includes(data.sourceResult.pdfProtocol)
+                        ? (data.sourceResult.pdfProtocol === 'pdf-external-v2' ? root.Qisi.PdfExternalContract : root.Qisi.PdfMultimodalContract).validateCanonical(data.projected.drafts, batchId, root.Qisi.DocxProducerIdentityContract)
+                        : await ports.validateCandidates(
                         data.projected.drafts,
                         {
                             batchId,
@@ -656,6 +606,7 @@
                             ) ? data.loaded.batch.draftPersistence.version : 0,
                             batch: data.loaded.batch,
                             sourceFiles: data.loaded.files,
+                            pdfEvidence: ['pdf-multimodal-v1','pdf-external-v2'].includes(data.sourceResult.pdfProtocol) ? { protocol: data.sourceResult.pdfProtocol, windows: data.sourceResult.evidence, tasks: data.sourceResult.evidence, unassigned: data.sourceResult.unassigned || [], errors: data.sourceResult.windowErrors, unmatched: data.sourceResult.unmatched, warnings: data.sourceResult.warnings } : null,
                             drafts: data.reviewDrafts,
                             images: data.projected.draftImages,
                             route: data.route,

@@ -165,7 +165,7 @@
                 ok: true,
                 candidate: true,
                 answer:
-                    compact,
+                    sortLabelsByOptionOrder(labels, options),
                 reason:
                     'structural-option-label-normalized',
                 originalAnswer:
@@ -196,9 +196,10 @@
     };
 
     const normalizeQuestionNumber = value => {
-        const match =
-            String(value ?? '').match(/\d{1,3}/);
-        return match ? String(Number(match[0])) : '';
+        const match = String(value ?? '').replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
+            .trim().match(/^(?:第\s*)?(\d+)(?:\s*题)?$/);
+        const number = match ? Number(match[1]) : 0;
+        return Number.isSafeInteger(number) && number > 0 ? String(number) : '';
     };
 
     const getQuestionNumber = item =>
@@ -215,7 +216,7 @@
     const isObjectiveDraft = draft => {
         const type =
             String(draft?.type || draft?.questionType || draft?.题型 || '').trim();
-        return /单选|多选|choice|single|multiple/i.test(type);
+        return /单选|多选|选择|choice|select|single|multiple/i.test(type);
     };
 
     const isMultipleDraft = draft => {
@@ -258,6 +259,9 @@
     const normalizeObjectiveAnswerToLabels = (answerRaw, draft) => {
         const raw =
             stripMathShell(answerRaw);
+        if (!normalizeComparableMathText(raw)) {
+            return { ok: false, answer: '', reason: 'option-value-not-matched', originalAnswer: raw };
+        }
         const compact =
             raw.replace(/\s+/g, '').toUpperCase();
         const options =
@@ -272,7 +276,7 @@
                 labels.every(label => optionLabels.has(label));
 
             return allValid
-                ? { ok: true, answer: compact, reason: 'already-option-label' }
+                ? { ok: true, answer: sortLabelsByOptionOrder(labels, options), reason: 'already-option-label' }
                 : { ok: false, answer: '', reason: 'invalid-option-label' };
         }
 
@@ -740,13 +744,14 @@
         legacyFusedQuestionNumbers = [],
         parserFusedQuestionNumbers = []
     } = {}) => {
-        const draftMap =
-            new Map(
-                (drafts || []).map((draft, index) => [
-                    getQuestionNumber(draft) || String(index + 1),
-                    draft
-                ])
-            );
+        const draftMap = new Map(), ambiguousDrafts = new Set();
+        for (const draft of drafts || []) {
+            const number = normalizeQuestionNumber(draft?.questionNumber ?? draft?.question ?? draft?.number ?? draft?.qno ?? draft?.sourceTrace?.questionNumber);
+            if (!number) continue;
+            if (draftMap.has(number) || ambiguousDrafts.has(number)) {
+                draftMap.delete(number); ambiguousDrafts.add(number);
+            } else draftMap.set(number, draft);
+        }
         const legacyAnswerMap =
             buildSafeItemMap(legacySafeAnswerItems, legacyFusedQuestionNumbers);
         const legacySolutionMap =
@@ -775,6 +780,12 @@
         allSafeQuestionNumbers.forEach(questionNumber => {
             const draft =
                 draftMap.get(questionNumber);
+            if (!draft) {
+                const reason = ambiguousDrafts.has(questionNumber) ? 'draft-number-ambiguous' : 'draft-number-missing';
+                for (const field of ['answer', 'solution']) fieldDecisions.push({ questionNumber, field, source: 'none', reason });
+                warnings.push({ questionNumber, code: reason });
+                return;
+            }
             const legacyAnswerItem =
                 legacyAnswerMap.get(questionNumber);
             const parserAnswerItem =

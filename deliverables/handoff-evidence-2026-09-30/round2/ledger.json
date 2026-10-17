@@ -1,0 +1,53 @@
+[
+  {
+    "attempt": 1,
+    "kind": "support",
+    "page": 10,
+    "model": "qwen-vl-ocr-latest",
+    "endpoint": "ocr",
+    "status": "error",
+    "startedAt": "2026-09-30T06:16:12.990Z",
+    "httpStatus": 502,
+    "durationMs": 106,
+    "code": "AI_PROXY_FETCH_FAILED",
+    "halt": true
+  },
+  {
+    "attempt": 2,
+    "kind": "support",
+    "page": 11,
+    "model": "qwen-vl-ocr-latest",
+    "endpoint": "ocr",
+    "status": "error",
+    "startedAt": "2026-09-30T07:53:56.716Z",
+    "httpStatus": 502,
+    "durationMs": 83,
+    "code": "AI_PROXY_FETCH_FAILED",
+    "halt": true
+  },
+  {
+    "attempt": 3,
+    "kind": "support",
+    "page": 11,
+    "model": "qwen-vl-ocr-latest",
+    "endpoint": "ocr",
+    "status": "transport-error",
+    "startedAt": "2026-09-30T11:41:21.845Z",
+    "durationMs": 27,
+    "code": "LOCAL_FETCH_FAILED",
+    "halt": true
+  },
+  {
+    "attempt": 4,
+    "kind": "support",
+    "page": 11,
+    "model": "qwen-vl-ocr-latest",
+    "endpoint": "ocr",
+    "status": "error",
+    "startedAt": "2026-09-30T11:43:19.296Z",
+    "httpStatus": 502,
+    "durationMs": 97,
+    "code": "AI_PROXY_FETCH_FAILED",
+    "halt": true
+  }
+]

@@ -11,7 +11,7 @@ const { createSecureLogger } = require('./qisi-secure-logger');
 const { instanceIdFor } = require('./qisi-local-instance');
 const { createAiRequestLimiter, networkFailureCode } = require('./qisi-local-ai-request-policy');
 const { assertDocxUploadType, validateDocxPackage } = require('./qisi-docx-upload-policy');
-const { postDashScope } = require('./qisi-local-https-transport');
+const { postDashScope, closeDashScopeConnections } = require('./qisi-local-https-transport');
 const { isAllowedLocalHost, isAllowedLocalOrigin, publicRootAssets, isPublicAsset } = require('./qisi-local-http-boundary');
 
 createSecureLogger(console).install();
@@ -22,13 +22,15 @@ const UPLOAD_DIR = path.join(TMP_DIR, 'uploads');
 const CONVERTED_DIR = path.join(TMP_DIR, 'converted');
 const TOOLS_DIR = path.join(ROOT, 'tools');
 const PS_CONVERTER = path.join(TOOLS_DIR, 'convert-docx-to-pdf.ps1');
+const { validateEquations, createNativeTranslator } = require('./qisi-mathtype-local-service');
+const translateLocalMtef = createNativeTranslator(ROOT);
 const PORT = Number(process.env.PORT || 3000);
 const HOST = '127.0.0.1';
 const CONVERT_TIMEOUT_MS = Number(process.env.DOCX_CONVERT_TIMEOUT_MS || 120000);
 const CONVERTER_MODE = String(process.env.QISI_DOCX_CONVERTER || 'auto').toLowerCase();
 const DASHSCOPE_API_KEY = String(process.env.DASHSCOPE_API_KEY || '').trim();
 const AI_BODY_LIMIT = String(process.env.AI_BODY_LIMIT || '60mb');
-const AI_REQUEST_TIMEOUT_MS = Math.max(10000, Number(process.env.AI_REQUEST_TIMEOUT_MS || 90000));
+const AI_REQUEST_TIMEOUT_MS = Math.max(10000, Number(process.env.AI_REQUEST_TIMEOUT_MS || 180000));
 const TEMP_JOB_MAX_AGE_MS = Math.max(60000, Number(process.env.QISI_TEMP_JOB_MAX_AGE_MS || 24 * 60 * 60 * 1000));
 const DASHSCOPE_CHAT_UPSTREAM = 'https://dashscope.aliyuncs.com/' + 'compatible-mode/v1/' + 'chat/completions';
 const DASHSCOPE_OCR_UPSTREAM = 'https://dashscope.aliyuncs.com/' + 'api/v1/services/aigc/' + 'multimodal-generation/' + 'generation';
@@ -112,9 +114,13 @@ async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
       error: 'Local AI request limit reached. Please retry later.' });
   }
   const controller = new AbortController();
-  const abortOnClose = () => { if (!res.writableEnded) controller.abort(); };
+  let abortReason = null;
+  const abort = reason => {
+    if (!controller.signal.aborted) { abortReason = reason; controller.abort(); }
+  };
+  const abortOnClose = () => { if (!res.writableEnded) abort('client_disconnected'); };
   res.once('close', abortOnClose);
-  const timer = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => abort('deadline'), AI_REQUEST_TIMEOUT_MS);
   const bodyText = JSON.stringify(req.body);
   const model = validation.model;
   const startedAt = Date.now();
@@ -136,7 +142,13 @@ async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
         'Content-Type': 'application/json'
       },
       body: bodyText,
-      signal: controller.signal
+      signal: controller.signal,
+      onPhase: event => console.log('[AI_PROXY][transport]', {
+        requestId,
+        stage: `${routeName}.transport.${event.stage}`,
+        durationMs: event.elapsedMs,
+        code: event.reusedSocket ? 'SOCKET_REUSED' : 'SOCKET_FRESH'
+      })
     });
     const responseBuffer = upstream.buffer;
     const contentType = upstream.contentType;
@@ -149,26 +161,34 @@ async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
       code: upstream.ok ? 'AI_PROXY_OK' : `AI_PROXY_HTTP_${upstream.status}`
     });
 
+    if (res.destroyed || res.writableEnded) return;
     res.status(upstream.status);
     res.set('content-type', contentType);
     return res.send(responseBuffer);
   } catch (error) {
     const aborted = error?.name === 'AbortError';
+    const timedOut = aborted && abortReason === 'deadline';
+    const cancelled = aborted && !timedOut;
     const causeCode = aborted ? 'REQUEST_ABORTED' : networkFailureCode(error);
+    const code = timedOut ? 'AI_PROXY_TIMEOUT' : cancelled ? 'AI_PROXY_CANCELLED' : 'AI_PROXY_FETCH_FAILED';
     console.error('[AI_PROXY][error]', {
       requestId,
       stage: `${routeName}.error`,
       engine: model,
       durationMs: Date.now() - startedAt,
-      code: aborted ? 'AI_PROXY_TIMEOUT' : `AI_PROXY_FETCH_FAILED:${causeCode}`
+      code: aborted ? code : `AI_PROXY_FETCH_FAILED:${causeCode}`
     });
 
-    return res.status(aborted ? 504 : 502).json({
+    if (res.destroyed || res.writableEnded || abortReason === 'client_disconnected') return;
+    return res.status(timedOut ? 504 : cancelled ? 499 : 502).json({
       ok: false,
-      code: aborted ? 'AI_PROXY_TIMEOUT' : 'AI_PROXY_FETCH_FAILED',
+      code,
       causeCode,
-      error: aborted
+      ...(error.transportDiagnostic ? { transportDiagnostic: error.transportDiagnostic } : {}),
+      ...(abortReason ? { abortReason } : {}),
+      error: timedOut
         ? `DashScope upstream request timed out after ${AI_REQUEST_TIMEOUT_MS}ms.`
+        : cancelled ? 'DashScope upstream request cancelled.'
         : `DashScope upstream connection failed (${causeCode}).`
     });
   } finally {
@@ -636,6 +656,13 @@ app.get('/api/convert/self-test', async (req, res) => {
   }
 });
 
+// Local structured formula conversion only; no AI transport is involved.
+app.post('/api/convert/mathtype-mtef', express.json({ limit: '8mb' }), async (req, res) => {
+  if (!validateEquations(req.body)) return res.status(400).json({ ok: false, code: 'MTEF_BATCH_INVALID', equations: [] });
+  try { return res.json(await translateLocalMtef(req.body.equations)); }
+  catch { return res.status(503).json({ ok: false, code: 'MATHTYPE_NATIVE_UNAVAILABLE', equations: [] }); }
+});
+
 app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => {
   const uploaded = req.file;
   const cleanupJob = { uploadPath: uploaded?.path || '', outputDir: '' };
@@ -724,7 +751,7 @@ app.use((error, req, res, next) => {
 
 async function startServer() {
   await tempJobManager.cleanupExpired();
-  app.listen(PORT, HOST, () => {
+  const server = app.listen(PORT, HOST, () => {
     console.log(`[qisi-local-server] running at http://localhost:${PORT}`);
     console.log(`[qisi-local-server] open http://localhost:${PORT}/main.html`);
     console.log(`[qisi-local-server] health check: http://localhost:${PORT}/api/health`);
@@ -733,6 +760,7 @@ async function startServer() {
     console.log('[qisi-local-server] LibreOffice candidates:');
     findLibreOfficeExecutable().forEach(p => console.log(`  - ${p}`));
   });
+  server.once('close', closeDashScopeConnections);
 }
 
 startServer().catch(error => {

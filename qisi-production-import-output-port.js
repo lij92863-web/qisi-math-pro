@@ -249,6 +249,19 @@
 
     function projectImportOutput(input = {}, ports = {}) {
         const drafts = Array.isArray(input.drafts) ? input.drafts : [];
+        const v1 = drafts.filter(draft => ['pdf-multimodal-v1','pdf-external-v2'].includes(draft?.producer?.routeId));
+        if (v1.length) {
+            const other = drafts.filter(draft => !['pdf-multimodal-v1','pdf-external-v2'].includes(draft?.producer?.routeId));
+            const legacy = other.length ? projectImportOutput({ ...input, drafts: other }, ports) : { drafts: [], removedIds: new Set(), idMap: new Map(), diagnostics: { before: [], after: [] } };
+            return { ...legacy, drafts: [...v1, ...legacy.drafts], draftImages: input.draftImages || [] };
+        }
+        if (drafts.some(draft => draft?.source?.format === 'pdf' ||
+            draft?.source?.mode === 'pdf-ai' ||
+            String(draft?.producer?.routeId || '').startsWith('pdf-'))) {
+            const error = new Error('PRODUCTION_IMPORT_PDF_V1_REQUIRED');
+            error.code = 'PRODUCTION_IMPORT_PDF_V1_REQUIRED';
+            throw error;
+        }
         const groups = new Map();
         const noQuestion = [];
         for (const draft of drafts) {

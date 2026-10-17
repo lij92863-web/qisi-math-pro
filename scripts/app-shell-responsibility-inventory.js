@@ -33,7 +33,7 @@ function inferTarget(name, domain) {
     if (/batch.*context|source.*manifest|engine.*config/.test(value)) return ['qisi-batch-context-service.js', 'C2-2'];
     if (/source.*role|file.*role|classif/.test(value)) return ['qisi-source-role-classifier.js', 'C2-3'];
     if (domain === 'docx-import') return ['qisi-docx-import-coordinator.js', 'C2-4'];
-    if (domain === 'pdf-safe-partial' || domain === 'recognition-and-images') return ['qisi-pdf-import-coordinator.js', 'C2-5'];
+    if (domain === 'pdf-safe-partial' || domain === 'recognition-and-images') return ['qisi-pdf-multimodal-producer.js', 'PDF-V1'];
     if (/normaliz|wrapper|convert.*candidate/.test(value)) return ['qisi-candidate-normalizer.js', 'C2-6'];
     if (/validat|sequence|ownership|admission/.test(value)) return ['qisi-import-validation-service.js', 'C2-7'];
     if (/review|draft.*build|build.*draft/.test(value)) return ['qisi-review-draft-builder.js', 'C2-8'];

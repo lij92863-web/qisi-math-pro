@@ -209,6 +209,26 @@
                     'docx-deterministic-support-to-candidate';
             }
         }
+        const pdfV1 = identity.source?.format === 'pdf' && ['pdf-multimodal-v1','pdf-external-v2'].includes(identity.producer?.routeId);
+        if (pdfV1 && provenance.sourceId !== identity.source.sourceId && ['answer', 'solution'].includes(field)) {
+            const support = (draft.supportSources || []).find(s => s.sourceId === provenance.sourceId && s.format === 'pdf' && s.roles.includes(field));
+            if (support) { expectedSource = support; expectedBoundary = identity.producer.routeId === 'pdf-external-v2' ? 'pdf-external-support-to-candidate' : 'pdf-multimodal-support-to-candidate'; }
+        }
+        if (field === 'images' && Array.isArray(provenance.imageEvidence)) {
+            const evidence = new Map(provenance.imageEvidence.map(item => [item.imageId, item]));
+            const validImages = evidence.size === provenance.imageEvidence.length &&
+                evidence.size === (draft.images || []).length && (draft.images || []).every(image => {
+                    const item = evidence.get(image.id);
+                    if (!item || !item.evidenceRef || item.sourceId !== (image.sourceFileId || identity.source.sourceId)) return false;
+                    if (item.sourceId === identity.source.sourceId) return true;
+                    const support = (draft.supportSources || []).find(source => source.sourceId === item.sourceId &&
+                        source.format === (pdfV1 ? 'pdf' : 'docx') && source.roles.includes(item.field));
+                    return Boolean(support && ['answer', 'solution'].includes(item.field) &&
+                        String(draft[item.field] || '').includes('[[IMAGE:' + image.id + ']]'));
+                });
+            if (!validImages) errors.push(errorOf('admission-producer-provenance-invalid', 'images',
+                'Each DOCX support image requires its own source, role and exact field token.'));
+        }
         if (
             (identity.producer?.mode === 'vision-ai' &&
                 provenance.status !== 'controlled-write') ||
@@ -266,6 +286,10 @@
                 field,
                 `Provenance kind and status disagree for ${field}.`
             ));
+        }
+        if (/\[DOCX不可显示图片:/.test(JSON.stringify(value))) {
+            errors.push(errorOf('admission-field-rejected', field, 'Unconverted DOCX formula or image cannot enter formal data.'));
+            return;
         }
         const present = hasValue(value);
         if (status === 'rejected') {

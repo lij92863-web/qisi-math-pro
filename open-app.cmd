@@ -64,7 +64,8 @@ echo.
 
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%" >nul 2>nul
 
-start "Qisi Math Pro Server" /MIN /D "%APP_DIR%" %ComSpec% /C ""%NODE_EXE%" "%APP_DIR%\%SERVER_JS%" 1>>"%LOG_FILE%" 2>&1"
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%APP_DIR%\scripts\start-local-server.ps1"
+if errorlevel 1 goto :start_failed
 
 rem ------------------------------------------------------------
 rem Step 4 - poll the health endpoint until the server answers
@@ -114,9 +115,9 @@ echo     Done!  Qisi Math Pro is opening in your browser.
 echo     If the browser does not appear, open this link manually:
 echo         %APP_URL%
 echo.
-echo     Keep the small "Qisi Math Pro Server" window on the
-echo     taskbar running while you use the program.
-echo     Closing it will shut the program down.
+echo     The local service runs silently in the background.
+echo     You do not need to start it manually next time.
+echo     Clicking the desktop shortcut reuses the service.
 echo.
 echo     This black window will close by itself in 5 seconds.
 echo   ==========================================================

@@ -1,0 +1,87 @@
+{
+  "date": "2026-10-01",
+  "paidCalls": 0,
+  "scope": "Native IDB fixture only. Bulk write/update includes transaction and derived hooks/index maintenance; schema upgrade includes reopening plus backfill/index creation. Serialized UTF8 size is not physical disk space.",
+  "writes": [
+    {
+      "mode": "plain",
+      "round": 0,
+      "n": 5000,
+      "insertMs": 135.60000000009313,
+      "updateMs": 307,
+      "count": 5000,
+      "serializedBytes": 1137781
+    },
+    {
+      "mode": "indexed",
+      "round": 0,
+      "n": 5000,
+      "insertMs": 669.8000000000466,
+      "updateMs": 1652,
+      "count": 5000,
+      "serializedBytes": 2650561
+    },
+    {
+      "mode": "indexed",
+      "round": 1,
+      "n": 5000,
+      "insertMs": 1413.8999999999069,
+      "updateMs": 2659,
+      "count": 5000,
+      "serializedBytes": 2650561
+    },
+    {
+      "mode": "plain",
+      "round": 1,
+      "n": 5000,
+      "insertMs": 445.9000000001397,
+      "updateMs": 727.0999999998603,
+      "count": 5000,
+      "serializedBytes": 1137781
+    },
+    {
+      "mode": "plain",
+      "round": 2,
+      "n": 5000,
+      "insertMs": 200.80000000004657,
+      "updateMs": 301.80000000004657,
+      "count": 5000,
+      "serializedBytes": 1137781
+    },
+    {
+      "mode": "indexed",
+      "round": 2,
+      "n": 5000,
+      "insertMs": 686.3999999999069,
+      "updateMs": 1720.2000000001863,
+      "count": 5000,
+      "serializedBytes": 2650561
+    }
+  ],
+  "upgrades": [
+    {
+      "round": 0,
+      "n": 10000,
+      "elapsedMs": 5256.100000000093,
+      "version": 9,
+      "rows": 10000,
+      "indexedRows": 10000
+    },
+    {
+      "round": 1,
+      "n": 10000,
+      "elapsedMs": 2756.899999999907,
+      "version": 9,
+      "rows": 10000,
+      "indexedRows": 10000
+    },
+    {
+      "round": 2,
+      "n": 10000,
+      "elapsedMs": 2766.0999999998603,
+      "version": 9,
+      "rows": 10000,
+      "indexedRows": 10000
+    }
+  ]
+}

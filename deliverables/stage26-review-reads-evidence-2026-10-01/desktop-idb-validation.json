@@ -1,0 +1,21 @@
+{
+  "nativeIndexedDB": true,
+  "isolatedContext": true,
+  "target": "C:/Users/Administrator/Desktop/题库系统",
+  "paidCalls": 0,
+  "result": {
+    "first": [
+      1,
+      1,
+      1
+    ],
+    "second": [
+      2,
+      2,
+      2
+    ],
+    "associationCode": "DRAFT_PERSISTENCE_ASSOCIATION_INVALID",
+    "missingDraft": true,
+    "imageEvidencePreserved": true
+  }
+}

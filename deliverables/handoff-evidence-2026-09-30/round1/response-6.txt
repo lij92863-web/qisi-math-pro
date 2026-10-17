@@ -1,0 +1,32 @@
+{
+  "questions": [
+    {
+      "questionNumber": "未编号",
+      "type": "解答题",
+      "stem": "(1)证明：$AE \\perp$ 平面 $PBF$；\n\n(2)已知圆柱 $OO_1$ 的体积为 $\\pi$，$PB = 2$，点 $A$ 到直线 $PF$ 的距离是 $1$.\n\n\\quad (i) 求 $CE$ 的长度；\n\n\\quad (ii) 求直线 $CD$ 与平面 $PAE$ 所成角的正弦值.",
+      "options": {"A":"","B":"","C":"","D":""},
+      "answer": "",
+      "solution": "",
+      "isFragment": false,
+      "question_bbox": [146, 87, 659, 320],
+      "images": [
+        {
+          "image_bbox": [149, 87, 330, 208],
+          "image_description": "圆柱几何图：圆柱OO₁，上底面圆心O₁，下底面圆心O；下底面圆周上有D、C、E、B四点，其中DE、CB为弦；点A在下底面内；点P在上底面圆周上；连接PA、PB、PC、PD、PE、AE、BF等线段，构成空间几何关系。",
+          "image_confidence": 0.95
+        }
+      ]
+    },
+    {
+      "questionNumber": "18",
+      "type": "解答题",
+      "stem": "已知 $A$、$B$ 分别为 $x$ 轴、$y$ 轴上的动点，$|AB|=2$，$\\overrightarrow{BC}=\\lambda\\overrightarrow{BA}(0<\\lambda<1)$.\n\n(1)讨论 $C$ 点的运动轨迹 $\\Gamma$ 表示的图形；\n\n(2)若 $AB$ 与 $\\Gamma$ 只有一个交点，求 $\\triangle AOB$ 面积的最大值（$O$ 为坐标原点）.",
+      "options": {"A":"","B":"","C":"","D":""},
+      "answer": "",
+      "solution": "",
+      "isFragment": false,
+      "question_bbox": [148, 612, 730, 690],
+      "images": []
+    }
+  ]
+}

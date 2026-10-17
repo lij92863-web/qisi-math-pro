@@ -103,7 +103,7 @@
             const pages = root.Qisi.Utils.expandPageRange(file.pageRange, pdf.numPages);
             recordRenderedPages(pages.length);
 
-            if (pages.length > 20) {
+            if (pages.length > 20 && !options.suppressCostEstimate) {
                 const estimated = estimateVisionCalls(
                     pages.length,
                     getRecognitionMode()
@@ -502,11 +502,32 @@
                 throw error;
             }
 
+            if (options.requireAllPages && rendered.length !== pages.length) throw new Error('PDF_V1_RENDER_INCOMPLETE');
+            Object.defineProperty(rendered, 'totalPages', { value: pdf.numPages, enumerable: false });
             return rendered;
         };
 
 
-        return Object.freeze({ renderPdfFilePages });
+        const renderPdfRegion = async (file, { pageNo, bbox, scale = 3 }) => {
+            if (!root.Qisi.PdfMultimodalContract.bboxValid(bbox)) throw new TypeError('PDF_V1_BBOX_INVALID');
+            const buffer = await (await dataUrlToBlob(file.uploadPath)).arrayBuffer();
+            const pdf = await root.pdfjsLib.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false }).promise;
+            try {
+                const page = await pdf.getPage(pageNo);
+                const viewport = page.getViewport({ scale });
+                const x = Math.floor(bbox[0] * viewport.width / 1000), y = Math.floor(bbox[1] * viewport.height / 1000);
+                const canvas = root.document.createElement('canvas');
+                canvas.width = Math.ceil(bbox[2] * viewport.width / 1000) - x;
+                canvas.height = Math.ceil(bbox[3] * viewport.height / 1000) - y;
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport, transform: [1, 0, 0, 1, -x, -y], background: '#fff' }).promise;
+                const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+                let ink = false;
+                for (let i = 0; i < pixels.length; i += 4) if (pixels[i] < 240 || pixels[i + 1] < 240 || pixels[i + 2] < 240) { ink = true; break; }
+                if (!ink) throw new Error('PDF_V1_CROP_EMPTY');
+                return { url: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height };
+            } finally { await pdf.destroy(); }
+        };
+        return Object.freeze({ renderPdfFilePages, renderPdfRegion });
     }
 
     return Object.freeze({ createBrowserPdfRenderer });

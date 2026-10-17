@@ -172,7 +172,7 @@
         const restoreLatexMathSegments = (source = '', chunks = []) => {
             let output = String(source || '');
             chunks.forEach((chunk, index) => {
-                output = output.replace(`@@QISI_MATH_SEGMENT_${index}@@`, chunk);
+                output = output.replace(`@@QISI_MATH_SEGMENT_${index}@@`, () => chunk);
             });
             return output;
         };
@@ -285,11 +285,9 @@
 
             if (/^[A-D]{1,4}$/.test(compact)) return compact;
 
-            const direct = raw.match(/(?:答案|故选|选|应选|正确答案|为|是)\s*[:：]?\s*([A-D]{1,4})(?![A-Z])/);
+            const direct = raw.match(/(?:正确答案|答案|故选|应选)(?:为|是)?\s*[:：]?\s*([A-D]{1,4})(?![A-Z])/);
             if (direct?.[1]) return direct[1];
 
-            const tail = raw.match(/([A-D]{1,4})\s*$/);
-            if (tail?.[1] && tail[1].length <= 4) return tail[1];
 
             return '';
         };
@@ -598,14 +596,16 @@
             if (!text) return Array.from({ length: maxPage }, (_, idx) => idx + 1);
             const pages = new Set();
             text.split(',').forEach(part => {
+                part = part.trim();
                 const rangeMatch = part.match(/^(\d+)-(\d+)$/);
                 if (rangeMatch) {
                     const start = Number(rangeMatch[1]);
                     const end = Number(rangeMatch[2]);
-                    for (let page = start; page <= end; page++) if (page <= maxPage) pages.add(page);
+                    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 1 || end < start) return;
+                    for (let page = start; page <= Math.min(end, maxPage); page++) pages.add(page);
                 } else {
                     const page = Number(part);
-                    if (page > 0 && page <= maxPage) pages.add(page);
+                    if (/^\d+$/.test(part) && Number.isSafeInteger(page) && page > 0 && page <= maxPage) pages.add(page);
                 }
             });
             return [...pages].sort((a, b) => a - b);
@@ -718,6 +718,7 @@
         };
 
         const hasUnconvertedImagePlaceholder = (value = '') => {
+            if (/\[DOCX不可显示图片:/i.test(String(value || ''))) return true;
             const raw = String(value || '');
 
             // Legal media tokens are not unconverted-image errors.
@@ -919,7 +920,7 @@
         const cleanDisplayOptionsForBatchSave = (options) => {
             const arr = Array.isArray(options) ? options : ['', '', '', ''];
 
-            return [0, 1, 2, 3].map(idx => {
+            return Array.from({ length: Math.max(4, arr.length) }, (_, idx) => {
                 const raw = cleanRecognizedText(arr[idx] || '');
                 if (!raw) return '';
 

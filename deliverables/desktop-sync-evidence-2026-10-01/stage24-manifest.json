@@ -1,0 +1,20 @@
+[
+  {
+    "file": "main.html",
+    "sourceBefore": "7f806805a331a08fcb9b7f324137d9e5b40c381ef4d647b1ed1f612b4ff75d52",
+    "desktopBefore": "7f806805a331a08fcb9b7f324137d9e5b40c381ef4d647b1ed1f612b4ff75d52",
+    "after": "b464d2728af9b39d3c8d0d8a472c11960955972f84c04d65ccb53f67fb8ddb2c"
+  },
+  {
+    "file": "app.css",
+    "sourceBefore": "fffd7ed3912b3df0b145ed179693dc2d223a9c6373d6c8ed83f7fc4e44dca720",
+    "desktopBefore": "57dc82993fff0bf9991398c595255061b426c3663ea657b0a837a61a39466b55",
+    "after": "9dc15877605ca0f9e97f6a6a63cab13df5572b4096a3049d8f8a64a3db0491f6"
+  },
+  {
+    "file": "app.js",
+    "sourceBefore": "58a8af328433fccbdde83a8473375b7589ad83fbbc1a119ae6c3d17005731c4f",
+    "desktopBefore": "4988a6fb571e1df13f625d64a469b06a0d9c79dea94772b11de46bd9925bebb7",
+    "after": "2070b93aa76ab1a8a4e0580138c8b9a22df8c66569f8b31a1c825847cdd034fe"
+  }
+]

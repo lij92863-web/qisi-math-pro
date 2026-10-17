@@ -1,0 +1,318 @@
+{
+  "scope": "Offline structural presence only; no mathematical acceptance, no automatic attachment or insertion",
+  "paidCalls": 0,
+  "source": "original 21-page Shenzhen PDF",
+  "items": [
+    {
+      "question": "1",
+      "type": "单选题",
+      "stemChars": 46,
+      "options": 4,
+      "rawImages": 0,
+      "rawAnswer": false,
+      "rawSolution": false,
+      "cachedSupportAnswer": true,
+      "cachedSupportSolution": true
+    },
+    {
+      "question": "2",
+      "type": "单选题",
+      "stemChars": 130,
+      "options": 4,
+      "rawImages": 0,
+      "rawAnswer": false,
+      "rawSolution": false,
+      "cachedSupportAnswer": true,
+      "cachedSupportSolution": true
+    },
+    {
+      "question": "3",
+      "type": "单选题",
+      "stemChars": 73,
+      "options": 4,
+      "rawImages": 0,
+      "rawAnswer": false,
+      "rawSolution": false,
+      "cachedSupportAnswer": true,
+      "cachedSupportSolution": true
+    },
+    {
+      "question": "4",
+      "type": "单选题",
+      "stemChars": 73,
+      "options": 4,
+      "rawImages": 0,
+      "rawAnswer": false,
+      "rawSolution": false,
+      "cachedSupportAnswer": true,
+      "cachedSupportSolution": true
+    },
+    {
+      "question": "5",
+      "type": "单选题",
+      "stemChars": 169,
+      "options": 4,
+      "rawImages": 1,
+      "rawAnswer": false,
+      "rawSolution": false,
+      "cachedSupportAnswer": true,
+      "cachedSupportSolution": true
+    },
+    {
+      "question": "6",
+      "type": "单选题",
+      "stemChars": 164,
+      "options": 4,
+      "rawImages": 0,
+      "rawAnswer": false,
+      "rawSolution": false,
+      "cachedSupportAnswer": true,
+      "cachedSupportSolution": true
+    },
+    {
+      "question": "7",
+      "type": "单选题",
+      "stemChars": 49,
+      "options": 4,
+      "rawImages": 0,
+      "rawAnswer": false,
+      "rawSolution": false,
+      "cachedSupportAnswer": true,
+      "cachedSupportSolution": false
+    },
+    {
+      "question": "8",
+      "type": "单选题",
+      "stemChars": 118,
+      "options": 4,
+      "rawImages": 0,
+      "rawAnswer": false,
+      "rawSolution": false,
+      "cachedSupportAnswer": true,
+      "cachedSupportSolution": false
+    },
+    {
+      "question": "9",
+      "type": "多选题",
+      "stemChars": 238,
+      "options": 4,
+      "rawImages": 1,
+      "rawAnswer": false,
+      "rawSolution": false,
+      "cachedSupportAnswer": true,
+      "cachedSupportSolution": false
+    },
+    {
+      "question": "10",
+      "type": "单选题",
+      "stemChars": 120,
+      "options": 2,
+      "rawImages": 1,
+      "rawAnswer": false,
+      "rawSolution": false,
+      "cachedSupportAnswer": true,
+      "cachedSupportSolution": false
+    },
+    {
+      "question": "11",
+      "type": "多选题",
+      "stemChars": 248,
+      "options": 4,
+      "rawImages": 0,
+      "rawAnswer": false,
+      "rawSolution": false,
+      "cachedSupportAnswer": true,
+      "cachedSupportSolution": false
+    },
+    {
+      "question": "12",
+      "type": "填空题",
+      "stemChars": 65,
+      "options": 0,
+      "rawImages": 0,
+      "rawAnswer": false,
+      "rawSolution": false,
+      "cachedSupportAnswer": true,
+      "cachedSupportSolution": true
+    },
+    {
+      "question": "13",
+      "type": "填空题",
+      "stemChars": 101,
+      "options": 0,
+      "rawImages": 0,
+      "rawAnswer": false,
+      "rawSolution": false,
+      "cachedSupportAnswer": true,
+      "cachedSupportSolution": true
+    },
+    {
+      "question": "14",
+      "type": "填空题",
+      "stemChars": 228,
+      "options": 0,
+      "rawImages": 0,
+      "rawAnswer": false,
+      "rawSolution": false,
+      "cachedSupportAnswer": true,
+      "cachedSupportSolution": false
+    },
+    {
+      "question": "15",
+      "type": "解答题",
+      "stemChars": 387,
+      "options": 0,
+      "rawImages": 1,
+      "rawAnswer": false,
+      "rawSolution": false,
+      "cachedSupportAnswer": false,
+      "cachedSupportSolution": false
+    },
+    {
+      "question": "16",
+      "type": "解答题",
+      "stemChars": 144,
+      "options": 0,
+      "rawImages": 0,
+      "rawAnswer": false,
+      "rawSolution": false,
+      "cachedSupportAnswer": true,
+      "cachedSupportSolution": true
+    },
+    {
+      "question": "17",
+      "type": "解答题",
+      "stemChars": 80,
+      "options": 0,
+      "rawImages": 0,
+      "rawAnswer": false,
+      "rawSolution": false,
+      "cachedSupportAnswer": false,
+      "cachedSupportSolution": false
+    },
+    {
+      "question": "18",
+      "type": "解答题",
+      "stemChars": 202,
+      "options": 0,
+      "rawImages": 0,
+      "rawAnswer": false,
+      "rawSolution": false,
+      "cachedSupportAnswer": false,
+      "cachedSupportSolution": false
+    },
+    {
+      "question": "19",
+      "type": "解答题",
+      "stemChars": 324,
+      "options": 0,
+      "rawImages": 0,
+      "rawAnswer": false,
+      "rawSolution": false,
+      "cachedSupportAnswer": false,
+      "cachedSupportSolution": false
+    }
+  ],
+  "support": [
+    {
+      "page": 9,
+      "attempt": 8,
+      "answers": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11"
+      ],
+      "solutions": [
+        "1",
+        "2",
+        "3"
+      ],
+      "warnings": []
+    },
+    {
+      "page": 10,
+      "attempt": 12,
+      "answers": [
+        "4",
+        "5",
+        "6"
+      ],
+      "solutions": [
+        "4",
+        "5",
+        "6"
+      ],
+      "warnings": []
+    },
+    {
+      "page": 14,
+      "attempt": 9,
+      "answers": [
+        "12",
+        "13",
+        "14"
+      ],
+      "solutions": [
+        "12",
+        "13"
+      ],
+      "warnings": []
+    },
+    {
+      "page": 16,
+      "attempt": 13,
+      "answers": [
+        "16"
+      ],
+      "solutions": [
+        "16"
+      ],
+      "warnings": []
+    }
+  ],
+  "unownedFragments": 2,
+  "sequenceSafe": true,
+  "boundaries": [
+    {
+      "question": 10,
+      "pages": [
+        2,
+        3
+      ],
+      "reasons": [
+        "missing-options"
+      ]
+    },
+    {
+      "question": 16,
+      "pages": [
+        4,
+        5
+      ],
+      "reasons": [
+        "unowned-head",
+        "page-tail"
+      ]
+    },
+    {
+      "question": 17,
+      "pages": [
+        5,
+        6
+      ],
+      "reasons": [
+        "fragment",
+        "unowned-head",
+        "page-tail"
+      ]
+    }
+  ]
+}

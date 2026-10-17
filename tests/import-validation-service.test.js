@@ -56,9 +56,6 @@ const productionDependencies = (overrides = {}) => ({
     reviewValidator: {
         validate: () => ({ valid: true, errors: [], warnings: [] })
     },
-    safePartialPipeline: {
-        assertSafePartialInvariants: () => true
-    },
     ...overrides
 });
 
@@ -163,7 +160,7 @@ test('production policy owner preserves deterministic acceptance and PDF fail-cl
         }),
         error => error.code === 'IMPORT_VALIDATION_REJECTED' &&
             error.failures.some(failure =>
-                failure.code === 'controlled-write-missing'
+                failure.code === 'pdf-v1-producer-required'
             )
     );
 });
@@ -283,4 +280,14 @@ test('production path requires the service before review persistence', () => {
         /\.validatePdfSupportSequence\s*\(|\.validateStructuredQuestionDraft\s*\(|\.assertSafePartialInvariants\s*\(/
     );
     assert.doesNotMatch(app, /const\s+canonicalPdf\s*=|const\s+reviewablePartial\s*=/);
+});
+
+
+test('D-1 production sequence gate accepts only the fully validated subset', () => {
+    const ports = Validation.createProductionValidationPorts(productionDependencies({
+        supportAligner: require('../qisi-pdf-support-aligner.js')
+    }));
+    const drafts = [1, 3].map(number => draft({ questionNumber: String(number) }));
+    assert.equal(ports.validateSequence(drafts, { context: { expectedQuestionNumbers: [1, 2, 3] } }).valid, true);
+    assert.equal(ports.validateSequence(drafts, { context: { expectedQuestionNumbers: [1, 2] } }).valid, false);
 });

@@ -1,6 +1,14 @@
+(function (root, factory) {
+    const api = factory(root);
+    root.Qisi = root.Qisi || {};
+    root.Qisi.Components = api;
+    if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
+    'use strict';
 ﻿        const Icon = {
             props: ['name', 'size', 'class'],
             setup(props) {
+                const { ref, onMounted, watch } = root.Vue;
                 const el = ref(null);
                 const updateIcon = () => {
                     if (el.value && window.lucide) {
@@ -508,6 +516,7 @@
             },
             emits: ['toggle-cart', 'edit', 'delete', 'toggle-pick'],
             setup(props, { emit }) {
+                const { ref, reactive, computed, toRaw } = root.Vue;
                 const showAnswer = ref(false);
                 const isEditing = ref(false);
                 const activeEditTab = ref('stem');
@@ -641,3 +650,6 @@
         };
 
 
+
+    return { Icon, LatexPreview, KnowledgeTree, QuestionCard, renderQuestionOptionsHtml, renderLatexPreviewHtml };
+});

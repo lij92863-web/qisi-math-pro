@@ -44,9 +44,10 @@ describe('finalChoiceAnswerText', () => {
         assert.equal(result, 'A');
     });
 
-    it('tail match: answer at end', () => {
+    // User-authorized N42: a trailing geometry label is not answer ownership evidence.
+    it('unanchored tail is withheld', () => {
         const result = finalChoiceAnswerText('根据计算 ABD');
-        assert.equal(result, 'ABD');
+        assert.equal(result, '');
     });
 
     it('boundary: single answer', () => {

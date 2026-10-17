@@ -14,7 +14,6 @@ const SNAPSHOT_FILES = Object.freeze([
     'qisi-draft-persistence-service.js',
     'qisi-formal-admission-policy.js',
     'qisi-import-state-machine.js',
-    'qisi-pdf-safe-partial-pipeline.js',
     'qisi-production-import-output-port.js',
     'qisi-recognition-contracts.js',
     'qisi-review-controller.js',
@@ -169,7 +168,6 @@ async function runWorker(repoRoot, profile, runs, warmups) {
     const load = file => require(path.join(repoRoot, file));
     const DocxIdentity = load('qisi-docx-producer-identity-contract.js');
     const ReviewBuilder = load('qisi-review-draft-builder.js');
-    const PdfSafePartial = load('qisi-pdf-safe-partial-pipeline.js');
     const ReviewController = load('qisi-review-controller.js');
     const OutputPort = load('qisi-production-import-output-port.js');
     const Utils = load('qisi-utils.js');
@@ -277,19 +275,6 @@ async function runWorker(repoRoot, profile, runs, warmups) {
         )),
         value => value.length === 1 &&
             value[0].producer.routeId === 'docx-rendered-to-pdf-vision'
-    ));
-    scenarios.push(await measure(
-        'pdf-safe-partial', runs, warmups,
-        () => repeated(1000, () => {
-            const value = PdfSafePartial.normalizePdfPipelineResult({
-                answerQuestionNumbers: ['1'],
-                solutionQuestionNumbers: [],
-                warnings: [{ questionNumber: '2' }]
-            });
-            PdfSafePartial.assertSafePartialInvariants(value);
-            return value;
-        }),
-        value => value.isSafePartial === true && value.isComplete === false
     ));
     for (const count of [100, 300]) {
         scenarios.push(await measure(

@@ -1,0 +1,42 @@
+{
+  "questions": [
+    {
+      "questionNumber": "15",
+      "type": "解答题",
+      "stem": "15. 某公司要在一条笔直的道边安装路灯，要求灯柱 $AB$ 与地面垂直，灯杆 $BC$ 与灯柱 $AB$ 所在的平面与道路走向垂直，路灯 $C$ 采用锥形灯罩，射出的光线与平面 $ABC$ 的部分截面如图中阴影部分所示。已知 $\\angle ABC = \\frac{2}{3}\\pi$, $\\angle ACD = \\frac{\\pi}{3}$，路宽 $AD = 24$ 米。设 $\\angle BAC = \\theta \\left(\\frac{\\pi}{12} \\le \\theta \\le \\frac{\\pi}{6}\\right)$\n\n(1) 若 $\\theta = \\frac{\\pi}{6}$，求灯柱 $AB$ 的高 $h$；\n\n(2) 此公司应该如何设置 $\\theta$ 的值才能使制造路灯灯柱 $AB$ 与灯杆 $BC$ 所用材料的总长度最小？最小值为多少？",
+      "options": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": ""
+      },
+      "answer": "",
+      "solution": "",
+      "isFragment": false,
+      "question_bbox": [147, 151, 845, 477],
+      "images": [
+        {
+          "image_bbox": [147, 265, 352, 385],
+          "image_description": "三角形ABC与点D构成的几何图形，其中AB垂直于AD，阴影区域为三角形ACD，点B在A上方，C在B右上方，D在A右侧，形成四边形ABCD的一部分。",
+          "image_confidence": 0.95
+        }
+      ]
+    },
+    {
+      "questionNumber": "16",
+      "type": "解答题",
+      "stem": "16. 下表为某汽车模型公司的产品分类，共有 25 个汽车模型，其外观和内饰的颜色分布如表所示：\n\n\\begin{tabular}{|l|c|c|}\n\\hline\n & 红色外观 & 蓝色外观 \\\\\n\\hline\n米色内饰 & 8 & 12 \\\\\n\\hline\n\\end{tabular}",
+      "options": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": ""
+      },
+      "answer": "",
+      "solution": "",
+      "isFragment": false,
+      "question_bbox": [147, 764, 845, 892],
+      "images": []
+    }
+  ]
+}

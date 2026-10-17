@@ -49,10 +49,11 @@ describe('normalizeDraftPreviewOptions', () => {
         );
     });
 
-    it('boundary case: truncates options after D', () => {
+    // User-authorized N32/N40 consistency: editor must preserve existing E/F options.
+    it('boundary case: preserves options after D', () => {
         assert.deepEqual(
             normalizeDraftPreviewOptions({ options: ['A', 'B', 'C', 'D', 'E'] }),
-            ['A', 'B', 'C', 'D']
+            ['A', 'B', 'C', 'D', 'E']
         );
     });
 
@@ -70,11 +71,11 @@ describe('normalizeDraftPreviewOptions', () => {
         assert.deepEqual(question.options, before);
     });
 
-    it('output shape consistency: always returns four options', () => {
+    it('output shape consistency: pads to four and preserves longer arrays', () => {
         const inputs = [{ options: ['A'] }, {}, null, undefined, { options: [1, 2, 3, 4, 5] }];
         for (const input of inputs) {
             const result = normalizeDraftPreviewOptions(input);
-            assert.equal(result.length, 4);
+            assert.equal(result.length, Math.max(4, input?.options?.length || 0));
             assert.ok(result.every(option => typeof option === 'string'));
         }
     });

@@ -971,6 +971,8 @@
         };
         const restoreBackup = async (backup, { expectedSnapshot } = {}) => {
             const normalized = validateBackup(backup);
+            // Legacy partial backups replace only explicitly provided tables. Empty means clear; absent means preserve.
+            const providedTables = BACKUP_TABLES.filter(name => Object.hasOwn(backup.tables, name));
             await transaction(BACKUP_TABLES, async () => {
                 if (expectedSnapshot !== undefined) {
                     if (!isRecord(expectedSnapshot) || Object.keys(expectedSnapshot).length !== BACKUP_TABLES.length ||
@@ -982,7 +984,7 @@
                     try { await waitFor(defaultSnapshotPolicy.assertSameSnapshot(expectedSnapshot, current)); }
                     catch (cause) { throw new StorageRepositoryError('restore-conflict', 'Current data changed or could not be compared; restoration cancelled.', { causeCode: cause?.code || '' }); }
                 }
-                for (const name of BACKUP_TABLES) {
+                for (const name of providedTables) {
                     const target = table(name);
                     await target.clear();
                     if (normalized.tables[name].length) {
@@ -990,7 +992,7 @@
                     }
                 }
             });
-            return { restored: true, tableCount: BACKUP_TABLES.length };
+            return { restored: true, tableCount: providedTables.length };
         };
 
         const repository = Object.freeze({

@@ -1,0 +1,80 @@
+{
+  "scope": "Production formal repository boundary with native IndexedDB: decision to commit; excludes UI workflow reloads/render, AI/OCR, seed setup and user data.",
+  "date": "2026-10-01",
+  "root": "C:/Users/Administrator/Desktop/题库系统",
+  "paidCalls": 0,
+  "samples": [
+    {
+      "n": 1000,
+      "m": 20,
+      "round": 0,
+      "elapsedMs": 171.29999999701977,
+      "reads": 20,
+      "readRows": 20190,
+      "readMs": 95.39999999850988,
+      "cpuMs": 23.400000002235174,
+      "scanCalls": 20,
+      "count": 1020
+    },
+    {
+      "n": 10000,
+      "m": 20,
+      "round": 0,
+      "elapsedMs": 1048.7000000029802,
+      "reads": 20,
+      "readRows": 200190,
+      "readMs": 788.4999999925494,
+      "cpuMs": 197.19999999925494,
+      "scanCalls": 20,
+      "count": 10020
+    },
+    {
+      "n": 10000,
+      "m": 20,
+      "round": 1,
+      "elapsedMs": 995.2000000029802,
+      "reads": 20,
+      "readRows": 200190,
+      "readMs": 752.2000000029802,
+      "cpuMs": 182.1000000052154,
+      "scanCalls": 20,
+      "count": 10020
+    },
+    {
+      "n": 1000,
+      "m": 20,
+      "round": 1,
+      "elapsedMs": 156.90000000223517,
+      "reads": 20,
+      "readRows": 20190,
+      "readMs": 95.80000000074506,
+      "cpuMs": 18.600000012665987,
+      "scanCalls": 20,
+      "count": 1020
+    },
+    {
+      "n": 1000,
+      "m": 20,
+      "round": 2,
+      "elapsedMs": 154.89999999850988,
+      "reads": 20,
+      "readRows": 20190,
+      "readMs": 93.89999999850988,
+      "cpuMs": 18.399999998509884,
+      "scanCalls": 20,
+      "count": 1020
+    },
+    {
+      "n": 10000,
+      "m": 20,
+      "round": 2,
+      "elapsedMs": 1030.300000000745,
+      "reads": 20,
+      "readRows": 200190,
+      "readMs": 758.8999999985099,
+      "cpuMs": 178.40000000596046,
+      "scanCalls": 20,
+      "count": 10020
+    }
+  ]
+}

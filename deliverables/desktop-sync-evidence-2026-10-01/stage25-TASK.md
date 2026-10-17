@@ -1,0 +1,3 @@
+# Stage 25 consolidated audit and algorithm report
+User authorized after safe desktop sync and acceptance. Allowed: ai/DESKTOP_AUDIT_RECHECK_2026-09-30.md in C repair/desktop; existing desktop deliverables recheck mirror and evidence folder. Preserve original external audit/handoff, all paid ledgers, user data, .env and E runtime.
+One master report mirrored. Explain actual deployment/gates, constrained proof/complexity/lower bound, new native IDB boundary timings, correct historical even-sample median, field-by-field raw PDF limits, 4/20 halted ledger and 16 remaining. No additional code/schema/tests. Gate: verify:safe, runtime/architecture/diff scope then scoped commit.

@@ -1,5 +1,11 @@
-﻿const { createApp, ref, reactive, watch, onMounted, nextTick, computed, toRaw } = Vue;
-
+(function (root, factory) {
+    const api = factory(root);
+    root.Qisi = root.Qisi || {};
+    root.Qisi.Config = api;
+    if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
+    'use strict';
+﻿
         const PRESET_TEMPLATES = {
             quizSheet: {
                 name: '测验模板',
@@ -138,3 +144,8 @@
         const CHINESE_SECTION_NUMBERS = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
 
 
+
+    const pdfPrices = [{ maxInput: 32000, inputYuanPerMillion: 0.2, outputYuanPerMillion: 0.8 }, { maxInput: 256000, inputYuanPerMillion: 0.6, outputYuanPerMillion: 2.4 }, { maxInput: 1000000, inputYuanPerMillion: 1.2, outputYuanPerMillion: 4.8 }];
+    const pdfExternal = { enabled: false, mode: 'parse-organize-text', strictTextSchema: true, wireVersion: 'pdf-external-v2.2', model: 'qwen3.7-flash-2026-07-15', reviewModel: 'qwen3.7-flash-2026-07-15', parserVersion: 'pdf-page-evidence-v2', profileVersion: 'qwen37-simple-model-led-v1', maxPromptBytes: 500000, maxRequestImages: 256, priceCheckedOn: '2026-10-14', priceTiers: pdfPrices, parserPriceTiers: pdfPrices, reviewPriceTiers: pdfPrices, requireCrossWindowLock: true, bindings: { parseUsesRecognizer: true, organizeUsesRecognizer: true, reviewUsesRecognizer: true } };
+    return { PRESET_TEMPLATES, DEFAULT_PRESET_KEY, DEFAULT_TEMPLATE, EXAM_LAYOUT_PRESETS, QUESTION_TYPE_LABELS, DEFAULT_GROUP_CONFIG, EXAM_TYPE_ORDER, CHINESE_SECTION_NUMBERS, pdfExternal };
+});

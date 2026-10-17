@@ -95,10 +95,16 @@
             const aLine = lines.find(line => /^答案/.test(line));
 
             if (qLine && aLine) {
-                const qs = qLine.match(/[0-9０-９]{1,3}/g) || [];
-                const as = aLine.match(/[A-DＡ-Ｄ]{1,4}/g) || [];
-
-                qs.forEach((q, idx) => addAnswer(q, as[idx] || '', 0.9));
+                const questionCells = qLine.replace(/^题号\s*[:：]?/, '').trim().split(/[\s|,，、]+/);
+                const answerCells = aLine.replace(/^答案\s*[:：]?/, '').trim()
+                    .replace(/[Ａ-Ｆ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248));
+                const qs = questionCells.map(value => /^[0-9０-９]+$/.test(value)
+                    ? String(Number(value.replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248)))) : '');
+                const as = answerCells.replace(/[\s|,，、]+/g, '').split('');
+                // A complete explicit single-label row is the only positional summary accepted.
+                if (qs.length !== as.length || qs.some(q => !Number.isSafeInteger(Number(q)) || Number(q) < 1) ||
+                    qs.some((q, i) => i > 0 && Number(q) <= Number(qs[i - 1])) || !as.every(a => /^[A-F]$/.test(a))) return [];
+                qs.forEach((q, idx) => addAnswer(q, as[idx], null));
             }
 
             const pairRegex = /(?:^|[\n\s，,；;、])(?:第\s*)?([0-9０-９]{1,3})(?:\s*题)?\s*[\.:：、．\)）]?\s*(?:【答案】|参考答案[:：]|答案[:：])?\s*([A-DＡ-Ｄ]{1,4})(?=$|[\s，,；;。])/g;

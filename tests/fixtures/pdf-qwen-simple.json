@@ -1,0 +1,13 @@
+{
+  "raw": [
+    "```json\n{\"source_id\":\"fake-source\",\"table_data\":{\"headers\":[\"材料\",\"2\",\"3\"]}}\n```\n7. 原题有两种证明。前置证明第一步。前置证明第二步。\n[figure] {\"bbox\":[0,0,1,1]}\n页尾续文没有结束。",
+    "<table><tr><td>甲</td><td>2</td><td>3</td></tr></table>\n上一页证明的尾段：故结论成立。另一处详解（1）略。\n原文异常位置：[无法辨认]。"
+  ],
+  "regions": [
+    [
+      {"kind":"figure","bbox":[0.1,0.2,0.4,0.5],"anchor":"7. 原题附图","issues":[]},
+      {"kind":"table","bbox":[0.5,0.6,0.9,0.8],"anchor":"材料数值表","issues":[]}
+    ],
+    []
+  ]
+}

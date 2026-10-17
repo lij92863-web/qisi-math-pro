@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
+const { verifyFrozenPdfFiles } = require('../scripts/verify-frozen-pdf-files.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(ROOT, file), 'utf8');
@@ -80,7 +80,7 @@ test('browser dependency order loads identity contract before schema and admissi
     assert.ok(shadowPort > 0 && shadowPort < bridge);
 });
 
-test('six frozen PDF high-risk owners are byte-unchanged from package baseline', () => {
+test('six frozen PDF high-risk owners match baseline or exact user-approved repairs', () => {
     const files = [
         'qisi-pdf-support-controlled-write.js',
         'qisi-pdf-support-aligner.js',
@@ -89,11 +89,9 @@ test('six frozen PDF high-risk owners are byte-unchanged from package baseline',
         'qisi-pdf-answer-extraction-quality.js',
         'scripts/pdf-master-browser-runner.js'
     ];
-    const output = execFileSync('git', [
-        'diff', '--name-only',
-        '9ab2f21282af4f5eb394658f31d5ba357cd46ca5', '--', ...files
-    ], { cwd: ROOT, encoding: 'utf8' }).trim();
-    assert.equal(output, '');
+    // User approved exact N1/N2/D-1 repairs on 2026-10-01; all other files retain this baseline.
+    assert.deepEqual(verifyFrozenPdfFiles(files,
+        '9ab2f21282af4f5eb394658f31d5ba357cd46ca5'), []);
 });
 
 test('deterministic DOCX option labels cannot create a zero-length global match', () => {

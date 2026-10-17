@@ -38,3 +38,12 @@ test('real IndexedDB keeps restore transaction alive for binary comparison and r
   });assert.deepEqual(result,{first:'older',code:'restore-conflict',preserved:'concurrent'});
  }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}
 });
+
+
+test('N26 absent tables survive partial restore while explicit empty tables clear',async()=>{
+ const database=new FakeDatabase({questions:[{id:'q'}],images:[{id:'i',blob:new Blob(['keep'])}],customTemplates:[{id:'t'}]});
+ const repository=Storage.createRepository(database,{waitFor:work=>work});
+ await repository.restoreBackup({schemaVersion:Storage.BACKUP_SCHEMA_VERSION,tables:{questions:[]}});
+ assert.equal((await database.table('questions').toArray()).length,0);
+ assert.equal(await (await database.table('images').get('i')).blob.text(),'keep');assert.equal((await database.table('customTemplates').get('t')).id,'t');
+});

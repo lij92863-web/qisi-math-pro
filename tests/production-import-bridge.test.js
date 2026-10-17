@@ -8,14 +8,13 @@ const StateMachine = require('../qisi-import-state-machine.js');
 const BatchContext = require('../qisi-batch-context-service.js');
 const Roles = require('../qisi-source-role-classifier.js');
 const DocxCoordinator = require('../qisi-docx-import-coordinator.js');
-const PdfCoordinator = require('../qisi-pdf-import-coordinator.js');
+const PdfContract = require('../qisi-pdf-multimodal-contract.js');
+const Identity = require('../qisi-docx-producer-identity-contract.js');
 const CandidateNormalizer = require('../qisi-candidate-normalizer.js');
 const Validation = require('../qisi-import-validation-service.js');
 const ReviewBuilder = require('../qisi-review-draft-builder.js');
 const OutputPort = require('../qisi-production-import-output-port.js');
 const Diagnostics = require('../qisi-import-diagnostics.js');
-const Projection = require('../qisi-pdf-candidate-projection.js');
-const ControlledWrite = require('../qisi-pdf-support-controlled-write.js');
 const RoutePolicy = require('../qisi-production-import-route-policy.js');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -40,69 +39,21 @@ const docxDraft = () => ({
     solution: 'solution', warnings: ['docx-warning'],
     source: { mode: 'docx-deterministic', sourceId: 'docx-1' }
 });
-const pdfDraft = () => ({
-    id: 'draft-pdf-1', questionNumber: '1', type: 'choice',
-    stem: 'safe pdf stem',
-    options: [
-        { label: 'A', text: 'alpha' }, { label: 'B', text: 'beta' },
-        { label: 'C', text: 'gamma' }, { label: 'D', text: 'delta' }
-    ],
-    answer: '', solution: '', images: [], warnings: ['missing-answer'],
-    sourceQuestionFileId: 'pdf-question', sourceFileId: 'pdf-question',
-    sourcePage: 1,
-    sourceTrace: {
-        sourceFileId: 'pdf-question', sourcePage: 1,
-        evidenceId: 'question-block', sourceKind: 'textLayer'
-    }
-});
-
-const pdfProjectionInput = (draft = pdfDraft()) => ({
-    source: {
-        sourceId: 'pdf-question', sourceType: 'pdf', sourceOrder: 1
-    },
-    engineResult: { sourceKind: 'textLayer', engine: 'pdf-text-layer' },
-    parsedQuestion: draft,
-    alignmentResult: {
-        mode: 'prefix', safeQuestionNumbers: ['1'],
-        fusedQuestionNumbers: [], warnings: [{ code: 'sequence-prefix' }]
-    },
-    controlledWriteDecision: {
-        ...ControlledWrite.buildPdfSupportFieldLevelControlledWrite({
-            drafts: [draft],
-            parserSafeAnswerItems: [{
-                questionNumber: '1', answer: '{"unsafe":"shell"}'
-            }],
-            parserSafeSolutionItems: [{
-                questionNumber: '1', solution: 'safe solution'
-            }]
-        }),
-        decisionId: 'cw:bridge:1'
-    },
-    evidence: {
-        fields: Object.fromEntries([
-            'questionNumber', 'stem', 'options', 'answer', 'solution', 'images'
-        ].map(field => [field, { page: 1, blockIds: [`${field}-block`] }])),
-        rawEvidenceRefs: [{ evidenceId: 'question-block' }]
-    },
-    pageContext: { page: 1, sourceOrder: 1 },
-    validation: {
-        schemaValid: true, sequenceValid: true, ownershipValid: true
-    }
-});
-
-const pdfProjectionContext = (draft = pdfDraft()) => {
-    const input = pdfProjectionInput(draft);
-    return {
-        drafts: [draft],
-        sources: pdfFiles(),
-        controlledWriteDecisions: [input.controlledWriteDecision],
-        controlledWriteDecisionId: input.controlledWriteDecision.decisionId,
-        alignmentResults: [input.alignmentResult],
-        routeContext: {
-            sourceMode: 'pdf-deterministic', engine: 'pdf-text-layer'
+const pdfDraft = () => PdfContract.canonicalDraft(
+    PdfContract.groupProposals([{
+        field: 'question', model: 'qwen3-vl-plus', evidence: [],
+        source: { sourceId: 'pdf-question', format: 'pdf', filename: 'questions.pdf' },
+        item: {
+            question_no: '1', type: 'single', stem: 'safe pdf stem',
+            options: [
+                { label: 'A', text: 'alpha' }, { label: 'B', text: 'beta' },
+                { label: 'C', text: 'gamma' }, { label: 'D', text: 'delta' }
+            ],
+            figures: [], source_pages: [1], status: 'complete', warnings: []
         }
-    };
-};
+    }], 'batch-1')[0],
+    { batchId: 'batch-1', now: 1, identityContract: Identity }
+);
 
 const normalizerHelpers = {
     hasUnescapedLatexCommandInJsonString: () => false,
@@ -209,33 +160,14 @@ function createHarness(overrides = {}) {
                 signal
             );
         },
-        runPdfImport: async (context, signal) => {
+        runPdfImport: async () => {
             calls.push('pdf');
-            return PdfCoordinator.runPdfImport(
-                {
-                    batchId: context.batchId,
-                    batch: context.batch,
-                    sources: context.sources
-                },
-                {
-                    processSources: async () => ({
-                        drafts: clone(overrides.sourceDrafts || [pdfDraft()]),
-                        projectionContext: clone(
-                            overrides.projectionContext || pdfProjectionContext()
-                        ),
-                        draftImages: [], unmatched: [], warnings: ['safe-prefix'], errors: []
-                    }),
-                    createSafePartial: draft => ({
-                        draft, isSafePartial: true, isComplete: false,
-                        requiresManualReview: true
-                    })
-                },
-                signal
-            );
-        },
-        projectPdfCandidates: inputs => {
-            calls.push('pdf-project');
-            return Projection.projectPdfCandidates(inputs);
+            return clone(overrides.pdfResult || {
+                pdfProtocol: PdfContract.PROTOCOL,
+                drafts: overrides.sourceDrafts || [pdfDraft()],
+                draftImages: [], unmatched: [], warnings: ['fixture-warning'],
+                windowErrors: [], evidence: []
+            });
         },
         normalizeCandidates: drafts => {
             calls.push('normalize');
@@ -297,19 +229,45 @@ test('DOCX complete follows the deterministic review-only state path', async () 
     assert.equal(JSON.stringify(result).includes('FORMAL_ADMISSION'), false);
 });
 
-test('PDF safe partial uses the recognition path and preserves rejected ownership', async () => {
+test('PDF V1 preserves missing support and bypasses legacy content processing', async () => {
     const harness = createHarness({ files: pdfFiles() });
     const result = await Bridge.createProductionImportBridge(harness.ports)
         .run(productionInput());
 
     assert.equal(result.route, 'pdf');
     assert.equal(result.state.state, 'WAITING_CONFIRMATION');
-    assert.equal(result.drafts[0].supportLevel, 'prefix');
-    assert.equal(result.drafts[0].fieldProvenance.answer.status, 'rejected');
-    assert.equal(result.drafts[0].fieldProvenance.solution.status, 'controlled-write');
-    assert.equal(harness.calls.includes('pdf-project'), true);
+    assert.equal(result.drafts[0].pdfV1.states.question, 'complete');
+    assert.equal(result.drafts[0].pdfV1.states.answer, 'missing');
+    assert.equal(result.drafts[0].fieldProvenance.answer.status, 'missing');
+    assert.equal(result.drafts[0].fieldProvenance.solution.status, 'missing');
+    assert.match(PdfContract.reviewProblem(result.drafts[0]), /答案缺失/);
+    assert.deepEqual(result.drafts, [{
+        ...pdfDraft(), order: 1, selected: true,
+        duplicateStatus: 'none', updatedAt: 100
+    }]);
+    for (const call of ['normalize', 'validate']) {
+        assert.equal(harness.calls.includes(call), false, call);
+    }
+    assert.deepEqual(harness.calls.filter(call => !call.startsWith('load-')), [
+        'classify', 'pdf', 'project', 'build', 'persist'
+    ]);
     assert.equal(harness.calls.includes('pdf'), true);
     assert.equal(harness.calls.includes('docx'), false);
+});
+
+test('legacy PDF result is rejected before persistence without a projection fallback', async () => {
+    const harness = createHarness({
+        files: pdfFiles(),
+        pdfResult: { drafts: [docxDraft()], safePartialCandidates: [] }
+    });
+    await assert.rejects(
+        Bridge.createProductionImportBridge(harness.ports).run(productionInput()),
+        error => error.code === 'PRODUCTION_IMPORT_RESULT_MALFORMED' &&
+            error.causeCode === 'pdf-v1-protocol-required'
+    );
+    assert.equal(harness.persisted.length, 0);
+    assert.equal(harness.calls.includes('normalize'), false);
+    assert.equal(Bridge.REQUIRED_PORTS.includes('projectPdfCandidates'), false);
 });
 
 test('mixed DOCX/PDF input fails before either source coordinator', async () => {
@@ -493,7 +451,7 @@ test('bridge is browser-loaded as the production-wired layer-3 owner before the 
         'source-role-classifier',
         'production-import-route-policy',
         'docx-import-coordinator',
-        'pdf-import-coordinator',
+        'pdf-multimodal-contract',
         'candidate-normalizer',
         'import-validation-service',
         'review-draft-builder',

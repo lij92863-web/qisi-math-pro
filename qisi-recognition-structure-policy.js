@@ -307,9 +307,20 @@
                     '';
 
                 const answer = normalizeAnswerForLatex(rawAnswer);
-                const repaired = root.Qisi.SupportRepair.repairChoiceOptions(rawStem, rawOptions, item.type || item.题型 || fallbackType, choiceRepairDeps);
-                const type = normalizeQuestionType(
-                    item.type || item.题型 || fallbackType,
+                // A strict JSON producer already owns field boundaries. Re-parsing ABC in
+                // a geometric formula as A/B/C options destroys that evidence.
+                const repaired = allowTextResplit
+                    ? root.Qisi.SupportRepair.repairChoiceOptions(rawStem, rawOptions, item.type || item.题型 || fallbackType, choiceRepairDeps)
+                    : { stem: root.Qisi.Utils.cleanDisplayTextForBatchSave(rawStem),
+                        options: rawOptions.map(value => {
+                            const text = root.Qisi.Utils.cleanDisplayTextForBatchSave(value);
+                            return /\\[A-Za-z]+/.test(text) && !/[一-鿿$]/.test(text)
+                                ? `$${text}$` : text;
+                        }) };
+                const rawType = item.type || item.题型 || fallbackType;
+                const type = !allowTextResplit && /^(单选题|多选题|填空题|解答题|证明题)$/.test(rawType)
+                    ? rawType : normalizeQuestionType(
+                    rawType,
                     repaired.stem,
                     repaired.options,
                     answer,
@@ -366,7 +377,12 @@
                         imageIds: []
                     }
                 };
-            }).filter(item => item.stem || item.options.some(Boolean)) : [];
+            }) : [];
+            // Retain empty candidates with their raw/source evidence; review/producer validation
+            // decides admissibility instead of silently changing the recognized sequence.
+            for (const item of mapped) if (!item.stem && !item.options.some(Boolean)) {
+                item.warnings = [...(item.warnings || []), '识别项题干和选项均为空，已保留原始证据，请人工核对。'];
+            }
 
             const result = allowTextResplit
                 ? splitMergedRecognizedItems(mapped, sourceFile)

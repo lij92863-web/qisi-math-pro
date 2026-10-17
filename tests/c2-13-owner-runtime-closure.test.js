@@ -2,7 +2,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
 
 const ROOT = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(ROOT, file), 'utf8');
@@ -92,6 +91,8 @@ test('C2-13 detailed owners agree with compatibility manifest and runtime loadin
     const detailedByFile = new Map(detailed.map(item => [item.module, item]));
     const main = read('main.html');
     const appIndex = main.indexOf('./app.js');
+    const runtimes = new Map(json('architecture/runtime-modules.json').modules.map(item => [item.file,item.runtime]));
+    const server = read('qisi-local-server.js');
 
     for (const owner of detailed) {
         if (owner.status === 'removed') continue;
@@ -100,7 +101,10 @@ test('C2-13 detailed owners agree with compatibility manifest and runtime loadin
             assert.ok(compatibilityByFile.has(owner.module), `compatibility:${owner.module}`);
         }
         const scriptIndex = main.indexOf(`./${owner.module}`);
-        if (owner.status === 'production' || owner.status === 'shadow') {
+        if (runtimes.get(owner.module) === 'node' && owner.status === 'production') {
+            assert.equal(scriptIndex,-1,`node module in browser:${owner.module}`);
+            assert.ok(server.includes("require('./" + owner.module.replace(/\.js$/, '') + "')"),`server entry:${owner.module}`);
+        } else if (owner.status === 'production' || owner.status === 'shadow') {
             const isShellEntry = owner.ownerId === 'ui-shell';
             assert.ok(
                 scriptIndex >= 0 && (isShellEntry
@@ -116,7 +120,8 @@ test('C2-13 detailed owners agree with compatibility manifest and runtime loadin
     for (const item of compatibility) {
         if (item.status === 'production-wired') {
             assert.equal(detailedByFile.get(item.file)?.status, 'production', item.file);
-            assert.match(main, new RegExp(`(?:\\./)?${item.file.replace('.', '\\.')}(?:[?"'])`));
+            if (runtimes.get(item.file) === 'node') assert.ok(server.includes("require('./" + item.file.replace(/\.js$/, '') + "')"),item.file);
+            else assert.match(main, new RegExp(`(?:\\./)?${item.file.replace('.', '\\.')}(?:[?"'])`));
         }
         if (item.status === 'deprecated') {
             assert.equal(detailedByFile.get(item.file)?.status, 'deprecated', item.file);
@@ -126,13 +131,11 @@ test('C2-13 detailed owners agree with compatibility manifest and runtime loadin
     assert.doesNotMatch(main, /<script[^>]+src=["'][^"']*tests\//);
 
     const ordered = [
-        'qisi-pdf-support-block-parser.js',
-        'qisi-pdf-support-controlled-write.js',
-        'qisi-pdf-candidate-projection.js',
         'qisi-import-validation-service.js',
         'qisi-review-draft-builder.js',
         'qisi-draft-persistence-service.js',
         'qisi-import-state-machine.js',
+        'qisi-pdf-multimodal-contract.js',
         'qisi-production-import-bridge.js',
         'qisi-normal-ui-import-controller.js',
         'app.js'
@@ -166,8 +169,8 @@ test('C2-13 production graph has no forbidden cross-layer implementation edge', 
         'qisi-docx-import-coordinator.js',
         'qisi-production-docx-source-port.js',
         'qisi-production-docx-vision-source-port.js',
-        'qisi-pdf-import-coordinator.js',
-        'qisi-production-pdf-sources-port.js'
+        'qisi-pdf-multimodal-producer.js',
+        'qisi-pdf-multimodal-contract.js'
     ]) {
         assert.doesNotMatch(
             read(file),
@@ -205,8 +208,8 @@ test('C2-13 critical runtime factories fail closed without required dependencies
     const FormalSubmit = require('../qisi-batch-formal-submit.js');
     const DraftPersistence = require('../qisi-draft-persistence-service.js');
     const DocxVision = require('../qisi-production-docx-vision-source-port.js');
-    const PdfSources = require('../qisi-production-pdf-sources-port.js');
-    const Projection = require('../qisi-pdf-candidate-projection.js');
+    const PdfProducer = require('../qisi-pdf-multimodal-producer.js');
+    const PdfContract = require('../qisi-pdf-multimodal-contract.js');
     const Repository = require('../qisi-storage-repository.js');
     const Classifier = require('../qisi-source-role-classifier.js');
 
@@ -241,15 +244,12 @@ test('C2-13 critical runtime factories fail closed without required dependencies
         error => error?.code === 'DRAFT_PERSISTENCE_REPOSITORY_REQUIRED'
     );
     assert.throws(
-        () => PdfSources.createProductionImportRunner({}),
-        error => error?.code === 'PDF_PRODUCTION_PORT_REQUIRED'
+        () => PdfProducer.createProducer({}),
+        error => error instanceof TypeError && error.message === 'PDF_V1_PORT_REQUIRED:renderPages'
     );
     assert.throws(
-        () => Projection.createPdfEngineProjectionContext({
-            sources: [{ id: 'q', roles: ['question'] }],
-            engineResult: { drafts: [{ questionNumber: '1', stem: 'x' }] }
-        }),
-        error => error?.code === 'pdf-projection-context-invalid'
+        () => PdfContract.parseResponse('{"questions":[]}', { pages: [1], roles: ['full'] }),
+        error => error?.code === 'PDF_V1_SCHEMA_INVALID'
     );
     assert.throws(
         () => Repository.createRepository(),
@@ -260,11 +260,4 @@ test('C2-13 critical runtime factories fail closed without required dependencies
         error => error?.code === 'SOURCE_ROLE_MISSING_SOURCE'
     );
 
-    const projectionSandbox = {};
-    vm.runInNewContext(read('qisi-pdf-candidate-projection.js'), projectionSandbox);
-    assert.throws(
-        () => projectionSandbox.Qisi.PdfCandidateProjection
-            .createProductionProjectionContextBuilder(),
-        error => error?.code === 'pdf-production-projection-dependency-missing'
-    );
 });

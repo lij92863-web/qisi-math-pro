@@ -14,8 +14,6 @@ test('database comparison aliases share one fingerprint owner and preserve norma
     context.window = context;
     vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../qisi-db.js'), 'utf8'), context);
     const methods = vm.runInContext('({ normalizeCompareText, questionCoreFingerprint, questionStemFingerprint, normalizeOptionsForCompare })', context);
-    assert.equal(methods.questionCoreFingerprint, policy.canonicalCoreFingerprint);
-    assert.equal(methods.questionStemFingerprint, policy.canonicalStemFingerprint);
     for (const question of [{ stem: '$\\left(x^2+1\\right)$， Ａ', options: ['（X）', 'Ｂ.'] },
         { stem: '普通题', options: null }, {}, { stem: '0', options: ['', '$\\frac{1}{2}$'] }]) {
         const expected = 'qisi-core-v2:' + JSON.stringify([normalizeBefore(question.stem),
@@ -24,4 +22,28 @@ test('database comparison aliases share one fingerprint owner and preserve norma
         assert.equal(methods.questionStemFingerprint(question), normalizeBefore(question.stem));
     }
     assert.equal(methods.normalizeOptionsForCompare(undefined), '');
+});
+
+test('database loaded before duplicate policy delegates comparison and index hooks to the real owner', () => {
+    let indexedPolicy;
+    class Dexie { version() { return { stores: () => ({ upgrade() {} }) }; } }
+    const context = vm.createContext({Dexie, Qisi: {QuestionIndexStorage: {
+        configure(_db, {policy}) {indexedPolicy = policy;}
+    }}});
+    context.window = context;
+    vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../qisi-db.js'), 'utf8'), context);
+    const methods = vm.runInContext('({ normalizeCompareText, questionCoreFingerprint, questionStemFingerprint })', context);
+    const question = {stem: 'late policy', options: ['A', 'B']};
+    assert.throws(() => methods.questionCoreFingerprint(question), /QuestionDuplicatePolicy|canonicalCoreFingerprint|undefined/);
+    const calls = [];
+    context.Qisi.QuestionDuplicatePolicy = Object.fromEntries(
+        ['normalizeText', 'canonicalCoreFingerprint', 'canonicalStemFingerprint'].map(name => [name,
+            (...args) => {calls.push(name); return policy[name](...args);}])
+    );
+    assert.equal(methods.normalizeCompareText(' A '), policy.normalizeText(' A '));
+    assert.equal(methods.questionCoreFingerprint(question), policy.canonicalCoreFingerprint(question));
+    assert.equal(methods.questionStemFingerprint(question), policy.canonicalStemFingerprint(question));
+    assert.equal(indexedPolicy.canonicalCoreFingerprint(question), policy.canonicalCoreFingerprint(question));
+    assert.equal(indexedPolicy.canonicalStemFingerprint(question), policy.canonicalStemFingerprint(question));
+    assert.deepEqual(calls, ['normalizeText', 'canonicalCoreFingerprint', 'canonicalStemFingerprint', 'canonicalCoreFingerprint', 'canonicalStemFingerprint']);
 });

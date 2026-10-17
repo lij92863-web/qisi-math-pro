@@ -1,0 +1,46 @@
+```latex
+\begin{center}
+《广东深圳高级中学（集团）2026届高三适应性考试数学试卷》参考答案
+\end{center}
+
+\begin{center}
+\begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|}
+\hline
+题号 & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & 10 & \\
+\hline
+答案 & D & A & B & A & C & D & C & D & AB & BCD & \\
+\hline
+题号 & 11 & & & & & & & & & & \\
+\hline
+答案 & BC & & & & & & & & & & \\
+\hline
+\end{tabular}
+\end{center}
+
+\begin{enumerate}
+    \item D
+    \begin{itemize}
+        \item【分析】根据复数代数形式的除法运算化简$z$，再计算其模即可。
+        \item【详解】因为$z(1+i)=2i$，所以$z=\frac{2i}{1+i}=\frac{2i(1-i)}{(1+i)(1-i)}=1+i$，所以$|z|=\sqrt{1^2+1^2}=\sqrt{2}$。
+        \item故选：D
+    \end{itemize}
+    \item A
+    \begin{itemize}
+        \item【分析】若函数$y=\tan(x+\varphi)$的图象关于$\left(\frac{\pi}{4},0\right)$对称，根据正切函数的对称性可得$\varphi=-\frac{\pi}{4}+\frac{k\pi}{2}(k\in\mathbb{Z})$，再根据充分、必要条件结合包含关系分析求解。
+        \item【详解】若函数$y=\tan(x+\varphi)$的图象关于$\left(\frac{\pi}{4},0\right)$对称，则$\frac{\pi}{4}+\varphi=\frac{k\pi}{2}(k\in\mathbb{Z})$，解得$\varphi=-\frac{\pi}{4}+\frac{k\pi}{2}(k\in\mathbb{Z})$，
+        \item因为$\left\{\varphi\left| \varphi=-\frac{\pi}{4}+k\pi,k\in\mathbb{Z}\right.\right\}$是$\left\{\varphi\left| \varphi=-\frac{\pi}{4}+\frac{k\pi}{2},k\in\mathbb{Z}\right.\right\}$的真子集，
+        \item所以“$\varphi=-\frac{\pi}{4}+k\pi(k\in\mathbb{Z})$”是“函数$y=\tan(x+\varphi)$的图象关于$\left(\frac{\pi}{4},0\right)$对称”的充分不必要条件。
+        \item故选：A。
+    \end{itemize}
+    \item B
+    \begin{itemize}
+        \item【分析】根据集合元素的互异性及并集的概念求解即可。
+        \item【详解】根据集合元素的互异性可知，$a\neq 1$，$a\neq-2$。因为$A\cup B$含有4个元素，所以$A\cap B$仅含有1个元素，若$a^2\in A$，则$a^2=1$或$a^2=a$，所以$a=0$或$a=\pm 1$。
+        \item若$-1\in A$，则$a=-1$。
+        \item结合集合元素的互异性可知$a=0$或$a=-1$。
+        \item当$a=0$时，$A=\{-2,1,0\}$，$B=\{-1,0\}$，$A\cup B=\{-2,-1,0,1\}$，符合题意。
+    \end{itemize}
+\end{enumerate}
+
+答案第1页，共13页
+```

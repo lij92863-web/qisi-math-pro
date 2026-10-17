@@ -17,10 +17,15 @@ test('browser startup loads all local modules before app without a project error
             modules: [
                 'Utils',
                 'SupportRepair',
-                'PdfSupportControlledWrite',
+                'PdfMultimodalContract',
                 'DocxPipeline',
                 'UiEvents',
                 'ReviewDraftState'
+            ].filter(name => Boolean(window.Qisi?.[name])),
+            retiredOwners: [
+                'ProductionPdfSourcesPort', 'PdfImportCoordinator',
+                'PdfCandidateProjection', 'PdfOcrSupportParser',
+                'PdfSupportBlockParser', 'PdfSupportControlledWrite', 'PdfQuestionBoundary'
             ].filter(name => Boolean(window.Qisi?.[name])),
             appLast: [...document.scripts]
                 .filter(script => script.src && script.src.includes(location.host))
@@ -30,6 +35,7 @@ test('browser startup loads all local modules before app without a project error
         assert.match(result.title, /奇思数学 Pro/);
         assert.equal(result.batchEntry, true);
         assert.equal(result.modules.length, 6);
+        assert.deepEqual(result.retiredOwners, []);
         assert.equal(result.appLast, true);
         assertNoRuntimeErrors(harness);
     } finally {

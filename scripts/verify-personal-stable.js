@@ -57,22 +57,19 @@ const suites = Object.freeze([
         args: ['--test', 'tests/pdf-route-b-hold.test.js']
     },
     {
-        name: 'controlled-write ownership',
+        name: 'current PDF contract and external raw-order ownership',
         command: node,
         args: [
             '--test',
-            'tests/pdf-support-controlled-write-answer-ownership.test.js'
+            'tests/pdf-multimodal-v1.test.js',
+            'tests/pdf-external-evaluation.test.js'
         ]
     },
     {
-        name: 'browser runner preflight',
+        name: 'normal UI PDF persistence without retired parsers',
         command: node,
-        args: ['scripts/pdf-master-browser-runner.js', 'preflight']
-    },
-    {
-        name: 'browser runner dry-run',
-        command: node,
-        args: ['scripts/pdf-master-browser-runner.js', 'dry-run']
+        args: ['--test', 'tests/e2e/pdf-projection-browser-shadow.test.js'],
+        timeoutMs: 5 * 60 * 1000
     },
     {
         name: 'no-real-ai',

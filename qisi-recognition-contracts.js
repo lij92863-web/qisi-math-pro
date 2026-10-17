@@ -194,7 +194,7 @@
             /(?:choice|select|单选|多选|选择)/i.test(String(value || ''));
 
         const isLabelAnswer = value =>
-            /^[A-D](?:[\s,，、]*[A-D])*$/i.test(String(value || '').trim());
+            /^[A-F](?:[\s,，、]*[A-F])*$/i.test(String(value || '').trim());
 
         const resultOf = (errors, warnings = []) => immutable({
             valid: errors.length === 0,

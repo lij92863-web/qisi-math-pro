@@ -39,6 +39,7 @@ Only these modes are valid:
 
 - `full`
 - `prefix`
+- `subset`: user-authorized D-1, identical strictly increasing expected subsets with shared gaps; keep missing questions withheld and require review.
 - `fail-closed`
 
 ## Sequence reliability checks
@@ -47,7 +48,7 @@ Before attaching support, validate:
 
 - normalized question numbers
 - expected question numbers
-- continuous prefix
+- continuous prefix, or a completely validated identical expected subset for D-1
 - strictly increasing order
 - duplicate markers
 - jump-back markers
@@ -57,6 +58,8 @@ Before attaching support, validate:
 - objective answer normalization
 
 ## Forbidden alignment strategies
+
+D-1 was explicitly authorized on 2026-10-01. Resume only when both entire sequences are identical, valid and strictly increasing, all numbers belong to explicit increasing expected numbers, and both omit the same question(s). One-sided gaps, duplicates, jump-backs, unknown or out-of-range numbers must never enable resumption; retain the original strict prefix/fail-closed handling.
 
 Never attach based on:
 

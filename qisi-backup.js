@@ -31,6 +31,23 @@
             'draftImages'
         ];
 
+        const PREFERENCE_KEYS = Object.freeze(['qisi_exam_cart', 'qisi_exam_question_meta', 'qisi_exam_config',
+            'qisi_exam_group_config', 'qisi_exam_template', 'qisi_teacher_name', 'qisi_template',
+            'qisi_template_overrides', 'qisi_draft_v2', 'qisi_export_mode', 'qisi_last_view']);
+        const snapshotPreferences = (storage = globalThis.localStorage) => !storage ? undefined :
+            Object.fromEntries(PREFERENCE_KEYS.map(key => [key, storage.getItem(key)]));
+        const restorePreferences = (preferences, storage = globalThis.localStorage) => {
+            if (preferences === undefined) return () => {};
+            if (!storage) throw new Error('Local preferences storage is unavailable');
+            const original = snapshotPreferences(storage);
+            const apply = values => { for (const [key, value] of Object.entries(values)) {
+                if (!PREFERENCE_KEYS.includes(key) || (value !== null && typeof value !== 'string')) throw new Error('Invalid backup preferences');
+                if (value === null) storage.removeItem(key); else storage.setItem(key, value);
+            } };
+            try { apply(preferences); } catch (cause) { apply(original); throw cause; }
+            return () => apply(original);
+        };
+
         const safeName = value =>
             String(value || 'item')
                 .replace(/[\\/:*?"<>|]/g, '_')
@@ -104,17 +121,21 @@
             });
         };
 
-        const inspectBackup = async blob => {
+        const inspectBackup = async (blob, generatedHere = false) => {
             if (!(blob instanceof Blob)) throw new Error('Backup verification target is not a Blob');
             if (!globalThis.JSZip) throw new Error('JSZip is not loaded; backup cannot be verified');
             const zip = await globalThis.Qisi.ArchiveSecurity.load(globalThis.JSZip,
-                await blob.arrayBuffer(), 'full-backup', { name: blob.name || '', type: blob.type || '' });
+                await blob.arrayBuffer(), 'full-backup', { name: blob.name || '', type: blob.type || '' },
+                generatedHere ? { maxEntries: Infinity, maxEntryUncompressedBytes: Infinity, maxTotalUncompressedBytes: Infinity, maxCompressionRatio: Infinity } : {});
             const errors = [], warnings = [], missingBlobFiles = [], tables = {};
             const manifest = await readZipJson(zip, 'manifest.json');
             if (manifest?.format !== 'qisi-full-backup' || manifest?.version !== 1 ||
                 !manifest.tables || typeof manifest.tables !== 'object' || Array.isArray(manifest.tables)) {
                 throw new Error('Unsupported full backup manifest');
             }
+            if (manifest.preferences !== undefined && (!manifest.preferences || typeof manifest.preferences !== 'object' ||
+                Array.isArray(manifest.preferences) || Object.entries(manifest.preferences).some(([key, value]) =>
+                    !PREFERENCE_KEYS.includes(key) || (value !== null && typeof value !== 'string')))) errors.push('Invalid backup preferences');
             for (const required of ['questions', 'images']) {
                 if (!Object.hasOwn(manifest.tables, required)) errors.push(`Required table missing: ${required}`);
             }
@@ -209,6 +230,7 @@
                 return { ...metadata, blob: new Blob([bytes], { type: blobType }) };
             }));
             return { backup: { schemaVersion: 'qisi.storage.v1', createdAt: result.manifest.exportedAt, tables },
+                preferences: result.manifest.preferences,
                 manifest: result.manifest, verification: result.verification,
                 absentTables: TABLE_NAMES.filter(name => !Object.hasOwn(tables, name)) };
         };
@@ -230,6 +252,7 @@
                 version: 1,
                 exportedAt: new Date().toISOString(),
                 databaseName: db.name || '',
+                preferences: snapshotPreferences(),
                 tables: {},
                 binaryEncoding: 'qisi.blob-fields.v1', binaryFields
             };
@@ -305,7 +328,7 @@
             });
 
             const blob = new Blob([bytes], { type: 'application/zip' });
-            const verification = await verifyFullDatabaseBackupBlob(blob);
+            const verification = (await inspectBackup(blob, true)).verification;
 
             console.log('[QISI_BACKUP][verification]', verification);
 
@@ -354,6 +377,7 @@
         };
 
         return {
+            PREFERENCE_KEYS, snapshotPreferences, restorePreferences,
             TABLE_NAMES: Object.freeze([...TABLE_NAMES]),
             snapshotDatabase,
             createFullDatabaseBackup,

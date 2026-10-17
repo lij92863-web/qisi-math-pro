@@ -31,7 +31,9 @@ test('one verified HTTPS POST preserves upstream status and exact payload', asyn
     const result = await postDashScope(input(), ports);
     assert.equal(ports.calls.length, 1);
     assert.equal(ports.calls[0].options.rejectUnauthorized, true);
-    assert.equal(ports.calls[0].options.agent, false);
+    assert.equal(ports.calls[0].options.agent.options.keepAlive, true);
+    assert.equal(ports.calls[0].options.agent.maxSockets, 4);
+    assert.equal(ports.calls[0].options.agent.maxFreeSockets, 2);
     assert.equal(ports.calls[0].body, input().body);
     assert.equal(result.status, 429); assert.equal(result.ok, false);
     assert.equal(result.buffer.toString(), '{"ok":true}');
@@ -62,4 +64,97 @@ test('pre-abort makes no request and active cancellation destroys exactly one tr
     const promise = postDashScope({ ...input(), signal: active.signal }, ports);
     active.abort(); await assert.rejects(promise, { name: 'AbortError' });
     assert.equal(ports.calls.length, 1); assert.equal(ports.calls[0].req.destroyed, true);
+});
+
+function phasedRequest({ failAt, reused = false, observer } = {}) {
+    const calls = [], socket = new EventEmitter();
+    socket.authorized = reused;
+    const request = (_url, options, callback) => {
+        const req = new EventEmitter(); req.reusedSocket = reused;
+        req.destroy = error => queueMicrotask(() => req.emit('error', error));
+        req.end = () => {
+            calls.push(options);
+            queueMicrotask(() => {
+                req.emit('socket', socket);
+                const fail = phase => {
+                    if (phase !== failAt) return false;
+                    req.emit('error', Object.assign(Error('private-body-and-credential'), { code: 'ECONNRESET' }));
+                    return true;
+                };
+                if (fail('socket_assigned')) return;
+                if (!reused) {
+                    socket.emit('lookup', null, '127.0.0.1', 4, 'private-host');
+                    if (fail('dns_lookup')) return;
+                    socket.emit('connect');
+                    if (fail('tcp_connected')) return;
+                    socket.authorized = true; socket.emit('secureConnect');
+                    if (fail('tls_connected')) return;
+                }
+                req.emit('finish');
+                if (fail('request_finished')) return;
+                const response = new EventEmitter();
+                response.statusCode = 200; response.headers = {};
+                callback(response); observer?.(req, response, socket);
+                if (failAt === 'response_started') { response.emit('aborted'); return; }
+                if (failAt === 'response_close') { response.emit('close'); return; }
+                response.emit('data', Buffer.from('synthetic'));
+                response.complete = failAt !== 'incomplete_end';
+                response.emit('end');
+            });
+        };
+        return req;
+    };
+    return { request, calls, socket };
+}
+
+test('failure diagnostics distinguish connection stages without declaring non-submission or retrying', async () => {
+    for (const phase of ['socket_assigned', 'dns_lookup', 'tcp_connected', 'tls_connected', 'request_finished', 'response_started']) {
+        const ports = phasedRequest({ failAt: phase });
+        await assert.rejects(postDashScope(input(), ports), error => {
+            assert.equal(error.code, 'ECONNRESET');
+            assert.equal(error.transportDiagnostic.phase, phase);
+            assert.equal(error.definitelyNotSubmitted, undefined);
+            assert.equal(error.transportDiagnostic.outcome, 'failed');
+            assert.doesNotMatch(JSON.stringify(error.transportDiagnostic), /private|Bearer|127\.0\.0\.1/);
+            return true;
+        });
+        assert.equal(ports.calls.length, 1);
+        for (const event of ['lookup', 'connect', 'secureConnect']) assert.equal(ports.socket.listenerCount(event), 0);
+    }
+});
+
+test('reuse records existing TLS state and a bounded snapshot even without new handshake events', async () => {
+    const ports = phasedRequest({ reused: true }), phases = [];
+    const result = await postDashScope({ ...input(), onPhase: event => phases.push(event) }, ports);
+    assert.equal(result.transportDiagnostic.reusedSocket, true);
+    assert.equal(result.transportDiagnostic.tlsAuthorized, true);
+    assert.equal(result.transportDiagnostic.responseComplete, true);
+    assert.equal(result.transportDiagnostic.outcome, 'complete');
+    assert.ok(phases.some(e => e.stage === 'socket_reused'));
+    assert.ok(!phases.some(e => e.stage === 'tls_connected'));
+    assert.ok(result.transportDiagnostic.events.length <= 12);
+    assert.ok(result.transportDiagnostic.elapsedMs >= 0);
+});
+
+test('observer failures never change request outcome; terminal events settle only once', async () => {
+    const ports = phasedRequest();
+    const result = await postDashScope({ ...input(), onPhase() { throw Error('observer'); } }, ports);
+    assert.equal(result.status, 200);
+    assert.equal(ports.calls.length, 1);
+});
+
+test('premature response close or incomplete end cannot be accepted as success', { timeout: 2000 }, async () => {
+    for (const failAt of ['response_close', 'incomplete_end']) {
+        const ports = phasedRequest({ failAt });
+        await assert.rejects(postDashScope(input(), ports), { code: 'ECONNRESET' });
+        assert.equal(ports.calls.length, 1);
+    }
+});
+
+test('separate requests use the same bounded production agent', async () => {
+    const first = mock(), second = mock();
+    await postDashScope(input(), first); await postDashScope(input(), second);
+    assert.equal(first.calls[0].options.agent, second.calls[0].options.agent);
+    assert.equal(first.calls[0].options.agent.maxTotalSockets, 4);
+    assert.equal(first.calls[0].options.agent.scheduling, 'lifo');
 });

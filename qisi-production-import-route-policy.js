@@ -62,6 +62,23 @@
         return identity;
     }
 
+    // Restore the original normal-UI producer; identity remains explicit internally.
+    function selectNormalUiProducerMode(classification) {
+        const sources = Array.isArray(classification?.sources)
+            ? classification.sources.filter(source => !source.isSupplementalImage)
+            : [];
+        const types = new Set(sources.map(source => source.fileType));
+        if (!sources.some(source => source.isQuestion) || types.size !== 1 ||
+            !['docx', 'pdf'].includes([...types][0])) {
+            fail('PRODUCTION_IMPORT_SOURCE_UNSUPPORTED', 'normal-ui-source-unsupported');
+        }
+        return types.has('docx') ? 'docx-deterministic' : 'pdf';
+    }
+
+    function canReuseNormalUiCommittedRequest(batch) {
+        return batch?.producerMode !== 'pdf';
+    }
+
     function resolveProductionImportRoute(input = {}) {
         const manifest = input.sourceManifest;
         const classification = input.classification;
@@ -155,7 +172,9 @@
     const api = Object.freeze({
         PRODUCER_IDENTITIES,
         ProductionImportRoutePolicyError,
-        resolveProductionImportRoute
+        resolveProductionImportRoute,
+        selectNormalUiProducerMode,
+        canReuseNormalUiCommittedRequest
     });
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (root) {

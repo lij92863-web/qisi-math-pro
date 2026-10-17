@@ -43,6 +43,7 @@ Allowed modes:
 
 - `full`
 - `prefix`
+- `subset` (user-authorized D-1: validated shared gaps only; review required)
 - `fail-closed`
 
 Required behavior:

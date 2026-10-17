@@ -80,7 +80,7 @@ const createHarness = ({
         formalSubmit,
         refreshBatchStats: async () => ({ counts: {} }),
         mergeImages: (left, right) => [...left, ...right],
-        dataUrlToBlob: async value => `blob:${value}`,
+        dataUrlToBlob: async value => new Blob([value], { type: 'image/png' }),
         clock: () => 100
     });
     return { service, state: () => clone(state), formalCalls, reads };
@@ -184,4 +184,11 @@ test('deleted draft is rejected before confirmation or formal submission', async
     }
     assert.equal(harness.formalCalls.length, 0);
     assert.deepEqual(harness.reads, { batch: 0, review: 2 });
+});
+
+
+test('N29 unresolved remote image fails before any formal write',async()=>{
+ const h=createHarness({initialDraft:draft({status:'reviewed',images:[{id:'missing',url:'https://example.invalid/image.png'}]})});
+ await assert.rejects(()=>h.service.submitDraft({batchId:'batch-1',draftId:'draft-1',expectedDraftVersion:1}),{code:'REVIEW_IMAGE_BYTES_REQUIRED'});
+ assert.equal(h.formalCalls.length,0);
 });

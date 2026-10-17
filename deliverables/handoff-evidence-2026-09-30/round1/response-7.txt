@@ -1,0 +1,20 @@
+{
+  "questions": [
+    {
+      "questionNumber": "19",
+      "type": "解答题",
+      "stem": "已知 $f(x)=x\\mathrm{e}^{x}+a\\mathrm{e}^{x}-1$.\n\n(1) 若 $a\\geq 0$，证明：$f(x)\\geq x+\\ln x$ 恒成立.\n\n(2) 令 $g_{n}(x)=f(x)-n$，且 $\\forall n\\in\\mathbb{N}^{*}$，$g_{n}(x)$ 有唯一的正零点 $x_{n}$.\n\n\\quad (i) 求 $a$ 的取值范围；\n\n\\quad (ii) 当 $a=1$ 时，证明：$2\\left(\\sqrt{n+2}-\\sqrt{2}\\right)<\\frac{1}{x_{1}}+\\frac{1}{x_{2}}+\\cdots+\\frac{1}{x_{n}}<2+n+2\\ln n$.",
+      "options": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": ""
+      },
+      "answer": "",
+      "solution": "",
+      "isFragment": false,
+      "question_bbox": [148, 150, 697, 312],
+      "images": []
+    }
+  ]
+}

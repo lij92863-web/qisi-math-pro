@@ -61,6 +61,12 @@
                 };
             }
             next.fieldProvenance = fieldProvenance;
+            if (['pdf-multimodal-v1','pdf-external-v2'].includes(next.producer?.routeId)) {
+                next.status = 'pending'; next.manualConfirmed = false; next.confirmedAt = null;
+                const states = (next.pdfExternal || next.pdfV1)?.states;
+                if (states) for (const field of explicitFields) states[['questionNumber', 'stem', 'options', 'type'].includes(field) ? 'question' : field] = 'manual';
+                if (explicitFields.includes('images')) next.imageReviewStatus = next.images?.length ? 'need_confirm' : 'none';
+            }
             next.userEdited = true;
             next.manualEdited = true;
             next.updatedAt = clock();

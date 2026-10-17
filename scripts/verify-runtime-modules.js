@@ -33,6 +33,17 @@ function verify(root = path.resolve(__dirname, '..')) {
         if (!catalog.runtimeInventory || path.resolve(path.dirname(catalogPath), catalog.runtimeInventory) !==
             path.join(root, 'architecture/runtime-modules.json')) result.errors.push(`inventory-reference-mismatch:${file}`);
     }
+    const orderedScripts = [...html.matchAll(/<script\b[^>]*src=["']\.\/([^"'?]+)(?:[?"'])/g)].map(match => match[1]);
+    for (const [dependency, consumer] of [
+        ['qisi-storage-repository.js', 'qisi-utils.js'],
+        ['vendor/dexie/dexie.min.js', 'qisi-db.js'], ['qisi-question-index-storage.js', 'qisi-db.js']
+    ]) if (orderedScripts.indexOf(dependency) < 0 || orderedScripts.indexOf(consumer) < 0 ||
+        orderedScripts.indexOf(dependency) >= orderedScripts.indexOf(consumer)) result.errors.push('load-order:' + dependency + ' -> ' + consumer);
+    // Deferred modules may precede Vue or their consumers, but every entry is still required exactly once.
+    for (const file of ['vendor/vue/vue.global.prod.js', 'qisi-config.js', 'qisi-components.js',
+        'qisi-question-duplicate-policy.js', 'app.js']) {
+        if (orderedScripts.filter(script => script === file).length !== 1) result.errors.push('required-script:' + file);
+    }
     result.valid = result.errors.length === 0;
     return result;
 }

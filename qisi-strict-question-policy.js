@@ -358,7 +358,7 @@
                         other.image_bbox.map(value => Math.round(value)).join(',') === key
                     ) === index;
                 });
-                current.confidence = Math.max(
+                current.confidence = Math.min(
                     Number(current.confidence || 0),
                     Number(item.confidence || 0)
                 );

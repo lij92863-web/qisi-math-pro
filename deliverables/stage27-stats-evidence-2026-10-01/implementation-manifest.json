@@ -1,0 +1,44 @@
+[
+  {
+    "name": "qisi-storage-repository.js",
+    "existed": true,
+    "beforeSha256": "f25c6ddc280be65f64be8d3f5ed43d452a05b42f7f5c35785531d6d35a7134b4",
+    "afterSha256": "6881df43103cdccfadb54944f133e0bca829e1b249da4c81ac8375f519b7588a"
+  },
+  {
+    "name": "qisi-draft-persistence-service.js",
+    "existed": true,
+    "beforeSha256": "c7fecf8fb945f21bea4a8d8027a194aecf93a940fd9826cbd60115c1746b6a81",
+    "afterSha256": "2f51e450052f72fb2b509dfbb1d23e0140fce0fc0a80c248088689d5ca25e036"
+  },
+  {
+    "name": "qisi-draft-maintenance-service.js",
+    "existed": true,
+    "beforeSha256": "7d56f02e72fc9e91b9d4c2e5ec5f61ddbb1aae3b5264435ea12ad657a4c2092e",
+    "afterSha256": "1e4b42f2f371797411dccd4f8926108ed086aa69b47b30acd5249d70ec1032f0"
+  },
+  {
+    "name": "app.js",
+    "existed": true,
+    "beforeSha256": "b157d0c638ed4bc2d0d0214f65cdeb17c55b605b2a28034905ff0800b3909f2c",
+    "afterSha256": "a6788c7d8995ef44bc3131143ec3b63d4fab8f9436cadab8948a26f48e153ae3"
+  },
+  {
+    "name": "main.html",
+    "existed": true,
+    "beforeSha256": "5e7b0f50c009c4c806a3ddb3c817f5255efe6269277b7663303412178ea3dcdc",
+    "afterSha256": "6625c64dbb8c1a38af4e9dd8abb768f8ccc13860bd477a9602a6cfdc5f27dd8d"
+  },
+  {
+    "name": "docs/architecture/APP_SHELL_RESPONSIBILITY_MATRIX_CORRECTIVE_R1.json",
+    "existed": true,
+    "beforeSha256": "515b17eba113422f549c45f8b458df11c0b98a47a77584cace3bcd9ec07c2749",
+    "afterSha256": "839dc6c9312db6136b5f004dd8568eda1558c0c941aed81c1459242457c5fba6"
+  },
+  {
+    "name": "tests/draft-maintenance-service.test.js",
+    "existed": true,
+    "beforeSha256": "4e3f6799bde0f461001a5f2fac19840b461d7f363f40581fe077f3e4f1909365",
+    "afterSha256": "f0c16b8925f1028a5fb46d994a245ce17b828ac76f3838be36f3872c87a6ef6b"
+  }
+]

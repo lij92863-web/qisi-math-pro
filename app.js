@@ -1,3 +1,17 @@
+(function (root, factory) {
+    const start = () => root.Qisi.Runtime.boot(() => factory(root), {
+        requiredModules: ['Backup', 'Config', 'Components']
+    });
+    root.Qisi = root.Qisi || {};
+    root.Qisi.App = { start };
+    if (typeof module !== 'undefined' && module.exports) module.exports = root.Qisi.App;
+    else if (root.document.readyState === 'loading') root.document.addEventListener('DOMContentLoaded', start, { once: true });
+    else start();
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
+    'use strict';
+    const { createApp, ref, reactive, watch, onMounted, nextTick, computed, toRaw } = root.Vue;
+    const { PRESET_TEMPLATES, DEFAULT_PRESET_KEY, DEFAULT_TEMPLATE, EXAM_LAYOUT_PRESETS, QUESTION_TYPE_LABELS, DEFAULT_GROUP_CONFIG, EXAM_TYPE_ORDER, CHINESE_SECTION_NUMBERS } = root.Qisi.Config;
+    const { Icon, LatexPreview, KnowledgeTree, QuestionCard, renderQuestionOptionsHtml, renderLatexPreviewHtml } = root.Qisi.Components;
 ﻿        const App = {
             components: { Icon, LatexPreview, KnowledgeTree, QuestionCard },
             setup() {
@@ -139,6 +153,7 @@
                 const imagePositionMenuId = ref('');
                 const activeDraftEditorBuffer = ref('');
                 const activeDraftEditorOriginal = ref('');
+                const activeDraftEditorOriginalFields = ref({});
                 const activeDraftEditorQuestionId = ref('');
                 const activeDraftEditorTextarea = ref(null);
                 const cropModalOpen = ref(false);
@@ -172,7 +187,6 @@
                 const batchCreateFiles = ref([]);
                 const batchCreateTypeHint = ref('mixed');
                 const batchCreateWarning = ref('');
-                const batchCreateProducerMode = ref('');
                 const batchExpectedQuestionCount = ref(0);
                 const unmatchedAnswers = ref([]);
                 const submitSummary = ref(null);
@@ -359,7 +373,6 @@
                     batchImportMode.value = 'create';
                     batchCreateTypeHint.value = type;
                     batchCreateWarning.value = '';
-                    batchCreateProducerMode.value = '';
                     activeBatchId.value = '';
                     activeDraftQuestionId.value = '';
                     if (!batchCreateFiles.value.length && type === 'text') {
@@ -615,23 +628,7 @@
                             : await draftPersistenceService
                                 .persistReviewDraftCommand(command);
                     } catch (error) {
-                        try {
-                            await loadBatchImportData();
-                            await nextTick();
-                            window.Qisi.ReviewDraftState
-                                .syncActiveDraftEditorFromQuestion({
-                                    activeDraftQuestion,
-                                    activeDraftEditorBuffer,
-                                    activeDraftEditorOriginal,
-                                    activeDraftEditorQuestionId,
-                                    buildDraftEditorSource
-                                });
-                        } catch (reloadError) {
-                            console.error(
-                                '[REVIEW_DRAFT][error-reload-failed]',
-                                reloadError
-                            );
-                        }
+                        // Keep unsaved editor input when storage fails; the persisted version remains unchanged.
                         showBatchToast(
                             `${failureMessage}：${
                                 error?.code || error?.message || 'storage-failure'
@@ -650,6 +647,10 @@
                     return true;
                 };
 
+                const pdfDraftContract = q => window.Qisi.PdfExternalContract.isExternal(q) ? window.Qisi.PdfExternalContract : window.Qisi.PdfMultimodalContract.isV1(q) ? window.Qisi.PdfMultimodalContract : null;
+                const pdfDraftMeta = q => q?.pdfExternal || q?.pdfV1 || null;
+                const activePdfReviewPanel = computed(() => window.Qisi.PdfExternalContract.reviewPanel(activeDraftQuestion.value));
+                const activePdfUnassigned = computed(() => batchImportFiles.value.flatMap(file => (file.pdfExternalEvidence?.unassigned || []).map(fragment => ({ ...fragment, sourceFileName: file.filename }))));
                 const activeDraftImages = computed(() => {
                     const q = activeDraftQuestion.value;
                     const qid = q?.id;
@@ -660,7 +661,7 @@
                     const inline = (q.images || [])
                         .filter(isValidQuestionPreviewImage)
                         .filter(isRealQuestionFigureImageRow);
-                    return mergeImageListsById(inline, bound);
+                    return mergeImageListsById(inline, Boolean(pdfDraftContract(q)) ? bound.filter(i => q.images.some(image => image.id === i.id)) : bound);
                 });
 
                 const activeDraftRealQuestionImages = computed(() => {
@@ -686,7 +687,7 @@
                             );
                         });
 
-                    return mergeImageListsById(inline, bound);
+                    return mergeImageListsById(inline, Boolean(pdfDraftContract(q)) ? bound.filter(i => q.images.some(image => image.id === i.id)) : bound);
                 });
 
                 const activeDraftSourcePageImages = computed(() => {
@@ -694,6 +695,9 @@
                     const qid = q?.id;
                     if (!q || !qid) return [];
 
+                    if (Boolean(pdfDraftContract(q))) return pdfDraftMeta(q).sourcePageImages.map((img, i) => ({
+                        ...img, id: `${qid}_source_${i}`, batchId: q.batchId, questionId: qid, sourcePage: img.pageNo, source: 'source-page', status: 'need_confirm'
+                    }));
                     if (q.sourcePageImage) {
                         return [{
                             id: `${qid}_source_page`,
@@ -772,12 +776,26 @@
                         showBatchToast(`复制失败：${error?.message || String(error)}`);
                     }
                 };
+                const activeDraftSourceLabel = computed({
+                    get: () => activeDraftQuestion.value?.meta?.source ||
+                        (typeof activeDraftQuestion.value?.source === 'string' ? activeDraftQuestion.value.source : ''),
+                    set: value => { const q = activeDraftQuestion.value; if (q) q.meta = { ...(q.meta || {}), source: value }; }
+                });
                 const activeDraftEditorDirty = computed(() =>
-                    activeDraftEditorBuffer.value !== activeDraftEditorOriginal.value
+                    Boolean(activeDraftQuestion.value) && (activeDraftEditorBuffer.value !== activeDraftEditorOriginal.value ||
+                    window.Qisi.ReviewDraftState.draftEditorFieldSignature(activeDraftQuestion.value) !==
+                        JSON.stringify(activeDraftEditorOriginalFields.value))
                 );
+                const protectUnsavedDraft = event => {
+                    if (!activeDraftEditorDirty.value) return;
+                    event.preventDefault(); event.returnValue = '';
+                };
+                window.addEventListener('beforeunload', protectUnsavedDraft);
+                Vue.onUnmounted(() => window.removeEventListener('beforeunload', protectUnsavedDraft));
 
                 const buildDraftEditorSource = (q) => {
                     if (!q) return '';
+                    if (Boolean(pdfDraftContract(q))) return q.editorSource || pdfDraftContract(q).editorSource(q);
 
                     if (typeof q.editorSource === 'string' && q.editorSource.length > 0) {
                         return window.Qisi.ReviewDraftState.normalizeDraftEditorNewlines(q.editorSource);
@@ -792,68 +810,11 @@
                     );
                 };
 
-                const normalizeEditorChoiceLabel = (value) =>
-                    String(value || '')
-                        .replace(/[Ａ-Ｄａ-ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
-                        .toUpperCase();
-
-                const splitChoiceSourceForEditor = (source) => {
-                    const text = window.Qisi.ReviewDraftState.normalizeDraftEditorNewlines(source);
-                    if (!text.trim()) return null;
-
-                    const labelRegex = /(^|\n)[ \t　]*([A-DＡ-Ｄa-dａ-ｄ])\s*[.．。、:：)）]/g;
-                    const hits = [];
-                    let match;
-
-                    while ((match = labelRegex.exec(text)) !== null) {
-                        hits.push({
-                            label: normalizeEditorChoiceLabel(match[2]),
-                            start: match.index + String(match[1] || '').length,
-                            contentStart: labelRegex.lastIndex
-                        });
-                    }
-
-                    let bestSequence = null;
-
-                    for (let startIndex = 0; startIndex < hits.length; startIndex += 1) {
-                        if (hits[startIndex].label !== 'A') continue;
-
-                        const sequence = [hits[startIndex]];
-                        let expectedCode = 'B'.charCodeAt(0);
-
-                        for (let index = startIndex + 1; index < hits.length; index += 1) {
-                            const expectedLabel = String.fromCharCode(expectedCode);
-
-                            if (hits[index].label === expectedLabel) {
-                                sequence.push(hits[index]);
-                                expectedCode += 1;
-                                if (expectedCode > 'D'.charCodeAt(0)) break;
-                            }
-                        }
-
-                        if (sequence.length >= 2 && (!bestSequence || sequence.length > bestSequence.length)) {
-                            bestSequence = sequence;
-                        }
-                    }
-
-                    if (!bestSequence) return null;
-
-                    const options = ['', '', '', ''];
-
-                    bestSequence.forEach((hit, index) => {
-                        const next = bestSequence[index + 1];
-                        const end = next ? next.start : text.length;
-                        const optionIndex = hit.label.charCodeAt(0) - 65;
-                        options[optionIndex] = text.slice(hit.contentStart, end).trim();
-                    });
-
-                    const stem = text.slice(0, bestSequence[0].start).trimEnd();
-                    if (!stem.trim()) return null;
-
-                    return { stem, options };
-                };
+                const splitChoiceSourceForEditor = source =>
+                    window.Qisi.ReviewDraftState.splitChoiceSourceForEditor(source);
 
                 const buildDraftEditorProjection = (source, question) => {
+                    if (Boolean(pdfDraftContract(question))) return pdfDraftContract(question).projectEditorSource(source, question);
                     const text = window.Qisi.ReviewDraftState.normalizeDraftEditorNewlines(source);
                     const type = String(question?.type || '解答题').trim();
                     const isChoice = type === '单选题' || type === '多选题';
@@ -872,7 +833,7 @@
                     if (split) {
                         return {
                             stem: split.stem,
-                            options: [0, 1, 2, 3].map(index => String(split.options?.[index] || '')),
+                            options: split.options.map(option => String(option || '')),
                             type,
                             parsedOptions: true
                         };
@@ -920,6 +881,7 @@
 
                 const discardActiveDraftEditorChanges = () => {
                     activeDraftEditorBuffer.value = activeDraftEditorOriginal.value;
+                    if (activeDraftQuestion.value) window.Qisi.ReviewDraftState.restoreDraftEditorFields(activeDraftQuestion.value, activeDraftEditorOriginalFields.value);
                     showBatchToast('已放弃未保存修改。');
                 };
 
@@ -930,6 +892,7 @@
                             activeDraftQuestion,
                             activeDraftEditorBuffer,
                             activeDraftEditorOriginal,
+                        activeDraftEditorOriginalFields,
                             activeDraftEditorQuestionId,
                             buildDraftEditorSource
                         });
@@ -1011,8 +974,13 @@
                         batchCreateWarning.value = '请至少上传一个题目文件，系统需要先识别题目内容。';
                         return;
                     }
-                    if (!batchCreateProducerMode.value) {
-                        batchCreateWarning.value = '请选择本任务的明确识别方式。';
+                    let producerMode;
+                    try {
+                        producerMode = window.Qisi.ProductionImportRoutePolicy
+                            .selectNormalUiProducerMode(window.Qisi.SourceRoleClassifier
+                                .classifySourceRoles(toRaw(batchCreateFiles.value)));
+                    } catch (error) {
+                        batchCreateWarning.value = '文件组合暂不支持识别，请将 DOCX 与 PDF 分别创建任务。';
                         return;
                     }
                     const invalidPdf = batchCreateFiles.value.find(file => file.fileType === 'pdf' && !window.Qisi.Utils.validatePageRange(file.pageRange));
@@ -1031,7 +999,7 @@
                         id: batchId,
                         title,
                         sourceType: fileTypes.size === 1 ? [...fileTypes][0] : 'mixed',
-                        producerMode: batchCreateProducerMode.value,
+                        producerMode,
                         sourceVersion: 1,
                         sourceFileName: batchCreateFiles.value.map(file => file.filename).join(' + '),
                         status: 'pending',
@@ -1832,28 +1800,6 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                             now: () => performance.now()
                         });
 
-                const productionImportEngineHelpers = () => ({
-                    makeBatchId,
-                    getBatchFileRoles,
-                    batchHasQuestionRole,
-                    batchHasAnswerRole,
-                    batchHasSolutionRole,
-                    renderPdfFilePages,
-                    extractPdfTextWithPdfJs,
-                    extractPdfLayoutWithPdfJs,
-                    convertDocxRecordToPdfRecord: docxToPdfConverter,
-                    extractTextFromDraftFile,
-                    recognizePageMarkdownWithQwen,
-                    locateQuestionFiguresWithQwen,
-                    cropDataUrlByBbox,
-                    cleanRecognizedText,
-                    cleanDisplayTextForBatchSave,
-                    cleanDisplayOptionsForBatchSave,
-                    normalizeQuestionType,
-                    normalizeQuestionKey,
-                    isFatalQwenServiceError
-                });
-
                 const runProductionDocxDeterministicImport =
                     window.Qisi.ProductionDocxSourcePort
                         .createProductionImportRunner({
@@ -1897,46 +1843,21 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                                     signal: input.signal
                                 })
                         });
-                const runProductionPdfImport =
-                    window.Qisi.ProductionPdfSourcesPort
-                        .createProductionImportRunner({
-                            coordinator: window.Qisi.PdfImportCoordinator,
-                            hasQuestionRole: batchHasQuestionRole,
-                            isFullRole: batchIsFullRole,
-                            hasAnswerRole: batchHasAnswerRole,
-                            hasSolutionRole: batchHasSolutionRole,
-                            getRoles: getBatchFileRoles,
-                            normalizeQuestionNumber: normalizeQuestionKey,
-                            getEngineHelpers: productionImportEngineHelpers,
-                            processQuestionSource: input =>
-                                strictVisualQuestionProducer.processQuestionFile({
-                                    file: input.source,
-                                    batch: input.batch,
-                                    expectedQuestionCount:
-                                        input.expectedQuestionCount,
-                                    onPageProgress: input.onPageProgress,
-                                    reportStage: input.reportStage,
-                                    signal: input.signal
-                                }),
-                            prepareSupportPages: input =>
-                                strictVisualQuestionProducer.preparePages(input.source),
-                            processSupportPages: input =>
-                                recognizeVisualSupportFromPreparedPages({
-                                    file: input.source,
-                                    pages: input.pages,
-                                    strict: input.strict, evidenceOnly: input.evidenceOnly,
-                                    expectedQuestionNumbers:
-                                        input.expectedQuestionNumbers,
-                                    requiredKinds: input.requiredKinds,
-                                    onPageProgress: input.onPageProgress,
-                                    signal: input.signal
-                                }),
-                            buildProjectionContext:
-                                window.Qisi.PdfCandidateProjection
-                                    .createProductionProjectionContextBuilder(),
-                            safePartialPipeline:
-                                window.Qisi.PdfSafePartialPipeline
-                        });
+                const pdfExternalExecutor = window.Qisi.PdfExternalProvider.createExecutor({
+                    recognize: qwenOcrRuntime.requestPdfWindow,
+                    getBindings: () => window.Qisi.Config.pdfExternal?.bindings
+                });
+                const runProductionPdfImport = window.Qisi.PdfExternalProducer.createProducer({
+                    renderPages: renderPdfFilePages,
+                    renderRegion: browserPdfRenderer.renderPdfRegion,
+                    execute: pdfExternalExecutor,
+                    renderMath: window.katex?.renderToString,
+                    getRoles: getBatchFileRoles,
+                    getConfig: () => window.Qisi.Config.pdfExternal,
+                    resolveAsset: (assetId, result) => window.Qisi.Config.pdfExternal?.bindings?.resolveAsset?.(assetId, result),
+                    getExistingDrafts: batchId => storageRepository.findBy('draftQuestions', 'batchId', batchId),
+                    persistSourceEvidence: (file, evidence) => storageRepository.put('draftImportFiles', { ...file, pdfExternalEvidence: evidence, updatedAt: Date.now() })
+                });
 
                 const productionImportBridge =
                     window.Qisi.ProductionImportBridge.createProductionImportBridge({
@@ -1955,8 +1876,6 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         runDocxImport: runProductionDocxDeterministicImport,
                         runDocxVisionImport: runProductionDocxVisionImport,
                         runPdfImport: runProductionPdfImport,
-                        projectPdfCandidates: context =>
-                            window.Qisi.PdfCandidateProjection.projectPdfCandidates(context),
                         normalizeCandidates: drafts =>
                             window.Qisi.CandidateNormalizer.normalizeCandidates(
                                 [{ questions: drafts }],
@@ -1990,11 +1909,11 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                                 images: command.images,
                                 files: command.sourceFiles.map(file => ({
                                     ...file,
-                                    parseStatus: 'success',
+                                    ...(command.pdfEvidence ? { [command.pdfEvidence.protocol === 'pdf-external-v2' ? 'pdfExternalEvidence' : 'pdfV1Evidence']: { ...command.pdfEvidence, tasks: command.pdfEvidence.tasks?.filter(e => e.sourceId === file.id), unassigned: command.pdfEvidence.unassigned?.filter(e => e.source_id === file.id) }, parseStatus: command.pdfEvidence.errors.some(e => e.sourceId === file.id) ? 'partial' : 'success' } : { parseStatus: 'success' }),
                                     errorMessage: '',
                                     updatedAt: command.batchPatch.updatedAt
                                 })),
-                                batchPatch: command.batchPatch,
+                                batchPatch: { ...command.batchPatch, importWarnings: command.warnings, unmatchedAnswers: command.unmatched },
                                 idempotencyKey: command.idempotencyKey,
                                 expectedVersion: command.expectedVersion,
                                 signal: command.signal
@@ -2024,11 +1943,13 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     window.Qisi.NormalUiImportController
                         .createNormalUiImportController({
                             bridge: productionImportBridge,
+                            canReuseCommittedRequest: window.Qisi.ProductionImportRoutePolicy
+                                .canReuseNormalUiCommittedRequest,
                             loadBatch: batchId =>
                                 storageRepository.get('draftImportBatches', batchId),
                             applyReviewModel: async result => {
-                                await loadBatchImportData();
                                 activeBatchId.value = result.batchId;
+                                await loadBatchImportData();
                                 batchImportMode.value = 'review';
                                 activeDraftQuestionId.value =
                                     result.readback.questions[0]?.id || '';
@@ -2036,8 +1957,8 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                             },
                             notifySuccess: ({ draftCount }) =>
                                 showBatchToast(`批量识别完成：生成 ${draftCount} 道草稿。`),
-                            notifyFailure: ({ code }) =>
-                                showBatchToast(`批量识别失败：${code}`)
+                            notifyFailure: ({ code, message }) =>
+                                showBatchToast(`批量识别失败：${message || code}`)
                         });
 
                 const runBatchRecognition = async (batchId) => {
@@ -2072,6 +1993,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         activeDraftQuestion,
                         activeDraftEditorBuffer,
                         activeDraftEditorOriginal,
+                        activeDraftEditorOriginalFields,
                         activeDraftEditorQuestionId,
                         buildDraftEditorSource
                     });
@@ -2083,6 +2005,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     if (activeDraftEditorDirty.value) {
                         const leave = confirm('当前题目的 LaTeX 有未保存修改。切换题目将放弃这些修改，是否继续？');
                         if (!leave) return;
+                        discardActiveDraftEditorChanges();
                     }
 
                     activeDraftQuestionId.value = id;
@@ -2092,6 +2015,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         activeDraftQuestion,
                         activeDraftEditorBuffer,
                         activeDraftEditorOriginal,
+                        activeDraftEditorOriginalFields,
                         activeDraftEditorQuestionId,
                         buildDraftEditorSource
                     });
@@ -2099,6 +2023,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
 
                 const cleanSingleDraftForSave = (q) => {
                     if (!q) return q;
+                    if (Boolean(pdfDraftContract(q))) { q.updatedAt = Date.now(); return q; }
 
                     window.Qisi.Utils.preserveRawEvidence(q);
 
@@ -2139,6 +2064,28 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     showBatchToast('已保存草稿。');
                 };
 
+                const choosePdfCandidate = async (field, index) => {
+                    const q = activeDraftQuestion.value;
+                    if (!q || q.status === 'submitted') return;
+                    if (activeDraftEditorDirty.value) { showBatchToast('请先保存或放弃未保存编辑，再采用候选。'); return; }
+                    const expectedDraftVersion = q.version;
+                    const next = pdfDraftContract(q).chooseCandidate(toRaw(q), field, index, reviewController);
+                    const persisted = await runReviewDraftPersistenceCommand({ batchId: q.batchId, draft: next, images: next.images, expectedDraftVersion });
+                    if (!persisted) return;
+                    Object.assign(q, persisted.draft);
+                    activeDraftEditorBuffer.value = buildDraftEditorSource(q);
+                    await loadBatchImportData();
+                    window.Qisi.ReviewDraftState.syncActiveDraftEditorFromQuestion({ activeDraftQuestion, activeDraftEditorBuffer, activeDraftEditorOriginal, activeDraftEditorOriginalFields, activeDraftEditorQuestionId, buildDraftEditorSource });
+                    showBatchToast('已采用人工选择；请核对并重新确认。');
+                };
+
+                const acknowledgePdfTaskIssues = async () => {
+                    const q = activeDraftQuestion.value;
+                    if (!q?.pdfExternal || q.status === 'submitted') return;
+                    const next = window.Qisi.PdfExternalContract.acknowledgeTaskIssues(toRaw(q), reviewController);
+                    const persisted = await runReviewDraftPersistenceCommand({ batchId: q.batchId, draft: next, expectedDraftVersion: q.version });
+                    if (persisted) { Object.assign(q, persisted.draft); await loadBatchImportData(); showBatchToast('已记录来源范围检查，请重新确认本题。'); }
+                };
                 const removeEditorOptionWarning = (q) => {
                     q.warnings = (q.warnings || []).filter(warning =>
                         !String(warning).includes('题目编辑源码暂未识别出选项')
@@ -2147,6 +2094,10 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
 
                 const commitDraftEditorBufferToQuestion = (q) => {
                     if (!q) return null;
+                    if (Boolean(pdfDraftContract(q))) {
+                        Object.assign(q, pdfDraftContract(q).applyEditorSource(toRaw(q), activeDraftEditorBuffer.value, reviewController));
+                        return buildDraftEditorProjection(activeDraftEditorBuffer.value, q);
+                    }
 
                     const migratedSource = migrateLegacyIncludegraphicsToQisiTokens(
                         activeDraftEditorBuffer.value,
@@ -2196,6 +2147,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     if (!q) return false;
                     const expectedDraftVersion = q.version;
 
+                    window.Qisi.ReviewDraftState.applyDraftEditorMetadata(q);
                     commitDraftEditorBufferToQuestion(q);
                     cleanSingleDraftForSave(q);
                     normalizeDraftQuestionBeforeSave(q);
@@ -2209,6 +2161,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     await refreshBatchStats(q.batchId);
 
                     activeDraftEditorOriginal.value = activeDraftEditorBuffer.value;
+                    activeDraftEditorOriginalFields.value = window.Qisi.ReviewDraftState.snapshotDraftEditorFields(q);
                     activeDraftEditorQuestionId.value = q.id || '';
 
                     if (!options.silent) {
@@ -2248,6 +2201,12 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     if (!image || !q) return;
                     const expectedDraftVersion = q.version;
                     image.status = 'deleted';
+                    if (Boolean(pdfDraftContract(q))) {
+                        const next = pdfDraftContract(q).removeImage(toRaw(q), imageId, reviewController);
+                        const result = await runReviewDraftPersistenceCommand({ batchId: q.batchId, draft: next, images: [toRaw(image)], expectedDraftVersion });
+                        if (result) { Object.assign(q, result.draft); activeDraftEditorBuffer.value = buildDraftEditorSource(q); await loadBatchImportData(); }
+                        return;
+                    }
                     Object.assign(q, reviewController.editFields(q, {
                         images: (q.images || []).filter(
                             img => img.id !== imageId
@@ -2268,6 +2227,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     if (q.id === activeDraftQuestionId.value) {
                         activeDraftEditorBuffer.value = cleanedEditorSource;
                         activeDraftEditorOriginal.value = cleanedEditorSource;
+                        activeDraftEditorOriginalFields.value = window.Qisi.ReviewDraftState.snapshotDraftEditorFields(q);
                     }
 
                     const remainingRealImages = activeDraftRealQuestionImages.value
@@ -2284,6 +2244,27 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     });
                     if (!persisted) return;
                     await loadBatchImportData();
+                };
+
+                const openPdfSource = async (source) => {
+                    const file = batchImportFiles.value.find(f => f.id === source.sourceFileId);
+                    if (!file || file.fileType !== 'pdf') return;
+                    const viewer = window.open('', '_blank');
+                    if (!viewer) { showBatchToast('请允许浏览器打开原 PDF。'); return; }
+                    try {
+                        const url = URL.createObjectURL(await dataUrlToBlob(file.uploadPath));
+                        viewer.opener = null;
+                        viewer.location.href = url + '#page=' + (source.sourcePage || 1);
+                        setTimeout(() => URL.revokeObjectURL(url), 60000);
+                    } catch (error) { viewer.close(); showBatchToast('原 PDF 打开失败：' + error.message); }
+                };
+                const savePdfManualCrop = async (q, source, bbox) => {
+                    const file = batchImportFiles.value.find(f => f.id === source.sourceFileId);
+                    const crop = await browserPdfRenderer.renderPdfRegion(file, { pageNo: source.sourcePage, bbox });
+                    const image = { id: makeBatchId('crop'), batchId: q.batchId, questionId: q.id, ...crop, bbox, source: 'manual-crop', sourceFileId: file.id, sourceFileName: file.filename, sourcePage: source.sourcePage, status: 'bound' };
+                    const next = pdfDraftContract(q).applyManualCrop(toRaw(q), image, cropState.belongsTo || 'stem', reviewController);
+                    const result = await runReviewDraftPersistenceCommand({ batchId: q.batchId, draft: next, images: [image], expectedDraftVersion: q.version });
+                    if (result) { Object.assign(q, result.draft); activeDraftEditorBuffer.value = buildDraftEditorSource(q); await loadBatchImportData(); closeCropModal(); }
                 };
 
                 const resetCropState = () => {
@@ -2310,6 +2291,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     }
 
                     cropState.sourceImage = img;
+                    cropState.belongsTo = activeDraftTab.value === 'stem' ? 'stem' : activeDraftTab.value;
                     resetCropState();
                     cropModalOpen.value = true;
 
@@ -2396,6 +2378,11 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         return;
                     }
 
+                    if (Boolean(pdfDraftContract(q))) {
+                        const width = imgEl.getBoundingClientRect().width, height = imgEl.getBoundingClientRect().height;
+                        await savePdfManualCrop(q, source, [x / width * 1000, y / height * 1000, (x + w) / width * 1000, (y + h) / height * 1000]);
+                        return;
+                    }
                     let rawImg;
                     try {
                         rawImg = await loadImageForCrop(source.url);
@@ -2608,6 +2595,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                                     .refreshBatchStats(command),
                             mergeImages: mergeImageListsById,
                             dataUrlToBlob,
+                            resolveImageRecords: ids => storageRepository.loadImageRecords(ids),
                             clock: Date.now
                         });
 
@@ -2629,6 +2617,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     error?.message || '正式入库失败。');
 
                 const markDraftReviewed = async () => {
+                    try {
                     const q = activeDraftQuestion.value;
                     if (!q) return;
 
@@ -2648,8 +2637,13 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         return;
                     }
                     activeDraftEditorOriginal.value = activeDraftEditorBuffer.value;
+                    activeDraftEditorOriginalFields.value = window.Qisi.ReviewDraftState.snapshotDraftEditorFields(q);
                     await loadBatchImportData();
                     showBatchToast('已标记为确认。');
+
+                    } catch (error) {
+                        showBatchToast(`操作未完成：${error?.code || error?.message || 'storage-failure'}`);
+                    }
                 };
 
                 const submitDraftQuestion = async (questionId = activeDraftQuestionId.value, silent = false) => {
@@ -2692,11 +2686,16 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                 };
 
                 const openBatchSubmitSummary = async () => {
+                    try {
                     if (!activeBatchId.value) return;
                     submitSummary.value = await reviewWorkflowService
                         .prepareReviewedBatch({
                             batchId: activeBatchId.value
                         });
+
+                    } catch (error) {
+                        showBatchToast(`操作未完成：${error?.code || error?.message || 'storage-failure'}`);
+                    }
                 };
 
                 const rerunActiveBatchRecognition = async () => {
@@ -2711,11 +2710,14 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                 };
 
                 const dedupeActiveBatchDraftsNow = async () => {
+                    try {
                     const batchId = activeBatchId.value;
                     if (!batchId) {
                         showBatchToast('当前没有打开批量任务。');
                         return;
                     }
+                    if (!confirm('去重会删除重复草稿及其人工修改，请先核对并保存需要保留的内容。确定继续？')) return;
+                    if (activeDraftEditorDirty.value && !await saveActiveDraftQuestion({ silent: true })) return;
                     const result = await draftMaintenanceService
                         .dedupeBatchDrafts({
                         batchId,
@@ -2726,6 +2728,10 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     showBatchToast(
                         `已清理重复题：${result.beforeCount} 条 → ${result.afterCount} 条。`
                     );
+
+                    } catch (error) {
+                        showBatchToast(`操作未完成：${error?.code || error?.message || 'storage-failure'}`);
+                    }
                 };
 
                 const showUnmatchedAnswerList = () => {
@@ -2738,6 +2744,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                 };
 
                 const cleanupActiveBatchDisplayPollution = async () => {
+                    try {
                     const batchId = activeBatchId.value;
                     if (!batchId) {
                         alert('当前没有打开批量任务。');
@@ -2749,6 +2756,10 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     showBatchToast(
                         `已清理 ${result.changedCount} 道题的显示字段污染。`
                     );
+
+                    } catch (error) {
+                        showBatchToast(`操作未完成：${error?.code || error?.message || 'storage-failure'}`);
+                    }
                 };
 
                 const showCropNotice = (sourceImage = null) => {
@@ -2757,6 +2768,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                 };
 
                 const confirmBatchSubmit = async () => {
+                    try {
                     if (!submitSummary.value) return;
                     const result = await reviewWorkflowService
                         .submitReviewedBatch({
@@ -2770,12 +2782,21 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     showBatchToast(
                         `已提交 ${result.okCount} 道题，失败 ${result.failedCount} 道。`
                     );
+
+                    } catch (error) {
+                        showBatchToast(`操作未完成：${error?.code || error?.message || 'storage-failure'}`);
+                    }
                 };
 
                 const deleteBatchImport = async (batchId) => {
+                    try {
                     if (!confirm('确定删除这个批量录题任务吗？已入库的正式题目不会受影响。')) return;
                     await draftMaintenanceService.deleteDraftBatch({ batchId });
                     await openBatchList();
+
+                    } catch (error) {
+                        showBatchToast(`操作未完成：${error?.code || error?.message || 'storage-failure'}`);
+                    }
                 };
 
                 const externalTeacherGroups = computed(() => {
@@ -2846,6 +2867,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     ? confirmItems.value
                     : confirmItems.value.filter(item => item.status === confirmStatusFilter.value));
 
+                const missingCartQuestionIds = computed(() => cart.value.filter(id => !questions.value.some(q => q?.id === id)));
                 const cartQuestionsOrdered = computed(() => cart.value
                     .map(id => questions.value.find(q => q && q.id === id))
                     .filter(Boolean));
@@ -3367,6 +3389,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                             allQuestions.map(toRaw),
                             { teacherName }
                         );
+                        if (plan.missingImageIds.length) throw new Error('题库缺少图片数据，请补回图片后导出：' + plan.missingImageIds.join('、'));
                         const zip = new JSZip();
                         zip.file(
                             'manifest.json',
@@ -3425,10 +3448,11 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                             const newImgId = `img_pending_${importOrder}_${oldId || Math.random().toString(36).slice(2, 8)}`;
                             const filePath = img.file || (oldId ? `images/${oldId}.png` : '');
                             const imgFile = filePath ? zip.file(filePath) : null;
+                            if (!imgFile) throw new Error('题库包缺少图片文件：' + filePath);
                             if (imgFile) {
                                 imagePayloads.push({ tempId: newImgId, oldId, filePath, blob: await imgFile.async('blob') });
                             }
-                            cleanImages.push({ tempId: newImgId, oldId, align: img.align || 'center' });
+                            cleanImages.push({ ...img, tempId: newImgId, oldId, align: img.align || 'center' });
                         }
                         preparedQuestions.push({ raw, cleanImages, importOrder });
                         importOrder += 1;
@@ -3516,6 +3540,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                                 const sourceQuestionId = raw.id || `source_${importOrder}`;
                                 const extId = `ext_${batchId}_${sourceQuestionId}_${importOrder}`;
                                 const cleanImages = prepared.cleanImages.map(img => ({
+                                    ...img,
                                     id: imageIdMap.get(img.tempId) || `ext_${batchId}_${img.oldId || importOrder}_${Math.random().toString(36).slice(2, 6)}`,
                                     align: img.align || 'center'
                                 }));
@@ -4535,7 +4560,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                                     message: error?.message || String(error)
                                 });
 
-                                return '<span class="latex-render-error">[公式语法错误]</span>';
+                                return '<span class="latex-render-error">[公式语法错误] ' + escapeHtml(segment.raw || expression) + '</span>';
                             }
                         })
                         .join('');
@@ -4677,7 +4702,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
 <link rel="stylesheet" href="${escapeHtml(new URL('./vendor/katex/katex.min.css', window.location.href).href)}"/>
 <style>
 body {
-    font-family: ${examConfig.fontFamily === '霞鹜文楷' ? '"LXGW WenKai", "KaiTi", serif' : '"Noto Serif SC", "Source Han Serif SC", "Microsoft YaHei", "SimSun", serif'};
+    font-family: ${examConfig.fontFamily === '霞鹜文楷' ? '"KaiTi", "STKaiti", serif' : '"SimSun", "Songti SC", serif'};
     padding:24px;
     color:#111;
     line-height:1.8;
@@ -4783,6 +4808,7 @@ Promise.all([imageReady, fontReady]).then(() => {
                 };
 
                 const printExam = async () => {
+                    if (missingCartQuestionIds.value.length) { alert('试卷车有题目已不存在，请核对后再打印。'); return; }
                     if(cart.value.length === 0) return alert("请先从题库中挑选试题放入试卷篮！");
                     if (printBusy.value) return;
                     printBusy.value = true;
@@ -4997,12 +5023,13 @@ Promise.all([imageReady, fontReady]).then(() => {
                     confirmItems, filteredConfirmItems, confirmStatusFilter, confirmStatusOptions, confirmStatusCount, batchPersonalKnowledge, batchSystemKnowledge, flatSystemKnowledge, flatPersonalKnowledge, flatKnowledge, applyBatchKnowledge, confirmAddExternalToPersonal,
                     importBankInput, openImportBankPicker, handleImportBankFileChange, pendingImportPreview, cancelImportPreview, confirmImportBankPreview, exportQuestionBankPackage,
                     undoLatestExternalMerge, deleteExternalBatch, recalculateExternalBatchStatus,
-                    batchImportMode, batchImportBatches, recentBatchImportBatches, batchImportFiles, batchDraftQuestions, filteredDraftQuestions, batchDraftImages, batchImportFilter, activeBatchId, activeBatch, activeDraftQuestionId, activeDraftQuestion, batchRecognitionSummary, activeDraftEditorBuffer, activeDraftEditorOriginal, activeDraftEditorDirty, activeDraftEditorPreview, activeDraftEditorTextarea, activeDraftImages, activeDraftRealQuestionImages, activeDraftSourcePageImages, activeDraftPreviewImages, unassignedDraftImages, activeDraftTab, batchUploadInput, isDraggingBatchFiles, batchToast, unassignedImageModal, imagePositionMenuId, cropModalOpen, cropImageRef, cropState, cropSelectionStyle, pendingPurposeFile, pendingPurposeRoles, batchCreateFiles, batchCreateTypeHint, batchCreateWarning, batchCreateProducerMode, batchExpectedQuestionCount, batchDefaultMeta, unmatchedAnswers, submitSummary,
-                    openBatchCreate, openBatchList, clearBatchDraftWorkspace, openBatchFilePicker, handleBatchFileChange, handleBatchDrop, handleBatchHomeDrop, togglePurposeRole, confirmBatchFilePurpose, cancelBatchFilePurpose, editBatchFilePurpose, removeBatchCreateFile, createDraftImportBatch, runBatchRecognition, cancelBatchRecognition, rerunActiveBatchRecognition, dedupeActiveBatchDraftsNow, openBatchReview, selectDraftQuestion, updateDraftQuestionField, saveActiveDraftQuestion, markDraftReviewed, submitDraftQuestion, openBatchSubmitSummary, confirmBatchSubmit, deleteBatchImport, validatePageRange, batchStatusText, draftQuestionStatusText, roleLabel, rolesLabel, fileTypeText, formatFileSize, draftQuestionProblems, confirmDraftImages, deleteDraftImage, toggleImagePositionMenu, copyDraftImagePlacementLatex, openSourcePageCrop, closeCropModal, resetCropState, startManualCrop, moveManualCrop, endManualCrop, saveManualCropToDraft, bindUnassignedImage, deleteUnassignedImage, showUnmatchedAnswerList, showActiveRawText, showCropNotice, cleanupActiveBatchDisplayPollution, markActiveDraftUserEdited, insertDraftEditorText, discardActiveDraftEditorChanges,
+                    batchImportMode, batchImportBatches, recentBatchImportBatches, batchImportFiles, batchDraftQuestions, filteredDraftQuestions, batchDraftImages, batchImportFilter, activeBatchId, activeBatch, activeDraftQuestionId, activeDraftQuestion, batchRecognitionSummary, activeDraftEditorBuffer, activeDraftEditorOriginal, activeDraftSourceLabel, activeDraftEditorDirty, activeDraftEditorPreview, activeDraftEditorTextarea, activeDraftImages, activeDraftRealQuestionImages, activeDraftSourcePageImages, activeDraftPreviewImages, unassignedDraftImages, activeDraftTab, batchUploadInput, isDraggingBatchFiles, batchToast, unassignedImageModal, imagePositionMenuId, cropModalOpen, cropImageRef, cropState, cropSelectionStyle, pendingPurposeFile, pendingPurposeRoles, batchCreateFiles, batchCreateTypeHint, batchCreateWarning, batchExpectedQuestionCount, batchDefaultMeta, unmatchedAnswers, submitSummary,
+                    openBatchCreate, openBatchList, clearBatchDraftWorkspace, openBatchFilePicker, handleBatchFileChange, handleBatchDrop, handleBatchHomeDrop, togglePurposeRole, confirmBatchFilePurpose, cancelBatchFilePurpose, editBatchFilePurpose, removeBatchCreateFile, createDraftImportBatch, runBatchRecognition, cancelBatchRecognition, rerunActiveBatchRecognition, dedupeActiveBatchDraftsNow, openBatchReview, selectDraftQuestion, updateDraftQuestionField, saveActiveDraftQuestion, markDraftReviewed, submitDraftQuestion, openBatchSubmitSummary, confirmBatchSubmit, deleteBatchImport, validatePageRange, batchStatusText, draftQuestionStatusText, roleLabel, rolesLabel, fileTypeText, formatFileSize, draftQuestionProblems, confirmDraftImages, deleteDraftImage, toggleImagePositionMenu, copyDraftImagePlacementLatex, openSourcePageCrop, openPdfSource, closeCropModal, resetCropState, startManualCrop, moveManualCrop, endManualCrop, saveManualCropToDraft, bindUnassignedImage, deleteUnassignedImage, showUnmatchedAnswerList, showActiveRawText, showCropNotice, cleanupActiveBatchDisplayPollution, markActiveDraftUserEdited, choosePdfCandidate, pdfDraftMeta, activePdfReviewPanel, activePdfUnassigned, acknowledgePdfTaskIssues, insertDraftEditorText, discardActiveDraftEditorChanges,
                     syncActiveDraftEditorFromQuestion: () => window.Qisi.ReviewDraftState.syncActiveDraftEditorFromQuestion({
                         activeDraftQuestion,
                         activeDraftEditorBuffer,
                         activeDraftEditorOriginal,
+                        activeDraftEditorOriginalFields,
                         activeDraftEditorQuestionId,
                         buildDraftEditorSource
                     }),
@@ -5010,7 +5037,7 @@ Promise.all([imageReady, fontReady]).then(() => {
                     getExternalStatus, externalStatusLabel, externalStatusClass, actionLabel,
                     cartQuestions: cartQuestionsOrdered,
                     cartGrouped: computed(() => { const sel = questions.value.filter(q => q && cart.value.includes(q.id)); return sel.reduce((acc, q) => { (acc[q.type] = acc[q.type] || []).push(q); return acc; }, {}); }),
-                    cartQuestionsOrdered, activeExamGroups, examQuestionMeta, examGroupConfig, selectedExamTemplate, examConfig, examPresets, selectedExamPreset, templateFeatureOptions, printBusy, moveCartQuestion, examDisplayIndex, startExamPointerDrag, dropExamQuestion, draggingExamQuestionId, dragOverExamQuestionId, resetExamOrder, groupSummaryText, syncExamGroups, openExamBuilder, finishExamBuild,
+                    missingCartQuestionIds, cartQuestionsOrdered, activeExamGroups, examQuestionMeta, examGroupConfig, selectedExamTemplate, examConfig, examPresets, selectedExamPreset, templateFeatureOptions, printBusy, moveCartQuestion, examDisplayIndex, startExamPointerDrag, dropExamQuestion, draggingExamQuestionId, dragOverExamQuestionId, resetExamOrder, groupSummaryText, syncExamGroups, openExamBuilder, finishExamBuild,
                     entryForm, entryTab, entryPreviewStem, entryPreviewOptions, isDraggingImg, isDraggingOcr, ocrDraftStore, ocrLoading, examTitle, exportMode, latexTemplate,
                     presets: PRESET_TEMPLATES, allTemplateCards, customTemplates, currentPresetKey, editMode, editTplName, 
                     knowledgeTree, personalKnowledgeTree, personalTreeRows, activeKnowledge, activeKnowledgeType, libraryKnowledgeMode, activeKnowledgeTree, activeKnowledgeCounts, knowledgeCounts, personalKnowledgeCounts, handleKnowledgeSelect, switchLibraryKnowledgeMode, isCartOpen, cartPanelAvailable, showEntryKnowledge, showEntryPersonalKnowledge, hoverL1, hoverPersonalL1,
@@ -5063,8 +5090,6 @@ Promise.all([imageReady, fontReady]).then(() => {
             template: '#app-tpl'
         };
 
-        Qisi.Runtime.boot(
-            () => {
                 const app = createApp(App);
                 app.config.errorHandler = (error, instance, info) => {
                     console.error('Vue 运行错误已捕获', { error, info, instance });
@@ -5105,11 +5130,7 @@ Promise.all([imageReady, fontReady]).then(() => {
                 });
 
                 return app;
-            },
-            {
-                requiredModules: [
-                    'Backup'
-                ]
-            }
-        );
 
+
+
+});

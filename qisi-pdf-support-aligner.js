@@ -25,22 +25,17 @@
                             ch.charCodeAt(0) - 0xFEE0
                         )
                     )
-                    .replace(/[０-９]/g, ch =>
-                        String.fromCharCode(
-                            ch.charCodeAt(0) - 0xFEE0
-                        )
-                    )
                     .trim();
 
             const match =
-                source.match(/\d{1,3}/);
+                source.match(/^(?:第\s*)?(\d+)(?:\s*题)?$/);
 
             if (!match) return '';
 
             const number =
-                Number(match[0]);
+                Number(match[1]);
 
-            return Number.isInteger(number) && number > 0
+            return Number.isSafeInteger(number) && number > 0
                 ? String(number)
                 : '';
         };
@@ -396,8 +391,25 @@
                 isSupportSequenceReliable(report)
                     ? answerValues
                     : findReliablePrefix(report, expectedValues);
-            const fusedQuestionNumbers =
-                isSupportSequenceReliable(report)
+            const expectedSet = new Set(expectedValues);
+            // D-1: only a fully validated identical subset can resume after a shared gap.
+            const canResume = expectedValues.length > 0 &&
+                expectedValues.length === expectedQuestionNumbers.length &&
+                expectedValues.every((value, index) => index === 0 || value > expectedValues[index - 1]) &&
+                !report.answerSequence.invalidRows.length &&
+                !report.solutionSequence.invalidRows.length &&
+                report.answerSequence.strictlyIncreasing &&
+                report.solutionSequence.strictlyIncreasing &&
+                sameOrderedValues(answerValues, solutionValues) &&
+                answerItems.every(item => item?.sourceTrace?.supportSequenceReliable !== false) &&
+                solutionItems.every(item => item?.sourceTrace?.supportSequenceReliable !== false) &&
+                answerValues.every(value => expectedSet.has(value)) &&
+                prefix.length < answerValues.length;
+            const safeValues = canResume ? answerValues : prefix;
+            const safeSet = new Set(safeValues);
+            const fusedQuestionNumbers = canResume
+                ? expectedValues.filter(value => !safeSet.has(value)).map(String)
+                : isSupportSequenceReliable(report)
                     ? []
                     : valuesAfterPrefix({
                         prefixLength:
@@ -409,7 +421,7 @@
             const mode =
                 isSupportSequenceReliable(report)
                     ? 'full'
-                    : (
+                    : canResume ? 'subset' : (
                         prefix.length
                             ? 'prefix'
                             : 'fail-closed'
@@ -455,7 +467,7 @@
                 prefixCutoffIndex:
                     prefix.length,
                 safeQuestionNumbers:
-                    prefix.map(String),
+                    safeValues.map(String),
                 fusedQuestionNumbers,
                 report
             };
@@ -491,14 +503,14 @@
                 };
             }
 
-            if (validation.mode === 'prefix') {
+            if (validation.mode === 'prefix' || validation.mode === 'subset') {
                 return {
                     reliable: false,
-                    mode: 'prefix',
+                    mode: validation.mode,
                     safeAnswerItems:
-                        (answerItems || []).slice(0, validation.prefixCutoffIndex),
+                        (answerItems || []).slice(0, validation.safeQuestionNumbers.length),
                     safeSolutionItems:
-                        (solutionItems || []).slice(0, validation.prefixCutoffIndex),
+                        (solutionItems || []).slice(0, validation.safeQuestionNumbers.length),
                     safeQuestionNumbers:
                         validation.safeQuestionNumbers,
                     fusedQuestionNumbers:
@@ -510,7 +522,7 @@
                             'missing_solution'
                         ],
                     warnings:
-                        ['pdf-support-prefix-only'],
+                        [validation.mode === 'subset' ? 'pdf-support-shared-gaps' : 'pdf-support-prefix-only'],
                     report
                 };
             }
