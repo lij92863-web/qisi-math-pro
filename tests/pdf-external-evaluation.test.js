@@ -67,8 +67,8 @@ for(const c of fixture.sequenceCases)test(c.name+' is checked across all windows
     const gate=E.evaluateSequences(observations,['1','2','3']);assert.equal(gate.mode,c.mode);assert.deepEqual(gate.safeQuestionNumbers,c.safe);
 });
 
-test('single declared answer stream uses strict prefix without manufacturing solutions',()=>{
-    const o=[{questions:[],answers:[{question_no:'1'},{question_no:'3'}],solutions:[]}];const gate=E.evaluateSequences(o,['1','2','3'],['answers']);assert.equal(gate.mode,'prefix');assert.deepEqual(gate.safeQuestionNumbers,['1']);assert.deepEqual(gate.sequences.solutions.values,[]);
+test('single declared answer stream joins by anchored number and never manufactures solutions',()=>{
+    const o=[{questions:[],answers:[{question_no:'1'},{question_no:'3'}],solutions:[]}];const gate=E.evaluateSequences(o,['1','2','3'],['answers']);assert.equal(gate.mode,'subset');assert.deepEqual(gate.safeQuestionNumbers,['1','3']);assert.equal(gate.anchors.answers.anchored,true);assert.deepEqual(gate.sequences.solutions.values,[]);
 });
 
 test('main question backtrack and malformed expected sequence are rejected',()=>{

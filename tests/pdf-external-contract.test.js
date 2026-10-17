@@ -9,9 +9,17 @@ const build=result=>C.buildDrafts([observation(result)],{batchId:'exam1',identit
 test('V2 drafts have independent explicit identity and keep full source proof',()=>{
  const built=build(clone(f.result)),q=built.drafts[0];assert.equal(q.producer.routeId,'pdf-external-v2');assert.equal(q.pdfV1,undefined);assert.equal(q.pdfExternal.protocol,'pdf-external-v2');assert.equal(q.manualConfirmed,false);assert.equal(I.validateCanonicalIdentity(q).valid,true);assert.equal(q.solution,f.result.solutions[0].text);assert.equal(q.fieldProvenance.solution.controlledWriteAccepted,true);
 });
-test('whole-source one-sided gaps reject later fields rather than exact-number bypass',()=>{
+// Identity is the printed number, anchored on the first item: a mid-document
+// gap is local information loss and must stay local (ai/ALIGNMENT_ANCHORED_KEY_JOIN_2026-10-17.md).
+test('a mid-document gap keeps later support fields instead of rejecting them wholesale',()=>{
  const r=clone(f.result),base=r.questions[0],a=r.answers[0],s=r.solutions[0];r.questions=['1','2','3'].map(n=>({...clone(base),question_no:n}));r.answers=['1','3'].map(n=>({...clone(a),question_no:n}));r.solutions=['1','2','3'].map(n=>({...clone(s),question_no:n}));
- const built=build(r);assert.equal(built.sequenceGate.mode,'prefix');assert.equal(built.drafts[2].fieldProvenance.answer.status,'rejected');assert.equal(built.drafts[2].fieldProvenance.solution.controlledWriteAccepted,false);
+ const built=build(r);assert.equal(built.sequenceGate.mode,'full');assert.equal(built.drafts[2].fieldProvenance.answer.controlledWriteAccepted,true);assert.equal(built.drafts[1].fieldProvenance.solution.controlledWriteAccepted,true);
+});
+// The anchor is what separates a shifted document from a gapped one; without it
+// the two are observationally identical, so it must keep failing closed.
+test('a globally shifted support document is rejected whole, never attached by exact number',()=>{
+ const r=clone(f.result),base=r.questions[0],a=r.answers[0],s=r.solutions[0];r.questions=['1','2','3'].map(n=>({...clone(base),question_no:n}));r.answers=['2','3'].map(n=>({...clone(a),question_no:n}));r.solutions=['2','3'].map(n=>({...clone(s),question_no:n}));
+ const built=build(r);assert.equal(built.sequenceGate.mode,'fail-closed');assert.deepEqual(built.sequenceGate.safeQuestionNumbers,[]);assert.equal(built.sequenceGate.anchors.answers.observedFirst,'2');assert.equal(built.drafts[1].fieldProvenance.answer.status,'rejected');
 });
 test('V2 task issues remain blocking until explicit source-scope review',()=>{
  const q=C.buildDrafts([observation(clone(f.result))],{batchId:'exam1',identityContract:I,taskProblems:['unassigned tail']}).drafts[0];
@@ -41,4 +49,14 @@ test('rerun retains teacher fields, selectable machine candidates, omitted edits
  const kept=C.retainReviewDrafts([fresh],[edited])[0];assert.equal(kept.solution,'Teacher proof');assert.equal(kept.manualConfirmed,false);assert.equal(kept.pdfExternal.candidates.solution.length,2);assert.equal(edited.pdfExternal.candidates.solution.length,1);
  const omitted=C.retainReviewDrafts([],[edited])[0];assert.equal(omitted.solution,'Teacher proof');assert.equal(omitted.manualConfirmed,false);assert.ok(omitted.pdfExternal.taskProblems.some(s=>s.includes('未返回')));
  const submitted={...edited,status:'submitted'};assert.deepEqual(C.retainReviewDrafts([fresh],[submitted])[0],submitted);
+});
+
+test('typed math outside delimiters is a blocking problem naming the field',()=>{
+ const draft={stem:'已知 x^2=1，求 x。',options:[],answer:'',solution:''};
+ const problems=C.mathProblems(draft,()=>{});
+ assert.equal(problems.length,1);assert.match(problems[0].message,/题干/);assert.match(problems[0].message,/x\^2/);
+});
+test('typeset math and ordinary prose are never reported as typed math',()=>{
+ const draft={stem:'第 2 题（1）选 A. 3 万元，且 $x^2=1$。',options:['A. 3 万元','B. $\\sqrt{2}$'],answer:'$\\frac{1}{2}$',solution:'由 $AB=3$ 得证。'};
+ assert.deepEqual(C.mathProblems(draft,()=>{}),[]);
 });

@@ -1,23 +1,245 @@
 {
   "metadata": {
-    "sources": [{"source_id":"s1","scope_id":"exam1","document_role":"full","allowed_streams":["questions","answers","solutions"],"total_pages":3,"input_pages":[1,2,3],"output_pages":[1,2],"context_only_pages":[3]}],
+    "sources": [
+      {
+        "source_id": "s1",
+        "scope_id": "exam1",
+        "document_role": "full",
+        "allowed_streams": [
+          "questions",
+          "answers",
+          "solutions"
+        ],
+        "total_pages": 3,
+        "input_pages": [
+          1,
+          2,
+          3
+        ],
+        "output_pages": [
+          1,
+          2
+        ],
+        "context_only_pages": [
+          3
+        ]
+      }
+    ],
     "assets": []
   },
   "result": {
-    "questions": [{"source_id":"s1","scope_id":"exam1","question_no":"1","number_text":"1.","number_page":1,"source_pages":[1,2],"status":"observed_complete","figures":[],"issues":[],"type":"free_response","stem":"已知 $x^2=1$。\n（1）求 $x$；\n（2）证明原文结论。","options":[]}],
-    "answers": [{"source_id":"s1","scope_id":"exam1","question_no":"1","number_text":"1.","number_page":2,"source_pages":[2],"status":"observed_complete","figures":[],"issues":[],"text":"（1）$x=\\pm1$；（2）见原证明。"}],
-    "solutions": [{"source_id":"s1","scope_id":"exam1","question_no":"1","number_text":"1.","number_page":2,"source_pages":[2],"status":"observed_complete","figures":[],"issues":[],"text":"解法一：原文第一步。\n原文末尾：故结论成立。\n解法二：完整保留。"}],
-    "unassigned": [{"source_id":"s1","scope_id":"exam1","source_pages":[1],"kind":"solution","text":"输入开头没有题号的上一题尾段，不能删除或挂到下一题。","figures":[],"reason":"缺少可见原题号"}],
-    "pages": [{"source_id":"s1","page":1,"state":"content","issues":[]},{"source_id":"s1","page":2,"state":"content","issues":[]},{"source_id":"s1","page":3,"state":"context_only","issues":[]}],
+    "questions": [
+      {
+        "source_id": "s1",
+        "scope_id": "exam1",
+        "question_no": "1",
+        "number_text": "1.",
+        "number_page": 1,
+        "source_pages": [
+          1,
+          2
+        ],
+        "status": "observed_complete",
+        "figures": [],
+        "issues": [],
+        "type": "free_response",
+        "stem": "已知 $x^2=1$。\n（1）求 $x$；\n（2）证明原文结论。",
+        "options": []
+      }
+    ],
+    "answers": [
+      {
+        "source_id": "s1",
+        "scope_id": "exam1",
+        "question_no": "1",
+        "number_text": "1.",
+        "number_page": 2,
+        "source_pages": [
+          2
+        ],
+        "status": "observed_complete",
+        "figures": [],
+        "issues": [],
+        "text": "（1）$x=\\pm1$；（2）见原证明。"
+      }
+    ],
+    "solutions": [
+      {
+        "source_id": "s1",
+        "scope_id": "exam1",
+        "question_no": "1",
+        "number_text": "1.",
+        "number_page": 2,
+        "source_pages": [
+          2
+        ],
+        "status": "observed_complete",
+        "figures": [],
+        "issues": [],
+        "text": "解法一：原文第一步。\n原文末尾：故结论成立。\n解法二：完整保留。"
+      }
+    ],
+    "unassigned": [
+      {
+        "source_id": "s1",
+        "scope_id": "exam1",
+        "source_pages": [
+          1
+        ],
+        "kind": "solution",
+        "text": "输入开头没有题号的上一题尾段，不能删除或挂到下一题。",
+        "figures": [],
+        "reason": "缺少可见原题号"
+      }
+    ],
+    "pages": [
+      {
+        "source_id": "s1",
+        "page": 1,
+        "state": "content",
+        "issues": []
+      },
+      {
+        "source_id": "s1",
+        "page": 2,
+        "state": "content",
+        "issues": []
+      },
+      {
+        "source_id": "s1",
+        "page": 3,
+        "state": "context_only",
+        "issues": []
+      }
+    ],
     "warnings": []
   },
   "sequenceCases": [
-    {"name":"complete","answers":["1","2","3"],"solutions":["1","2","3"],"mode":"full","safe":["1","2","3"]},
-    {"name":"shared gap","answers":["1","3"],"solutions":["1","3"],"mode":"subset","safe":["1","3"]},
-    {"name":"one sided gap","answers":["1","3"],"solutions":["1","2","3"],"mode":"prefix","safe":["1"]},
-    {"name":"cross window jump back","answers":["2","1","3"],"solutions":["2","1","3"],"mode":"fail-closed","safe":[]},
-    {"name":"identical repeated number","answers":["1","1","2"],"solutions":["1","1","2"],"mode":"fail-closed","safe":[]},
-    {"name":"unknown marker","answers":["1","不明","3"],"solutions":["1","不明","3"],"mode":"fail-closed","safe":[]},
-    {"name":"foreign number","answers":["1","2","4"],"solutions":["1","2","4"],"mode":"fail-closed","safe":[]}
+    {
+      "name": "complete",
+      "answers": [
+        "1",
+        "2",
+        "3"
+      ],
+      "solutions": [
+        "1",
+        "2",
+        "3"
+      ],
+      "mode": "full",
+      "safe": [
+        "1",
+        "2",
+        "3"
+      ]
+    },
+    {
+      "name": "shared gap",
+      "answers": [
+        "1",
+        "3"
+      ],
+      "solutions": [
+        "1",
+        "3"
+      ],
+      "mode": "subset",
+      "safe": [
+        "1",
+        "3"
+      ]
+    },
+    {
+      "name": "one sided gap keeps later items",
+      "answers": [
+        "1",
+        "3"
+      ],
+      "solutions": [
+        "1",
+        "2",
+        "3"
+      ],
+      "mode": "full",
+      "safe": [
+        "1",
+        "2",
+        "3"
+      ]
+    },
+    {
+      "name": "cross window jump back",
+      "answers": [
+        "2",
+        "1",
+        "3"
+      ],
+      "solutions": [
+        "2",
+        "1",
+        "3"
+      ],
+      "mode": "fail-closed",
+      "safe": []
+    },
+    {
+      "name": "identical repeated number",
+      "answers": [
+        "1",
+        "1",
+        "2"
+      ],
+      "solutions": [
+        "1",
+        "1",
+        "2"
+      ],
+      "mode": "fail-closed",
+      "safe": []
+    },
+    {
+      "name": "unknown marker",
+      "answers": [
+        "1",
+        "不明",
+        "3"
+      ],
+      "solutions": [
+        "1",
+        "不明",
+        "3"
+      ],
+      "mode": "fail-closed",
+      "safe": []
+    },
+    {
+      "name": "foreign number",
+      "answers": [
+        "1",
+        "2",
+        "4"
+      ],
+      "solutions": [
+        "1",
+        "2",
+        "4"
+      ],
+      "mode": "fail-closed",
+      "safe": []
+    },
+    {
+      "name": "head gap is indistinguishable from a shifted document",
+      "answers": [
+        "2",
+        "3"
+      ],
+      "solutions": [
+        "2",
+        "3"
+      ],
+      "mode": "fail-closed",
+      "safe": []
+    }
   ]
 }

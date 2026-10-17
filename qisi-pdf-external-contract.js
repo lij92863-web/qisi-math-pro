@@ -1,7 +1,6 @@
 (function(root,factory){ const api=factory(root); if(typeof module!=='undefined'&&module.exports)module.exports=api; root.Qisi=root.Qisi||{}; root.Qisi.PdfExternalContract=api; })(typeof globalThis!=='undefined'?globalThis:this,function(root){
 'use strict';
 const schema={"$schema":"https://json-schema.org/draft/2020-12/schema","title":"PDF external recognition wire v2.1","type":"object","additionalProperties":false,"required":["questions","answers","solutions","unassigned","pages","warnings"],"properties":{"questions":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["source_id","scope_id","question_no","number_text","number_page","source_pages","status","figures","issues","type","stem","options"],"properties":{"source_id":{"type":"string"},"scope_id":{"type":"string"},"question_no":{"type":"string","minLength":1},"number_text":{"type":"string","minLength":1},"number_page":{"type":"integer","minimum":1},"source_pages":{"type":"array","minItems":1,"uniqueItems":true,"items":{"type":"integer","minimum":1}},"status":{"enum":["observed_complete","open_start","open_end","open_both","uncertain"]},"figures":{"type":"array","items":{"$ref":"#/$defs/figure"}},"issues":{"type":"array","items":{"type":"string"}},"type":{"enum":["single_choice","multiple_choice","fill_blank","free_response","unknown"]},"stem":{"type":"string"},"options":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["label","text"],"properties":{"label":{"type":"string"},"text":{"type":"string"}}}}}}},"answers":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["source_id","scope_id","question_no","number_text","number_page","source_pages","status","figures","issues","text"],"properties":{"source_id":{"type":"string"},"scope_id":{"type":"string"},"question_no":{"type":"string","minLength":1},"number_text":{"type":"string","minLength":1},"number_page":{"type":"integer","minimum":1},"source_pages":{"type":"array","minItems":1,"uniqueItems":true,"items":{"type":"integer","minimum":1}},"status":{"enum":["observed_complete","open_start","open_end","open_both","uncertain"]},"figures":{"type":"array","items":{"$ref":"#/$defs/figure"}},"issues":{"type":"array","items":{"type":"string"}},"text":{"type":"string"}}}},"solutions":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["source_id","scope_id","question_no","number_text","number_page","source_pages","status","figures","issues","text"],"properties":{"source_id":{"type":"string"},"scope_id":{"type":"string"},"question_no":{"type":"string","minLength":1},"number_text":{"type":"string","minLength":1},"number_page":{"type":"integer","minimum":1},"source_pages":{"type":"array","minItems":1,"uniqueItems":true,"items":{"type":"integer","minimum":1}},"status":{"enum":["observed_complete","open_start","open_end","open_both","uncertain"]},"figures":{"type":"array","items":{"$ref":"#/$defs/figure"}},"issues":{"type":"array","items":{"type":"string"}},"text":{"type":"string"}}}},"unassigned":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["source_id","scope_id","source_pages","kind","text","figures","reason"],"properties":{"source_id":{"type":"string"},"scope_id":{"type":"string"},"source_pages":{"type":"array","minItems":1,"uniqueItems":true,"items":{"type":"integer","minimum":1}},"kind":{"enum":["question","answer","solution","unknown"]},"text":{"type":"string"},"figures":{"type":"array","items":{"$ref":"#/$defs/figure"}},"reason":{"type":"string"}}}},"pages":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["source_id","page","state","issues"],"properties":{"source_id":{"type":"string"},"page":{"type":"integer","minimum":1},"state":{"enum":["content","blank","unreadable","context_only"]},"issues":{"type":"array","items":{"type":"string"}}}}},"warnings":{"type":"array","items":{"type":"string"}}},"$defs":{"figure":{"type":"object","additionalProperties":false,"required":["id","page","field","option_label","asset_id","bbox"],"properties":{"id":{"type":"string"},"page":{"type":"integer","minimum":1},"field":{"enum":["stem","option","answer","solution","unassigned"]},"option_label":{"type":["string","null"]},"asset_id":{"type":["string","null"]},"bbox":{"anyOf":[{"type":"array","minItems":4,"maxItems":4,"items":{"type":"number","minimum":0,"maximum":1}},{"type":"null"}]}}}}};
-const aligner=root.Qisi?.PdfSupportAligner || (typeof module!=='undefined'&&module.exports ? require('./qisi-pdf-support-aligner.js') : null);
 const STREAMS = ['questions', 'answers', 'solutions'];
 const clone = value => JSON.parse(JSON.stringify(value));
 const WIRE_VERSION = 'pdf-external-v2.2';
@@ -205,6 +204,15 @@ function sequenceOf(items) {
     return { valid, values };
 }
 
+function keyJoin(values, expected) {
+    const expectedSet = new Set(expected);
+    const anchored = values.length > 0 && values[0] === expected[0];
+    // A printed number outside the expected set is positive evidence that this
+    // document is not the support of the expected exam; distrust the stream.
+    const foreign = values.filter(value => !expectedSet.has(value));
+    return { values, anchored, foreign, accepted: anchored && !foreign.length ? values.filter(value => expectedSet.has(value)) : [] };
+}
+
 function evaluateSequences(observations, expected, requiredStreams = ['answers', 'solutions']) {
     // Observations must already be supplied in trusted owner page order, never completion order.
     const sequences = Object.fromEntries(STREAMS.map(s => [s, sequenceOf(observations.flatMap(o => o[s]))]));
@@ -216,14 +224,19 @@ function evaluateSequences(observations, expected, requiredStreams = ['answers',
     if (sequences.questions.values.length && (!sequences.questions.valid || JSON.stringify(sequences.questions.values) !== JSON.stringify(expected))) errors.push('question-sequence');
     for (const s of requiredStreams) if (!sequences[s].valid || sequences[s].values.some(v => !expectedSet.has(v))) errors.push(s + '-sequence');
     if (errors.length) return { mode: 'fail-closed', safeQuestionNumbers: [], errors, sequences };
-    if (requiredStreams.length === 2) {
-        const gate = aligner.validatePdfSupportSequence({ answerItems: sequences.answers.values.map(question => ({ question })), solutionItems: sequences.solutions.values.map(question => ({ question })), expectedQuestionNumbers: expected });
-        return { mode: gate.mode, safeQuestionNumbers: gate.safeQuestionNumbers, errors: [], sequences };
-    }
-    // A genuinely single declared support stream has no invented second sequence.
-    const values = sequences[requiredStreams[0]].values, prefix = [];
-    for (let i = 0; i < values.length && values[i] === expected[i]; i += 1) prefix.push(values[i]);
-    return { mode: values.length === expected.length && prefix.length === expected.length ? 'full' : prefix.length ? 'prefix' : 'fail-closed', safeQuestionNumbers: prefix, errors: [], sequences };
+    // Identity is the printed question number, not the position in the sequence.
+    // A support document whose first item is not the first question cannot be
+    // distinguished from a globally shifted or mismatched document, so it is
+    // rejected as a whole (see ai/ALIGNMENT_ANCHORED_KEY_JOIN_2026-10-17.md).
+    const streams = requiredStreams.map(stream => ({ stream, ...keyJoin(sequences[stream].values, expected) }));
+    const covered = [...new Set(streams.flatMap(row => row.accepted))].sort((left, right) => Number(left) - Number(right));
+    const rejected = streams.filter(row => row.values.length && (!row.anchored || row.foreign.length)).map(row => row.stream);
+    const leadingRun = covered.every((value, index) => value === expected[index]);
+    const mode = !covered.length ? 'fail-closed'
+        : rejected.length ? 'gapped'
+        : covered.length === expected.length ? 'full'
+        : leadingRun ? 'prefix' : 'subset';
+    return { mode, safeQuestionNumbers: covered, errors: [], sequences, anchors: Object.fromEntries(streams.map(row => [row.stream, { expectedFirst: expected[0], observedFirst: row.values[0] ?? null, anchored: row.anchored }])) };
 }
 
 function assemblePrompt(template, replacements) {
@@ -497,16 +510,50 @@ function settleAttempt(ledger, id, outcome) {
         copy.editorSource = editorSource(copy); copy.imageReviewStatus = 'need_confirm';
         return reviewController.markFieldsManual(copy, [field, 'images']);
     }
+    const MATH_FIELD_LABEL = { stem: '题干', options: '选项', answer: '答案', solution: '解析' };
+    // Everything that must reach the page as typeset math, not as typed text.
+    // Only unambiguous patterns are listed: a bare LaTeX command, an unwrapped
+    // superscript/subscript, a math glyph, a relation between math operands and
+    // a named function applied to an operand. Ordinary prose ("第 2 题", "（1）",
+    // "A. 3 万元") must never be reported, or the gate becomes unusable.
+    const BARE_MATH_RULES = [
+        { kind: '未包裹的 LaTeX 命令', pattern: /\\[a-zA-Z]+/ },
+        { kind: '未包裹的上下标', pattern: /[A-Za-z0-9)\]}】]\s*[\^_]\s*\{?[A-Za-z0-9]/ },
+        { kind: '未包裹的数学符号', pattern: /[√∠△□≤≥≠≈≌∽∈∉⊆⊂∪∩∅⊥∥∑∏∫∞παβγθλμσφωΔΣΠ]/ },
+        { kind: '未包裹的关系式', pattern: /[A-Za-z][A-Za-z0-9]*\s*[=<>]\s*[-+]?[A-Za-z0-9(（]/ },
+        { kind: '未包裹的函数名', pattern: /\b(?:sin|cos|tan|cot|sec|csc|log|ln|lg|lim|max|min)(?:\s+(?=[A-Za-z0-9(（∠√πθαβ])|(?=[A-Z0-9(（πθαβ]))/ }
+    ];
+    // Machine tokens ([[IMAGE:...]], [[figure:...]], [[asset:...]]) are placeholders,
+    // never visible math, so they must not trigger the typed-math gate.
+    const stripMathSegments = text => String(text ?? '')
+        .replace(/\[\[[^\]\n]*\]\]/g, ' ')
+        .replace(/\$\$[\s\S]*?\$\$/g, ' $$ ')
+        .replace(/(^|[^\\])\$[^$\n]*?\$/g, '$1 $$ ');
+    function bareMath(text) {
+        const visible = stripMathSegments(text);
+        for (const rule of BARE_MATH_RULES) {
+            const match = visible.match(rule.pattern);
+            if (match) return { token: match[0].trim(), kind: rule.kind };
+        }
+        return null;
+    }
     function mathProblems(draft, renderMath) {
         const problems = [];
         for (const field of ['stem', 'options', 'answer', 'solution']) {
             const texts = Array.isArray(draft[field]) ? draft[field] : [draft[field]];
-            for (const text of texts) for (const match of String(text).matchAll(/\$\$([\s\S]*?)\$\$|(?<!\\)\$([^$\n]+)\$/g)) {
-                const math = match[1] ?? match[2];
-                try {
-                    if (/\\\\[a-zA-Z]/.test(math)) throw new Error('公式反斜杠重复转义');
-                    if (renderMath) renderMath(math, { throwOnError: true, strict: 'ignore' });
-                } catch (error) { problems.push({ field, message: '公式需要对照原卷修正：' + error.message }); break; }
+            for (const text of texts) {
+                const bare = bareMath(text);
+                if (bare) {
+                    problems.push({ field, message: '公式必须写成 LaTeX：' + MATH_FIELD_LABEL[field] + '中有' + bare.kind + '“' + bare.token + '”，请对照原卷改为 $…$ 形式' });
+                    break;
+                }
+                for (const match of String(text).matchAll(/\$\$([\s\S]*?)\$\$|(?<!\\)\$([^$\n]+)\$/g)) {
+                    const math = match[1] ?? match[2];
+                    try {
+                        if (/\\\\[a-zA-Z]/.test(math)) throw new Error('公式反斜杠重复转义');
+                        if (renderMath) renderMath(math, { throwOnError: true, strict: 'ignore' });
+                    } catch (error) { problems.push({ field, message: '公式需要对照原卷修正：' + error.message }); break; }
+                }
             }
         }
         return problems;
@@ -535,5 +582,5 @@ function settleAttempt(ledger, id, outcome) {
         for (const target of fields) if (Array.isArray(next[target]) ? !next[target].length : !String(next[target] || '').trim()) next.fieldProvenance[target] = { field: target, kind: 'missing', status: 'missing' };
         return next;
     }
-    return Object.freeze({ PROTOCOL, TYPES, WIRE_VERSION, LEGACY_WIRE_VERSION, SCHEMA: schema, SCHEMA_V22: schemaV22, REVIEW_SCHEMA: reviewSchema, schemaErrors, getWireSchema, isExternal, validateRequest, validateWireResult, validateReviewResult, evaluateSequences, assemblePrompt, projectQwenStrictSchema, calculateUsageCost, reserveAttempt, settleAttempt, buildDrafts, validateCanonical, retainReviewDrafts, bboxValid, reviewPanel, reviewProblem, editorSource, projectEditorSource, applyEditorSource, chooseCandidate, removeImage, applyManualCrop, mathProblems, acknowledgeTaskIssues });
+    return Object.freeze({ PROTOCOL, TYPES, WIRE_VERSION, LEGACY_WIRE_VERSION, SCHEMA: schema, SCHEMA_V22: schemaV22, REVIEW_SCHEMA: reviewSchema, schemaErrors, getWireSchema, isExternal, validateRequest, validateWireResult, validateReviewResult, evaluateSequences, assemblePrompt, projectQwenStrictSchema, calculateUsageCost, reserveAttempt, settleAttempt, buildDrafts, validateCanonical, retainReviewDrafts, bboxValid, reviewPanel, reviewProblem, editorSource, projectEditorSource, applyEditorSource, chooseCandidate, removeImage, applyManualCrop, mathProblems, bareMath, acknowledgeTaskIssues });
 });

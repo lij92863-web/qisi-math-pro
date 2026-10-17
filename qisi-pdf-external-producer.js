@@ -3,6 +3,10 @@
 const pageEvidence=root.Qisi?.PdfPageEvidence || (typeof module!=='undefined'&&module.exports?require('./qisi-pdf-page-evidence.js'):null);
 const DEFAULT_CONFIG=Object.freeze({enabled:false,wireVersion:'pdf-external-v2.2',mode:'direct',model:'',reviewModel:'',profileVersion:'unconfigured',windowMode:'document',outputPages:5,contextPages:2,renderScale:2,cropScale:3,jpegQuality:0.94,maxTokens:32768,timeoutMs:180000,maxCalls:80,maxQueries:20,maxPageAppearances:1000,maxYuan:20,maxRequestYuan:0.25,maxQueryYuan:0.25,maxResourceYuan:0.25});
 const activeRuns=new Set();
+// Typography repair is owned here, not in the app shell: only the normalizer is
+// used, so the instance is built with inert ports instead of shell wiring.
+let typography=null;
+const typeset=()=>{if(typography!==null)return typography;const api=root.Qisi?.QuestionContentPolicy;if(!api?.createQuestionContentPolicy)return typography=null;try{typography=api.createQuestionContentPolicy({recognizeFormulaText:()=>'',blockImageToken:()=>'',getDefaultType:()=>''}).normalizeMathTextForLatexSafe;}catch(_){typography=null;}return typography;};
 const copy=v=>JSON.parse(JSON.stringify(v));
 const error=(code,message,details)=>Object.assign(Error(message||code),{code,details});
 const active=signal=>{if(signal?.aborted)throw Object.assign(Error('PDF任务已取消'),{name:'AbortError'});};
@@ -282,6 +286,10 @@ function createProducer(ports={},initial={}){
   let built;
   try{built=contract.buildDrafts(observations,{batchId:context.batchId,identityContract:identity,taskProblems});}catch(cause){cause.details={...cause.details,evidence,errors,unassigned,warnings};throw cause;}
   for(const draft of built.drafts){
+   // Typeset repair happens before the gate: only fields that still carry typed
+   // math are touched, so already-correct model LaTeX is never rewritten.
+   const normalizeMath=typeof ports.normalizeMath==='function'?ports.normalizeMath:typeset();
+   if(typeof normalizeMath==='function'){const fix=text=>{const value=String(text??'');return contract.bareMath(value)?normalizeMath(value):value;};draft.stem=fix(draft.stem);draft.options=(draft.options||[]).map(fix);if(draft.answer)draft.answer=fix(draft.answer);if(draft.solution)draft.solution=fix(draft.solution);}
    const refs=new Set();for(const field of ['question','answer','solution'])for(const variant of draft.pdfExternal.candidates[field])for(const page of variant.item.source_pages){const k=JSON.stringify([variant.source.sourceId,page]);if(refs.has(k))continue;refs.add(k);const rendered=allPages.get(variant.source.sourceId).find(p=>p.pageNo===page);draft.pdfExternal.sourcePageImages.push({pageNo:page,sourcePage:page,sourceFileId:variant.source.sourceId,sourceFileName:variant.source.filename,filename:variant.source.filename,url:rendered.url});}
    draft.sourcePageImage=draft.pdfExternal.sourcePageImages[0]?.url||'';draft.sourceTrace.sourcePageImage=draft.sourcePageImage;
    draft.pdfExternal.responses=evidence.filter(e=>['question','answer','solution'].some(f=>draft.pdfExternal.candidates[f].some(v=>v.evidence.some(r=>r.requestId===e.requestId))));

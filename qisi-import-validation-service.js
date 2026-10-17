@@ -217,7 +217,7 @@
                     expectedQuestionNumbers: expected
                 });
                 const valid = result.mode === 'full' || (
-                    ['prefix', 'subset'].includes(result.mode) &&
+                    ['prefix', 'gapped', 'subset'].includes(result.mode) &&
                     result.safeQuestionNumbers.length === drafts.length
                 );
                 return {

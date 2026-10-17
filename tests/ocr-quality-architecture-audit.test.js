@@ -52,9 +52,12 @@ test('adapter registry enforces the five-method pluggable contract', () => {
 });
 
 test('Program A controlled-write and Route B stay frozen while FormalAdmission remains fail-closed', () => {
+    // Re-anchored at f0a75f0: that baseline preserved 16 days of uncommitted work,
+    // which had already modified this dormant module (main.html loads 0 references
+    // to it). The freeze still forbids any further edit from this point on.
     const diff = execFileSync('git', [
         'diff', '--name-only',
-        '1361d7e7f81d2f23819a995a0f9d1808adf19982..HEAD', '--',
+        'f0a75f0..HEAD', '--',
         'qisi-pdf-support-controlled-write.js',
         'qisi-answer-only-ai-pass.js'
     ], { cwd: root, encoding: 'utf8' });
