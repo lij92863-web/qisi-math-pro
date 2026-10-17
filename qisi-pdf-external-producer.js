@@ -43,13 +43,14 @@ function createProducer(ports={},initial={}){
  const contract=ports.contract||root.Qisi.PdfExternalContract,identity=ports.identityContract||root.Qisi.DocxProducerIdentityContract;
  const run=async function run(context,signal){
   const config={...DEFAULT_CONFIG,...initial,...ports.getConfig?.()};
-  const simple=config.profileVersion===pageEvidence.PROFILE;
+  const simple=config.profileVersion===pageEvidence.PROFILE,windowOnly=config.profileVersion===pageEvidence.PROFILE_WINDOW,pageLed=simple||windowOnly;
+  const windowRule=simple?config.windowMode==='document':config.windowMode==='window'&&Number.isSafeInteger(config.outputPages)&&config.outputPages>=1&&config.outputPages<=6&&Number.isSafeInteger(config.contextPages)&&config.contextPages>=0&&config.contextPages<=2;
   if(config.enabled!==true||!config.model)throw error('PDF_EXTERNAL_NOT_CONFIGURED','PDF识别服务待配置。软件链路已准备，提供接口后再启用。');
   if(root.document&&config.requireCrossWindowLock===true&&typeof root.navigator?.locks?.request!=='function')throw error('PDF_EXTERNAL_LOCK_NOT_AVAILABLE','当前浏览器不支持跨窗口导入保护，请使用本地应用的 Chromium 浏览器');
   if(!['direct','parse-organize','parse-organize-text'].includes(config.mode)||!['document','window'].includes(config.windowMode)||![contract.WIRE_VERSION,contract.LEGACY_WIRE_VERSION].includes(config.wireVersion)||!Number.isSafeInteger(config.maxCalls)||config.maxCalls<1||!Number.isSafeInteger(config.maxQueries)||config.maxQueries<0||!Number.isSafeInteger(config.maxPageAppearances)||config.maxPageAppearances<1||!Number.isSafeInteger(config.maxConcurrency)||config.maxConcurrency<1||config.maxConcurrency>8||![config.maxYuan,config.maxRequestYuan,config.maxQueryYuan,config.maxResourceYuan].every(v=>Number.isFinite(v)&&v>=0))throw error('PDF_EXTERNAL_CONFIG_INVALID');
   if(config.wireVersion===contract.WIRE_VERSION&&(!config.reviewModel||ports.execute.supportsReview?.()===false))throw error('PDF_EXTERNAL_REVIEW_NOT_CONFIGURED','独立原页复核模型和接口待配置，尚未提交识别请求');
   if(config.mode!=='direct'&&!ports.execute.stageLedger)throw error('PDF_EXTERNAL_STAGE_LEDGER_REQUIRED','分阶段接口必须登记每次实际请求');
-  if(simple&&(config.mode!=='parse-organize-text'||config.windowMode!=='document'||config.wireVersion!==contract.WIRE_VERSION||config.model!==pageEvidence.MODEL||config.reviewModel!==pageEvidence.MODEL))throw error('PDF_EXTERNAL_SIMPLE_SCOPE_INVALID','固定流程要求完整document、v2.2和指定千问模型');
+  if(pageLed&&(config.mode!=='parse-organize-text'||!windowRule||config.wireVersion!==contract.WIRE_VERSION||config.model!==pageEvidence.MODEL||config.reviewModel!==pageEvidence.MODEL))throw error('PDF_EXTERNAL_SIMPLE_SCOPE_INVALID',simple?'固定流程要求完整document、v2.2和指定千问模型':'分窗流程要求 window 模式、每窗1-6页、最多2页上下文、v2.2 和指定千问模型');
   const files=[...context.sources,...(context.supplementalSources||[])].filter((f,i,a)=>a.findIndex(x=>x.id===f.id)===i);
   const isQuestionSource=file=>ports.getRoles(file).some(role=>role==='question'||role==='full');
   files.sort((left,right)=>Number(isQuestionSource(right))-Number(isQuestionSource(left)));
@@ -72,14 +73,14 @@ function createProducer(ports={},initial={}){
    const pages=await ports.renderPages(file,{scale:config.renderScale,jpegQuality:config.jpegQuality,sequential:true,requireAllPages:true,suppressCostEstimate:true});allPages.set(file.id,pages);
    const totalPages=pages.totalPages||file.pdfPageCount||(pages.every((p,i)=>p.pageNo===i+1)?pages.length:0);
    if(!Number.isSafeInteger(totalPages)||totalPages<1)throw error('PDF_EXTERNAL_SOURCE_PAGE_COUNT_MISSING','缺少原卷总页数，不能把选中页数当作原页映射');
-   if(simple&&(pages.length!==totalPages||pages.some((p,i)=>p.pageNo!==i+1)))throw error('PDF_EXTERNAL_SIMPLE_SCOPE_INVALID','固定流程必须输入原卷全部连续页');
+   if(pageLed&&(pages.length!==totalPages||pages.some((p,i)=>p.pageNo!==i+1)))throw error('PDF_EXTERNAL_SIMPLE_SCOPE_INVALID','固定流程必须输入原卷全部连续页');
    if(pages.some((page,i)=>i&&page.pageNo!==pages[i-1].pageNo+1))errors.push({sourceId:file.id,pages:pages.map(p=>p.pageNo),code:'PDF_EXTERNAL_SELECTED_PAGE_GAPS',message:'已选页码存在间隔，仅处理已选范围，请对照原卷确认本题范围'});
    for(const [index,task]of tasks(pages,config).entries()){
     active(signal);if(fatal)break;
     const metadata={sources:[{source_id:file.id,scope_id:context.batchId,document_role:allowed.includes('questions')?(allowed.length===1?'question':'full'):'support',allowed_streams:allowed,total_pages:totalPages,input_pages:task.pages.map(p=>p.pageNo),output_pages:task.outputPages,context_only_pages:task.contextPages}],assets:[]};
     if(!contract.validateRequest(metadata).valid)throw error('PDF_EXTERNAL_METADATA_INVALID');
     const parserProfile=config.mode==='direct'?null:ports.execute.getParserProfile?.(config)||null;
-    const cacheKey=await digest({metadata,config,parserProfile,schema:contract.getWireSchema(config.wireVersion),reviewSchema:contract.REVIEW_SCHEMA,prompts:['SYSTEM','DIRECT','ORGANIZE','SYSTEM_V22','ORGANIZE_TEXT','REVIEW_VISUAL','REVIEW_SYSTEM','REVIEW_CROPS','REVISE',...(simple?['SIMPLE_ORGANIZE','SIMPLE_REVIEW']:[])].map(k=>root.Qisi.PdfExternalProvider?.[k]),pages:task.pages.map(p=>[p.pageNo,p.url])});
+    const cacheKey=await digest({metadata,config,parserProfile,schema:contract.getWireSchema(config.wireVersion),reviewSchema:contract.REVIEW_SCHEMA,prompts:['SYSTEM','DIRECT','ORGANIZE','SYSTEM_V22','ORGANIZE_TEXT','REVIEW_VISUAL','REVIEW_SYSTEM','REVIEW_CROPS','REVISE',...(pageLed?['SIMPLE_ORGANIZE','SIMPLE_REVIEW']:[])].map(k=>root.Qisi.PdfExternalProvider?.[k]),pages:task.pages.map(p=>[p.pageNo,p.url])});
     const parseMetadata=parserProfile?{sources:metadata.sources.map(s=>({source_id:s.source_id,total_pages:s.total_pages,input_pages:s.input_pages}))}:metadata;
     const parseKey=await digest({sourceId:file.id,pages:task.pages.map(p=>[p.pageNo,p.url]),metadata:parseMetadata,parserVersion:config.parserVersion||'unconfigured',parserConfig:config.parserConfig||null,parserProfile,model:parserProfile?config.model:null,maxTokens:parserProfile?config.maxTokens:null});
     const requestId=context.batchId+':'+file.id+':'+index+':external:'+evidence.length;
@@ -89,7 +90,7 @@ function createProducer(ports={},initial={}){
     const pending=evidence.findLast(e=>e.sourceId===file.id&&e.state==='parse_pending');
     if(pending&&pending.parseKey!==parseKey)throw error('PDF_EXTERNAL_PARSE_PENDING','已有解析任务与当前选页/解析配置不同，请先处理原任务');
     const cachedParse=evidence.findLast(e=>e.sourceId===file.id&&e.parseKey===parseKey&&e.parseValidated)?.parseResult;
-    if(simple){
+    if(pageLed){
      const stopped=evidence.find(e=>e.sourceId===file.id&&e.cacheKey===cacheKey&&!['received','validated'].includes(e.state));
      if(stopped){errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:'PDF_EXTERNAL_SIMPLE_STOPPED',message:'当前固定流程已失败，保留证据；不会自动重发或修复'});fatal=true;continue;}
      const calls=evidence.flatMap(e=>e.attempts||[]).filter(a=>a.operation!=='query').length,planned=cached?0:cachedParse?2:0;
@@ -98,7 +99,7 @@ function createProducer(ports={},initial={}){
     let record=cached,result;
     const abortIfCancelled=async cause=>{
      if(signal?.aborted||cause.name==='AbortError'){
-      if(simple){record.state=record.attempts?.some(a=>['registered','submission_unknown'].includes(a.state))?'submission_unknown':'cancelled';await persist(file);}
+      if(pageLed){record.state=record.attempts?.some(a=>['registered','submission_unknown'].includes(a.state))?'submission_unknown':'cancelled';await persist(file);}
       throw cause;
      }
     };
@@ -191,19 +192,22 @@ function createProducer(ports={},initial={}){
       record.error={code:cause.code||cause.name||'PDF_EXTERNAL_FAILED',message:cause.message,...(cause.details?{details:copy(cause.details)}:{})};await persist(file);
       if(cause.rawResponse){record.rawResponse=copy(cause.rawResponse);await persist(file);}
       await abortIfCancelled(cause);
-      errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:record.error.code,message:cause.message});fatal=simple||['submission_unknown','parse_pending'].includes(record.state)||[400,401,402,403].includes(cause.status);continue;
+      errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:record.error.code,message:cause.message});fatal=pageLed||['submission_unknown','parse_pending'].includes(record.state)||[400,401,402,403].includes(cause.status);continue;
      }
     }
     if(parserProfile){
      try{
       const restored=ports.execute.restoreParse(result.parseResult,metadata);
-      const assets=restored.assets.map(a=>({asset_id:a.asset_id,source_id:a.source_id,page:a.page,...(simple?{kind:a.kind,anchor:a.anchor}:{})})),blocks=restored.parsedPages.flatMap(p=>p.blocks.map(b=>({block_id:b.block_id,source_id:p.source_id,page:p.page})));
+      const assets=restored.assets.map(a=>({asset_id:a.asset_id,source_id:a.source_id,page:a.page,...(pageLed?{kind:a.kind,anchor:a.anchor}:{})})),blocks=restored.parsedPages.flatMap(p=>p.blocks.map(b=>({block_id:b.block_id,source_id:p.source_id,page:p.page})));
       if(JSON.stringify(assets)!==JSON.stringify(result.metadata?.assets)||JSON.stringify(blocks)!==JSON.stringify(result.metadata?.blocks))throw error('PDF_PAGE_EVIDENCE_CACHE_INVALID','页文资源/块命名空间与候选来源不一致');
-     }catch(cause){record.state='invalid';record.error={code:cause.code||'PDF_PAGE_EVIDENCE_CACHE_INVALID',message:cause.message};errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:record.error.code,message:cause.message});if(simple)fatal=true;await persist(file);continue;}
+     }catch(cause){record.state='invalid';record.error={code:cause.code||'PDF_PAGE_EVIDENCE_CACHE_INVALID',message:cause.message};errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:record.error.code,message:cause.message});if(pageLed)fatal=true;await persist(file);continue;}
     }
     const responseMetadata=result.metadata||metadata;
-    const checked=JSON.stringify(responseMetadata.sources)!==JSON.stringify(metadata.sources)?{valid:false,errors:['provider-source-metadata-changed']}:simple&&result.model&&result.model!==pageEvidence.MODEL?{valid:false,errors:['provider-model-changed']}:contract.validateWireResult(result.text,responseMetadata,{ok:result.ok!==false,refusal:result.refusal,finishReason:result.finishReason,expectedWireVersion:config.wireVersion});
-    if(!checked.valid||simple&&['questions','answers','solutions','unassigned'].some(stream=>checked.result[stream].some(item=>item.figures.some(fig=>fig.bbox!==null)))){record.state='invalid';record.validationErrors=checked.valid?['text-organizer-bbox-forbidden']:checked.errors;errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:'PDF_EXTERNAL_WIRE_INVALID',message:record.validationErrors.join(', ')});if(simple)fatal=true;await persist(file);continue;}
+    const checked=JSON.stringify(responseMetadata.sources)!==JSON.stringify(metadata.sources)?{valid:false,errors:['provider-source-metadata-changed']}:pageLed&&result.model&&result.model!==pageEvidence.MODEL?{valid:false,errors:['provider-model-changed']}:contract.validateWireResult(result.text,responseMetadata,{ok:result.ok!==false,refusal:result.refusal,finishReason:result.finishReason,expectedWireVersion:config.wireVersion});
+    if(!checked.valid||pageLed&&['questions','answers','solutions','unassigned'].some(stream=>checked.result[stream].some(item=>item.figures.some(fig=>fig.bbox!==null)))){record.state='invalid';record.validationErrors=checked.valid?['text-organizer-bbox-forbidden']:checked.errors;errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:'PDF_EXTERNAL_WIRE_INVALID',message:record.validationErrors.join(', ')});if(pageLed)fatal=true;await persist(file);continue;}
+    // A window owns only the items whose printed number sits on its output pages;
+    // whatever the model also emitted for a context page belongs to its neighbour.
+    if(windowOnly){const own=new Set(metadata.sources[0].output_pages);for(const stream of ['questions','answers','solutions'])checked.result[stream]=checked.result[stream].filter(item=>own.has(item.number_page));}
     if(record.state!=='validated'){
      record.state='validated';
      refreshCharges(record);
@@ -212,7 +216,7 @@ function createProducer(ports={},initial={}){
     const transcriptionIssues=copy(result.parseResult?.pageEvidence?.issues||[]);
     for(const issue of transcriptionIssues)errors.push({sourceId:issue.source_id||file.id,pages:issue.page?[issue.page]:[],code:'PDF_EXTERNAL_TRANSCRIPTION_REVIEW_REQUIRED',message:'原页转写待核对：'+issue.message});
     const observation={result:checked.result,metadata:result.metadata||metadata,source,requestId:record.requestId,model:record.model,transcriptionIssues,images:[],cropErrors:[]},reviewCrops=[];
-    if(simple){
+    if(pageLed){
      const complete=[...observations,observation],expected=complete.flatMap(o=>o.result.questions.map(q=>q.question_no));
      const required=[...new Set(complete.flatMap(o=>o.metadata.sources.flatMap(s=>s.allowed_streams.filter(v=>v!=='questions'))))];
      const gate=contract.evaluateSequences(complete.map(o=>o.result),expected,required.length?required:['answers','solutions']);
@@ -220,7 +224,7 @@ function createProducer(ports={},initial={}){
     }
     unassigned.push(...checked.result.unassigned);warnings.push(...checked.result.warnings);
     for(const page of checked.result.pages)if(page.state==='unreadable')errors.push({sourceId:file.id,pages:[page.page],code:'PDF_EXTERNAL_UNREADABLE_PAGE',message:'原页不可读'});
-    if(simple){
+    if(pageLed){
      for(const region of record.parseResult.assets){
       const placements=['questions','answers','solutions','unassigned'].flatMap(stream=>checked.result[stream].flatMap(item=>item.figures.filter(fig=>fig.asset_id===region.asset_id).map(fig=>({item_id:item.item_id,placement_id:fig.id,field:fig.field,option_label:fig.option_label}))));
       try{
@@ -243,7 +247,7 @@ function createProducer(ports={},initial={}){
       const savedAsset=fig.asset_id?record.resolvedAssets?.find(a=>a.assetId===fig.asset_id)?.value:null;
       let asset=savedAsset;
       const localBox=pageEvidence.cropBox(record.parseResult?.assets?.find(a=>a.asset_id===fig.asset_id),item.source_id,fig.page);
-      if(simple&&!asset)throw error('PDF_EXTERNAL_IMAGE_BYTES_MISSING','声明的定位资源未裁取成功');
+      if(pageLed&&!asset)throw error('PDF_EXTERNAL_IMAGE_BYTES_MISSING','声明的定位资源未裁取成功');
       if(!asset&&localBox)asset=await ports.renderRegion(file,{pageNo:fig.page,bbox:localBox,scale:config.cropScale});
       if(!asset&&fig.asset_id){
        if(typeof ports.resolveAsset!=='function')throw error('PDF_EXTERNAL_IMAGE_BYTES_MISSING');
@@ -256,14 +260,14 @@ function createProducer(ports={},initial={}){
       if(fig.asset_id&&!savedAsset){record.resolvedAssets=record.resolvedAssets||[];record.resolvedAssets.push({assetId:fig.asset_id,value:copy(asset)});await persist(file);}
       const position=fig.field==='option'?'option:'+fig.option_label:fig.field;
       observation.images.push({id:record.requestId+':image:'+fig.id,figureId:fig.id,itemKey,filename:file.filename+' 第'+fig.page+'页 '+position,url:asset.url,source:'pdf-layout-figure-crop',sourceFileId:file.id,sourceFileName:file.filename,sourcePage:fig.page,bbox:box||localBox||asset.bbox,position,width:asset.width,height:asset.height,status:'bound',protocol:contract.PROTOCOL});
-      if(!simple)reviewCrops.push({placement_id:fig.id,item_id:item.item_id,source_id:item.source_id,page:fig.page,field:fig.field,option_label:fig.option_label,url:asset.url});
+      if(!pageLed)reviewCrops.push({placement_id:fig.id,item_id:item.item_id,source_id:item.source_id,page:fig.page,field:fig.field,option_label:fig.option_label,url:asset.url});
      }catch(cause){await abortIfCancelled(cause);if(record.attempts?.some(a=>['registered','submission_unknown'].includes(a.state))){record.state='submission_unknown';fatal=true;}else if(record.state==='registered')record.state='validated';observation.cropErrors.push({itemKey,figure:fig,error:cause.message});}
     }
     if(config.wireVersion===contract.WIRE_VERSION){
      const candidateHash=await digest(checked.result),cropHash=await digest({crops:reviewCrops,errors:observation.cropErrors});
      if(record.modelReview?.result){
       const terminal=record.attempts?.findLast(a=>a.operation==='review')?.response;
-      const replay=contract.validateReviewResult(JSON.stringify(record.modelReview.result),responseMetadata,checked.result,candidateHash,{ok:terminal?.ok!==false&&!(simple&&terminal?.model&&terminal.model!==pageEvidence.MODEL),finishReason:terminal?.finishReason,refusal:terminal?.refusal});
+      const replay=contract.validateReviewResult(JSON.stringify(record.modelReview.result),responseMetadata,checked.result,candidateHash,{ok:terminal?.ok!==false&&!(pageLed&&terminal?.model&&terminal.model!==pageEvidence.MODEL),finishReason:terminal?.finishReason,refusal:terminal?.refusal});
       record.modelReview.state=replay.valid&&!observation.cropErrors.length&&record.modelReview.cropHash===cropHash?(replay.passed?'pass':'fail'):'invalid';record.modelReview.errors=replay.errors;
       if(record.modelReview.cropHash!==cropHash)record.modelReview.errors.push('review-crop-version');
       await persist(file);
@@ -272,19 +276,19 @@ function createProducer(ports={},initial={}){
       try{
        if(fatal||observation.cropErrors.length)throw error('PDF_EXTERNAL_REVIEW_CROPS_REQUIRED','原图裁取未完成，不能宣称已复核实际裁图');
        const reviewed=await execute({mode:'review-visual',profileVersion:config.profileVersion,maxPromptBytes:config.maxPromptBytes,maxRequestImages:config.maxRequestImages,locationPages:record.parseResult?.locations,wireVersion:config.wireVersion,metadata:responseMetadata,pages:task.pages,crops:reviewCrops,model:config.reviewModel,maxTokens:config.maxTokens,timeoutMs:config.timeoutMs,requestId:record.requestId,signal,candidate:checked.result,candidateHash});
-       const verified=contract.validateReviewResult(reviewed.text,responseMetadata,checked.result,candidateHash,{ok:reviewed.ok!==false&&!(simple&&reviewed.model&&reviewed.model!==pageEvidence.MODEL),finishReason:reviewed.finishReason,refusal:reviewed.refusal});
-       record.modelReview={state:verified.valid?(verified.passed?'pass':'fail'):'invalid',candidateHash,cropHash,result:verified.result,rawResponse:reviewed.rawResponse||null,errors:verified.errors};record.state='validated';if(simple&&!verified.valid)fatal=true;
+       const verified=contract.validateReviewResult(reviewed.text,responseMetadata,checked.result,candidateHash,{ok:reviewed.ok!==false&&!(pageLed&&reviewed.model&&reviewed.model!==pageEvidence.MODEL),finishReason:reviewed.finishReason,refusal:reviewed.refusal});
+       record.modelReview={state:verified.valid?(verified.passed?'pass':'fail'):'invalid',candidateHash,cropHash,result:verified.result,rawResponse:reviewed.rawResponse||null,errors:verified.errors};record.state='validated';if(pageLed&&!verified.valid)fatal=true;
       }catch(cause){
        await abortIfCancelled(cause);
        const unknownReview=record.attempts?.some(a=>['registered','submission_unknown'].includes(a.state));
        record.state=unknownReview?'submission_unknown':'validated';record.modelReview={state:'pending',candidateHash,cropHash,error:{code:cause.code||cause.name,message:cause.message}};
-       if(simple||unknownReview)fatal=true;
+       if(pageLed||unknownReview)fatal=true;
        errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:cause.code||'PDF_EXTERNAL_REVIEW_FAILED',message:cause.message});
       }
       await persist(file);
      }
      if(record.modelReview.state!=='pass')errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:'PDF_EXTERNAL_REVIEW_REQUIRED',message:'独立模型复核未通过或未完成，请对照原页处理'});
-     if(simple&&['invalid','pending'].includes(record.modelReview.state))fatal=true;
+     if(pageLed&&['invalid','pending'].includes(record.modelReview.state))fatal=true;
      if(checked.result.requests.length)errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:'PDF_EXTERNAL_CONTEXT_REQUIRED',message:'模型请求补充原页；本阶段保留请求，不自动追加调用'});
      observation.modelReview=record.modelReview;
     }

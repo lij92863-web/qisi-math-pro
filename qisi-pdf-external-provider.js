@@ -19,13 +19,14 @@ function checkCapacity(task) {
 }
 function createExecutor(ports={}) {
  const contract=ports.contract||root.Qisi.PdfExternalContract;
+ const pageLedProfile=profile=>profile===pageEvidence.PROFILE||profile===pageEvidence.PROFILE_WINDOW;
  const execute=async function execute(task,onStage=async()=>{}) {
   const binding={...ports,...ports.getBindings?.()};
   const schema=contract.getWireSchema(task.wireVersion||contract.LEGACY_WIRE_VERSION);
   const systemPrompt=task.wireVersion===contract.WIRE_VERSION?SYSTEM_V22:SYSTEM;
   const call=async(operation,fn,input)=>{
    if(task.signal?.aborted)throw Object.assign(Error('PDF任务已取消'),{name:'AbortError'});
-   if(task.profileVersion===pageEvidence.PROFILE)checkCapacity({...input,maxPromptBytes:task.maxPromptBytes,maxRequestImages:task.maxRequestImages});
+   if(pageLedProfile(task.profileVersion))checkCapacity({...input,maxPromptBytes:task.maxPromptBytes,maxRequestImages:task.maxRequestImages});
    let requestId=null;
    if(task.trackRequests){const registered=await onStage({stage:'request-start',operation,input});requestId=registered?.requestId||null;if(requestId)input={...input,requestId};}
    let result;
@@ -37,7 +38,7 @@ function createExecutor(ports={}) {
   if(task.mode==='review-visual'){
    const review=typeof binding.review==='function'?binding.review:binding.reviewUsesRecognizer===true?binding.recognize:null;
    if(typeof review!=='function')throw Object.assign(Error('独立原页复核接口待配置'),{code:'PDF_EXTERNAL_REVIEW_NOT_CONFIGURED',definitelyNotSubmitted:true});
-   return call('review',review,{metadata:task.metadata,pages:task.pages,crops:task.crops||[],model:task.model,maxTokens:task.maxTokens,timeoutMs:task.timeoutMs,requestId:task.requestId,signal:task.signal,candidateHash:task.candidateHash,candidate:task.candidate,systemPrompt:REVIEW_SYSTEM,prompt:contract.assemblePrompt(REVIEW_VISUAL,{REQUEST_METADATA_JSON:task.metadata,CANDIDATE_HASH:task.candidateHash,CANDIDATE_JSON:task.candidate,RESULT_SCHEMA_MIN_JSON:contract.REVIEW_SCHEMA})+REVIEW_CROPS+(task.profileVersion===pageEvidence.PROFILE?contract.assemblePrompt(SIMPLE_REVIEW,{LOCATION_PAGES_JSON:task.locationPages||[]}):'')});
+   return call('review',review,{metadata:task.metadata,pages:task.pages,crops:task.crops||[],model:task.model,maxTokens:task.maxTokens,timeoutMs:task.timeoutMs,requestId:task.requestId,signal:task.signal,candidateHash:task.candidateHash,candidate:task.candidate,systemPrompt:REVIEW_SYSTEM,prompt:contract.assemblePrompt(REVIEW_VISUAL,{REQUEST_METADATA_JSON:task.metadata,CANDIDATE_HASH:task.candidateHash,CANDIDATE_JSON:task.candidate,RESULT_SCHEMA_MIN_JSON:contract.REVIEW_SCHEMA})+REVIEW_CROPS+(pageLedProfile(task.profileVersion)?contract.assemblePrompt(SIMPLE_REVIEW,{LOCATION_PAGES_JSON:task.locationPages||[]}):'')});
   }
   if(task.mode==='revise'){
    if(typeof binding.recognize!=='function')throw Object.assign(Error('PDF修订接口待配置'),{code:'PDF_EXTERNAL_NOT_CONFIGURED',definitelyNotSubmitted:true});
@@ -47,9 +48,17 @@ function createExecutor(ports={}) {
    if(typeof binding.recognize!=='function')throw Object.assign(Error('PDF识别接口待配置'),{code:'PDF_EXTERNAL_NOT_CONFIGURED',definitelyNotSubmitted:true});
    return call('direct',binding.recognize,{...task,systemPrompt,prompt:contract.assemblePrompt(DIRECT,{REQUEST_METADATA_JSON:task.metadata,RESULT_SCHEMA_MIN_JSON:schema})});
   }
-  if(task.profileVersion===pageEvidence.PROFILE){
-   const source=task.metadata?.sources?.[0];
-   if(task.mode!=='parse-organize-text'||task.wireVersion!==contract.WIRE_VERSION||task.model!==pageEvidence.MODEL||!contract.validateRequest(task.metadata).valid||task.metadata.sources.length!==1||source.context_only_pages.length||source.input_pages.length!==source.total_pages||source.input_pages.some((page,i)=>page!==i+1)||JSON.stringify(source.output_pages)!==JSON.stringify(source.input_pages)||JSON.stringify(task.pages?.map(p=>p.pageNo))!==JSON.stringify(source.input_pages))throw Object.assign(Error('新固定流程仅支持完整原卷、固定模型和纯文本整理'),{code:'PDF_EXTERNAL_SIMPLE_SCOPE_INVALID',definitelyNotSubmitted:true});
+  if(pageLedProfile(task.profileVersion)){
+   const source=task.metadata?.sources?.[0],windowed=task.profileVersion===pageEvidence.PROFILE_WINDOW;
+   const pagesMatch=JSON.stringify(task.pages?.map(p=>p.pageNo))===JSON.stringify(source?.input_pages);
+   // The document profile requires one call over the whole paper. The windowed
+   // profile keeps the same requirements on the *input* (the teacher still hands
+   // in the complete paper) but allows each call to cover one window plus its
+   // context pages, so the organise step can run in parallel.
+   const scopeInvalid=windowed
+    ? !contract.validateRequest(task.metadata).valid||task.metadata.sources.length!==1||!source.output_pages.length||source.output_pages.some(page=>!source.input_pages.includes(page))||!pagesMatch
+    : !contract.validateRequest(task.metadata).valid||task.metadata.sources.length!==1||source.context_only_pages.length||source.input_pages.length!==source.total_pages||source.input_pages.some((page,i)=>page!==i+1)||JSON.stringify(source.output_pages)!==JSON.stringify(source.input_pages)||!pagesMatch;
+   if(task.mode!=='parse-organize-text'||task.wireVersion!==contract.WIRE_VERSION||task.model!==pageEvidence.MODEL||scopeInvalid)throw Object.assign(Error(windowed?'分窗流程仅支持完整原卷、单来源、固定模型与窗口内输出页':'新固定流程仅支持完整原卷、固定模型和纯文本整理'),{code:'PDF_EXTERNAL_SIMPLE_SCOPE_INVALID',definitelyNotSubmitted:true});
    const recognize=binding.recognize;
    if(typeof recognize!=='function'||binding.parseUsesRecognizer!==true||binding.organizeUsesRecognizer!==true)throw Object.assign(Error('固定模型工序接口待配置'),{code:'PDF_EXTERNAL_NOT_CONFIGURED',definitelyNotSubmitted:true});
    const hashes=await Promise.all(task.pages.map(p=>pageEvidence.imageHash(p.url)));
@@ -131,7 +140,7 @@ function createExecutor(ports={}) {
  };
  execute.stageLedger=true;
  execute.supportsReview=()=>{const binding={...ports,...ports.getBindings?.()};return typeof binding.review==='function'||binding.reviewUsesRecognizer===true&&typeof binding.recognize==='function';};
- execute.getParserProfile=(config={})=>{if(config.profileVersion===pageEvidence.PROFILE)return{version:pageEvidence.VERSION_V2,receiptVersion:pageEvidence.RECEIPT_VERSION,rawSystem:pageEvidence.RAW_SYSTEM,locationSystem:pageEvidence.LOCATION_SYSTEM,schema:pageEvidence.LOCATION_SCHEMA};const binding={...ports,...ports.getBindings?.()};return typeof binding.parse!=='function'&&binding.parseUsesRecognizer===true?{version:pageEvidence.VERSION,system:pageEvidence.SYSTEM,prompt:pageEvidence.PROMPT,schema:pageEvidence.SCHEMA}:null;};
+ execute.getParserProfile=(config={})=>{if(pageLedProfile(config.profileVersion))return{version:pageEvidence.VERSION_V2,receiptVersion:pageEvidence.RECEIPT_VERSION,rawSystem:pageEvidence.RAW_SYSTEM,locationSystem:pageEvidence.LOCATION_SYSTEM,schema:pageEvidence.LOCATION_SCHEMA};const binding={...ports,...ports.getBindings?.()};return typeof binding.parse!=='function'&&binding.parseUsesRecognizer===true?{version:pageEvidence.VERSION,system:pageEvidence.SYSTEM,prompt:pageEvidence.PROMPT,schema:pageEvidence.SCHEMA}:null;};
  execute.restoreParse=(parsed,metadata)=>parsed?.protocol===pageEvidence.VERSION_V2||execute.getParserProfile()?pageEvidence.restore(parsed,metadata,contract):parsed;
  return execute;
 }

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>路线决策：整卷 30 秒怎么做到</title>
+<style>
+  :root{--ink:#1a1d24;--ink2:#3d434f;--ink3:#6b7280;--line:#e3e6ec;--accent:#2f5bd7;--soft:#eef3ff;--risk:#c0392b;--rsoft:#fdf0ee;--ok:#1d7a4c;--osoft:#eef8f2;--warn:#9a6a00;--wsoft:#fdf6e7}
+  *{box-sizing:border-box}
+  body{margin:0;padding:0 0 70px;background:#fbfcfe;color:var(--ink);font-family:"Source Han Sans SC","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;font-size:15px;line-height:1.8}
+  .wrap{max-width:940px;margin:0 auto;padding:0 26px}
+  header{padding:50px 0 24px;border-bottom:1px solid var(--line);margin-bottom:30px}
+  .kicker{font-size:12px;letter-spacing:.14em;color:var(--accent);font-weight:700}
+  h1{font-size:29px;line-height:1.32;margin:12px 0 10px}
+  .sub{color:var(--ink3);font-size:13.5px}
+  .verdict{margin:24px 0 0;padding:20px 24px;background:var(--soft);border-left:4px solid var(--accent);border-radius:0 10px 10px 0}
+  .verdict p{margin:0}.verdict p+p{margin-top:10px}
+  h2{font-size:21px;margin:44px 0 6px;padding-bottom:9px;border-bottom:2px solid var(--ink);display:inline-block}
+  h2 span{color:var(--accent);margin-right:9px}
+  p{margin:12px 0}
+  .lede{color:var(--ink2);margin:14px 0 18px}
+  table{width:100%;border-collapse:collapse;margin:18px 0;font-size:13.5px;background:#fff}
+  th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{background:#f5f7fb;font-size:12.5px;font-weight:700;color:var(--ink2)}
+  tr:last-child td{border-bottom:none}
+  .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .card{border:1px solid var(--line);border-radius:12px;background:#fff;padding:18px 22px;margin:16px 0}
+  .card.a{border-left:4px solid var(--ok)}
+  .card.b{border-left:4px solid var(--warn)}
+  .card.c{border-left:4px solid var(--risk)}
+  .card h4{margin:0 0 6px;font-size:16px}
+  .tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#eef1f6;color:var(--ink2);margin-left:8px}
+  .card.a .tag{background:var(--osoft);color:var(--ok)}
+  .card.b .tag{background:var(--wsoft);color:var(--warn)}
+  .card.c .tag{background:var(--rsoft);color:var(--risk)}
+  ul{margin:10px 0;padding-left:21px}li{margin:7px 0;color:var(--ink2)}li b{color:var(--ink)}
+  .foot{margin-top:50px;padding-top:18px;border-top:1px solid var(--line);font-size:12.5px;color:var(--ink3)}
+  code{background:#f2f4f8;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="kicker">Route Decision · 速度专项</div>
+  <h1>整卷 30 秒：物理极限在哪，该选哪条路</h1>
+  <div class="sub">2026-10-18 · 基于本项目实测 + 外部方案调研</div>
+  <div class="verdict">
+    <p><b>结论一：现在的慢不是模型慢，是排队。</b>21 页 × 2 次调用 = 42 次，原来一个等一个，约 500 秒。它们互不依赖，改成并发后这一段降到 <b>50–60 秒</b>（已实施）。</p>
+    <p><b>结论二：30 秒做完“题目+答案+解析”全字段，目前没有任何产品有公开证据。</b>瓶颈是长文本生成速度：本卷实测输出 16,245 个 token，用时 66.7 秒，折合 243 token/秒。这是单流的物理下限。</p>
+    <p><b>结论三：要到 30 秒，必须把“生成”换成“解析”。</b>专用版面解析器（MinerU / Doc2X / TextIn）出 Markdown 只要 10–20 秒，模型只做“把块挂到题号上”。代价是钱：卷均 0.08 元 → 0.4 元。</p>
+  </div>
+</header>
+
+<h2><span>01</span>实测数据（本次真实跑出来的）</h2>
+<p class="lede">不是估算，是 21 页真卷跑出来的数字。</p>
+<table>
+  <thead><tr><th>环节</th><th class="num">输出 token</th><th class="num">耗时</th><th class="num">单价</th></tr></thead>
+  <tbody>
+    <tr><td>单页转写（原页 1）</td><td class="num">782</td><td class="num">11.5 s</td><td class="num">0.0011 元</td></tr>
+    <tr><td>整卷一次性结构化</td><td class="num">16,245</td><td class="num">66.7 s</td><td class="num">0.064 元</td></tr>
+    <tr><td>42 次调用串行（旧）</td><td class="num">—</td><td class="num">≈500 s</td><td class="num">0.08 元</td></tr>
+    <tr><td>42 次调用并发 6–8 路（已改）</td><td class="num">—</td><td class="num">≈50–60 s</td><td class="num">0.08 元</td></tr>
+  </tbody>
+</table>
+<p>关键推论：<b>一次调用输出整卷，最快也要 67 秒</b>。所以“一次调用跑完整卷”这条路，无论怎么调参，都进不了 30 秒。</p>
+
+<h2><span>02</span>外部方案对比（有出处的才列）</h2>
+<p class="lede">只看“能不能出结构化题目+答案+解析”，以及 21 页耗时和千页成本。</p>
+<table>
+  <thead><tr><th>方案</th><th>类型</th><th class="num">21 页耗时</th><th class="num">千页成本</th><th>结构化能力</th></tr></thead>
+  <tbody>
+    <tr><td><b>qwen3.7-flash</b>（现用）</td><td>云 VLM</td><td class="num">50–67 s</td><td class="num">3.9 元</td><td>能出题目/答案/解析，需提示词约束</td></tr>
+    <tr><td><b>MinerU 2.5</b></td><td>开源自建</td><td class="num">9.9 s（A100）</td><td class="num">≈4 元 + 显卡</td><td>Markdown + 公式 + 图框，非题目结构</td></tr>
+    <tr><td><b>PaddleOCR-VL</b></td><td>开源自建</td><td class="num">13 s</td><td class="num">≈4 元 + 显卡</td><td>Markdown + 版面，非题目结构</td></tr>
+    <tr><td><b>Doc2X</b></td><td>云解析</td><td class="num">官方称 500 页/分</td><td class="num">20 元</td><td>Markdown/JSON + 版面块</td></tr>
+    <tr><td><b>TextIn xParse</b></td><td>云解析</td><td class="num">官方称 100 页/1.5 s</td><td class="num">71 元</td><td>Markdown/JSON + 版面块</td></tr>
+    <tr><td><b>Mathpix</b></td><td>云 OCR</td><td class="num">未公开</td><td class="num">35 元</td><td>数学最强，但只到行级，不出题目结构</td></tr>
+    <tr><td>腾讯云 试卷切题</td><td>云</td><td class="num">异步批处理</td><td class="num">200 元</td><td>题干 + 坐标</td></tr>
+  </tbody>
+</table>
+<p class="lede">没有任何一家的公开材料写着“21 页中文数学卷，30 秒内出题目+答案+解析”。宣传页上的“500 页/分”都是<b>解析成 Markdown</b>，不是出结构化题库。</p>
+
+<h2><span>03</span>三条可选路线</h2>
+
+<div class="card a">
+  <h4>路线 A：只做并发（已实施）<span class="tag">今天可用</span></h4>
+  <p>页面转写/定位并发 6–8 路，其余不动。整卷约 <b>50–60 秒</b>（含一次整卷结构化 67 秒仍是瓶颈，实测总耗时需再量）。成本不变，仍是卷均 0.08 元。</p>
+  <p><b>风险：</b>做不到 30 秒。</p>
+</div>
+
+<div class="card b">
+  <h4>路线 B：并发 + 分窗结构化 + 两阶段显示<span class="tag">推荐</span></h4>
+  <p>把“一次整卷结构化（67 秒）”拆成 7 个窗口并行，每窗约 12 秒；题目先出（约 20 秒可见），解析随后补齐。整卷预计 <b>35–45 秒</b>。</p>
+  <p><b>代价：</b>跨窗边界的题需要靠上下文页兜住，偶尔需要人工确认；不引入外部服务，成本不变。</p>
+</div>
+
+<div class="card c">
+  <h4>路线 C：接专用解析器 + 模型只做归属<span class="tag">唯一能进 30 秒</span></h4>
+  <p>Doc2X / TextIn 出 Markdown+版面块（10–20 秒），模型只负责“这块属于第几题”（输出 3–5k token，15 秒）。整卷 <b>25–35 秒</b>。</p>
+  <p><b>代价：</b>卷均 0.08 → 0.4 元（仍很便宜）；数据要出境到第三方；多一个外部依赖与故障点。</p>
+</div>
+
+<h2><span>04</span>我的建议</h2>
+<p>先做 <b>路线 B</b>：它不需要外部服务、不动你的题库结构，能把整卷压到 35–45 秒，并且“题目 20 秒先出来”，你的体感等待会明显缩短。</p>
+<p>如果 35–45 秒仍不接受，再上 <b>路线 C</b>。那时只需要替换“文字从哪来”这一段，后面的对齐、复核、入库全不用改——所以 B 和 C 不冲突，B 是 C 的地基。</p>
+<p><b>需要你拍一下板：</b>30 秒和“整卷独立视觉复核”不能同时要。复核本身就是一次整卷请求，实测就要 67 秒。建议把复核改成<b>只复核被标记的题</b>（通常 3–5 道），而不是全卷。</p>
+
+<div class="foot">
+  数据来源：本项目 2026-10-17 真实 21 页整卷实测；外部方案见 ai/PDF_FAST_PARSE_MODEL_SELECTION_2026-10-18.md（含链接与“查不到证据”的清单）。
+</div>
+</div>
+</body>
+</html>

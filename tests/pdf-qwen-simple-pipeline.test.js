@@ -15,7 +15,7 @@ function wire(metadata) {
     const common = { source_id, scope_id, question_no: '7', number_text: '7.', number_page: 1, source_pages: [1,2], status: 'observed_complete', figures: [], issues: [] };
     const entry = (id, field, extra) => ({ ...clone(common), ...extra, item_id: id, occurrence_id: 'occ-' + id, evidence: [{ source_id, page: 1, field, option_label: null, quote: '7.', block_id: metadata.blocks[0].block_id }] });
     const fig = (id, field) => ({ id, page: 1, field, option_label: null, asset_id: metadata.assets[0].asset_id, bbox: null });
-    const result={ wire_version: C.WIRE_VERSION, questions: [entry('q','stem',{ type:'free_response', stem:'原题完整正文 [[figure:q-image]]', options:[], figures:[fig('q-image','stem')] })], answers:[entry('a','answer',{text:'原文给出的答案'})], solutions:[entry('s','solution',{text:'前置证明第一步。前置证明第二步。上一页证明的尾段：故结论成立。另一处详解（1）略。 [[figure:s-image]]',figures:[fig('s-image','solution')]})], unassigned:[], pages:source.input_pages.map(page=>({source_id,page,state:'content',issues:[]})), warnings:[], requests:[] };
+    const result={ wire_version: C.WIRE_VERSION, questions: [entry('q','stem',{ type:'free_response', stem:'原题完整正文 [[figure:q-image]]', options:[], figures:[fig('q-image','stem')] })], answers:[entry('a','answer',{text:'原文给出的答案'})], solutions:[entry('s','solution',{text:'前置证明第一步。前置证明第二步。上一页证明的尾段：故结论成立。另一处详解（1）略。 [[figure:s-image]]',figures:[fig('s-image','solution')]})], unassigned:[], pages:source.input_pages.map(page=>({source_id,page,state:source.context_only_pages.includes(page)?'context_only':'content',issues:[]})), warnings:[], requests:[] };
     for(const stream of ['questions','answers','solutions'])if(!source.allowed_streams.includes(stream))result[stream]=[];
     return result;
 }
@@ -211,4 +211,13 @@ test('page requests overlap instead of queueing, and results keep page order',as
     assert.ok(elapsed<400,'page requests were serialized: '+elapsed+'ms');
     assert.deepEqual(result.drafts.map(d=>d.questionNumber),['7']);
     assert.equal(result.drafts[0].pdfExternal.reviewStates.modelReview,'pass');
+});
+
+test('windowed profile organizes each window separately and keeps only its own pages',async()=>{
+    const h=harness({config:{profileVersion:E.PROFILE_WINDOW,windowMode:'window',outputPages:1,contextPages:1}});
+    const result=await h.run();
+    const textCalls=h.calls.filter(call=>call.inputMode==='text');
+    assert.equal(textCalls.length,2,'one organize call per window');
+    assert.deepEqual(textCalls.map(call=>call.metadata.sources[0].output_pages),[[1],[2]]);
+    assert.equal(result.drafts.length,1,'items printed on a context page are not owned by this window');
 });

@@ -6,6 +6,11 @@
     'use strict';
     const VERSION = 'pdf-page-evidence-v1';
     const VERSION_V2 = 'pdf-page-evidence-v2', PROFILE = 'qwen37-simple-model-led-v1', MODEL = 'qwen3.7-flash-2026-07-15';
+    // Windowed variant of the same pipeline: identical page work, but the organize
+    // step runs per page window in parallel instead of once over the whole paper.
+    // A whole-paper organize emits ~16k tokens (67 s measured), which cannot meet
+    // the 30-60 s target no matter how the transport is tuned.
+    const PROFILE_WINDOW = 'qwen37-window-model-led-v1';
     const copy = value => JSON.parse(JSON.stringify(value));
     const freeze = value => { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } return value; };
     const object = properties => ({ type: 'object', additionalProperties: false, required: Object.keys(properties), properties });
@@ -145,5 +150,5 @@
     function cropBox(asset, sourceId, page) {
         return [VERSION,VERSION_V2].includes(asset?.protocol) && asset.coordinate_space === 'normalized-page-0-1' && asset.source_id === sourceId && asset.page === page && bboxValid(asset.bbox) ? asset.bbox.map(n => n * 1000) : null;
     }
-    return Object.freeze({ VERSION, VERSION_V2, PROFILE, MODEL, RECEIPT_VERSION, SCHEMA, LOCATION_SCHEMA, SYSTEM, PROMPT, RAW_SYSTEM, LOCATION_SYSTEM, imageHash, preparePageTask, receiveRaw, receiveLocation, projectPages, prepareTask, projectResponse, restore, cropBox });
+    return Object.freeze({ VERSION, VERSION_V2, PROFILE, PROFILE_WINDOW, MODEL, RECEIPT_VERSION, SCHEMA, LOCATION_SCHEMA, SYSTEM, PROMPT, RAW_SYSTEM, LOCATION_SYSTEM, imageHash, preparePageTask, receiveRaw, receiveLocation, projectPages, prepareTask, projectResponse, restore, cropBox });
 });
