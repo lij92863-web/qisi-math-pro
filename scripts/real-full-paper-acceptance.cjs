@@ -17,6 +17,10 @@ const PORT = Number(process.env.ACCEPTANCE_PORT || 32190);
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 const POLL_MS = 5000;
 const MAX_WAIT_MS = Number(process.env.ACCEPTANCE_MAX_MS || 45 * 60 * 1000);
+const KEEP_STATE = process.argv.includes('--keep-state');
+// Persistent profile keeps IndexedDB (and therefore paid page receipts) across
+// runs, so a retry after a late failure reuses evidence instead of re-billing.
+const PROFILE_DIR = path.join(ROOT, 'local-run-artifacts', 'acceptance-profile');
 const STAMP = new Date().toISOString().replace(/[:.]/g, '-');
 const OUT_DIR = path.join(ROOT, 'local-run-artifacts', 'real-full-paper-' + STAMP);
 const pdfPath = path.resolve(process.argv[2] || '');
@@ -55,7 +59,7 @@ const readState = page => page.evaluate(async () => {
     const serverOut = [];
     const child = spawn(process.execPath, ['qisi-local-server.js'], {
         cwd: ROOT, windowsHide: true,
-        env: { ...process.env, PORT: String(PORT) },
+        env: { ...process.env, PORT: String(PORT), AI_REQUEST_TIMEOUT_MS: String(Number(process.env.AI_REQUEST_TIMEOUT_MS || 900000)) },
         stdio: ['ignore', 'pipe', 'pipe']
     });
     child.stdout.on('data', chunk => serverOut.push(String(chunk)));
@@ -70,8 +74,8 @@ const readState = page => page.evaluate(async () => {
         log('识别服务凭据状态', JSON.stringify(ai));
         if (ai.configured !== true) throw new Error('识别服务未配置凭据，整卷验收无法执行');
 
-        browser = await chromium.launch({ headless: true });
-        const context = await browser.newContext({ acceptDownloads: true });
+        browser = await chromium.launchPersistentContext(PROFILE_DIR, { headless: true, acceptDownloads: true });
+        const context = browser;
         const page = await context.newPage();
         page.on('console', message => consoleLog.push(message.type() + ': ' + message.text()));
         page.on('pageerror', error => consoleLog.push('pageerror: ' + error.message));
@@ -84,23 +88,28 @@ const readState = page => page.evaluate(async () => {
             const config = window.Qisi?.Config?.pdfExternal;
             if (!config) return { ok: false, reason: 'pdfExternal 配置缺失' };
             config.enabled = true;
-            return { ok: config.enabled === true, model: config.model, profile: config.profileVersion };
+            config.timeoutMs = 900000;
+            config.maxTokens = Math.max(Number(config.maxTokens) || 0, 65536);
+            return { ok: config.enabled === true, model: config.model, profile: config.profileVersion, timeoutMs: config.timeoutMs };
         });
         if (!enabled.ok) throw new Error('无法开启 PDF 识别：' + JSON.stringify(enabled));
         log('识别开关已开启', JSON.stringify(enabled));
 
-        await page.evaluate(async () => {
-            const db = new window.Dexie('QisiMathVueDB');
-            await db.open();
-            try {
-                for (const name of ['questions', 'draftImportBatches', 'draftImportFiles', 'draftQuestions', 'draftImages']) {
-                    await db.table(name).clear();
-                }
-            } finally { db.close(); }
-        });
-
-        const before = await readState(page);
-        const existing = new Set(before.batches.map(row => row.id));
+        // --keep-state resumes the previous attempt (page receipts are reused and
+        // not re-billed); the default clears the ephemeral profile first.
+        if (!KEEP_STATE) {
+            await page.evaluate(async () => {
+                const db = new window.Dexie('QisiMathVueDB');
+                await db.open();
+                try {
+                    for (const name of ['questions', 'draftImportBatches', 'draftImportFiles', 'draftQuestions', 'draftImages']) {
+                        await db.table(name).clear();
+                    }
+                } finally { db.close(); }
+            });
+        }
+        const baseline = await readState(page);
+        const existing = new Set(baseline.batches.map(row => row.id));
 
         log('上传试卷', pdfPath);
         await page.locator('nav .nav-item').nth(1).click();

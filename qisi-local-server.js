@@ -1,4 +1,7 @@
-require('dotenv').config();
+// The project .env is this machine's explicit configuration and must win over a
+// stale machine-wide variable of the same name: an inherited key silently
+// shadowed a corrected .env and produced a misleading invalid_api_key.
+require('dotenv').config({ override: true });
 
 const express = require('express');
 const multer = require('multer');

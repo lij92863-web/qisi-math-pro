@@ -25,9 +25,12 @@ function review(task, options) {
 }
 function harness(options = {}) {
     const calls=[], crops=[], file={id:'s1',filename:'synthetic.pdf',fileType:'pdf',pdfPageCount:2};
-    let config={enabled:true,mode:'parse-organize-text',windowMode:'document',wireVersion:C.WIRE_VERSION,model,reviewModel:model,profileVersion:profile,strictTextSchema:true,parserPriceTiers:prices,priceTiers:prices,reviewPriceTiers:prices,...options.config};
+    // Serial on purpose: these cases pin fencing, ordering and billing semantics
+    // one request at a time; parallel dispatch is covered separately.
+    let config={enabled:true,mode:'parse-organize-text',windowMode:'document',wireVersion:C.WIRE_VERSION,model,reviewModel:model,profileVersion:profile,strictTextSchema:true,maxConcurrency:1,parserPriceTiers:prices,priceTiers:prices,reviewPriceTiers:prices,...options.config};
     const recognize=async task=>{
         calls.push(clone(task));
+        if(options.delayMs)await new Promise(r=>setTimeout(r,options.delayMs));
         if (options.unknown && options.unknown === task.inputMode) throw Error('accepted unknown');
         if (options.cancel && options.cancel === task.inputMode) options.controller.abort();
         let value, text;
@@ -197,4 +200,15 @@ test('cached invalid review still fences later source calls',async()=>{
 });
 test('cancellation during mechanical crops cannot resume itself into a new review request',async()=>{
     const options={controller:new AbortController(),cancelCrop:true},h=harness(options);await assert.rejects(h.run(),{name:'AbortError'});assert.equal(h.file.pdfExternalEvidence.tasks[0].state,'cancelled');assert.equal(h.calls.length,5);options.controller=new AbortController();options.cancelCrop=false;await assert.rejects(h.run());assert.equal(h.calls.length,5);
+});
+
+test('page requests overlap instead of queueing, and results keep page order',async()=>{
+    const h=harness({config:{maxConcurrency:4},delayMs:120});
+    const started=Date.now(),result=await h.run(),elapsed=Date.now()-started;
+    const pageCalls=h.calls.filter(t=>['page-raw','page-regions'].includes(t.inputMode));
+    assert.equal(pageCalls.length,4);
+    // Serial would need at least 4×120ms; overlapped it is ~2 rounds.
+    assert.ok(elapsed<400,'page requests were serialized: '+elapsed+'ms');
+    assert.deepEqual(result.drafts.map(d=>d.questionNumber),['7']);
+    assert.equal(result.drafts[0].pdfExternal.reviewStates.modelReview,'pass');
 });

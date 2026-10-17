@@ -1,7 +1,7 @@
 (function(root,factory){const api=factory(root);if(typeof module!=='undefined'&&module.exports)module.exports=api;root.Qisi=root.Qisi||{};root.Qisi.PdfExternalProducer=api;})(typeof globalThis!=='undefined'?globalThis:this,function(root){
 'use strict';
 const pageEvidence=root.Qisi?.PdfPageEvidence || (typeof module!=='undefined'&&module.exports?require('./qisi-pdf-page-evidence.js'):null);
-const DEFAULT_CONFIG=Object.freeze({enabled:false,wireVersion:'pdf-external-v2.2',mode:'direct',model:'',reviewModel:'',profileVersion:'unconfigured',windowMode:'document',outputPages:5,contextPages:2,renderScale:2,cropScale:3,jpegQuality:0.94,maxTokens:32768,timeoutMs:180000,maxCalls:80,maxQueries:20,maxPageAppearances:1000,maxYuan:20,maxRequestYuan:0.25,maxQueryYuan:0.25,maxResourceYuan:0.25});
+const DEFAULT_CONFIG=Object.freeze({enabled:false,wireVersion:'pdf-external-v2.2',mode:'direct',model:'',reviewModel:'',profileVersion:'unconfigured',windowMode:'document',outputPages:5,contextPages:2,renderScale:2,cropScale:3,jpegQuality:0.94,maxTokens:32768,maxConcurrency:6,timeoutMs:180000,maxCalls:80,maxQueries:20,maxPageAppearances:1000,maxYuan:20,maxRequestYuan:0.25,maxQueryYuan:0.25,maxResourceYuan:0.25});
 const activeRuns=new Set();
 // Typography repair is owned here, not in the app shell: only the normalizer is
 // used, so the instance is built with inert ports instead of shell wiring.
@@ -46,7 +46,7 @@ function createProducer(ports={},initial={}){
   const simple=config.profileVersion===pageEvidence.PROFILE;
   if(config.enabled!==true||!config.model)throw error('PDF_EXTERNAL_NOT_CONFIGURED','PDF识别服务待配置。软件链路已准备，提供接口后再启用。');
   if(root.document&&config.requireCrossWindowLock===true&&typeof root.navigator?.locks?.request!=='function')throw error('PDF_EXTERNAL_LOCK_NOT_AVAILABLE','当前浏览器不支持跨窗口导入保护，请使用本地应用的 Chromium 浏览器');
-  if(!['direct','parse-organize','parse-organize-text'].includes(config.mode)||!['document','window'].includes(config.windowMode)||![contract.WIRE_VERSION,contract.LEGACY_WIRE_VERSION].includes(config.wireVersion)||!Number.isSafeInteger(config.maxCalls)||config.maxCalls<1||!Number.isSafeInteger(config.maxQueries)||config.maxQueries<0||!Number.isSafeInteger(config.maxPageAppearances)||config.maxPageAppearances<1||![config.maxYuan,config.maxRequestYuan,config.maxQueryYuan,config.maxResourceYuan].every(v=>Number.isFinite(v)&&v>=0))throw error('PDF_EXTERNAL_CONFIG_INVALID');
+  if(!['direct','parse-organize','parse-organize-text'].includes(config.mode)||!['document','window'].includes(config.windowMode)||![contract.WIRE_VERSION,contract.LEGACY_WIRE_VERSION].includes(config.wireVersion)||!Number.isSafeInteger(config.maxCalls)||config.maxCalls<1||!Number.isSafeInteger(config.maxQueries)||config.maxQueries<0||!Number.isSafeInteger(config.maxPageAppearances)||config.maxPageAppearances<1||!Number.isSafeInteger(config.maxConcurrency)||config.maxConcurrency<1||config.maxConcurrency>8||![config.maxYuan,config.maxRequestYuan,config.maxQueryYuan,config.maxResourceYuan].every(v=>Number.isFinite(v)&&v>=0))throw error('PDF_EXTERNAL_CONFIG_INVALID');
   if(config.wireVersion===contract.WIRE_VERSION&&(!config.reviewModel||ports.execute.supportsReview?.()===false))throw error('PDF_EXTERNAL_REVIEW_NOT_CONFIGURED','独立原页复核模型和接口待配置，尚未提交识别请求');
   if(config.mode!=='direct'&&!ports.execute.stageLedger)throw error('PDF_EXTERNAL_STAGE_LEDGER_REQUIRED','分阶段接口必须登记每次实际请求');
   if(simple&&(config.mode!=='parse-organize-text'||config.windowMode!=='document'||config.wireVersion!==contract.WIRE_VERSION||config.model!==pageEvidence.MODEL||config.reviewModel!==pageEvidence.MODEL))throw error('PDF_EXTERNAL_SIMPLE_SCOPE_INVALID','固定流程要求完整document、v2.2和指定千问模型');
@@ -54,6 +54,10 @@ function createProducer(ports={},initial={}){
   const isQuestionSource=file=>ports.getRoles(file).some(role=>role==='question'||role==='full');
   files.sort((left,right)=>Number(isQuestionSource(right))-Number(isQuestionSource(left)));
   const observations=[],errors=[],warnings=[],unassigned=[],allPages=new Map();
+  // Requests in flight right now. A persisted 'registered' attempt that is not in
+  // this set survived a crash and is genuinely ambiguous; one that is in this set
+  // is simply concurrent work.
+  const inFlight=new Set();
   const previous=await ports.getExistingDrafts?.(context.batchId)||[];
   if(previous.some(q=>!contract.isExternal(q)))throw error('PDF_EXTERNAL_EXISTING_PROTOCOL','历史草稿继续使用原审核协议；新识别请建立新任务，保留原草稿');
   let fatal=false;
@@ -130,7 +134,9 @@ function createProducer(ports={},initial={}){
      }
      if(event.stage==='request-start'){
       active(signal);
-      if(record.attempts?.some(a=>['registered','submission_unknown'].includes(a.state)))throw error('PDF_EXTERNAL_SUBMISSION_UNKNOWN','本任务有接受未知的请求，后续提交已停止');
+      // 'registered' means in-flight while a worker is running, and ambiguous
+      // only when it survived a crash. Only the latter may stop later dispatch.
+      if(record.attempts?.some(a=>a.state==='submission_unknown'||(a.state==='registered'&&!inFlight.has(a.requestId))))throw error('PDF_EXTERNAL_SUBMISSION_UNKNOWN','本任务有接受未知的请求，后续提交已停止');
       // Preserve conservative charges from historical aggregated records when resuming a job.
       if(record.actualSubmission&&!record.attempts){record.attempts=[{requestId:record.requestId+':legacy',operation:'legacy',state:'received',calls:record.calls||1,pageAppearances:record.pages?.length||0,reservedYuan:record.reservedYuan||0,cost:record.cost||{known:false,yuan:null}}];}
       const physical=evidence.flatMap(e=>e.attempts?.length?e.attempts:e.actualSubmission?[{operation:'legacy',calls:e.calls||1,pageAppearances:e.pages?.length||0,reservedYuan:e.reservedYuan||0,cost:e.cost}]:[]);
@@ -139,10 +145,11 @@ function createProducer(ports={},initial={}){
       const pageAppearances=query||event.operation==='resource'?0:(event.input.pages?.length||event.input.parsedPages?.length||metadata.sources[0].input_pages.length)+(event.input.crops?.length||0);
       if((query?queries+1>config.maxQueries:calls+1>config.maxCalls)||physical.reduce((n,a)=>n+a.pageAppearances,0)+pageAppearances>config.maxPageAppearances||spent+reservedYuan>config.maxYuan+Number.EPSILON)throw error('PDF_EXTERNAL_BUDGET_EXHAUSTED','达到调用次数、页数或金额上限，后续请求已停止');
       const attempt={requestId:record.requestId+':'+event.operation+':'+(record.attempts||[]).length,operation:event.operation,state:'registered',inputMode:event.input.inputMode||null,model:event.input.model||config.model,parserVersion:config.parserVersion||null,wireVersion:config.wireVersion,pageAppearances,reservedYuan,cost:{known:false,yuan:null},registeredAt:Date.now(),requestHash:await requestDigest(event.operation,event.input)};
-      record.attempts=record.attempts||[];record.attempts.push(attempt);record.currentAttemptId=attempt.requestId;record.state='registered';refreshCharges(record);await persist(file);return{requestId:attempt.requestId};
+      record.attempts=record.attempts||[];record.attempts.push(attempt);inFlight.add(attempt.requestId);record.currentAttemptId=attempt.requestId;record.state='registered';refreshCharges(record);await persist(file);return{requestId:attempt.requestId};
      }
      if(['request-finish','request-error'].includes(event.stage)){
-      const attempt=record.attempts.find(a=>a.requestId===record.currentAttemptId),cause=event.cause;
+      const attempt=record.attempts.find(a=>a.requestId===(event.requestId||record.currentAttemptId)),cause=event.cause;
+      if(attempt)inFlight.delete(attempt.requestId);
       const response=event.result||{rawResponse:cause?.rawResponse||null,usage:cause?.usage||cause?.rawResponse?.usage||null,billing:cause?.billing,queryBilling:cause?.queryBilling};
       if(!attempt||attempt.operation!==event.operation)throw error('PDF_EXTERNAL_ATTEMPT_STATE_INVALID');
       Object.assign(attempt,{state:event.stage==='request-finish'||cause?.externalResponseReceived?'received':cause?.submissionAccepted===false||cause?.definitelyNotSubmitted===true?'rejected':'submission_unknown',finishedAt:Date.now(),elapsedMs:Date.now()-attempt.registeredAt,response:copy(response),cost:attemptCost(contract,event.operation,response,config)});
@@ -157,12 +164,16 @@ function createProducer(ports={},initial={}){
      if(event.stage==='parse'||event.validated){const original=record.attempts?.find(a=>a.operation==='parse');if(original){original.finalBilling={usage:event.result?.usage||event.result?.rawResponse?.usage||null,billing:event.result?.billing||null};original.cost=attemptCost(contract,'parse',event.result,config);refreshCharges(record);}}
      await persist(file);
     };
+    // Ledger writes are serialized so concurrent page requests cannot interleave
+    // a half-written evidence record; the network calls themselves stay parallel.
+    let ledger=Promise.resolve();
+    const serialStage=event=>{const next=ledger.then(()=>onStage(event),()=>onStage(event));ledger=next.then(()=>undefined,()=>undefined);return next;};
     const execute=async taskInput=>{
-     if(ports.execute.stageLedger)return ports.execute({...taskInput,trackRequests:true},onStage);
+     if(ports.execute.stageLedger)return ports.execute({...taskInput,trackRequests:true,maxConcurrency:config.maxConcurrency},serialStage);
      const registration=await onStage({stage:'request-start',operation:taskInput.mode==='review-visual'?'review':'direct',input:taskInput});
      let output;
-     try{output=await ports.execute({...taskInput,requestId:registration.requestId});}catch(cause){await onStage({stage:'request-error',operation:taskInput.mode==='review-visual'?'review':'direct',cause});throw cause;}
-     await onStage({stage:'request-finish',operation:taskInput.mode==='review-visual'?'review':'direct',result:output});return output;
+     try{output=await ports.execute({...taskInput,requestId:registration.requestId});}catch(cause){await onStage({stage:'request-error',operation:taskInput.mode==='review-visual'?'review':'direct',cause,requestId:registration.requestId});throw cause;}
+     await onStage({stage:'request-finish',operation:taskInput.mode==='review-visual'?'review':'direct',result:output,requestId:registration.requestId});return output;
     };
     if(cached)result={text:cached.text,model:cached.model,finishReason:cached.finishReason,usage:cached.usage,ok:cached.ok,refusal:cached.refusal,metadata:cached.metadata||metadata,parseResult:cached.parseResult,rawResponse:cached.rawResponse};
     else{

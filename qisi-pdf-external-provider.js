@@ -26,10 +26,12 @@ function createExecutor(ports={}) {
   const call=async(operation,fn,input)=>{
    if(task.signal?.aborted)throw Object.assign(Error('PDF任务已取消'),{name:'AbortError'});
    if(task.profileVersion===pageEvidence.PROFILE)checkCapacity({...input,maxPromptBytes:task.maxPromptBytes,maxRequestImages:task.maxRequestImages});
-   if(task.trackRequests){const registered=await onStage({stage:'request-start',operation,input});if(registered?.requestId)input={...input,requestId:registered.requestId};}
+   let requestId=null;
+   if(task.trackRequests){const registered=await onStage({stage:'request-start',operation,input});requestId=registered?.requestId||null;if(requestId)input={...input,requestId};}
    let result;
-   try{result=await fn(input);}catch(cause){if(task.trackRequests)await onStage({stage:'request-error',operation,cause});throw cause;}
-   if(task.trackRequests)await onStage({stage:'request-finish',operation,result});
+   try{result=await fn(input);}catch(cause){if(task.trackRequests)await onStage({stage:'request-error',operation,cause,requestId});throw cause;}
+   // The request id travels with the outcome: several requests may be in flight.
+   if(task.trackRequests)await onStage({stage:'request-finish',operation,result,requestId});
    return ['transcribe','locate'].includes(operation)?{...result,attemptId:input.requestId}:result;
   };
   if(task.mode==='review-visual'){
@@ -56,17 +58,35 @@ function createExecutor(ports={}) {
     parsed=pageEvidence.restore(parsed,task.metadata,contract);
     if(parsed.protocol!==pageEvidence.VERSION_V2||JSON.stringify(parsed.rawPages.map(p=>p.page_image_hash))!==JSON.stringify(hashes))throw Object.assign(Error('原页内容与缓存身份不符'),{code:'PDF_PAGE_EVIDENCE_CACHE_INVALID',externalResponseReceived:true});
    }else{
-    const raw=[],locations=[];
-    const plan=['transcribe','locate'].flatMap(operation=>task.pages.map((page,i)=>({operation,pageImageHash:hashes[i],input:pageEvidence.preparePageTask(task,page,operation,hashes[i],contract)})));
-    const reused=task.trackRequests?await onStage({stage:'page-plan',requests:plan}):[];
-    for(const [i,entry]of plan.entries()){
+   const raw=[],locations=[];
+   const plan=['transcribe','locate'].flatMap(operation=>task.pages.map((page,i)=>({operation,pageImageHash:hashes[i],input:pageEvidence.preparePageTask(task,page,operation,hashes[i],contract)})));
+   const reused=task.trackRequests?await onStage({stage:'page-plan',requests:plan}):[];
+   // Page-level work is independent: transcribing page n does not depend on page
+   // n-1, and locate is independent from transcribe. Running them one at a time
+   // was pure latency bundling (42 serial round trips for a 21-page paper), so
+   // they are dispatched with bounded concurrency and reassembled in page order.
+   const settled=new Array(plan.length);
+   const concurrency=Math.max(1,Math.min(Number(task.maxConcurrency)||6,plan.length));
+   let cursor=0;
+   const drain=async()=>{
+    for(;;){
+     const index=cursor++;if(index>=plan.length)return;
      if(task.signal?.aborted)throw Object.assign(Error('PDF任务已取消'),{name:'AbortError'});
+     const entry=plan[index];
+     const result=reused?.[index]||await call(entry.operation,recognize,entry.input);
+     // Validate each page as soon as it lands: a bad page must stop the run at
+     // once, not after the remaining pages have already been paid for.
      const page=entry.input.pages[0].pageNo;
-     const result=reused?.[i]||await call(entry.operation,recognize,entry.input);
      if(entry.operation==='transcribe')pageEvidence.receiveRaw(result,source.source_id,page,entry.pageImageHash);
      else pageEvidence.receiveLocation(result,source.source_id,page,contract);
-     (entry.operation==='transcribe'?raw:locations).push({source_id:source.source_id,page,page_image_hash:entry.pageImageHash,response:result});
+     settled[index]={result,page};
     }
+   };
+   await Promise.all(Array.from({length:concurrency},()=>drain()));
+   for(const [index,entry]of plan.entries()){
+    const {result,page}=settled[index];
+    (entry.operation==='transcribe'?raw:locations).push({source_id:source.source_id,page,page_image_hash:entry.pageImageHash,response:result});
+   }
     parsed=pageEvidence.projectPages(raw,locations,task.metadata,contract);
    }
    const metadata={...task.metadata,assets:parsed.assets.map(a=>({asset_id:a.asset_id,source_id:a.source_id,page:a.page,kind:a.kind,anchor:a.anchor})),blocks:parsed.rawPages.map(p=>({block_id:p.block_id,source_id:p.source_id,page:p.page}))};
