@@ -63,11 +63,23 @@ function createProducer(ports={},initial={}){
   if(previous.some(q=>!contract.isExternal(q)))throw error('PDF_EXTERNAL_EXISTING_PROTOCOL','历史草稿继续使用原审核协议；新识别请建立新任务，保留原草稿');
   let fatal=false;
   const evidence=files.flatMap(f=>f.pdfExternalEvidence?.tasks||[]).map(copy);
-  const persist=async file=>{file.pdfExternalEvidence={protocol:contract.PROTOCOL,tasks:evidence.filter(e=>e.sourceId===file.id),unassigned:copy(unassigned.filter(u=>u.source_id===file.id)),errors:copy(errors.filter(e=>e.sourceId===file.id))};await ports.persistSourceEvidence?.(file,copy(file.pdfExternalEvidence));};
+  // Windowed tasks run at the same time, so their bookkeeping shares one queue:
+  // budget checks, evidence scans and ledger writes must never interleave.
+  const stageQueue={queue:Promise.resolve()};
+  let requestSeq=0,persistQueue=Promise.resolve();
+  // A window owns only its own evidence records. Reading another window's live
+  // 'registered' state as an ambiguous submission would abort a healthy run.
+  const ownsWindow=(record,outputPages)=>!windowOnly||!Array.isArray(record.metadata?.sources?.[0]?.output_pages)||record.metadata.sources[0].output_pages.some(page=>outputPages.includes(page));
+  // Tasks buffer their own findings; the caller merges them in page order.
+  const persistFile=(file,pending={})=>{
+   const pendingErrors=[...(pending.errors||[])],pendingUnassigned=[...(pending.unassigned||[])];
+   const write=async()=>{file.pdfExternalEvidence={protocol:contract.PROTOCOL,tasks:evidence.filter(e=>e.sourceId===file.id),unassigned:copy([...unassigned,...pendingUnassigned].filter(u=>u.source_id===file.id)),errors:copy([...errors,...pendingErrors].filter(e=>e.sourceId===file.id))};await ports.persistSourceEvidence?.(file,copy(file.pdfExternalEvidence));};
+   const next=persistQueue.then(write,write);persistQueue=next.then(()=>undefined,()=>undefined);return next;
+  };
   for(const file of files){
    active(signal);
    if(String(file.fileType||'').toLowerCase()!=='pdf'||file.convertedFromDocx)throw error('PDF_EXTERNAL_SOURCE_NOT_PDF');
-   if(fatal){errors.push({sourceId:file.id,pages:[],code:'PDF_EXTERNAL_HALTED',message:'此前致命错误，来源未处理'});await persist(file);continue;}
+   if(fatal){errors.push({sourceId:file.id,pages:[],code:'PDF_EXTERNAL_HALTED',message:'此前致命错误，来源未处理'});await persistFile(file);continue;}
    const roles=ports.getRoles(file),allowed=roles.includes('full')?['questions','answers','solutions']:[['question','questions'],['answer','answers'],['solution','solutions']].filter(([r])=>roles.includes(r)).map(([,s])=>s);
    const source={sourceId:file.id,format:'pdf',filename:file.filename,mimeType:'application/pdf',sourceOrder:files.indexOf(file)};
    const pages=await ports.renderPages(file,{scale:config.renderScale,jpegQuality:config.jpegQuality,sequential:true,requireAllPages:true,suppressCostEstimate:true});allPages.set(file.id,pages);
@@ -75,24 +87,30 @@ function createProducer(ports={},initial={}){
    if(!Number.isSafeInteger(totalPages)||totalPages<1)throw error('PDF_EXTERNAL_SOURCE_PAGE_COUNT_MISSING','缺少原卷总页数，不能把选中页数当作原页映射');
    if(pageLed&&(pages.length!==totalPages||pages.some((p,i)=>p.pageNo!==i+1)))throw error('PDF_EXTERNAL_SIMPLE_SCOPE_INVALID','固定流程必须输入原卷全部连续页');
    if(pages.some((page,i)=>i&&page.pageNo!==pages[i-1].pageNo+1))errors.push({sourceId:file.id,pages:pages.map(p=>p.pageNo),code:'PDF_EXTERNAL_SELECTED_PAGE_GAPS',message:'已选页码存在间隔，仅处理已选范围，请对照原卷确认本题范围'});
-   for(const [index,task]of tasks(pages,config).entries()){
-    active(signal);if(fatal)break;
+   const projectTasks=tasks(pages,config);
+   // One window is one task. Findings stay task-local until the caller merges them
+   // in page order, so completion order can never reorder observations.
+   const executeTask=async(index,task,prior)=>{
+    const observations=[],errors=[],warnings=[],unassigned=[];
+    const persist=file=>persistFile(file,{errors,warnings,unassigned});
+    const done=()=>({observations,errors,warnings,unassigned});
+    active(signal);if(fatal)return done();
     const metadata={sources:[{source_id:file.id,scope_id:context.batchId,document_role:allowed.includes('questions')?(allowed.length===1?'question':'full'):'support',allowed_streams:allowed,total_pages:totalPages,input_pages:task.pages.map(p=>p.pageNo),output_pages:task.outputPages,context_only_pages:task.contextPages}],assets:[]};
     if(!contract.validateRequest(metadata).valid)throw error('PDF_EXTERNAL_METADATA_INVALID');
     const parserProfile=config.mode==='direct'?null:ports.execute.getParserProfile?.(config)||null;
     const cacheKey=await digest({metadata,config,parserProfile,schema:contract.getWireSchema(config.wireVersion),reviewSchema:contract.REVIEW_SCHEMA,prompts:['SYSTEM','DIRECT','ORGANIZE','SYSTEM_V22','ORGANIZE_TEXT','REVIEW_VISUAL','REVIEW_SYSTEM','REVIEW_CROPS','REVISE',...(pageLed?['SIMPLE_ORGANIZE','SIMPLE_REVIEW']:[])].map(k=>root.Qisi.PdfExternalProvider?.[k]),pages:task.pages.map(p=>[p.pageNo,p.url])});
     const parseMetadata=parserProfile?{sources:metadata.sources.map(s=>({source_id:s.source_id,total_pages:s.total_pages,input_pages:s.input_pages}))}:metadata;
     const parseKey=await digest({sourceId:file.id,pages:task.pages.map(p=>[p.pageNo,p.url]),metadata:parseMetadata,parserVersion:config.parserVersion||'unconfigured',parserConfig:config.parserConfig||null,parserProfile,model:parserProfile?config.model:null,maxTokens:parserProfile?config.maxTokens:null});
-    const requestId=context.batchId+':'+file.id+':'+index+':external:'+evidence.length;
-    const unknown=evidence.find(e=>e.sourceId===file.id&&(['submission_unknown','registered'].includes(e.state)||e.attempts?.some(a=>['registered','submission_unknown'].includes(a.state))));
-    if(unknown){errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:'PDF_EXTERNAL_SUBMISSION_UNKNOWN',message:'此前提交状态未知，不能自动重复发送'});fatal=true;await persist(file);break;}
+    const requestId=context.batchId+':'+file.id+':'+index+':external:'+(windowOnly?++requestSeq:evidence.length);
+    const unknown=evidence.find(e=>e.sourceId===file.id&&ownsWindow(e,task.outputPages)&&(['submission_unknown','registered'].includes(e.state)||e.attempts?.some(a=>['registered','submission_unknown'].includes(a.state))));
+    if(unknown){errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:'PDF_EXTERNAL_SUBMISSION_UNKNOWN',message:'此前提交状态未知，不能自动重复发送'});fatal=true;await persist(file);return done();}
     const cached=evidence.findLast(e=>e.sourceId===file.id&&e.cacheKey===cacheKey&&['validated','received'].includes(e.state)&&e.finishReason==='stop');
-    const pending=evidence.findLast(e=>e.sourceId===file.id&&e.state==='parse_pending');
+    const pending=evidence.findLast(e=>e.sourceId===file.id&&ownsWindow(e,task.outputPages)&&e.state==='parse_pending');
     if(pending&&pending.parseKey!==parseKey)throw error('PDF_EXTERNAL_PARSE_PENDING','已有解析任务与当前选页/解析配置不同，请先处理原任务');
     const cachedParse=evidence.findLast(e=>e.sourceId===file.id&&e.parseKey===parseKey&&e.parseValidated)?.parseResult;
     if(pageLed){
      const stopped=evidence.find(e=>e.sourceId===file.id&&e.cacheKey===cacheKey&&!['received','validated'].includes(e.state));
-     if(stopped){errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:'PDF_EXTERNAL_SIMPLE_STOPPED',message:'当前固定流程已失败，保留证据；不会自动重发或修复'});fatal=true;continue;}
+     if(stopped){errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:'PDF_EXTERNAL_SIMPLE_STOPPED',message:'当前固定流程已失败，保留证据；不会自动重发或修复'});fatal=true;return done();}
      const calls=evidence.flatMap(e=>e.attempts||[]).filter(a=>a.operation!=='query').length,planned=cached?0:cachedParse?2:0;
      if(calls+planned>config.maxCalls)throw error('PDF_EXTERNAL_BUDGET_EXHAUSTED','固定路径调用数超过上限，尚未提交新的模型请求');
     }
@@ -167,8 +185,9 @@ function createProducer(ports={},initial={}){
     };
     // Ledger writes are serialized so concurrent page requests cannot interleave
     // a half-written evidence record; the network calls themselves stay parallel.
-    let ledger=Promise.resolve();
-    const serialStage=event=>{const next=ledger.then(()=>onStage(event),()=>onStage(event));ledger=next.then(()=>undefined,()=>undefined);return next;};
+    // Windowed tasks share one queue because they are dispatched at the same time.
+    const queue=windowOnly?stageQueue:{queue:Promise.resolve()};
+    const serialStage=event=>{const next=queue.queue.then(()=>onStage(event),()=>onStage(event));queue.queue=next.then(()=>undefined,()=>undefined);return next;};
     const execute=async taskInput=>{
      if(ports.execute.stageLedger)return ports.execute({...taskInput,trackRequests:true,maxConcurrency:config.maxConcurrency},serialStage);
      const registration=await onStage({stage:'request-start',operation:taskInput.mode==='review-visual'?'review':'direct',input:taskInput});
@@ -192,7 +211,7 @@ function createProducer(ports={},initial={}){
       record.error={code:cause.code||cause.name||'PDF_EXTERNAL_FAILED',message:cause.message,...(cause.details?{details:copy(cause.details)}:{})};await persist(file);
       if(cause.rawResponse){record.rawResponse=copy(cause.rawResponse);await persist(file);}
       await abortIfCancelled(cause);
-      errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:record.error.code,message:cause.message});fatal=pageLed||['submission_unknown','parse_pending'].includes(record.state)||[400,401,402,403].includes(cause.status);continue;
+      errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:record.error.code,message:cause.message});fatal=pageLed||['submission_unknown','parse_pending'].includes(record.state)||[400,401,402,403].includes(cause.status);return done();
      }
     }
     if(parserProfile){
@@ -200,11 +219,11 @@ function createProducer(ports={},initial={}){
       const restored=ports.execute.restoreParse(result.parseResult,metadata);
       const assets=restored.assets.map(a=>({asset_id:a.asset_id,source_id:a.source_id,page:a.page,...(pageLed?{kind:a.kind,anchor:a.anchor}:{})})),blocks=restored.parsedPages.flatMap(p=>p.blocks.map(b=>({block_id:b.block_id,source_id:p.source_id,page:p.page})));
       if(JSON.stringify(assets)!==JSON.stringify(result.metadata?.assets)||JSON.stringify(blocks)!==JSON.stringify(result.metadata?.blocks))throw error('PDF_PAGE_EVIDENCE_CACHE_INVALID','页文资源/块命名空间与候选来源不一致');
-     }catch(cause){record.state='invalid';record.error={code:cause.code||'PDF_PAGE_EVIDENCE_CACHE_INVALID',message:cause.message};errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:record.error.code,message:cause.message});if(pageLed)fatal=true;await persist(file);continue;}
+     }catch(cause){record.state='invalid';record.error={code:cause.code||'PDF_PAGE_EVIDENCE_CACHE_INVALID',message:cause.message};errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:record.error.code,message:cause.message});if(pageLed)fatal=true;await persist(file);return done();}
     }
     const responseMetadata=result.metadata||metadata;
     const checked=JSON.stringify(responseMetadata.sources)!==JSON.stringify(metadata.sources)?{valid:false,errors:['provider-source-metadata-changed']}:pageLed&&result.model&&result.model!==pageEvidence.MODEL?{valid:false,errors:['provider-model-changed']}:contract.validateWireResult(result.text,responseMetadata,{ok:result.ok!==false,refusal:result.refusal,finishReason:result.finishReason,expectedWireVersion:config.wireVersion});
-    if(!checked.valid||pageLed&&['questions','answers','solutions','unassigned'].some(stream=>checked.result[stream].some(item=>item.figures.some(fig=>fig.bbox!==null)))){record.state='invalid';record.validationErrors=checked.valid?['text-organizer-bbox-forbidden']:checked.errors;errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:'PDF_EXTERNAL_WIRE_INVALID',message:record.validationErrors.join(', ')});if(pageLed)fatal=true;await persist(file);continue;}
+    if(!checked.valid||pageLed&&['questions','answers','solutions','unassigned'].some(stream=>checked.result[stream].some(item=>item.figures.some(fig=>fig.bbox!==null)))){record.state='invalid';record.validationErrors=checked.valid?['text-organizer-bbox-forbidden']:checked.errors;errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:'PDF_EXTERNAL_WIRE_INVALID',message:record.validationErrors.join(', ')});if(pageLed)fatal=true;await persist(file);return done();}
     // A window owns only the items whose printed number sits on its output pages;
     // whatever the model also emitted for a context page belongs to its neighbour.
     if(windowOnly){const own=new Set(metadata.sources[0].output_pages);for(const stream of ['questions','answers','solutions'])checked.result[stream]=checked.result[stream].filter(item=>own.has(item.number_page));}
@@ -217,10 +236,10 @@ function createProducer(ports={},initial={}){
     for(const issue of transcriptionIssues)errors.push({sourceId:issue.source_id||file.id,pages:issue.page?[issue.page]:[],code:'PDF_EXTERNAL_TRANSCRIPTION_REVIEW_REQUIRED',message:'原页转写待核对：'+issue.message});
     const observation={result:checked.result,metadata:result.metadata||metadata,source,requestId:record.requestId,model:record.model,transcriptionIssues,images:[],cropErrors:[]},reviewCrops=[];
     if(pageLed){
-     const complete=[...observations,observation],expected=complete.flatMap(o=>o.result.questions.map(q=>q.question_no));
+     const complete=[...prior,...observations,observation],expected=complete.flatMap(o=>o.result.questions.map(q=>q.question_no));
      const required=[...new Set(complete.flatMap(o=>o.metadata.sources.flatMap(s=>s.allowed_streams.filter(v=>v!=='questions'))))];
      const gate=contract.evaluateSequences(complete.map(o=>o.result),expected,required.length?required:['answers','solutions']);
-     if(gate.errors.length||required.length&&gate.mode==='fail-closed'){record.state='invalid';record.error={code:'PDF_EXTERNAL_SEQUENCE_INVALID',message:'来源题号或答案解析序列不可靠，固定流程已停止'};errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,...record.error});fatal=true;await persist(file);continue;}
+     if(gate.errors.length||required.length&&gate.mode==='fail-closed'){record.state='invalid';record.error={code:'PDF_EXTERNAL_SEQUENCE_INVALID',message:'来源题号或答案解析序列不可靠，固定流程已停止'};errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,...record.error});fatal=true;await persist(file);return done();}
     }
     unassigned.push(...checked.result.unassigned);warnings.push(...checked.result.warnings);
     for(const page of checked.result.pages)if(page.state==='unreadable')errors.push({sourceId:file.id,pages:[page.page],code:'PDF_EXTERNAL_UNREADABLE_PAGE',message:'原页不可读'});
@@ -293,6 +312,24 @@ function createProducer(ports={},initial={}){
      observation.modelReview=record.modelReview;
     }
     observations.push(observation);await persist(file);
+    return done();
+   };
+   if(windowOnly){
+    // Bounded concurrency for page windows. Slots are merged by index, never by
+    // completion: buildDrafts/evaluateSequences treat observations as trusted page
+    // order. A fatal window stops new dispatch; in-flight windows may finish.
+    const slots=new Array(projectTasks.length);
+    let cursor=0;
+    const drain=async()=>{for(;;){const index=cursor++;if(index>=projectTasks.length||fatal)return;slots[index]=await executeTask(index,projectTasks[index],observations);}};
+    await Promise.all(Array.from({length:Math.max(1,Math.min(config.maxConcurrency,projectTasks.length))},()=>drain()));
+    for(const slot of slots){if(!slot)continue;observations.push(...slot.observations);errors.push(...slot.errors);warnings.push(...slot.warnings);unassigned.push(...slot.unassigned);}
+    await persistFile(file);
+   }else{
+    for(const [index,task]of projectTasks.entries()){
+     if(fatal)break;
+     const slot=await executeTask(index,task,observations);
+     observations.push(...slot.observations);errors.push(...slot.errors);warnings.push(...slot.warnings);unassigned.push(...slot.unassigned);
+    }
    }
   }
   active(signal);

@@ -84,14 +84,21 @@ const readState = page => page.evaluate(async () => {
         await page.goto(ORIGIN + '/main.html', { waitUntil: 'domcontentloaded' });
         await page.waitForSelector('nav .nav-item', { timeout: 60000 });
 
-        const enabled = await page.evaluate(() => {
+        const windowed = process.argv.includes('--windowed');
+        const enabled = await page.evaluate(useWindows => {
             const config = window.Qisi?.Config?.pdfExternal;
             if (!config) return { ok: false, reason: 'pdfExternal 配置缺失' };
             config.enabled = true;
             config.timeoutMs = 900000;
             config.maxTokens = Math.max(Number(config.maxTokens) || 0, 65536);
-            return { ok: config.enabled === true, model: config.model, profile: config.profileVersion, timeoutMs: config.timeoutMs };
-        });
+            if (useWindows) {
+                config.profileVersion = 'qwen37-window-model-led-v1';
+                config.windowMode = 'window';
+                config.outputPages = 4;
+                config.contextPages = 1;
+            }
+            return { ok: config.enabled === true, model: config.model, profile: config.profileVersion, windowMode: config.windowMode, timeoutMs: config.timeoutMs };
+        }, windowed);
         if (!enabled.ok) throw new Error('无法开启 PDF 识别：' + JSON.stringify(enabled));
         log('识别开关已开启', JSON.stringify(enabled));
 

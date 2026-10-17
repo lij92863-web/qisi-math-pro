@@ -21,29 +21,30 @@ function wire(metadata) {
 }
 function review(task, options) {
     const s = task.metadata.sources[0];
-    return { review_version:'pdf-external-review-v1', candidate_hash:task.candidateHash, pages:task.candidate.pages.map(p=>({source_id:p.source_id,page:p.page,state:'checked',issues:[]})), items:['questions','answers','solutions'].flatMap(k=>task.candidate[k]).map(i=>({item_id:i.item_id,verdict:options.failedReview?'fail':'pass',issues:options.failedReview?[{code:'omission',field:'item',detail:'原文遗漏',source_pages:[1]}]:[],evidence:[{source_id:s.source_id,page:1,quote:'原文'}]})), unrepresented:options.unrepresented?[{source_id:s.source_id,page:2,quote:'未表达表格',reason:'原页有内容未进候选'}]:[], requests:[], summary:'模拟双向核对' };
+    return { review_version:'pdf-external-review-v1', candidate_hash:task.candidateHash, pages:task.candidate.pages.map(p=>({source_id:p.source_id,page:p.page,state:'checked',issues:[]})), items:['questions','answers','solutions'].flatMap(k=>task.candidate[k]).map(i=>({item_id:i.item_id,verdict:options.failedReview?'fail':'pass',issues:options.failedReview?[{code:'omission',field:'item',detail:'原文遗漏',source_pages:[1]}]:[],evidence:[{source_id:s.source_id,page:i.source_pages[0],quote:'原文'}]})), unrepresented:options.unrepresented?[{source_id:s.source_id,page:2,quote:'未表达表格',reason:'原页有内容未进候选'}]:[], requests:[], summary:'模拟双向核对' };
 }
 function harness(options = {}) {
-    const calls=[], crops=[], file={id:'s1',filename:'synthetic.pdf',fileType:'pdf',pdfPageCount:2};
+    const calls=[], crops=[], file={id:'s1',filename:'synthetic.pdf',fileType:'pdf',pdfPageCount:(options.pages||[1,2]).length};
     // Serial on purpose: these cases pin fencing, ordering and billing semantics
     // one request at a time; parallel dispatch is covered separately.
     let config={enabled:true,mode:'parse-organize-text',windowMode:'document',wireVersion:C.WIRE_VERSION,model,reviewModel:model,profileVersion:profile,strictTextSchema:true,maxConcurrency:1,parserPriceTiers:prices,priceTiers:prices,reviewPriceTiers:prices,...options.config};
     const recognize=async task=>{
-        calls.push(clone(task));
-        if(options.delayMs)await new Promise(r=>setTimeout(r,options.delayMs));
+        calls.push({...clone(task),at:Date.now()});
+        const delay=typeof options.delayMs==='function'?options.delayMs(task):options.delayMs;
+        if(delay)await new Promise(r=>setTimeout(r,delay));
         if (options.unknown && options.unknown === task.inputMode) throw Error('accepted unknown');
         if (options.cancel && options.cancel === task.inputMode) options.controller.abort();
         let value, text;
         const s=task.metadata.sources[0], page=s.input_pages[0];
-        if (task.inputMode==='page-raw') text=fixture.raw[page-1];
+        if (task.inputMode==='page-raw') text=fixture.raw[page-1]??('第'+page+'页原文');
         else if (task.inputMode==='page-regions') {
-            value={location_version:'pdf-page-regions-v1',source_id:s.source_id,page,state:'content',regions:clone(fixture.regions[page-1]),issues:[]};
+            value={location_version:'pdf-page-regions-v1',source_id:s.source_id,page,state:'content',regions:clone(fixture.regions[page-1]??[]),issues:[]};
             if(options.locationIssue&&page===2){value.regions=[{kind:'spatial',bbox:null,anchor:'原页数阵',issues:['无法确定范围']}];value.issues=['源符号异常'];}
             if(options.badLocation&&page===1)value.table_data={hidden:2};
             if(options.missingReports){delete value.issues;for(const region of value.regions)delete region.issues;}
             text=JSON.stringify(value);
         } else if(task.inputMode==='text') {
-            value=wire(task.metadata);if(options.badWire)value.questions[0].source_id='foreign';if(options.duplicateQuestion){const repeated=clone(value.questions[0]);repeated.item_id='q2';repeated.occurrence_id='occ-q2';repeated.figures=[];repeated.stem='另一次同号原题';value.questions.push(repeated);}if(options.badSequence){value.answers[0].question_no='8';value.answers[0].number_text='8.';}if(options.requests)value.requests=[{source_id:s.source_id,pages:[2],item_ids:['q'],reason:'仍需核对'}];if(options.unassigned)value.unassigned=[{item_id:'tail',source_id:s.source_id,scope_id:s.scope_id,source_pages:[2],kind:'solution',text:'无号原文尾段',figures:[],reason:'归属无法确定'}];text=JSON.stringify(value);
+            if(options.perWindowQuestion){const own=task.metadata.sources[0],page=own.output_pages[0],block=task.metadata.blocks.find(b=>b.page===page).block_id,row=no=>({source_id:own.source_id,scope_id:own.scope_id,question_no:String(no),number_text:no+'.',number_page:no,source_pages:[no],status:'observed_complete',figures:[],issues:[]});value={wire_version:C.WIRE_VERSION,questions:[{...row(page),type:'free_response',stem:'第'+page+'题正文',options:[],item_id:'q'+page,occurrence_id:'occ-q'+page,evidence:[{source_id:own.source_id,page,field:'stem',option_label:null,quote:page+'.',block_id:block}]}],answers:[{...row(page),text:'第'+page+'题答案',item_id:'a'+page,occurrence_id:'occ-a'+page,evidence:[{source_id:own.source_id,page,field:'answer',option_label:null,quote:page+'.',block_id:block}]}],solutions:[{...row(page),text:'第'+page+'题解析',item_id:'s'+page,occurrence_id:'occ-s'+page,evidence:[{source_id:own.source_id,page,field:'solution',option_label:null,quote:page+'.',block_id:block}]}],unassigned:[],pages:own.input_pages.map(p=>({source_id:own.source_id,page:p,state:own.context_only_pages.includes(p)?'context_only':'content',issues:[]})),warnings:[],requests:[]};}else value=wire(task.metadata);if(options.badWire)value.questions[0].source_id='foreign';if(options.duplicateQuestion){const repeated=clone(value.questions[0]);repeated.item_id='q2';repeated.occurrence_id='occ-q2';repeated.figures=[];repeated.stem='另一次同号原题';value.questions.push(repeated);}if(options.badSequence){value.answers[0].question_no='8';value.answers[0].number_text='8.';}if(options.requests)value.requests=[{source_id:s.source_id,pages:[2],item_ids:['q'],reason:'仍需核对'}];if(options.unassigned)value.unassigned=[{item_id:'tail',source_id:s.source_id,scope_id:s.scope_id,source_pages:[2],kind:'solution',text:'无号原文尾段',figures:[],reason:'归属无法确定'}];text=JSON.stringify(value);
         } else { value=review(task,options);text=options.badReview?'{}':JSON.stringify(value); }
         return {text,ok:true,finishReason:options.truncated&&options.truncated===task.inputMode?'length':'stop',model:options.wrongModel===(task.inputMode||'review')?'wrong':model,usage:{prompt_tokens:10,completion_tokens:20},rawResponse:{original:text}};
     };
@@ -220,4 +221,24 @@ test('windowed profile organizes each window separately and keeps only its own p
     assert.equal(textCalls.length,2,'one organize call per window');
     assert.deepEqual(textCalls.map(call=>call.metadata.sources[0].output_pages),[[1],[2]]);
     assert.equal(result.drafts.length,1,'items printed on a context page are not owned by this window');
+});
+
+test('windowed organize overlaps windows yet merges observations in page order',async()=>{
+    // Three windows, two slots: the third window starts while the first (slow) one
+    // is still organizing, and finishes before it. Completion order is [2,3,1], so
+    // a merge by completion would both break the printed order and let one window
+    // read the other's in-flight 'registered' evidence as an unknown submission.
+    const h=harness({pages:[1,2,3],config:{profileVersion:E.PROFILE_WINDOW,windowMode:'window',outputPages:1,contextPages:0,maxConcurrency:2},perWindowQuestion:true,
+        delayMs:task=>task.inputMode==='text'?(task.metadata.sources[0].output_pages[0]===1?400:300):10});
+    const started=Date.now(),result=await h.run(),elapsed=Date.now()-started;
+    const organizes=h.calls.filter(call=>call.inputMode==='text');
+    assert.equal(organizes.length,3,'one organize call per window');
+    assert.deepEqual(organizes.map(call=>call.metadata.sources[0].output_pages),[[1],[2],[3]]);
+    // Two windows overlap immediately; the third starts once a slot frees up, not
+    // after the slow first window finishes: two rounds instead of the serial three.
+    assert.ok(organizes[1].at-organizes[0].at<80,'the first two windows were serialized');
+    assert.ok(organizes[2].at-organizes[0].at<400,'the third window waited for the slow window');
+    assert.ok(elapsed<850,'windows were serialized: '+elapsed+'ms');
+    assert.deepEqual(result.drafts.map(draft=>draft.questionNumber),['1','2','3']);
+    assert.deepEqual(result.drafts.map(draft=>draft.stem),['第1题正文','第2题正文','第3题正文']);
 });
