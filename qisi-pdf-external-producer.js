@@ -189,7 +189,7 @@ function createProducer(ports={},initial={}){
     const queue=windowOnly?stageQueue:{queue:Promise.resolve()};
     const serialStage=event=>{const next=queue.queue.then(()=>onStage(event),()=>onStage(event));queue.queue=next.then(()=>undefined,()=>undefined);return next;};
     const execute=async taskInput=>{
-     if(ports.execute.stageLedger)return ports.execute({...taskInput,trackRequests:true,maxConcurrency:config.maxConcurrency},serialStage);
+     if(ports.execute.stageLedger)return ports.execute({...taskInput,trackRequests:true,maxConcurrency:windowOnly?Math.max(1,Math.min(2,config.maxConcurrency)):config.maxConcurrency},serialStage);
      const registration=await onStage({stage:'request-start',operation:taskInput.mode==='review-visual'?'review':'direct',input:taskInput});
      let output;
      try{output=await ports.execute({...taskInput,requestId:registration.requestId});}catch(cause){await onStage({stage:'request-error',operation:taskInput.mode==='review-visual'?'review':'direct',cause,requestId:registration.requestId});throw cause;}
@@ -221,12 +221,22 @@ function createProducer(ports={},initial={}){
       if(JSON.stringify(assets)!==JSON.stringify(result.metadata?.assets)||JSON.stringify(blocks)!==JSON.stringify(result.metadata?.blocks))throw error('PDF_PAGE_EVIDENCE_CACHE_INVALID','页文资源/块命名空间与候选来源不一致');
      }catch(cause){record.state='invalid';record.error={code:cause.code||'PDF_PAGE_EVIDENCE_CACHE_INVALID',message:cause.message};errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:record.error.code,message:cause.message});if(pageLed)fatal=true;await persist(file);return done();}
     }
+    // Windowed runs: the request itself decides which pages are context only, and
+    // an item belongs to the window whose output pages carry its printed number.
+    // Both facts are normalised mechanically before validation, so a model that
+    // also transcribes the shared context page cannot fail the whole window while
+    // the owning window still has every item it needs.
+    if(windowOnly&&typeof result.text==='string'){
+     try{
+      const value=JSON.parse(result.text),s=metadata.sources[0],out=new Set(s.output_pages),ctx=new Set(s.context_only_pages);
+      for(const stream of ['questions','answers','solutions'])if(Array.isArray(value[stream]))value[stream]=value[stream].filter(item=>out.has(item.number_page));
+      if(Array.isArray(value.pages))for(const page of value.pages)if(ctx.has(page.page))page.state='context_only';
+      result={...result,text:JSON.stringify(value)};
+     }catch(_){/* 原文无法解析时保留，交给校验器给出结论 */}
+    }
     const responseMetadata=result.metadata||metadata;
     const checked=JSON.stringify(responseMetadata.sources)!==JSON.stringify(metadata.sources)?{valid:false,errors:['provider-source-metadata-changed']}:pageLed&&result.model&&result.model!==pageEvidence.MODEL?{valid:false,errors:['provider-model-changed']}:contract.validateWireResult(result.text,responseMetadata,{ok:result.ok!==false,refusal:result.refusal,finishReason:result.finishReason,expectedWireVersion:config.wireVersion});
     if(!checked.valid||pageLed&&['questions','answers','solutions','unassigned'].some(stream=>checked.result[stream].some(item=>item.figures.some(fig=>fig.bbox!==null)))){record.state='invalid';record.validationErrors=checked.valid?['text-organizer-bbox-forbidden']:checked.errors;errors.push({sourceId:file.id,pages:metadata.sources[0].input_pages,code:'PDF_EXTERNAL_WIRE_INVALID',message:record.validationErrors.join(', ')});if(pageLed)fatal=true;await persist(file);return done();}
-    // A window owns only the items whose printed number sits on its output pages;
-    // whatever the model also emitted for a context page belongs to its neighbour.
-    if(windowOnly){const own=new Set(metadata.sources[0].output_pages);for(const stream of ['questions','answers','solutions'])checked.result[stream]=checked.result[stream].filter(item=>own.has(item.number_page));}
     if(record.state!=='validated'){
      record.state='validated';
      refreshCharges(record);

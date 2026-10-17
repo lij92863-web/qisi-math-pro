@@ -47,6 +47,14 @@
       "runtime": "dormant"
     },
     {
+      "file": "qisi-block-ownership-prompt.js",
+      "runtime": "dormant"
+    },
+    {
+      "file": "qisi-block-ownership.js",
+      "runtime": "dormant"
+    },
+    {
       "file": "qisi-browser-document-source.js",
       "runtime": "browser"
     },
@@ -183,6 +191,10 @@
       "runtime": "node"
     },
     {
+      "file": "qisi-mineru-client.js",
+      "runtime": "node"
+    },
+    {
       "file": "qisi-normal-ui-import-controller.js",
       "runtime": "browser"
     },
@@ -223,6 +235,10 @@
       "runtime": "browser"
     },
     {
+      "file": "qisi-paper-segmenter.js",
+      "runtime": "dormant"
+    },
+    {
       "file": "qisi-pdf-answer-extraction-quality.js",
       "runtime": "dormant"
     },
@@ -249,6 +265,10 @@
     {
       "file": "qisi-pdf-multimodal-producer.js",
       "runtime": "dormant"
+    },
+    {
+      "file": "qisi-pdf-page-evidence.js",
+      "runtime": "browser"
     },
     {
       "file": "qisi-pdf-safe-partial-pipeline.js",
@@ -412,10 +432,6 @@
     },
     {
       "file": "qisi-visual-support-source.js",
-      "runtime": "browser"
-    },
-    {
-      "file": "qisi-pdf-page-evidence.js",
       "runtime": "browser"
     }
   ]

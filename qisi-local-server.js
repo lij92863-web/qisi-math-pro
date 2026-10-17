@@ -16,6 +16,7 @@ const { createAiRequestLimiter, networkFailureCode } = require('./qisi-local-ai-
 const { assertDocxUploadType, validateDocxPackage } = require('./qisi-docx-upload-policy');
 const { postDashScope, closeDashScopeConnections } = require('./qisi-local-https-transport');
 const { isAllowedLocalHost, isAllowedLocalOrigin, publicRootAssets, isPublicAsset } = require('./qisi-local-http-boundary');
+const { createMineruClient } = require('./qisi-mineru-client');
 
 createSecureLogger(console).install();
 
@@ -35,6 +36,10 @@ const DASHSCOPE_API_KEY = String(process.env.DASHSCOPE_API_KEY || '').trim();
 const AI_BODY_LIMIT = String(process.env.AI_BODY_LIMIT || '60mb');
 const AI_REQUEST_TIMEOUT_MS = Math.max(10000, Number(process.env.AI_REQUEST_TIMEOUT_MS || 180000));
 const TEMP_JOB_MAX_AGE_MS = Math.max(60000, Number(process.env.QISI_TEMP_JOB_MAX_AGE_MS || 24 * 60 * 60 * 1000));
+// MinerU 精准解析：token 只在服务端 .env 读取，浏览器永远拿不到。
+const MINERU_TOKEN = String(process.env.MINERU_TOKEN || '').trim();
+const MINERU_MAX_PDF_BYTES = 200 * 1024 * 1024;
+const MINERU_MAX_PAGES = 200;
 const DASHSCOPE_CHAT_UPSTREAM = 'https://dashscope.aliyuncs.com/' + 'compatible-mode/v1/' + 'chat/completions';
 const DASHSCOPE_OCR_UPSTREAM = 'https://dashscope.aliyuncs.com/' + 'api/v1/services/aigc/' + 'multimodal-generation/' + 'generation';
 // Supported modes: auto / libreoffice-first / word-first / libreoffice-only / word-only
@@ -49,7 +54,13 @@ const tempJobManager = createTempJobManager({
 });
 
 const app = express();
-const aiRequestLimiter = createAiRequestLimiter();
+// The pipeline legitimately issues page-parallel requests (a 21-page paper opens
+// up to 12 in flight). The old fixed cap of 4 turned that into AI_PROXY_BUSY,
+// which is a local rejection and looks like a provider failure to the caller.
+const aiRequestLimiter = createAiRequestLimiter({
+    maxConcurrent: Math.max(1, Number(process.env.AI_MAX_CONCURRENT || 16) | 0),
+    capacity: Math.max(1, Number(process.env.AI_RATE_CAPACITY || 600) | 0)
+});
 const aiJsonParser = express.json({ limit: AI_BODY_LIMIT, type: 'application/json' });
 
 app.use((req, res, next) => {
@@ -243,6 +254,18 @@ function sanitizeFilename(name) {
     .replace(/\s+/g, '_')
     .replace(/_+/g, '_')
     .slice(0, 160);
+}
+
+// multipart 的 filename 按 latin1 解码，中文名会变成乱码，这里还原成 UTF-8。
+function decodeMultipartFilename(name) {
+  const value = String(name || '');
+  if (!value || !/[\u0080-\u00ff]/.test(value)) return value;
+  try {
+    const decoded = Buffer.from(value, 'latin1').toString('utf8');
+    return decoded.includes('\ufffd') ? value : decoded;
+  } catch {
+    return value;
+  }
 }
 
 function killProcessTree(child) {
@@ -740,6 +763,157 @@ app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => 
     });
   } finally {
     await tempJobManager.cleanupRequest(cleanupJob);
+  }
+});
+
+// ---- MinerU 精准解析（契约 ai/MINERU_BLOCK_PROTOCOL.md §4） ----
+const mineruClient = createMineruClient({ token: MINERU_TOKEN });
+
+const mineruUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+    filename: (req, file, cb) => {
+      const safe = sanitizeFilename(decodeMultipartFilename(file.originalname) || 'upload.pdf');
+      const ext = path.extname(safe) || '.pdf';
+      const base = path.basename(safe, ext);
+      cb(null, `mineru_${Date.now()}_${base}${ext}`);
+    }
+  }),
+  fileFilter: (req, file, callback) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (ext !== '.pdf' || (file.mimetype && file.mimetype !== 'application/pdf' && file.mimetype !== 'application/octet-stream')) {
+      return callback(Object.assign(new Error('Only .pdf is supported.'), { code: 'MINERU_UPLOAD_TYPE_INVALID' }));
+    }
+    callback(null, true);
+  },
+  limits: { fileSize: MINERU_MAX_PDF_BYTES, files: 1 }
+});
+
+const mineruUploadSingle = (req, res, next) => {
+  mineruUpload.single('file')(req, res, error => {
+    if (!error) return next();
+    const code = error.code === 'LIMIT_FILE_SIZE' ? 'MINERU_UPLOAD_SIZE_LIMIT' : 'MINERU_UPLOAD_TYPE_INVALID';
+    return res.status(code === 'MINERU_UPLOAD_SIZE_LIMIT' ? 413 : 400).json({
+      ok: false,
+      code,
+      error: code === 'MINERU_UPLOAD_SIZE_LIMIT'
+        ? `PDF 超过 ${Math.round(MINERU_MAX_PDF_BYTES / 1024 / 1024)}MB 上限。`
+        : '只接受 .pdf 文件，表单字段名必须是 file。'
+    });
+  });
+};
+
+// 未压缩页对象里 /Type /Page 的条目数即页数；读不到就算 0（交给 MinerU 侧限制），读到且超限直接拒绝。
+function estimatePdfPageCount(buffer) {
+  const matches = buffer.toString('latin1').match(/\/Type\s*\/Page[^s]/g);
+  return matches ? matches.length : 0;
+}
+
+function mineruErrorStatus(error) {
+  const code = String(error?.code || '');
+  if (code === 'MINERU_NOT_CONFIGURED') return 503;
+  if (code === 'MINERU_INPUT_INVALID' || code === 'MINERU_UPLOAD_TYPE_INVALID' || code === 'MINERU_IMAGE_NAME_INVALID') return 400;
+  if (code === 'MINERU_PAGE_LIMIT') return 413;
+  if (code === 'MINERU_PARSE_TIMEOUT') return 504;
+  if (code === 'MINERU_IMAGE_NOT_FOUND' || code === 'MINERU_JOB_NOT_FOUND') return 404;
+  if (code.startsWith('MINERU_')) return 502;
+  return 500;
+}
+
+app.post('/api/mineru/parse', mineruUploadSingle, async (req, res) => {
+  const uploaded = req.file;
+  if (!uploaded) {
+    return res.status(400).json({ ok: false, code: 'MINERU_FILE_MISSING', error: '未收到 PDF，表单字段名必须是 file。' });
+  }
+
+  const controller = new AbortController();
+  const abortOnClose = () => { if (!res.writableEnded) controller.abort(); };
+  res.once('close', abortOnClose);
+  const startedAt = Date.now();
+
+  try {
+    const buffer = await fsp.readFile(uploaded.path);
+    if (buffer.length < 5 || buffer.subarray(0, 5).toString('latin1') !== '%PDF-') {
+      return res.status(400).json({ ok: false, code: 'MINERU_FILE_INVALID', error: '上传内容不是有效的 PDF。' });
+    }
+    if (buffer.length > MINERU_MAX_PDF_BYTES) {
+      return res.status(413).json({ ok: false, code: 'MINERU_UPLOAD_SIZE_LIMIT', error: 'PDF 超过 200MB 上限。' });
+    }
+    const estimatedPages = estimatePdfPageCount(buffer);
+    if (estimatedPages > MINERU_MAX_PAGES) {
+      return res.status(413).json({
+        ok: false, code: 'MINERU_PAGE_LIMIT',
+        error: `PDF 共 ${estimatedPages} 页，超过 ${MINERU_MAX_PAGES} 页上限。`
+      });
+    }
+
+    const result = await mineruClient.parse(buffer, {
+      filename: decodeMultipartFilename(uploaded.originalname) || path.basename(uploaded.path),
+      signal: controller.signal
+    });
+
+    console.log('[MINERU_PARSE]', {
+      stage: 'mineru.parse',
+      code: 'MINERU_PARSE_OK',
+      durationMs: Date.now() - startedAt,
+      pages: result.source.pages,
+      blocks: result.pages.reduce((sum, page) => sum + page.blocks.length, 0),
+      answerTable: result.answerTable ? 'parsed' : 'null',
+      submitMs: result.timings?.submitMs,
+      uploadMs: result.timings?.uploadMs,
+      pollMs: result.timings?.pollMs,
+      fetchZipMs: result.timings?.fetchZipMs
+    });
+
+    if (res.destroyed || res.writableEnded) return;
+    return res.json({
+      protocol: result.protocol,
+      job: result.job,
+      source: result.source,
+      pages: result.pages,
+      answerTable: result.answerTable,
+      notes: result.notes,
+      timings: result.timings
+    });
+  } catch (error) {
+    const aborted = error?.name === 'AbortError' || controller.signal.aborted;
+    const code = aborted ? 'MINERU_CANCELLED' : (error?.code || 'MINERU_PARSE_FAILED');
+    console.error('[MINERU_PARSE][error]', {
+      stage: error?.stage || 'mineru.parse',
+      code,
+      durationMs: Date.now() - startedAt,
+      mineruCode: error?.mineruCode ?? null
+    });
+    if (res.destroyed || res.writableEnded) return;
+    return res.status(aborted ? 499 : mineruErrorStatus(error)).json({
+      ok: false,
+      code,
+      error: error?.message || String(error),
+      ...(error?.stage ? { stage: error.stage } : {}),
+      ...(error?.httpStatus ? { httpStatus: error.httpStatus } : {}),
+      ...(error?.mineruCode !== undefined ? { mineruCode: error.mineruCode } : {}),
+      ...(error?.mineruMsg ? { mineruMsg: error.mineruMsg } : {})
+    });
+  } finally {
+    res.removeListener('close', abortOnClose);
+    await tempJobManager.cleanupRequest({ uploadPath: uploaded.path });
+  }
+});
+
+app.get('/api/mineru/image', async (req, res) => {
+  try {
+    const { bytes, name } = await mineruClient.readImage(req.query?.name, { job: req.query?.job });
+    const types = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
+    res.set('Content-Type', types[path.extname(name).toLowerCase()] || 'application/octet-stream');
+    res.set('Cache-Control', 'no-store');
+    return res.send(Buffer.from(bytes));
+  } catch (error) {
+    if (res.writableEnded) return;
+    return res.status(mineruErrorStatus(error)).json({
+      ok: false,
+      code: error?.code || 'MINERU_IMAGE_FAILED',
+      error: error?.message || String(error)
+    });
   }
 });
 
