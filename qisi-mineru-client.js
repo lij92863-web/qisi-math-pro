@@ -118,8 +118,9 @@
     // ---- 块整理（契约 §1） ----
 
     function pageOf(item) {
-        const index = Number(item?.page_idx);
-        return Number.isInteger(index) && index >= 0 ? index + 1 : 1;
+        const index = item?.page_idx;
+        if (!Number.isSafeInteger(index) || index < 0) throw fail('MINERU_CONTENT_INVALID', 'content_list 的 page_idx 必须是非负整数。');
+        return index + 1;
     }
 
     function imagePathOf(item) {
@@ -148,22 +149,43 @@
         return null;
     }
 
-    function parseContentList(list) {
+    // 只按 type 或 text 判重会误删题图：image/chart 的内容在 img_path 而不在 text。
+    // 若将来要加内容去重，键必须含 image（或 bbox），否则 8 张不同题图会被当成同一块；
+    // 本卷实测按 type|text 统计出的 15 个"重复"里，有 9 个是 text 为空的假重复。
+    function parseContentList(list, { sourceId = null } = {}) {
         if (!Array.isArray(list)) throw fail('MINERU_CONTENT_INVALID', 'content_list.json 不是数组。');
         const pages = [];
         let droppedPageNumbers = 0;
-        let droppedUnknown = 0;
-        for (const item of list) {
-            if (String(item?.type || '') === 'page_number') { droppedPageNumbers += 1; continue; }
+        let retainedUnknown = 0;
+        const counts = new Map();
+        let previousPage = 0;
+        for (const [itemIndex, item] of list.entries()) {
             const page = pageOf(item);
+            if (page < previousPage) throw fail('MINERU_CONTENT_INVALID', 'content_list 页码倒序，不能重排原始来源。');
+            previousPage = page;
             while (pages.length < page) pages.push({ page: pages.length + 1, blocks: [] });
+            if (String(item?.type || '') === 'page_number') { droppedPageNumbers += 1; continue; }
             const bucket = pages[page - 1].blocks;
-            const block = toBlock(item, `p${page}b${bucket.length}`);
-            if (!block) { droppedUnknown += 1; continue; }
-            if (!BLOCK_TYPES.has(block.type)) { droppedUnknown += 1; continue; }
+            const ordinal = counts.get(page) || 0;
+            counts.set(page, ordinal + 1);
+            const id = `p${page}b${ordinal}`;
+            const block = toBlock(item, id) || { id, type: 'unsupported', text: String(item?.text ?? '') };
+            block.page = page;
+            if (block.type === 'unsupported') retainedUnknown += 1;
+            const field = item.type === 'table' && item.table_body != null ? 'table_body' : 'text';
+            block.origin = { sourceId, itemIndex, field, blockId: id, ...(block.text != null ? { range: [0, block.text.length] } : {}) };
             bucket.push(block);
+            for (const field of ['image_caption', 'image_footnote', 'table_caption', 'table_footnote']) {
+                const values = Array.isArray(item[field]) ? item[field] : item[field] == null ? [] : [item[field]];
+                values.forEach((value, index) => {
+                    const text = String(value);
+                    const captionId = `${id}/${field}/${index}`;
+                    bucket.push({ id: captionId, page, type: 'text', text, parentId: id,
+                        origin: { sourceId, itemIndex, field, index, blockId: captionId, range: [0, text.length] } });
+                });
+            }
         }
-        return { pages, droppedPageNumbers, droppedUnknown };
+        return { pages, droppedPageNumbers, droppedUnknown: 0, retainedUnknown, evidence: { items: list } };
     }
 
     function stripTags(html) {
@@ -188,27 +210,43 @@
         return rows;
     }
 
-    // 只认「题号」行紧跟「答案」行的确定性结构；任何冲突都整体判为 null，不猜。
+    // Absence and invalid evidence are different states. Invalid printed tables
+    // must stop conversion, not disappear while another table is accepted.
     function answerTableFromHtml(html) {
         const rows = tableRows(html);
         const table = {};
         let pending = null;
         let pairs = 0;
+        // 中学试卷卷头几乎必有一张「题号｜一｜二｜三｜总分 / 得分｜…」的成绩表，
+        // 它不是答案表。只有整张表里真的出现「答案」单元格时，才按答案表严格校验；
+        // 否则安静跳过。否则一张成绩表就能把整份 PDF 判死（整卷归零）。
+        const isAnswerTable = rows.some(cells => String(cells[0] || '').replace(/\s+/g, '') === '答案');
+        if (!isAnswerTable) return null;
         for (const cells of rows) {
             const head = String(cells[0] || '').replace(/\s+/g, '');
-            if (head === '题号') { pending = cells.slice(1); continue; }
+            if (head === '题号') {
+                if (pending) throw fail('MINERU_ANSWER_TABLE_INVALID', '题号行缺少对应答案行。');
+                pending = cells.slice(1); continue;
+            }
             if (head === '答案' && pending) {
+                if (!pending.length || cells.length !== pending.length + 1) throw fail('MINERU_ANSWER_TABLE_INVALID', '题号与答案列数不一致。');
                 for (let i = 0; i < pending.length; i += 1) {
-                    const number = String(pending[i] || '').replace(/[^0-9]/g, '');
+                    const label = String(pending[i] || '').trim().replace(/[０-９]/g, c => String(c.charCodeAt(0) - 0xff10));
                     const answer = String(cells[i + 1] || '').replace(/\s+/g, '');
-                    if (!number || !answer) continue;
-                    if (Object.prototype.hasOwnProperty.call(table, number) && table[number] !== answer) return null;
+                    // Rectangular tables may pad their final pair of rows with
+                    // empty columns. Only a pair of empty cells is padding.
+                    if (!label && !answer) continue;
+                    if (!/^[1-9]\d{0,2}$/.test(label)) throw fail('MINERU_ANSWER_TABLE_INVALID', '题号单元格不是明确的正整数。');
+                    const number = String(Number(label));
+                    if (!answer) throw fail('MINERU_ANSWER_TABLE_INVALID', '答案表存在空答案。');
+                    if (Object.prototype.hasOwnProperty.call(table, number)) throw fail('MINERU_ANSWER_TABLE_INVALID', '答案表题号重复。');
                     table[number] = answer;
                     pairs += 1;
                 }
                 pending = null;
-            }
+            } else if (pending) throw fail('MINERU_ANSWER_TABLE_INVALID', '题号行后不是答案行。');
         }
+        if (pending) throw fail('MINERU_ANSWER_TABLE_INVALID', '题号行缺少对应答案行。');
         return pairs ? table : null;
     }
 
@@ -220,7 +258,7 @@
             const parsed = answerTableFromHtml(block.text);
             if (!parsed) continue;
             for (const [number, answer] of Object.entries(parsed)) {
-                if (Object.prototype.hasOwnProperty.call(merged, number) && merged[number] !== answer) return null;
+                if (Object.prototype.hasOwnProperty.call(merged, number) && merged[number] !== answer) throw fail('MINERU_ANSWER_TABLE_INVALID', '多个答案表之间存在冲突。');
                 merged[number] = answer;
                 pairs += 1;
             }
@@ -385,13 +423,14 @@
                 throw fail('MINERU_CONTENT_INVALID', `content_list.json 解析失败: ${error.message}`, { stage: 'unzip' });
             }
 
-            const { pages, droppedPageNumbers, droppedUnknown } = parseContentList(list);
+            const sha256 = await sha256Hex(bytes);
+            const { pages, droppedPageNumbers, retainedUnknown, evidence } = parseContentList(list, { sourceId: sha256 });
             const allBlocks = pages.flatMap(page => page.blocks);
             const answerTable = parseAnswerTable(allBlocks);
             const pageCount = pages.length;
             const notes = [];
             if (droppedPageNumbers) notes.push(`page_number 块已丢弃（${droppedPageNumbers} 个）`);
-            if (droppedUnknown) notes.push(`无法识别的块已丢弃（${droppedUnknown} 个）`);
+            if (retainedUnknown) notes.push(`未支持的块已保留，需核查（${retainedUnknown} 个）`);
             if (!answerTable) notes.push('表格块中未解析出「题号/答案」结构，answerTable 为 null');
             notes.push(`MinerU batch ${batchId}`);
 
@@ -399,7 +438,6 @@
             const jobId = `${Date.now().toString(36)}-${jobSeq.toString(36)}`;
             remember(jobId, { zipBytes, entries, filename });
 
-            const sha256 = await sha256Hex(bytes);
             timings.fetchZipMs = Date.now() - fetchZipStartedAt;
             timings.totalMs = Date.now() - startedAt;
 
@@ -408,6 +446,7 @@
                 job: jobId,
                 source: { filename, pages: pageCount, sha256 },
                 pages,
+                evidence,
                 answerTable,
                 notes,
                 timings

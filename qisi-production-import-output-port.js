@@ -280,9 +280,33 @@
         const kept = [];
         const removedIds = new Set();
         const idMap = new Map();
+        // 「识别失败」这类占位文字不是真实题干，不能拿它来判断两条是不是同一题。
+        // 真正的题目题干都是有意义的长文本。
+        const failureStemPattern = /^(?:识别失败|无法识别|未识别|识别不清|图片无法识别|读取失败)$/;
+        const stemKey = draft => text(draft?.stem, ports).replace(/\s+/g, '');
         for (const group of groups.values()) {
             if (group.length === 1) {
                 kept.push(group[0]);
+                continue;
+            }
+            // 同一题号撞在一起时，先看题干是不是真的不同。
+            // 「两个大题都从 1 开始编号」是常见排版，这种情况下题干完全不同，
+            // 旧逻辑按质量分合并会直接丢掉一道题。必须全部保留，交人工核对。
+            // 只有题干一致（或只剩一条有意义的题干）时才走合并 —— 那才是重复识别。
+            const stems = group.map(stemKey);
+            const meaningfulStems = stems.filter(stem =>
+                stem.length >= 10 && !failureStemPattern.test(stem));
+            const stemsDiffer = meaningfulStems.length > 1 &&
+                meaningfulStems.some(stem => stem !== meaningfulStems[0]);
+            if (stemsDiffer) {
+                for (const draft of group) {
+                    const questionNo = normalizeQuestionNo(draft, ports);
+                    draft.warnings = [...new Set([
+                        ...(draft.warnings || []),
+                        `题号 ${questionNo || '(未识别)'} 在同一来源出现 ${group.length} 条题干不同的题目，已全部保留。若这是两个大题各自从头编号，请在正式入库前核对题号。`
+                    ])];
+                    kept.push(draft);
+                }
                 continue;
             }
             const ranked = [...group].sort((left, right) =>

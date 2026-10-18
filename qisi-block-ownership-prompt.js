@@ -24,6 +24,7 @@
         '5. 表格块（kind=table）可以放进 stem 或 solution（例如列联表、杨辉三角）。',
         '6. 同一题的同一字段内不得重复同一个 id。',
         '7. 题号必须使用原文印刷的题号（阿拉伯数字字符串）。原文没印题号的块放进 unassigned。',
+        '8. 共享选项原块只能标注候选引用，最终须由软件验证并拆成原文片段；不能复制整块充当四个选项。',
         '',
         '只输出 JSON，不要任何解释文字。'
     ].join('\n');
@@ -58,25 +59,20 @@
 
     const kindOf = block => String(block && block.type || '');
 
-    // Page windows over the blocks of one phase, in page order, never splitting a
-    // page. A window is the unit of one model request.
+    // Contiguous slices preserve source order. Page labels only control budget;
+    // they neither reorder blocks nor certify cross-page provenance.
     const planWindows = (blocks, { pagesPerWindow = 4 } = {}) => {
-        const size = Math.max(1, Math.min(8, Number(pagesPerWindow) || 4));
-        const byPage = new Map();
-        for (const block of blocks) {
-            const page = Number(block.page);
-            if (!Number.isSafeInteger(page)) continue;
-            if (!byPage.has(page)) byPage.set(page, []);
-            byPage.get(page).push(block);
-        }
-        const pages = [...byPage.keys()].sort((a, b) => a - b);
+        if (!Number.isSafeInteger(pagesPerWindow) || pagesPerWindow < 1 || pagesPerWindow > 8) throw new Error('BLOCK_WINDOW_SIZE_INVALID');
         const windows = [];
-        for (let index = 0; index < pages.length; index += size) {
-            const slice = pages.slice(index, index + size);
-            windows.push({
-                pages: slice,
-                blocks: slice.flatMap(page => byPage.get(page))
-            });
+        let current = null;
+        for (const block of blocks) {
+            if (!Number.isSafeInteger(block.page) || block.page < 1) throw new Error('BLOCK_PAGE_REQUIRED:' + block.id);
+            if (!current || (!current.pages.includes(block.page) && current.pages.length === pagesPerWindow)) {
+                current = { pages: [], blocks: [] };
+                windows.push(current);
+            }
+            if (!current.pages.includes(block.page)) current.pages.push(block.page);
+            current.blocks.push(block);
         }
         return windows;
     };
@@ -91,7 +87,7 @@
         blocks: (blocks || []).map(block => {
             const kind = kindOf(block);
             if (kind === 'image' || kind === 'chart') return { id: block.id, p: block.page, kind, alt: '图' };
-            return { id: block.id, p: block.page, kind, text: String(block.text == null ? '' : block.text) };
+            return { id: block.id, p: block.page, kind, text: String(block.text == null ? '' : block.text), ...(block.parentId ? { parentId: block.parentId } : {}) };
         })
     });
 
@@ -119,7 +115,7 @@
         try {
             const value = JSON.parse(cleaned);
             if (!value || typeof value !== 'object' || !Array.isArray(value.questions)) return { ok: false, reason: 'shape' };
-            if (value.protocol && value.protocol !== 'block-ownership-v1') return { ok: false, reason: 'protocol' };
+            if (value.protocol !== 'block-ownership-v1') return { ok: false, reason: 'protocol' };
             return { ok: true, value };
         } catch (error) {
             return { ok: false, reason: 'json', message: error.message };

@@ -121,12 +121,26 @@
             });
         };
 
-        const inspectBackup = async (blob, generatedHere = false) => {
+        // 备份只有一个标准：能通过恢复时的全部校验，才算备份。
+        // 以前这里有个 generatedHere 开关，对自己刚生成的文件把上限全设为 Infinity，
+        // 于是出现「备份成功、校验通过、真要恢复时被拒」——等于给老师假的救命绳。
+        // 现在删掉这个例外：自己生成的也必须过同一道闸。
+        const inspectBackup = async blob => {
             if (!(blob instanceof Blob)) throw new Error('Backup verification target is not a Blob');
             if (!globalThis.JSZip) throw new Error('JSZip is not loaded; backup cannot be verified');
-            const zip = await globalThis.Qisi.ArchiveSecurity.load(globalThis.JSZip,
+            const loaded = await globalThis.Qisi.ArchiveSecurity.load(globalThis.JSZip,
                 await blob.arrayBuffer(), 'full-backup', { name: blob.name || '', type: blob.type || '' },
-                generatedHere ? { maxEntries: Infinity, maxEntryUncompressedBytes: Infinity, maxTotalUncompressedBytes: Infinity, maxCompressionRatio: Infinity } : {});
+                {});
+            // load 失败时返回的是 {ok:false, code}，不是一个 zip。
+            // 直接往下走会在 readZipJson 里炸成一条看不懂的异常，
+            // 老师会以为是自己电脑坏了。这里把它转成带错误码的正常失败。
+            if (!loaded || loaded.ok === false) {
+                const error = new Error(loaded?.code || 'ARCHIVE_UNREADABLE');
+                error.code = loaded?.code || 'ARCHIVE_UNREADABLE';
+                error.details = loaded?.details;
+                throw error;
+            }
+            const zip = loaded;
             const errors = [], warnings = [], missingBlobFiles = [], tables = {};
             const manifest = await readZipJson(zip, 'manifest.json');
             if (manifest?.format !== 'qisi-full-backup' || manifest?.version !== 1 ||
@@ -319,16 +333,32 @@
                 JSON.stringify(manifest, null, 2)
             );
 
-            const bytes = await zip.generateAsync({
-                type: 'uint8array',
-                compression: 'DEFLATE',
-                compressionOptions: {
-                    level: 6
-                }
-            });
+            // 生成方必须主动满足校验方，而不是给自己发一张免检证。
+            //
+            // 一个备份唯一的用处是「将来能恢复」，所以创建时的校验和恢复时的校验
+            // 必须是同一套。以前的做法是创建时把上限全设成 Infinity，
+            // 于是出现「备份成功、校验通过、真要恢复时被拒」。
+            //
+            // 但直接把上限统一也有代价：极少数内容（例如题干里出现上兆的重复字符）
+            // 压缩比会超过 100，属于安全上的压缩炸弹特征，此时不该放宽限制，
+            // 而应降级为不压缩重新打包 —— 备份要的是能恢复，不是省那点空间。
+            const buildBlob = async compression => {
+                const bytes = await zip.generateAsync(compression === 'STORE'
+                    ? { type: 'uint8array', compression: 'STORE' }
+                    : { type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+                return new Blob([bytes], { type: 'application/zip' });
+            };
 
-            const blob = new Blob([bytes], { type: 'application/zip' });
-            const verification = (await inspectBackup(blob, true)).verification;
+            let blob = await buildBlob('DEFLATE');
+            let verification;
+            try {
+                verification = (await inspectBackup(blob)).verification;
+            } catch (error) {
+                if (error?.code !== 'ARCHIVE_COMPRESSION_RATIO_LIMIT') throw error;
+                console.warn('[QISI_BACKUP][compression-fallback] 压缩比超过安全上限，改用不压缩重打包');
+                blob = await buildBlob('STORE');
+                verification = (await inspectBackup(blob)).verification;
+            }
 
             console.log('[QISI_BACKUP][verification]', verification);
 

@@ -162,3 +162,23 @@ test('V1 PDF fields bypass the legacy cleaner and scoring merger exactly', () =>
     assert.deepEqual(q, before);
     assert.equal(output.drafts[0].options.length, 2);
 });
+
+test('two different questions sharing one number are kept, not merged away', () => {
+    // 「两个大题都从 1 开始编号」是常见排版。旧逻辑按质量分把其中一道合并掉，
+    // 直接丢题。题干明显不同必须全部保留，并给出可读的警告。
+    const drafts = [
+        { id: 'fn-1', sourceFileId: 's1', questionNumber: '1',
+          stem: '已知函数 f(x)=lnx，求其单调递增区间', options: [],
+          sourceTrace: { source: 'docx-importer' } },
+        { id: 'geo-1', sourceFileId: 's1', questionNumber: '1',
+          stem: '在正方体 ABCD-A1B1C1D1 中求异面直线所成的角', options: [],
+          sourceTrace: { source: 'docx-importer' } }
+    ];
+    const result = OutputPort.projectImportOutput(
+        { drafts, draftImages: [], stage: 'characterization' }, helpers);
+    assert.equal(result.drafts.length, 2, '题干不同的两条必须都保留，合并就是丢题');
+    for (const draft of result.drafts) {
+        assert.ok((draft.warnings || []).some(warning => /题干不同/.test(warning)),
+            '保留的每条都要带可读的警告');
+    }
+});

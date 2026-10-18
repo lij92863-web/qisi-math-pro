@@ -866,15 +866,7 @@ app.post('/api/mineru/parse', mineruUploadSingle, async (req, res) => {
     });
 
     if (res.destroyed || res.writableEnded) return;
-    return res.json({
-      protocol: result.protocol,
-      job: result.job,
-      source: result.source,
-      pages: result.pages,
-      answerTable: result.answerTable,
-      notes: result.notes,
-      timings: result.timings
-    });
+    return res.json(result);
   } catch (error) {
     const aborted = error?.name === 'AbortError' || controller.signal.aborted;
     const code = aborted ? 'MINERU_CANCELLED' : (error?.code || 'MINERU_PARSE_FAILED');

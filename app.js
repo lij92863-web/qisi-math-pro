@@ -2885,11 +2885,13 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                 const examPresets = computed(() => ({
                     ...Object.fromEntries(Object.entries(EXAM_LAYOUT_PRESETS).map(([id, preset]) => {
                         const override = templateOverrides.value[id] || {};
-                        return [id, { ...preset, name: override.name || preset.name, desc: PRESET_TEMPLATES[id]?.desc || preset.desc }];
+                        // 系统模板被改过版式时，override.config 必须生效，否则改完一切换就还原。
+                        return [id, { ...preset, name: override.name || preset.name, desc: PRESET_TEMPLATES[id]?.desc || preset.desc,
+                            config: { ...preset.config, ...(override.config || {}) } }];
                     })),
                     ...Object.fromEntries(customTemplates.value.map(tpl => [
                         tpl.id,
-                        { name: tpl.name, desc: tpl.desc || '自定义 LaTeX 模板，使用通用组卷配置。', config: { ...EXAM_LAYOUT_PRESETS[DEFAULT_PRESET_KEY].config, title: tpl.name } }
+                        { name: tpl.name, desc: tpl.desc || '自定义模板', config: { ...EXAM_LAYOUT_PRESETS[DEFAULT_PRESET_KEY].config, ...(tpl.config || {}), title: tpl.config?.title || tpl.name } }
                     ]))
                 }));
 
@@ -3868,8 +3870,13 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         const savedTemplate = safeStorage.get('qisi_exam_template', DEFAULT_PRESET_KEY) || DEFAULT_PRESET_KEY;
                         const hasSavedTemplate = !!EXAM_LAYOUT_PRESETS[savedTemplate] || customTemplates.value.some(t => t.id === savedTemplate);
                         selectedExamTemplate.value = hasSavedTemplate ? savedTemplate : DEFAULT_PRESET_KEY;
-                        const savedConfig = hasSavedTemplate ? safeStorage.json('qisi_exam_config', null) : null;
-                        Object.assign(examConfig, EXAM_LAYOUT_PRESETS[selectedExamTemplate.value]?.config || EXAM_LAYOUT_PRESETS[DEFAULT_PRESET_KEY].config, savedConfig || {});
+                        // qisi_exam_config 现在带 template 标记：只认本模板自己的临时改动，
+                        // 避免在 A 模板调好的字号跑到 B 模板上去。
+                        const savedRaw = hasSavedTemplate ? safeStorage.json('qisi_exam_config', null) : null;
+                        const savedConfig = savedRaw && savedRaw.template
+                            ? (savedRaw.template === selectedExamTemplate.value ? savedRaw.config : null)
+                            : savedRaw;
+                        Object.assign(examConfig, EXAM_LAYOUT_PRESETS[DEFAULT_PRESET_KEY].config, examPresets.value[selectedExamTemplate.value]?.config || {}, savedConfig || {});
                         Object.assign(examGroupConfig, safeStorage.json('qisi_exam_group_config', {}) || {});
                         nextTick(() => { restoringExamConfig.value = false; });
                     } catch (e) {
@@ -3903,7 +3910,8 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                 });
 
                 watch(examConfig, (val) => {
-                    safeStorage.setJson('qisi_exam_config', toRaw(val));
+                    // 带 template 标记：恢复时只认本模板自己的临时改动。
+                    safeStorage.setJson('qisi_exam_config', { template: selectedExamTemplate.value, config: toRaw(val) });
                     examTitle.value = val.title || examTitle.value;
                 }, { deep: true });
 
@@ -3917,7 +3925,8 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                 watch(selectedExamTemplate, (key) => {
                     safeStorage.set('qisi_exam_template', key);
                     if (restoringExamConfig.value) return;
-                    Object.assign(examConfig, EXAM_LAYOUT_PRESETS[key]?.config || EXAM_LAYOUT_PRESETS[DEFAULT_PRESET_KEY].config);
+                    // 切模板时按模板自身配置重建；缺了这步，自定义模板会退回默认版式。
+                    Object.assign(examConfig, EXAM_LAYOUT_PRESETS[DEFAULT_PRESET_KEY].config, examPresets.value[key]?.config || {});
                     if (PRESET_TEMPLATES[key] && editMode.value === 'system' && currentPresetKey.value !== key) {
                         const tpl = getTemplateCard(key, PRESET_TEMPLATES[key]);
                         currentPresetKey.value = tpl.id;
@@ -3943,6 +3952,12 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         const id = 'img_' + Math.random().toString(36).substring(2,8);
                         entryForm.images.push({ id, url: e.target.result, align: 'center' }); // 默认居中设好
                         entryForm[entryTab.value] += `\n\\begin{center}[[IMAGE:${id}]]\\end{center}\n`;
+                        // 图片一进来就落库。草稿只留 id 和 align（不留 base64），
+                        // 否则刷新一次草稿就把图丢了，提交后题目带着空图引用入库，
+                        // 之后整个题库都无法导出。
+                        fetch(e.target.result).then(res => res.blob())
+                            .then(blob => db.images.put({ id, blob, createdAt: Date.now() }))
+                            .catch(error => console.warn('[ENTRY_IMAGE][persist-failed]', { id, message: error?.message }));
                     }; 
                     reader.readAsDataURL(file);
                 };
@@ -3985,8 +4000,15 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     reader.readAsDataURL(file);
                 };
 
+                // 两次点击之间隔着一个 await，按钮本身不会自己变灰。
+                // 没有这个互斥，手快双击就会存出两道一模一样的题。
+                let submitInFlight = false;
+
                 const submitQuestion = async () => {
+                    if (submitInFlight) return;
+                    submitInFlight = true;
                     if(!entryForm.stem.trim()) {
+                        submitInFlight = false;
                         alert('题干为空，先把 OCR 内容送入题干或手动输入题目。');
                         return;
                     }
@@ -4005,6 +4027,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         const primaryKnowledgeType = personalKnowledge ? 'personal' : 'system';
 
                         const imageRecords = [];
+                        const lostImageIds = [];
                         for (const img of entryForm.images) {
                             if (img?.url && img.url.startsWith('data:')) {
                                 const blob = await (await fetch(img.url)).blob();
@@ -4013,7 +4036,21 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                                     blob,
                                     createdAt: now
                                 });
+                            } else if (img?.id) {
+                                // 刷新过页面：草稿里只剩 id，二进制在图片库里。
+                                const stored = await db.images.get(img.id);
+                                if (stored?.blob) {
+                                    imageRecords.push({ id: img.id, blob: stored.blob, createdAt: now });
+                                } else {
+                                    lostImageIds.push(img.id);
+                                }
                             }
+                        }
+                        // 不许带着悬空图片引用入库：那会让整个题库导出时报
+                        // 「题库缺少图片数据」，一次手滑锁死全部导出。
+                        if (lostImageIds.length) {
+                            throw new Error('这几张图片没有存进来：' + lostImageIds.join('、') +
+                                '。请删掉重新粘贴，否则这道题会带着空图入库。');
                         }
 
                         const newQ = {
@@ -4055,9 +4092,11 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         await loadData();
 
                         view.value = 'library';
+                        submitInFlight = false;
                     } catch (error) {
                         console.error('保存入库失败', error);
                         alert(`保存入库失败：${error?.message || error}`);
+                        submitInFlight = false;
                     }
                 };
 
@@ -4693,6 +4732,17 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     return content + `</main>`;
                 };
 
+                // 打印窗口里的字体栈与字号档位。
+                // 全部用 Windows 自带字体的名字，老师电脑上一定装得到，
+                // 不会出现「选了楷体结果印成默认宋体」。
+                const PRINT_FONT_STACKS = {
+                    '思源宋体': '"SimSun", "Songti SC", serif',
+                    '霞鹜文楷': '"KaiTi", "STKaiti", serif',
+                    '黑体': '"SimHei", "Heiti SC", sans-serif',
+                    '微软雅黑': '"Microsoft YaHei", "PingFang SC", sans-serif'
+                };
+                const PRINT_FONT_SIZES = { '三号': '21px', '四号': '19px', '小四': '16px', '五号': '14px', '小五': '12px' };
+
                 const openPrintWindow = (content, title = '试卷打印') => {
                     const html = `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -4702,11 +4752,11 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
 <link rel="stylesheet" href="${escapeHtml(new URL('./vendor/katex/katex.min.css', window.location.href).href)}"/>
 <style>
 body {
-    font-family: ${examConfig.fontFamily === '霞鹜文楷' ? '"KaiTi", "STKaiti", serif' : '"SimSun", "Songti SC", serif'};
+    font-family: ${PRINT_FONT_STACKS[examConfig.fontFamily] || PRINT_FONT_STACKS['思源宋体']};
     padding:24px;
     color:#111;
     line-height:1.8;
-    font-size:${examConfig.fontSize === '五号' ? '14px' : '16px'};
+    font-size:${PRINT_FONT_SIZES[examConfig.fontSize] || PRINT_FONT_SIZES['小四']};
 }
 .subtitle,.organizer { font-size:14px; color:#333; }
 .notice { margin:12px auto 0; padding:0; border:0; text-align:left; font-size:13px; }
@@ -4815,6 +4865,9 @@ Promise.all([imageReady, fontReady]).then(() => {
                     try {
                         syncExamMeta();
                         const qs = await hydrateQuestionsForPrint(cartQuestionsOrdered.value);
+                        // 导出前逐题验公式。宁可这次不导出，也不让老师拿到
+                        // 一份印着红字或空白公式的讲义。
+                        if (!root.Qisi.HandoutFormulaGate.confirmBeforeExport(qs)) return;
                         const questionsContent = buildQuestionContent(qs);
                         if (exportMode.value === 'split') {
                             const answersContent = buildAnswerContent(qs, false);
@@ -4851,9 +4904,13 @@ Promise.all([imageReady, fontReady]).then(() => {
                 const handleCodeInput = (e) => { latexTemplate.value = e.target.value; };
                 
                 const saveNewCustomTemplate = async () => {
-                    const tpl = { id: 'tpl_' + Date.now(), name: editTplName.value, code: ensureImagePackagesForLatex(latexTemplate.value), createdAt: Date.now() };
+                    // 模板 = 版式配置 + LaTeX 代码。只存代码会让老师调好的字体字号全部丢失。
+                    const tpl = { id: 'tpl_' + Date.now(), name: editTplName.value, code: ensureImagePackagesForLatex(latexTemplate.value), config: toRaw(examConfig), createdAt: Date.now() };
                     latexTemplate.value = tpl.code;
-                    await db.customTemplates.put(tpl); await loadData(); 
+                    await db.customTemplates.put(tpl);
+                    // 只刷模板表，不跑全库 loadData：后者会把全库图片的 blob URL
+                    // 全部 revoke 再重建，页面上图片会闪白一下。
+                    customTemplates.value = await storageRepository.listTable('customTemplates', { orderBy: 'createdAt', reverse: true });
                     editMode.value = 'custom'; currentPresetKey.value = tpl.id; alert('已存为新模板');
                 };
                 
@@ -4861,7 +4918,7 @@ Promise.all([imageReady, fontReady]).then(() => {
                     if (PRESET_TEMPLATES[currentPresetKey.value]) {
                         templateOverrides.value = {
                             ...templateOverrides.value,
-                            [currentPresetKey.value]: { name: editTplName.value, code: ensureImagePackagesForLatex(latexTemplate.value), updatedAt: Date.now() }
+                            [currentPresetKey.value]: { name: editTplName.value, code: ensureImagePackagesForLatex(latexTemplate.value), config: toRaw(examConfig), updatedAt: Date.now() }
                         };
                         latexTemplate.value = templateOverrides.value[currentPresetKey.value].code;
                         safeStorage.setJson(
@@ -4873,11 +4930,16 @@ Promise.all([imageReady, fontReady]).then(() => {
                     }
                     const nextCode = ensureImagePackagesForLatex(latexTemplate.value);
                     latexTemplate.value = nextCode;
-                    await db.customTemplates.update(currentPresetKey.value, { name: editTplName.value, code: nextCode });
-                    await loadData(); alert('已更新');
+                    await db.customTemplates.update(currentPresetKey.value, { name: editTplName.value, code: nextCode, config: toRaw(examConfig) });
+                    customTemplates.value = await storageRepository.listTable('customTemplates', { orderBy: 'createdAt', reverse: true });
+                    alert('已更新');
                 };
                 
-                const deleteCustomTemplate = async (id) => { await db.customTemplates.delete(id); await loadData(); selectPresetTemplate(DEFAULT_PRESET_KEY); };
+                const deleteCustomTemplate = async (id) => {
+                    await db.customTemplates.delete(id);
+                    customTemplates.value = await storageRepository.listTable('customTemplates', { orderBy: 'createdAt', reverse: true });
+                    selectPresetTemplate(DEFAULT_PRESET_KEY);
+                };
 
                 const savePersonalKnowledge = async () => {
                     await db.personalKnowledge.put({ id: 'tree', nodes: toRaw(personalKnowledgeTree.value), updatedAt: Date.now() });

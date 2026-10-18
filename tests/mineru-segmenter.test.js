@@ -41,12 +41,16 @@ test('a number that is not expected is reported, not silently accepted', () => {
     assert.ok(result.issues.some(i => i.code === 'missing-number' && i.no === '2'));
 });
 
-test('the printed answer table always wins over a conflicting solution head', () => {
+test('conflicting printed answer sources withhold binding and preserve both values', () => {
     const question = S.segment([b('q1', 1, 'text', '1. 题')]);
     const solution = S.segment([b('s1', 9, 'text', '1. C')]);
     const built = S.assemble({ questionSegment: question, solutionSegment: solution, answerTable: { 1: 'D' } });
-    assert.equal(built.questions[0].answer, 'D');
-    assert.equal(built.questions[0].answerSource, 'answer-table');
+    assert.equal(built.questions[0].answer, '');
+    assert.equal(built.questions[0].answerSource, 'none');
+    assert.deepEqual(built.questions[0].solutionBlocks, []);
+    assert.equal(built.valid, false);
+    assert.equal(built.issues[0].table, 'D');
+    assert.equal(built.issues[0].solution, 'C');
     assert.deepEqual(built.issues.map(i => i.code), ['answer-table-conflict']);
 });
 
@@ -65,7 +69,7 @@ test('solution-only mode reads the answer printed on its own head line', () => {
     assert.equal(S.answerStatedInSolution(solution.runs[0]), 'B');
 });
 
-test('a marker glued onto the previous paragraph still starts its question', () => {
+test('a glued multipart marker remains a candidate until its hierarchy is confirmed', () => {
     const blocks = [
         b('a', 1, 'text', '1. 一'),
         b('b', 2, 'text', '故最小值为 8 米.\n2. (1) 1/5 (2) 分布列如下'),
@@ -73,7 +77,7 @@ test('a marker glued onto the previous paragraph still starts its question', () 
     ];
     const result = S.segment(blocks, { numbers: ['1', '2', '3'] });
     assert.deepEqual(result.order, ['1', '2', '3']);
-    assert.deepEqual(result.issues, []);
+    assert.ok(result.issues.some(i => i.code === 'ambiguous-boundary'));
     const second = result.runs.find(run => run.no === '2');
     assert.match(result.runs.find(run => run.no === '1').blocks[1].text, /最小值为 8 米/);
     assert.match(second.blocks[0].text, /^2\./);
@@ -84,7 +88,37 @@ test('a numbered list inside a solution is not mistaken for a new question', () 
         b('a', 9, 'text', '1. A'),
         b('b', 9, 'text', '详解：\n2. 这一步不是新题，因为 2 不在期望题号里')
     ];
-    const result = S.segment(blocks, { numbers: ['1', '3'] });
+    const result = S.segment(blocks, { numbers: ['1', '3'], role: 'support' });
     assert.deepEqual(result.order, ['1'], 'no synthetic run from a numbered list');
     assert.equal(result.issues.filter(i => i.code === 'missing-number').length, 1);
+});
+
+test('the answer section is found by the numbering restart, not only by a heading', () => {
+    const blocks = [
+        b('a', 1, 'text', '1. 第一题'), b('b', 1, 'text', '2. 第二题'), b('c', 2, 'text', '3. 第三题'),
+        b('d', 3, 'text', '1. D'), b('e', 3, 'text', '2. A'), b('f', 3, 'text', '3. B')
+    ];
+    const boundary = S.findAnswerBoundary(blocks);
+    assert.equal(boundary.reason, 'numbering-restart');
+    assert.equal(boundary.index, 3);
+    const paper = S.segmentPaper(blocks);
+    assert.deepEqual(paper.questionSegment.order, ['1', '2', '3']);
+    assert.deepEqual(paper.solutionSegment.order, ['1', '2', '3']);
+    assert.deepEqual(paper.questionSegment.issues, []);
+    assert.deepEqual(paper.solutionSegment.issues, []);
+});
+
+test('a heading still splits a paper whose answer side has no numbers', () => {
+    const blocks = [b('a', 1, 'text', '1. 第一题'), b('b', 2, 'text', '参考答案'), b('c', 2, 'text', '略')];
+    const paper = S.segmentPaper(blocks);
+    assert.equal(paper.boundary.reason, 'heading');
+    assert.deepEqual(paper.questionSegment.order, ['1']);
+    assert.equal(paper.combined, true);
+});
+
+test('a question-only file reports itself as not combined', () => {
+    const paper = S.segmentPaper([b('a', 1, 'text', '1. 一'), b('b', 1, 'text', '2. 二')]);
+    assert.equal(paper.combined, false);
+    assert.equal(paper.solutionSegment, null);
+    assert.deepEqual(paper.questionSegment.order, ['1', '2']);
 });

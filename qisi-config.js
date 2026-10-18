@@ -124,6 +124,22 @@
                 name: '高考模板',
                 desc: '左侧装订线、绝密标识、考试标题、注意事项与标准大题结构。',
                 config: { title: '2024年普通高等学校招生全国统一考试', subtitle: '理 科 数 学', organizer: '', subject: '理 科 数 学', mode: '普通', paperType: '普通试卷', paperSize: 'A4', fontSize: '小四', fontFamily: '思源宋体', themeColor: '#111827', showDifficulty: false, showSource: false, showAnswer: false, showSolution: false, answerSpace: true, showNotice: true, showScore: true, showQuestionName: false, includeAnswerSection: true, showHeaderFields: false, showAnswerGrid: false, showCornerMarks: false, compactMode: false, showSecretMark: true }
+            },
+            // 讲义类预设：和试卷的区别是「例题下面直接跟解析」，而不是把答案集中印在最后。
+            handoutLesson: {
+                name: '新授课讲义',
+                desc: '例题下方直接跟解析，题间留白，适合课堂上边讲边练。',
+                config: { title: '课 题', subtitle: '', organizer: '', subject: '数学', mode: '讲义', paperType: '教师版', paperSize: 'A4', fontSize: '小四', fontFamily: '思源宋体', themeColor: '#111827', showDifficulty: false, showSource: false, showAnswer: true, showSolution: true, answerSpace: true, showNotice: false, showScore: false, showQuestionName: false, includeAnswerSection: false, showHeaderFields: true, showAnswerGrid: false, answerGridCount: 9, answerLineStart: 10, answerLineCount: 3, showCornerMarks: false, compactMode: false, showSecretMark: false }
+            },
+            handoutReview: {
+                name: '复习讲义',
+                desc: '题量偏大、排版紧凑，带解析，适合单元复习和专题梳理。',
+                config: { title: '专题复习', subtitle: '', organizer: '', subject: '数学', mode: '讲义', paperType: '教师版', paperSize: 'A4', fontSize: '五号', fontFamily: '思源宋体', themeColor: '#111827', showDifficulty: false, showSource: false, showAnswer: true, showSolution: true, answerSpace: false, showNotice: false, showScore: false, showQuestionName: false, includeAnswerSection: false, showHeaderFields: false, showAnswerGrid: false, answerGridCount: 9, answerLineStart: 10, answerLineCount: 3, showCornerMarks: false, compactMode: true, showSecretMark: false }
+            },
+            handoutHomework: {
+                name: '作业纸',
+                desc: '学生版：只有题目和作答空间，不印答案，带班级姓名栏。',
+                config: { title: '课后作业', subtitle: '', organizer: '', subject: '数学', mode: '讲义', paperType: '学生版', paperSize: 'A4', fontSize: '五号', fontFamily: '思源宋体', themeColor: '#111827', showDifficulty: false, showSource: false, showAnswer: false, showSolution: false, answerSpace: true, showNotice: false, showScore: false, showQuestionName: false, includeAnswerSection: false, showHeaderFields: true, showAnswerGrid: false, answerGridCount: 9, answerLineStart: 10, answerLineCount: 3, showCornerMarks: false, compactMode: true, showSecretMark: false }
             }
         };
         const QUESTION_TYPE_LABELS = {

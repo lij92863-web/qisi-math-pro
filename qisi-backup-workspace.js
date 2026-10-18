@@ -4,9 +4,20 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
     'use strict';
     const fail = (code, message) => { const error = new Error(message); error.code = code; throw error; };
+    // 「上次完整备份」的持久记录。qisi-backup.js 的 exportFullDatabaseBackup
+    // 在下载备份时会写同一个键；这里在文件夹备份成功时也写，
+    // 让「距离上次备份多久」跨会话仍然准确 —— 这是给界面提醒用的。
+    const readLastFullBackupAt = () => {
+        try { return Number(root.localStorage?.getItem?.('qisi_last_full_backup_at') || 0) || 0; }
+        catch { return 0; }
+    };
+    const writeLastFullBackupAt = value => {
+        try { root.localStorage?.setItem?.('qisi_last_full_backup_at', String(value)); } catch { /* 空间不足不致命 */ }
+    };
     function createBackupWorkspace(ports, state = {}) {
         Object.assign(state, { automatic: false, busy: false, reading: false, restoring: false, folderReady: false,
-            folderName: '', preview: null, confirmWord: '', confirmOverwrite: false, lastBackupAt: 0,
+            folderName: '', preview: null, confirmWord: '', confirmOverwrite: false,
+            lastBackupAt: readLastFullBackupAt(),
             lastSavedFile: '', pendingChanges: false, notice: '', error: '', supported: ports.supported === true });
         const timer = ports.setTimer || root.setTimeout, cancelTimer = ports.clearTimer || root.clearTimeout;
         const clock = ports.clock || Date.now, interval = ports.intervalMs || 60000;
@@ -14,12 +25,26 @@
         const onWrites = parts => {
             if (Object.keys(parts).some(key => key.startsWith('idb://' + ports.database.name + '/'))) markDirty();
         };
-        const translate = error => error?.code === 'restore-conflict' ? '当前数据发生变化，已取消恢复；请重新确认。' :
-            error?.code === 'CONFIRMATION_REQUIRED' ? '请确认覆盖范围，并输入“恢复备份”。' :
-            error?.code === 'FOLDER_REQUIRED' ? '请先选择备份文件夹，恢复前需要保存当前数据。' :
-            error?.name === 'NotAllowedError' ? '文件夹权限不足，请重新选择文件夹。' :
-            error?.code === 'UNSUPPORTED' ? '当前浏览器不支持选择文件夹，请用新版 Edge 或 Chrome 打开。' :
-            error?.code === 'BACKUP_BUSY' ? '备份操作正在进行，请稍后再试。' : '操作未完成，请检查备份文件、文件夹权限及磁盘空间。';
+        // 错误码 → 老师能看懂的话。用表而不是三元链：加一个错误码只加一行，
+        // 不会再出现「找不到对应分支就掉进兜底文案」的误导。
+        // 尤其那几个 ARCHIVE_* 上限：以前一律显示「请检查文件夹权限及磁盘空间」，
+        // 而真实原因是「这份备份大到恢复不了」。
+        const FAILURE_MESSAGES = Object.freeze({
+            'restore-conflict': '当前数据发生变化，已取消恢复；请重新确认。',
+            CONFIRMATION_REQUIRED: '请确认覆盖范围，并输入“恢复备份”。',
+            FOLDER_REQUIRED: '请先选择备份文件夹，恢复前需要保存当前数据。',
+            BACKUP_BUSY: '备份操作正在进行，请稍后再试。',
+            UNSUPPORTED: '当前浏览器不支持选择文件夹，请用新版 Edge 或 Chrome 打开。',
+            NotAllowedError: '文件夹权限不足，请重新选择文件夹。',
+            ARCHIVE_TOTAL_SIZE_LIMIT: '这份备份解压后超过 512 MB，恢复时会被拒绝。它不能当作救命备份：请减少图片后再备份，或分批导出。',
+            ARCHIVE_ENTRY_COUNT_LIMIT: '这份备份的文件数超过 2 万个，恢复时会被拒绝。请减少图片后再备份。',
+            ARCHIVE_ENTRY_SIZE_LIMIT: '这份备份里有单个文件超过 64 MB，恢复时会被拒绝。',
+            ARCHIVE_COMPRESSION_RATIO_LIMIT: '这份备份的压缩比异常（可能已损坏），恢复时会被拒绝。',
+            ARCHIVE_PATH_TRAVERSAL: '这份备份内含异常的路径，已拒绝处理。',
+            ARCHIVE_UNREADABLE: '这个文件不是有效的备份压缩包，或已经损坏。'
+        });
+        const translate = error => FAILURE_MESSAGES[error?.code] || FAILURE_MESSAGES[error?.name] ||
+            ('操作未完成（' + (error?.code || error?.name || '未知原因') + '），请把这条信息告诉维护者。');
         const reportFailure = error => { state.error = translate(error); return { ok: false, code: error?.code || error?.name || 'BACKUP_FAILED' }; };
         const pauseAutomatic = () => { state.automatic = false; if (scheduled !== undefined) cancelTimer(scheduled); scheduled = undefined; };
         const schedule = () => {
@@ -62,6 +87,7 @@
                     const result = await ports.backup.createFullDatabaseBackup(ports.database);
                     const filename = await writeNewFile(result, purpose);
                     savedRevision = capturedRevision; state.lastBackupAt = clock(); state.lastSavedFile = filename;
+                    writeLastFullBackupAt(state.lastBackupAt);
                     state.notice = '完整备份已保存到所选文件夹。';
                     try { ports.recordReport?.(state.lastBackupAt, result.manifest.verification); }
                     catch (_) { state.notice = '备份文件已保存，但状态记录未能保存。'; }

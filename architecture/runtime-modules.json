@@ -87,6 +87,10 @@
       "runtime": "browser"
     },
     {
+      "file": "qisi-docx-numbering.js",
+      "runtime": "browser"
+    },
+    {
       "file": "qisi-docx-import-coordinator.js",
       "runtime": "browser"
     },
@@ -133,6 +137,18 @@
     {
       "file": "qisi-formal-admission-policy.js",
       "runtime": "browser"
+    },
+    {
+      "file": "qisi-handout-formula-gate.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-handout-html.js",
+      "runtime": "dormant"
+    },
+    {
+      "file": "qisi-handout-model.js",
+      "runtime": "dormant"
     },
     {
       "file": "qisi-import-diagnostics.js",
@@ -233,6 +249,10 @@
     {
       "file": "qisi-page-question-parser.js",
       "runtime": "browser"
+    },
+    {
+      "file": "qisi-paper-pairing.js",
+      "runtime": "dormant"
     },
     {
       "file": "qisi-paper-segmenter.js",
@@ -433,6 +453,10 @@
     {
       "file": "qisi-visual-support-source.js",
       "runtime": "browser"
+    },
+    {
+      "file": "qisi-mineru-evidence.js",
+      "runtime": "dormant"
     }
   ]
 }

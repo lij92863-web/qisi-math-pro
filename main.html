@@ -223,6 +223,8 @@
                         <label class="border rounded px-3 py-1 cursor-pointer">选择备份恢复<input type="file" accept=".zip,application/zip" class="hidden" data-testid="restore-file" :disabled="backupStatus.busy || backupStatus.reading" @change="backupWorkspace.inspectRestoreFile($event.target.files[0]); $event.target.value = ''" /></label>
                     </div>
                     <p class="text-xs mt-2">自动备份：{{ backupStatus.automatic ? '已开启' : '未开启' }}<span v-if="backupStatus.folderReady"> ｜ 文件夹：{{ backupStatus.folderName }}</span><span v-if="backupStatus.pendingChanges"> ｜ 有新变化待备份</span></p>
+                    <p v-if="!backupStatus.folderReady && !backupStatus.lastBackupAt" class="text-xs mt-2 p-2 rounded bg-red-50 text-red-700 font-bold leading-relaxed">还没有设置备份位置：现在没有任何自动备份。题库只存在这台电脑的浏览器里，一旦清理浏览器数据就找不回来了，建议点上面的「选择备份文件夹」。</p>
+                    <p v-else-if="backupStatus.folderReady && backupStatus.lastBackupAt && (Date.now() - backupStatus.lastBackupAt > 7 * 86400000)" class="text-xs mt-2 p-2 rounded bg-amber-50 text-amber-800 leading-relaxed">距离上一次成功备份已经超过一周，中间录的题都还没有副本。</p>
                     <p v-if="backupStatus.lastBackupAt" class="text-xs mt-1">最近保存：{{ new Date(backupStatus.lastBackupAt).toLocaleString() }} ｜ {{ backupStatus.lastSavedFile }}</p>
                     <p v-if="backupStatus.busy || backupStatus.reading" class="text-xs mt-2">正在处理，请稍候。</p>
                     <p v-if="backupStatus.notice" class="text-xs text-blue-700 mt-2" role="status">{{ backupStatus.notice }}</p>
@@ -1438,11 +1440,21 @@
 
                     <aside class="exam-config-panel bg-white rounded-xl shadow-sm border border-gray-200">
                         <div class="p-5 border-b border-gray-100">
-                            <label class="text-[11px] font-bold text-gray-500 mb-1.5 block">选择模板</label>
-                            <select class="input-base" v-model="selectedExamTemplate">
-                                <option v-for="(tpl, key) in examPresets" :key="key" :value="key">{{tpl.name}}</option>
-                            </select>
-                            <p class="text-[11px] text-gray-400 mt-2">{{selectedExamPreset.desc}}</p>
+                            <label class="text-[11px] font-bold text-gray-500 mb-2 block">选择模板</label>
+                            <div class="grid grid-cols-1 gap-2">
+                                <button
+                                    v-for="(tpl, key) in examPresets"
+                                    :key="key"
+                                    type="button"
+                                    @click="selectedExamTemplate = key"
+                                    :class="['text-left px-3 py-2.5 rounded-lg border-2 transition-all', selectedExamTemplate === key ? 'border-[#22a039] bg-green-50/70 shadow-sm' : 'border-gray-100 hover:border-gray-300 hover:bg-gray-50']">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span :class="['text-[13px] font-bold', selectedExamTemplate === key ? 'text-[#1b802d]' : 'text-gray-700']">{{tpl.name}}</span>
+                                        <span v-if="selectedExamTemplate === key" class="text-[10px] font-bold text-white bg-[#22a039] px-1.5 py-0.5 rounded-full shrink-0">当前</span>
+                                    </div>
+                                    <p class="text-[11px] text-gray-400 mt-1 leading-snug line-clamp-2">{{tpl.desc}}</p>
+                                </button>
+                            </div>
                         </div>
 
                         <div class="p-5 space-y-4 overflow-y-auto custom-scrollbar flex-1">
@@ -1466,16 +1478,24 @@
                                 </div>
                                 <div class="space-y-1.5">
                                     <label class="config-label">字号</label>
-                                    <select class="input-base" v-model="examConfig.fontSize"><option>小四</option><option>五号</option></select>
+                                    <select class="input-base" v-model="examConfig.fontSize"><option>三号</option><option>四号</option><option>小四</option><option>五号</option><option>小五</option></select>
                                 </div>
                             </div>
                             <div class="space-y-1.5">
                                 <label class="config-label">试卷类型</label>
-                                <select class="input-base" v-model="examConfig.paperType"><option>普通试卷</option><option>教师版</option><option>学生版</option></select>
+                                <select class="input-base" v-model="examConfig.paperType"
+                                    @change="examConfig.showAnswer = examConfig.paperType === '教师版'; examConfig.showSolution = examConfig.paperType === '教师版';">
+                                    <option>普通试卷</option><option>教师版</option><option>学生版</option>
+                                </select>
                             </div>
                             <div class="space-y-1.5">
                                 <label class="config-label">字体</label>
-                                <select class="input-base" v-model="examConfig.fontFamily"><option value="思源宋体">系统宋体</option><option value="霞鹜文楷">系统楷体</option></select>
+                                <select class="input-base" v-model="examConfig.fontFamily">
+                                    <option value="思源宋体">宋体（最常用）</option>
+                                    <option value="霞鹜文楷">楷体（讲义、低年级）</option>
+                                    <option value="黑体">黑体（标题醒目）</option>
+                                    <option value="微软雅黑">微软雅黑（屏幕阅读）</option>
+                                </select>
                             </div>
                             <div class="space-y-1.5">
                                 <label class="config-label">主题色</label>
@@ -1490,6 +1510,14 @@
                                     <button @click="exportMode='split'" :class="['py-2 border rounded text-[12px] font-bold transition-all', exportMode==='split' ? 'border-[#22a039] bg-green-50 text-[#22a039]' : 'border-gray-200 text-gray-500 hover:bg-gray-50']">两份 PDF：题目和答案分开</button>
                                 </div>
                             </div>
+                            <div class="config-title"><span></span>答案与解析<span></span></div>
+                            <p class="text-[11px] text-gray-400 -mt-1">讲义的常见做法：例题下面直接跟解析。</p>
+                            <label class="config-check">
+                                <input type="checkbox" v-model="examConfig.showAnswer" /> 每题下方显示答案
+                            </label>
+                            <label class="config-check">
+                                <input type="checkbox" v-model="examConfig.showSolution" /> 每题下方显示解析
+                            </label>
                             <div class="config-title"><span></span>模板特性<span></span></div>
                             <label v-for="item in templateFeatureOptions" :key="item.key" class="config-check">
                                 <input type="checkbox" v-model="examConfig[item.key]" /> {{item.label}}
@@ -1669,6 +1697,7 @@
     <script src="./qisi-docx-ole-reader.js?v=local-mtef-20261001"></script>
     <script src="./qisi-docx-mtef-reader.js?v=local-mtef-20261001"></script>
     <script src="./qisi-docx-formula-source.js?v=local-mtef-20261001"></script>
+    <script src="./qisi-docx-numbering.js?v=auto-numbering-01"></script>
     <script src="./qisi-batch-importer.js?v=foundation-01"></script>
     <script src="./qisi-batch-engine-v2.js?v=pdf-v1-retirement-20261003"></script>
     <script src="./qisi-support-parser.js?v=stage1a-support-parser-04"></script>
@@ -1706,6 +1735,7 @@
     <script src="./qisi-review-draft-state.js?v=bmr3-review-draft-01"></script>
     <script src="./qisi-review-draft-normalization-policy.js?v=pdf-external-v2-20261013"></script>
     <script src="./qisi-backup-workspace.js?v=backup-commit-events-01"></script>
+    <script src="./qisi-handout-formula-gate.js?v=handout-gate-01"></script>
     <script src="./app.js?v=pdf-external-v2-20261013"></script>
 </body>
 </html>

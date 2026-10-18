@@ -1,150 +1,304 @@
 (function initPaperSegmenter(root, factory) {
-    const api = factory();
+    const api = factory(root);
     root.Qisi = root.Qisi || {};
     root.Qisi.PaperSegmenter = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
     'use strict';
 
-    // Identity is the printed number, joined by key — the same rule the PDF chain
-    // already uses for support alignment, applied to layout blocks. The segmenter
-    // never invents a question: any deviation (duplicate, gap, out-of-range, or a
-    // number that does not advance) fails the whole segmentation so the caller can
-    // fail closed instead of shipping a paper with a misplaced solution.
+    const Evidence = typeof module !== 'undefined' && module.exports ? require('./qisi-mineru-evidence.js') : root.Qisi.MineruEvidence;
 
-    const NUMBER_START = /^\s*(?:#{1,6}\s*)?(\d{1,2})\s*[.、．]\s*/;
-    // A parser sometimes glues the next question's marker onto the previous block
-    // ("…米.\n16. (1) 1/5"). Splitting there is not a guess: the marker is printed
-    // on its own line, and it is only split when that number is one the paper is
-    // known to contain and has not been seen yet.
-    const NUMBER_INLINE = /(^|\n)[ \t]*(?:#{1,6}[ \t]*)?(\d{1,2})[ \t]*[.、．][ \t]*/g;
-    const SOLUTION_HEAD = /^\s*(?:#{1,6}\s*)?(\d{1,2})\s*[.、．]\s*([A-D]{1,4})\s*$/;
-
-    const textOf = block => String(block && block.text == null ? '' : block.text);
-
-    const numberOnBlock = block => {
-        if (String(block && block.type) !== 'text') return null;
-        const match = textOf(block).match(NUMBER_START);
-        if (!match) return null;
-        const value = Number(match[1]);
-        return Number.isSafeInteger(value) && value > 0 ? match[1] : null;
+    const NUMBER_START = /^\s*(?:#{1,6}\s*)?([0-9０-９]{1,3})\s*(?:[.、．](?![0-9０-９])\s*|(?=【(?:答案|解析|详解)】))/;
+    const SOLUTION_HEAD = /^\s*(?:#{1,6}\s*)?([0-9０-９]{1,3})\s*[.、．]\s*([A-H]{1,8})\s*$/;
+    const ANSWER_HEADING = /^\s*#{0,6}\s*(?:《[^\n]*》\s*)?(?:参考答案(?:与解析)?|答案与解析|答案|解析)\s*$/;
+    const textOf = block => String(block?.text ?? '');
+    const canonical = value => {
+        const digits = String(value).replace(/[０-９]/g, c => String(c.charCodeAt(0) - 0xff10));
+        return /^\d{1,3}$/.test(digits) ? String(Number(digits)) : 'NaN';
     };
 
-    // Only invoked when the caller knows which numbers the paper contains, so a
-    // numbered list inside a solution is never mistaken for a question boundary.
-    const expandGluedMarkers = (blocks, numbers) => {
-        const expected = new Set((numbers || []).map(String));
-        const seen = new Set();
+    const { maskMath, fragment } = Evidence;
+
+    function headOf(block) {
+        if (block?.type !== 'text' || block.parentId) return null;
+        const match = maskMath(textOf(block)).match(NUMBER_START);
+        if (!match || canonical(match[1]) === '0') return null;
+        // Whitespace in the math mask must not consume the answer itself.
+        const original = textOf(block).match(NUMBER_START);
+        return original ? { no: canonical(match[1]), end: original[0].length } : null;
+    }
+    const numberOnBlock = block => headOf(block)?.no || null;
+
+    function supportEvidence(body, following = '', internal = false) {
+        if (/^\s*【(?:答案|解析|详解)】/.test(body)) return 'explicit-label';
+        if (/^\s*[A-H]{1,8}(?=\s*(?:$|\n|【))/.test(body)) return 'choice-head';
+        if (/^\s*[（(]\s*1\s*[)）]/.test(body)) {
+            if (!internal || /[（(]\s*2\s*[)）]|【(?:分析|解析|详解)】/.test(body) ||
+                /^\s*(?:[（(]\s*2\s*[)）]|【(?:分析|解析|详解)】)/.test(following)) return 'multipart-head';
+        }
+        const firstLine = body.split('\n')[0].trim();
+        const plain = maskMath(firstLine).trim();
+        if (firstLine && /^[\s\d+−\-.,，/;；=()（）]*$/.test(plain) &&
+            /^\s*【(?:分析|解析|详解)】/.test(following)) return 'scalar-head';
+        return null;
+    }
+
+    function reviewIndex(blocks, reviews, issues) {
+        const source = new Map(blocks.map(block => [block.id, block]));
+        const index = new Map();
+        for (const review of reviews) {
+            const block = source.get(review.blockId);
+            const key = review.blockId + ':' + review.offset;
+            if (!block || !review.sourceId || review.sourceId !== block.origin?.sourceId || review.text !== textOf(block) ||
+                !Number.isSafeInteger(review.offset) || review.offset < 1 || review.offset >= review.text.length ||
+                !NUMBER_START.test(maskMath(review.text).slice(review.offset)) ||
+                !['question-start', 'nested'].includes(review.decision) || !review.evidence || index.has(key)) {
+                issues.push({ code: 'invalid-boundary-review', blockId: review.blockId });
+            } else index.set(key, review);
+        }
+        return index;
+    }
+
+    function expand(blocks, expected, issues, role, reviews) {
         const out = [];
-        for (const block of blocks) {
+        for (let index = 0; index < blocks.length; index++) {
+            const block = blocks[index];
+            if (block?.type !== 'text' || block.parentId) { out.push(block); continue; }
             const text = textOf(block);
-            if (String(block && block.type) !== 'text') { out.push(block); continue; }
-            const head = numberOnBlock(block);
-            if (head) seen.add(head);
+            const masked = maskMath(text);
             const cuts = [];
-            if (text.includes('\n')) {
-                for (const match of text.matchAll(NUMBER_INLINE)) {
-                    const at = match.index + (match[1] ? match[1].length : 0);
-                    const no = match[2];
-                    if (at === 0 || !expected.has(no) || seen.has(no) || cuts.some(cut => cut.no === no)) continue;
-                    cuts.push({ at, no });
+            const ambiguous = new Set();
+            const leadingSpace = text.match(/^\s*/)[0].length;
+            const pattern = /(^|[\s。；;.!！?？])[ \t]*(?:#{1,6}[ \t]*)?([0-9０-９]{1,3})[ \t]*(?:[.、．](?![0-9０-９])[ \t]*|(?=【(?:答案|解析|详解)】))/g;
+            const candidates = [...masked.matchAll(pattern)];
+            for (let n = 0; n < candidates.length; n++) {
+                const match = candidates[n];
+                const prefixEnd = match.index + match[1].length;
+                const at = prefixEnd + masked.slice(prefixEnd).match(/^[ \t]*/)[0].length;
+                if (at <= leadingSpace) continue;
+                const no = canonical(match[2]);
+                if (no === '0') continue;
+                const end = n + 1 < candidates.length ? candidates[n + 1].index : text.length;
+                // Match on original text to avoid treating masked formulas as whitespace.
+                const marker = text.slice(at).match(NUMBER_START);
+                if (!marker) continue;
+                const body = text.slice(at + marker[0].length, end);
+                const evidence = supportEvidence(body, textOf(blocks[index + 1]), true);
+                const review = reviews.get(block.id + ':' + at);
+                if (review?.decision === 'nested') continue;
+                if (review?.decision === 'question-start') cuts.push(at);
+                else if (role === 'support' && evidence) {
+                    cuts.push(at);
+                    if (evidence === 'multipart-head') {
+                        ambiguous.add(at);
+                        issues.push({ code: 'ambiguous-boundary', no, blockId: block.id, offset: at });
+                    }
+                } else if (match[1] === '\n') {
+                    if (role === 'question') cuts.push(at);
+                    ambiguous.add(at);
+                    issues.push({ code: 'ambiguous-boundary', no, blockId: block.id, offset: at });
                 }
             }
             if (!cuts.length) { out.push(block); continue; }
-            let start = 0;
-            cuts.forEach((cut, index) => {
-                out.push({ ...block, id: block.id + '#' + index, text: text.slice(start, cut.at).trim() });
-                seen.add(cut.no);
-                start = cut.at;
-            });
-            out.push({ ...block, id: block.id + '#' + cuts.length, text: text.slice(start).trim() });
+            const offsets = [0, ...cuts, text.length];
+            for (let n = 0; n < offsets.length - 1; n++) {
+                const piece = fragment(block, offsets[n], offsets[n + 1]);
+                if (ambiguous.has(offsets[n])) piece.boundaryAmbiguity = true;
+                const review = reviews.get(block.id + ':' + offsets[n]);
+                if (review) piece.boundaryReview = review;
+                out.push(piece);
+            }
         }
         return out;
-    };
+    }
 
-    // Split a contiguous block range into runs keyed by printed number. Paragraphs
-    // before the first number (title, section heading, page furniture) go to the
-    // preamble and never become a question.
-    const segment = (blocks, { numbers = null } = {}) => {
+    function segment(blocks, { numbers = null, role = 'question', sourceRegistry = null, boundaryReviews = [] } = {}) {
         const issues = [];
+        const blocksById = Object.assign(Object.create(null), sourceRegistry);
+        const inputIds = new Set();
+        const inputBlocks = new Set(blocks);
+        for (const block of blocks) {
+            if (!block.id || inputIds.has(block.id) || (Object.hasOwn(blocksById, block.id) && blocksById[block.id] !== block)) issues.push({ code: 'duplicate-block-id', blockId: block.id });
+            else blocksById[block.id] = block;
+            inputIds.add(block.id);
+            if (block.type === 'unsupported') issues.push({ code: 'unsupported-block', blockId: block.id });
+            if (block.boundaryAmbiguity) issues.push({ code: 'ambiguous-boundary', blockId: block.id });
+        }
+        const expectedNumbers = (numbers || []).map(canonical);
+        for (const [index, no] of expectedNumbers.entries()) {
+            if (!/^[1-9]\d{0,2}$/.test(no) || (index && Number(no) <= Number(expectedNumbers[index - 1]))) issues.push({ code: 'invalid-expected-sequence', no, index });
+        }
+        const expectedSet = new Set(expectedNumbers);
+        const reviews = reviewIndex(blocks, boundaryReviews, issues);
+        const source = expand(blocks, expectedSet, issues, role, reviews);
         const runs = [];
         const preamble = [];
         let current = null;
-        const source = Array.isArray(numbers) && numbers.length ? expandGluedMarkers(blocks, numbers) : blocks;
         for (const block of source) {
-            const number = numberOnBlock(block);
-            if (number) {
-                if (current) runs.push(current);
-                current = { no: number, blocks: [block], marker: textOf(block) };
-                continue;
-            }
-            if (current) current.blocks.push(block);
+            if (!Object.hasOwn(blocksById, block.id)) blocksById[block.id] = block;
+            else if (blocksById[block.id] !== block && !inputBlocks.has(block)) issues.push({ code: 'fragment-id-collision', blockId: block.id });
+            const head = headOf(block);
+            if (head) {
+                current = { no: head.no, blocks: [block], marker: textOf(block) };
+                runs.push(current);
+            } else if (current) current.blocks.push(block);
             else preamble.push(block);
         }
-        if (current) runs.push(current);
-
-        const seen = new Map();
-        for (const run of runs) {
-            if (seen.has(run.no)) issues.push({ code: 'duplicate-number', no: run.no, at: seen.get(run.no) });
-            else seen.set(run.no, run.no);
+        const seen = new Set();
+        for (const [index, run] of runs.entries()) {
+            if (seen.has(run.no)) issues.push({ code: 'duplicate-number', no: run.no });
+            seen.add(run.no);
+            if (index && Number(run.no) <= Number(runs[index - 1].no)) issues.push({ code: 'number-not-increasing', no: run.no, after: runs[index - 1].no });
+            run.supportEvidence = supportEvidence(textOf(run.blocks[0]).slice(headOf(run.blocks[0]).end), textOf(run.blocks[1]));
+            if (role === 'support' && !run.supportEvidence) issues.push({ code: 'ambiguous-support-head', no: run.no, blockId: run.blocks[0].id });
         }
-
-        let expected = Array.isArray(numbers) && numbers.length
-            ? numbers.map(String)
-            : runs.map(run => run.no);
-        for (let index = 0; index < expected.length; index += 1) {
-            if (!seen.has(expected[index])) issues.push({ code: 'missing-number', no: expected[index], index });
+        if (!numbers && runs.length) {
+            const values = [...seen].map(Number);
+            for (let n = Math.min(...values); n <= Math.max(...values); n++) expectedSet.add(String(n));
         }
+        for (const no of expectedSet) if (!seen.has(no)) issues.push({ code: 'missing-number', no });
+        for (const no of seen) if (!expectedSet.has(no)) issues.push({ code: 'unexpected-number', no });
+        return { role, coverage: numbers ? 'expected-sequence' : 'observed-sequence', runs, preamble, issues, order: runs.map(run => run.no), expected: [...expectedSet], blocksById, valid: issues.length === 0 };
+    }
 
-        // The numbers must advance strictly, in the order the paper prints them.
-        for (let index = 1; index < runs.length; index += 1) {
-            if (Number(runs[index].no) <= Number(runs[index - 1].no)) issues.push({ code: 'number-not-increasing', no: runs[index].no, after: runs[index - 1].no });
+    // A restart identifies the answer stream, but its title/table may precede
+    // the first numbered answer. Keep that contiguous metadata in its preamble.
+    function supportPreambleStart(blocks, markerIndex, previousMarker) {
+        let start = markerIndex;
+        while (start > previousMarker + 1) {
+            let at = start - 1;
+            while (at > previousMarker && blocks[at].parentId) at--;
+            const block = blocks[at];
+            const table = block.type === 'table' && /<t[dh]\b[^>]*>\s*题号\s*<\/t[dh]>/i.test(textOf(block)) &&
+                /<t[dh]\b[^>]*>\s*答案\s*<\/t[dh]>/i.test(textOf(block));
+            const attachments = blocks.slice(at + 1, start).every(item => item.parentId === block.id);
+            if (table && attachments) { start = at; continue; }
+            if (at === start - 1 && block.type === 'text' && !block.parentId &&
+                (ANSWER_HEADING.test(textOf(block)) || /^\s*#{0,6}\s*《[^\n]*》\s*参考\s*$/.test(textOf(block)))) { start = at; continue; }
+            break;
         }
+        return start;
+    }
 
-        for (const run of runs) {
-            if (!expected.includes(run.no)) issues.push({ code: 'unexpected-number', no: run.no });
-        }
-
-        return { runs, preamble, issues, order: runs.map(run => run.no), expected };
-    };
-
-    // A question owns the figures that sit inside its own block range, in reading
-    // order. This is positional, not semantic: no model, no guessing.
-    const figureOf = run => run.blocks.filter(block => ['image', 'chart'].includes(String(block && block.type)));
-    const tableOf = run => run.blocks.filter(block => String(block && block.type) === 'table');
-
-    const answerStatedInSolution = run => {
-        const head = textOf(run.blocks[0]).match(SOLUTION_HEAD);
-        return head ? head[2] : null;
-    };
-
-    // Build one draft-shaped record per question. `answerTable` (parsed by the
-    // caller from the printed answer table) always wins over the model or the
-    // solution text, because that table is the paper's own verdict.
-    const assemble = ({ questionSegment, solutionSegment, answerTable = null, types = {} }) => {
-        const issues = [];
-        const solutions = new Map((solutionSegment ? solutionSegment.runs : []).map(run => [run.no, run]));
-        const questions = (questionSegment ? questionSegment.runs : []).map(run => {
-            const solution = solutions.get(run.no) || null;
-            const stated = solution ? answerStatedInSolution(solution) : null;
-            const fromTable = answerTable ? (answerTable[run.no] ?? null) : null;
-            if (answerTable && stated && fromTable && String(stated) !== String(fromTable)) {
-                issues.push({ code: 'answer-table-conflict', no: run.no, table: fromTable, solution: stated });
+    function findAnswerBoundary(blocks, { boundaryReviews = [] } = {}) {
+        const seen = new Set();
+        const order = [];
+        let previousMarker = -1;
+        for (let index = 0; index < blocks.length; index++) {
+            if (!blocks[index].parentId && ANSWER_HEADING.test(textOf(blocks[index]))) return { index, reason: 'heading' };
+            const head = headOf(blocks[index]);
+            if (!head) continue;
+            if (seen.has(head.no)) {
+                const suffix = blocks.slice(index);
+                const ids = new Set(suffix.map(b => b.id));
+                const support = segment(suffix, { numbers: order, role: 'support', boundaryReviews: boundaryReviews.filter(r => ids.has(r.blockId)) });
+                const increasing = order.every((no, i) => !i || Number(no) > Number(order[i - 1]));
+                if (increasing && support.valid && support.order.length === order.length && support.order.every((no, i) => no === order[i])) {
+                    const start = supportPreambleStart(blocks, index, previousMarker);
+                    return { index: start, reason: 'numbering-restart', ...(start === index ? {} : { markerIndex: index }) };
+                }
+                // A malformed first restart cannot be repaired by looking for a
+                // later convenient split. An explicit heading still wins below.
+                const heading = blocks.findIndex((block, at) => at > index && !block.parentId && ANSWER_HEADING.test(textOf(block)));
+                return { index: heading, reason: heading < 0 ? 'unproved-restart' : 'heading' };
             }
-            if (!solution) issues.push({ code: 'solution-missing', no: run.no });
+            seen.add(head.no);
+            order.push(head.no);
+            previousMarker = index;
+        }
+        return { index: -1, reason: 'none' };
+    }
+
+    function segmentPaper(blocks, { numbers = null, boundaryReviews = [] } = {}) {
+        const reviewIssues = [];
+        reviewIndex(blocks, boundaryReviews, reviewIssues);
+        const boundary = findAnswerBoundary(blocks, { boundaryReviews });
+        const questionBlocks = boundary.index < 0 ? blocks : blocks.slice(0, boundary.index);
+        const qids = new Set(questionBlocks.map(b => b.id));
+        const questionSegment = segment(questionBlocks, { numbers, boundaryReviews: boundaryReviews.filter(r => qids.has(r.blockId)) });
+        questionSegment.issues.push(...reviewIssues);
+        questionSegment.valid = questionSegment.issues.length === 0;
+        const solutionSegment = boundary.index < 0 ? null : segment(blocks.slice(boundary.index), { numbers: questionSegment.order, role: 'support', boundaryReviews: boundaryReviews.filter(r => !qids.has(r.blockId)) });
+        return { boundary, questionSegment, solutionSegment, combined: boundary.index >= 0 };
+    }
+
+    const figureOf = run => run.blocks.filter(block => ['image', 'chart'].includes(block.type));
+    const tableOf = run => run.blocks.filter(block => block.type === 'table');
+
+    function answerEvidence(run, tableValue = null) {
+        const declarations = Evidence.explicitDeclarations(run?.blocks || []);
+        const head = run && headOf(run.blocks[0]);
+        if (head) {
+            const body = textOf(run.blocks[0]).slice(head.end).trim();
+            const choice = body.match(/^([A-H]{1,8})(?=\s*(?:$|\n|【))/);
+            const value = choice?.[1] || (run.supportEvidence === 'scalar-head' ? body.split('\n')[0].trim() : null);
+            if (value) declarations.unshift({ value, blockId: run.blocks[0].id, kind: 'solution-head' });
+        }
+        if (tableValue != null) declarations.unshift({ value: tableValue, kind: 'answer-table' });
+        return Evidence.aggregateAnswers(declarations);
+    }
+
+    function answerStatedInSolution(run) {
+        return answerEvidence(run).value || null;
+    }
+
+    function assemble({ questionSegment, solutionSegment = null, answerTable = null, types = {} }) {
+        const issues = [];
+        const blocksById = Object.create(null);
+        for (const [side, part] of [['question', questionSegment], ['support', solutionSegment]]) {
+            if (!part) continue;
+            issues.push(...part.issues.map(issue => ({ ...issue, side })));
+            for (const [id, block] of Object.entries(part.blocksById)) {
+                if (Object.hasOwn(blocksById, id) && blocksById[id] !== block) issues.push({ code: 'duplicate-block-id', blockId: id, side });
+                else blocksById[id] = block;
+            }
+        }
+        // Sequence validation precedes the map: duplicates must never overwrite.
+        const questionNumbers = new Set(questionSegment?.order || []);
+        if (questionSegment && !questionNumbers.size) issues.push({ code: 'question-markers-missing' });
+        const supportNumbers = new Set(solutionSegment?.order || []);
+        const ambiguousHeads = new Set(issues.filter(i => i.code === 'ambiguous-support-head').map(i => i.no));
+        if (solutionSegment) {
+            for (const no of questionNumbers) if (!supportNumbers.has(no)) issues.push({ code: 'solution-missing', no });
+            for (const run of solutionSegment.runs) {
+                if (!questionNumbers.has(run.no)) issues.push({ code: 'unexpected-solution', no: run.no });
+                if (!run.supportEvidence && !ambiguousHeads.has(run.no)) issues.push({ code: 'ambiguous-support-head', no: run.no });
+            }
+        }
+        for (const block of Object.values(blocksById)) {
+            if (block.parentId && !Object.hasOwn(blocksById, block.parentId)) issues.push({ code: 'missing-parent-block', blockId: block.id });
+            if (!block.origin || block.origin.blockId === block.id) continue;
+            const source = blocksById[block.origin.blockId];
+            const range = block.origin.range;
+            if (!source || !Array.isArray(range) || range.length !== 2 || !range.every(Number.isSafeInteger) || range[0] < 0 || range[1] < range[0] || range[1] > textOf(source).length || textOf(source).slice(...range) !== textOf(block)) issues.push({ code: 'invalid-fragment-source', blockId: block.id });
+            if (block.boundaryReview && (!source || block.boundaryReview.sourceId !== source.origin?.sourceId || block.boundaryReview.text !== textOf(source) || block.boundaryReview.offset !== range?.[0])) issues.push({ code: 'invalid-boundary-review', blockId: block.id });
+        }
+        const admissible = issues.length === 0;
+        const solutions = admissible ? new Map((solutionSegment?.runs || []).map(run => [run.no, run])) : new Map();
+        const questions = (questionSegment?.runs || []).map(run => {
+            const solution = solutions.get(run.no);
+            const stated = solution ? answerStatedInSolution(solution) : null;
+            const fromTable = answerTable?.[run.no] ?? null;
+            const answers = answerEvidence(solution, fromTable);
+            const conflict = answers.state === 'conflicting';
+            if (conflict) issues.push({ code: fromTable == null ? 'answer-evidence-conflict' : 'answer-table-conflict', no: run.no, evidence: answers.evidence, table: fromTable, solution: stated });
+            const bind = admissible && !conflict;
             return {
-                questionNo: run.no,
-                type: types[run.no] || null,
-                stemBlocks: run.blocks.filter(block => !['image', 'chart'].includes(String(block && block.type))).map(block => block.id),
-                figureBlocks: figureOf(run).map(block => block.id),
-                tableBlocks: tableOf(run).map(block => block.id),
-                answer: fromTable != null ? String(fromTable) : (stated || ''),
-                answerSource: fromTable != null ? 'answer-table' : (stated ? 'solution-head' : 'none'),
-                solutionBlocks: solution ? solution.blocks.map(block => block.id) : []
+                questionNo: run.no, type: types[run.no] || null,
+                stemBlocks: run.blocks.filter(block => !['image', 'chart'].includes(block.type)).map(block => block.id),
+                figureBlocks: figureOf(run).map(block => block.id), tableBlocks: tableOf(run).map(block => block.id),
+                answer: bind ? answers.value : '',
+                answerEvidence: answers,
+                contentStatus: 'unverified',
+                contentIssues: [...run.blocks, ...(solution?.blocks || [])].filter(b => !textOf(b).trim() && !b.image).map(b => ({ code: 'empty-source-block', blockId: b.id })),
+                coverage: questionSegment.coverage,
+                answerSource: bind ? (fromTable != null ? 'answer-table' : stated ? 'solution-head' : 'none') : 'none',
+                solutionBlocks: bind && solution ? solution.blocks.map(block => block.id) : [],
+                reviewRequired: true
             };
         });
-        return { questions, issues };
-    };
+        return { questions, issues, blocksById, valid: issues.length === 0 };
+    }
 
-    return Object.freeze({ NUMBER_START, SOLUTION_HEAD, segment, assemble, numberOnBlock, answerStatedInSolution, figureOf, tableOf });
+    return Object.freeze({ NUMBER_START, SOLUTION_HEAD, ANSWER_HEADING, findAnswerBoundary, segmentPaper, segment, assemble, numberOnBlock, answerEvidence, answerStatedInSolution, figureOf, tableOf });
 });

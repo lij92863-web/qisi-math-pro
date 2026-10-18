@@ -6,6 +6,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const Segmenter = require('../qisi-paper-segmenter.js');
+const Client = require('../qisi-mineru-client.js').internals;
 
 const unzipDir = path.resolve(process.argv[2] || '');
 const goldPath = path.resolve(process.argv[3] || '');
@@ -15,47 +16,12 @@ const contentListFile = fs.readdirSync(unzipDir).find(name => name.endsWith('_co
 if (!contentListFile) throw new Error('未找到 content_list.json');
 
 const raw = JSON.parse(fs.readFileSync(path.join(unzipDir, contentListFile), 'utf8'));
-const blocks = raw
-    .filter(block => block.type !== 'page_number')
-    .map((block, index) => ({
-        id: 'p' + (block.page_idx + 1) + 'b' + index,
-        page: block.page_idx + 1,
-        type: block.type,
-        text: block.text || block.table_body || '',
-        image: block.img_path || null,
-        bbox: block.bbox || null
-    }));
-
-// 答案表：从表格块里确定性解析“题号/答案”两行。
-const answerTable = (() => {
-    for (const block of blocks) {
-        if (block.type !== 'table' || !/题号/.test(block.text)) continue;
-        const rows = [...block.text.matchAll(/<tr>([\s\S]*?)<\/tr>/g)]
-            .map(row => [...row[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(cell => cell[1].trim()));
-        const headerRow = rows.find(row => row[0] === '题号');
-        const answerRow = rows.find(row => row[0] === '答案');
-        if (!headerRow || !answerRow) continue;
-        // A wide answer table is printed as several 题号/答案 row pairs (1-10, then
-        // 11), so every pair must be merged, not just the first one.
-        const table = {};
-        for (let index = 0; index < rows.length; index += 1) {
-            const head = rows[index], body = rows[index + 1];
-            if (!head || head[0] !== '题号' || !body || body[0] !== '答案') continue;
-            for (let column = 1; column < head.length; column += 1) {
-                const no = head[column], value = body[column];
-                if (/^\d{1,2}$/.test(no) && value) table[no] = value;
-            }
-        }
-        if (Object.keys(table).length) return table;
-    }
-    return null;
-})();
-
-const splitAt = blocks.findIndex(block => /参考答案/.test(String(block.text || '')));
-if (splitAt < 0) throw new Error('未找到答案分界');
-const questionSegment = Segmenter.segment(blocks.slice(0, splitAt));
-const solutionSegment = Segmenter.segment(blocks.slice(splitAt), { numbers: questionSegment.order });
-const built = Segmenter.assemble({ questionSegment, solutionSegment, answerTable });
+const normalized = Client.parseContentList(raw);
+const blocks = normalized.pages.flatMap(page => page.blocks);
+const answerTable = Client.parseAnswerTable(blocks);
+const paper = Segmenter.segmentPaper(blocks);
+const { questionSegment, solutionSegment } = paper;
+const built = Segmenter.assemble({ ...paper, answerTable });
 
 const gold = fs.existsSync(goldPath) ? JSON.parse(fs.readFileSync(goldPath, 'utf8')) : { questions: [] };
 const goldByNo = new Map((gold.questions || []).map(item => [String(item.no), item]));
@@ -66,7 +32,7 @@ const rows = built.questions.map(question => {
     const answerMatches = goldAnswer && question.answer ? String(goldAnswer).trim() === String(question.answer).trim() : null;
     const figureOk = reference ? ((reference.has_figure === true) === (question.figureBlocks.length > 0)) : null;
     const stemBlock = question.stemBlocks[0];
-    const stemText = stemBlock ? String(blocks.find(block => block.id === stemBlock).text || '') : '';
+    const stemText = stemBlock ? String(built.blocksById[stemBlock].text || '') : '';
     return { question, reference, goldAnswer, answerMatches, figureOk, stemText };
 });
 
@@ -122,7 +88,7 @@ ${rows.map(row => `<tr>
 <h2 style="font-size:17px;margin:28px 0 8px">需要处理的问题</h2>
 <ul>
 ${built.issues.map(issue => `<li class="issue"><code>${escape(issue.code)}</code> ${issue.no ? '第 ' + escape(issue.no) + ' 题' : ''} ${issue.table ? '（表：' + escape(issue.table) + '，解析：' + escape(issue.solution) + '）' : ''}</li>`).join('') || '<li>无</li>'}
-${solutionSegment.issues.map(issue => `<li class="issue">答案区 <code>${escape(issue.code)}</code> ${issue.no ? '第 ' + escape(issue.no) + ' 题' : ''}</li>`).join('')}
+${(solutionSegment?.issues || []).map(issue => `<li class="issue">答案区 <code>${escape(issue.code)}</code> ${issue.no ? '第 ' + escape(issue.no) + ' 题' : ''}</li>`).join('')}
 </ul>
 </div></body></html>`;
 
@@ -132,6 +98,6 @@ console.log(JSON.stringify({
     answerTableEntries: answerTable ? Object.keys(answerTable).length : 0,
     answerMatches: compared ? answered + '/' + compared : null,
     solutionsLocated: located + '/' + built.questions.length,
-    issues: built.issues.concat(solutionSegment.issues).map(i => i.code + (i.no ? ':' + i.no : '')),
+    issues: built.issues.concat((solutionSegment?.issues || [])).map(i => i.code + (i.no ? ':' + i.no : '')),
     out: outPath
 }, null, 2));

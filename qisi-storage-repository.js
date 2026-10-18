@@ -293,51 +293,59 @@
         ) => {
             const input = clone(question);
             const id = requireId(input?.id, 'question.id');
-            return transaction(['questions', 'images'], async tx => {
-                const existing = await tx.get('questions', id);
-                if (
-                    existing && confirmationToken &&
-                    existing.storageMeta?.confirmationToken === confirmationToken
-                ) {
-                    return { question: existing, idempotent: true };
-                }
-                if (existing && !allowUpdate) {
-                    throw new StorageRepositoryError(
-                        'duplicate-id', `Question ${id} already exists.`, { id }
-                    );
-                }
-                if (
-                    existing && expectedUpdatedAt !== undefined &&
-                    existing.updatedAt !== expectedUpdatedAt
-                ) {
-                    throw new StorageRepositoryError(
-                        'write-conflict',
-                        `Question ${id} changed in another writer.`,
-                        { id, expectedUpdatedAt, actualUpdatedAt: existing.updatedAt }
-                    );
-                }
-                const now = clock();
-                const next = {
-                    ...input,
-                    createdAt: existing?.createdAt ?? input.createdAt ?? now,
-                    updatedAt: now,
-                    storageMeta: {
-                        ...(isRecord(existing?.storageMeta)
-                            ? existing.storageMeta
-                            : {}),
-                        ...(isRecord(input.storageMeta) ? input.storageMeta : {}),
-                        ...(confirmationToken ? { confirmationToken } : {})
+            // 事务回调**不能是 async 函数**：async 永远返回原生 Promise，
+            // Dexie 拿到原生 Promise 就判定事务结束并提交，于是第二次写抛
+            // PrematureCommitError —— 而第一次写已经生效，老师看到「保存入库失败」
+            // 但题目其实进库了，重试就多出一道重复题。
+            // 所以这里直接对 Dexie 表操作，让每一步返回的都是 Dexie 自己的 Promise。
+            imageRecords.forEach(image => requireId(image?.id, 'image.id'));
+            return transaction(['questions', 'images'], () =>
+                table('questions').get(id).then(existing => {
+                    if (
+                        existing && confirmationToken &&
+                        existing.storageMeta?.confirmationToken === confirmationToken
+                    ) {
+                        return { question: existing, idempotent: true };
                     }
-                };
-                delete next.deletedAt;
-                delete next.deletedBy;
-                for (const image of imageRecords) {
-                    requireId(image?.id, 'image.id');
-                    await tx.put('images', image);
-                }
-                await tx.put('questions', next);
-                return { question: clone(next), idempotent: false };
-            });
+                    if (existing && !allowUpdate) {
+                        throw new StorageRepositoryError(
+                            'duplicate-id', `Question ${id} already exists.`, { id }
+                        );
+                    }
+                    if (
+                        existing && expectedUpdatedAt !== undefined &&
+                        existing.updatedAt !== expectedUpdatedAt
+                    ) {
+                        throw new StorageRepositoryError(
+                            'write-conflict',
+                            `Question ${id} changed in another writer.`,
+                            { id, expectedUpdatedAt, actualUpdatedAt: existing.updatedAt }
+                        );
+                    }
+                    const now = clock();
+                    const next = {
+                        ...input,
+                        createdAt: existing?.createdAt ?? input.createdAt ?? now,
+                        updatedAt: now,
+                        storageMeta: {
+                            ...(isRecord(existing?.storageMeta)
+                                ? existing.storageMeta
+                                : {}),
+                            ...(isRecord(input.storageMeta) ? input.storageMeta : {}),
+                            ...(confirmationToken ? { confirmationToken } : {})
+                        }
+                    };
+                    delete next.deletedAt;
+                    delete next.deletedBy;
+                    return table('questions').put(next).then(() => {
+                        if (!imageRecords.length) {
+                            return { question: clone(next), idempotent: false };
+                        }
+                        return table('images').bulkPut(imageRecords)
+                            .then(() => ({ question: clone(next), idempotent: false }));
+                    });
+                })
+            );
         };
 
         const updateQuestion = async (

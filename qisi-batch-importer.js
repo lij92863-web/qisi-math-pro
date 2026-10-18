@@ -899,38 +899,12 @@
         return stripQuestionNo(stripOptionsFromStemText(blockText));
     };
 
-    const expandWordLetterNumbering = (xml, numberingXml) => {
-        if (!numberingXml) return xml;
-        const document = new DOMParser().parseFromString(numberingXml, 'application/xml');
-        const abstracts = new Map(Array.from(document.getElementsByTagName('w:abstractNum'))
-            .map(node => [node.getAttribute('w:abstractNumId'), node]));
-        const lists = new Map();
-        for (const node of document.getElementsByTagName('w:num')) {
-            const abstractId = node.getElementsByTagName('w:abstractNumId')[0]?.getAttribute('w:val');
-            const level = abstracts.get(abstractId)?.getElementsByTagName('w:lvl')[0];
-            if (level?.getAttribute('w:ilvl') !== '0' ||
-                level.getElementsByTagName('w:numFmt')[0]?.getAttribute('w:val') !== 'upperLetter' ||
-                level.getElementsByTagName('w:lvlText')[0]?.getAttribute('w:val') !== '%1.') continue;
-            const start = Number(node.getElementsByTagName('w:startOverride')[0]?.getAttribute('w:val') ||
-                level.getElementsByTagName('w:start')[0]?.getAttribute('w:val') || 1);
-            lists.set(node.getAttribute('w:numId'), {next:start});
-        }
-        return xml.replace(/<w:p\b[\s\S]*?<\/w:p>/g, paragraph => {
-            const properties = paragraph.match(/<w:numPr>[\s\S]*?<\/w:numPr>/)?.[0] || '';
-            if (!/<w:ilvl\s+w:val="0"/.test(properties)) return paragraph;
-            const id = properties.match(/<w:numId\s+w:val="(\d+)"/)?.[1], list = lists.get(id);
-            if (!list) return paragraph;
-            const value = list.next++;
-            if (!Number.isInteger(value) || value < 1 || value > 26) return paragraph;
-            const label = String.fromCharCode(64 + value);
-            const text = extractTextFromXmlFragment(paragraph);
-            if (new RegExp('^' + label + '\\s*[.．]').test(text)) return paragraph;
-            const prefix = '<w:r><w:t>' + label + '. </w:t></w:r>';
-            return paragraph.includes('</w:pPr>')
-                ? paragraph.replace('</w:pPr>', () => '</w:pPr>' + prefix)
-                : paragraph.replace(/<w:p\b[^>]*>/, tag => tag + prefix);
-        });
-    };
+    // 答案/解析区的标题行。
+    // 以前要求整行「完全等于」参考答案或答案及解析，于是「参考答案：」
+    // 「【参考答案】」「答案详解」这些常见写法全都认不到，
+    // 结果答案区被当成题目正文，凭空多出一批假题目。
+    // 这里统一成一个模式：可带书名号前缀、可带【】或[]、可带冒号、可带"及/与解析"。
+    const SUPPORT_HEADING_PATTERN = /^(?:《[^》]+》\s*)?[【\[]?\s*(?:参考答案|答案)\s*(?:及|与)?\s*(?:解析|详解|解答)?\s*[】\]]?\s*[:：]?\s*$/;
 
     const parseDocxFile = async (fileRecord, context = {}) => {
         const helpers = context.helpers || {};
@@ -942,8 +916,21 @@
         const { documentXml, relsXml } = await readDocxCoreXml(zip);
         const expanded = await window.Qisi.DocxFormulaSource.expand(
             documentXml, parseRelationships(relsXml), zip, { signal: context.signal });
+
+        // 题号的两种来源必须分层处理：
+        //   ① Word 自动编号（<w:numPr>）—— 编号在文档结构里，不在文字里，最可靠；
+        //   ② 老师手打的 "1." —— 只能靠正则从文字里认，天生会和解析正文里的
+        //      "1. 当 x>0 时" 混在一起。
+        // 所以先展开①，并且只展开答案区之前的段落：答案区里的自动编号是解析的
+        // 分步列表，展开它就会把解析切成假题目。
         const numberingEntry = zip.file('word/numbering.xml');
-        expanded.xml = expandWordLetterNumbering(expanded.xml, numberingEntry ? await numberingEntry.async('string') : '');
+        const numberingXml = numberingEntry ? await numberingEntry.async('string') : '';
+        const headingIndex = splitDocxParagraphs(expanded.xml).findIndex(paragraph =>
+            SUPPORT_HEADING_PATTERN.test(paragraph.text));
+        expanded.xml = window.Qisi.DocxNumbering.expand(expanded.xml, numberingXml, {
+            beforeIndex: headingIndex
+        }).xml;
+
         const mediaMap = await buildMediaMaps(zip, relsXml, fileRecord.filename);
         const blocks = buildQuestionBlocksFromDocumentXml(expanded.xml);
         const originalBlocks = new Map(buildQuestionBlocksFromDocumentXml(documentXml)
@@ -951,7 +938,7 @@
         const supportImages = [];
         const supportParagraphs = splitDocxParagraphs(expanded.xml);
         const supportHeading = supportParagraphs.findIndex(paragraph =>
-            /^(?:《[^》]+》\s*)?(?:参考答案(?:及|与)?(?:解析|详解)?|答案(?:及|与)(?:解析|详解))$/.test(paragraph.text));
+            SUPPORT_HEADING_PATTERN.test(paragraph.text));
         const supportText = (supportHeading >= 0 ? supportParagraphs.slice(supportHeading + 1) : supportParagraphs).map(paragraph =>
             xmlFragmentToRenderableText(paragraph.rawXml, mediaMap, supportImages, 'support')
         ).join('\n');

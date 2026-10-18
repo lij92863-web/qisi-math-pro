@@ -60,11 +60,14 @@ test('draft images and nested binary fields roundtrip instead of becoming empty 
 });
 
 
-test('N4 own high-compression backups self-verify while external archive limits remain active',async()=>{
+test('N4 a backup that can be created can always be restored',async()=>{
+ // 产品不变量：创建时通过校验的备份，恢复时也必须通过。
+ // 以前这里断言的是 false —— 即「备份显示成功、真恢复时被拒」被当成正常行为，
+ // 等于给老师一根会断的救命绳。压缩比超限时改为不压缩重新打包，两条校验共用一把尺子。
  const rows=data();rows.questions[0].stem='x'.repeat(1024*1024);
  const created=await Backup.createFullDatabaseBackup(db(rows));
  assert.equal(created.manifest.verification.ok,true);
- assert.equal((await Backup.verifyFullDatabaseBackupBlob(created.blob)).ok,false);
+ assert.equal((await Backup.verifyFullDatabaseBackupBlob(created.blob)).ok,true);
 });
 test('N27 preference allowlist roundtrips and can roll back without exporting credentials',async()=>{
  const old=globalThis.localStorage,values=new Map([['qisi_teacher_name','Teacher'],['qisi_exam_cart','["q1"]'],['secret-key','never-export']]);

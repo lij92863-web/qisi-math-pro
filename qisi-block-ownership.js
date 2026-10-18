@@ -1,302 +1,253 @@
-(function(root,factory){ const api=factory(root); if(typeof module!=='undefined'&&module.exports)module.exports=api; root.Qisi=root.Qisi||{}; root.Qisi.BlockOwnership=api; })(typeof globalThis!=='undefined'?globalThis:this,function(root){
-'use strict';
-const PROTOCOL='block-ownership-v1';
-const TYPES=Object.freeze(['single_choice','multiple_choice','fill_blank','free_response','unknown']);
-const ARRAY_FIELDS=Object.freeze(['stem','answer','solution','figures']);
-const PLACEHOLDER_ALT=Object.freeze({image:'图',chart:'图',table:'表格'});
-const DEFAULT_MAX_TEXT_CHARS=4000;
-const DEFAULT_HEAD_RATIO=0.75;
-const clone=value=>JSON.parse(JSON.stringify(value));
-const isPlainObject=value=>Boolean(value)&&typeof value==='object'&&!Array.isArray(value);
-const basename=value=>String(value).split(/[\\/]/).pop();
-const blockKind=block=>typeof block.type==='string'&&block.type?block.type:'text';
+(function (root, factory) {
+    const api = factory(root);
+    root.Qisi = root.Qisi || {};
+    root.Qisi.BlockOwnership = api;
+    if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
+    'use strict';
+    const node = typeof module !== 'undefined' && module.exports;
+    const Segmenter = node ? require('./qisi-paper-segmenter.js') : root.Qisi.PaperSegmenter;
+    const Evidence = node ? require('./qisi-mineru-evidence.js') : root.Qisi.MineruEvidence;
+    const PROTOCOL = 'block-ownership-v1';
+    const TYPES = Object.freeze(['single_choice', 'multiple_choice', 'fill_blank', 'free_response', 'unknown']);
+    const FIELDS = ['stem', 'answer', 'solution', 'figures'];
+    const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+    const clone = value => JSON.parse(JSON.stringify(value));
 
-function blockIndex(source){
-    if(!source) return null;
-    if(source instanceof Map) return source;
-    if(Array.isArray(source)){
-        const map=new Map();
-        for(const block of source){
-            if(block&&typeof block.id==='string'&&block.id) map.set(block.id,block);
+    function blockIndex(source) {
+        if (!source) throw new Error('BLOCK_OWNERSHIP_BLOCKS_REQUIRED');
+        const entries = source instanceof Map ? [...source] : Array.isArray(source) ? source.map(b => [b?.id, b]) : Object.entries(source);
+        const map = new Map();
+        for (const [id, block] of entries) {
+            if (typeof id !== 'string' || !id || id !== block?.id) throw new Error('BLOCK_OWNERSHIP_BLOCK_ID_REQUIRED');
+            if (map.has(id)) throw new Error('BLOCK_OWNERSHIP_DUPLICATE_BLOCK_ID:' + id);
+            map.set(id, block);
         }
         return map;
     }
-    if(typeof source==='object'){
-        const map=new Map();
-        for(const key of Object.keys(source)) map.set(key,source[key]);
-        return map;
-    }
-    return null;
-}
-function numberList(value){
-    if(!Array.isArray(value)) return null;
-    return value.map(item=>String(item).trim()).filter(Boolean);
-}
-function truncateText(text,limit){
-    if(!Number.isFinite(limit)||limit<=0||text.length<=limit) return {text,truncated:false};
-    const head=Math.max(1,Math.ceil(limit*DEFAULT_HEAD_RATIO));
-    const tail=Math.max(0,limit-head);
-    return {text:text.slice(0,head)+'\n…[truncated '+String(text.length-limit)+' chars]…\n'+(tail?text.slice(text.length-tail):''),truncated:true};
-}
 
-// §2：只给编号清单 + 文本，图/表/图表只给占位描述。
-function buildOwnershipPayload(input,options={}){
-    const source=input||{}, pages=source.pages;
-    if(!Array.isArray(pages)) throw new Error('BLOCK_OWNERSHIP_PAGES_REQUIRED');
-    const limit=Number.isFinite(options.maxTextChars)?options.maxTextChars:DEFAULT_MAX_TEXT_CHARS;
-    const numbers=numberList(source.questionNumbers);
-    const blocks=[];
-    const seenIds=new Set();
-    pages.forEach((page,index)=>{
-        const pageNo=Number.isSafeInteger(page&&page.page)?page.page:index+1;
-        const list=Array.isArray(page&&page.blocks)?page.blocks:[];
-        for(const block of list){
-            if(!block||typeof block.id!=='string'||!block.id) throw new Error('BLOCK_OWNERSHIP_BLOCK_ID_REQUIRED');
-            // id 全局唯一是 §1 的硬约束；重复会让后续按 id 取块静默取错，必须当场 fail fast。
-            if(seenIds.has(block.id)) throw new Error('BLOCK_OWNERSHIP_DUPLICATE_BLOCK_ID:'+block.id);
-            seenIds.add(block.id);
-            const kind=blockKind(block);
-            if(kind==='image'||kind==='chart'||kind==='table'){
-                blocks.push({id:block.id,p:pageNo,kind,alt:PLACEHOLDER_ALT[kind]});
+    function buildOwnershipPayload(input, options = {}) {
+        if (!Array.isArray(input?.pages)) throw new Error('BLOCK_OWNERSHIP_PAGES_REQUIRED');
+        blockIndex(input.pages.flatMap(page => page.blocks));
+        const blocks = [];
+        for (const page of input.pages) {
+            if (!Number.isSafeInteger(page.page) || page.page < 1) throw new Error('BLOCK_OWNERSHIP_PAGE_REQUIRED');
+            for (const block of page.blocks) {
+                const kind = block.type;
+                const entry = { id: block.id, p: page.page, kind };
+                if (kind === 'image' || kind === 'chart') entry.alt = '图';
+                else entry.text = String(block.text || '');
+                if (block.parentId) entry.parentId = block.parentId;
+                // Budget overflow belongs to planning. Never erase source identity.
+                if (options.maxTextChars > 0 && entry.text?.length > options.maxTextChars) throw new Error('BLOCK_OWNERSHIP_TEXT_BUDGET:' + block.id);
+                blocks.push(entry);
+            }
+        }
+        return { exam: { pages: input.pages.length, question_numbers: input.questionNumbers || [] }, answer_table: input.answerTable || null, blocks };
+    }
+
+    function sequence(numbers, errors, tag) {
+        if (!Array.isArray(numbers) || !numbers.length) { errors.push(tag + ':required'); return; }
+        numbers.forEach((no, i) => {
+            if (typeof no !== 'string' || !/^[1-9]\d{0,2}$/.test(no)) errors.push(tag + ':invalid-number:' + no);
+            if (i && Number(no) <= Number(numbers[i - 1])) errors.push(tag + ':not-increasing:' + no);
+        });
+    }
+
+    function sourceContext(known, options, errors) {
+        const blocks = [...known.values()].filter(b => !b.origin || b.origin.blockId === b.id);
+        let paper;
+        if (options.phase === 'solutions') {
+            const part = Segmenter.segment(blocks, { numbers: options.questionNumbers, role: 'support', boundaryReviews: options.boundaryReviews });
+            paper = { solutionSegment: part };
+            errors.push(...part.issues.map(i => 'source:' + i.code));
+        } else {
+            paper = Segmenter.segmentPaper(blocks, { boundaryReviews: options.boundaryReviews });
+            const built = Segmenter.assemble({ ...paper, answerTable: options.answerTable });
+            errors.push(...built.issues.map(i => 'source:' + i.code));
+        }
+        const owners = new Map();
+        for (const [role, part] of [['question', paper.questionSegment], ['support', paper.solutionSegment]]) {
+            for (const run of part?.runs || []) for (const block of run.blocks) {
+                owners.set(block.id, { no: run.no, role });
+                known.set(block.id, block);
+            }
+        }
+        return { ...paper, owners, solutions: new Map((paper.solutionSegment?.runs || []).map(run => [run.no, run])) };
+    }
+
+    // Model references may narrow an anchored interval, never create or expand it.
+    function inspect(value, source, options) {
+        const errors = [];
+        let known;
+        try { known = blockIndex(source); } catch (error) { return { errors: [error.message], known: new Map(), context: {} }; }
+        if (!object(value)) return { errors: ['result-not-object'], known, context: {} };
+        if (value.protocol !== PROTOCOL) errors.push(value.protocol === undefined ? 'missing-protocol' : 'protocol-version:' + value.protocol);
+        const phase = options.phase || 'full';
+        if (!['full', 'questions', 'solutions'].includes(phase)) errors.push('invalid-phase');
+        if (!Array.isArray(value.questions)) errors.push('questions-not-array');
+        if (!Array.isArray(value.unassigned)) errors.push('unassigned-not-array');
+        if (options.questionNumbers !== undefined && !Array.isArray(options.questionNumbers)) {
+            errors.push('expected:not-array');
+            return { errors, known, context: {} };
+        }
+        const context = sourceContext(known, options, errors);
+        const expected = options.questionNumbers || context.questionSegment?.order;
+        sequence(expected, errors, 'expected');
+        const items = Array.isArray(value.questions) ? value.questions : [];
+        const actual = items.map(item => item?.question_no);
+        sequence(actual, errors, 'questions');
+        const expectedSet = new Set(expected || []), actualSet = new Set(actual);
+        for (const no of expectedSet) if (!actualSet.has(no)) errors.push('missing-question-no:' + no);
+        for (const no of actualSet) if (!expectedSet.has(no)) errors.push('question-no-not-allowed:' + no);
+        const counts = new Set(), used = new Set();
+        items.forEach((item, i) => {
+            const tag = 'questions[' + i + ']';
+            if (!object(item)) { errors.push(tag + ':not-object'); return; }
+            if (counts.has(item.question_no)) errors.push('duplicate-question-no:' + item.question_no);
+            counts.add(item.question_no);
+            if (!TYPES.includes(item.type)) errors.push(tag + ':invalid-type');
+            if (!Array.isArray(item.issues) || item.issues.some(x => typeof x !== 'string')) errors.push(tag + ':issues-not-array');
+            const check = (ids, field) => {
+                if (!Array.isArray(ids)) { errors.push(tag + '.' + field + ':not-array'); return; }
+                const seen = new Set();
+                for (const id of ids) {
+                    const label = tag + '.' + field;
+                    if (typeof id !== 'string' || !known.has(id)) { errors.push(label + ':unknown-block:' + id); continue; }
+                    if (seen.has(id)) errors.push(label + ':duplicate-block:' + id);
+                    seen.add(id); used.add(id);
+                    const owner = context.owners.get(id);
+                    const role = field === 'answer' || field === 'solution' ? 'support' : 'question';
+                    if (!owner || owner.no !== item.question_no || (field !== 'figures' && owner.role !== role)) errors.push(label + ':outside-source-range:' + id);
+                    if (known.get(id).truncated) errors.push(label + ':incomplete-source:' + id);
+                    if ((phase === 'questions' && role === 'support') || (phase === 'solutions' && (role === 'question' || field === 'figures'))) errors.push(label + ':phase-forbidden');
+                    if (field === 'figures' && !['image', 'chart'].includes(known.get(id).type)) errors.push(label + ':not-image:' + id);
+                }
+            };
+            for (const field of FIELDS) check(item[field], field);
+            if (!object(item.options)) errors.push(tag + '.options:not-object');
+            else for (const [label, ids] of Object.entries(item.options)) {
+                if (!/^[A-H]$/.test(label)) errors.push(tag + '.options:invalid-label:' + label);
+                check(ids, 'options.' + label);
+            }
+        });
+        for (const group of Array.isArray(value.unassigned) ? value.unassigned : []) {
+            if (!object(group) || !Array.isArray(group.blocks) || typeof group.reason !== 'string') { errors.push('unassigned-invalid'); continue; }
+            for (const id of group.blocks) if (!known.has(id) || used.has(id)) errors.push('unassigned-invalid-block:' + id);
+        }
+        return { errors: [...new Set(errors)], known, context };
+    }
+
+    function validateOwnership(value, options = {}) {
+        const { issues: errors } = assembleExam(value, options.blocksById || options.blocks, options);
+        return { valid: !errors.length, errors, result: errors.length ? null : clone(value) };
+    }
+
+    function project(item, known, context, options) {
+        const issues = [], images = new Map();
+        const render = ids => (Array.isArray(ids) ? ids : []).map(id => {
+            const b = known.get(id);
+            if (!b) return '';
+            if (['image', 'chart'].includes(b.type)) {
+                const path = b.image;
+                if (!path) { issues.push('missing-image-path:' + id); return ''; }
+                const sourceId = b.origin?.sourceId || null;
+                const key = JSON.stringify([sourceId, path]);
+                images.set(key, { blockId: id, name: path.split('/').pop(), path, sourceId, assetId: key });
+                if (!sourceId) issues.push('missing-image-source:' + id);
+                return '[[IMAGE:' + encodeURIComponent(key) + ']]';
+            }
+            return b.text || '';
+        }).filter(Boolean).join('\n').trim();
+        const stemIds = Array.isArray(item.stem) ? [...item.stem] : [];
+        const optionRefs = object(item.options) ? clone(item.options) : {};
+        // The same projection handles model-shared references and options still
+        // embedded in a stem. No second parser is delegated to an unknown caller.
+        if (!Object.keys(optionRefs).length) for (const id of stemIds) {
+            const split = known.has(id) && Evidence.splitOptions(known.get(id));
+            if (split) for (const entry of split.options) optionRefs[entry.label] = [id];
+        }
+        const use = new Map();
+        for (const [label, ids] of Object.entries(optionRefs)) if (Array.isArray(ids)) for (const id of ids) {
+            if (!use.has(id)) use.set(id, []);
+            use.get(id).push(label);
+        }
+        const optionEvidence = [];
+        for (const [id, labels] of use) if (labels.length > 1) {
+            const block = known.get(id);
+            const split = block && Evidence.splitOptions(block);
+            if (!split || [...labels].sort().join('') !== split.options.map(x => x.label).join('')) {
+                issues.push('options-unresolved:' + id);
+                for (const label of labels) optionRefs[label] = [];
                 continue;
             }
-            const text=typeof block.text==='string'?block.text:'';
-            const cut=truncateText(text,limit);
-            const entry={id:block.id,p:pageNo,kind,text:cut.text};
-            if(cut.truncated) entry.truncated=true;
-            blocks.push(entry);
-        }
-    });
-    return {
-        exam:{pages:pages.length,question_numbers:numbers||[]},
-        answer_table:source.answerTable&&typeof source.answerTable==='object'?source.answerTable:null,
-        blocks
-    };
-}
-
-function checkIdArray(value,tag,known,errors){
-    if(value===undefined) return;
-    if(!Array.isArray(value)){ errors.push(tag+':not-array'); return; }
-    const seen=new Set();
-    for(const id of value){
-        if(typeof id!=='string'||!id){ errors.push(tag+':invalid-block-id'); continue; }
-        if(seen.has(id)){ errors.push(tag+':duplicate-block:'+id); continue; }
-        seen.add(id);
-        if(known&&!known.has(id)) errors.push(tag+':unknown-block:'+id);
-    }
-}
-
-// §3 校验：一律返回 {valid,errors,result}，不向调用方抛异常。
-function validateOwnership(value,options={}){
-    const errors=[];
-    const known=blockIndex(options&&(options.blocksById||options.blocks));
-    if(!known) errors.push('blocks-by-id-required');
-    const allowedNumbers=numberList(options&&options.questionNumbers);
-    const allowed=allowedNumbers?new Set(allowedNumbers):null;
-    if(!isPlainObject(value)) return {valid:false,errors:['result-not-object'],result:null};
-    if(value.protocol===undefined) errors.push('missing-protocol');
-    else if(value.protocol!==PROTOCOL) errors.push('protocol-version:'+String(value.protocol));
-    if(!Array.isArray(value.questions)) errors.push('questions-not-array');
-    else{
-        const numbers=new Set();
-        value.questions.forEach((item,index)=>{
-            const tag='questions['+index+']';
-            if(!isPlainObject(item)){ errors.push(tag+':not-object'); return; }
-            const qno=item.question_no;
-            if(typeof qno!=='string'||!qno.trim()) errors.push(tag+':question-no');
-            else{
-                if(numbers.has(qno)) errors.push(tag+':duplicate-question-no:'+qno);
-                else numbers.add(qno);
-                if(allowed&&!allowed.has(qno)) errors.push(tag+':question-no-not-allowed:'+qno);
+            for (const entry of split.options) {
+                const existing = known.get(entry.block.id);
+                if (existing && (existing.text !== entry.block.text || JSON.stringify(existing.origin) !== JSON.stringify(entry.block.origin))) {
+                    issues.push('fragment-id-collision:' + entry.block.id);
+                    continue;
+                }
+                known.set(entry.block.id, entry.block);
+                optionRefs[entry.label] = optionRefs[entry.label].map(ref => ref === id ? entry.block.id : ref);
             }
-            if(item.type!==undefined&&!TYPES.includes(item.type)) errors.push(tag+':invalid-type:'+String(item.type));
-            for(const field of ARRAY_FIELDS) checkIdArray(item[field],tag+'.'+field,known,errors);
-            if(item.options!==undefined){
-                if(!isPlainObject(item.options)) errors.push(tag+'.options:not-object');
-                else for(const label of Object.keys(item.options)) checkIdArray(item.options[label],tag+'.options.'+label,known,errors);
-            }
-            if(item.issues!==undefined&&!Array.isArray(item.issues)) errors.push(tag+'.issues:not-array');
-        });
-    }
-    if(value.unassigned!==undefined){
-        if(!Array.isArray(value.unassigned)) errors.push('unassigned-not-array');
-        else value.unassigned.forEach((group,index)=>{
-            const tag='unassigned['+index+']';
-            if(!isPlainObject(group)){ errors.push(tag+':not-object'); return; }
-            if(!Array.isArray(group.blocks)){ errors.push(tag+'.blocks:not-array'); return; }
-            checkIdArray(group.blocks,tag+'.blocks',known,errors);
-        });
-    }
-    const valid=errors.length===0;
-    return {valid,errors,result:valid?clone(value):null};
-}
-
-function renderBlock(block,id,context,issues,images){
-    const kind=blockKind(block);
-    if(kind==='image'||kind==='chart'){
-        const name=typeof block.image==='string'?basename(block.image):'';
-        if(!name){ issues.push(context+':missing-image-name:'+id); return ''; }
-        images.push({blockId:id,name});
-        return '[[IMAGE:'+name+']]';
-    }
-    if(kind==='table'){
-        const html=typeof block.text==='string'?block.text:'';
-        if(!html.trim()){ issues.push(context+':missing-block-text:'+id); return ''; }
-        return html;
-    }
-    const text=typeof block.text==='string'?block.text:'';
-    if(!text.trim()){ issues.push(context+':missing-block-text:'+id); return ''; }
-    return text;
-}
-
-function renderIds(ids,context,known,issues,images){
-    if(!Array.isArray(ids)){
-        if(ids!==undefined) issues.push(context+':not-array');
-        return '';
-    }
-    const seen=new Set(), parts=[];
-    for(const id of ids){
-        if(typeof id!=='string'||!id){ issues.push(context+':invalid-block-id'); continue; }
-        if(seen.has(id)){ issues.push(context+':duplicate-block:'+id); continue; }
-        seen.add(id);
-        const block=known&&known.get(id);
-        // 不存在的块只报错，绝不拿别的块顶替。
-        if(!block){ issues.push(context+':unknown-block:'+id); continue; }
-        const text=renderBlock(block,id,context,issues,images);
-        if(text.trim()) parts.push(text);
-    }
-    return parts.join('\n').trim();
-}
-
-function answerLabel(text){
-    const trimmed=String(text).trim();
-    if(/^[A-Ha-h]+$/.test(trimmed)) return trimmed.toUpperCase();
-    const match=trimmed.match(/^[（(]?([A-Ha-h])(?:[)）.．、:：]|\s)/);
-    return match?match[1].toUpperCase():null;
-}
-
-// §3 拼装：text 取原文，image/chart → [[IMAGE:<文件名>]]，table → HTML。不做任何公式规范化。
-function assembleQuestion(ownershipItem,blocksById,options={}){
-    const issues=[];
-    const known=blockIndex(blocksById);
-    if(!isPlainObject(ownershipItem)) return {questionNo:'',type:'unknown',stem:'',options:[],answer:'',solution:'',images:[],issues:['invalid-ownership-item']};
-    const item=ownershipItem;
-    const questionNo=item.question_no==null?'':String(item.question_no).trim();
-    const type=TYPES.includes(item.type)?item.type:'unknown';
-    if(item.type===undefined) issues.push('missing-type');
-    else if(!TYPES.includes(item.type)) issues.push('invalid-type:'+String(item.type));
-    const images=[];
-    const seenImages=new Set();
-    const addImage=image=>{
-        if(!image||seenImages.has(image.blockId)) return;
-        seenImages.add(image.blockId);
-        images.push(image);
-    };
-    const render=(ids,context)=>{
-        const local=[];
-        const text=renderIds(ids,context,known,issues,local);
-        local.forEach(addImage);
-        return text;
-    };
-    const stem=render(item.stem,'stem');
-    const optionEntries=[];
-    if(item.options!==undefined){
-        if(!isPlainObject(item.options)) issues.push('options:not-object');
-        else for(const label of Object.keys(item.options).sort()){
-            optionEntries.push({label,text:render(item.options[label],'options.'+label)});
+            const at = stemIds.indexOf(id);
+            if (split.prefix) {
+                known.set(split.prefix.id, split.prefix);
+                if (at >= 0) stemIds.splice(at, 1, split.prefix.id);
+                else optionEvidence.push(split.prefix.id);
+            } else if (at >= 0) stemIds.splice(at, 1);
         }
-    }
-    const modelAnswer=render(item.answer,'answer');
-    const solution=render(item.solution,'solution');
-    if(Array.isArray(item.figures)) for(const id of item.figures){
-        if(typeof id!=='string'||!id){ issues.push('figures:invalid-block-id'); continue; }
-        if(seenImages.has(id)) continue;
-        const block=known&&known.get(id);
-        if(!block){ issues.push('figures:unknown-block:'+id); continue; }
-        const kind=blockKind(block);
-        if(kind!=='image'&&kind!=='chart'){ issues.push('figures:not-image:'+id); continue; }
-        const name=typeof block.image==='string'?basename(block.image):'';
-        if(!name){ issues.push('figures:missing-image-name:'+id); continue; }
-        seenImages.add(id);
-        images.push({blockId:id,name});
-    }
-    const tableValue=options&&options.answerTable&&Object.prototype.hasOwnProperty.call(options.answerTable,questionNo)?options.answerTable[questionNo]:undefined;
-    const hasTable=tableValue!==undefined&&tableValue!==null&&String(tableValue).trim()!=='';
-    const choice=type==='single_choice'||type==='multiple_choice';
-    let answer=modelAnswer;
-    if(hasTable&&choice){
-        const fromTable=String(tableValue).trim();
-        answer=fromTable;
-        if(modelAnswer){
-            const label=answerLabel(modelAnswer);
-            if(label===null) issues.push('answer-table-unverifiable');
-            else if(label!==fromTable.replace(/\s+/g,'').toUpperCase()) issues.push('answer-table-conflict');
+        const stem = render(stemIds);
+        const optionEntries = Object.entries(optionRefs).map(([label, ids]) => ({ label, text: render(ids), blocks: ids }));
+        for (const entry of optionEntries) {
+            if (!new RegExp('^\\s*' + entry.label + '[.．、]').test(Evidence.maskMath(entry.text))) issues.push('option-label-unproved:' + entry.label);
         }
-    }else if(hasTable&&!choice&&!modelAnswer){
-        answer=String(tableValue).trim();
-    }
-    if(choice&&!answer) issues.push('missing-answer');
-    if(choice&&optionEntries.length>0&&optionEntries.length<2) issues.push('options-incomplete');
-    if(!stem&&!optionEntries.length&&!images.length) issues.push('empty-stem');
-    if(Array.isArray(item.issues)) issues.unshift(...item.issues.filter(issue=>typeof issue==='string'));
-    return {questionNo,type,stem,options:optionEntries,answer,solution,images,issues};
-}
-
-function referencedIds(questions){
-    const ids=new Set();
-    const push=value=>{ if(Array.isArray(value)) value.forEach(id=>{ if(typeof id==='string'&&id) ids.add(id); }); };
-    for(const item of questions){
-        if(!isPlainObject(item)) continue;
-        for(const field of ARRAY_FIELDS) push(item[field]);
-        if(isPlainObject(item.options)) Object.keys(item.options).forEach(label=>push(item.options[label]));
-    }
-    return ids;
-}
-
-// 批量拼装 + 全卷题号连续性检查（缺号/重号只报告，不补号）。
-function assembleExam(ownership,blocksById,options={}){
-    const value=isPlainObject(ownership)?ownership:{};
-    const items=Array.isArray(value.questions)?value.questions:[];
-    const drafts=items.map(item=>assembleQuestion(item,blocksById,options));
-    const issues=[];
-    const counts=new Map();
-    for(const draft of drafts){
-        if(!draft.questionNo){ issues.push('missing-question-no'); continue; }
-        counts.set(draft.questionNo,(counts.get(draft.questionNo)||0)+1);
-    }
-    for(const [qno,count] of counts) if(count>1) issues.push('duplicate-question-no:'+qno);
-    const expected=numberList(options&&options.questionNumbers)||numberList(value.exam&&value.exam.question_numbers);
-    if(expected){
-        const allowed=new Set(expected);
-        for(const [qno] of counts) if(!allowed.has(qno)) issues.push('unexpected-question-no:'+qno);
-        const seen=new Set();
-        for(const qno of expected){ if(seen.has(qno)) continue; seen.add(qno); if(!counts.has(qno)) issues.push('missing-question-no:'+qno); }
-    }
-    const unassigned=[];
-    const reported=new Set();
-    const index=blockIndex(blocksById);
-    if(Array.isArray(value.unassigned)) for(const group of value.unassigned){
-        if(!isPlainObject(group)||!Array.isArray(group.blocks)) continue;
-        const blocks=[];
-        for(const id of group.blocks){
-            if(typeof id!=='string'||!id) continue;
-            if(index&&!index.has(id)) issues.push('unassigned-unknown-block:'+id);
-            blocks.push(id);
-            reported.add(id);
+        render(item.figures);
+        const run = context.solutions?.get(item.question_no);
+        const answers = Segmenter.answerEvidence(run, options.answerTable?.[item.question_no]);
+        if (answers.state === 'conflicting') issues.push('answer-evidence-conflict');
+        if (['single_choice', 'multiple_choice'].includes(item.type)) {
+            const labels = optionEntries.map(x => x.label).sort();
+            if (labels.length < 2 || labels.some((label, i) => label !== String.fromCharCode(65 + i))) issues.push('options-incomplete');
+            const key = Evidence.answerKey(answers.value);
+            if (key && (!/^[A-H]+$/.test(key) || [...key].some(label => !labels.includes(label)) || (item.type === 'single_choice' && key.length !== 1))) issues.push('choice-answer-invalid');
         }
-        unassigned.push({blocks,reason:typeof group.reason==='string'?group.reason:''});
+        const solution = render(item.solution);
+        if (!stem && options.phase !== 'solutions') issues.push('empty-stem');
+        return { questionNo: item.question_no, type: item.type, stem, options: optionEntries,
+            answer: answers.value, solution, images: [...images.values()], issues,
+            answerEvidence: answers, optionEvidence, contentStatus: 'unverified', reviewRequired: true };
     }
-    if(index&&options.reportUnreferenced!==false){
-        const used=referencedIds(items);
-        const orphans=[];
-        for(const id of index.keys()) if(!used.has(id)&&!reported.has(id)) orphans.push(id);
-        if(orphans.length){
-            orphans.forEach(id=>issues.push('unreferenced-block:'+id));
-            unassigned.push({blocks:orphans,reason:'unreferenced-block'});
-        }
-    }
-    return {drafts,issues,unassigned};
-}
 
-return Object.freeze({PROTOCOL,TYPES,buildOwnershipPayload,validateOwnership,assembleQuestion,assembleExam,blockIndex});
+    function assembleExam(ownership, source, options = {}) {
+        const { errors, known, context } = inspect(ownership, source, options);
+        const items = Array.isArray(ownership?.questions) ? ownership.questions.filter(object) : [];
+        // Invalid external input never enters field projection. Preserve its raw
+        // claims and source registry for review instead of partially interpreting
+        // malformed fields and trying to repair them in each renderer.
+        if (errors.length) return {
+            drafts: items.map(item => ({ questionNo: item.question_no, type: item.type,
+                stem: '', options: [], answer: '', solution: '', images: [],
+                answerEvidence: Segmenter.answerEvidence(context.solutions?.get(item.question_no), options.answerTable?.[item.question_no]),
+                valid: false, reviewRequired: true, contentStatus: 'unverified', rawOwnership: clone(item), issues: errors })),
+            issues: errors, valid: false, unassigned: Array.isArray(ownership?.unassigned) ? ownership.unassigned : [], blocksById: Object.fromEntries(known)
+        };
+        const drafts = items.map(item => project(item, known, context, options));
+        const issues = [...errors, ...drafts.flatMap(d => d.issues.map(i => d.questionNo + ':' + i))];
+        const valid = issues.length === 0;
+        for (const draft of drafts) {
+            draft.valid = valid;
+            if (!valid || options.phase === 'questions') { draft.answer = ''; draft.solution = ''; }
+        }
+        return { drafts, issues, valid, unassigned: ownership?.unassigned || [], blocksById: Object.fromEntries(known) };
+    }
+
+    function assembleQuestion(item, source, options = {}) {
+        const built = assembleExam({ protocol: PROTOCOL, questions: [item], unassigned: [] }, source,
+            { ...options, questionNumbers: options.questionNumbers || [item?.question_no] });
+        return built.drafts[0] ? { ...built.drafts[0], issues: built.issues } :
+            { questionNo: '', type: 'unknown', stem: '', options: [], answer: '', solution: '', images: [], valid: false, reviewRequired: true, issues: built.issues };
+    }
+
+    return Object.freeze({ PROTOCOL, TYPES, blockIndex, buildOwnershipPayload, validateOwnership, assembleQuestion, assembleExam });
 });

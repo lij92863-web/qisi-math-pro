@@ -307,9 +307,11 @@
         const extractPdfTextWithPdfJs = async (file) => {
             if (!root.pdfjsLib) return '';
 
+            // 必须与 vendor/pdfjs/pdf.min.js 同版本（3.11.174）且走本站路径。
+            // 指向 CDN 会让断网时文字提取直接失败，联网时白下 1.1MB。
             root.pdfjsLib.GlobalWorkerOptions.workerSrc =
                 root.pdfjsLib.GlobalWorkerOptions.workerSrc ||
-                'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+                './vendor/pdfjs/pdf.worker.min.js';
 
             const buffer = await (await dataUrlToBlob(file.uploadPath)).arrayBuffer();
             const pdf = await root.pdfjsLib.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false }).promise;
@@ -364,9 +366,11 @@
         const extractPdfLayoutWithPdfJs = async (file, options = {}) => {
             if (!root.pdfjsLib) return [];
 
+            // 必须与 vendor/pdfjs/pdf.min.js 同版本（3.11.174）且走本站路径。
+            // 指向 CDN 会让断网时文字提取直接失败，联网时白下 1.1MB。
             root.pdfjsLib.GlobalWorkerOptions.workerSrc =
                 root.pdfjsLib.GlobalWorkerOptions.workerSrc ||
-                'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+                './vendor/pdfjs/pdf.worker.min.js';
 
             const buffer = await (await dataUrlToBlob(file.uploadPath)).arrayBuffer();
             const pdf = await root.pdfjsLib.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false }).promise;
