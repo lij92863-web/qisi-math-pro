@@ -38,20 +38,20 @@ test('the numbered step inside a solution stays part of that solution', () => {
     assert.match(solutions['1'] || '', /由题意得/);
 });
 
-test('two different answers for one question keep the first and leave a visible warning', () => {
-    // 真正的重复（源文件里题号印了两次且答案不同）：
-    // 不许清空（那是静默丢）、不许抛错拒整份（会误杀正常文件）。
-    // 保留先出现的一条，并在 warnings 里留下痕迹。
+test('two different answers for one question are both refused with a visible conflict', () => {
+    // 源文件里同一题号印了两次且答案不同：两个值都不采用，该题留空并标记冲突。
+    // 旧实现「保留先出现的一条」是在用位置猜哪条对，题号印错就会静默挂错答案。
+    // 也不抛错拒整份 —— 一道题的问题不该让整份文件失败。
     const text = '答案：\n1. A\n2. C\n1. D';
     let result;
     assert.doesNotThrow(() => { result = Parser.parseAnswerAndSolutionItemsFromText(text, file); });
     const first = result.answers.find(row => row.question === '1');
     assert.ok(first);
-    assert.equal(first.answer, 'A');
-    assert.ok(
-        (Array.isArray(first.warnings) && first.warnings.length > 0) || first.conflict,
-        '重复答案必须留下可见的警告或冲突标记，不能悄无声息'
-    );
+    assert.equal(first.answer, '');
+    assert.equal(result.answers.find(row => row.question === '2').answer, 'C');
+    const conflict = result.conflicts.find(row => row.question === '1' && row.field === 'answer');
+    assert.ok(conflict, '重复答案必须留下可见的冲突标记，不能悄无声息');
+    assert.deepEqual(conflict.values.sort(), ['A', 'D']);
 });
 
 test('identical duplicate answers are de-duplicated silently', () => {

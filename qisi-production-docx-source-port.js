@@ -251,6 +251,34 @@
             for (const source of supportSources) {
                 const roles = supportRoles(source);
                 const parsed = await parseSupportSource(source, batch, signal, importer);
+                // 解析层报告的同题号冲突：两个值都不采用，该字段留空并标记待人工确认。
+                // 不在这里抛错 —— 一道题的问题不该让整份文件失败。
+                for (const conflict of (Array.isArray(parsed.conflicts) ? parsed.conflicts : [])) {
+                    const question = normalizeQuestionNumber(conflict.question);
+                    const index = byQuestion.get(question);
+                    if (index === undefined) continue;
+                    const field = conflict.field === 'solution' ? 'solution' : 'answer';
+                    const draft = drafts[index];
+                    drafts[index] = {
+                        ...draft,
+                        [field]: '',
+                        warnings: [...(draft.warnings || []), {
+                            code: 'DOCX_SUPPORT_DUPLICATE_QUESTION',
+                            field,
+                            questionNumber: question,
+                            message: `第 ${question} 题的${field === 'answer' ? '答案' : '解析'}出现多条不同取值，已全部留空待人工确认。`,
+                            values: Array.isArray(conflict.values) ? conflict.values : []
+                        }],
+                        fieldProvenance: {
+                            ...(draft.fieldProvenance || {}),
+                            [field]: contract.rejectedSupportProvenance(
+                                draft, field, {
+                                    questionNumber: question,
+                                    source: draft.source
+                                })
+                        }
+                    };
+                }
                 const groups = [
                     ['answer', parsed.answers],
                     ['solution', parsed.solutions]
@@ -272,10 +300,9 @@
                             continue;
                         }
                         const key = `${question}:${field}`;
-                        if (applied.has(key)) {
-                            throw createError('DOCX_SUPPORT_DUPLICATE');
-                        }
                         applied.add(key);
+                        // 同一题号同一字段再次出现时不再抛错：取值相同是幂等重复，
+                        // 取值不同由字段级冲突处理（该字段留空 + 标记冲突），整份文件照常导入。
                         drafts[index] =
                             contract.applyDeterministicDocxSupportField({
                                 candidate: drafts[index],

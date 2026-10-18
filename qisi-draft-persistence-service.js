@@ -204,6 +204,7 @@
                 const batch = {
                     ...command.batch,
                     draftPersistence: {
+                        ...command.batch.draftPersistence,
                         version: nextVersion,
                         idempotencyKey: command.idempotencyKey,
                         signature: command.signature

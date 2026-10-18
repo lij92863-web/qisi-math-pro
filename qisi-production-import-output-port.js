@@ -150,39 +150,125 @@
         return [...byId.values()];
     }
 
-    function betterText(current, candidate, ports) {
-        const left = text(current, ports);
-        const right = text(candidate, ports);
-        if (!left && right) return candidate;
-        if (left && !right) return current;
-        const leftBad = badCharCount(left);
-        const rightBad = badCharCount(right);
-        const leftMath = latexSignalCount(left);
-        const rightMath = latexSignalCount(right);
-        if (leftBad > 0 && rightBad === 0 && right.length >= 6) return candidate;
-        if (rightBad > 0 && leftBad === 0) return current;
-        if (rightMath > leftMath && rightBad <= leftBad) return candidate;
-        if (right.length > left.length * 1.25 && rightBad <= leftBad) return candidate;
-        return current;
+    // 凭证等级决定字段归属：判不出高下就保留主候选，不按文本质量猜。
+    const PROVENANCE_RANK = Object.freeze({
+        'controlled-write': 3,
+        manual: 3,
+        missing: 2,
+        rejected: 1
+    });
+
+    function clone(value) {
+        if (Array.isArray(value)) return value.map(clone);
+        if (value && typeof value === 'object') {
+            return Object.fromEntries(
+                Object.entries(value).map(([key, item]) => [key, clone(item)])
+            );
+        }
+        return value;
+    }
+
+    function provenanceStatus(provenance) {
+        return String(provenance?.status || provenance?.kind || '').trim();
+    }
+
+    function provenanceRank(provenance) {
+        return PROVENANCE_RANK[provenanceStatus(provenance)] || 0;
+    }
+
+    // 返回 'left' / 'right'；同级或任一方没有显式等级时返回 null（不可判定）。
+    function strongerProvenance(left, right) {
+        const leftRank = provenanceRank(left);
+        const rightRank = provenanceRank(right);
+        if (!leftRank || !rightRank || leftRank === rightRank) return null;
+        return leftRank > rightRank ? 'left' : 'right';
+    }
+
+    function chooseText(best, other, field, context) {
+        const { ports, questionNo, warnings, rejected } = context;
+        const bestProvenance = best.fieldProvenance?.[field];
+        const otherProvenance = other.fieldProvenance?.[field];
+        const stronger = strongerProvenance(bestProvenance, otherProvenance);
+        if (stronger === 'left') return 'best';
+        if (stronger === 'right') return 'other';
+        const bestText = text(best[field], ports);
+        const otherText = text(other[field], ports);
+        // 补空不算择优：一边为空、另一边有值，直接取有值的一边（凭证随值一起搬）。
+        if (!bestText && otherText) return 'other';
+        if (bestText && !otherText) return 'best';
+        if (!bestText && !otherText) return 'best';
+        // 两条都有值且按凭证判不出高下：不猜。保留主候选，另一条记入候选供人工采用。
+        if (bestText !== otherText) {
+            warnings.push(
+                `题号 ${questionNo || '(未识别)'} 的 ${field} 字段两条候选无法按来源凭证判定高下，已保留主候选原文，另一条取值已记入候选。`
+            );
+            rejected[field] = String(other[field] || '').slice(0, 200);
+        }
+        return 'best';
+    }
+
+    function chooseOptions(best, other, ports, context) {
+        const bestProvenance = best.fieldProvenance?.options;
+        const otherProvenance = other.fieldProvenance?.options;
+        const stronger = strongerProvenance(bestProvenance, otherProvenance);
+        if (stronger === 'left') return 'best';
+        if (stronger === 'right') return 'other';
+        const bestOptions = Array.isArray(best.options) ? best.options : ['', '', '', ''];
+        const otherOptions = Array.isArray(other.options) ? other.options : ['', '', '', ''];
+        const bestJoined = cleanOptions(bestOptions, ports).join('\n');
+        const otherJoined = cleanOptions(otherOptions, ports).join('\n');
+        if (!bestJoined && otherJoined) return 'other';
+        if (bestJoined && !otherJoined) return 'best';
+        if (!bestJoined && !otherJoined) return 'best';
+        if (bestJoined !== otherJoined) {
+            context.warnings.push(
+                `题号 ${context.questionNo || '(未识别)'} 的 options 两条候选无法按来源凭证判定高下，已保留主候选选项，另一条已记入候选。`
+            );
+            context.rejected.options = otherJoined.slice(0, 200);
+        }
+        return 'best';
     }
 
     function mergeCandidate(best, other, ports) {
         const merged = { ...best };
-        const bestOptions = Array.isArray(best.options) ? best.options : ['', '', '', ''];
-        const otherOptions = Array.isArray(other.options) ? other.options : ['', '', '', ''];
-        const bestCount = countMeaningfulOptions(bestOptions, ports);
-        const otherCount = countMeaningfulOptions(otherOptions, ports);
-        if (
-            otherCount > bestCount ||
-            (
-                otherCount === bestCount &&
-                badCharCount(otherOptions.join('\n')) < badCharCount(bestOptions.join('\n')) &&
-                latexSignalCount(otherOptions.join('\n')) >= latexSignalCount(bestOptions.join('\n'))
-            )
-        ) merged.options = otherOptions;
-        merged.stem = betterText(best.stem, other.stem, ports);
-        merged.answer = betterText(best.answer, other.answer, ports);
-        merged.solution = betterText(best.solution, other.solution, ports);
+        const questionNo = normalizeQuestionNo(best, ports) ||
+            normalizeQuestionNo(other, ports);
+        const warnings = [];
+        const rejected = {};
+        const context = { ports, questionNo, warnings, rejected };
+        const bestProvenance = best.fieldProvenance || {};
+        const fieldProvenance = clone(bestProvenance);
+        let provenanceAdopted = false;
+        const adopt = field => {
+            merged[field] = other[field];
+            const evidence = other.fieldProvenance?.[field];
+            fieldProvenance[field] = evidence && typeof evidence === 'object'
+                ? clone(evidence)
+                : { ...clone(bestProvenance[field] || {}), status: 'rejected' };
+            provenanceAdopted = true;
+        };
+        for (const field of ['stem', 'answer', 'solution']) {
+            if (chooseText(best, other, field, context) === 'other') adopt(field);
+        }
+        if (chooseOptions(best, other, ports, context) === 'other') {
+            adopt('options');
+            if (best.pdfExternal || other.pdfExternal) {
+                merged.pdfExternal = clone(other.pdfExternal || best.pdfExternal);
+                if (
+                    Array.isArray(best.pdfExternal?.optionLabels) &&
+                    Array.isArray(other.pdfExternal?.optionLabels)
+                ) {
+                    merged.pdfExternal.optionLabels = clone(
+                        other.pdfExternal.optionLabels
+                    );
+                } else {
+                    merged.pdfExternal.optionLabels = [];
+                    warnings.push(
+                        `题号 ${questionNo || '(未识别)'} 的 options 已改用另一候选，但两侧缺少可对齐的 optionLabels，选项标签已留空。`
+                    );
+                }
+            }
+        }
         merged.images = mergeImages([best.images || [], other.images || []], ports);
         merged.recognizedImages = mergeImages([
             best.recognizedImages || [], other.recognizedImages || []
@@ -206,14 +292,21 @@
                     score: qualityScore(other, ports),
                     badChars: badCharCount(allText(other)),
                     optionCount: countMeaningfulOptions(other.options, ports),
-                    stemHead: text(other.stem || '', ports).slice(0, 100)
+                    stemHead: text(other.stem || '', ports).slice(0, 100),
+                    answer: String(other.answer || '').slice(0, 200),
+                    solution: String(other.solution || '').slice(0, 200),
+                    ...(Object.keys(rejected).length
+                        ? { rejectedValues: { ...rejected } }
+                        : {})
                 }
             ]
         };
         merged.warnings = [...new Set([
             ...(best.warnings || []), ...(other.warnings || []),
-            '检测到重复题号，系统已合并候选并保留质量更高版本。'
+            ...warnings,
+            '检测到重复题号，系统已合并候选并保留主候选；两条取值不同且无法判定的字段已记入候选。'
         ])];
+        if (provenanceAdopted) merged.fieldProvenance = fieldProvenance;
         return merged;
     }
 

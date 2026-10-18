@@ -45,6 +45,8 @@
         };
 
 
+        // 冲突不能靠猜：同一题号出现两段不同内容时，两个值都不采用，该题留空并标记，
+        // 由审核页要求人工确认。缺答案可以接受，错挂答案不能接受。
         const pushUniqueQuestionItem = (list, item, valueKey) => {
             const question = normalizeQuestionKey(item.question);
             const value = root.Qisi.Utils.cleanRecognizedText(item[valueKey]);
@@ -62,27 +64,71 @@
                 return;
             }
 
-            const existingValue = root.Qisi.Utils.cleanRecognizedText(list[existingIndex][valueKey]);
+            const existing = list[existingIndex];
+            const existingValue = root.Qisi.Utils.cleanRecognizedText(existing[valueKey]);
 
             // 完全相同的内容：正常的重复印刷，去重即可。
             if (existingValue === value) return;
 
-            // 同一个题号出现两段不同内容。旧逻辑「保留更长的那段」是在用长度
-            // 猜哪条对 —— 题号印错时会挂错答案。
-            // 三条路都试过了，各有利弊：
-            //   清空字段 → 老师以为源文件本来就没有，静默丢数据；
-            //   抛错拒整份 → 解析切分不可靠时会误杀完全正常的文件；
-            // 所以这里选：保留先出现的一条（行为确定、不猜），并在 warnings
-            // 里留下痕迹，让上层有机会提示「第 N 题的题号可能印重了」。
+            // 解析会被两条路径各抽一次（编号分块 / 行内标签），抽出的文本互为子串。
+            // 这是同��段内容的两次抽取，不是两条答案：保留更完整的那一份，不算冲突。
+            if (valueKey === 'solution') {
+                const compact = row => String(row || '').replace(/\s+/g, '');
+                const left = compact(existingValue);
+                const right = compact(value);
+                if (left && right && (left.includes(right) || right.includes(left))) {
+                    if (right.length > left.length) {
+                        list[existingIndex] = { ...existing, [valueKey]: value };
+                    }
+                    return;
+                }
+            }
+
+            // 之前清空过的题再次出现不同取值：仍然是冲突，不复活。
+            const alreadyConflicted = existingValue === '';
+            const seenValues = alreadyConflicted
+                ? (Array.isArray(existing.conflictValues) ? existing.conflictValues : [])
+                : [existingValue];
+
             list[existingIndex] = {
-                ...list[existingIndex],
+                ...existing,
+                [valueKey]: '',
+                conflictValues: [...seenValues, value],
                 warnings: [
-                    ...(Array.isArray(list[existingIndex].warnings)
-                        ? list[existingIndex].warnings
-                        : []),
-                    `duplicate-${valueKey}:题号 ${question} 出现了两条不同的${valueKey === 'answer' ? '答案' : '解析'}，已保留先出现的一条`
+                    ...(Array.isArray(existing.warnings) ? existing.warnings : []),
+                    {
+                        code: 'DOCX_SUPPORT_DUPLICATE_QUESTION',
+                        field: valueKey,
+                        question,
+                        message: `题号 ${question} 出现了${seenValues.length + 1}条不同的${valueKey === 'answer' ? '答案' : '解析'}，已全部留空待人工确认。`,
+                        values: [...seenValues, value].map(row => String(row).slice(0, 200))
+                    }
                 ]
             };
+        };
+
+        // 冲突清单由行上的 warnings 汇总得出，不另设跨次调用的可变状态。
+        // 多条解析路径可能各记一次同一处冲突，这里按题号+字段去重。
+        const collectConflicts = (...lists) => {
+            const seen = new Set();
+            const rows = [];
+            for (const list of lists) {
+                for (const row of list || []) {
+                    for (const item of Array.isArray(row?.warnings) ? row.warnings : []) {
+                        if (!item || item.code !== 'DOCX_SUPPORT_DUPLICATE_QUESTION') continue;
+                        const question = normalizeQuestionKey(item.question ?? row.question);
+                        const key = `${question}|${item.field}`;
+                        if (seen.has(key)) continue;
+                        seen.add(key);
+                        rows.push({
+                            question,
+                            field: item.field,
+                            values: Array.isArray(item.values) ? item.values : []
+                        });
+                    }
+                }
+            }
+            return rows;
         };
 
         const parseAnswerItemsFromText = (text, sourceFile) => {
@@ -192,14 +238,44 @@
                     chosen.set(candidate.question, candidate);
                 }
             }
+            const chosenSet = new Set(chosen.values());
+            // 落选的候选如果自己带标签（例如同一题号的第二条「1. 答案：C」），
+            // 它不是上一题解析的一部分。把它挡在上一题块之外，
+            // 否则这条重复答案会被当成解析正文混进去。
+            const droppedLabeled = candidates.filter(
+                candidate => !chosenSet.has(candidate) && candidate.hasLabel
+            );
+            // 被挡下来的重复解析行也要走到冲突通道：两个值都不采用，不静默丢掉。
+            const solutions = [];
+            droppedLabeled.forEach(candidate => {
+                const index = candidates.indexOf(candidate);
+                const end = candidates[index + 1]?.start || source.length;
+                const text = source.slice(candidate.contentStart, end).trim();
+                const inline = text.match(new RegExp(`${solutionLabelPattern}\\s*([\\s\\S]*)$`, 'i'));
+                if (!inline) return;
+                const value = root.Qisi.Utils.cleanRecognizedText(inline[1]);
+                if (!value) return;
+                pushUniqueQuestionItem(solutions, {
+                    question: candidate.question,
+                    solution: value,
+                    imageRefs: extractGraphicRefs(value),
+                    confidence: 0.86,
+                    warnings: [],
+                    sourceFileId: sourceFile.id,
+                    sourceFileName: sourceFile.filename
+                }, 'solution');
+            });
+
             const marks = [...chosen.values()].sort((a, b) => a.start - b.start);
 
-            const solutions = [];
-
             marks.forEach((mark, idx) => {
+                const nextStart = marks[idx + 1]?.start || source.length;
+                const blocker = droppedLabeled.find(
+                    candidate => candidate.start > mark.start && candidate.start < nextStart
+                );
                 let block = source.slice(
                     mark.contentStart,
-                    marks[idx + 1]?.start || source.length
+                    blocker ? blocker.start : nextStart
                 ).trim();
 
                 const inlineSolutionMatch = block.match(new RegExp(`${solutionLabelPattern}\\s*([\\s\\S]*)$`, 'i'));
@@ -320,7 +396,11 @@
             (inline.answers || []).forEach(item => pushUniqueQuestionItem(answers, item, 'answer'));
             (inline.solutions || []).forEach(item => pushUniqueQuestionItem(solutions, item, 'solution'));
 
-            return { answers, solutions };
+            return {
+                answers,
+                solutions,
+                conflicts: collectConflicts(answers, solutions)
+            };
         };
 
 

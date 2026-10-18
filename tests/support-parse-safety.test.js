@@ -46,3 +46,26 @@ test('a summary table row is not parsed a second time by the positional matcher'
     const second = parsed.answers.find(row => row.question === '2');
     assert.equal(second.answer, '2');
 });
+
+test('two different values for one question number are both refused, not one of them', () => {
+    // 同一个题号出现两条不同答案：两个值都不采用，该题留空并标记冲突。
+    // 旧实现「保留先出现的一条」，题号印错时就会静默挂错答案。
+    const parsed = Parser.parseAnswerAndSolutionItemsFromText(
+        '1. 答案：A\n1. 答案：C', file);
+    assert.deepEqual(parsed.answers.map(row => [row.question, row.answer]), [['1', '']]);
+    assert.equal(parsed.conflicts.length, 1);
+    assert.deepEqual(
+        { question: parsed.conflicts[0].question, field: parsed.conflicts[0].field },
+        { question: '1', field: 'answer' });
+    assert.deepEqual(parsed.conflicts[0].values.sort(), ['A', 'C']);
+});
+
+test('a numbered step inside a solution is not read as a second answer', () => {
+    // 解析正文里的「2. 分两种情况讨论」是步骤，不是第 2 题的答案。
+    const parsed = Parser.parseAnswerAndSolutionItemsFromText(
+        ['1. 【答案】A', '【解析】因为……', '2. 分两种情况讨论', '综上选 A。', '2. 【答案】B', '【解析】略'].join('\n'),
+        file);
+    assert.deepEqual(parsed.answers.map(row => [row.question, row.answer]), [['1', 'A'], ['2', 'B']]);
+    assert.match(parsed.solutions.find(row => row.question === '1').solution, /分两种情况讨论/);
+    assert.equal(parsed.conflicts.length, 0);
+});

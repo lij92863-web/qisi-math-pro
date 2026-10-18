@@ -36,5 +36,5 @@ test('migrated module scripts load before app and app remains below baseline', (
         const index = main.indexOf(`./${script}`);
         assert.ok(index >= 0 && index < appIndex, `${script} order`);
     }
-    assert.ok(app.split(/\r?\n/).length < 22043);
+    assert.ok(app.split(/\r?\n/).length < 6000);
 });

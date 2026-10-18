@@ -26,6 +26,12 @@
             this.stage = 'production-import-bridge';
             if (details.causeCode) this.causeCode = details.causeCode;
             if (details.port) this.port = details.port;
+            if (details.submittedCount !== undefined) {
+                this.submittedCount = details.submittedCount;
+            }
+            if (Array.isArray(details.draftIds)) {
+                this.draftIds = details.draftIds.map(String);
+            }
         }
     }
 
@@ -39,7 +45,9 @@
             causeCode: details.causeCode
                 ? safeCode(details.causeCode)
                 : '',
-            port: details.port ? safeCode(details.port, 'unknown-port') : ''
+            port: details.port ? safeCode(details.port, 'unknown-port') : '',
+            submittedCount: details.submittedCount,
+            draftIds: details.draftIds
         });
     }
 
@@ -268,7 +276,9 @@
         const primaryCause = activeCause || error;
         if (String(primaryCause?.code || '').startsWith('PRODUCTION_IMPORT_')) {
             return createError(primaryCause.code, {
-                causeCode: primaryCause.causeCode
+                causeCode: primaryCause.causeCode,
+                submittedCount: primaryCause.submittedCount,
+                draftIds: primaryCause.draftIds
             });
         }
         const code = String(error?.code || '').startsWith('IMPORT_')
@@ -742,6 +752,28 @@
                         readback: data.readback,
                         diagnostics: diagnostics.snapshot()
                     });
+                }
+                if (mode === 'production') {
+                    const submittedDrafts = (
+                        Array.isArray(data.loaded.questions)
+                            ? data.loaded.questions
+                            : []
+                    ).filter(draft => draft?.status === 'submitted');
+                    const submittedCount = Number(
+                        data.loaded.batch.submittedCount || 0
+                    ) || submittedDrafts.length;
+                    if (submittedCount > 0) {
+                        throw createError(
+                            'PRODUCTION_IMPORT_SUBMITTED_DRAFT_AT_RISK',
+                            {
+                                submittedCount,
+                                draftIds: submittedDrafts
+                                    .map(draft => draft.id)
+                                    .filter(Boolean)
+                                    .slice(0, 10)
+                            }
+                        );
+                    }
                 }
                 if (data.producerIdentity === 'docx-deterministic') {
                     await step('deterministic-source-loaded');

@@ -665,9 +665,8 @@
                 field, candidateQuestion, supportQuestion
             });
         }
-        if (hasValue(candidate[field]) && candidate[field] !== value) {
-            throw fail('DOCX_DETERMINISTIC_SUPPORT_CONFLICT', { field });
-        }
+        // 注意：同一题号出现两条不同取值时**不抛错**（见下方冲突分支）——
+        // 一道题的问题不应该让整份文件失败，两个值也不允许择一。
         const source = canonicalSource(input.source, 'docx');
         const roles = stableStrings(input.roles).filter(role => role !== 'full');
         if (!roles.includes(field) ||
@@ -675,6 +674,45 @@
             throw fail('DOCX_DETERMINISTIC_SUPPORT_ROLE_INVALID', { field });
         }
         const producer = clone(candidate.producer);
+        const evidenceRef =
+            `docx:${source.sourceId}:question:${candidateQuestion}:field:${field}`;
+        if (hasValue(candidate[field]) && candidate[field] !== value) {
+            // 同一题号出现两条不同取值：不猜。两个值都不采用，该字段留空并标记冲突，
+            // 其余题照常导入——一道题的问题不应该让整份文件失败。
+            const conflicted = clone(candidate);
+            conflicted[field] = '';
+            conflicted.warnings = [...new Set([
+                ...(candidate.warnings || []),
+                {
+                    code: 'DOCX_SUPPORT_DUPLICATE_QUESTION',
+                    field,
+                    questionNumber: candidateQuestion,
+                    message: `第 ${candidateQuestion} 题的${field === 'answer' ? '答案' : '解析'}出现两条不同取值，已全部留空待人工确认。`,
+                    values: [
+                        String(candidate[field]).slice(0, 200),
+                        String(value).slice(0, 200)
+                    ]
+                }
+            ])];
+            conflicted.fieldProvenance = {
+                ...(candidate.fieldProvenance || {}),
+                [field]: provenanceEntry({
+                    field,
+                    kind: 'rejected',
+                    source,
+                    producer,
+                    page: input.support?.sourcePage || 1,
+                    blockIds: input.support?.blockIds || [],
+                    accepted: false,
+                    reasonCode: 'docx-support-conflicting-values',
+                    evidenceRef,
+                    producerBoundary: source.sourceId === candidate.source.sourceId
+                        ? 'docx-deterministic-source-to-candidate'
+                        : 'docx-deterministic-support-to-candidate'
+                })
+            };
+            return conflicted;
+        }
         const output = clone(candidate);
         output[field] = clone(value);
         output.supportSources = source.sourceId === output.source.sourceId
@@ -763,6 +801,28 @@
         ));
     }
 
+    // 同一题号出现多条不同取值时，字段凭证的统一形状。凭证的形状只在这里定义，
+    // 调用方（source-port / maintenance）不得自行拼装 controlledWrite* 字段。
+    function rejectedSupportProvenance(candidate, field, {
+        questionNumber, source, reasonCode = 'docx-support-conflicting-values'
+    } = {}) {
+        const producer = clone(candidate?.producer || {});
+        const existing = candidate?.fieldProvenance?.[field];
+        return provenanceEntry({
+            field,
+            kind: 'rejected',
+            source: source || candidate?.source || { sourceId: '', format: 'docx', sourceOrder: 0 },
+            producer,
+            page: 1,
+            blockIds: [],
+            accepted: false,
+            reasonCode,
+            evidenceRef: `docx:${candidate?.source?.sourceId || ''}:question:${questionNumber || ''}:field:${field}`,
+            producerBoundary: 'docx-deterministic-support-to-candidate',
+            ...(existing?.controlledWriteDecisionId ? {} : {})
+        });
+    }
+
     return Object.freeze({
         CONTRACT_VERSION,
         FORMAL_FIELDS,
@@ -781,6 +841,7 @@
         applyDocxVisionSupportField,
         projectDeterministicDocxCandidate,
         applyDeterministicDocxSupportField,
+        rejectedSupportProvenance,
         compareCanonicalDocxCandidates
     });
 });

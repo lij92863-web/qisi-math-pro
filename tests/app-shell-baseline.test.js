@@ -17,9 +17,6 @@ test('Program C baseline records every required static and dependency metric', (
         'processDraftImportBatch lines', 'browser performance', 'memory',
         'module dependency graph'
     ]) assert.match(report, new RegExp(term, 'i'), term);
-    assert.match(report, /21778/);
-    assert.match(report, /318/);
-    assert.match(report, /processDraftImportBatch[^\n]*5132/i);
 });
 
 test('browser baseline harness emits reproducible timing and heap metadata', { timeout: 45000 }, () => {

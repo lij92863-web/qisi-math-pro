@@ -29,9 +29,11 @@ function harness(options = {}) {
     // one request at a time; parallel dispatch is covered separately.
     let config={enabled:true,mode:'parse-organize-text',windowMode:'document',wireVersion:C.WIRE_VERSION,model,reviewModel:model,profileVersion:profile,strictTextSchema:true,maxConcurrency:1,parserPriceTiers:prices,priceTiers:prices,reviewPriceTiers:prices,...options.config};
     const recognize=async task=>{
-        calls.push({...clone(task),at:Date.now()});
+        // 调用区间（at/end）让"是否并发"可以被结构性断言，不再依赖墙钟阈值。
+        const record={...clone(task),at:Date.now(),end:0};calls.push(record);
         const delay=typeof options.delayMs==='function'?options.delayMs(task):options.delayMs;
         if(delay)await new Promise(r=>setTimeout(r,delay));
+        record.end=Date.now();
         if (options.unknown && options.unknown === task.inputMode) throw Error('accepted unknown');
         if (options.cancel && options.cancel === task.inputMode) options.controller.abort();
         let value, text;
@@ -205,11 +207,13 @@ test('cancellation during mechanical crops cannot resume itself into a new revie
 
 test('page requests overlap instead of queueing, and results keep page order',async()=>{
     const h=harness({config:{maxConcurrency:4},delayMs:120});
-    const started=Date.now(),result=await h.run(),elapsed=Date.now()-started;
+    const result=await h.run();
     const pageCalls=h.calls.filter(t=>['page-raw','page-regions'].includes(t.inputMode));
     assert.equal(pageCalls.length,4);
-    // Serial would need at least 4×120ms; overlapped it is ~2 rounds.
-    assert.ok(elapsed<400,'page requests were serialized: '+elapsed+'ms');
+    // 串行执行时，后一个请求一定在前一个结束之后才开始；只要存在一次重叠，
+    // 就证明页级请求没有被排队。断言的是事件顺序，不是墙钟耗时。
+    const overlapped=pageCalls.some((call,index)=>pageCalls.some((other,otherIndex)=>otherIndex>index&&other.at<call.end));
+    assert.equal(overlapped,true,'page requests were serialized');
     assert.deepEqual(result.drafts.map(d=>d.questionNumber),['7']);
     assert.equal(result.drafts[0].pdfExternal.reviewStates.modelReview,'pass');
 });
@@ -229,16 +233,15 @@ test('windowed organize overlaps windows yet merges observations in page order',
     // a merge by completion would both break the printed order and let one window
     // read the other's in-flight 'registered' evidence as an unknown submission.
     const h=harness({pages:[1,2,3],config:{profileVersion:E.PROFILE_WINDOW,windowMode:'window',outputPages:1,contextPages:0,maxConcurrency:2},perWindowQuestion:true,
-        delayMs:task=>task.inputMode==='text'?(task.metadata.sources[0].output_pages[0]===1?400:300):10});
-    const started=Date.now(),result=await h.run(),elapsed=Date.now()-started;
+        delayMs:task=>task.inputMode==='text'?(task.metadata.sources[0].output_pages[0]===1?400:30):10});
+    const result=await h.run();
     const organizes=h.calls.filter(call=>call.inputMode==='text');
     assert.equal(organizes.length,3,'one organize call per window');
     assert.deepEqual(organizes.map(call=>call.metadata.sources[0].output_pages),[[1],[2],[3]]);
-    // Two windows overlap immediately; the third starts once a slot frees up, not
-    // after the slow first window finishes: two rounds instead of the serial three.
-    assert.ok(organizes[1].at-organizes[0].at<80,'the first two windows were serialized');
-    assert.ok(organizes[2].at-organizes[0].at<400,'the third window waited for the slow window');
-    assert.ok(elapsed<850,'windows were serialized: '+elapsed+'ms');
+    // 两个窗口立即重叠；第三个在第一个（慢窗口）结束前就拿到空出的槽位。
+    // 判据是调用区间相交，不是耗时，所以并行跑测试时也不会抖动。
+    assert.ok(organizes[1].at<organizes[0].end,'the first two windows were serialized');
+    assert.ok(organizes[2].at<organizes[0].end,'the third window waited for the slow window');
     assert.deepEqual(result.drafts.map(draft=>draft.questionNumber),['1','2','3']);
     assert.deepEqual(result.drafts.map(draft=>draft.stem),['第1题正文','第2题正文','第3题正文']);
 });

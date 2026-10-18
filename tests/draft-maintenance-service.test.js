@@ -111,15 +111,19 @@ test('refreshBatchStats owns counts, patch persistence, and readback', async () 
     assert.equal(harness.state().batch.draftPersistence.version, 1);
 });
 
-test('dedupeBatchDrafts persists the single final-gate result', async () => {
+test('dedupeBatchDrafts merges drafts but never touches an already submitted row', async () => {
+    // 夹具里 draft-1(reviewed) 与 draft-2(submitted) 同号。去重只处理前者：
+    // 已入库行带 submittedQuestionId 凭证，维护动作改了它就是伪造提交记录。
     const harness = createHarness();
     const result = await harness.service.dedupeBatchDrafts({
         batchId: 'batch-1', files: []
     });
 
     assert.equal(result.beforeCount, 2);
-    assert.equal(result.afterCount, 1);
-    assert.equal(harness.state().questions.length, 1);
+    assert.equal(result.afterCount, 2);
+    assert.equal(result.skippedSubmitted, 1);
+    const ids = harness.state().questions.map(draft => draft.id);
+    assert.deepEqual(ids, ['draft-1', 'draft-2']);
     assert.equal(harness.state().batch.problemCount, 1);
 });
 

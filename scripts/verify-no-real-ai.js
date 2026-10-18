@@ -7,8 +7,17 @@ const failMarkers = [
     '/api/ai/chat',
     '/api/ai/ocr',
     'dashscope.aliyuncs.com',
-    'DASHSCOPE_API_KEY'
+    'DASHSCOPE_API_KEY',
+    // MinerU 云端解析：同样属于真实外部 AI 服务，浏览器侧不得直连。
+    // 只有服务端装配点和显式 opt-in 的离线探针可以出现，见 allowedFiles / reviewedProductionLines。
+    'mineru.net',
+    'MINERU_TOKEN'
 ];
+
+// 与 AI/OCR 相关的目录都要扫，避免新目录绕开门禁；不存在的目录自动跳过。
+const scanDirectories = ['tests', 'scripts', 'tools', 'local-ocr', 'benchmarks'];
+const scanExtensions = ['.js', '.cjs'];
+const skippedDirectoryNames = new Set(['node_modules', 'vendor']);
 
 const warningMarkers = [
     'qwen-vl-ocr-latest',
@@ -21,8 +30,11 @@ const allowedFiles = new Set([
     'qisi-local-server.js',
     // Production transport validates the fixed host; default tests inject a mock request.
     'qisi-local-https-transport.js',
+    // MinerU 云接口装配点：端点常量与 Bearer 透传都在客户端模块里，token 由服务端注入。
+    'qisi-mineru-client.js',
     'tests/local-https-transport.test.js',
     'scripts/pdf-master-browser-runner.js', // Explicit opt-in real-run; reviewed env-name declaration only.
+    'scripts/mineru-probe.cjs', // Explicit opt-in real-run probe; never part of verify:safe or npm test.
     'scripts/smoke-ai-proxy.js',
     'scripts/smoke-ai-vision-proxy.js',
     'scripts/verify-no-real-ai.js',
@@ -33,6 +45,8 @@ const allowedFiles = new Set([
 const reviewedProductionLines = {
     "qisi-local-server.js": [
         "const DASHSCOPE_API_KEY = String(process.env.DASHSCOPE_API_KEY || '').trim();",
+        "const MINERU_TOKEN = String(process.env.MINERU_TOKEN || '').trim();",
+        "const mineruClient = createMineruClient({ token: MINERU_TOKEN });",
         "const DASHSCOPE_CHAT_UPSTREAM = 'https://dashscope.aliyuncs.com/' + 'compatible-mode/v1/' + 'chat/completions';",
         "const DASHSCOPE_OCR_UPSTREAM = 'https://dashscope.aliyuncs.com/' + 'api/v1/services/aigc/' + 'multimodal-generation/' + 'generation';",
         "configured: Boolean(DASHSCOPE_API_KEY)",
@@ -40,6 +54,14 @@ const reviewedProductionLines = {
         "Authorization: `Bearer ${DASHSCOPE_API_KEY}`,",
         "app.post('/api/ai/chat', aiJsonParser, (req, res) => {",
         "app.post('/api/ai/ocr', aiJsonParser, (req, res) => {"
+    ],
+    "qisi-mineru-client.js": [
+        "const DEFAULT_BASE_URL = 'https://mineru.net';"
+    ],
+    "scripts/mineru-probe.cjs": [
+        "const TOKEN = String(process.env.MINERU_TOKEN || '').trim();",
+        "const BASE = 'https://mineru.net';",
+        "if (!TOKEN) throw new Error('MINERU_TOKEN 未配置');"
     ],
     "scripts/pdf-master-browser-runner.js": [
         "const API_KEY_ENV_NAME = 'DASH' + 'SCOPE_API_KEY';"
@@ -53,12 +75,20 @@ function toProjectPath(filePath) {
     return path.relative(rootDir, filePath).replace(/\\/g, '/');
 }
 
+function isScannableFile(filePath) {
+    return scanExtensions.some(extension => filePath.endsWith(extension));
+}
+
 function listFiles(dir, predicate, results = []) {
     if (!fs.existsSync(dir)) {
         return results;
     }
 
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.isDirectory() && skippedDirectoryNames.has(entry.name)) {
+            continue;
+        }
+
         const fullPath = path.join(dir, entry.name);
 
         if (entry.isDirectory()) {
@@ -78,22 +108,14 @@ function collectScanFiles() {
     const files = [];
 
     for (const name of fs.readdirSync(rootDir)) {
-        if (/^qisi-.*\.js$/.test(name) || name === 'app.js') {
+        if (isScannableFile(name) && (/^qisi-.*\.(js|cjs)$/.test(name) || name === 'app.js')) {
             files.push(path.join(rootDir, name));
         }
     }
 
-    listFiles(
-        path.join(rootDir, 'tests'),
-        (filePath) => filePath.endsWith('.js'),
-        files
-    );
-
-    listFiles(
-        path.join(rootDir, 'scripts'),
-        (filePath) => filePath.endsWith('.js'),
-        files
-    );
+    for (const dirname of scanDirectories) {
+        listFiles(path.join(rootDir, dirname), isScannableFile, files);
+    }
 
     return files;
 }

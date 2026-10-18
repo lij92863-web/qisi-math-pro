@@ -204,13 +204,23 @@ function sequenceOf(items) {
     return { valid, values };
 }
 
-function keyJoin(values, expected) {
-    const expectedSet = new Set(expected);
-    const anchored = values.length > 0 && values[0] === expected[0];
-    // A printed number outside the expected set is positive evidence that this
-    // document is not the support of the expected exam; distrust the stream.
-    const foreign = values.filter(value => !expectedSet.has(value));
-    return { values, anchored, foreign, accepted: anchored && !foreign.length ? values.filter(value => expectedSet.has(value)) : [] };
+// 可信前缀：从期望首题起，严格递增、不重复、且都属于本卷；第一处违规即截断。
+// 违规点本身也要扣留（重号的两条都算不可判定），截断之后的题不再挂答案，
+// 但题目本身照旧保留。
+function scanStream(values, expectedSet) {
+    const accepted = new Set();
+    const ambiguous = new Set();
+    const seen = new Set();
+    for (const raw of values) {
+        const value = String(raw);
+        if (!/^[1-9]\d*$/.test(value) || !expectedSet.has(value)) break;
+        if (seen.has(value)) { ambiguous.add(value); break; }
+        accepted.add(value);
+        seen.add(value);
+    }
+    // 重号的那道题本身不可判定：两条都可能是它的，也都不一定，两条都不认。
+    for (const value of ambiguous) accepted.delete(value);
+    return { accepted, ambiguous };
 }
 
 function evaluateSequences(observations, expected, requiredStreams = ['answers', 'solutions']) {
@@ -219,24 +229,79 @@ function evaluateSequences(observations, expected, requiredStreams = ['answers',
     const errors = [];
     if (!Array.isArray(expected) || !expected.length || !sequenceOf(expected.map(n => ({ question_no: n }))).valid) errors.push('expected-sequence');
     if (!requiredStreams.length || new Set(requiredStreams).size !== requiredStreams.length || requiredStreams.some(s => !['answers', 'solutions'].includes(s))) errors.push('required-streams');
-    if (errors.length) return { mode: 'fail-closed', safeQuestionNumbers: [], errors, sequences };
+    if (errors.length) return { mode: 'fail-closed', safeQuestionNumbers: [], withheld: [], errors, sequences };
     const expectedSet = new Set(expected);
-    if (sequences.questions.values.length && (!sequences.questions.valid || JSON.stringify(sequences.questions.values) !== JSON.stringify(expected))) errors.push('question-sequence');
-    for (const s of requiredStreams) if (!sequences[s].valid || sequences[s].values.some(v => !expectedSet.has(v))) errors.push(s + '-sequence');
-    if (errors.length) return { mode: 'fail-closed', safeQuestionNumbers: [], errors, sequences };
-    // Identity is the printed question number, not the position in the sequence.
-    // A support document whose first item is not the first question cannot be
-    // distinguished from a globally shifted or mismatched document, so it is
-    // rejected as a whole (see ai/ALIGNMENT_ANCHORED_KEY_JOIN_2026-10-17.md).
-    const streams = requiredStreams.map(stream => ({ stream, ...keyJoin(sequences[stream].values, expected) }));
-    const covered = [...new Set(streams.flatMap(row => row.accepted))].sort((left, right) => Number(left) - Number(right));
-    const rejected = streams.filter(row => row.values.length && (!row.anchored || row.foreign.length)).map(row => row.stream);
-    const leadingRun = covered.every((value, index) => value === expected[index]);
-    const mode = !covered.length ? 'fail-closed'
-        : rejected.length ? 'gapped'
-        : covered.length === expected.length ? 'full'
-        : leadingRun ? 'prefix' : 'subset';
-    return { mode, safeQuestionNumbers: covered, errors: [], sequences, anchors: Object.fromEntries(streams.map(row => [row.stream, { expectedFirst: expected[0], observedFirst: row.values[0] ?? null, anchored: row.anchored }])) };
+
+    // 题面本身出现重号：该题号的归属不可判定，逐题扣留，不牵连其它题。
+    const repeated = new Set();
+    const seenQuestions = new Set();
+    for (const value of sequences.questions.values) {
+        if (seenQuestions.has(value)) repeated.add(value);
+        else seenQuestions.add(value);
+    }
+
+    // 身份判定：support 流首项必须是本卷首题，且不得出现外来题号。
+    // 这种情况说明"这份答案不是这张卷的"，逐题判没有意义，必须整卷停。
+    const identityFailures = [];
+    for (const stream of requiredStreams) {
+        const values = sequences[stream].values;
+        if (!values.length) continue;
+        if (values[0] !== expected[0]) identityFailures.push(stream + '-identity-unanchored');
+        else if (values.some(value => !expectedSet.has(value))) identityFailures.push(stream + '-foreign-question-number');
+    }
+    if (identityFailures.length) {
+        return {
+            mode: 'fail-closed',
+            safeQuestionNumbers: [],
+            withheld: expected.map(question => ({ question, reason: 'identity-untrusted' })),
+            errors: identityFailures,
+            sequences,
+            anchors: Object.fromEntries(requiredStreams.map(stream => [stream, {
+                expectedFirst: expected[0],
+                observedFirst: sequences[stream].values[0] ?? null
+            }]))
+        };
+    }
+
+    const scans = new Map(requiredStreams.map(stream => [
+        stream,
+        { values: sequences[stream].values, ...scanStream(sequences[stream].values, expectedSet) }
+    ]));
+    const present = question => requiredStreams.some(stream => scans.get(stream).values.includes(question));
+    const safeQuestionNumbers = [];
+    const withheld = [];
+    for (const question of expected) {
+        if (repeated.has(question)) {
+            withheld.push({ question, reason: 'duplicate-question-number' });
+            continue;
+        }
+        const broken = requiredStreams.find(stream => {
+            const scan = scans.get(stream);
+            return scan.values.includes(question) && !scan.accepted.has(question);
+        });
+        if (broken) {
+            withheld.push({ question, stream: broken, reason: 'sequence-break' });
+            continue;
+        }
+        if (present(question)) safeQuestionNumbers.push(question);
+    }
+    const covered = expected.filter(question => present(question));
+    const leadingRun = safeQuestionNumbers.every((value, index) => value === expected[index]);
+    const mode = !safeQuestionNumbers.length ? 'fail-closed'
+        : withheld.length ? (leadingRun ? 'prefix' : 'subset')
+        : covered.length === expected.length ? 'full' : 'subset';
+    return {
+        mode,
+        safeQuestionNumbers,
+        withheld,
+        errors: [],
+        sequences,
+        anchors: Object.fromEntries(requiredStreams.map(stream => [stream, {
+            expectedFirst: expected[0],
+            observedFirst: sequences[stream].values[0] ?? null,
+            anchored: sequences[stream].values.length > 0 && sequences[stream].values[0] === expected[0]
+        }]))
+    };
 }
 
 function assemblePrompt(template, replacements) {
@@ -304,8 +369,9 @@ function settleAttempt(ledger, id, outcome) {
         const expected = questions.map(q => q.question_no);
         assert(expected.length && sequenceOf(questions).valid, 'whole-question-sequence');
         const required = [...new Set(observations.flatMap(o => o.metadata.sources.flatMap(s => s.allowed_streams.filter(v => v !== 'questions'))))];
-        const gate = required.length ? evaluateSequences(observations.map(o => o.result), expected, required) : { mode: 'fail-closed', safeQuestionNumbers: [], errors: [] };
+        const gate = required.length ? evaluateSequences(observations.map(o => o.result), expected, required) : { mode: 'fail-closed', safeQuestionNumbers: [], withheld: [], errors: [] };
         const safe = new Set(gate.safeQuestionNumbers), groups = new Map();
+const withheldByQuestion = new Map((gate.withheld || []).map(row => [row.question, row]));
         for (const observation of observations) for (const [stream, field] of [['questions','question'],['answers','answer'],['solutions','solution']]) for (const raw of observation.result[stream]) {
             assert(raw.scope_id === batchId, 'source-scope');
             const group = groups.get(raw.question_no) || { no: raw.question_no, question: [], answer: [], solution: [] };
@@ -337,15 +403,17 @@ function settleAttempt(ledger, id, outcome) {
             }
             for (const field of ['question','answer','solution']) {
                 let status = observedState(group[field]);
-                if (field !== 'question' && group[field].length && !safe.has(group.no)) status = 'rejected';
+                const withheldReason = withheldByQuestion.get(group.no);
+                if (field !== 'question' && group[field].length && (!safe.has(group.no) || withheldReason)) status = 'rejected';
                 const variant = group[field][0]; draft.pdfExternal.states[field] = versioned && status === 'complete' ? 'observed_complete' : status;
                 if (!variant) continue;
                 const item = insertFigures(variant.item, variant.images, field);
                 if (field === 'question') { draft.stem = item.stem; draft.options = item.options.map(o => o.text); draft.pdfExternal.optionLabels = item.options.map(o => o.label); if (!draft.stem.trim() || draft.type === '待确认') draft.pdfExternal.states.question = 'partial'; }
-                else draft[field] = item[field];
+                // 被判定不可信的取值不进展示字段：留空并交给审核页补，界面不显示"看着有、其实没挂上"的内容。
+                else if (status !== 'rejected') draft[field] = item[field];
                 draft.images.push(...clone(variant.images));
                 draft.warnings.push(...variant.item.issues);
-                if (status !== 'complete') draft.warnings.push(field + ': ' + status + '，请对照原页处理');
+                if (status !== 'complete') draft.warnings.push(field + ': ' + status + (withheldReason ? `（${withheldReason.reason}${withheldReason.stream ? '/' + withheldReason.stream : ''}）` : '') + '，请对照原页处理');
                 for (const candidate of group[field]) if (candidate.source.sourceId !== source.sourceId) {
                     let support = draft.supportSources.find(s => s.sourceId === candidate.source.sourceId);
                     if (!support) { support = { ...clone(candidate.source), roles: [] }; draft.supportSources.push(support); }
@@ -362,7 +430,13 @@ function settleAttempt(ledger, id, outcome) {
                 const value = field === 'questionNumber' ? draft.questionNumber : draft[field];
                 const present = Array.isArray(value) ? value.length > 0 : Boolean(String(value || '').trim());
                 const accepted = !versioned && draft.pdfExternal.states[unit] === 'complete';
-                const kind = !present ? 'missing' : accepted ? 'controlled-write' : 'rejected';
+                // 被判定不可信的字段是"有来源但拒绝采用"，凭证必须是 rejected，
+                // 不能因为展示字段留空就退化成 missing（missing 会被当成"本来就没有"）。
+                const kind = draft.pdfExternal.states[unit] === 'rejected'
+                    ? 'rejected'
+                    : !present ? 'missing'
+                    : accepted ? 'controlled-write'
+                    : 'rejected';
                 draft.fieldProvenance[field] = { field, kind, status: kind, sourceId: src.sourceId, sourceFormat: 'pdf', producerMode: 'vision-ai', routeId: PROTOCOL, engine: first.model, page: variant?.item.number_page || draft.sourcePage, blockIds: [], manuallyEdited: false, controlledWriteAccepted: accepted && present, controlledWriteDecisionId: id + ':' + field, reasonCode: versioned ? 'pdf-external-pending-human-review' : 'pdf-external-' + draft.pdfExternal.states[unit], producerBoundary: src.sourceId === source.sourceId ? 'pdf-vision-engine-output-to-candidate' : 'pdf-external-support-to-candidate', contractVersion: identityContract.CONTRACT_VERSION };
             }
             draft.fieldProvenance.images.imageEvidence = draft.images.map(i => ({ imageId: i.id, sourceId: i.sourceFileId, field: i.position, evidenceRef: 'pdf:' + i.sourceFileId + ':' + i.sourcePage + ':' + JSON.stringify(i.bbox) }));

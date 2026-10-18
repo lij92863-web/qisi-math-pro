@@ -155,17 +155,32 @@
             signal
         } = {}) => {
             const loaded = await load(batchId, signal);
-            const result = dedupeDrafts(loaded.questions, {
-                stage: 'manual-active-batch',
-                batchId,
-                files,
-                draftImages: loaded.images
-            });
+            const submittedCount = loaded.questions.filter(
+                draft => draft?.status === 'submitted'
+            ).length;
+            const result = dedupeDrafts(
+                loaded.questions.filter(draft => draft?.status !== 'submitted'),
+                {
+                    stage: 'manual-active-batch',
+                    batchId,
+                    files,
+                    draftImages: loaded.images
+                }
+            );
             if (!result || !Array.isArray(result.drafts) ||
                 !Array.isArray(result.draftImages)) {
                 throw error('DRAFT_MAINTENANCE_DEDUPE_MALFORMED');
             }
-            const drafts = clone(result.drafts);
+            // 合并只产出非 submitted 行；把它们按原顺序放回原位，
+            // 已提交行原样保留，维护动作永远不能改写凭证。
+            const mergedById = new Map(clone(result.drafts).map(
+                draft => [String(draft?.id ?? ''), draft]
+            ));
+            const drafts = loaded.questions.flatMap(draft => {
+                if (draft?.status === 'submitted') return [clone(draft)];
+                const merged = mergedById.get(String(draft?.id ?? ''));
+                return merged ? [merged] : [];
+            });
             const images = clone(result.draftImages);
             const problemCount = drafts.filter(draft => {
                 const isChoice = draft.type === '单选题' ||
@@ -175,6 +190,7 @@
             const batchPatch = {
                 totalCount: drafts.length,
                 problemCount,
+                skippedSubmitted: submittedCount,
                 unassignedImageCount: images.filter(
                     image => image.status === 'unassigned'
                 ).length,
@@ -193,6 +209,7 @@
             return {
                 beforeCount: loaded.questions.length,
                 afterCount: drafts.length,
+                skippedSubmitted: submittedCount,
                 readback
             };
         };

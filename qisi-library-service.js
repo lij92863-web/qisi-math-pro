@@ -341,13 +341,7 @@
             const normalized = operations.map(normalizeExternalOperation);
             return requireRepositoryMethod('transaction')(
                 ['questions', 'externalQuestions', 'mergeBatches'],
-                async tx => {
-                    if (await tx.get('mergeBatches', id)) {
-                        fail(
-                            'EXTERNAL_MERGE_DUPLICATE',
-                            'External merge command already exists.'
-                        );
-                    }
+                tx => {
                     const mergeBatch = {
                         id,
                         createdAt,
@@ -358,95 +352,131 @@
                         summary: { added: 0, filled: 0, skipped: 0 },
                         revertedAt: 0
                     };
+                    // 事务回调必须是同步函数 + Dexie promise 链：async 回调会返回原生
+                    // Promise，Dexie 判定事务提前提交，"撤销"就可能撤一半。
+                    const applyOperation = operation =>
+                        tx.get('externalQuestions', operation.externalId)
+                            .then(external => {
+                                if (!external) {
+                                    fail(
+                                        'EXTERNAL_MERGE_SOURCE_MISSING',
+                                        'External merge source was not found.'
+                                    );
+                                }
+                                mergeBatch.externalStatusSnapshots.push({
+                                    id: external.id,
+                                    processStatus:
+                                        external.processStatus || 'unprocessed',
+                                    linkedQuestionId:
+                                        external.linkedQuestionId || '',
+                                    processedAt: external.processedAt || 0
+                                });
+                                if (operation.action === 'skip') {
+                                    return tx.update(
+                                        'externalQuestions',
+                                        external.id,
+                                        {
+                                            processStatus: 'skipped',
+                                            processedAt: createdAt
+                                        }
+                                    ).then(() => {
+                                        mergeBatch.summary.skipped += 1;
+                                    });
+                                }
+                                if (operation.action === 'fill') {
+                                    return tx.get(
+                                        'questions',
+                                        operation.question.id
+                                    ).then(current => {
+                                        if (!current) {
+                                            fail(
+                                                'EXTERNAL_MERGE_TARGET_MISSING',
+                                                'External merge target was not found.'
+                                            );
+                                        }
+                                        if (
+                                            operation.expectedUpdatedAt !== undefined &&
+                                            current.updatedAt !==
+                                                operation.expectedUpdatedAt
+                                        ) {
+                                            fail(
+                                                'EXTERNAL_MERGE_TARGET_STALE',
+                                                'External merge target changed.'
+                                            );
+                                        }
+                                        mergeBatch.filledQuestionSnapshots
+                                            .push(current);
+                                        return tx.put('questions', operation.question)
+                                            .then(() => tx.update(
+                                                'externalQuestions',
+                                                external.id,
+                                                {
+                                                    processStatus: 'filled',
+                                                    linkedQuestionId: operation.question.id,
+                                                    processedAt: createdAt
+                                                }
+                                            ))
+                                            .then(() => {
+                                                mergeBatch.summary.filled += 1;
+                                            });
+                                    });
+                                }
+                                return tx.get(
+                                    'questions',
+                                    operation.question.id
+                                ).then(existingQuestion => {
+                                    if (existingQuestion) {
+                                        fail(
+                                            'EXTERNAL_MERGE_QUESTION_DUPLICATE',
+                                            'External merge question already exists.'
+                                        );
+                                    }
+                                    return tx.put('questions', operation.question)
+                                        .then(() => {
+                                            mergeBatch.addedQuestionIds.push(
+                                                operation.question.id
+                                            );
+                                        })
+                                        .then(() => tx.update(
+                                            'externalQuestions',
+                                            external.id,
+                                            {
+                                                processStatus: 'added',
+                                                linkedQuestionId: operation.question.id,
+                                                processedAt: createdAt
+                                            }
+                                        ))
+                                        .then(() => {
+                                            mergeBatch.summary.added += 1;
+                                        });
+                                });
+                            });
+                    let chain = tx.get('mergeBatches', id).then(existing => {
+                        if (existing) {
+                            fail(
+                                'EXTERNAL_MERGE_DUPLICATE',
+                                'External merge command already exists.'
+                            );
+                        }
+                    });
                     for (const operation of normalized) {
-                        const external = await tx.get(
-                            'externalQuestions',
-                            operation.externalId
-                        );
-                        if (!external) {
-                            fail(
-                                'EXTERNAL_MERGE_SOURCE_MISSING',
-                                'External merge source was not found.'
-                            );
-                        }
-                        mergeBatch.externalStatusSnapshots.push({
-                            id: external.id,
-                            processStatus:
-                                external.processStatus || 'unprocessed',
-                            linkedQuestionId: external.linkedQuestionId || '',
-                            processedAt: external.processedAt || 0
-                        });
-                        if (operation.action === 'skip') {
-                            await tx.update('externalQuestions', external.id, {
-                                processStatus: 'skipped',
-                                processedAt: createdAt
-                            });
-                            mergeBatch.summary.skipped += 1;
-                            continue;
-                        }
-                        if (operation.action === 'fill') {
-                            const current = await tx.get(
-                                'questions',
-                                operation.question.id
-                            );
-                            if (!current) {
+                        chain = chain.then(() => applyOperation(operation));
+                    }
+                    return chain
+                        .then(() => tx.put('mergeBatches', mergeBatch))
+                        .then(() => tx.get('mergeBatches', id))
+                        .then(readback => {
+                            if (!readback) {
                                 fail(
-                                    'EXTERNAL_MERGE_TARGET_MISSING',
-                                    'External merge target was not found.'
+                                    'EXTERNAL_MERGE_READBACK_FAILED',
+                                    'External merge readback failed.'
                                 );
                             }
-                            if (
-                                operation.expectedUpdatedAt !== undefined &&
-                                current.updatedAt !==
-                                    operation.expectedUpdatedAt
-                            ) {
-                                fail(
-                                    'EXTERNAL_MERGE_TARGET_STALE',
-                                    'External merge target changed.'
-                                );
-                            }
-                            mergeBatch.filledQuestionSnapshots.push(current);
-                            await tx.put(
-                                'questions',
-                                operation.question
-                            );
-                            await tx.update('externalQuestions', external.id, {
-                                processStatus: 'filled',
-                                linkedQuestionId: operation.question.id,
-                                processedAt: createdAt
-                            });
-                            mergeBatch.summary.filled += 1;
-                            continue;
-                        }
-                        if (await tx.get('questions', operation.question.id)) {
-                            fail(
-                                'EXTERNAL_MERGE_QUESTION_DUPLICATE',
-                                'External merge question already exists.'
-                            );
-                        }
-                        await tx.put('questions', operation.question);
-                        mergeBatch.addedQuestionIds.push(
-                            operation.question.id
-                        );
-                        await tx.update('externalQuestions', external.id, {
-                            processStatus: 'added',
-                            linkedQuestionId: operation.question.id,
-                            processedAt: createdAt
+                            return {
+                                mergeBatch: readback,
+                                summary: clone(readback.summary)
+                            };
                         });
-                        mergeBatch.summary.added += 1;
-                    }
-                    await tx.put('mergeBatches', mergeBatch);
-                    const readback = await tx.get('mergeBatches', id);
-                    if (!readback) {
-                        fail(
-                            'EXTERNAL_MERGE_READBACK_FAILED',
-                            'External merge readback failed.'
-                        );
-                    }
-                    return {
-                        mergeBatch: readback,
-                        summary: clone(readback.summary)
-                    };
                 }
             );
         };
@@ -474,63 +504,61 @@
             }
             return requireRepositoryMethod('transaction')(
                 ['questions', 'externalQuestions', 'mergeBatches'],
-                async tx => {
-                    const batch = await tx.get(
-                        'mergeBatches',
-                        mergeBatchId
-                    );
-                    if (!batch) {
-                        fail(
-                            'EXTERNAL_MERGE_MISSING',
-                            'External merge batch was not found.'
-                        );
-                    }
-                    if (batch.revertedAt) {
-                        fail(
-                            'EXTERNAL_MERGE_ALREADY_REVERTED',
-                            'External merge batch was already reverted.'
-                        );
-                    }
-                    await tx.deleteMany(
-                        'questions',
-                        batch.addedQuestionIds || []
-                    );
-                    for (const snapshot of
-                        batch.filledQuestionSnapshots || []) {
-                        if (snapshot?.id) {
-                            await tx.put('questions', snapshot);
+                tx => tx.get('mergeBatches', mergeBatchId)
+                    .then(batch => {
+                        if (!batch) {
+                            fail(
+                                'EXTERNAL_MERGE_MISSING',
+                                'External merge batch was not found.'
+                            );
                         }
-                    }
-                    for (const snapshot of
-                        batch.externalStatusSnapshots || []) {
-                        if (!snapshot?.id) continue;
-                        await tx.update(
-                            'externalQuestions',
-                            snapshot.id,
-                            {
-                                processStatus:
-                                    snapshot.processStatus || 'unprocessed',
-                                linkedQuestionId:
-                                    snapshot.linkedQuestionId || '',
-                                processedAt: snapshot.processedAt || 0
+                        if (batch.revertedAt) {
+                            fail(
+                                'EXTERNAL_MERGE_ALREADY_REVERTED',
+                                'External merge batch was already reverted.'
+                            );
+                        }
+                        let chain = tx.deleteMany(
+                            'questions',
+                            batch.addedQuestionIds || []
+                        );
+                        for (const snapshot of
+                            batch.filledQuestionSnapshots || []) {
+                            if (snapshot?.id) {
+                                chain = chain.then(() =>
+                                    tx.put('questions', snapshot));
                             }
-                        );
-                    }
-                    await tx.update('mergeBatches', mergeBatchId, {
-                        revertedAt
-                    });
-                    const readback = await tx.get(
-                        'mergeBatches',
-                        mergeBatchId
-                    );
-                    if (readback?.revertedAt !== revertedAt) {
-                        fail(
-                            'EXTERNAL_MERGE_UNDO_READBACK_FAILED',
-                            'External merge undo readback failed.'
-                        );
-                    }
-                    return { mergeBatch: readback, reverted: true };
-                }
+                        }
+                        for (const snapshot of
+                            batch.externalStatusSnapshots || []) {
+                            if (!snapshot?.id) continue;
+                            chain = chain.then(() => tx.update(
+                                'externalQuestions',
+                                snapshot.id,
+                                {
+                                    processStatus:
+                                        snapshot.processStatus || 'unprocessed',
+                                    linkedQuestionId:
+                                        snapshot.linkedQuestionId || '',
+                                    processedAt: snapshot.processedAt || 0
+                                }
+                            ));
+                        }
+                        return chain
+                            .then(() => tx.update('mergeBatches', mergeBatchId, {
+                                revertedAt
+                            }))
+                            .then(() => tx.get('mergeBatches', mergeBatchId))
+                            .then(readback => {
+                                if (readback?.revertedAt !== revertedAt) {
+                                    fail(
+                                        'EXTERNAL_MERGE_UNDO_READBACK_FAILED',
+                                        'External merge undo readback failed.'
+                                    );
+                                }
+                                return { mergeBatch: readback, reverted: true };
+                            });
+                    })
             );
         };
 

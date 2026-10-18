@@ -265,7 +265,9 @@ test('production runner attaches DOCX answer and solution by exact question numb
     );
 });
 
-test('production runner fails closed on duplicate deterministic support', async () => {
+test('duplicate deterministic support on one question degrades to that field, not the whole import', async () => {
+    // 两个答案源给出同一题号的不同取值：不再让整份文件失败，也不在两条取值之间择一。
+    // 这道题的答案留空并标记冲突，其余题照常导入。
     const questionSource = source();
     const supports = ['answer-1', 'answer-2'].map((id, index) => ({
         ...source(), id, roles: ['answer'], sourceOrder: index + 2
@@ -286,23 +288,28 @@ test('production runner fails closed on duplicate deterministic support', async 
                     stem: 'Question', options: [], answer: '', solution: '',
                     images: []
                 }]
-                : [{ rawBlock: '1. 【答案】A' }]
+                : [{ rawBlock: '1. 【答案】' + (file.id === 'answer-1' ? 'A' : 'C') }]
             })
         },
-        parseSupportText: () => ({
-            answers: [{ question: '1', answer: 'A' }], solutions: []
+        parseSupportText: text => ({
+            answers: [{ question: '1', answer: /C/.test(String(text)) ? 'C' : 'A' }],
+            solutions: []
         }),
         getRoles: file => file.roles,
         cleanText: value => String(value || '').trim(),
         cleanOptions: values => values || []
     });
-    await assert.rejects(
-        runner({
-            batchId: 'batch-1', batch: { id: 'batch-1' },
-            sources: [questionSource, ...supports]
-        }),
-        error => error.code === 'DOCX_SUPPORT_DUPLICATE'
-    );
+    const result = await runner({
+        batchId: 'batch-1', batch: { id: 'batch-1' },
+        sources: [questionSource, ...supports]
+    });
+    const draft = result.drafts.find(item => item.id === 'draft-1');
+    assert.equal(draft.answer, '');
+    const conflicts = (draft.warnings || [])
+        .filter(item => item && item.code === 'DOCX_SUPPORT_DUPLICATE_QUESTION');
+    assert.equal(conflicts.length, 1);
+    assert.deepEqual(conflicts[0].values.sort(), ['A', 'C']);
+    assert.equal(draft.fieldProvenance.answer.status, 'rejected');
 });
 
 test('the app composes the deterministic owner without a local parser precursor', () => {

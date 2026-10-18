@@ -14,7 +14,7 @@
     "verify:batch-safety": "node scripts/verify-batch-safety.js",
     "verify:no-real-ai": "node scripts/verify-no-real-ai.js",
     "verify:diff-scope": "node scripts/verify-diff-scope.js",
-    "verify:safe": "npm run verify:no-real-ai && npm run check && npm test && npm run verify:batch-safety",
+    "verify:safe": "npm run verify:no-real-ai && npm run check && npm test && node scripts/verify-write-boundary.js",
     "verify": "npm run check && npm test",
     "verify:personal-stable": "node scripts/verify-personal-stable.js",
     "test:ai-proxy": "node scripts/smoke-ai-proxy.js",
