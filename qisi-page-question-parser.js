@@ -87,8 +87,6 @@
         const parseOptionsFromBlock = (block = '') => {
             const source = root.Qisi.Utils.cleanRecognizedText(block)
                 .replace(/\r/g, '\n')
-                .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
-                .replace(/([A-D])\s*[．.、:：]\s*/g, '$1. ')
                 .replace(/[ \t]{2,}/g, ' ')
                 .trim();
 
@@ -96,18 +94,12 @@
                 return { stem: '', options: ['', '', '', ''] };
             }
 
-            const labelRegex = /(^|[\n\r\s　]|[（(])([A-D])\s*(?:[\.．、:：\)）]|(?=\s*[$\\\u4e00-\u9fa5A-Za-z0-9（(]))/g;
-
-            const hits = [];
-            let match;
-
-            while ((match = labelRegex.exec(source)) !== null) {
-                hits.push({
-                    label: match[2],
-                    start: match.index + match[1].length,
-                    contentStart: labelRegex.lastIndex
-                });
-            }
+            const hits = root.Qisi.Utils.findOptionLabels(source).map(hit => ({
+                label: hit.label,
+                start: hit.markerStart,
+                rowStart: hit.rowStart,
+                contentStart: hit.contentStart
+            }));
 
             const candidates = [];
 
@@ -146,7 +138,7 @@
 
                 ordered.forEach((hit, idx) => {
                     const next = ordered[idx + 1];
-                    const end = next ? next.start : source.length;
+                    const end = next ? next.rowStart : source.length;
                     const content = source.slice(hit.contentStart, end).trim();
 
                     if (content.length >= 1) score += 1;
@@ -166,12 +158,12 @@
 
             const ordered = candidates.sort((a, b) => scoreCandidate(b) - scoreCandidate(a))[0];
 
-            const stem = source.slice(0, ordered[0].start).trim();
+            const stem = source.slice(0, ordered[0].rowStart).trim();
             const options = ['', '', '', ''];
 
             ordered.forEach((hit, idx) => {
                 const next = ordered[idx + 1];
-                const end = next ? next.start : source.length;
+                const end = next ? next.rowStart : source.length;
 
                 const value = source
                     .slice(hit.contentStart, end)

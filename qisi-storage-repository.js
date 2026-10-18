@@ -107,6 +107,139 @@
         );
     };
 
+    // 墓碑（软删）：行仍然在库里、仍然带 submittedQuestionId 与全部原始内容，只是不再
+    // 参与审核、统计与提交。它是"这一行被有意删掉"的唯一证据。
+    const isDraftTombstone = draft => draft?.status === 'deleted';
+
+    const tombstonedDraftIds = drafts => new Set(
+        (drafts || []).filter(isDraftTombstone).map(draft => String(draft?.id ?? ''))
+    );
+
+    const rowKeyOf = row => String(row?.id ?? '');
+
+    // 「可见集合」是审核、统计、提交三者的共同口径：墓碑行不在其中，挂在墓碑上的图片
+    // 也不在。注意判据是"挂在墓碑上"，不是"挂在可见草稿上"——尚未指派题目的图片没有
+    // questionId，它属于审核页的待指派清单，不该因为一次删除而从统计里消失。
+    // 每个读出口都走这里，所以新增一处读取不会漏掉过滤，也不会有两处口径不一致。
+    const visibleDraftRows = (drafts, images) => {
+        const visible = (drafts || []).filter(draft => !isDraftTombstone(draft));
+        const stones = tombstonedDraftIds(drafts);
+        return {
+            questions: visible,
+            images: (images || []).filter(
+                image => !stones.has(String(image?.questionId ?? ''))
+            )
+        };
+    };
+
+    // 「谁能写 status:'deleted'」在服务层收口，但"写进来的墓碑是否自证"是存储层的完整性
+    // 问题：deletedBy / reason 不是审计装饰，是安全判据。任何写入者只要能写 drafts 就能
+    // 伪造一个空壳墓碑把一行 submitted 悄悄摘掉，所以判据只读传入行自身，并要求它与库里
+    // 那行指向同一个正式题——否则「删除」和「替换凭证」就分不开了。
+    const assertDraftTombstonesControlled = (existingDrafts, incomingDrafts, batchId) => {
+        const stored = new Map(
+            (existingDrafts || []).map(draft => [rowKeyOf(draft), draft])
+        );
+        const uncontrolled = (incomingDrafts || [])
+            .filter(isDraftTombstone)
+            .filter(draft => {
+                const reason = typeof draft?.reason === 'string'
+                    ? draft.reason.trim() : '';
+                const deletedBy = typeof draft?.deletedBy === 'string'
+                    ? draft.deletedBy.trim() : '';
+                const prior = stored.get(rowKeyOf(draft));
+                return !reason || !deletedBy || !prior ||
+                    String(draft?.submittedQuestionId ?? '') !==
+                        String(prior?.submittedQuestionId ?? '');
+            })
+            .map(draft => rowKeyOf(draft));
+        if (!uncontrolled.length) return;
+        throw new StorageRepositoryError(
+            'draft-tombstone-uncontrolled',
+            `${uncontrolled.length} tombstone draft row(s) lack a verifiable deletion record.`,
+            { batchId, uncontrolled }
+        );
+    };
+
+    // 墓碑不可复活，也不可消失。任何整批重写路径（重新识别、保存字段、去重、统计刷新）
+    // 都按"可见集合"提交，都不许顺手把一次删除撤销，也不许把它连行物理抹掉。
+    // 库里已有的墓碑是这一行的事实，调用方说什么不算数：它提交什么版本的这一行都会被
+    // 库里的墓碑原样覆盖。这让"防复活"成为写门的一条类级规则，而不是每个调用方各自
+    // 记得别改 status —— 后者今天有四处，明天就有第五处。
+    const preserveDraftTombstones = (existingDrafts, incomingDrafts) => {
+        const incoming = Array.isArray(incomingDrafts) ? incomingDrafts : [];
+        const tombstones = new Map(
+            (existingDrafts || [])
+                .filter(isDraftTombstone)
+                .map(draft => [rowKeyOf(draft), draft])
+        );
+        if (!tombstones.size) return incoming;
+        const merged = incoming.map(draft => {
+            const stone = tombstones.get(rowKeyOf(draft));
+            return stone ? clone(stone) : draft;
+        });
+        const present = new Set(merged.map(rowKeyOf));
+        const dropped = [...tombstones.values()].filter(
+            draft => !present.has(rowKeyOf(draft))
+        );
+        if (!dropped.length) return merged;
+        // 墓碑回到它原来的 order 位置，审核页与统计看到的题号顺序不会因为一次删除而移位。
+        return [...merged, ...dropped].sort(
+            (left, right) => (left?.order ?? 0) - (right?.order ?? 0)
+        );
+    };
+
+    const preserveTombstoneImages = (existingImages, incomingImages, tombstoneIds) => {
+        const incoming = Array.isArray(incomingImages) ? incomingImages : [];
+        if (!tombstoneIds.size) return incoming;
+        const present = new Set(incoming.map(rowKeyOf));
+        const retained = (existingImages || [])
+            .filter(image => tombstoneIds.has(String(image?.questionId ?? '')))
+            .filter(image => !present.has(rowKeyOf(image)));
+        return retained.length ? [...incoming, ...retained] : incoming;
+    };
+
+    // 删除必须一次写完：行状态与批次审计同批落库。只改行不记审计（或反过来）都会让
+    // 「删了哪些题、谁删的、为什么删」这条链断在中间，比根本没删更难排查。
+    //
+    // 判据分两个方向，因为两条链的有效期不同：
+    //   新出现的墓碑 —— 本次写入第一次把它标成 deleted，那 batch.deletedDrafts 里必须
+    //     同批出现同 draftId 条目。分两次调用时第一次就会在这里抛。
+    //   早就存在的墓碑 —— 它的行内 deletedBy/reason/deletedAt 本身就是永久审计；批次
+    //     顶层数组只留最近 50 条，是给任务列表用的窗口，不是凭证。所以不要求老墓碑
+    //     仍在窗口里，否则第 51 次删除之后整批再也写不动。
+    // 反方向无条件成立：审计里出现一个库里根本没有墓碑行的 draftId，就是伪造。
+    const assertTombstonesAudited = (drafts, existingDrafts, batch) => {
+        const audit = Array.isArray(batch?.deletedDrafts) ? batch.deletedDrafts : [];
+        const audited = new Set(audit.map(entry => String(entry?.draftId ?? '')));
+        const stones = (drafts || []).filter(isDraftTombstone);
+        const known = new Set(
+            (existingDrafts || []).filter(isDraftTombstone).map(rowKeyOf)
+        );
+        const unaudited = stones
+            .filter(draft => !known.has(rowKeyOf(draft)))
+            .filter(draft => !audited.has(rowKeyOf(draft)))
+            .map(rowKeyOf);
+        if (unaudited.length) {
+            throw new StorageRepositoryError(
+                'draft-tombstone-unaudited',
+                `${unaudited.length} deleted draft row(s) have no batch audit entry.`,
+                { batchId: batch?.id, unaudited }
+            );
+        }
+        const stoneIds = new Set(stones.map(rowKeyOf));
+        const orphaned = [...audited].filter(
+            draftId => draftId && !stoneIds.has(draftId)
+        );
+        if (orphaned.length) {
+            throw new StorageRepositoryError(
+                'draft-tombstone-audit-orphaned',
+                `${orphaned.length} deletion audit entr(ies) have no deleted draft row.`,
+                { batchId: batch?.id, orphaned }
+            );
+        }
+    };
+
     const createPreferenceFacade = (
         storage,
         { strict = true, onError = null } = {}
@@ -509,8 +642,15 @@
                                 .where('batchId').equals(batchId).toArray()
                                 .then(images => {
                                     assertActive();
+                                    // 统计也必须走可见集合：墓碑留在 batch.totalCount 里
+                                    // 就会让"批次有几道题"与实际可审核的题数长期不一致。
+                                    const visible = visibleDraftRows(
+                                        questions, images
+                                    );
                                     const { counts, batchPatch } = buildUpdate({
-                                        batch, questions, images
+                                        batch,
+                                        questions: visible.questions,
+                                        images: visible.images
                                     });
                                     assertActive();
                                     return batchTable.update(batchId, clone(batchPatch))
@@ -530,14 +670,17 @@
                 }
             );
         };
-        const loadDraftBatch = async batchId => ({
-            batch: await get('draftImportBatches', batchId),
-            files: await findBy('draftImportFiles', 'batchId', batchId),
-            questions: await findBy(
-                'draftQuestions', 'batchId', batchId, { sortBy: 'order' }
-            ),
-            images: await findBy('draftImages', 'batchId', batchId)
-        });
+        const loadDraftBatch = async batchId => {
+            const [questions, images] = await Promise.all([
+                findBy('draftQuestions', 'batchId', batchId, { sortBy: 'order' }),
+                findBy('draftImages', 'batchId', batchId)
+            ]);
+            return {
+                batch: await get('draftImportBatches', batchId),
+                files: await findBy('draftImportFiles', 'batchId', batchId),
+                ...visibleDraftRows(questions, images)
+            };
+        };
         const createDraftBatch = async ({ batch, files = [], signal } = {}) => {
             const batchId = requireId(batch?.id, 'batch.id');
             if (!Array.isArray(files)) {
@@ -616,6 +759,9 @@
                     const draftTable = table('draftQuestions');
                     const imageTable = table('draftImages');
                     const fileTable = table('draftImportFiles');
+                    // 本事务真正落库的行集。整批重写会补回墓碑，所以落库数可能多于调用方
+                    // 提交的可见数；回报给调用方的必须是落库数，否则读回校验会数出个数不符。
+                    const written = { drafts: [], images: undefined };
                     assertActive();
                     // 先读快照：同一个事务里读到的批次已提交行，是本事务必须保住的凭证。
                     return draftTable.where('batchId').equals(batch.id).toArray()
@@ -644,27 +790,58 @@
                             });
                         })
                         .then(existingDrafts => {
+                            // 墓碑先落位：整批重写的调用方提交的是"可见集合"，被删的行不在
+                            // 其中。墓碑必须在删表之前被找回并原样带回，否则凭证与审计一起
+                            // 物理消失。放在不变式之前，顺序本身就是"不许抹掉删除记录"的意思。
+                            const nextDrafts = preserveDraftTombstones(
+                                existingDrafts, drafts
+                            );
+                            assertDraftTombstonesControlled(
+                                existingDrafts, nextDrafts, batch.id
+                            );
+                            // 墓碑保留 submittedQuestionId，proofOf 与删除前完全相同，所以
+                            // 「已提交凭证集合不得减少」这条不变式对一次合法删除天然成立 ——
+                            // 不需要、也不应该有绕过它的分支。真正把"删除"和"抹掉凭证"分开
+                            // 的是上一行的自证判据：submittedQuestionId 被改动即抛。
                             assertSubmittedDraftsPreserved(
-                                existingDrafts, drafts, batch.id
+                                existingDrafts, nextDrafts, batch.id
+                            );
+                            assertTombstonesAudited(
+                                nextDrafts, existingDrafts, batch
                             );
                             assertActive();
-                            return draftTable.where('batchId')
-                                .equals(batch.id).delete();
+                            return imageTable.where('batchId').equals(batch.id)
+                                .toArray()
+                                .then(existingImages => {
+                                    written.drafts = nextDrafts;
+                                    written.images = Array.isArray(images)
+                                        ? preserveTombstoneImages(
+                                            existingImages,
+                                            images,
+                                            tombstonedDraftIds(nextDrafts)
+                                        )
+                                        : undefined;
+                                    assertActive();
+                                    return draftTable.where('batchId')
+                                        .equals(batch.id).delete();
+                                });
                         })
                         .then(() => {
                             assertActive();
-                            if (!drafts.length) return undefined;
-                            return draftTable.bulkPut(clone(drafts));
+                            if (!written.drafts.length) return undefined;
+                            return draftTable.bulkPut(clone(written.drafts));
                         })
                         .then(() => {
                             assertActive();
-                            if (!Array.isArray(images)) return undefined;
+                            if (!Array.isArray(written.images)) return undefined;
                             return imageTable.where('batchId').equals(batch.id)
                                 .delete()
                                 .then(() => {
                                     assertActive();
-                                    if (!images.length) return undefined;
-                                    return imageTable.bulkPut(clone(images));
+                                    if (!written.images.length) return undefined;
+                                    return imageTable.bulkPut(
+                                        clone(written.images)
+                                    );
                                 });
                         })
                         .then(() => {
@@ -680,9 +857,9 @@
                             assertActive();
                             return {
                                 batch: clone(batch),
-                                draftCount: drafts.length,
-                                imageCount: Array.isArray(images)
-                                    ? images.length
+                                draftCount: written.drafts.length,
+                                imageCount: Array.isArray(written.images)
+                                    ? written.images.length
                                     : undefined
                             };
                         });
@@ -866,6 +1043,15 @@
                             throw new StorageRepositoryError(
                                 'draft-missing',
                                 `Draft ${id} was not found.`,
+                                { draftId: id }
+                            );
+                        }
+                        // 已删除的草稿不再参与提交。读口把墓碑挡在可见集合之外，但一个
+                        // 过期 id 仍可能被提交上来；不挡就是墓碑复活，且正式题会被写进去。
+                        if (isDraftTombstone(fresh)) {
+                            throw new StorageRepositoryError(
+                                'draft-deleted',
+                                `Draft ${id} was deleted and cannot be submitted.`,
                                 { draftId: id }
                             );
                         }

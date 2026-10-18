@@ -1,4 +1,6 @@
 (function () {
+    const resolveUtils = () => window.Qisi.Utils;
+
     const dataUrlToArrayBuffer = async (dataUrl) => {
         const res = await fetch(dataUrl);
         return await res.arrayBuffer();
@@ -693,19 +695,9 @@
             .replace(/\s+/g, ' ')
             .trim();
 
-        const labelRe = /(^|[\n\r\s,;，；。])([A-D])\s*(?:[.\uFF0E\u3001\u3002)\uFF09]|(?=\s*(?:\$|\\|\[\[IMAGE:|\[[^\]]+\]|[0-9\u4e00-\u9fffA-Za-z])))/g;
-        const hits = [];
-        let match;
-
         const labelText = maskMathSpans(joined);
-        while ((match = labelRe.exec(labelText)) !== null) {
-            const label = String(match[2] || '').toUpperCase();
-            hits.push({
-                label,
-                start: match.index + (match[1] || '').length,
-                contentStart: labelRe.lastIndex
-            });
-        }
+        const hits = resolveUtils().findOptionLabels(labelText)
+            .map(hit => ({ label: hit.label, start: hit.markerStart, rowStart: hit.rowStart, contentStart: hit.contentStart }));
 
         const labels = hits.map(hit => hit.label).join('');
         if (!labels.includes('A') || !labels.includes('B')) return ['', '', '', ''];
@@ -718,7 +710,7 @@
             if (idx < 0 || idx > 3) continue;
 
             const nextHit = hits[i + 1];
-            const raw = joined.slice(hit.contentStart, nextHit ? nextHit.start : joined.length).trim();
+            const raw = joined.slice(hit.contentStart, nextHit ? nextHit.rowStart : joined.length).trim();
             options[idx] = cleanOptionText(raw, helpers);
         }
 
@@ -813,8 +805,8 @@
             const label = prefix[1] || prefix[2] || prefix[3];
             return label + '.' + (prefix[4] ? ' $' + prefix[4] + '$' : '');
         });
-        const labels = [...maskMathSpans(provisional).matchAll(/(?:^|\s)([A-D])\s*[.．、]/g)]
-            .map(match => match[1]).join('');
+        const labels = resolveUtils().findOptionLabels(maskMathSpans(provisional))
+            .map(hit => hit.label).join('');
         // The literal label is stored in the formula. Require the complete ordered row.
         return labels === 'ABCD' ? provisional : text;
     };
@@ -872,8 +864,8 @@
 
     const stripOptionsFromStemText = (text = '') => {
         const source = normalizeDocxText(text || '');
-        const idx = maskMathSpans(source).search(/(?:^|\s)A\s*[.\uFF0E\u3001\u3002)\uFF09]/);
-        if (idx >= 0) return source.slice(0, idx).trim();
+        const firstLabel = resolveUtils().findOptionLabels(maskMathSpans(source))[0];
+        if (firstLabel && firstLabel.label === 'A') return source.slice(0, firstLabel.rowStart).trim();
         return source.trim();
     };
 

@@ -61,12 +61,15 @@
                 };
             }
             next.fieldProvenance = fieldProvenance;
-            if (['pdf-multimodal-v1','pdf-external-v2'].includes(next.producer?.routeId)) {
-                next.status = 'pending'; next.manualConfirmed = false; next.confirmedAt = null;
-                const states = (next.pdfExternal || next.pdfV1)?.states;
-                if (states) for (const field of explicitFields) states[['questionNumber', 'stem', 'options', 'type'].includes(field) ? 'question' : field] = 'manual';
-                if (explicitFields.includes('images')) next.imageReviewStatus = next.images?.length ? 'need_confirm' : 'none';
-            }
+            // Manual edits invalidate any earlier human confirmation on every route,
+            // not only the PDF ones: the edited content must be confirmed again.
+            next.status = 'pending'; next.manualConfirmed = false; next.confirmedAt = null;
+            if (explicitFields.includes('images')) next.imageReviewStatus = next.images?.length ? 'need_confirm' : 'none';
+            // `fieldProvenance` above is the route-independent field-level state carrier;
+            // `pdfExternal.states` / `pdfV1.states` are extra per-field mirrors that only
+            // the PDF containers carry, so mirror into them when present.
+            const states = (next.pdfExternal || next.pdfV1)?.states;
+            if (states) for (const field of explicitFields) states[['questionNumber', 'stem', 'options', 'type'].includes(field) ? 'question' : field] = 'manual';
             next.userEdited = true;
             next.manualEdited = true;
             next.updatedAt = clock();

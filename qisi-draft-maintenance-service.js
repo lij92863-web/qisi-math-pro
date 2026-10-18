@@ -30,6 +30,17 @@
     const versionOf = batch => Number.isInteger(batch?.draftPersistence?.version)
         ? batch.draftPersistence.version
         : 0;
+    // 读回校验要能比对 deletedDrafts 这类结构值：写入与读出是两次独立的结构复制，
+    // 引用比较永远不等。数组按内容比，其余类型保持严格相等 —— 不做无依据的深比较。
+    const sameStat = (left, right) => {
+        if (left === right) return true;
+        if (!Array.isArray(left) || !Array.isArray(right)) return false;
+        return JSON.stringify(left) === JSON.stringify(right);
+    };
+
+    // 批次顶层审计数组随批次整行读出，所以只留最近 50 条。超出时丢最旧的，且必须
+    // 说出来 —— 悄悄截断会让"删了但查不到"变成常态。
+    const DELETED_DRAFTS_LIMIT = 50;
 
     const createDraftMaintenanceService = ({
         persistence,
@@ -121,7 +132,7 @@
             const readback = await load(batchId, signal);
             for (const [key, value] of Object.entries(batchPatch)) {
                 if (key === 'updatedAt') continue;
-                if (readback.batch?.[key] !== value) {
+                if (!sameStat(readback.batch?.[key], value)) {
                     throw error('DRAFT_MAINTENANCE_READBACK_MISMATCH', {
                         batchId,
                         field: key
@@ -259,6 +270,90 @@
             return { changedCount, readback };
         };
 
+        // 单题软删。这是全系统唯一能写 `status:'deleted'` 的地方：deletedBy / reason 是
+        // 安全判据不是审计装饰，能写 drafts 就能伪造，所以"谁能删"收口在服务层，
+        // 仓储只校验"写进来的墓碑是否自证"。
+        const deleteDraftQuestion = async ({
+            batchId, draftId, reason, actorId, signal
+        } = {}) => {
+            const id = String(batchId || '').trim();
+            const targetId = String(draftId || '').trim();
+            const why = String(reason || '').trim();
+            const who = String(actorId || '').trim();
+            if (!id || !targetId || !why || !who) {
+                throw error('DRAFT_MAINTENANCE_INPUT_INVALID');
+            }
+            const loaded = await load(id, signal);
+            const target = loaded.questions.find(
+                draft => String(draft?.id ?? '') === targetId
+            );
+            if (!target) {
+                throw error('DRAFT_MAINTENANCE_DRAFT_NOT_FOUND', {
+                    batchId: id, draftId: targetId
+                });
+            }
+            const version = versionOf(loaded.batch);
+            const deletedAt = clock();
+            // 行状态与批次审计同批提交。分两次调用时仓储侧的墓碑自证与双写校验都会拦下，
+            // 所以这里不存在"只改了行"或"只记了审计"的中间态。
+            const drafts = loaded.questions.map(draft =>
+                String(draft?.id ?? '') === targetId
+                    ? {
+                        ...clone(draft),
+                        status: 'deleted',
+                        deletedAt,
+                        deletedBy: who,
+                        reason: why
+                    }
+                    : clone(draft)
+            );
+            const deletedDrafts = [
+                ...(Array.isArray(loaded.batch?.deletedDrafts)
+                    ? loaded.batch.deletedDrafts : []),
+                {
+                    draftId: targetId,
+                    questionNumber: target.questionNumber ?? null,
+                    submittedQuestionId: target.submittedQuestionId ?? null,
+                    reason: why,
+                    actorId: who,
+                    deletedAt
+                }
+            ].slice(-DELETED_DRAFTS_LIMIT);
+            const visible = {
+                ...loaded,
+                questions: drafts.filter(draft => draft.status !== 'deleted')
+            };
+            const readback = await persistAndReadback({
+                batchId: id,
+                loaded,
+                drafts,
+                images: loaded.images,
+                batchPatch: {
+                    ...countsFor(visible),
+                    // 批次标题上的题数必须跟着可见集合走，否则删完还显示旧数字。
+                    totalCount: visible.questions.length,
+                    deletedDrafts,
+                    updatedAt: clock()
+                },
+                // 幂等键带版本：同一版本重复点删要能被识别成重放，换了版本就是一次新的
+                // 删除请求，不能因为键相同而被静默吞掉。
+                idempotencyKey:
+                    `maintenance:delete-draft:${id}:${targetId}:${version}`,
+                signal
+            });
+            return {
+                draftId: targetId,
+                version,
+                droppedAuditCount: Math.max(
+                    0,
+                    (Array.isArray(loaded.batch?.deletedDrafts)
+                        ? loaded.batch.deletedDrafts.length : 0) + 1 -
+                        DELETED_DRAFTS_LIMIT
+                ),
+                readback
+            };
+        };
+
         const deleteDraftBatch = async ({
             batchId,
             expectedVersion,
@@ -295,6 +390,7 @@
             refreshBatchStats,
             dedupeBatchDrafts,
             cleanupDisplayFields,
+            deleteDraftQuestion,
             deleteDraftBatch,
             deleteDraftBatches
         });

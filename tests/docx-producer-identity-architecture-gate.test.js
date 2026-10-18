@@ -94,11 +94,14 @@ test('six frozen PDF high-risk owners match baseline or exact user-approved repa
         '9ab2f21282af4f5eb394658f31d5ba357cd46ca5'), []);
 });
 
-test('deterministic DOCX option labels cannot create a zero-length global match', () => {
+test('deterministic DOCX option labels are owned by the shared option-label implementation', () => {
     const importer = read('qisi-batch-importer.js');
-    assert.match(
-        importer,
-        /\(\^\|\[\\n\\r\\s,;，；。\]\)\(\[A-D\]\)/
+    // 不变量：DOCX 导入路径不再自带选项标签正则，标签口径只有qisi-utils.js 一处。
+    assert.doesNotMatch(importer, /\(\[A-D\]\)\s*\[\.．、]/);
+    assert.match(importer, /resolveUtils\(\)\.findOptionLabels/);
+    assert.equal(
+        (importer.match(/findOptionLabels\(/g) || []).length,
+        3,
+        'DOCX 导入的每一处标签识别都必须走共享实现'
     );
-    assert.doesNotMatch(importer, /const labelRe = \/\(\^\|\[[^\n]+\?\(\[A-D\]\)/);
 });

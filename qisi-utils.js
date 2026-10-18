@@ -177,6 +177,53 @@
             return output;
         };
 
+        // 选项标签与分隔符的全产品唯一口径。PDF 审核投影、DOCX 块解析、页级块
+        // 解析都从这里取标签，任何一条路径都不再自带正则：同一段文本无论从哪条
+        // 路径进来，老师看到的标签序列与选项文本必须一致。
+        // 标签只认 A-Z 字母。数字标签与题号、答案标签体系冲突，不在这里支持。
+        const findOptionLabels = (value) => {
+            const source = String(value ?? '')
+                .replace(/\r/g, '\n')
+                .replace(/[Ａ-Ｚ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248));
+
+const hits = [];
+            // 前缀：行首或空白（含全角空格），其后可选左括号与空白。后缀：分隔符 + 可选空白。
+            const pattern = /(^|[\n\r\u3000 \t])([（(]?)([A-Z])[ \t\u3000]*[.．。、:：)）][ \t\u3000]*/g;
+            let match;
+            while ((match = pattern.exec(source)) !== null) {
+                hits.push({
+                    label: match[3],
+                    rowStart: match.index,
+                    markerStart: match.index + match[1].length + match[2].length,
+                    contentStart: pattern.lastIndex
+                });
+            }
+            return hits;
+        };
+
+        // 宽口径候选：单选/多选题的 source 里出现了行首数字标签行，说明老师写了
+        // 选项但不是本产品支持的写法。它只用来报"格式未识别"，不被当作选项解析。
+        const hasUnrecognizedOptionRows = (value) => {
+            const source = String(value ?? '').replace(/\r/g, '\n');
+            return /(^|\n)[ \t\u3000]*[0-9０-９]{1,2}[ \t\u3000]*[.．。、)）]/.test(source);
+        };
+
+        // 按标签把一段文本切成题干 + 选项。没有标签时题干是原文，一个字都不切。
+        const splitOptionLabels = (value) => {
+            const source = String(value ?? '');
+            const hits = findOptionLabels(source);
+            if (!hits.length) return { stem: source, optionLabels: [], options: [] };
+
+            const options = hits.map((hit, index) =>
+                source.slice(hit.contentStart, hits[index + 1]?.rowStart ?? source.length).replace(/\s+$/, ''));
+
+            return {
+                stem: source.slice(0, hits[0].rowStart).replace(/\s+$/, ''),
+                optionLabels: hits.map(hit => hit.label),
+                options
+            };
+        };
+
         const cleanRecognizedText = (value) => {
             if (value === false || value === true || value === null || value === undefined) return '';
             if (Array.isArray(value)) return value.map(cleanRecognizedText).filter(Boolean).join('\n');
@@ -965,6 +1012,7 @@
             expandPageRange,
             extractRelevanceTokens,
             findNode,
+            findOptionLabels,
             finalChoiceAnswerText,
             normalizeBareLatexExpressionForDisplay,
             normalizeBareLatexForDisplayOptionLine,
@@ -976,6 +1024,7 @@
             hasBatchMediaToken,
             hasUnconvertedImagePlaceholder,
             hasUnconvertedOptionPlaceholder,
+            hasUnrecognizedOptionRows,
             isFatalQwenServiceError,
             isRawJsonPayloadText,
             itemHasUnconvertedImagePlaceholder,
@@ -990,6 +1039,7 @@
             restoreLatexMathSegments,
             sanitizeLatexWrapperArtifacts,
             splitAnswerSolutionSections,
+            splitOptionLabels,
             stripBatchImagePlaceholders,
             splitQuestionForStorage,
             stripAnswerSolution,

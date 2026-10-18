@@ -252,12 +252,12 @@
             return old;
         };
 
+        // 选项标签判定同样走共享口径，避免第三份正则再漂移出第四份。
         const hasChoiceLabelSignal = (text = '') => {
-            const source = root.Qisi.Utils.cleanRecognizedText(text)
-                .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248));
-
-            return /(?:^|[\n\r\s　])A\s*[\.\．、:：\)）]/.test(source) &&
-                /(?:^|[\n\r\s　])B\s*[\.\．、:：\)）]/.test(source);
+            const labels = new Set(root.Qisi.Utils.findOptionLabels(
+                root.Qisi.Utils.cleanRecognizedText(text)
+            ).map(hit => hit.label));
+            return labels.has('A') && labels.has('B');
         };
 
         const stripQuestionSectionNoise = (text) => root.Qisi.Utils.cleanRecognizedText(text)
@@ -290,9 +290,7 @@
 
             const answerLooksChoice = /^[A-D]{1,4}$/.test(ans);
             const stemHasChoiceBlank = /[（(]\s*[）)]/.test(sourceStem);
-            const stemHasOptionLabels =
-                /(?:^|[\n\r\s　])A\s*[\.\．、:：\)）]/.test(sourceStem) &&
-                /(?:^|[\n\r\s　])B\s*[\.\．、:：\)）]/.test(sourceStem);
+            const stemHasOptionLabels = hasChoiceLabelSignal(sourceStem);
 
             const choiceLanguageSignal = /下列|正确的是|错误的是|故选|选项|单项选择|单选|多项选择|多选|全部选对|部分选对|有选错/.test(haystack);
 

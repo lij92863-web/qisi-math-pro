@@ -1468,6 +1468,7 @@
         "chooseCandidate"
       ],
       "allowedDependencies": [
+        "utils",
         "docx-producer-identity-contract"
       ],
       "forbiddenDependencies": [
@@ -1514,7 +1515,8 @@
       ],
       "allowedDependencies": [
         "support-aligner",
-        "docx-producer-identity-contract"
+        "docx-producer-identity-contract",
+        "utils"
       ],
       "forbiddenDependencies": [
         "app-shell",

@@ -526,6 +526,7 @@ const withheldByQuestion = new Map((gate.withheld || []).map(row => [row.questio
         if (!Object.values(TYPES).filter(t => t !== '待确认').includes(draft.type)) return '请选择原卷题型。';
         const rejected = Object.entries(draft.fieldProvenance || {}).filter(([, p]) => p.status === 'rejected').map(([f]) => f);
         if (rejected.length) return `尚未处理不完整或冲突字段：${rejected.join('、')}。请修改或明确采用候选。`;
+        if (['单选题', '多选题'].includes(draft.type) && !draft.pdfExternal.optionLabels?.length && resolveUtils().hasUnrecognizedOptionRows(draft.stem || '')) return '选项格式未识别：本题按 A/B/C/D 字母标签切分选项，检测到的是数字标签行，请改成 A. B. C. D. 后再确认。';
         if (['单选题', '多选题'].includes(draft.type) && (draft.options.length < 2 || draft.options.some(o => !o.trim()) || draft.pdfExternal.optionLabels?.length !== draft.options.length || draft.pdfExternal.optionLabels.some((label, i) => label !== String.fromCharCode(65 + i)))) return '选项标签或正文不完整，请对照原页；缺失标签不会自动重编号。';
         if (['单选题', '多选题', '填空题'].includes(draft.type) && !draft.answer.trim()) return '答案缺失，请人工补充。';
         if (['单选题', '多选题'].includes(draft.type)) {
@@ -542,12 +543,15 @@ const withheldByQuestion = new Map((gate.withheld || []).map(row => [row.questio
         return draft.stem + (draft.options.length ? '\n\n' + draft.options.map((o, i) => `${draft.pdfExternal.optionLabels[i] || String.fromCharCode(65 + i)}. ${o}`).join('\n') : '');
     }
     // Only explicit teacher editor delimiters are mapped. No legacy math cleaning or exam inference.
+    function resolveUtils() {
+        if (root && root.Qisi && root.Qisi.Utils) return root.Qisi.Utils;
+        return require('./qisi-utils.js');
+    }
     function projectEditorSource(source, draft) {
         if (source === (draft.editorSource || editorSource(draft))) return { stem: draft.stem, options: clone(draft.options), optionLabels: clone(draft.pdfExternal.optionLabels || []), type: draft.type, parsedOptions: draft.options.length > 0 };
-        const markers = ['单选题', '多选题'].includes(draft.type) ? [...source.matchAll(/(?:^|\n)([A-Z])\.[ \t]/g)] : [];
-        const stem = markers.length ? source.slice(0, markers[0].index).replace(/\n{1,2}$/, '') : source;
-        const options = markers.map((marker, i) => source.slice(marker.index + marker[0].length, markers[i + 1]?.index ?? source.length));
-        return { stem, options, optionLabels: markers.map(m => m[1]), type: draft.type, parsedOptions: markers.length > 0 };
+        if (!['单选题', '多选题'].includes(draft.type)) return { stem: source, options: [], optionLabels: [], type: draft.type, parsedOptions: false };
+        const parsed = resolveUtils().splitOptionLabels(source);
+        return { ...parsed, type: draft.type, parsedOptions: parsed.optionLabels.length > 0 };
     }
     function applyEditorSource(draft, source, reviewController) {
         const projection = projectEditorSource(source, draft);
