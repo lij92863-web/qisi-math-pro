@@ -100,5 +100,6 @@
   "importRunCommandsOwner": "qisi-import-run-commands.js",
   "libraryImageResourcesOwner": "qisi-library-image-resources.js",
   "librarySnapshotOwner": "qisi-library-snapshot.js",
-  "libraryExternalMergeOwner": "qisi-library-external-merge.js"
+  "libraryExternalMergeOwner": "qisi-library-external-merge.js",
+  "personalKnowledgeModelOwner": "qisi-personal-knowledge-model.js"
 }

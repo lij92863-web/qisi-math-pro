@@ -529,6 +529,10 @@
     {
       "file": "qisi-library-external-merge.js",
       "runtime": "browser"
+    },
+    {
+      "file": "qisi-personal-knowledge-model.js",
+      "runtime": "browser"
     }
   ]
 }

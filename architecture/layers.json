@@ -1446,6 +1446,23 @@
       "status": "production-wired"
     },
     {
+      "id": "personal-knowledge-model",
+      "file": "qisi-personal-knowledge-model.js",
+      "layer": 1,
+      "domainOwner": "personalKnowledgeModelOwner",
+      "publicApi": [
+        "flattenRows",
+        "buildNode"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
       "id": "review-draft-normalization",
       "file": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

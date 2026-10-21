@@ -4773,18 +4773,9 @@ Promise.all([imageReady, fontReady]).then(() => {
                     await db.personalKnowledge.put({ id: 'tree', nodes: toRaw(personalKnowledgeTree.value), updatedAt: Date.now() });
                 };
 
-                const personalTreeRows = computed(() => {
-                    const rows = [];
-                    const walk = (nodes, level, parent = null, grandParent = null) => {
-                        (nodes || []).forEach(node => {
-                            const children = Array.isArray(node.children) ? node.children : [];
-                            rows.push({ node, level, parent, grandParent, hasChildren: children.length > 0 });
-                            if (children.length > 0 && node.expanded !== false) walk(children, level + 1, node, level === 1 ? node : grandParent);
-                        });
-                    };
-                    walk(personalKnowledgeTree.value, 1);
-                    return rows;
-                });
+                const personalTreeRows = computed(() =>
+                    window.Qisi.PersonalKnowledgeModel.flattenRows(personalKnowledgeTree.value)
+                );
 
                 const togglePersonalExpanded = async (node) => {
                     node.expanded = node.expanded === false;
@@ -4817,7 +4808,7 @@ Promise.all([imageReady, fontReady]).then(() => {
                 const createPersonalL1 = async () => {
                     const name = personalL1Name.value.trim();
                     if (!name) return;
-                    const node = { id: `pk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name, children: [], expanded: true };
+                    const node = window.Qisi.PersonalKnowledgeModel.buildNode({ id: `pk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name, level: 1 });
                     personalKnowledgeTree.value.push(node);
                     selectedPersonalL1Id.value = node.id;
                     selectedPersonalL2Id.value = '';
@@ -4831,7 +4822,7 @@ Promise.all([imageReady, fontReady]).then(() => {
                     if (!parent || !name) return;
                     parent.children = parent.children || [];
                     parent.expanded = true;
-                    const node = { id: `pk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name, children: [], expanded: true };
+                    const node = window.Qisi.PersonalKnowledgeModel.buildNode({ id: `pk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name, level: 2 });
                     parent.children.push(node);
                     selectedPersonalL2Id.value = node.id;
                     personalL2Name.value = '';
@@ -4845,7 +4836,7 @@ Promise.all([imageReady, fontReady]).then(() => {
                     if (!parent || !name) return;
                     parent.children = parent.children || [];
                     parent.expanded = true;
-                    parent.children.push({ id: `pk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name });
+                    parent.children.push(window.Qisi.PersonalKnowledgeModel.buildNode({ id: `pk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name, level: 3 }));
                     personalL3Name.value = '';
                     await savePersonalKnowledge();
                 };

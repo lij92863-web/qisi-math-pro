@@ -67,7 +67,8 @@
         "review-editor-commit",
         "review-session-commands",
         "review-image-commands",
-        "review-batch-confirm"
+        "review-batch-confirm",
+        "personal-knowledge-model"
       ]
     },
     {

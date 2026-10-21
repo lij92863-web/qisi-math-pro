@@ -865,6 +865,26 @@
       "status": "production"
     },
     {
+      "ownerId": "personal-knowledge-model",
+      "module": "qisi-personal-knowledge-model.js",
+      "layer": 1,
+      "responsibilities": [
+        "personal-knowledge-tree-rows-and-node-shapes"
+      ],
+      "allowedCallers": [
+        "ui-shell"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "question-repository",
+        "formal-admission",
+        "app-shell"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "none",
+      "status": "production"
+    },
+    {
       "ownerId": "review-draft-normalization",
       "module": "qisi-review-draft-normalization-policy.js",
       "layer": 1,
