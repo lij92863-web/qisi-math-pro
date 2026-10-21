@@ -1,0 +1,965 @@
+/* Qisi Math Pro - UI redesign (ink blue / celadon / rice paper). Loaded after app.css. */
+
+:root {
+    --paper: #e4e2d7;
+    --paper-2: #efeee5;
+    --card: #fbfaf4;
+    --card-2: #f1efe5;
+    --ink: #101616;
+    --ink-2: #25302d;
+    --muted: #46504d;
+    --line: #c9c5b6;
+    --line-strong: #aea997;
+    --accent: #1f3a57;
+    --accent-strong: #16293f;
+    --accent-soft: #dbe4ee;
+    --jade: #356b63;
+    --jade-soft: #dbe8e2;
+    --gold: #b1854a;
+    --shadow-card: 0 18px 40px -30px rgba(30, 42, 48, .55), 0 1px 0 rgba(255, 255, 255, .8) inset;
+    --shadow-lift: 0 22px 46px -26px rgba(30, 42, 48, .5);
+    --radius: 18px;
+    --font-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", STSong, STSongti-SC-Regular, SimSun, serif;
+    --font-mono: "Cascadia Mono", "JetBrains Mono", Consolas, "Noto Serif SC", monospace;
+}
+
+html, body {
+    background: var(--paper) !important;
+    color: var(--ink);
+}
+
+body {
+    font-family: var(--font-serif) !important;
+    letter-spacing: .01em;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+        radial-gradient(1100px 520px at 12% -10%, rgba(255, 255, 255, .75), transparent 60%),
+        radial-gradient(900px 480px at 92% 4%, rgba(47, 75, 110, .06), transparent 65%),
+        repeating-linear-gradient(0deg, rgba(96, 82, 56, .022) 0 1px, transparent 1px 4px);
+}
+
+button, input, select, textarea, label, h1, h2, h3, h4, p, span, div, a, summary {
+    font-family: var(--font-serif);
+}
+
+.sidebar {
+    background: rgba(250, 246, 236, .92) !important;
+    border-bottom: 1px solid var(--line) !important;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, .9) inset, 0 14px 34px -30px rgba(30, 42, 48, .7) !important;
+    padding: 12px 30px !important;
+}
+
+.sidebar .text-\[17px\],
+.sidebar strong {
+    letter-spacing: .12em;
+}
+
+.nav-item {
+    border-radius: 10px !important;
+    padding: 9px 15px !important;
+    font-size: 13.5px !important;
+    font-weight: 600 !important;
+    letter-spacing: .06em;
+    color: #6b7370 !important;
+}
+
+.nav-item::before {
+    background: var(--accent-soft) !important;
+    border-radius: 10px !important;
+}
+
+.nav-item:hover:not(.active) {
+    background: rgba(255, 253, 247, .8) !important;
+    color: var(--ink) !important;
+    transform: none !important;
+}
+
+.nav-item.active {
+    background: var(--accent-soft) !important;
+    color: var(--accent-strong) !important;
+    border-color: rgba(47, 75, 110, .16) !important;
+    box-shadow: none !important;
+}
+
+.nav-item.active > * {
+    background: transparent !important;
+}
+
+.nav-item::before {
+    display: none !important;
+}
+
+.main-content {
+    background: transparent !important;
+    padding: 22px 28px 28px !important;
+    z-index: 1;
+}
+
+.entry-main-card,
+.entry-side-panel > div,
+.batch-review-top,
+.batch-recognition-summary,
+.batch-question-nav,
+.batch-editor-card,
+.batch-preview-card,
+.batch-import-header,
+.batch-section,
+.batch-create-main,
+.batch-default-meta {
+    background: var(--card) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: var(--radius) !important;
+    box-shadow: var(--shadow-card) !important;
+}
+
+.entry-main-card h2,
+.batch-editor-card h2,
+.batch-preview-head h2,
+.entry-side-panel h3 {
+    font-weight: 700 !important;
+    letter-spacing: .08em;
+    color: var(--ink) !important;
+}
+
+.entry-main-card h2 {
+    font-size: 19px !important;
+    padding: 0 0 14px 17px !important;
+    border-bottom: 1px solid var(--line) !important;
+    position: relative;
+}
+
+.entry-main-card h2::before,
+.batch-editor-card h2::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: .52em;
+    width: 7px;
+    height: 7px;
+    background: var(--accent);
+    transform: rotate(45deg);
+}
+
+.batch-editor-card h2 {
+    position: relative;
+    padding-left: 16px;
+}
+
+.input-base,
+.batch-editor-card input,
+.batch-editor-card select,
+.batch-editor-card textarea:not(.batch-latex-source-editor),
+.entry-side-panel textarea {
+    background: var(--card-2) !important;
+    border: 1px solid var(--line-strong) !important;
+    border-radius: 10px !important;
+    color: var(--ink) !important;
+    font-size: 13px !important;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, .85) inset;
+}
+
+.input-base:focus,
+.batch-editor-card input:focus,
+.batch-editor-card select:focus,
+.batch-editor-card textarea:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 3px rgba(47, 75, 110, .13) !important;
+    background: #fffefb !important;
+}
+
+label {
+    letter-spacing: .04em;
+}
+
+.material-primary-btn,
+.material-light-btn,
+.entry-main-card > button:last-child {
+    border-radius: 11px !important;
+    font-weight: 600 !important;
+    letter-spacing: .08em;
+    transition: transform .09s ease, box-shadow .12s ease, background .16s ease, border-color .16s ease !important;
+}
+
+.material-primary-btn {
+    background: linear-gradient(180deg, #2a4a6b, var(--accent)) !important;
+    border: 1px solid var(--accent-strong) !important;
+    color: #fff8f2 !important;
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, .28) inset,
+        0 2px 0 var(--accent-strong),
+        0 10px 20px -12px rgba(36, 60, 88, .75) !important;
+}
+
+.material-primary-btn:hover {
+    background: linear-gradient(180deg, #33587e, #2f4b6e) !important;
+    transform: translateY(-1px);
+}
+
+.material-primary-btn:active {
+    transform: translateY(2px) !important;
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, .2) inset,
+        0 0 0 var(--accent-strong),
+        0 4px 10px -8px rgba(36, 60, 88, .7) !important;
+}
+
+.material-light-btn {
+    background: linear-gradient(180deg, #fffefa, #f7f1e4) !important;
+    border: 1px solid var(--line-strong) !important;
+    color: var(--ink-2) !important;
+    box-shadow: 0 1px 0 #fff inset, 0 2px 0 rgba(90, 76, 50, .12) !important;
+}
+
+.material-light-btn:hover {
+    border-color: var(--accent) !important;
+    color: var(--accent-strong) !important;
+    transform: translateY(-1px);
+}
+
+.material-light-btn:active {
+    transform: translateY(2px) !important;
+    box-shadow: 0 1px 0 #fff inset, 0 0 0 rgba(90, 76, 50, .1) !important;
+}
+
+.material-light-btn.danger {
+    color: #8a5545 !important;
+}
+
+.entry-layout {
+    gap: 22px !important;
+    align-items: stretch;
+}
+
+.entry-main-card {
+    padding: 26px 28px 22px !important;
+    display: flex;
+    flex-direction: column;
+}
+
+.entry-layout .grid.grid-cols-2 {
+    gap: 10px 12px !important;
+}
+
+.entry-layout label.text-\[10px\] {
+    font-size: 10.5px !important;
+    letter-spacing: .14em;
+    color: var(--muted) !important;
+    font-weight: 600 !important;
+}
+
+.entry-compact-control {
+    height: 38px !important;
+    font-size: 13px !important;
+    padding-left: 12px !important;
+}
+
+.entry-drop-zone {
+    min-height: 58px;
+    border: 1px dashed var(--line-strong) !important;
+    background: rgba(251, 247, 238, .7) !important;
+    border-radius: 12px !important;
+    padding: 10px 14px !important;
+}
+
+.entry-drop-zone:hover {
+    border-color: var(--accent) !important;
+    background: var(--accent-soft) !important;
+    box-shadow: none !important;
+}
+
+.entry-main-card .flex.gap-4.border-b {
+    border-bottom: 0 !important;
+    gap: 6px !important;
+    margin-bottom: 12px !important;
+    padding: 4px !important;
+    background: var(--card-2);
+    border: 1px solid var(--line) !important;
+    border-radius: 12px;
+    width: fit-content;
+}
+
+.entry-main-card .flex.gap-4.border-b button {
+    border: 0 !important;
+    border-radius: 9px;
+    padding: 7px 20px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    letter-spacing: .1em;
+    color: var(--muted) !important;
+}
+
+.entry-main-card .flex.gap-4.border-b button.text-\[\#1a73e8\] {
+    background: var(--card) !important;
+    color: var(--accent-strong) !important;
+    box-shadow: 0 1px 0 #fff inset, 0 2px 8px -4px rgba(30, 42, 48, .35);
+}
+
+textarea.textarea-code {
+    flex: 1;
+    min-height: 46vh !important;
+    padding: 20px 22px !important;
+    background: #fffefb !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 14px !important;
+    font-family: var(--font-mono) !important;
+    font-size: 13.5px !important;
+    line-height: 1.95 !important;
+    color: var(--ink) !important;
+    box-shadow: 0 10px 24px -22px rgba(30, 42, 48, .55) inset !important;
+}
+
+textarea.textarea-code:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 3px rgba(47, 75, 110, .1) !important;
+    background: #fff !important;
+}
+
+.entry-main-card > button:last-child {
+    margin-top: 16px;
+    height: 52px !important;
+    font-size: 15px !important;
+    background: linear-gradient(180deg, #2a4a6b, var(--accent)) !important;
+    border: 1px solid var(--accent-strong) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, .28) inset, 0 3px 0 var(--accent-strong), 0 16px 26px -18px rgba(36, 60, 88, .8) !important;
+}
+
+.entry-main-card > button:last-child:active {
+    transform: translateY(3px) !important;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, .2) inset, 0 0 0 var(--accent-strong) !important;
+}
+
+.entry-side-panel {
+    width: 380px !important;
+    gap: 18px !important;
+}
+
+.entry-side-panel > div {
+    padding: 20px !important;
+}
+
+.entry-side-panel h3 {
+    font-size: 14px !important;
+}
+
+.entry-side-panel .drop-zone {
+    height: 92px !important;
+    border-style: dashed !important;
+}
+
+.entry-question-preview {
+    min-height: 260px !important;
+    background: #fffefa !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 12px !important;
+    padding: 18px !important;
+    box-shadow: none !important;
+}
+
+.batch-review-shell {
+    gap: 14px !important;
+    padding-bottom: 56px;
+}
+
+.batch-review-top {
+    padding: 16px 20px !important;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+}
+
+.batch-review-top strong {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    letter-spacing: .04em;
+    color: var(--ink) !important;
+}
+
+.batch-review-top span {
+    color: var(--muted) !important;
+    font-size: 12.5px !important;
+    font-weight: 500 !important;
+    letter-spacing: .03em;
+}
+
+.batch-review-top-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px !important;
+}
+
+.batch-recognition-summary {
+    padding: 14px 20px !important;
+}
+
+.batch-recognition-summary-grid {
+    gap: 6px !important;
+}
+
+.batch-recognition-summary-grid span,
+.batch-recognition-summary-missing p {
+    background: var(--card-2) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 9px !important;
+    color: var(--muted) !important;
+    font-weight: 500 !important;
+}
+
+.batch-recognition-summary-grid b {
+    color: var(--ink) !important;
+    font-weight: 700 !important;
+}
+
+.batch-recognition-summary details {
+    margin-bottom: 10px;
+}
+
+.batch-recognition-summary details summary {
+    color: #8a5545;
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+.batch-review-grid {
+    grid-template-columns: 208px minmax(0, 1fr) 380px;
+    gap: 16px !important;
+}
+
+.batch-question-nav {
+    padding: 12px !important;
+    gap: 6px !important;
+}
+
+.batch-filter-tabs {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    padding: 4px;
+    background: var(--card-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    margin-bottom: 6px;
+}
+
+.batch-filter-tabs button {
+    border: 0 !important;
+    border-radius: 7px !important;
+    padding: 6px 0 !important;
+    font-size: 11px !important;
+    background: transparent;
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.batch-filter-tabs button.active {
+    background: var(--card) !important;
+    color: var(--accent-strong) !important;
+    box-shadow: 0 1px 0 #fff inset, 0 2px 8px -6px rgba(30, 42, 48, .5);
+}
+
+.batch-question-nav-item {
+    padding: 9px 10px !important;
+    border-radius: 9px !important;
+    border: 1px solid transparent !important;
+    background: transparent !important;
+    min-height: 46px;
+}
+
+.batch-question-nav-item:hover {
+    background: var(--card-2) !important;
+    transform: none !important;
+}
+
+.batch-question-nav-item.active {
+    background: var(--accent-soft) !important;
+    border-color: rgba(47, 75, 110, .22) !important;
+}
+
+.batch-question-nav-item span {
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
+    color: var(--ink) !important;
+}
+
+.batch-question-nav-item small {
+    font-size: 10.5px !important;
+    color: var(--muted) !important;
+}
+
+.batch-editor {
+    gap: 12px !important;
+}
+
+.batch-problem-card {
+    background: #faf5e8 !important;
+    border: 1px solid #e7dcc0 !important;
+    border-left: 3px solid #b08a57 !important;
+    border-radius: 12px !important;
+    padding: 12px 16px !important;
+}
+.batch-editor-card.content { order: 1; }
+.batch-meta-toggle { order: 2; }
+.batch-editor-card:not(.content) { order: 4; }
+.batch-editor .pdf-model-review { order: 3; }
+.batch-editor-actions { order: 5; }
+
+.batch-meta-toggle {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.batch-meta-toggle .material-light-btn {
+    width: auto;
+    height: 34px;
+    padding: 0 14px;
+    font-size: 12px;
+    gap: 8px;
+}
+
+.batch-meta-toggle .material-light-btn span {
+    color: var(--muted);
+    font-weight: 500;
+    letter-spacing: .04em;
+}
+
+.batch-select-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 2px 4px 6px;
+}
+
+.batch-select-all {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: 11.5px;
+    letter-spacing: .06em;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 6px;
+}
+
+.batch-select-all:hover {
+    color: var(--accent-strong);
+    background: var(--accent-soft);
+}
+
+.batch-select-row span {
+    color: var(--accent-strong);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.batch-question-nav-item {
+    padding-left: 34px !important;
+    position: relative;
+}
+
+.batch-select-box {
+    position: absolute !important;
+    left: 9px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    color: #b5b8ad;
+    cursor: pointer;
+}
+
+.batch-select-box.checked {
+    color: var(--accent);
+}
+
+.batch-question-nav-item span:not(.batch-select-box) {
+    font-size: 12.5px !important;
+}
+
+.batch-editor-card {
+    padding: 16px 18px !important;
+    border-radius: 14px !important;
+}
+
+.batch-editor-card h2 {
+    font-size: 13px !important;
+    margin-bottom: 12px !important;
+    letter-spacing: .12em;
+    color: var(--ink-2) !important;
+}
+
+.batch-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 180px));
+    justify-content: start;
+    gap: 10px 12px !important;
+}
+
+.batch-editor-card label {
+    font-size: 11px !important;
+    letter-spacing: .1em;
+    color: var(--muted) !important;
+    font-weight: 600 !important;
+}
+
+.batch-problem-card {
+    background: #f7f4e9 !important;
+    border: 1px solid #e3d9c2 !important;
+    border-left: 3px solid var(--accent) !important;
+    border-radius: 12px !important;
+    padding: 12px 16px !important;
+}
+
+.batch-problem-card strong {
+    color: #7a6136;
+    font-size: 12.5px;
+    letter-spacing: .08em;
+}
+
+.batch-problem-card p {
+    color: #6b6250;
+    font-size: 12px;
+    margin: 4px 0;
+}
+
+.pdf-model-review {
+    max-height: 340px;
+    overflow: auto;
+}
+
+.batch-content-tabs {
+    display: inline-flex !important;
+    gap: 4px !important;
+    padding: 4px;
+    background: var(--card-2);
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    margin-bottom: 12px !important;
+}
+
+.batch-content-tabs button {
+    border: 0 !important;
+    border-radius: 8px !important;
+    padding: 7px 18px !important;
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
+    letter-spacing: .08em;
+    color: var(--muted) !important;
+}
+
+.batch-content-tabs button.active {
+    background: var(--card) !important;
+    color: var(--accent-strong) !important;
+    box-shadow: 0 1px 0 #fff inset, 0 2px 8px -6px rgba(30, 42, 48, .45) !important;
+}
+
+.batch-editor-card.content {
+    min-height: 300px !important;
+}
+
+textarea.batch-latex-source-editor,
+.batch-editor-card.content textarea {
+    min-height: 40vh !important;
+    padding: 16px 18px !important;
+    background: #fffefb !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 12px !important;
+    font-family: var(--font-mono) !important;
+    font-size: 13px !important;
+    line-height: 1.9 !important;
+}
+
+textarea.batch-latex-source-editor:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 3px rgba(47, 75, 110, .1) !important;
+}
+
+.batch-editor-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    gap: 8px !important;
+    padding: 12px 4px !important;
+    background: linear-gradient(180deg, rgba(244, 239, 228, 0), rgba(244, 239, 228, .96) 38%);
+}
+
+.batch-editor-actions .material-primary-btn,
+.batch-editor-actions .material-light-btn {
+    min-width: 112px;
+    height: 40px;
+}
+
+.batch-editor-actions .review-confirm {
+    background: var(--jade-soft) !important;
+    border: 1px solid rgba(53, 107, 99, .35) !important;
+    color: var(--jade) !important;
+    box-shadow: 0 1px 0 #fff inset, 0 2px 0 rgba(53, 107, 99, .18) !important;
+}
+
+.batch-editor-actions .review-confirm:hover {
+    background: #dcebe5 !important;
+    transform: translateY(-1px);
+}
+
+.batch-editor-actions .review-confirm:active {
+    transform: translateY(2px) !important;
+    box-shadow: 0 1px 0 #fff inset !important;
+}
+
+.batch-editor-actions .review-submit {
+    min-width: 132px;
+}
+
+.batch-preview-panel {
+    gap: 12px !important;
+}
+
+.batch-preview-card {
+    padding: 18px !important;
+    position: sticky;
+    top: 0;
+}
+
+.batch-preview-head h2 {
+    font-size: 13px !important;
+    letter-spacing: .12em;
+}
+
+.batch-question-preview-layout {
+    background: #fffefa;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px;
+    min-height: 300px;
+}
+
+.batch-preview-answer strong {
+    color: var(--jade) !important;
+    font-weight: 700;
+    letter-spacing: .12em;
+}
+
+.batch-bottom-bar {
+    background: rgba(250, 246, 236, .95) !important;
+    border-top: 1px solid var(--line) !important;
+    box-shadow: 0 -14px 30px -26px rgba(30, 42, 48, .6) !important;
+    backdrop-filter: blur(10px);
+    padding: 9px 22px !important;
+}
+
+.batch-bottom-bar span {
+    color: var(--muted);
+    font-size: 12.5px;
+    letter-spacing: .04em;
+}
+
+.batch-bottom-bar .material-primary-btn {
+    height: 38px;
+    min-width: 150px;
+}
+
+.latex-preview,
+.math-content,
+.qisi-question-flow-preview {
+    font-family: var(--font-serif);
+    font-size: 15px;
+    line-height: 1.95;
+    color: var(--ink);
+}
+
+.gaokao-option {
+    margin: 6px 0;
+}
+
+.option-label {
+    color: var(--accent-strong);
+    font-weight: 700;
+    margin-right: 6px;
+}
+
+*::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: #d5d3c6;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: #bfbcab;
+    background-clip: padding-box;
+    border: 2px solid transparent;
+}
+
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.batch-review-grid {
+    position: relative;
+}
+
+.qisi-pane-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 9px;
+    z-index: 8;
+    cursor: col-resize;
+    border-radius: 999px;
+    transition: background .14s ease;
+}
+
+.qisi-pane-handle:hover {
+    background: rgba(47, 75, 110, .14);
+}
+
+body.qisi-pane-dragging {
+    cursor: col-resize;
+    user-select: none;
+}
+
+body.qisi-pane-dragging .qisi-pane-handle {
+    background: rgba(47, 75, 110, .2);
+}
+
+.batch-editor-actions {
+    flex-wrap: wrap;
+}
+
+.batch-editor-actions .review-quick {
+    min-width: 148px;
+}
+
+.batch-bottom-bar .material-light-btn {
+    height: 38px;
+    margin-right: 8px;
+}
+
+@media (max-width: 1500px) {
+    .batch-review-grid {
+        grid-template-columns: 196px minmax(0, 1fr) 340px;
+    }
+}
+
+@media (max-width: 1280px) {
+    .entry-side-panel {
+        width: 330px !important;
+    }
+
+    .batch-review-grid {
+        grid-template-columns: 180px minmax(0, 1fr) 310px;
+    }
+}
+
+@media (max-width: 1100px) {
+    .entry-side-panel {
+        width: 100% !important;
+    }
+
+    .batch-review-grid {
+        grid-template-columns: 180px minmax(0, 1fr);
+    }
+
+    .batch-preview-panel {
+        display: none;
+    }
+}
+
+
+
+/* Contrast and weight pass: teachers read from a projector and a dim office,
+   so body copy is one weight heavier and secondary text is two steps darker. */
+body { font-weight: 500; }
+.nav-item { font-weight: 600 !important; color: #4b5653 !important; }
+.nav-item.active { color: var(--accent-strong) !important; }
+.entry-main-card h2,
+.batch-editor-card h2,
+.batch-preview-head h2,
+.entry-side-panel h3 { font-weight: 700 !important; color: var(--ink) !important; }
+label,
+.batch-editor-card label,
+.entry-layout label.text-\[10px\] { color: var(--ink-2) !important; font-weight: 600 !important; }
+.input-base,
+.batch-editor-card input,
+.batch-editor-card select,
+.batch-editor-card textarea,
+.entry-side-panel textarea { color: var(--ink) !important; font-weight: 500 !important; }
+::placeholder { color: #7d8783 !important; opacity: 1; }
+.batch-review-top span { color: var(--ink-2) !important; }
+.batch-recognition-summary-grid span,
+.batch-recognition-summary-missing p { color: var(--ink-2) !important; font-weight: 600 !important; }
+.batch-recognition-summary-grid b { color: var(--ink) !important; font-weight: 700 !important; }
+.batch-question-nav-item span { font-weight: 600 !important; color: var(--ink) !important; }
+.batch-question-nav-item small { color: var(--muted) !important; }
+.batch-filter-tabs button { font-weight: 600 !important; color: var(--ink-2) !important; }
+.batch-filter-tabs button.active { color: var(--accent-strong) !important; }
+.batch-content-tabs button { font-weight: 600 !important; color: var(--ink-2) !important; }
+.batch-content-tabs button.active { color: var(--accent-strong) !important; }
+.entry-main-card .flex.gap-4.border-b button { font-weight: 600 !important; }
+.material-primary-btn,
+.material-light-btn { font-weight: 700 !important; }
+.latex-preview,
+.math-content,
+.qisi-question-flow-preview { font-weight: 500; color: var(--ink); }
+.batch-meta-toggle .material-light-btn span { color: var(--ink-2) !important; }
+.batch-bottom-bar span { color: var(--ink-2) !important; }
+
+
+/* Heavier reading weight: Noto Serif SC at 500 still looks thin on Windows. */
+body { font-weight: 600 !important; -webkit-font-smoothing: auto; }
+label,
+.batch-editor-card label,
+.entry-layout label.text-\\[10px\\] { font-weight: 700 !important; color: #1f2a27 !important; font-size: 11px !important; letter-spacing: .08em; }
+.nav-item { font-weight: 700 !important; color: #394541 !important; font-size: 14px !important; }
+.nav-item.active { color: var(--accent-strong) !important; }
+.input-base,
+.batch-editor-card input,
+.batch-editor-card select,
+.batch-editor-card textarea,
+.entry-side-panel textarea { font-weight: 600 !important; color: var(--ink) !important; }
+.batch-recognition-summary-grid span,
+.batch-recognition-summary-missing p { font-weight: 600 !important; color: #25302d !important; }
+.batch-recognition-summary-grid b { font-weight: 700 !important; }
+.batch-question-nav-item span { font-weight: 700 !important; }
+.batch-question-nav-item small { color: #46504d !important; font-weight: 500 !important; }
+.batch-review-top span { color: #25302d !important; font-weight: 500 !important; }
+.latex-preview,
+.math-content,
+.qisi-question-flow-preview { font-weight: 500 !important; }
+.entry-main-card h2,
+.batch-editor-card h2,
+.batch-preview-head h2,
+.entry-side-panel h3 { font-weight: 700 !important; color: #0d1314 !important; }
+.batch-meta-toggle .material-light-btn span { color: #25302d !important; font-weight: 600 !important; }
+.batch-bottom-bar span { color: #25302d !important; font-weight: 500 !important; }
+
+
+/* Stroke pass: Windows ClearType renders serif CJK thin at 14-15px.
+   A hairline stroke restores the printed-textbook weight without faux-bold. */
+body { -webkit-text-stroke: .18px currentColor; }
+h1, h2, h3, strong, b,
+.nav-item,
+.material-primary-btn,
+.material-light-btn,
+.batch-question-nav-item span,
+.batch-review-top strong { -webkit-text-stroke: .3px currentColor; }
+.katex, .katex * { -webkit-text-stroke: 0 !important; }
+.entry-layout label.text-\\[10px\\],
+.batch-editor-card label { font-size: 11.5px !important; }
+.batch-question-nav-item small { font-size: 11px !important; }
+.batch-recognition-summary-grid span,
+.batch-recognition-summary-missing p { font-size: 12.5px !important; }

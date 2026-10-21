@@ -95,7 +95,7 @@ describe('bm-a4-r3-ownership-audit', () => {
             helper: 'cleanDisplayTextForBatchSave',
             line: findLineIn(
                 supportTextParserLines,
-                'solution: root.Qisi.Utils.cleanDisplayTextForBatchSave(stripQuestionSectionNoise(block)),'
+                'const value = root.Qisi.Utils.cleanDisplayTextForBatchSave('
             )
         };
         const result = auditCallsite(site, supportTextParserLines);
@@ -111,7 +111,8 @@ describe('bm-a4-r3-ownership-audit', () => {
         assert.doesNotMatch(app, /pdfSupportFusedWarnings/);
         assert.doesNotMatch(app, /pdfSupportFieldWarningsByQuestion/);
         assert.doesNotMatch(app, /PdfCandidateProjection\s*\.projectPdfCandidates\s*\(/);
-        assert.match(app, /PdfExternalProducer\.createProducer/);
+        assert.match(app, /PdfMineruProducer\.createProducer/);
+        assert.doesNotMatch(app, /PdfExternalProducer\.createProducer/);
         assert.doesNotMatch(app, /PdfMultimodalProducer\.createProducer/);
         assert.match(owner, /function\s+buildDrafts\s*\(/);
     });

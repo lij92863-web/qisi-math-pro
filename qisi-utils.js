@@ -1,4 +1,4 @@
-﻿        const storageRepositoryApi =
+        const storageRepositoryApi =
             typeof Qisi !== 'undefined' && Qisi.StorageRepository
                 ? Qisi.StorageRepository
                 : typeof require === 'function'
@@ -177,28 +177,38 @@
             return output;
         };
 
-        // 选项标签与分隔符的全产品唯一口径。PDF 审核投影、DOCX 块解析、页级块
-        // 解析都从这里取标签，任何一条路径都不再自带正则：同一段文本无论从哪条
-        // 路径进来，老师看到的标签序列与选项文本必须一致。
-        // 标签只认 A-Z 字母。数字标签与题号、答案标签体系冲突，不在这里支持。
+        // Lexical offsets always refer to the caller's text. Math spans cannot
+        // supply option labels. Unpunctuated labels require a complete A-D row.
         const findOptionLabels = (value) => {
-            const source = String(value ?? '')
-                .replace(/\r/g, '\n')
+            const source = String(value ?? '').replace(/\r/g, '\n')
                 .replace(/[Ａ-Ｚ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248));
-
-const hits = [];
-            // 前缀：行首或空白（含全角空格），其后可选左括号与空白。后缀：分隔符 + 可选空白。
-            const pattern = /(^|[\n\r\u3000 \t])([（(]?)([A-Z])[ \t\u3000]*[.．。、:：)）][ \t\u3000]*/g;
-            let match;
-            while ((match = pattern.exec(source)) !== null) {
-                hits.push({
-                    label: match[3],
-                    rowStart: match.index,
-                    markerStart: match.index + match[1].length + match[2].length,
-                    contentStart: pattern.lastIndex
-                });
+            const masked = source.split('');
+            const parsed = tokenizeLatexSource(source);
+            for (const part of parsed.segments.filter(part => part.type === 'math')) {
+                for (let i = part.start; i < part.end; i++) masked[i] = ' ';
             }
-            return hits;
+            for (const issue of parsed.issues) {
+                for (let i = issue.index; i < masked.length; i++) masked[i] = ' ';
+            }
+            const search = masked.join('');
+            const hits = [];
+            const pattern = /(^|[\n\r\u3000 \t])([（(][ \t]*|)([A-Z])[ \t\u3000]*[.．。、:：)）]/g;
+            let match;
+            while ((match = pattern.exec(search)) !== null) {
+                hits.push({ label: match[3], rowStart: match.index,
+                    markerStart: match.index + match[1].length + match[2].length,
+                    contentStart: pattern.lastIndex + source.slice(pattern.lastIndex).match(/^[ \t\u3000]*/)[0].length });
+            }
+            const bare = /(^|[\n\r\u3000 \t])([A-D])[ \t\u3000]+(?=\S)/g;
+            const candidates = [...hits];
+            while ((match = bare.exec(source)) !== null) {
+                const markerStart = match.index + match[1].length;
+                if (search[markerStart] !== match[2] || hits.some(hit => hit.markerStart === markerStart)) continue;
+                candidates.push({ label: match[2], rowStart: match.index,
+                    markerStart, contentStart: bare.lastIndex });
+            }
+            candidates.sort((a, b) => a.markerStart - b.markerStart);
+            return candidates.map(hit => hit.label).join('') === 'ABCD' ? candidates : hits;
         };
 
         // 宽口径候选：单选/多选题的 source 里出现了行首数字标签行，说明老师写了
@@ -380,22 +390,51 @@ const hits = [];
 
         const normalizeBareLatexForDisplaySpan = (span = '') => {
             const source = String(span || '');
-            if (!BARE_LATEX_DISPLAY_SIGNAL_RE.test(source)) return source;
+            if (!source) return source;
 
-            return source.replace(
+            // Sub-question labels are mathematical enumerations in this domain:
+            // (i)/(ii)/(iii) must render as math, never as italic prose.
+            const labelled = source.replace(
+                /\((i{1,3}|iv|vi{1,3}|ix|x|I{1,3}|IV|VI{1,3}|IX|X)\)/g,
+                (match, roman) => `$(\\mathrm{${roman}})$`
+            );
+
+            const isMathLikeRun = (run = '') => {
+                if (BARE_LATEX_DISPLAY_SIGNAL_RE.test(run)) return true;
+                const body = run.trim();
+                if (!body) return false;
+                // equations / inequalities: AB=3, x<0, S=12
+                if (/[=<>]|\u2264|\u2265/.test(body) && /[A-Za-z0-9]/.test(body)) return true;
+                // geometry / point / vector labels: AB, ABCD, PQ
+                if (/^[A-Za-z]{2,4}$/.test(body)) return true;
+                // labelled point / coordinate: A(1,2), (1,2)
+                if (/^[A-Za-z]\([^()]*\d[^()]*\)$/.test(body)) return true;
+                if (/^\(\s*-?\d[^()]*\)$/.test(body)) return true;
+                // a single variable: x, A, m
+                if (/^[A-Za-z]$/.test(body)) return true;
+                // a standalone quantity: 3, 12, 3.14
+                if (/^\d+(?:\.\d+)?$/.test(body)) return true;
+                return false;
+            };
+
+            // Fill-in blanks: OCR emits \_\_\_\_, which is only valid inside
+            // math. Outside math the renderer prints the backslashes verbatim
+            // ("\ \ \ \"), which is the artifact users see in the preview.
+            const BLANK_TOKEN = '\u0001';
+            const blanked = labelled.replace(/(?:\\_){2,}/g, BLANK_TOKEN);
+
+            const replaced = blanked.replace(
                 /[A-Za-z0-9\\{}()[\]^_+\-*/=.,:;|<>!~ \t鈭歿?√蟺π]+/g,
                 (run) => {
-                    if (!BARE_LATEX_DISPLAY_SIGNAL_RE.test(run)) return run;
+                    if (!isMathLikeRun(run)) return run;
 
                     const leading = run.match(/^\s*/)?.[0] || '';
                     const trailing = run.match(/\s*$/)?.[0] || '';
                     let body = run.slice(leading.length, run.length - trailing.length);
                     if (!body) return run;
 
-                    if (!BARE_LATEX_DISPLAY_SIGNAL_RE.test(body)) return run;
-
                     const normalized = normalizeBareLatexExpressionForDisplay(body);
-                    if (!normalized || !BARE_LATEX_DISPLAY_SIGNAL_RE.test(normalized)) return run;
+                    if (!normalized) return run;
                     if (/^\$[\s\S]*\$$/.test(normalized) || /^\\\([\s\S]*\\\)$/.test(normalized) || /^\\\[[\s\S]*\\\]$/.test(normalized)) {
                         return run;
                     }
@@ -403,11 +442,13 @@ const hits = [];
                     return `${leading}$${normalized}$${trailing}`;
                 }
             );
+
+            return replaced.split(BLANK_TOKEN).join('$\\_\\_\\_\\_$');
         };
 
         const normalizeBareLatexForDisplayTextBody = (text) => {
             const source = String(text ?? '');
-            if (!source || !BARE_LATEX_DISPLAY_SIGNAL_RE.test(source)) return source;
+            if (!source) return source;
 
             const {
                 protectedText,
@@ -440,6 +481,18 @@ const hits = [];
         const normalizeBareLatexForDisplayText = (text) => {
             const source = String(text ?? '');
             if (!source) return source;
+
+            // A display block spans lines:
+            //     $$
+            //     \overrightarrow{...}
+            //     $$
+            // Splitting it per line wraps the middle line as if it were bare
+            // prose, producing $$\n$...$\n$$ and a guaranteed KaTeX failure.
+            // Math delimiters therefore force one whole-document pass, where the
+            // protected segments keep their inner text untouched.
+            if (/\$\$|\\\[|\\\(/.test(source)) {
+                return normalizeBareLatexForDisplayTextBody(source);
+            }
 
             return source.split('\n').map(line => {
                 const optionLine = normalizeBareLatexForDisplayOptionLine(line);
@@ -1030,6 +1083,7 @@ const hits = [];
             itemHasUnconvertedImagePlaceholder,
             mathSignalCount,
             normalizeAnswerSolutionSource,
+            normalizeLatexText,
             normalizeFigureBbox,
             preserveRawEvidence,
             questionMatchesLibraryFilters,

@@ -79,6 +79,15 @@
         };
 
         const renderLatexPreviewHtml = (content, images = []) => {
+            // Every rendered surface (review preview, option rows, question cards)
+            // shares the same math policy: bare formulas, letters, numbers and
+            // (i)/(ii) labels are promoted to LaTeX before tokenizing. Doing it
+            // here means no call site can bypass the rule.
+            const normalizeDisplayText = root?.Qisi?.Utils?.normalizeBareLatexForDisplayText;
+            if (typeof normalizeDisplayText === 'function' && typeof content === 'string') {
+                content = normalizeDisplayText(content);
+            }
+
             const escapeHtmlLocal = (value) => String(value ?? '')
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
