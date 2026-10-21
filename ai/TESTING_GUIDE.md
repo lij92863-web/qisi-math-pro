@@ -62,10 +62,16 @@ This command is intentionally not part of `verify:safe` yet to avoid duplicate h
 Runs safe full verification:
 
 ```text
-check + test + smoke:batch:mock + verify:no-real-ai
+verify:no-real-ai + check + test + verify-write-boundary
 ```
 
 Use before final report and before commit.
+
+This order reflects the current package.json. The full recursive test command
+discovers batch mock, offline golden replay and isolated restore tests; it is
+not a separate invocation of smoke:batch:mock. A failing test prevents the final
+write-boundary command from running. Independent focused smoke and batch-safety
+commands remain available.
 
 ### `npm run verify:no-real-ai`
 

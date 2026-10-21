@@ -1,5 +1,9 @@
 # CODEX_TASK.local.md
 
+> 最新交接入口（2026-10-21）：[给 Astra 的完整交接](HANDOFF_FOR_ASTRA_2026-10-21.md)。用户已要求停止代码实施，先交接，再由 Astra 规划app.js拆分。打印拆分未实施；下面连续推进和 C8A 均为历史记录，不能据此自动继续写代码或恢复在线识别授权。
+
+> 当前入口（2026-10-20）：[连续基线任务](CODEX_TASK_CONTINUOUS_BASELINE_2026-10-20.md) / [实际结果](CONTINUOUS_BASELINE_RESULT_2026-10-20.md)。用户本轮要求连续推进，阶段 0 证据保全后已开展离线回放、隔离恢复与有回归保护的空表格审核提示修复。下文为完整保留的历史任务记录；本索引不恢复历史付费识别权限或生产数据写入权限，后续以当前对话及明确任务范围为准。
+
 ## Current stage
 
 C8A — Agent constitution and skills bootstrap
