@@ -1809,25 +1809,17 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                                 showBatchToast(`批量识别失败：${message || code}`)
                         });
 
-                const runBatchRecognition = async (batchId) => {
-                    if (!batchId) {
-                        throw new Error('缺少批量录题任务 ID');
-                    }
+                const runBatchRecognition = async (batchId) => window.Qisi.ImportRunCommands.runBatch({
+                    batchId,
+                    controller: normalUiImportController,
+                    warn: (message, payload) => console.warn(message, payload)
+                });
 
-                    if (normalUiImportController.isRunning(batchId)) {
-                        console.warn('[BATCH_DEBUG][duplicate-run-blocked]', { batchId });
-                        return normalUiImportController.run(batchId);
-                    }
-                    return normalUiImportController.run(batchId);
-                };
-
-                const cancelBatchRecognition = batchId => {
-                    const cancelled = normalUiImportController.cancel(batchId);
-                    if (!cancelled) {
-                        showBatchToast('当前任务没有可取消的识别请求。');
-                    }
-                    return cancelled;
-                };
+                const cancelBatchRecognition = batchId => window.Qisi.ImportRunCommands.cancelBatch({
+                    batchId,
+                    controller: normalUiImportController,
+                    notify: showBatchToast
+                });
 
                 const openBatchReview = async (batchId) => {
                     activeBatchId.value = batchId;
@@ -2622,16 +2614,13 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     }
                 };
 
-                const rerunActiveBatchRecognition = async () => {
-                    const batchId = activeBatchId.value;
-                    if (!batchId) {
-                        showBatchToast('当前没有可重新识别的任务');
-                        return;
-                    }
-                    if (!confirm('重新识别会用新的规则更新当前草稿，已提交入库的正式题目不受影响。是否继续？')) return;
-                    await runBatchRecognition(batchId);
-                    await openBatchReview(batchId);
-                };
+                const rerunActiveBatchRecognition = async () => window.Qisi.ImportRunCommands.rerunBatch({
+                    batchId: activeBatchId.value,
+                    confirmRerun: message => confirm(message),
+                    run: runBatchRecognition,
+                    openReview: openBatchReview,
+                    notify: showBatchToast
+                });
 
                 const dedupeActiveBatchDraftsNow = async () => {
                     try {

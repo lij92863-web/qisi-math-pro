@@ -63,7 +63,7 @@ test('production app retires the legacy coordinator and contains no no-op valida
     assert.doesNotMatch(app, /legacyBatchRunCoordinator\.run\s*\(/);
     assert.doesNotMatch(main, /qisi-legacy-batch-run-coordinator\.js/);
     assert.match(app, /ProductionImportBridge\.createProductionImportBridge/);
-    assert.match(app, /normalUiImportController\.run\s*\(/);
+    assert.match(app, /controller:\s*normalUiImportController/);
     assert.doesNotMatch(app, /ImportOrchestrator\.createImportOrchestrator/);
     assert.doesNotMatch(
         app,

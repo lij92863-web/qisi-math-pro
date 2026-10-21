@@ -11,7 +11,7 @@ test('the giant legacy batch owner is deleted and cannot be reached from AppProx
     const controller = read('qisi-normal-ui-import-controller.js');
     assert.doesNotMatch(app, /const\s+processDraftImportBatch\s*=/);
     assert.doesNotMatch(app.slice(app.lastIndexOf('return {')), /\bprocessDraftImportBatch\b/);
-    assert.match(app, /normalUiImportController\.run\(batchId/);
+    assert.match(app, /controller:\s*normalUiImportController/);
     assert.match(controller, /mode:\s*'production'/);
 });
 

@@ -96,5 +96,6 @@
   "reviewEditorCommitOwner": "qisi-review-editor-commit.js",
   "reviewSessionCommandsOwner": "qisi-review-session-commands.js",
   "reviewImageCommandsOwner": "qisi-review-image-commands.js",
-  "reviewBatchConfirmOwner": "qisi-review-batch-confirm.js"
+  "reviewBatchConfirmOwner": "qisi-review-batch-confirm.js",
+  "importRunCommandsOwner": "qisi-import-run-commands.js"
 }

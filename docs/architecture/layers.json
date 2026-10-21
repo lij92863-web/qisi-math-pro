@@ -104,7 +104,8 @@
         "pdf-external-provider",
         "pdf-external-producer",
         "mineru-task-service",
-        "mineru-client"
+        "mineru-client",
+        "import-run-commands"
       ]
     },
     {

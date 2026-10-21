@@ -1380,6 +1380,24 @@
       "status": "production-wired"
     },
     {
+      "id": "import-run-commands",
+      "file": "qisi-import-run-commands.js",
+      "layer": 2,
+      "domainOwner": "importRunCommandsOwner",
+      "publicApi": [
+        "runBatch",
+        "cancelBatch",
+        "rerunBatch"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
       "id": "review-draft-normalization",
       "file": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

@@ -9,13 +9,14 @@
       "file": "app.js",
       "range": [
         1812,
-        1822
+        1816
       ],
       "class": "A",
       "allowedCalls": [
         "normalUiImportController.isRunning",
         "console.warn",
-        "normalUiImportController.run"
+        "normalUiImportController.run",
+        "window.Qisi.ImportRunCommands.runBatch"
       ],
       "forbiddenCalls": [
         "productionImportBridge.run",
@@ -24,14 +25,14 @@
         "batchFormalSubmit.submit"
       ],
       "owner": "UI Shell",
-      "astSha256": "d8920653f788259cf0fbd6af580fee3b330cff8482823f155a221410514a6b91"
+      "astSha256": "fad750e7ffe627e5af8428734f89c0a10ef4f15a0fec60c99bb63092043b928a"
     },
     {
       "name": "refreshBatchStats",
       "file": "app.js",
       "range": [
-        2439,
-        2444
+        2431,
+        2436
       ],
       "class": "A",
       "allowedCalls": [
@@ -48,8 +49,8 @@
       "name": "markDraftReviewed",
       "file": "app.js",
       "range": [
-        2456,
-        2484
+        2448,
+        2476
       ],
       "class": "A",
       "allowedCalls": [
@@ -72,8 +73,8 @@
       "name": "submitDraftQuestion",
       "file": "app.js",
       "range": [
-        2486,
-        2523
+        2478,
+        2515
       ],
       "class": "A",
       "allowedCalls": [
@@ -99,8 +100,8 @@
       "name": "openBatchSubmitSummary",
       "file": "app.js",
       "range": [
-        2613,
-        2623
+        2605,
+        2615
       ],
       "class": "A",
       "allowedCalls": [
@@ -118,8 +119,8 @@
       "name": "dedupeActiveBatchDraftsNow",
       "file": "app.js",
       "range": [
-        2636,
-        2659
+        2625,
+        2648
       ],
       "class": "A",
       "allowedCalls": [
@@ -141,8 +142,8 @@
       "name": "cleanupActiveBatchDisplayPollution",
       "file": "app.js",
       "range": [
-        2670,
-        2687
+        2659,
+        2676
       ],
       "class": "A",
       "allowedCalls": [
@@ -163,8 +164,8 @@
       "name": "confirmBatchSubmit",
       "file": "app.js",
       "range": [
-        2694,
-        2713
+        2683,
+        2702
       ],
       "class": "A",
       "allowedCalls": [
@@ -185,8 +186,8 @@
       "name": "deleteBatchImport",
       "file": "app.js",
       "range": [
-        2715,
-        2724
+        2704,
+        2713
       ],
       "class": "A",
       "allowedCalls": [
