@@ -1327,6 +1327,23 @@
       "status": "production-wired"
     },
     {
+      "id": "review-session-commands",
+      "file": "qisi-review-session-commands.js",
+      "layer": 1,
+      "domainOwner": "reviewSessionCommandsOwner",
+      "publicApi": [
+        "resolveSelection",
+        "persistDraftCommand"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
       "id": "review-draft-normalization",
       "file": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

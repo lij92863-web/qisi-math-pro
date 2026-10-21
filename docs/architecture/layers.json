@@ -64,7 +64,8 @@
         "review-draft-read-model",
         "review-image-projection",
         "review-editor-projection",
-        "review-editor-commit"
+        "review-editor-commit",
+        "review-session-commands"
       ]
     },
     {

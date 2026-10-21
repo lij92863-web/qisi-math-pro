@@ -501,6 +501,10 @@
     {
       "file": "qisi-review-editor-commit.js",
       "runtime": "browser"
+    },
+    {
+      "file": "qisi-review-session-commands.js",
+      "runtime": "browser"
     }
   ]
 }

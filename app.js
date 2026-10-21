@@ -617,26 +617,14 @@
                     }
                 };
 
-                const runReviewDraftPersistenceCommand = async (
-                    command,
-                    { kind = 'draft', failureMessage = '草稿保存失败' } = {}
-                ) => {
-                    try {
-                        return kind === 'image'
-                            ? await draftPersistenceService
-                                .persistReviewImageCommand(command)
-                            : await draftPersistenceService
-                                .persistReviewDraftCommand(command);
-                    } catch (error) {
-                        // Keep unsaved editor input when storage fails; the persisted version remains unchanged.
-                        showBatchToast(
-                            `${failureMessage}：${
-                                error?.code || error?.message || 'storage-failure'
-                            }`
-                        );
-                        return null;
-                    }
-                };
+                const runReviewDraftPersistenceCommand = async (command, { kind = 'draft', failureMessage = '草稿保存失败' } = {}) =>
+                    window.Qisi.ReviewSessionCommands.persistDraftCommand({
+                        service: draftPersistenceService,
+                        command,
+                        kind,
+                        failureMessage,
+                        notify: showBatchToast
+                    });
 
                 const recentBatchImportBatches = computed(() => [...batchImportBatches.value].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 12));
                 const activeBatch = computed(() => batchImportBatches.value.find(batch => batch.id === activeBatchId.value) || null);
@@ -1860,9 +1848,13 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                 };
 
                 const selectDraftQuestion = async (id) => {
-                    if (!id || id === activeDraftQuestionId.value) return;
-
-                    if (activeDraftEditorDirty.value) {
+                    const decision = window.Qisi.ReviewSessionCommands.resolveSelection({
+                        currentId: activeDraftQuestionId.value,
+                        nextId: id,
+                        dirty: activeDraftEditorDirty.value
+                    });
+                    if (decision === 'noop') return;
+                    if (decision === 'prompt') {
                         const leave = confirm('当前题目的 LaTeX 有未保存修改。切换题目将放弃这些修改，是否继续？');
                         if (!leave) return;
                         discardActiveDraftEditorChanges();
