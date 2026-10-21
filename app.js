@@ -4386,53 +4386,27 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     }));
                 };
 
-                const buildHeaderFields = () => {
-                    if (!examConfig.showHeaderFields) return '';
-                    const fields = selectedExamTemplate.value === 'examZh'
-                        ? ['班级', '姓名', '考号']
-                        : ['班别', '姓名', '评分'];
-                    return `<div class="student-fields">${fields.map(label => `<span>${label}<i></i></span>`).join('')}</div>`;
-                };
+                const buildHeaderFields = () => window.Qisi.ExamPaperParts.buildHeaderFields({
+                    show: examConfig.showHeaderFields,
+                    template: selectedExamTemplate.value
+                });
 
-                const buildAnswerGrid = (count) => {
-                    if (!examConfig.showAnswerGrid) return '';
-                    const total = Math.max(1, Math.min(Number(examConfig.answerGridCount || count || 0), 20));
-                    const nums = Array.from({ length: total }, (_, idx) => idx + 1);
-                    const lineStart = Math.max(1, Number(examConfig.answerLineStart || total + 1));
-                    const lineCount = Math.max(0, Math.min(Number(examConfig.answerLineCount || 0), 10));
-                    const blanks = Array.from({ length: lineCount }, (_, idx) => lineStart + idx);
-                    return `<div class="answer-grid-wrap">
-                        <table class="answer-grid">
-                            <tr><th>题号</th>${nums.map(n => `<td>${n}</td>`).join('')}</tr>
-                            <tr><th>答案</th>${nums.map(() => '<td></td>').join('')}</tr>
-                        </table>
-                        <div class="answer-lines">${blanks.map(n => `<span>${n}.<i></i></span>`).join('')}</div>
-                    </div>`;
-                };
+                const buildAnswerGrid = (count) => window.Qisi.ExamPaperParts.buildAnswerGrid({
+                    show: examConfig.showAnswerGrid,
+                    count,
+                    config: examConfig
+                });
 
-                const buildNotice = () => {
-                    if (!examConfig.showNotice) return '';
-                    if (selectedExamTemplate.value === 'examZh') {
-                        return `<div class="notice exam-notice"><b>注意事项：</b>
-                            <ol>
-                                <li>答卷前，考生务必将自己的姓名、准考证号填写在答题卡上。</li>
-                                <li>回答选择题时，选出每小题答案后，用铅笔把答题卡上对应题目的答案标号涂黑。如需改动，用橡皮擦干净后，再选涂其它答案标号。回答非选择题时，将答案写在答题卡上。写在本试卷上无效。</li>
-                                <li>考试结束后，将本试卷和答题卡一并交回。</li>
-                            </ol>
-                        </div>`;
-                    }
-                    return '<div class="notice">注意事项：请将答案填写在指定位置，保持卷面整洁。</div>';
-                };
+                const buildNotice = () => window.Qisi.ExamPaperParts.buildNotice({
+                    show: examConfig.showNotice,
+                    template: selectedExamTemplate.value
+                });
 
-                const buildAnswerContent = (qs, forceNewPage = true) => {
-                    let content = `<div class="answer-section ${forceNewPage ? 'new-page' : ''}"><h2>参考答案与解析</h2>`;
-                    qs.forEach((q, index) => {
-                        content += `<div class="answer-item"><b>${index + 1}.</b> ${q.answer ? renderLatexForPrint(q.answer, q.images || []) : '________'}`;
-                        if (q.solution) content += `<div class="answer-solution">${renderLatexForPrint(q.solution, q.images || [])}</div>`;
-                        content += `</div>`;
-                    });
-                    return content + `</div>`;
-                };
+                const buildAnswerContent = (qs, forceNewPage = true) => window.Qisi.ExamPaperParts.buildAnswerContent({
+                    questions: qs,
+                    forceNewPage,
+                    render: renderLatexForPrint
+                });
 
                 const buildPrintOptionsHtml = (q) => {
                     if (!(q.type === '单选题' || q.type === '多选题')) {

@@ -545,6 +545,10 @@
     {
       "file": "qisi-exam-groups.js",
       "runtime": "browser"
+    },
+    {
+      "file": "qisi-exam-paper-parts.js",
+      "runtime": "browser"
     }
   ]
 }

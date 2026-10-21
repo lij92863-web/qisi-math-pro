@@ -945,6 +945,26 @@
       "status": "production"
     },
     {
+      "ownerId": "exam-paper-parts",
+      "module": "qisi-exam-paper-parts.js",
+      "layer": 1,
+      "responsibilities": [
+        "exam-paper-header-grid-notice-answer-fragments"
+      ],
+      "allowedCallers": [
+        "ui-shell"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "question-repository",
+        "formal-admission",
+        "app-shell"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "none",
+      "status": "production"
+    },
+    {
       "ownerId": "review-draft-normalization",
       "module": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

@@ -104,5 +104,6 @@
   "personalKnowledgeModelOwner": "qisi-personal-knowledge-model.js",
   "manualEntryModelOwner": "qisi-manual-entry-model.js",
   "examTemplateModelOwner": "qisi-exam-template-model.js",
-  "examGroupsOwner": "qisi-exam-groups.js"
+  "examGroupsOwner": "qisi-exam-groups.js",
+  "examPaperPartsOwner": "qisi-exam-paper-parts.js"
 }

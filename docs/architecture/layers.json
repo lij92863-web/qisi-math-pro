@@ -71,7 +71,8 @@
         "personal-knowledge-model",
         "manual-entry-model",
         "exam-template-model",
-        "exam-groups"
+        "exam-groups",
+        "exam-paper-parts"
       ]
     },
     {
