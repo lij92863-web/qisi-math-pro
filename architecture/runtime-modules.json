@@ -553,6 +553,10 @@
     {
       "file": "qisi-print-resources.js",
       "runtime": "browser"
+    },
+    {
+      "file": "qisi-import-draft-command.js",
+      "runtime": "browser"
     }
   ]
 }

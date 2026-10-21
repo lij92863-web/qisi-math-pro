@@ -1751,20 +1751,10 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                                 context
                             ),
                         persistReviewDraftBatch: command =>
-                            draftPersistenceService.persistReviewDraftBatch({
-                                batchId: command.batchId,
-                                drafts: command.drafts,
-                                images: command.images,
-                                files: command.sourceFiles.map(file => ({
-                                    ...file,
-                                    ...(command.pdfEvidence ? { [command.pdfEvidence.protocol === 'pdf-mineru-v1' ? 'pdfMineruEvidence' : command.pdfEvidence.protocol === 'pdf-external-v2' ? 'pdfExternalEvidence' : 'pdfV1Evidence']: { ...command.pdfEvidence, tasks: command.pdfEvidence.tasks?.filter(e => e.sourceId === file.id), unassigned: command.pdfEvidence.unassigned?.filter(e => e.source_id === file.id) }, parseStatus: command.pdfEvidence.errors.some(e => e.sourceId === file.id) ? 'partial' : 'success' } : { parseStatus: 'success' }),
-                                    errorMessage: '',
-                                    updatedAt: command.batchPatch.updatedAt
-                                })),
-                                batchPatch: { ...command.batchPatch, importWarnings: command.warnings, unmatchedAnswers: command.unmatched },
-                                idempotencyKey: command.idempotencyKey,
-                                expectedVersion: command.expectedVersion,
-                                signal: command.signal
+                            window.Qisi.ImportDraftCommand.buildPersistReviewDraftBatchCall({
+                                command,
+                                persist: payload =>
+                                    draftPersistenceService.persistReviewDraftBatch(payload)
                             }),
                         reloadDraftBatch: batchId =>
                             draftPersistenceService.reloadDraftBatch(batchId),

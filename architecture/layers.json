@@ -1552,6 +1552,23 @@
       "status": "production-wired"
     },
     {
+      "id": "import-draft-command",
+      "file": "qisi-import-draft-command.js",
+      "layer": 2,
+      "domainOwner": "importDraftCommandOwner",
+      "publicApi": [
+        "evidenceFieldFor",
+        "filePatchFor",
+        "buildPersistReviewDraftBatchCall"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
       "id": "review-draft-normalization",
       "file": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

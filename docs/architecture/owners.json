@@ -985,6 +985,26 @@
       "status": "production"
     },
     {
+      "ownerId": "import-draft-command",
+      "module": "qisi-import-draft-command.js",
+      "layer": 2,
+      "responsibilities": [
+        "import-batch-persistence-command-mapping"
+      ],
+      "allowedCallers": [
+        "ui-shell"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "question-repository",
+        "formal-admission",
+        "app-shell"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "none",
+      "status": "production"
+    },
+    {
       "ownerId": "review-draft-normalization",
       "module": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

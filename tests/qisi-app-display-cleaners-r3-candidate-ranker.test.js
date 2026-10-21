@@ -13,7 +13,7 @@ describe('bm-a4-r3-candidate-ranker', () => {
     it('tool exists', () => { assert.equal(fs.existsSync(path.join(ROOT, 'scripts/bm-a4-r3-candidate-ranker.js')), true); });
     it('controlled-write always blocks', () => { const r = rankCallsite({ helper: 'cleanDisplayTextForBatchSave', line: 1, text: 'x' }, ['const finalAnswer = controlledWrite(value);']); assert.equal(r.risks.controlledWrite, true); assert.equal(r.decision, 'ALWAYS_BLOCK'); assert.equal(r.replacementAllowed, false); });
     it('unknown defers', () => { const r = rankCallsite({ helper: 'cleanDisplayTextForBatchSave', line: 1, text: 'x' }, ['const preview = cleanDisplayTextForBatchSave(text);']); assert.ok(r.decision === 'DEFER' || r.risks.unknown); });
-    it('display-only ranks high', () => { const r = rankCallsite({ helper: 'cleanDisplayTextForBatchSave', line: 2025, text: 'x' }, appLines); assert.ok(r.score >= 60 || r.decision !== 'BLOCK_UNTIL_MANUAL'); });
+    it('display-only ranks high', () => { const r = rankCallsite({ helper: 'cleanDisplayTextForBatchSave', line: 2014, text: 'x' }, appLines); assert.ok(r.score >= 60 || r.decision !== 'BLOCK_UNTIL_MANUAL'); });
     it('support attachment ranks low', () => { const r = rankCallsite({ helper: 'cleanDisplayTextForBatchSave', line: 2819, text: 'x' }, appLines); if (r.risks.supportAttachment) assert.ok(r.score < 85); });
     it('answer ownership ranks low', () => { const r = rankCallsite({ helper: 'cleanDisplayTextForBatchSave', line: 13568, text: 'x' }, appLines); if (r.risks.answerSolution) assert.ok(r.score < 85); });
     it('score thresholds correct', () => { const summary = rankAll(); assert.equal(summary.total, EXPECTED_REMAINING_CALLSITES); assert.ok(summary.byDecision.ALWAYS_BLOCK >= 0); });

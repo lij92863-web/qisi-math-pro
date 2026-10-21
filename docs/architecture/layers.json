@@ -114,7 +114,8 @@
         "import-run-commands",
         "library-image-resources",
         "library-snapshot",
-        "library-external-merge"
+        "library-external-merge",
+        "import-draft-command"
       ]
     },
     {
