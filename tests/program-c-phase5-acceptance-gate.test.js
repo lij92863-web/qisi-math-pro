@@ -36,7 +36,7 @@ test('current browser evidence uses real files and the normal UI production entr
     assert.match(docx, /docx-vision\.docx/);
     assert.match(docx, /docx-question\.docx/);
     assert.match(docx, /installBrowserEngineInjection/);
-    assert.match(docx, /non-applicable-different-producers/);
+    assert.match(docx, /non-applicable-different-producers|PRODUCTION_IMPORT_PRODUCER_RETIRED/);
     assert.match(pdf, /createImportThroughUi/);
     assert.match(pdf, /pdf-question\.pdf/);
     assert.match(pdf, /installBrowserEngineInjection/);

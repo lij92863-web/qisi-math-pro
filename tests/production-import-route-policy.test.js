@@ -29,10 +29,9 @@ function select({ producerMode, manifest, availableCapabilities = capabilities }
     });
 }
 
-test('explicit DOCX deterministic, DOCX vision, and PDF identities select one port', () => {
+test('explicit DOCX deterministic and PDF identities select one port; DOCX vision is retired', () => {
     for (const [producerMode, fileType] of [
         ['docx-deterministic', 'docx'],
-        ['docx-vision', 'docx'],
         ['pdf', 'pdf']
     ]) {
         const result = select({
@@ -43,6 +42,15 @@ test('explicit DOCX deterministic, DOCX vision, and PDF identities select one po
         assert.equal(result.producerIdentity, producerMode);
         assert.deepEqual(result.sourceIds, ['question']);
     }
+    // 2026-10-22: the DOCX visual fallback is retired; Qwen OCR stays for screenshots only.
+    assert.throws(
+        () => select({
+            producerMode: 'docx-vision',
+            manifest: [source('question', 'docx', ['full'], 1)]
+        }),
+        error => error.code === 'PRODUCTION_IMPORT_PRODUCER_RETIRED' &&
+            error.causeCode === 'docx-vision-retired'
+    );
 });
 
 test('mixed and unsupported sources fail before producer selection', () => {
@@ -98,11 +106,11 @@ test('batch and source producer identities cannot conflict', () => {
 test('unavailable capability has no catch fallback to another producer', () => {
     assert.throws(
         () => select({
-            producerMode: 'docx-vision',
+            producerMode: 'docx-deterministic',
             manifest: [source('question', 'docx', ['full'], 1)],
             availableCapabilities: {
                 ...capabilities,
-                docxVision: false
+                docxDeterministic: false
             }
         }),
         error => error.code ===

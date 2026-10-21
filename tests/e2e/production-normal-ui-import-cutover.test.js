@@ -154,17 +154,19 @@ test('normal UI production matrix executes seventeen true producer scenarios', {
             'draft-persisted', 'readback-verified'
         ]);
 
+        // 2026-10-22: DOCX vision is retired. Keep one scenario proving it fails
+        // closed before conversion instead of silently falling back.
         const vision = await run({
-            name: '2 DOCX vision', producerMode: 'docx-vision',
+            name: '2 DOCX vision (retired)', producerMode: 'docx-vision',
             files: [docx('docx-vision.docx', ['question'])],
             responses: [rawQuestions([question()])]
         });
-        assert.equal(batchRows(vision.snapshot, vision.batchId).batch.status, 'review');
-        await assertOrderedStages(harness.page, vision.batchId, [
-            'source-producer-entered', 'document-converted', 'page-rendered',
-            'ocr-adapter-called', 'parser-entered', 'validation-complete',
-            'draft-persisted', 'readback-verified'
-        ]);
+        assert.equal(batchRows(vision.snapshot, vision.batchId).batch.status, 'failed');
+        assert.equal(
+            (await readImportStageTrace(harness.page, vision.batchId))
+                .some(event => event.stage === 'source-producer-entered'),
+            false
+        );
 
         const full = await run({
             name: '3 PDF full question producer', producerMode: 'pdf',

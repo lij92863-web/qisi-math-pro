@@ -18,7 +18,7 @@ const stageNames = async (page, batchId) => (
     await readImportStageTrace(page, batchId)
 ).map(event => event.stage);
 
-test('normal UI real DOCX files preserve deterministic and vision producer identities', {
+test('normal UI real DOCX files preserve deterministic identity and refuse the retired vision identity', {
     timeout: 120000
 }, async () => {
     const harness = await startBrowserApp(32119);
@@ -40,37 +40,23 @@ test('normal UI real DOCX files preserve deterministic and vision producer ident
             }] } }]
         });
 
-        const vision = await createImportThroughUi(harness.page, {
+        // 2026-10-22: the DOCX visual fallback is retired. The batch must fail
+        // closed before any conversion or OCR call, not silently fall back.
+        const retired = await createImportThroughUi(harness.page, {
             producerMode: 'docx-vision',
             files: [{ file: fixture('docx-vision.docx'), roles: ['question'] }]
         });
-        const visionDrafts = vision.snapshot.drafts.filter(
-            draft => draft.batchId === vision.batchId
+        const retiredBatch = retired.snapshot.batches.find(
+            batch => batch.id === retired.batchId
         );
-        assert.equal(visionDrafts.length, 1);
-        const visionDraft = visionDrafts[0];
-        assert.equal(visionDraft.source.format, 'docx');
-        assert.equal(visionDraft.producer.mode, 'vision-ai');
+        assert.equal(retiredBatch.status, 'failed');
+        assert.equal(engine.calls.length, 0, 'no vision/OCR calls may run');
+        const retiredStages = await stageNames(harness.page, retired.batchId);
         assert.equal(
-            visionDraft.producer.routeId,
-            Contract.ROUTES.DOCX_VISION
+            retiredStages.includes('source-producer-entered'),
+            false,
+            'retired identity must not enter a producer'
         );
-        assert.equal(visionDraft.controlledWrite.evaluated, true);
-        assert.equal(
-            Contract.validateCanonicalIdentity(visionDraft).valid,
-            true
-        );
-        const visionStages = await stageNames(harness.page, vision.batchId);
-        for (const stage of [
-            'source-producer-entered',
-            'document-converted',
-            'page-rendered',
-            'ocr-adapter-called',
-            'parser-entered',
-            'validation-complete',
-            'draft-persisted',
-            'readback-verified'
-        ]) assert.ok(visionStages.includes(stage), stage);
 
         const deterministic = await createImportThroughUi(harness.page, {
             producerMode: 'docx-deterministic',
@@ -97,11 +83,6 @@ test('normal UI real DOCX files preserve deterministic and vision producer ident
             Contract.validateCanonicalIdentity(deterministicDraft).valid,
             true
         );
-        assert.notEqual(
-            visionDraft.producer.mode,
-            deterministicDraft.producer.mode,
-            'non-applicable-different-producers'
-        );
         const deterministicStages = await stageNames(
             harness.page,
             deterministic.batchId
@@ -111,6 +92,13 @@ test('normal UI real DOCX files preserve deterministic and vision producer ident
         assert.ok(deterministicStages.includes('draft-persisted'));
         assert.equal(engine.realApiCalled, false);
         assert.equal(harness.forbiddenRequests.length, 0);
+        // The only expected console error is the deliberate refusal of the retired
+        // identity; anything else still counts as a runtime error.
+        const unexpected = harness.consoleErrors.filter(
+            line => !line.includes('PRODUCTION_IMPORT_PRODUCER_RETIRED')
+        );
+        assert.deepEqual(unexpected, []);
+        harness.consoleErrors.length = 0;
         assertNoRuntimeErrors(harness);
     } finally {
         await harness.close();

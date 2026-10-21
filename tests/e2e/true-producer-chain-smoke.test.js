@@ -61,7 +61,7 @@ test('true producer smoke enters deterministic DOCX+DOCX stable chain from norma
     }
 });
 
-test('true producer smoke enters DOCX conversion and vision adapter', {
+test('true producer smoke refuses the retired DOCX vision identity before conversion', {
     timeout: 120000
 }, async () => {
     const harness = await startBrowserApp(32317);
@@ -82,6 +82,8 @@ test('true producer smoke enters DOCX conversion and vision adapter', {
                 }]
             } }]
         });
+        // 2026-10-22: DOCX vision is retired; it must fail closed and never
+        // convert, render or call the OCR adapter.
         const result = await createImportThroughUi(harness.page, {
             producerMode: 'docx-vision',
             files: [{
@@ -92,22 +94,19 @@ test('true producer smoke enters DOCX conversion and vision adapter', {
         const batch = result.snapshot.batches.find(row =>
             row.id === result.batchId
         );
-        assert.equal(batch.status, 'review', JSON.stringify({
+        assert.equal(batch.status, 'failed', JSON.stringify({
             batch,
             calls: engine.calls,
             forbiddenRequests: harness.forbiddenRequests,
             stages: await readImportStageTrace(harness.page, result.batchId)
         }));
-        assert.ok(engine.calls.some(call =>
-            ['chat', 'ocr'].includes(call.endpoint.split('/').at(-1))
-        ));
+        assert.equal(engine.calls.length, 0);
         const stages = (await readImportStageTrace(
             harness.page,
             result.batchId
         )).map(event => event.stage);
-        assert.ok(stages.includes('document-converted'));
-        assert.ok(stages.includes('page-rendered'));
-        assert.ok(stages.includes('ocr-adapter-called'));
+        assert.equal(stages.includes('document-converted'), false);
+        assert.equal(stages.includes('ocr-adapter-called'), false);
         assert.equal(engine.realApiCalled, false);
     } finally {
         await harness.close();

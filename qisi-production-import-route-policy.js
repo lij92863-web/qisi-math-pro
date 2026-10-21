@@ -141,8 +141,17 @@
             );
         }
         const producerIdentity = explicitProducerIdentity(input, activeManifest);
+        // DOCX visual fallback was retired on 2026-10-22 (user decision): the
+        // deterministic DOCX chain is the only DOCX producer. The Qwen OCR runtime
+        // is kept for manual screenshot recognition, not for DOCX re-runs.
+        if (producerIdentity === 'docx-vision') {
+            fail(
+                'PRODUCTION_IMPORT_PRODUCER_RETIRED',
+                'docx-vision-retired'
+            );
+        }
         const compatible = route === 'docx'
-            ? ['docx-deterministic', 'docx-vision']
+            ? ['docx-deterministic']
             : ['pdf'];
         if (!compatible.includes(producerIdentity)) {
             fail(
