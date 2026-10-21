@@ -65,7 +65,8 @@
         "review-image-projection",
         "review-editor-projection",
         "review-editor-commit",
-        "review-session-commands"
+        "review-session-commands",
+        "review-image-commands"
       ]
     },
     {

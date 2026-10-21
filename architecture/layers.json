@@ -1344,6 +1344,23 @@
       "status": "production-wired"
     },
     {
+      "id": "review-image-commands",
+      "file": "qisi-review-image-commands.js",
+      "layer": 1,
+      "domainOwner": "reviewImageCommandsOwner",
+      "publicApi": [
+        "planConfirmImages",
+        "planImageDeletion"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
       "id": "review-draft-normalization",
       "file": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

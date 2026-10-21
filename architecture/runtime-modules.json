@@ -505,6 +505,10 @@
     {
       "file": "qisi-review-session-commands.js",
       "runtime": "browser"
+    },
+    {
+      "file": "qisi-review-image-commands.js",
+      "runtime": "browser"
     }
   ]
 }

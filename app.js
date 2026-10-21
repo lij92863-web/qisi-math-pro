@@ -2006,12 +2006,19 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     const q = activeDraftQuestion.value;
                     if (!q) return;
                     const expectedDraftVersion = q.version;
+                    const plan = window.Qisi.ReviewImageCommands.planConfirmImages({
+                        question: q,
+                        images: activeDraftRealQuestionImages.value
+                    });
                     q.imageReviewStatus = 'confirmed';
-                    q.warnings = (q.warnings || []).filter(w => !String(w).includes('图片需要确认') && !String(w).includes('图片尚未确认'));
+                    q.warnings = plan.warnings;
                     cleanSingleDraftForSave(q);
+                    const updates = new Map(plan.imageUpdates.map(update => [update.id, update]));
                     for (const image of activeDraftRealQuestionImages.value) {
-                        image.status = 'bound';
-                        image.confidence = Math.max(image.confidence || 0, 0.9);
+                        const update = updates.get(image.id);
+                        if (!update) continue;
+                        image.status = update.status;
+                        image.confidence = update.confidence;
                     }
                     const persisted = await runReviewDraftPersistenceCommand({
                         batchId: q.batchId,
@@ -2038,21 +2045,20 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         if (result) { Object.assign(q, result.draft); activeDraftEditorBuffer.value = buildDraftEditorSource(q); await loadBatchImportData(); }
                         return;
                     }
-                    Object.assign(q, reviewController.editFields(q, {
-                        images: (q.images || []).filter(
-                            img => img.id !== imageId
-                        ),
-                        stem: removeImageTokenFromStemForV2(
-                            q.stem || '', imageId
-                        )
-                    }));
-                    const cleanedEditorSource = removeImageTokenFromStemForV2(
-                        q.editorSource ||
+                    const plan = window.Qisi.ReviewImageCommands.planImageDeletion({
+                        question: q,
+                        imageId,
+                        currentSource: q.editorSource ||
                             activeDraftEditorBuffer.value ||
                             q.stem ||
                             buildDraftEditorSource(q),
-                        imageId
-                    );
+                        removeToken: removeImageTokenFromStemForV2
+                    });
+                    Object.assign(q, reviewController.editFields(q, {
+                        images: plan.images,
+                        stem: plan.stem
+                    }));
+                    const cleanedEditorSource = plan.editorSource;
                     q.editorSource = cleanedEditorSource;
 
                     if (q.id === activeDraftQuestionId.value) {
