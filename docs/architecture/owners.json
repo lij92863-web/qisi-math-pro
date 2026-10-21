@@ -705,6 +705,26 @@
       "status": "production"
     },
     {
+      "ownerId": "review-editor-commit",
+      "module": "qisi-review-editor-commit.js",
+      "layer": 1,
+      "responsibilities": [
+        "review-draft-editor-commit-planning"
+      ],
+      "allowedCallers": [
+        "ui-shell"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "question-repository",
+        "formal-admission",
+        "app-shell"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "none",
+      "status": "production"
+    },
+    {
       "ownerId": "review-draft-normalization",
       "module": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

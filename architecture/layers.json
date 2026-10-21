@@ -1311,6 +1311,22 @@
       "status": "production-wired"
     },
     {
+      "id": "review-editor-commit",
+      "file": "qisi-review-editor-commit.js",
+      "layer": 1,
+      "domainOwner": "reviewEditorCommitOwner",
+      "publicApi": [
+        "planEditorCommit"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
       "id": "review-draft-normalization",
       "file": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

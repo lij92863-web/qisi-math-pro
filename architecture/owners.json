@@ -92,5 +92,6 @@
   "pdfQuestionDisplayOwner": "qisi-pdf-question-display.js",
   "reviewDraftReadModelOwner": "qisi-review-draft-read-model.js",
   "reviewImageProjectionOwner": "qisi-review-image-projection.js",
-  "reviewEditorProjectionOwner": "qisi-review-editor-projection.js"
+  "reviewEditorProjectionOwner": "qisi-review-editor-projection.js",
+  "reviewEditorCommitOwner": "qisi-review-editor-commit.js"
 }

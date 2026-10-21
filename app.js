@@ -1959,47 +1959,26 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         return buildDraftEditorProjection(activeDraftEditorBuffer.value, q);
                     }
 
-                    const migratedSource = migrateLegacyIncludegraphicsToQisiTokens(
-                        activeDraftEditorBuffer.value,
-                        activeDraftPreviewImages.value || []
-                    );
-                    const source = window.Qisi.ReviewDraftState.normalizeDraftEditorNewlines(
-                        normalizeImagePlacementDuplicates(migratedSource)
-                    );
-                    activeDraftEditorBuffer.value = source;
-                    const projection = buildDraftEditorProjection(source, q);
-                    const isChoice = q.type === '单选题' || q.type === '多选题';
-
-                    q.editorSource = source;
-
-                    let nextStem;
-                    let nextOptions;
-                    if (isChoice && projection.parsedOptions) {
-                        nextStem = projection.stem;
-                        nextOptions = projection.options.map(
-                            option => String(option || '')
-                        );
-                        removeEditorOptionWarning(q);
-                    } else if (isChoice) {
-                        nextStem = source;
-                        nextOptions = ['', '', '', ''];
-                        window.Qisi.Utils.addWarningOnce(
-                            q,
-                            '题目编辑源码暂未识别出规范的 A/B/C/D 选项，请检查选项是否分别以行首 A.、B.、C.、D. 开始。'
-                        );
-                    } else {
-                        nextStem = source;
-                        nextOptions = ['', '', '', ''];
-                        removeEditorOptionWarning(q);
-                    }
-
+                    const plan = window.Qisi.ReviewEditorCommit.planEditorCommit({
+                        question: q,
+                        source: activeDraftEditorBuffer.value,
+                        images: activeDraftPreviewImages.value || [],
+                        migrateImageTokens: migrateLegacyIncludegraphicsToQisiTokens,
+                        normalizeDuplicates: normalizeImagePlacementDuplicates,
+                        normalizeNewlines: window.Qisi.ReviewDraftState.normalizeDraftEditorNewlines,
+                        buildProjection: buildDraftEditorProjection
+                    });
+                    activeDraftEditorBuffer.value = plan.editorSource;
+                    q.editorSource = plan.editorSource;
+                    if (plan.optionWarning) window.Qisi.Utils.addWarningOnce(q, plan.optionWarning);
+                    else removeEditorOptionWarning(q);
                     Object.assign(q, reviewController.editFields(q, {
-                        stem: nextStem,
-                        options: nextOptions
+                        stem: plan.stem,
+                        options: plan.options
                     }));
                     q.updatedAt = Date.now();
 
-                    return projection;
+                    return plan.projection;
                 };
 
                 const saveActiveDraftQuestion = async (options = {}) => {

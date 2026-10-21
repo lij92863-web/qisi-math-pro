@@ -63,7 +63,8 @@
         "paper-segmenter",
         "review-draft-read-model",
         "review-image-projection",
-        "review-editor-projection"
+        "review-editor-projection",
+        "review-editor-commit"
       ]
     },
     {

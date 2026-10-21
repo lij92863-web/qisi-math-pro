@@ -497,6 +497,10 @@
     {
       "file": "qisi-review-editor-projection.js",
       "runtime": "browser"
+    },
+    {
+      "file": "qisi-review-editor-commit.js",
+      "runtime": "browser"
     }
   ]
 }
