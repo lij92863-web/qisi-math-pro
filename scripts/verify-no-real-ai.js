@@ -31,7 +31,7 @@ const allowedFiles = new Set([
     // Production transport validates the fixed host; default tests inject a mock request.
     'qisi-local-https-transport.js',
     // MinerU 云接口装配点：端点常量与 Bearer 透传都在客户端模块里，token 由服务端注入。
-    'qisi-mineru-client.js',
+    'qisi-mineru-task-service.js',
     'tests/local-https-transport.test.js',
     'scripts/pdf-master-browser-runner.js', // Explicit opt-in real-run; reviewed env-name declaration only.
     'scripts/mineru-probe.cjs', // Explicit opt-in real-run probe; never part of verify:safe or npm test.
@@ -46,7 +46,8 @@ const reviewedProductionLines = {
     "qisi-local-server.js": [
         "const DASHSCOPE_API_KEY = String(process.env.DASHSCOPE_API_KEY || '').trim();",
         "const MINERU_TOKEN = String(process.env.MINERU_TOKEN || '').trim();",
-        "const mineruClient = createMineruClient({ token: MINERU_TOKEN });",
+        "const mineruClient = createMineruClient({ token: MINERU_TOKEN,",
+        "app.get('/api/mineru/status', (req, res) => res.json({ configured: Boolean(MINERU_TOKEN) }));",
         "const DASHSCOPE_CHAT_UPSTREAM = 'https://dashscope.aliyuncs.com/' + 'compatible-mode/v1/' + 'chat/completions';",
         "const DASHSCOPE_OCR_UPSTREAM = 'https://dashscope.aliyuncs.com/' + 'api/v1/services/aigc/' + 'multimodal-generation/' + 'generation';",
         "configured: Boolean(DASHSCOPE_API_KEY)",
@@ -55,8 +56,8 @@ const reviewedProductionLines = {
         "app.post('/api/ai/chat', aiJsonParser, (req, res) => {",
         "app.post('/api/ai/ocr', aiJsonParser, (req, res) => {"
     ],
-    "qisi-mineru-client.js": [
-        "const DEFAULT_BASE_URL = 'https://mineru.net';"
+    "qisi-mineru-task-service.js": [
+        "projectZip, baseUrl = 'https://mineru.net', pollIntervalMs = 800, timeoutMs = 300000 } = {}) {"
     ],
     "scripts/mineru-probe.cjs": [
         "const TOKEN = String(process.env.MINERU_TOKEN || '').trim();",

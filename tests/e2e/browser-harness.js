@@ -150,6 +150,10 @@ const startBrowserApp = async (port, { fault = '' } = {}) => {
         forbiddenRequests.push(route.request().url());
         await route.abort('blockedbyclient');
     });
+    await context.route('**/api/mineru/**', async route => {
+        forbiddenRequests.push(route.request().url());
+        await route.abort('blockedbyclient');
+    });
     await context.route(/^https:\/\//, async route => {
         const url = route.request().url();
         try {
@@ -216,6 +220,9 @@ const startBrowserApp = async (port, { fault = '' } = {}) => {
             if (selectedFault === 'controlled-write-missing') {
                 trap(window.Qisi, 'PdfExternalContract', owner => Object.freeze({ ...owner, validateCanonical() { throw new Error('COUNTERFACTUAL_PDF_EXTERNAL_CONTRACT_FAILURE'); } }));
                 trap(window.Qisi, 'PdfMultimodalContract', owner => Object.freeze({ ...owner, validateCanonical() { throw new Error('COUNTERFACTUAL_PDF_V1_CONTRACT_FAILURE'); } }));
+                // The live PDF route validates its own canonical record contract; a
+                // violation there must fail the batch exactly like the retired ones.
+                trap(window.Qisi, 'PdfMineruContract', owner => Object.freeze({ ...owner, validateCanonical() { throw new Error('COUNTERFACTUAL_PDF_MINERU_CONTRACT_FAILURE'); } }));
                 trap(window.Qisi, 'PdfSupportControlledWrite', owner =>
                     Object.freeze({
                         ...owner,

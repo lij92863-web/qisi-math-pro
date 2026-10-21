@@ -93,6 +93,26 @@ test('C2-13 detailed owners agree with compatibility manifest and runtime loadin
     const appIndex = main.indexOf('./app.js');
     const runtimes = new Map(json('architecture/runtime-modules.json').modules.map(item => [item.file,item.runtime]));
     const server = read('qisi-local-server.js');
+    // A node module is a production entry when the server reaches it through its
+    // require chain. Direct requires alone would reject libraries that the server
+    // loads through an owned dependency, and an orphaned module still fails.
+    const serverRequires = (() => {
+        const reached = new Set();
+        let frontier = ["qisi-local-server.js"];
+        for (let depth = 0; depth < 4 && frontier.length; depth += 1) {
+            const next = [];
+            for (const file of frontier) {
+                for (const match of read(file).matchAll(/require\('\.\/([^']+?)(?:\.js)?'\)/g)) {
+                    const target = match[1].endsWith('.js') ? match[1] : `${match[1]}.js`;
+                    if (reached.has(target) || !fs.existsSync(path.join(ROOT, target))) continue;
+                    reached.add(target);
+                    next.push(target);
+                }
+            }
+            frontier = next;
+        }
+        return reached;
+    })();
 
     for (const owner of detailed) {
         if (owner.status === 'removed') continue;
@@ -103,7 +123,7 @@ test('C2-13 detailed owners agree with compatibility manifest and runtime loadin
         const scriptIndex = main.indexOf(`./${owner.module}`);
         if (runtimes.get(owner.module) === 'node' && owner.status === 'production') {
             assert.equal(scriptIndex,-1,`node module in browser:${owner.module}`);
-            assert.ok(server.includes("require('./" + owner.module.replace(/\.js$/, '') + "')"),`server entry:${owner.module}`);
+            assert.ok(serverRequires.has(owner.module),`server entry:${owner.module}`);
         } else if (owner.status === 'production' || owner.status === 'shadow') {
             const isShellEntry = owner.ownerId === 'ui-shell';
             assert.ok(
@@ -120,7 +140,7 @@ test('C2-13 detailed owners agree with compatibility manifest and runtime loadin
     for (const item of compatibility) {
         if (item.status === 'production-wired') {
             assert.equal(detailedByFile.get(item.file)?.status, 'production', item.file);
-            if (runtimes.get(item.file) === 'node') assert.ok(server.includes("require('./" + item.file.replace(/\.js$/, '') + "')"),item.file);
+            if (runtimes.get(item.file) === 'node') assert.ok(serverRequires.has(item.file),item.file);
             else assert.match(main, new RegExp(`(?:\\./)?${item.file.replace('.', '\\.')}(?:[?"'])`));
         }
         if (item.status === 'deprecated') {

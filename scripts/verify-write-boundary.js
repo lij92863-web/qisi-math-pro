@@ -3,7 +3,8 @@ const path = require('path');
 
 // 写入边界门禁。三条规则各自锁一个不变量，不靠"记得别这么写"：
 //   1. 写事务只能出现在 qisi-storage-repository.js。
-//   2. 写事务回调不得是 async（await 会把 Dexie 事务推到微任务边界，提前提交）。
+//   2. 本仓储约定显式返回数据库 promise 链；此语法门禁不证明事务原子性，
+//      也不表示 Dexie 不支持 async。失败回滚仍须通过实际存储测试验证。
 //   3. runtime 'dormant' 的模块不得被 runtime 'browser' 的模块 require。
 // 只读事务（Dexie mode 'r'）不写库，按 Dexie 语义不可能成为第二条写门，因此不计入 1、2。
 

@@ -11,11 +11,13 @@ const proxyEnvelope = text => ({
 });
 
 async function installBrowserEngineInjection(page, configuration = {}) {
-    await page.evaluate(disabled => {
-        if (window.Qisi?.Config?.pdfExternal && !disabled) Object.assign(window.Qisi.Config.pdfExternal, { enabled: true, mode: 'direct', wireVersion: 'pdf-external-v2.1', model: 'mock-pdf-model', profileVersion: 'isolated-mock-v2' });
-    }, configuration.externalDisabled === true);
     const calls = [];
+    // Any MinerU endpoint that this fixture cannot answer is aborted and
+    // recorded here; it must never escape to the real network.
+    const blockedRequests = [];
     let responses = [...(configuration.responses || [])];
+    const responsesBySource = new Map();
+    const extractionCache = new Map();
     let released = false;
     let releaseHold;
     const hold = new Promise(resolve => { releaseHold = resolve; });
@@ -102,12 +104,70 @@ async function installBrowserEngineInjection(page, configuration = {}) {
         });
     };
 
+    const mineruHandler = async route => {
+        const request = route.request(), url = new URL(request.url());
+        if (url.pathname === '/api/mineru/status') return route.fulfill({ json: { configured: configuration.externalDisabled !== true } });
+        if (url.pathname !== '/api/mineru/parse') {
+            blockedRequests.push(request.url());
+            return route.abort('blockedbyclient');
+        }
+        const crypto = require('node:crypto'), C = require('../../qisi-mineru-client').internals;
+        const body = request.postDataBuffer(), boundary = request.headers()['content-type'].match(/boundary=(.+)$/)[1];
+        const start = body.indexOf(Buffer.from('\r\n\r\n')) + 4, end = body.indexOf(Buffer.from('\r\n--' + boundary), start);
+        const sha256 = crypto.createHash('sha256').update(body.subarray(start, end)).digest('hex');
+        if (extractionCache.has(sha256)) return route.fulfill({ json: extractionCache.get(sha256) });
+        if (responsesBySource.size && !responsesBySource.has(sha256)) {
+            blockedRequests.push(request.url());
+            return route.abort('blockedbyclient');
+        }
+        const call = { index: calls.length + 1, endpoint: url.pathname, method: 'POST', model: 'offline-mineru', task: '' }; calls.push(call);
+        if (configuration.holdAtCall > 0 && calls.length >= configuration.holdAtCall && !released) await hold;
+        const selected = responsesBySource.has(sha256)
+            ? responsesBySource.get(sha256)
+            : responses.length ? responses.shift() : configuration.defaultResponse;
+        const response = typeof selected === 'function' ? await selected({ body: null, call }) : selected;
+        if (response?.abort) return route.abort('failed');
+        if (response?.status >= 400) return route.fulfill({ status: response.status, json: { code: 'MINERU_REQUEST_FAILED' } });
+        // Migrate frozen synthetic fixtures to source blocks at the HTTP boundary.
+        // No application route/config, candidate or persistence function is replaced.
+        const value = response?.value;
+        if (!value || !['questions', 'answers', 'solutions'].every(key => Array.isArray(value[key]))) return route.fulfill({ status: 502, json: { code: 'MINERU_RESPONSE_INVALID' } });
+        const items = [], text = value => items.push({ page_idx: 0, type: 'text', text: value });
+        for (const q of value.questions) {
+            text(({ single: '一、单项选择题', multi: '二、多项选择题', fill: '三、填空题', long: '四、解答题' })[q.type] || '题目');
+            text(q.question_no + '. ' + q.stem + '\n' + (q.options || []).map(o => o.label + '. ' + o.text).join('\n'));
+        }
+        if (value.answers.length || value.solutions.length) text('参考答案');
+        const used = new Set();
+        for (const a of value.answers) {
+            text(a.question_no + '【答案】' + (a.status === 'complete' ? a.answer : ''));
+            for (const [i, s] of value.solutions.entries()) if (!used.has(i) && s.question_no === a.question_no) { text('【解析】' + s.solution); used.add(i); }
+        }
+        for (const [i, s] of value.solutions.entries()) if (!used.has(i)) text(s.question_no + '【解析】' + s.solution);
+        const parsed = C.parseContentList(items, { sourceId: sha256 });
+        const result = { protocol: 'mineru-blocks-v1', job: sha256, source: { sha256, pages: parsed.pages.length }, ...parsed, answerTable: null, receipt: { state: 'ready' } };
+        extractionCache.set(sha256, result);
+        return route.fulfill({ json: result });
+    };
     await page.route('**/api/ai/**', handler);
+    await page.route('**/api/mineru/**', mineruHandler);
     return Object.freeze({
         realApiCalled: false,
         calls,
-        setResponses(next) {
+        blockedRequests,
+        setResponses(next, sourceFiles = []) {
             responses = [...next];
+            extractionCache.clear();
+            responsesBySource.clear();
+            if (sourceFiles.length) {
+                if (sourceFiles.length !== responses.length) throw new Error('Offline source/response count mismatch');
+                const fs = require('node:fs'), crypto = require('node:crypto');
+                for (const [index, file] of sourceFiles.entries()) {
+                    const key = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+                    if (responsesBySource.has(key)) throw new Error('Duplicate offline source identity');
+                    responsesBySource.set(key, responses[index]);
+                }
+            }
         },
         release() {
             released = true;
@@ -117,6 +177,7 @@ async function installBrowserEngineInjection(page, configuration = {}) {
             released = true;
             releaseHold();
             await page.unroute('**/api/ai/**', handler);
+            await page.unroute('**/api/mineru/**', mineruHandler);
         }
     });
 }
