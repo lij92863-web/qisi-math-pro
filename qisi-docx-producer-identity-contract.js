@@ -1,11 +1,13 @@
 (function initDocxProducerIdentityContract(root, factory) {
-    const api = factory();
+    const evidence = root?.Qisi?.SupportEvidence || (typeof module !== 'undefined' && module.exports
+        ? require('./qisi-support-evidence.js') : null);
+    const api = factory(evidence);
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (root) {
         root.Qisi = root.Qisi || {};
         root.Qisi.DocxProducerIdentityContract = api;
     }
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (evidence) {
     'use strict';
 
     const CONTRACT_VERSION = 'docx-producer-identity-r1';
@@ -25,7 +27,8 @@
         PDF_DETERMINISTIC: 'pdf-deterministic-import',
         PDF_VISION: 'pdf-vision-controlled-write',
         PDF_MULTIMODAL: 'pdf-multimodal-v1',
-        PDF_EXTERNAL: 'pdf-external-v2'
+        PDF_EXTERNAL: 'pdf-external-v2',
+        PDF_MINERU: 'pdf-mineru-v1'
     });
     const DOCX_VISION_TRANSITIONS = Object.freeze([
         Object.freeze({ code: 'docx-selected', reason: 'source-manifest-docx-selected' }),
@@ -243,7 +246,7 @@
             validateTransitionOrder(route, DOCX_DETERMINISTIC_TRANSITIONS, errors);
         }
         if (source?.format === 'pdf' && producer?.mode === 'vision-ai') {
-            if (![ROUTES.PDF_VISION, ROUTES.PDF_MULTIMODAL, ROUTES.PDF_EXTERNAL].includes(producer.routeId) || producer.deterministic !== false) {
+            if (![ROUTES.PDF_VISION, ROUTES.PDF_MULTIMODAL, ROUTES.PDF_EXTERNAL, ROUTES.PDF_MINERU].includes(producer.routeId) || producer.deterministic !== false) {
                 errors.push(errorOf('pdf-vision-identity-invalid', 'producer',
                     'PDF vision producer identity is invalid.'));
             }
@@ -266,7 +269,7 @@
         }
         if (value?.supportSources !== undefined) {
             const supportSources = value.supportSources;
-            const pdfV1 = source?.format === 'pdf' && producer?.mode === 'vision-ai' && [ROUTES.PDF_MULTIMODAL, ROUTES.PDF_EXTERNAL].includes(producer?.routeId);
+            const pdfV1 = source?.format === 'pdf' && producer?.mode === 'vision-ai' && [ROUTES.PDF_MULTIMODAL, ROUTES.PDF_EXTERNAL, ROUTES.PDF_MINERU].includes(producer?.routeId);
             if (
                 !Array.isArray(supportSources) ||
                 (!pdfV1 && (producer?.mode !== 'deterministic-docx' || source?.format !== 'docx'))
@@ -651,7 +654,7 @@
             candidate.producer?.routeId !== ROUTES.DOCX_DETERMINISTIC
         ) throw fail('DOCX_PRODUCER_IDENTITY_INVALID', identity);
         const value = fieldValue(input.support, field);
-        if (!hasValue(value)) {
+        if (!hasValue(value) && input.support?.evidence?.state !== 'conflict') {
             throw fail('DOCX_DETERMINISTIC_SUPPORT_VALUE_MISSING', { field });
         }
         const candidateQuestion = String(
@@ -676,24 +679,32 @@
         const producer = clone(candidate.producer);
         const evidenceRef =
             `docx:${source.sourceId}:question:${candidateQuestion}:field:${field}`;
-        if (hasValue(candidate[field]) && candidate[field] !== value) {
+        const previous = candidate.supportEvidence?.[field] || evidence.aggregate(null,
+            hasValue(candidate[field]) ? [{ value: candidate[field], sourceId: candidate.fieldProvenance?.[field]?.sourceId || candidate.source.sourceId }] : [],
+            { blocked: candidate.fieldProvenance?.[field]?.reasonCode === 'docx-support-conflicting-values' });
+        const supportEvidence = evidence.aggregate(previous,
+            [...(input.support?.evidence?.declarations || []),
+                { value, sourceId: source.sourceId, sourceName: source.filename, evidenceRef }],
+            { blocked: input.support?.evidence?.state === 'conflict' });
+        if (supportEvidence.state === 'conflict') {
             // 同一题号出现两条不同取值：不猜。两个值都不采用，该字段留空并标记冲突，
             // 其余题照常导入——一道题的问题不应该让整份文件失败。
             const conflicted = clone(candidate);
             conflicted[field] = '';
-            conflicted.warnings = [...new Set([
-                ...(candidate.warnings || []),
+            conflicted.supportEvidence = { ...clone(candidate.supportEvidence || {}), [field]: supportEvidence };
+            conflicted.supportSources = source.sourceId === candidate.source.sourceId
+                ? (candidate.supportSources || [])
+                : [...(candidate.supportSources || []).filter(item => item.sourceId !== source.sourceId), { ...source, roles }];
+            conflicted.warnings = [
+                ...(candidate.warnings || []).filter(item => !(item?.code === 'DOCX_SUPPORT_DUPLICATE_QUESTION' && item.field === field)),
                 {
                     code: 'DOCX_SUPPORT_DUPLICATE_QUESTION',
                     field,
                     questionNumber: candidateQuestion,
-                    message: `第 ${candidateQuestion} 题的${field === 'answer' ? '答案' : '解析'}出现两条不同取值，已全部留空待人工确认。`,
-                    values: [
-                        String(candidate[field]).slice(0, 200),
-                        String(value).slice(0, 200)
-                    ]
+                    message: `第 ${candidateQuestion} 题的${field === 'answer' ? '答案' : '解析'}存在取值或归属冲突，已留空并保留证据待人工确认。`,
+                    values: supportEvidence.values
                 }
-            ])];
+            ];
             conflicted.fieldProvenance = {
                 ...(candidate.fieldProvenance || {}),
                 [field]: provenanceEntry({
@@ -714,7 +725,8 @@
             return conflicted;
         }
         const output = clone(candidate);
-        output[field] = clone(value);
+        output[field] = supportEvidence.value;
+        output.supportEvidence = { ...clone(candidate.supportEvidence || {}), [field]: supportEvidence };
         output.supportSources = source.sourceId === output.source.sourceId
             ? (output.supportSources || [])
             : [...(output.supportSources || []).filter(item => item.sourceId !== source.sourceId),

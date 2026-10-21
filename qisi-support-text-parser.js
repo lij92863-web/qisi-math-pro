@@ -1,9 +1,11 @@
 (function initSupportTextParser(root, factory) {
-    const api = factory(root);
+    const evidence = root?.Qisi?.SupportEvidence || (typeof module !== 'undefined' && module.exports
+        ? require('./qisi-support-evidence.js') : null);
+    const api = factory(root, evidence);
     root.Qisi = root.Qisi || {};
     root.Qisi.SupportTextParser = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root, evidence) {
     'use strict';
 
     function createSupportTextParser(ports = {}) {
@@ -45,104 +47,49 @@
         };
 
 
-        // 冲突不能靠猜：同一题号出现两段不同内容时，两个值都不采用，该题留空并标记，
-        // 由审核页要求人工确认。缺答案可以接受，错挂答案不能接受。
-        const pushUniqueQuestionItem = (list, item, valueKey) => {
+        const pushUniqueQuestionItem = (list, item, field) => {
             const question = normalizeQuestionKey(item.question);
-            const value = root.Qisi.Utils.cleanRecognizedText(item[valueKey]);
-
-            if (!question || !value) return;
-
-            const existingIndex = list.findIndex(row => normalizeQuestionKey(row.question) === question);
-
-            if (existingIndex < 0) {
-                list.push({
-                    ...item,
-                    question,
-                    [valueKey]: value
-                });
-                return;
-            }
-
-            const existing = list[existingIndex];
-            const existingValue = root.Qisi.Utils.cleanRecognizedText(existing[valueKey]);
-
-            // 完全相同的内容：正常的重复印刷，去重即可。
-            if (existingValue === value) return;
-
-            // 解析会被两条路径各抽一次（编号分块 / 行内标签），抽出的文本互为子串。
-            // 这是同��段内容的两次抽取，不是两条答案：保留更完整的那一份，不算冲突。
-            if (valueKey === 'solution') {
-                const compact = row => String(row || '').replace(/\s+/g, '');
-                const left = compact(existingValue);
-                const right = compact(value);
-                if (left && right && (left.includes(right) || right.includes(left))) {
-                    if (right.length > left.length) {
-                        list[existingIndex] = { ...existing, [valueKey]: value };
-                    }
-                    return;
-                }
-            }
-
-            // 之前清空过的题再次出现不同取值：仍然是冲突，不复活。
-            const alreadyConflicted = existingValue === '';
-            const seenValues = alreadyConflicted
-                ? (Array.isArray(existing.conflictValues) ? existing.conflictValues : [])
-                : [existingValue];
-
-            list[existingIndex] = {
-                ...existing,
-                [valueKey]: '',
-                conflictValues: [...seenValues, value],
-                warnings: [
-                    ...(Array.isArray(existing.warnings) ? existing.warnings : []),
-                    {
-                        code: 'DOCX_SUPPORT_DUPLICATE_QUESTION',
-                        field: valueKey,
-                        question,
-                        message: `题号 ${question} 出现了${seenValues.length + 1}条不同的${valueKey === 'answer' ? '答案' : '解析'}，已全部留空待人工确认。`,
-                        values: [...seenValues, value].map(row => String(row).slice(0, 200))
-                    }
-                ]
-            };
+            const value = root.Qisi.Utils.cleanRecognizedText(item[field]);
+            if (!question || (!value && !item.evidence)) return;
+            const index = list.findIndex(row => normalizeQuestionKey(row.question) === question);
+            const existing = index >= 0 ? list[index] : null;
+            const state = evidence.aggregate(existing?.evidence,
+                item.evidence?.declarations || [{ value, sourceId: item.sourceFileId,
+                    sourceName: item.sourceFileName, range: item.range,
+                    evidenceRef: item.evidenceRef }],
+                { blocked: item.evidence?.state === 'conflict' });
+            const row = { ...existing, ...item, question, [field]: state.value, evidence: state,
+                warnings: state.state === 'conflict' ? [{
+                    code: 'DOCX_SUPPORT_DUPLICATE_QUESTION', field, question,
+                    message: `题号 ${question} 的${field === 'answer' ? '答案' : '解析'}${
+                        state.values.length > 1 || state.declarations.length > 1
+                            ? '证据不唯一' : '边界或归属不明确'
+                    }，已留空待人工确认。`,
+                    values: state.values
+                }] : [] };
+            if (state.state === 'conflict') row.conflictValues = state.values;
+            if (index < 0) list.push(row); else list[index] = row;
         };
 
-        // 冲突清单由行上的 warnings 汇总得出，不另设跨次调用的可变状态。
-        // 多条解析路径可能各记一次同一处冲突，这里按题号+字段去重。
-        const collectConflicts = (...lists) => {
-            const seen = new Set();
-            const rows = [];
-            for (const list of lists) {
-                for (const row of list || []) {
-                    for (const item of Array.isArray(row?.warnings) ? row.warnings : []) {
-                        if (!item || item.code !== 'DOCX_SUPPORT_DUPLICATE_QUESTION') continue;
-                        const question = normalizeQuestionKey(item.question ?? row.question);
-                        const key = `${question}|${item.field}`;
-                        if (seen.has(key)) continue;
-                        seen.add(key);
-                        rows.push({
-                            question,
-                            field: item.field,
-                            values: Array.isArray(item.values) ? item.values : []
-                        });
-                    }
-                }
-            }
-            return rows;
-        };
+        const collectConflicts = (...lists) => lists.flatMap(list => list
+            .filter(row => row.evidence?.state === 'conflict')
+            .map(row => ({ question: row.question,
+                field: Object.hasOwn(row, 'answer') ? 'answer' : 'solution',
+                values: row.evidence.values, evidence: row.evidence })));
 
         const parseAnswerItemsFromText = (text, sourceFile) => {
             const source = root.Qisi.Utils.normalizeAnswerSolutionSource(text);
             const { answerPart } = root.Qisi.Utils.splitAnswerSolutionSections(source);
             const answers = [];
 
-            const addAnswer = (question, answer, confidence = 0.86) => {
+            const addAnswer = (question, answer, confidence = 0.86, range = null) => {
                 const normalized = normalizeAnswerValue(answer);
                 if (!normalized) return;
 
                 pushUniqueQuestionItem(answers, {
                     question,
                     answer: normalized,
+                    range, evidenceRef: 'normalized-answer-section',
                     confidence,
                     warnings: [],
                     sourceFileId: sourceFile.id,
@@ -150,14 +97,17 @@
                 }, 'answer');
             };
 
-            const lines = answerPart.split(/\n+/).map(x => x.trim()).filter(Boolean);
-            const qLine = lines.find(line => /^题号/.test(line));
-            const aLine = lines.find(line => /^答案/.test(line));
-            // 结构化表格已经定过的题号，后面按位置猜的 pairRegex 不许再解析一遍，
-            // 否则「答案：A 2 C 4」会被读成「2 的答案是 C」。
-            const tableNumbers = new Set();
+            const lines = [...answerPart.matchAll(/[^\n]+/g)].map(match => ({
+                text: match[0].trim(), start: match.index, end: match.index + match[0].length
+            })).filter(line => line.text);
+            // 已消费的表格行不参与二次提取；行外同号声明仍是独立证据。
+            const tableRanges = [];
 
-            if (qLine && aLine) {
+            for (let index = 0; index + 1 < lines.length; index++) {
+                const header = lines[index], row = lines[index + 1];
+                if (!/^题号/.test(header.text) || !/^答案/.test(row.text)) continue;
+                const qLine = header.text, aLine = row.text;
+                tableRanges.push([header.start, header.end], [row.start, row.end]);
                 const questionCells = qLine.replace(/^题号\s*[:：]?/, '').trim().split(/[\s|,，、]+/);
                 const answerCells = aLine.replace(/^答案\s*[:：]?/, '').trim()
                     .replace(/[Ａ-Ｈ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248));
@@ -172,10 +122,9 @@
                 // A complete explicit label row is the only positional summary accepted.
                 if (qs.length !== as.length || qs.some(q => !Number.isSafeInteger(Number(q)) || Number(q) < 1) ||
                     qs.some((q, i) => i > 0 && Number(q) <= Number(qs[i - 1])) ||
-                    !as.every(a => a && a.length <= 12)) return [];
+                    !as.every(a => a && a.length <= 12)) continue;
                 qs.forEach((q, idx) => {
-                    tableNumbers.add(normalizeQuestionKey(q));
-                    addAnswer(q, as[idx], null);
+                    addAnswer(q, as[idx], null, [row.start, row.end]);
                 });
             }
 
@@ -183,9 +132,9 @@
             // 旧边界不含冒号就匹配不到第 1 题，首题答案静默缺失。
             const pairRegex = /(?:^|[\n\s，,；;、:：])(?:第\s*)?([0-9０-９]{1,3})(?:\s*题)?\s*[\.:：、．\)）]?\s*(?:【答案】|参考答案[:：]|答案[:：])?\s*([A-DＡ-Ｄ]{1,4})(?=$|[\s，,；;。])/g;
 
-            answerPart.replace(pairRegex, (_, q, answer) => {
-                if (tableNumbers.has(normalizeQuestionKey(q))) return '';
-                addAnswer(q, answer, 0.88);
+            answerPart.replace(pairRegex, (_, q, answer, offset) => {
+                if (tableRanges.some(([start, end]) => offset >= start && offset < end)) return '';
+                addAnswer(q, answer, 0.88, [offset, offset + _.length]);
                 return '';
             });
 
@@ -194,8 +143,8 @@
                 'g'
             );
 
-            answerPart.replace(formulaAnswerRegex, (_, q, answer) => {
-                addAnswer(q, answer, 0.86);
+            answerPart.replace(formulaAnswerRegex, (_, q, answer, offset) => {
+                addAnswer(q, answer, 0.86, [offset, offset + _.length]);
                 return '';
             });
 
@@ -207,106 +156,70 @@
 
             const markerRegex = /(^|\n)\s*(?:第\s*)?([0-9０-９]{1,3})(?:\s*题)?[\.:：、．\)）]\s*/g;
 
-            // 标记后面紧跟着【答案】/【解析】这类标签 → 大概率是真正的题目起点。
-            // 解析正文里的分步叙述「2. 分两种情况讨论」后面跟的是普通文字。
-            // 这是把两者区分开的关键信号：同一个题号出现两次时，
-            // 带标签的那个才是题目的真正起点，另一个只是上一题解析的一部分。
-            const labelAheadPattern = new RegExp(
-                '^[\\s\\n]{0,80}(?:【(?:答案|参考答案|解析|详解|解答|分析)】|(?:参考答案|答案|解析|详解|解答过程|解答|分析)\\s*[:：])'
-            );
+            // A question marker plus an explicit field label is a structural anchor.
+            // Bare numbered lines do not establish a new question boundary.
+            const labelAheadPattern = new RegExp(`^\\s*((?:\\[\\[IMAGE:[A-Za-z0-9_.:-]+\\]\\]\\s*)*)(?:${answerSolutionLabelPattern}|${solutionLabelPattern})`);
 
             const candidates = [];
             let match;
 
             while ((match = markerRegex.exec(source)) !== null) {
+                // A DOCX drawing can occur between its printed number and label.
+                // Only complete image tokens may intervene; text and math do not
+                // establish a boundary. Keep those figures with their own block.
+                const anchor = source.slice(markerRegex.lastIndex).match(labelAheadPattern);
                 candidates.push({
                     question: normalizeQuestionKey(match[2]),
                     start: match.index + match[1].length,
                     contentStart: markerRegex.lastIndex,
-                    hasLabel: labelAheadPattern.test(
-                        source.slice(markerRegex.lastIndex, markerRegex.lastIndex + 200)
-                    )
+                    hasLabel: Boolean(anchor),
+                    leadingImages: anchor?.[1]?.trim() || ''
                 });
             }
 
             if (!candidates.length) return [];
 
-            const chosen = new Map();
-            for (const candidate of candidates) {
-                const previous = chosen.get(candidate.question);
-                if (!previous || (candidate.hasLabel && !previous.hasLabel)) {
-                    chosen.set(candidate.question, candidate);
-                }
-            }
-            const chosenSet = new Set(chosen.values());
-            // 落选的候选如果自己带标签（例如同一题号的第二条「1. 答案：C」），
-            // 它不是上一题解析的一部分。把它挡在上一题块之外，
-            // 否则这条重复答案会被当成解析正文混进去。
-            const droppedLabeled = candidates.filter(
-                candidate => !chosenSet.has(candidate) && candidate.hasLabel
-            );
-            // 被挡下来的重复解析行也要走到冲突通道：两个值都不采用，不静默丢掉。
+            // Explicit labels are structural anchors. Bare numeric lines inside
+            // their ranges remain text, even when their numbers match later questions.
+            const marks = candidates.filter(candidate => candidate.hasLabel);
             const solutions = [];
-            droppedLabeled.forEach(candidate => {
-                const index = candidates.indexOf(candidate);
-                const end = candidates[index + 1]?.start || source.length;
-                const text = source.slice(candidate.contentStart, end).trim();
-                const inline = text.match(new RegExp(`${solutionLabelPattern}\\s*([\\s\\S]*)$`, 'i'));
-                if (!inline) return;
-                const value = root.Qisi.Utils.cleanRecognizedText(inline[1]);
+            if (!marks.length) {
+                // Text alone cannot distinguish "question 2" from "step 2".
+                // Retain the complete range as rejected evidence, never manufacture
+                // a solution attachment from an ascending numeric sequence.
+                for (const mark of candidates) {
+                    pushUniqueQuestionItem(solutions, {
+                        question: mark.question, solution: '',
+                        evidence: evidence.aggregate(null, [{ value: source,
+                            sourceId: sourceFile.id, sourceName: sourceFile.filename,
+                            range: [0, source.length], evidenceRef: 'unresolved-solution-boundary' }], { blocked: true }),
+                        sourceFileId: sourceFile.id, sourceFileName: sourceFile.filename
+                    }, 'solution');
+                }
+                return solutions;
+            }
+            marks.forEach((mark, index) => {
+                const end = marks[index + 1]?.start || source.length;
+                const block = source.slice(mark.contentStart, end);
+                const label = block.match(new RegExp(`${solutionLabelPattern}\\s*`, 'i'));
+                if (!label) return;
+                const start = mark.contentStart + label.index + label[0].length;
+                const value = root.Qisi.Utils.cleanDisplayTextForBatchSave(
+                    stripQuestionSectionNoise([mark.leadingImages, source.slice(start, end).trim()]
+                        .filter(Boolean).join('\n')));
                 if (!value) return;
                 pushUniqueQuestionItem(solutions, {
-                    question: candidate.question,
-                    solution: value,
-                    imageRefs: extractGraphicRefs(value),
-                    confidence: 0.86,
-                    warnings: [],
-                    sourceFileId: sourceFile.id,
-                    sourceFileName: sourceFile.filename
-                }, 'solution');
-            });
-
-            const marks = [...chosen.values()].sort((a, b) => a.start - b.start);
-
-            marks.forEach((mark, idx) => {
-                const nextStart = marks[idx + 1]?.start || source.length;
-                const blocker = droppedLabeled.find(
-                    candidate => candidate.start > mark.start && candidate.start < nextStart
-                );
-                let block = source.slice(
-                    mark.contentStart,
-                    blocker ? blocker.start : nextStart
-                ).trim();
-
-                const inlineSolutionMatch = block.match(new RegExp(`${solutionLabelPattern}\\s*([\\s\\S]*)$`, 'i'));
-                if (inlineSolutionMatch) {
-                    block = inlineSolutionMatch[1].trim();
-                } else {
-                    block = block
-                        .replace(new RegExp(`^\\s*${answerSolutionLabelPattern}\\s*[^\\n]{0,120}`), '')
-                        .replace(new RegExp(`^\\s*${solutionLabelPattern}\\s*`), '')
-                        .trim();
-                }
-
-                if (!block) return;
-
-                if (/^[A-DＡ-Ｄ]{1,4}$/.test(block.replace(/\s/g, ''))) return;
-
-                pushUniqueQuestionItem(solutions, {
-                    question: mark.question,
-                    solution: root.Qisi.Utils.cleanDisplayTextForBatchSave(stripQuestionSectionNoise(block)),
-                    imageRefs: extractGraphicRefs ? extractGraphicRefs(block) : [],
-                    confidence: 0.86,
-                    warnings: [],
-                    sourceFileId: sourceFile.id,
-                    sourceFileName: sourceFile.filename
+                    question: mark.question, solution: value,
+                    imageRefs: extractGraphicRefs(value), confidence: 0.86,
+                    range: [mark.leadingImages ? mark.contentStart : start, end], evidenceRef: 'normalized-support-solution',
+                    sourceFileId: sourceFile.id, sourceFileName: sourceFile.filename
                 }, 'solution');
             });
 
             return solutions;
         };
 
-        const parseInlineAnswerSolutionBlocks = (text, sourceFile) => {
+        const parseInlineAnswerBlocks = (text, sourceFile) => {
             const source = root.Qisi.Utils.normalizeAnswerSolutionSource(text);
 
             const markerRegex = /(^|\n)\s*(?:第\s*)?([0-9０-９]{1,3})(?:\s*题)?[\.:：、．\)）]?\s*/g;
@@ -322,7 +235,6 @@
             }
 
             const answers = [];
-            const solutions = [];
 
             marks.forEach((mark, idx) => {
                 const block = source.slice(
@@ -334,11 +246,9 @@
 
                 const solutionMatch = block.match(new RegExp(`${solutionLabelPattern}\\s*([\\s\\S]*)$`, 'i'));
 
-                let solution = '';
                 let answerBlock = block;
 
                 if (solutionMatch) {
-                    solution = root.Qisi.Utils.cleanRecognizedText(solutionMatch[1]);
                     answerBlock = block.slice(0, solutionMatch.index).trim();
                 }
 
@@ -351,6 +261,8 @@
                     pushUniqueQuestionItem(answers, {
                         question: mark.question,
                         answer,
+                        range: [mark.contentStart, marks[idx + 1]?.start || source.length],
+                        evidenceRef: 'normalized-support-answer',
                         confidence: 0.88,
                         warnings: [],
                         sourceFileId: sourceFile.id,
@@ -358,43 +270,147 @@
                     }, 'answer');
                 }
 
-                if (solution) {
-                    pushUniqueQuestionItem(solutions, {
-                        question: mark.question,
-                        solution: root.Qisi.Utils.cleanDisplayTextForBatchSave(stripQuestionSectionNoise(solution)),
-                        imageRefs: extractGraphicRefs(solution),
-                        confidence: 0.86,
-                        warnings: [],
-                        sourceFileId: sourceFile.id,
-                        sourceFileName: sourceFile.filename
-                    }, 'solution');
-                }
             });
 
-            return { answers, solutions };
+            return answers;
         };
 
         const parseSolutionItemsFromText = (text, sourceFile) => {
             const source = root.Qisi.Utils.normalizeAnswerSolutionSource(text);
-            const { solutionPart } = root.Qisi.Utils.splitAnswerSolutionSections(source);
+            // Interleaved labelled rows retain their question anchors; a standalone
+            // solution section may carry unresolved boundaries requiring review.
+            if (new RegExp(solutionLabelPattern).test(source)) {
+                return parseNumberedSolutionBlocks(source, sourceFile);
+            }
+            return [];
+        };
 
-            const fromGlobalSection = parseNumberedSolutionBlocks(solutionPart, sourceFile);
-            if (fromGlobalSection.length) return fromGlobalSection;
-
-            const inline = parseInlineAnswerSolutionBlocks(source, sourceFile);
-            return inline.solutions || [];
+        const parseStructuredSupport = sourceFile => {
+            const groups = { answer: new Map(), solution: new Map() }, unmatched = [];
+            sourceFile.supportBlocks.forEach((block, index) => {
+                const question = normalizeQuestionKey(block.questionNumber);
+                const raw = String(block.text || '');
+                const blockId = block.blockId || `block-${index}`;
+                if (block.kind === 'answer-table') {
+                    const allowed = new Set(block.expectedNumbers);
+                    for (const item of parseAnswerItemsFromText(raw, sourceFile)) {
+                        if (!allowed.has(item.question)) { unmatched.push(item); continue; }
+                        const group = groups.answer.get(item.question) || { declarations: [], blocked: false };
+                        group.declarations.push(...item.evidence.declarations.map(row => ({ ...row,
+                            evidenceRef: `docx-support-block:${blockId}:answer-table` })));
+                        groups.answer.set(item.question, group);
+                    }
+                    return;
+                }
+                const rejected = block.boundaryStatus === 'rejected';
+                if (rejected || !question) unmatched.push({ ...block, sourceFileId: sourceFile.id,
+                    sourceFileName: sourceFile.filename, rawText: raw,
+                    // The batch-level unmatched list is a display surface. Without
+                    // a value it renders as an empty row, which makes a rejected
+                    // boundary look like a silent field loss.
+                    value: rejected ? raw : undefined });
+                // Unknown source declarations do not create output identities.
+                if (!question || block.expectedQuestion === false) return;
+                const heading = raw.match(/^\s*(?:第\s*)?[（(]?([0-9０-９]{1,3})\s*(?:题)?[.．、:：)）]\s*/);
+                const offset = heading && normalizeQuestionKey(heading[1]) === question ? heading[0].length : 0;
+                const body = raw.slice(offset);
+                const solutionLabel = body.match(new RegExp(solutionLabelPattern));
+                const answerArea = body.slice(0, solutionLabel ? solutionLabel.index : body.length);
+                const answerLabel = answerArea.match(new RegExp(answerSolutionLabelPattern));
+                const parts = [...answerArea.trim().matchAll(/(?:^|\n)\s*[（(]\s*(\d{1,2})\s*[）)]/g)];
+                const orderedMultipart = parts.length > 0 && parts[0].index === 0 &&
+                    parts.every((part, i) => Number(part[1]) === i + 1);
+                const hasUnconvertedFormula = /\[DOCX不可显示图片:/.test(answerArea);
+                const multipart = orderedMultipart && !hasUnconvertedFormula;
+                let answer = '';
+                if (answerLabel) answer = normalizeAnswerValue(answerArea.slice(answerLabel.index + answerLabel[0].length));
+                else if (/^\d+$/.test(String(block.numericAnswer || ''))) answer = String(block.numericAnswer);
+                else if (multipart) answer = root.Qisi.Utils.cleanDisplayTextForBatchSave(answerArea);
+                else if (/^[A-DＡ-Ｄ]{1,4}\s*[。；;，,]?\s*$/.test(answerArea.trim())) answer = normalizeAnswerValue(answerArea);
+                // Converted inline formula-only answers are explicit values inside
+                // a producer-owned support block, never numbers from a solution.
+                else if (/^(?:\s*\$[^$]+\$\s*)+$/.test(answerArea)) answer = normalizeAnswerValue(answerArea);
+                // Keep a printed slash literally, without interpreting alternatives
+                // or dividing formulas. Rejected duplicates only check conflicts.
+                else if (block.expectedQuestion === true &&
+                    (block.boundaryStatus === 'accepted' || (rejected && groups.answer.get(question)?.declarations.length > 0)) &&
+                    Array.isArray(sourceFile.roles) && sourceFile.roles.some(role => ['answer', 'full'].includes(role)) &&
+                    !/[\r\n]/.test(answerArea.trim()) &&
+                    /^(?:\s*\$[^$]+\$\s*)+(?:\/\s*(?:\$[^$]+\$\s*)+)+$/.test(answerArea.trim())) {
+                    answer = normalizeAnswerValue(answerArea);
+                }
+                const solution = solutionLabel ? root.Qisi.Utils.cleanDisplayTextForBatchSave(
+                    stripQuestionSectionNoise(body.slice(solutionLabel.index + solutionLabel[0].length).trim())) : '';
+                let answerRange = [offset, offset + answerArea.length];
+                if (answerLabel && !answerArea.slice(answerLabel.index + answerLabel[0].length).trim()) {
+                    const conclusion = body.match(/(?:故选|应选)\s*[:：]\s*([A-D]{1,4})[。．.]?\s*$/);
+                    answer = conclusion?.[1] || '';
+                    if (conclusion) answerRange = [offset + conclusion.index, raw.length];
+                }
+                // An unconverted formula inside the answer area prevents a safe
+                // attachment, but it must not erase the answer silently. Keep the
+                // raw answer range as explicit unmatched evidence for review.
+                if (!answer && !rejected && hasUnconvertedFormula) {
+                    unmatched.push({ ...block, questionNumber: question, field: 'answer',
+                        value: answerArea.trim(), rawText: raw,
+                        code: 'DOCX_SUPPORT_ANSWER_UNCONVERTED_FORMULA',
+                        unresolvedReason: 'multipart-unconverted-formula',
+                        sourceFileId: sourceFile.id, sourceFileName: sourceFile.filename });
+                }
+                for (const [field, value, start, end] of [
+                    ['answer', answer, ...answerRange],
+                    ['solution', solution, solutionLabel ? offset + solutionLabel.index + solutionLabel[0].length : raw.length, raw.length]
+                ]) {
+                    // A field with no value is not a declaration. Substituting the
+                    // whole block text (the old `value || raw`) invented an answer
+                    // and turned one boundary rejection into a single-declaration
+                    // "conflict", which downstream admission cannot distinguish
+                    // from a genuine multi-value conflict and rejects wholesale.
+                    if (!value) continue;
+                    const existing = groups[field].get(question);
+                    // A rejected boundary only participates when the same field
+                    // already has another declaration for this question: that is
+                    // a real multi-value conflict. Otherwise the block stays in
+                    // `unmatched` with its source range and raw text, and the
+                    // field remains `missing` instead of a fake conflict.
+                    if (rejected && !existing?.declarations?.length) continue;
+                    const group = existing || { declarations: [], blocked: false };
+                    // A duplicated boundary that repeats the same value is the
+                    // same fact, not a field conflict: keep it unique so the
+                    // batch stays reviewable. Only a distinct value blocks.
+                    const existingValues = new Set(group.declarations
+                        .map(row => String(row.value || '').trim()).filter(Boolean));
+                    if (rejected && existingValues.size && !existingValues.has(value)) {
+                        group.blocked = true;
+                    }
+                    group.declarations.push({ value, sourceId: sourceFile.id,
+                        sourceName: sourceFile.filename, range: [start, end],
+                        evidenceRef: `docx-support-block:${blockId}:${field}` });
+                    groups[field].set(question, group);
+                }
+            });
+            const rows = field => [...groups[field]].map(([question, group]) => {
+                const state = evidence.aggregate(null, group.declarations, { blocked: group.blocked });
+                return { question, [field]: state.value, evidence: state, confidence: 0.88,
+                    sourceFileId: sourceFile.id, sourceFileName: sourceFile.filename,
+                    ...(field === 'solution' ? { imageRefs: extractGraphicRefs(state.value) } : {}),
+                    warnings: state.state === 'conflict' ? [{ code: 'DOCX_SUPPORT_BOUNDARY_CONFLICT', field, question }] : [] };
+            });
+            const answers = rows('answer'), solutions = rows('solution');
+            return { answers, solutions, conflicts: collectConflicts(answers, solutions), unmatched };
         };
 
         const parseAnswerAndSolutionItemsFromText = (text, sourceFile) => {
+            if (Array.isArray(sourceFile.supportBlocks)) return parseStructuredSupport(sourceFile);
             const directAnswers = parseAnswerItemsFromText(text, sourceFile);
             const directSolutions = parseSolutionItemsFromText(text, sourceFile);
-            const inline = parseInlineAnswerSolutionBlocks(text, sourceFile);
+            const inlineAnswers = parseInlineAnswerBlocks(text, sourceFile);
 
             const answers = [...directAnswers];
             const solutions = [...directSolutions];
 
-            (inline.answers || []).forEach(item => pushUniqueQuestionItem(answers, item, 'answer'));
-            (inline.solutions || []).forEach(item => pushUniqueQuestionItem(solutions, item, 'solution'));
+            inlineAnswers.forEach(item => pushUniqueQuestionItem(answers, item, 'answer'));
+
 
             return {
                 answers,

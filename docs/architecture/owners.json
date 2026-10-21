@@ -292,7 +292,9 @@
         "production-docx-vision-source-port",
         "qwen-vision-source-port"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "support-evidence"
+      ],
       "forbiddenDependencies": [
         "ui-shell",
         "question-repository",
@@ -587,7 +589,8 @@
         "ui-shell"
       ],
       "allowedDependencies": [
-        "utils"
+        "utils",
+        "support-evidence"
       ],
       "forbiddenDependencies": [
         "question-repository"
@@ -1811,6 +1814,26 @@
       "allowedDependencies": [
         "pdf-external-contract"
       ],
+      "forbiddenDependencies": [
+        "ui-shell",
+        "question-repository"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "none",
+      "status": "production"
+    },
+    {
+      "ownerId": "support-evidence",
+      "module": "qisi-support-evidence.js",
+      "layer": 0,
+      "responsibilities": [
+        "support-evidence-set-reduction"
+      ],
+      "allowedCallers": [
+        "support-text-parser",
+        "docx-producer-identity"
+      ],
+      "allowedDependencies": [],
       "forbiddenDependencies": [
         "ui-shell",
         "question-repository"

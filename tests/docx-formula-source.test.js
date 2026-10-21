@@ -57,3 +57,29 @@ test('byte-identical MTEF is translated once while every relationship retains it
     assert.equal(count,1);assert.deepEqual(result.formulas.map(f=>f.rid),['r1','r2']);
     assert.ok(result.formulas.every(f=>f.latex==='x'&&f.engine==='mathtype-native'));
 });
+
+test('later native batch failure preserves prior results and item-level failure evidence', async () => {
+    const count = 513, ids = Array.from({ length: count }, (_, i) => 'r' + i);
+    const sources = Object.fromEntries(ids.map((id, i) => [id, bytes(String(i))]));
+    let calls = 0;
+    const result = await Formula.expand(ids.map(object).join(''),
+        new Map(ids.map(id => [id, { target: id }])), zipFor(sources), {
+            translateNative: async rows => {
+                calls++;
+                if (calls === 2) throw new Error('MATHTYPE_LOCAL_SERVICE_UNAVAILABLE');
+                return { equations: rows.map(row => ({ id: row.id, ok: true, latex: '42' })) };
+            }
+        });
+    assert.equal(calls, 2);
+    assert.equal(result.formulas[0].engine, 'mathtype-native');
+    assert.equal(result.formulas[0].latex, '42');
+    assert.equal(result.formulas[512].engine, 'javascript-mtef');
+    assert.equal(result.formulas[512].nativeEvidence.code, 'MATHTYPE_LOCAL_SERVICE_UNAVAILABLE');
+});
+
+test('missing native items retain diagnostics even when local JavaScript conversion succeeds', async () => {
+    const result = await Formula.expand(object('r1'), new Map([['r1', { target: 'one' }]]),
+        zipFor({ one: bytes('x') }), { translateNative: async () => ({ equations: [] }) });
+    assert.equal(result.formulas[0].latex, 'x');
+    assert.equal(result.formulas[0].nativeEvidence.code, 'MATHTYPE_RESPONSE_ITEM_MISSING');
+});

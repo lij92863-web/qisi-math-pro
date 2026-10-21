@@ -30,12 +30,17 @@ test('a legitimate paper with numbered steps inside solutions is not rejected', 
     assert.doesNotMatch(solutions['2'] || '', /分两种情况/, '第 1 题解析里的分步被当成了第 2 题的解析');
 });
 
-test('the numbered step inside a solution stays part of that solution', () => {
+test('ambiguous unlabelled numbered steps are retained for review, never attached as later solutions', () => {
     // 「2. 当 x>0 时」是第 1 题解析里的分步叙述，不是第 2 题的解析开头。
     const text = '答案：1.A 2.B\n解析：\n1. 由题意得 x=2。\n2. 当 x>0 时 f(x) 递增。\n3. 综上。';
     const result = Parser.parseAnswerAndSolutionItemsFromText(text, file);
     const solutions = Object.fromEntries(result.solutions.map(row => [row.question, String(row.solution)]));
-    assert.match(solutions['1'] || '', /由题意得/);
+    assert.equal(solutions['1'], '');
+    assert.equal(solutions['2'], '');
+    for (const row of result.solutions) {
+        assert.equal(row.evidence.state, 'conflict');
+        assert.match(row.evidence.declarations[0].value, /由题意得[\s\S]*综上/);
+    }
 });
 
 test('two different answers for one question are both refused with a visible conflict', () => {
@@ -61,9 +66,10 @@ test('identical duplicate answers are de-duplicated silently', () => {
     assert.deepEqual(pairs, [['1', 'A'], ['2', 'C']]);
 });
 
-test('normal sequential solutions still split by question', () => {
+test('ascending bare numbers alone do not prove solution ownership', () => {
     const text = '解析：\n1. 先求定义域。\n2. 再求导数。\n3. 最后判号。';
     const result = Parser.parseAnswerAndSolutionItemsFromText(text, file);
     const numbers = result.solutions.map(row => row.question);
     assert.deepEqual(numbers, ['1', '2', '3']);
+    assert.ok(result.solutions.every(row => row.solution === '' && row.evidence.state === 'conflict'));
 });

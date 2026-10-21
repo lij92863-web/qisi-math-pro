@@ -79,5 +79,6 @@
   "pdfExternalContractOwner": "qisi-pdf-external-contract.js",
   "pdfExternalProviderOwner": "qisi-pdf-external-provider.js",
   "pdfExternalProducerOwner": "qisi-pdf-external-producer.js",
-  "pdfPageEvidenceOwner": "qisi-pdf-page-evidence.js"
+  "pdfPageEvidenceOwner": "qisi-pdf-page-evidence.js",
+  "supportEvidenceOwner": "qisi-support-evidence.js"
 }

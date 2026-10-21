@@ -118,13 +118,14 @@
                 : ['answer', 'solution'].filter(role => roles.has(role));
         };
 
-        const parseSupportSource = async (source, batch, signal, importer) => {
+        const parseSupportSource = async (source, batch, signal, importer, expectedQuestionNumbers) => {
             if (typeof ports.parseSupportText !== 'function') {
                 throw createError('DOCX_SUPPORT_PARSER_REQUIRED');
             }
             assertActive(signal);
             const parsed = await importer.parseDocxFile(source, {
                 batch,
+                expectedQuestionNumbers,
                 defaultMeta: batch.defaultMeta || defaultMeta(),
                 helpers: {
                     cleanDisplayTextForBatchSave: cleanText,
@@ -145,13 +146,24 @@
                 '$1$2. 【答案】$3') : text;
             const anchored = labeledText.replace(/(^|\n)(\s*(?:\[\[IMAGE:[^\]]+\]\]\s*)*)([0-9０-９]+)\s*(?=【(?:答案|参考答案|解析|详解|解答)】)/g,
                 '$1$3. $2');
-            const result = ports.parseSupportText(anchored, source);
-            const answerSlots = [...anchored.matchAll(/(?:^|\n)\s*([0-9０-９]+)\.\s*(?:\[\[IMAGE:[^\]]+\]\]\s*)*【(?:答案|参考答案)】([^\n]*)/g)];
+            // A full DOCX already has producer-owned question blocks. Reuse those
+            // identities when answers are embedded in stems/options; do not ask
+            // a second text parser to rediscover their question boundaries.
+            const parserSource = isQuestionSource(source) || parsed.supportSectionDeclared
+                ? { ...source, supportBlocks: parsed.supportSectionDeclared
+                    ? parsed.supportBlocks
+                    : parsed.drafts.map(draft => ({
+                        questionNumber: draft.questionNumber || draft.question,
+                        text: draft.renderableText || draft.rawBlock || draft.stem || ''
+                    })) } : source;
+            const result = ports.parseSupportText(anchored, parserSource);
+            const answerSlots = Array.isArray(parserSource.supportBlocks) ? [] : [...anchored.matchAll(/(?:^|\n)\s*([0-9０-９]+)\.\s*(?:\[\[IMAGE:[^\]]+\]\]\s*)*【(?:答案|参考答案)】([^\n]*)/g)];
             if (answerSlots.length) {
                 // An empty explicit answer stays empty; digits in a solution cannot fill it.
                 const explicitQuestions = new Set(answerSlots.map(slot => normalizeQuestionNumber(slot[1])));
                 const unlabelledAnswers = result.answers.filter(item =>
-                    !explicitQuestions.has(normalizeQuestionNumber(item.questionNumber || item.question)));
+                    !explicitQuestions.has(normalizeQuestionNumber(item.questionNumber || item.question)) ||
+                    item.evidence?.state === 'conflict');
                 result.answers = [...unlabelledAnswers, ...answerSlots.flatMap(slot => slot[2].trim()
                     ? ports.parseSupportText(slot[1] + '. 【答案】' + slot[2], source).answers
                         .filter(item => normalizeQuestionNumber(item.questionNumber || item.question) === normalizeQuestionNumber(slot[1]))
@@ -246,39 +258,11 @@
                 byQuestion.set(question, index);
             });
             const drafts = [...base.drafts];
-            const applied = new Set();
-            const unmatchedAnswers = [];
+            const unmatchedAnswers = [...(base.unmatchedAnswers || [])];
             for (const source of supportSources) {
                 const roles = supportRoles(source);
-                const parsed = await parseSupportSource(source, batch, signal, importer);
-                // 解析层报告的同题号冲突：两个值都不采用，该字段留空并标记待人工确认。
-                // 不在这里抛错 —— 一道题的问题不该让整份文件失败。
-                for (const conflict of (Array.isArray(parsed.conflicts) ? parsed.conflicts : [])) {
-                    const question = normalizeQuestionNumber(conflict.question);
-                    const index = byQuestion.get(question);
-                    if (index === undefined) continue;
-                    const field = conflict.field === 'solution' ? 'solution' : 'answer';
-                    const draft = drafts[index];
-                    drafts[index] = {
-                        ...draft,
-                        [field]: '',
-                        warnings: [...(draft.warnings || []), {
-                            code: 'DOCX_SUPPORT_DUPLICATE_QUESTION',
-                            field,
-                            questionNumber: question,
-                            message: `第 ${question} 题的${field === 'answer' ? '答案' : '解析'}出现多条不同取值，已全部留空待人工确认。`,
-                            values: Array.isArray(conflict.values) ? conflict.values : []
-                        }],
-                        fieldProvenance: {
-                            ...(draft.fieldProvenance || {}),
-                            [field]: contract.rejectedSupportProvenance(
-                                draft, field, {
-                                    questionNumber: question,
-                                    source: draft.source
-                                })
-                        }
-                    };
-                }
+                const parsed = await parseSupportSource(source, batch, signal, importer, [...byQuestion.keys()]);
+                unmatchedAnswers.push(...(parsed.unmatched || []));
                 const groups = [
                     ['answer', parsed.answers],
                     ['solution', parsed.solutions]
@@ -299,10 +283,6 @@
                             });
                             continue;
                         }
-                        const key = `${question}:${field}`;
-                        applied.add(key);
-                        // 同一题号同一字段再次出现时不再抛错：取值相同是幂等重复，
-                        // 取值不同由字段级冲突处理（该字段留空 + 标记冲突），整份文件照常导入。
                         drafts[index] =
                             contract.applyDeterministicDocxSupportField({
                                 candidate: drafts[index],

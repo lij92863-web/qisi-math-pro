@@ -3,6 +3,10 @@
   "authority": "Current runtime file coverage; existing layer catalogs remain distinct architectural views.",
   "modules": [
     {
+      "file": "qisi-support-evidence.js",
+      "runtime": "browser"
+    },
+    {
       "file": "app.js",
       "runtime": "browser"
     },

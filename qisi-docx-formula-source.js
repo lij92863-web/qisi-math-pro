@@ -69,8 +69,8 @@
         }
         const nativePayload = [...unique.values()];
         let nativeRows = [];
+        const nativeFailures = new Map();
         if (nativePayload.length) {
-            try {
                 const translate = options.translateNative || (async rows => {
                     const response = await root.fetch('/api/convert/mathtype-mtef', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -80,29 +80,48 @@
                 });
                 // Each bounded batch retains relationship IDs; results are never zipped by position.
                 for (let i = 0; i < nativePayload.length; i += 512) {
-                    const batch = nativePayload.slice(i, i + 512), response = await translate(batch);
-                    const ids = new Set(batch.map(row => row.id)), seen = new Set();
-                    for (const row of response.equations || []) {
-                        if (!ids.has(row.id) || seen.has(row.id)) throw new Error('MATHTYPE_RESPONSE_ID_MISMATCH');
-                        seen.add(row.id); nativeRows.push(row);
+                    const batch = nativePayload.slice(i, i + 512);
+                    try {
+                        const response = await translate(batch);
+                        const ids = new Set(batch.map(row => row.id)), seen = new Set();
+                        if (!Array.isArray(response?.equations)) throw new Error('MATHTYPE_RESPONSE_ID_MISMATCH');
+                        for (const row of response.equations) {
+                            if (!ids.has(row.id) || seen.has(row.id)) throw new Error('MATHTYPE_RESPONSE_ID_MISMATCH');
+                            seen.add(row.id);
+                        }
+                        nativeRows.push(...response.equations);
+                        for (const row of batch) if (!seen.has(row.id)) nativeFailures.set(row.id, 'MATHTYPE_RESPONSE_ITEM_MISSING');
+                    } catch (error) {
+                        if (options.signal?.aborted) throw error;
+                        const code = /^MATHTYPE_[A-Z0-9_]{1,64}$/.test(error?.code || error?.message || '')
+                            ? error.code || error.message : 'MATHTYPE_NATIVE_BATCH_FAILED';
+                        for (let j = i; j < nativePayload.length; j++) nativeFailures.set(nativePayload[j].id,
+                            j >= i + batch.length ? 'MATHTYPE_NATIVE_NOT_ATTEMPTED' : code);
+                        break;
                     }
                 }
-            } catch (error) {
-                if (options.signal?.aborted) throw error;
-                nativeRows = []; // Native failure never triggers OCR or positional recovery.
-            }
         }
         const native = new Map(nativeRows.map(row => [row.id, row])), formulas = [];
-        for (const [id, original] of aliases) if (native.has(original)) native.set(id, {...native.get(original), id});
+        for (const [id, original] of aliases) {
+            if (native.has(original)) native.set(id, {...native.get(original), id});
+            if (nativeFailures.has(original)) nativeFailures.set(id, nativeFailures.get(original));
+        }
         for (const equation of equations.values()) {
             const local = reader.classifyMtef(equation.mtef), row = native.get(equation.id);
             const knownConflict = local.code === 'MTEF_PREVIEW_CONFLICT';
             const nativeLatex = !knownConflict && row?.ok === true ? normalizeLatex(row.latex) : '';
             const fallback = !knownConflict && local.status === 'extracted' ? normalizeLatex(local.latex) : '';
             const latex = nativeLatex || fallback;
+            const nativeCode = nativeLatex ? 'MATHTYPE_LATEX_OK' : (nativeFailures.get(equation.id) ||
+                (!equation.mtef.length ? 'MATHTYPE_SOURCE_BYTES_MISSING' : knownConflict ? 'MTEF_PREVIEW_CONFLICT' :
+                    row ? (String(row.code || '').trim() || 'MATHTYPE_NATIVE_ITEM_REJECTED') : 'MATHTYPE_RESPONSE_ITEM_MISSING'));
             formulas.push({ rid: equation.id, source: equation.source, status: latex ? 'extracted' : 'unresolved',
                 engine: nativeLatex ? 'mathtype-native' : 'javascript-mtef', latex,
                 code: latex ? (nativeLatex ? 'MATHTYPE_LATEX_OK' : local.code) : local.code,
+                // A formula the native service refused keeps that refusal next to the
+                // local reader's own code; neither reason is overwritten by the other.
+                nativeCode,
+                nativeEvidence: { status: nativeLatex ? 'extracted' : 'unresolved', code: nativeCode },
                 mtefBase64: base64(equation.mtef) });
         }
         const byId = new Map(formulas.map(row => [row.rid, row]));

@@ -25,6 +25,21 @@
   ],
   "modules": [
     {
+      "id": "support-evidence",
+      "file": "qisi-support-evidence.js",
+      "layer": 0,
+      "domainOwner": "supportEvidenceOwner",
+      "publicApi": [
+        "aggregate"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
+      "status": "production-wired"
+    },
+    {
       "id": "secure-logger",
       "file": "qisi-secure-logger.js",
       "layer": 0,
@@ -618,7 +633,9 @@
         "projectDeterministicDocxCandidate",
         "compareCanonicalDocxCandidates"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "support-evidence"
+      ],
       "forbiddenDependencies": [
         "app-shell",
         "formal-admission",
@@ -1190,7 +1207,8 @@
         "createSupportTextParser"
       ],
       "allowedDependencies": [
-        "utils"
+        "utils",
+        "support-evidence"
       ],
       "forbiddenDependencies": [
         "app-shell",

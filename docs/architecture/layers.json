@@ -23,7 +23,8 @@
         "docx-producer-identity",
         "import-equivalence-normalizer",
         "question-duplicate-policy",
-        "docx-ole-reader"
+        "docx-ole-reader",
+        "support-evidence"
       ]
     },
     {

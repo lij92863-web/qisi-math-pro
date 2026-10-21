@@ -193,6 +193,10 @@
 
         const chinese = markerSource.match(/^\s*(?:第\s*)?([一二三四五六七八九十]+)\s*(?:题|[、.．])\s*/);
         const match = chinese && chineseQuestionNumbers.has(chinese[1]) ? chinese : markerSource.match(
+            /^\s*[（(]\s*((?:\d\s*)+)[)）]\s*/
+        ) || markerSource.match(
+            /^\s*(?:第\s*)?((?:\d\s*)+?)\s+[.\uFF0E]\s*/
+        ) || markerSource.match(
             /^\s*(?:第\s*)?((?:\d\s*)+)(?:题|[.\uFF0E](?!\d)|[\u3001\u3002)\uFF09])\s*/
         );
         if (!match) {
@@ -420,65 +424,109 @@
         return xmlFragmentToRenderableText(xml, new Map(), [], '');
     };
 
+    const literalTextFromXmlFragment = (xml = '') =>
+        [...String(xml || '').matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)]
+            .map(match => match[1]).join('');
+
     const splitDocxParagraphs = (documentXml = '') => {
         const paragraphs = [];
+        let paragraphIndex = -1;
+        // Table cells routinely contain labels such as "答案" (answer grid).
+        // They are not section headings of the document body, so every
+        // paragraph carries whether it sits inside a table.
+        let tableDepth = 0;
 
-        String(documentXml || '').replace(/<w:p[\s\S]*?<\/w:p>/g, (pXml) => {
-            const text = extractTextFromXmlFragment(pXml);
-            const hasObject = /<w:object\b|<w:drawing\b|<v:imagedata\b|<o:OLEObject\b/.test(pXml);
+        String(documentXml || '').replace(
+            /<w:tbl\b[^>]*>|<\/w:tbl>|<w:p\b[\s\S]*?<\/w:p>/g,
+            (fragment, sourceStart) => {
+                if (/^<w:tbl\b/.test(fragment)) {
+                    tableDepth += 1;
+                    return '';
+                }
+                if (fragment === '</w:tbl>') {
+                    tableDepth = Math.max(0, tableDepth - 1);
+                    return '';
+                }
 
-            if (text || hasObject) {
-                paragraphs.push({
-                    text,
-                    rawXml: pXml,
-                    hasObject
-                });
+                const pXml = fragment;
+                paragraphIndex += 1;
+                const text = extractTextFromXmlFragment(pXml);
+                const hasObject = /<w:object\b|<w:drawing\b|<v:imagedata\b|<o:OLEObject\b/.test(pXml);
+
+                if (text || hasObject) {
+                    paragraphs.push({
+                        paragraphIndex,
+                        sourceStart,
+                        sourceEnd: sourceStart + pXml.length,
+                        numId: pXml.match(/<w:numId\b[^>]*w:val=["']([^"']+)["']/)?.[1] || '',
+                        level: Number(pXml.match(/<w:ilvl\b[^>]*w:val=["'](\d+)["']/)?.[1] || 0),
+                        text,
+                        rawXml: pXml,
+                        hasObject,
+                        inTable: tableDepth > 0
+                    });
+                }
+
+                return '';
             }
-
-            return '';
-        });
+        );
 
         return paragraphs;
     };
 
     const UNDISPLAYABLE_IMAGE_PREFIX = '[DOCX不可显示图片:';
 
-    const getQuestionNoFromLine = (
-        line = ''
-    ) => {
-        return parseLeadingQuestionMarker(
-            line
-        ).questionNumber;
-    };
     const buildQuestionBlocksFromDocumentXml = (documentXml = '') => {
         const paragraphs = splitDocxParagraphs(documentXml);
         const blocks = [];
         let current = null;
+        let currentMarkerIsParenthesized = false;
         let sectionType = '';
 
         for (const p of paragraphs) {
-            if (/^(?:《[^》]+》\s*)?(?:参考答案(?:及|与)?(?:解析|详解)?|答案(?:及|与)(?:解析|详解))$/.test(p.text)) break;
+            // Only a body-level heading can end the question section. A bare
+            // "答案" cell in the answer grid (inside <w:tbl>) must never cut the
+            // paper before the first question, and a heading is only meaningful
+            // once at least one question block exists.
+            if (
+                SUPPORT_HEADING_PATTERN.test(p.text) &&
+                !p.inTable &&
+                (blocks.length > 0 || current)
+            ) break;
             // Blank answer-form labels are not question stems.
             if (/^(?:\d+\s*[.．、]\s*){2,}$/.test(p.text) && !p.hasObject) continue;
             const section = p.text.match(/^(?:[一二三四五六七八九十]+[、.．]\s*)?(单项选择题|单选题|多项选择题|多选题|填空题|解答题|证明题)(?:\s*[(:：]|\s*$)/);
             if (section) {
                 if (current) blocks.push(current);
                 current = null;
+                currentMarkerIsParenthesized = false;
                 sectionType = /多/.test(section[1]) ? '多选题'
                     : /单/.test(section[1]) ? '单选题' : section[1];
                 continue;
             }
-            const qNo = getQuestionNoFromLine(p.text || '');
+            const marker = parseLeadingQuestionMarker(p.text || '');
+            const qNo = marker.questionNumber;
+            const markerIsParenthesized = /^\s*[（(]/.test(
+                marker.rawMarker.slice(consumeLeadingImageTokens(marker.rawMarker))
+            );
+            // A parenthesized number inside a plain-numbered question is a
+            // subquestion. A document that starts with (1), (2) still uses
+            // those markers as its top-level question sequence.
+            const isSubquestion = p.numId && p.level > 0 || current && markerIsParenthesized &&
+                !currentMarkerIsParenthesized && !(p.numId && p.level === 0);
 
-            if (qNo) {
+            if (qNo && !isSubquestion) {
                 if (current) blocks.push(current);
 
                 current = {
                     q: qNo,
                     sectionType,
+                    parenthesized: markerIsParenthesized,
+                    structuralNumber: Boolean(p.numId && p.level === 0),
                     lines: [p.text || ''],
                     rawXmlParts: [p.rawXml || '']
                 };
+                currentMarkerIsParenthesized = markerIsParenthesized;
             } else if (current) {
                 current.lines.push(p.text || '');
                 current.rawXmlParts.push(p.rawXml || '');
@@ -486,6 +534,21 @@
         }
 
         if (current) blocks.push(current);
+
+        // Repeated unstructured parenthesized markers cannot distinguish parents
+        // from children. Preserve the region for review instead of creating keys.
+        const seenParentheses = new Set();
+        const ambiguousParentheses = blocks.some(block => {
+            if (!block.parenthesized || block.structuralNumber) return false;
+            if (seenParentheses.has(block.q)) return true;
+            seenParentheses.add(block.q);
+            return false;
+        });
+        if (ambiguousParentheses) {
+            for (const block of blocks) if (block.parenthesized && !block.structuralNumber) {
+                block.boundaryStatus = 'ambiguous';
+            }
+        }
 
         console.groupCollapsed('[BATCH_IMPORTER][docx-blocks]');
         console.log('paragraphCount =', paragraphs.length);
@@ -671,10 +734,6 @@
             ? options.filter(x => String(x || '').trim()).length
             : 0;
 
-    // Option labels are text outside a complete math span, never symbols inside a formula.
-    const maskMathSpans = text => text.replace(/(?<!\\)\$(?:\\.|[^$])*?(?<!\\)\$/g,
-        match => '$' + ' '.repeat(match.length - 1));
-
     const parseInlineTextOptions = (blockRawXml = '', helpers = {}) => {
         const textNodes = [];
 
@@ -695,7 +754,7 @@
             .replace(/\s+/g, ' ')
             .trim();
 
-        const labelText = maskMathSpans(joined);
+        const labelText = joined;
         const hits = resolveUtils().findOptionLabels(labelText)
             .map(hit => ({ label: hit.label, start: hit.markerStart, rowStart: hit.rowStart, contentStart: hit.contentStart }));
 
@@ -805,7 +864,7 @@
             const label = prefix[1] || prefix[2] || prefix[3];
             return label + '.' + (prefix[4] ? ' $' + prefix[4] + '$' : '');
         });
-        const labels = resolveUtils().findOptionLabels(maskMathSpans(provisional))
+        const labels = resolveUtils().findOptionLabels(provisional)
             .map(hit => hit.label).join('');
         // The literal label is stored in the formula. Require the complete ordered row.
         return labels === 'ABCD' ? provisional : text;
@@ -864,7 +923,7 @@
 
     const stripOptionsFromStemText = (text = '') => {
         const source = normalizeDocxText(text || '');
-        const firstLabel = resolveUtils().findOptionLabels(maskMathSpans(source))[0];
+        const firstLabel = resolveUtils().findOptionLabels(source)[0];
         if (firstLabel && firstLabel.label === 'A') return source.slice(0, firstLabel.rowStart).trim();
         return source.trim();
     };
@@ -882,9 +941,11 @@
             return parsed.source.trim();
         }
 
-        return parsed.source
-            .slice(parsed.markerLength)
-            .trim();
+        // The marker length includes leading drawings so identity detection can
+        // see the printed number. Removing the number must retain those figures.
+        const imagePrefix = parsed.source.slice(0, consumeLeadingImageTokens(parsed.source)).trim();
+        return [imagePrefix, parsed.source.slice(parsed.markerLength).trim()]
+            .filter(Boolean).join(' ');
     };
     const parseStemFromBlock = (block, renderableText = '') => {
         const blockText = (renderableText || block.lines.join('\n')).split(/【(?:答案|参考答案|解析|详解|解答|分析)】/)[0];
@@ -917,10 +978,10 @@
         // 分步列表，展开它就会把解析切成假题目。
         const numberingEntry = zip.file('word/numbering.xml');
         const numberingXml = numberingEntry ? await numberingEntry.async('string') : '';
-        const headingIndex = splitDocxParagraphs(expanded.xml).findIndex(paragraph =>
-            SUPPORT_HEADING_PATTERN.test(paragraph.text));
+        const heading = splitDocxParagraphs(expanded.xml).find(paragraph =>
+            !paragraph.inTable && SUPPORT_HEADING_PATTERN.test(paragraph.text));
         expanded.xml = window.Qisi.DocxNumbering.expand(expanded.xml, numberingXml, {
-            beforeIndex: headingIndex
+            beforeIndex: heading?.paragraphIndex ?? -1
         }).xml;
 
         const mediaMap = await buildMediaMaps(zip, relsXml, fileRecord.filename);
@@ -930,12 +991,91 @@
         const supportImages = [];
         const supportParagraphs = splitDocxParagraphs(expanded.xml);
         const supportHeading = supportParagraphs.findIndex(paragraph =>
-            SUPPORT_HEADING_PATTERN.test(paragraph.text));
-        const supportText = (supportHeading >= 0 ? supportParagraphs.slice(supportHeading + 1) : supportParagraphs).map(paragraph =>
-            xmlFragmentToRenderableText(paragraph.rawXml, mediaMap, supportImages, 'support')
-        ).join('\n');
+            !paragraph.inTable && SUPPORT_HEADING_PATTERN.test(paragraph.text));
+        const supportRows = (supportHeading >= 0 ? supportParagraphs.slice(supportHeading + 1) : supportParagraphs).map(paragraph => ({
+            text: xmlFragmentToRenderableText(paragraph.rawXml, mediaMap, supportImages, 'support'),
+            literalText: literalTextFromXmlFragment(paragraph.rawXml),
+            sourceStart: paragraph.sourceStart,
+            sourceEnd: paragraph.sourceEnd,
+            paragraphIndex: paragraph.paragraphIndex
+        }));
+        const supportText = supportRows.map(row => row.text).join('\n');
+        const supportBlocks = [];
+        if (supportHeading >= 0) {
+            const expectedNumbers = context.expectedQuestionNumbers || blocks.map(block => block.q);
+            const expectedOrder = new Map(expectedNumbers.map((q, index) => [String(q), index]));
+            let nextIndex = 0;
+            let active = null;
+            let section = 0;
+            let sequenceRejected = false;
+            let seen = new Set();
+            for (let rowIndex = 0; rowIndex < supportRows.length; rowIndex++) {
+                const row = supportRows[rowIndex];
+                if (/^题号\s*[:：]?/.test(row.text) && /^答案\s*[:：]?/.test(supportRows[rowIndex + 1]?.text || '')) {
+                    const answerRow = supportRows[++rowIndex];
+                    supportBlocks.push({ kind: 'answer-table', lines: [row.text, answerRow.text],
+                        blockId: `support-p${row.paragraphIndex}`, sourceStart: row.sourceStart,
+                        sourceEnd: answerRow.sourceEnd, expectedNumbers: [...expectedOrder.keys()] });
+                    active = null;
+                    continue;
+                }
+                if (SUPPORT_HEADING_PATTERN.test(row.text) || /^(?:【)?(?:解析|详解|解答)(?:】)?\s*[:：]?\s*$/.test(row.text)) {
+                    active = null; nextIndex = 0; seen = new Set(); sequenceRejected = false; section++;
+                    continue;
+                }
+                const marker = parseLeadingQuestionMarker(row.text);
+                const nativeMarker = row.literalText.match(/^\s*(\d{1,3})[．。]/);
+                const questionNumber = marker.questionNumber || nativeMarker?.[1] || '';
+                const index = expectedOrder.get(questionNumber);
+                const afterMarker = marker.source.slice(marker.markerLength).trim();
+                const declared = Boolean(nativeMarker) || /^(?:【(?:答案|参考答案|解析|分析|详解|解答)】|(?:答案|参考答案|解析|分析|详解|解答)\s*[:：]|[（(]\s*1\s*[)）]|[A-DＡ-Ｄ]{1,4}(?=$|[\s，,；;。]))/.test(afterMarker);
+                if (questionNumber && declared) {
+                    const numericAnswer = row.literalText.match(/^\s*(\d{1,3})[．。]\s*(\d+)\s*$/);
+                    const reason = seen.has(questionNumber) ? 'duplicate'
+                        : index === undefined ? 'unknown' : index < nextIndex ? 'backward'
+                        : sequenceRejected ? 'after-invalid-boundary' : '';
+                    if (reason) sequenceRejected = true;
+                    active = {
+                        questionNumber,
+                        lines: [row.text],
+                        numericAnswer: numericAnswer?.[1] === questionNumber ? numericAnswer[2] : '',
+                        sourceStart: row.sourceStart,
+                        sourceEnd: row.sourceEnd,
+                        blockId: `support-p${row.paragraphIndex}`,
+                        section,
+                        boundaryStatus: reason ? 'rejected' : 'accepted',
+                        boundaryReason: reason,
+                        expectedQuestion: index !== undefined
+                    };
+                    supportBlocks.push(active);
+                    seen.add(questionNumber);
+                    if (!reason) nextIndex = index + 1;
+                } else if (active) {
+                    active.lines.push(row.text);
+                    active.sourceEnd = row.sourceEnd;
+                }
+            }
+        }
 
-        const drafts = blocks.map((block, index) => {
+        const ambiguous = blocks.filter(block => block.boundaryStatus === 'ambiguous');
+        if (ambiguous.length) warnings.push('DOCX_QUESTION_BOUNDARY_AMBIGUOUS：括号题号层级不明确，原文已保留待审核。');
+        const rejectedSupportReasons = new Map();
+        for (const block of supportBlocks) {
+            if (block.boundaryStatus !== 'rejected' || !block.questionNumber) continue;
+            const reason = block.boundaryReason || 'rejected';
+            const previous = rejectedSupportReasons.get(block.questionNumber);
+            if (previous && previous !== reason) rejectedSupportReasons.set(block.questionNumber, 'mixed');
+            else if (!previous) rejectedSupportReasons.set(block.questionNumber, reason);
+        }
+        const supportBoundaryLabel = reason => ({
+            backward: '倒序', duplicate: '重复', unknown: '未知题号',
+            'after-invalid-boundary': '前序边界无效', mixed: '倒序/重复'
+        })[reason] || '不可靠';
+        const supportFormulaQuestions = new Set(supportBlocks
+            .filter(block => block.questionNumber &&
+                /\[DOCX不可显示图片:/.test(block.lines.join('\n')))
+            .map(block => block.questionNumber));
+        const drafts = blocks.filter(block => block.boundaryStatus !== 'ambiguous').map((block, index) => {
             const parsedOptions = parseOptionsFromBlock(block, mediaMap, helpers);
             const optionImages = parsedOptions.optionImages || [];
             const stem = parseStemFromBlock(block, parsedOptions.renderableText || '');
@@ -980,6 +1120,14 @@
                 warnings: [
                     ...(parsedOptions.hasUndisplayable
                         ? ['DOCX contains WMF/EMF/OLE option images; placeholders are shown for review.']
+                        : []),
+                    ...(rejectedSupportReasons.has(block.q)
+                        ? [`DOCX_SUPPORT_BOUNDARY_REVIEW：第 ${block.q} 题支持区存在${
+                            supportBoundaryLabel(rejectedSupportReasons.get(block.q))
+                        }边界，相关声明已保留原文待审核。`]
+                        : []),
+                    ...(supportFormulaQuestions.has(block.q)
+                        ? [`DOCX_SUPPORT_UNCONVERTED_FORMULA：第 ${block.q} 题支持区含未转换公式占位符，答案/解析需人工确认。`]
                         : [])
                 ],
                 status: 'pending',
@@ -1006,9 +1154,16 @@
         return {
             drafts,
             draftImages,
-            unmatchedAnswers: [],
+            unmatchedAnswers: ambiguous.length ? [{ code: 'DOCX_QUESTION_BOUNDARY_AMBIGUOUS',
+                sourceFileId: fileRecord.id, rawText: ambiguous.map(block => block.lines.join('\n')).join('\n'),
+                rawXml: ambiguous.map(block => block.rawXmlParts.join('\n')).join('\n') }] : [],
             warnings,
             supportText,
+            supportBlocks: supportBlocks.map(block => ({
+                ...block,
+                lines: undefined,
+                text: block.lines.join('\n'),
+            })),
             supportSectionDeclared: supportHeading >= 0,
             supportImages,
             formulaEvidence: expanded.formulas,
