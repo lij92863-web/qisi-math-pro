@@ -107,7 +107,8 @@
         "mineru-client",
         "import-run-commands",
         "library-image-resources",
-        "library-snapshot"
+        "library-snapshot",
+        "library-external-merge"
       ]
     },
     {

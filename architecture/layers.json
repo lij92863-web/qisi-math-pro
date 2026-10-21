@@ -1430,6 +1430,22 @@
       "status": "production-wired"
     },
     {
+      "id": "library-external-merge",
+      "file": "qisi-library-external-merge.js",
+      "layer": 2,
+      "domainOwner": "libraryExternalMergeOwner",
+      "publicApi": [
+        "countUnresolved",
+        "buildMergeOperations"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
       "id": "review-draft-normalization",
       "file": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

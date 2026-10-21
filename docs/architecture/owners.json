@@ -845,6 +845,26 @@
       "status": "production"
     },
     {
+      "ownerId": "library-external-merge",
+      "module": "qisi-library-external-merge.js",
+      "layer": 2,
+      "responsibilities": [
+        "library-external-merge-operation-planning"
+      ],
+      "allowedCallers": [
+        "ui-shell"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "question-repository",
+        "formal-admission",
+        "app-shell"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "none",
+      "status": "production"
+    },
+    {
       "ownerId": "review-draft-normalization",
       "module": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

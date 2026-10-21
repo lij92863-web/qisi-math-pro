@@ -3606,57 +3606,22 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
 
                 const confirmAddExternalToPersonal = async () => {
                     try {
-                        const unresolved = confirmItems.value.filter(item =>
-                            ['similar', 'answerConflict'].includes(item.status) && item.action === 'skip'
-                        );
+                        const unresolved = window.Qisi.LibraryExternalMerge
+                            .countUnresolved(confirmItems.value);
 
-                        if (unresolved.length > 0) {
-                            const ok = confirm(`还有 ${unresolved.length} 道疑似同题或答案冲突题未处理。是否跳过这些题并继续？`);
+                        if (unresolved > 0) {
+                            const ok = confirm(`还有 ${unresolved} 道疑似同题或答案冲突题未处理。是否跳过这些题并继续？`);
                             if (!ok) return;
                         }
 
                         const now = Date.now();
-                        const operations = [];
-                        for (const item of confirmItems.value) {
-                            const extQ = item.question;
-                            if (item.action === 'skip') {
-                                operations.push({
-                                    action: 'skip',
-                                    externalId: extQ.id
-                                });
-                                continue;
-                            }
-                            if (item.action === 'fill') {
-                                const matchInfo = getExternalMatchInfo(extQ);
-                                const localQ = matchInfo.matchedQuestion ||
-                                    questions.value.find(question =>
-                                        question.id === item.matchedQuestionId
-                                    );
-                                if (localQ) {
-                                    operations.push({
-                                        action: 'fill',
-                                        externalId: extQ.id,
-                                        question: buildFilledQuestionFromExternal(
-                                            localQ,
-                                            extQ,
-                                            item
-                                        ),
-                                        expectedUpdatedAt: localQ.updatedAt
-                                    });
-                                    continue;
-                                }
-                            }
-                            if (item.action === 'add' || item.action === 'fill') {
-                                operations.push({
-                                    action: 'add',
-                                    externalId: extQ.id,
-                                    question: copyExternalToPersonalQuestion(
-                                        extQ,
-                                        item
-                                    )
-                                });
-                            }
-                        }
+                        const operations = window.Qisi.LibraryExternalMerge.buildMergeOperations({
+                            items: confirmItems.value,
+                            findQuestion: id => questions.value.find(question => question.id === id),
+                            getMatchInfo: getExternalMatchInfo,
+                            fillQuestion: buildFilledQuestionFromExternal,
+                            copyQuestion: copyExternalToPersonalQuestion
+                        });
                         if (!operations.length) return;
 
                         const result = await libraryService.commitExternalMerge({

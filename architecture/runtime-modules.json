@@ -525,6 +525,10 @@
     {
       "file": "qisi-library-snapshot.js",
       "runtime": "browser"
+    },
+    {
+      "file": "qisi-library-external-merge.js",
+      "runtime": "browser"
     }
   ]
 }
