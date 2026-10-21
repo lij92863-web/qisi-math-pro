@@ -4372,19 +4372,11 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         .join('');
                 };
 
-                const hydrateQuestionsForPrint = async (qs) => {
-                    const ids = [...new Set(qs.flatMap(q => (q.images || []).map(img => img.id)).filter(Boolean))];
-                    const imageRows = ids.length ? await db.images.where('id').anyOf(ids).toArray() : [];
-                    return Promise.all(qs.map(async q => {
-                        const clone = { ...q, meta: q.meta ? { ...q.meta } : undefined, options: [...(q.options || [])] };
-                        clone.images = await Promise.all((q.images || []).map(async img => {
-                            const row = imageRows.find(item => item.id === img.id);
-                            if (row?.blob) return { ...img, url: await blobToDataUrl(row.blob) };
-                            return { ...img };
-                        }));
-                        return clone;
-                    }));
-                };
+                const hydrateQuestionsForPrint = (qs) => window.Qisi.PrintResources.hydrateQuestionsForPrint({
+                    questions: qs,
+                    loadImageRows: ids => db.images.where('id').anyOf(ids).toArray(),
+                    blobToDataUrl
+                });
 
                 const buildHeaderFields = () => window.Qisi.ExamPaperParts.buildHeaderFields({
                     show: examConfig.showHeaderFields,

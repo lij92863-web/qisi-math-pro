@@ -72,7 +72,8 @@
         "manual-entry-model",
         "exam-template-model",
         "exam-groups",
-        "exam-paper-parts"
+        "exam-paper-parts",
+        "print-resources"
       ]
     },
     {

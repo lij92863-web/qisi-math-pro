@@ -1535,6 +1535,23 @@
       "status": "production-wired"
     },
     {
+      "id": "print-resources",
+      "file": "qisi-print-resources.js",
+      "layer": 1,
+      "domainOwner": "printResourcesOwner",
+      "publicApi": [
+        "collectImageIds",
+        "hydrateQuestionsForPrint"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
       "id": "review-draft-normalization",
       "file": "qisi-review-draft-normalization-policy.js",
       "layer": 1,
