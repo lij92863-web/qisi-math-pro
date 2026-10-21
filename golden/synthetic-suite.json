@@ -1,0 +1,440 @@
+{
+  "schema": "qisi.golden.v1",
+  "annotation": {
+    "kind": "synthetic",
+    "author": "Codex",
+    "date": "2026-10-20",
+    "note": "Independently declared behavior fixtures. PDF cached blocks are synthetic and are not OCR ground truth for the PDF bytes. No human-verified real-paper accuracy claim."
+  },
+  "cases": [
+    {
+      "id": "docx-stable-pair",
+      "engine": "docx",
+      "expectedAutomaticAnswers": 1,
+      "workflow": "confirm-submit-reload",
+      "sources": [
+        {
+          "file": "tests/fixtures/true-import/docx-question.docx",
+          "sha256": "6798d0b40ab1ad7d97c4740d60abde89cf132265197ae61eb18aa2473b279283",
+          "roles": [
+            "question"
+          ]
+        },
+        {
+          "file": "tests/fixtures/true-import/docx-answer.docx",
+          "sha256": "da37994e883202b94cc78a6ff76f41814f9fc13426a84e4c18f28447c8531ab6",
+          "roles": [
+            "answer"
+          ]
+        },
+        {
+          "file": "tests/fixtures/true-import/docx-solution.docx",
+          "sha256": "560749ee2d3f887830b74000938a262211fb266f68581c3a3854c97c6aed7bc9",
+          "roles": [
+            "solution"
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "number": "1",
+          "stemIncludes": "Which statement is correct?",
+          "answer": "A",
+          "solutionIncludes": "declared stable answer",
+          "optionCount": 4,
+          "imageCount": 0,
+          "withhold": [],
+          "answerSourceFile": "docx-answer.docx",
+          "solutionSourceFile": "docx-solution.docx"
+        }
+      ]
+    },
+    {
+      "id": "pdf-full",
+      "engine": "mineru",
+      "expectedAutomaticAnswers": 0,
+      "workflow": "confirm-submit-reload",
+      "sources": [
+        {
+          "file": "tests/fixtures/true-import/pdf-question.pdf",
+          "sha256": "184b8e410a9a7219bdbdbaafeb7232177952bb3dd528d6621c8e06bdf41ea524",
+          "roles": [
+            "full"
+          ],
+          "items": [
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "一、单项选择题"
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "1. 第一题 A.甲 B.乙 C.丙 D.丁"
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "参考答案"
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "1【答案】A"
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "【解析】甲符合题意。"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "number": "1",
+          "stemIncludes": "第一题",
+          "answer": "A",
+          "solutionIncludes": "甲符合题意",
+          "optionCount": 4,
+          "imageCount": 0,
+          "withhold": [],
+          "answerSourceFile": "pdf-question.pdf",
+          "solutionSourceFile": "pdf-question.pdf"
+        }
+      ]
+    },
+    {
+      "id": "pdf-dual-with-image",
+      "engine": "mineru",
+      "expectedAutomaticAnswers": 0,
+      "workflow": "confirm-submit-reload",
+      "sources": [
+        {
+          "file": "tests/fixtures/true-import/pdf-question.pdf",
+          "sha256": "184b8e410a9a7219bdbdbaafeb7232177952bb3dd528d6621c8e06bdf41ea524",
+          "roles": [
+            "question"
+          ],
+          "items": [
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "一、单项选择题"
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "1. 第一题 A.甲 B.乙 C.丙 D.丁"
+            },
+            {
+              "type": "image",
+              "page_idx": 0,
+              "img_path": "images/figure.png",
+              "image_caption": [
+                "图1"
+              ]
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "2. 第二题 A.甲 B.乙 C.丙 D.丁"
+            }
+          ],
+          "assets": {
+            "images/figure.png": {
+              "type": "image/png",
+              "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+            }
+          }
+        },
+        {
+          "file": "tests/fixtures/true-import/pdf-answer.pdf",
+          "sha256": "906cd8216e2f009b9fe3d2ec2b9996c0f10a1dc0f660e3120e057ff240a9c617",
+          "roles": [
+            "answer",
+            "solution"
+          ],
+          "items": [
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "参考答案"
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "1【答案】A"
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "【解析】甲符合题意。"
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "2【答案】B"
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "【解析】乙符合题意。"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "number": "1",
+          "stemIncludes": "第一题",
+          "answer": "A",
+          "solutionIncludes": "甲符合题意",
+          "optionCount": 4,
+          "imageCount": 1,
+          "withhold": [],
+          "answerSourceFile": "pdf-answer.pdf",
+          "solutionSourceFile": "pdf-answer.pdf"
+        },
+        {
+          "number": "2",
+          "stemIncludes": "第二题",
+          "answer": "B",
+          "solutionIncludes": "乙符合题意",
+          "optionCount": 4,
+          "imageCount": 0,
+          "withhold": [],
+          "answerSourceFile": "pdf-answer.pdf",
+          "solutionSourceFile": "pdf-answer.pdf"
+        }
+      ]
+    },
+    {
+      "id": "pdf-question-only",
+      "engine": "mineru",
+      "expectedAutomaticAnswers": 0,
+      "sources": [
+        {
+          "file": "tests/fixtures/true-import/pdf-question.pdf",
+          "sha256": "184b8e410a9a7219bdbdbaafeb7232177952bb3dd528d6621c8e06bdf41ea524",
+          "roles": [
+            "question"
+          ],
+          "items": [
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "一、单项选择题"
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "1. 第一题 A.甲 B.乙 C.丙 D.丁"
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "2. 第二题 A.甲 B.乙 C.丙 D.丁"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "number": "1",
+          "stemIncludes": "第一题",
+          "answer": "A",
+          "solutionIncludes": "甲符合题意",
+          "optionCount": 4,
+          "imageCount": 0,
+          "withhold": [
+            "answer",
+            "solution"
+          ]
+        },
+        {
+          "number": "2",
+          "stemIncludes": "第二题",
+          "answer": "B",
+          "solutionIncludes": "乙符合题意",
+          "optionCount": 4,
+          "imageCount": 0,
+          "withhold": [
+            "answer",
+            "solution"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pdf-duplicate-support",
+      "engine": "mineru",
+      "expectedAutomaticAnswers": 0,
+      "sources": [
+        {
+          "file": "tests/fixtures/true-import/pdf-question.pdf",
+          "sha256": "184b8e410a9a7219bdbdbaafeb7232177952bb3dd528d6621c8e06bdf41ea524",
+          "roles": [
+            "question"
+          ],
+          "items": [
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "一、单项选择题"
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "1. 第一题 A.甲 B.乙 C.丙 D.丁"
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "2. 第二题 A.甲 B.乙 C.丙 D.丁"
+            }
+          ]
+        },
+        {
+          "file": "tests/fixtures/true-import/pdf-answer.pdf",
+          "sha256": "906cd8216e2f009b9fe3d2ec2b9996c0f10a1dc0f660e3120e057ff240a9c617",
+          "roles": [
+            "answer",
+            "solution"
+          ],
+          "items": [
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "参考答案"
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "1【答案】A"
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "1【答案】A"
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "2【答案】B"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "number": "1",
+          "stemIncludes": "第一题",
+          "answer": "A",
+          "solutionIncludes": "甲符合题意",
+          "optionCount": 4,
+          "imageCount": 0,
+          "withhold": [
+            "answer",
+            "solution"
+          ]
+        },
+        {
+          "number": "2",
+          "stemIncludes": "第二题",
+          "answer": "B",
+          "solutionIncludes": "乙符合题意",
+          "optionCount": 4,
+          "imageCount": 0,
+          "withhold": [
+            "answer",
+            "solution"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pdf-conflicting-sources",
+      "engine": "mineru",
+      "expectedAutomaticAnswers": 0,
+      "sources": [
+        {
+          "file": "tests/fixtures/true-import/pdf-question.pdf",
+          "sha256": "184b8e410a9a7219bdbdbaafeb7232177952bb3dd528d6621c8e06bdf41ea524",
+          "roles": [
+            "question"
+          ],
+          "items": [
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "一、单项选择题"
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "1. 第一题 A.甲 B.乙 C.丙 D.丁"
+            }
+          ]
+        },
+        {
+          "file": "tests/fixtures/true-import/pdf-answer.pdf",
+          "sha256": "906cd8216e2f009b9fe3d2ec2b9996c0f10a1dc0f660e3120e057ff240a9c617",
+          "roles": [
+            "answer"
+          ],
+          "items": [
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "参考答案"
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "1【答案】A"
+            }
+          ]
+        },
+        {
+          "file": "tests/fixtures/true-import/pdf-solution.pdf",
+          "sha256": "2cd71130d82f32ae496e507a638075bb14a40d01aded2eb415e6d23b1d237982",
+          "roles": [
+            "solution"
+          ],
+          "items": [
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "参考答案"
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "1【答案】B"
+            },
+            {
+              "page_idx": 0,
+              "type": "text",
+              "text": "【解析】另一个来源声明乙。"
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "number": "1",
+          "stemIncludes": "第一题",
+          "answer": null,
+          "solutionIncludes": null,
+          "optionCount": 4,
+          "imageCount": 0,
+          "withhold": [
+            "answer",
+            "solution"
+          ]
+        }
+      ]
+    }
+  ]
+}
