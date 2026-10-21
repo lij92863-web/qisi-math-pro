@@ -209,10 +209,10 @@
                     'docx-deterministic-support-to-candidate';
             }
         }
-        const pdfV1 = identity.source?.format === 'pdf' && ['pdf-multimodal-v1','pdf-external-v2'].includes(identity.producer?.routeId);
+        const pdfV1 = identity.source?.format === 'pdf' && ['pdf-multimodal-v1','pdf-external-v2','pdf-mineru-v1'].includes(identity.producer?.routeId);
         if (pdfV1 && provenance.sourceId !== identity.source.sourceId && ['answer', 'solution'].includes(field)) {
             const support = (draft.supportSources || []).find(s => s.sourceId === provenance.sourceId && s.format === 'pdf' && s.roles.includes(field));
-            if (support) { expectedSource = support; expectedBoundary = identity.producer.routeId === 'pdf-external-v2' ? 'pdf-external-support-to-candidate' : 'pdf-multimodal-support-to-candidate'; }
+            if (support) { expectedSource = support; expectedBoundary = identity.producer.routeId === 'pdf-mineru-v1' ? 'pdf-mineru-support-to-candidate' : identity.producer.routeId === 'pdf-external-v2' ? 'pdf-external-support-to-candidate' : 'pdf-multimodal-support-to-candidate'; }
         }
         if (field === 'images' && Array.isArray(provenance.imageEvidence)) {
             const evidence = new Map(provenance.imageEvidence.map(item => [item.imageId, item]));

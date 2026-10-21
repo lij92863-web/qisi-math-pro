@@ -99,8 +99,8 @@
       "name": "openBatchSubmitSummary",
       "file": "app.js",
       "range": [
-        2679,
-        2690
+        2776,
+        2786
       ],
       "class": "A",
       "allowedCalls": [
@@ -118,8 +118,8 @@
       "name": "dedupeActiveBatchDraftsNow",
       "file": "app.js",
       "range": [
-        2703,
-        2726
+        2799,
+        2822
       ],
       "class": "A",
       "allowedCalls": [
@@ -141,8 +141,8 @@
       "name": "cleanupActiveBatchDisplayPollution",
       "file": "app.js",
       "range": [
-        2737,
-        2754
+        2833,
+        2850
       ],
       "class": "A",
       "allowedCalls": [
@@ -163,8 +163,8 @@
       "name": "confirmBatchSubmit",
       "file": "app.js",
       "range": [
-        2761,
-        2780
+        2857,
+        2876
       ],
       "class": "A",
       "allowedCalls": [
@@ -185,8 +185,8 @@
       "name": "deleteBatchImport",
       "file": "app.js",
       "range": [
-        2782,
-        2791
+        2878,
+        2887
       ],
       "class": "A",
       "allowedCalls": [
@@ -204,7 +204,7 @@
       "astSha256": "4e3fcb1800b16c616c491c307c70dff6a6f75a4a9dbdc967de40eb9df7b536ac"
     }
   ],
-  "reviewedAstNodeCount": 28227,
-  "reviewedFunctionCount": 589,
+  "reviewedAstNodeCount": 28669,
+  "reviewedFunctionCount": 593,
   "reviewEvidence": "ai/FINDINGS_ALL_REPAIR_2026-10-01.md: N5-N9, N16, N27, N46, N52-N54 user-authorized bounded glue; N50 user-requested closure and deferred startup: ai/FINDINGS_LOADING_FOLLOWUP_2026-10-01.md; all nine original AST hashes preserved; role-only normal UI default restored: ai/DOCX_AUTO_ROUTE_REPAIR_2026-10-01.md; nine hashes preserved; PDF V1 bounded producer/faithful review/source glue: ai/CODEX_TASK_PDF_MULTIMODAL_V1.md; nine AST hashes independently matched; PDF V1 bounded producer/faithful review/source glue: ai/CODEX_TASK_PDF_MULTIMODAL_V1.md; nine AST hashes independently matched; PDF V1 next-round old entry retirement: ai/PDF_V1_NEXT_ROUND_EXECUTION_2026-10-03.md; original nine AST hashes preserved; user-directed software-only PDF V2 composition and review dispatch: ai/CODEX_TASK_PDF_EXTERNAL_V2_SOFTWARE_CHAIN_2026-10-13.md; all nine AST hashes checked unchanged"
 }

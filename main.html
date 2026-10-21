@@ -640,7 +640,14 @@
                                     <div class="batch-filter-tabs">
                                         <button v-for="tab in [{id:'all',name:'全部'},{id:'pending',name:'待确认'},{id:'reviewed',name:'已确认'},{id:'problems',name:'有问题'},{id:'images',name:'有图片'},{id:'submitted',name:'已入库'}]" :key="tab.id" @click="batchImportFilter = tab.id" :class="{active: batchImportFilter === tab.id}">{{ tab.name }}</button>
                                     </div>
+                                    <div class="batch-select-row">
+                                        <button class="batch-select-all" @click="selectAllDrafts">全选本页</button>
+                                        <span v-if="selectedDraftIds.length">{{ selectedDraftIds.length }} 已选</span>
+                                    </div>
                                     <button v-for="q in filteredDraftQuestions" :key="q.id" class="batch-question-nav-item" :class="{active: activeDraftQuestion?.id === q.id, submitted: q.status === 'submitted'}" @click="selectDraftQuestion(q.id)">
+                                        <span class="batch-select-box" :class="{ checked: selectedDraftIds.includes(q.id) }" @click.stop="toggleDraftSelection(q.id)" title="勾选后可批量确认">
+                                            <icon :name="selectedDraftIds.includes(q.id) ? 'check-square' : 'square'" size="14"></icon>
+                                        </span>
                                         <span>第 {{ q.questionNumber || q.order }} 题</span>
                                         <small>{{ q.type }}｜{{ String(q.stem || '').slice(0, 24) }}</small>
                                         <i v-if="draftQuestionProblems(q).length"></i>
@@ -656,7 +663,15 @@
                                         </div>
                                     </div>
 
-                                    <div class="batch-editor-card">
+                                    <div class="batch-meta-toggle">
+                                        <button class="material-light-btn" @click="draftMetaExpanded = !draftMetaExpanded">
+                                            <icon :name="draftMetaExpanded ? 'chevron-up' : 'chevron-down'" size="14"></icon>
+                                            更多信息
+                                            <span v-if="!draftMetaExpanded">{{ activeDraftQuestion.type }} · {{ activeDraftQuestion.grade || '未设年级' }} · {{ activeDraftQuestion.diff || '未设难度' }}</span>
+                                        </button>
+                                    </div>
+
+                                    <div class="batch-editor-card" v-show="draftMetaExpanded">
                                         <h2>题目属性</h2>
                                         <div class="batch-form-grid">
                                             <label>题型<select v-model="activeDraftQuestion.type" @change="markActiveDraftUserEdited('type')"><option>单选题</option><option>多选题</option><option>填空题</option><option>解答题</option><option>证明题</option></select></label>
@@ -666,7 +681,7 @@
                                         </div>
                                     </div>
 
-                                    <div class="batch-editor-card">
+                                    <div class="batch-editor-card" v-show="draftMetaExpanded">
                                         <h2>题库与来源</h2>
                                         <div class="batch-form-grid">
                                             <label>来源<input v-model="activeDraftSourceLabel" /></label>
@@ -773,8 +788,9 @@
                                     <div class="batch-editor-actions">
                                         <button class="material-light-btn" @click="saveActiveDraftQuestion"><icon name="save" size="14"></icon> 保存修改</button>
                                         <button v-if="activeDraftEditorDirty" class="material-light-btn" @click="discardActiveDraftEditorChanges">放弃修改</button>
-                                        <button class="material-primary-btn" @click="markDraftReviewed"><icon name="check-circle" size="14"></icon> 标记已确认</button>
-                                        <button class="material-primary-btn" :disabled="activeDraftQuestion.status === 'submitted'" @click="submitDraftQuestion(activeDraftQuestion.id)"><icon name="send" size="14"></icon> {{ activeDraftQuestion.status === 'submitted' ? '该题已入库' : '提交入库' }}</button>
+                                        <button class="material-light-btn review-confirm" @click="markDraftReviewed"><icon name="check-circle" size="14"></icon> 仅标记已确认</button>
+                                        <button class="material-light-btn review-submit" :disabled="activeDraftQuestion.status === 'submitted'" @click="submitDraftQuestion(activeDraftQuestion.id)"><icon name="send" size="14"></icon> {{ activeDraftQuestion.status === 'submitted' ? '该题已入库' : '提交入库' }}</button>
+                                        <button class="material-primary-btn review-quick" :disabled="activeDraftQuestion.status === 'submitted'" @click="confirmAndSubmitDraft(activeDraftQuestion.id)"><icon name="zap" size="14"></icon> 确认并入库</button>
                                     </div>
                                 </section>
 
@@ -862,6 +878,7 @@
 
                             <div class="batch-bottom-bar">
                                 <span>{{ activeDraftQuestion ? '当前：第 ' + (activeDraftQuestion.questionNumber || activeDraftQuestion.order) + ' 题｜' + draftQuestionStatusText(activeDraftQuestion.status) : '暂无题目' }}</span>
+                                <button v-if="selectedDraftIds.length" class="material-light-btn" @click="confirmSelectedDrafts">确认选中 {{ selectedDraftIds.length }} 题</button>
                                 <button class="material-primary-btn" @click="openBatchSubmitSummary">提交已确认题目</button>
                             </div>
                         </div>

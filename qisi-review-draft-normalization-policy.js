@@ -6,6 +6,17 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
     'use strict';
 
+    // A PDF recognition record belongs to exactly one protocol contract. The
+    // contract owns its own review gate, so the policy must ask the record's
+    // protocol instead of assuming the retired external/v1 pair.
+    function pdfRecordContract(q) {
+        const owns = (contract, predicate) => Boolean(contract?.[predicate]?.(q));
+        if (owns(root.Qisi?.PdfMineruContract, 'isRecord')) return root.Qisi.PdfMineruContract;
+        if (owns(root.Qisi?.PdfExternalContract, 'isExternal')) return root.Qisi.PdfExternalContract;
+        if (owns(root.Qisi?.PdfMultimodalContract, 'isV1')) return root.Qisi.PdfMultimodalContract;
+        return null;
+    }
+
     function createReviewDraftNormalizationPolicy(ports = {}) {
         for (const name of ["choiceOptionIssue","solutionQualityIssue","attachSourceTraceToDraftQuestion","extractOptionsFromCurrentBlockOnly","normalizeQuestionType","choiceQuestionMissingOptions","countValidOptions","addWarningOnce","batchDebugLog","toBatchDebugQuestion","getDefaultType","clock"]) {
             if (typeof ports[name] !== 'function') {
@@ -31,7 +42,8 @@
         const clock = ports.clock;
 
         const validateDraftContentForReview = (q) => {
-            if ((root.Qisi.PdfExternalContract?.isExternal(q) || root.Qisi.PdfMultimodalContract?.isV1(q))) return (q.pdfExternal ? root.Qisi.PdfExternalContract : root.Qisi.PdfMultimodalContract).reviewProblem(q);
+            const pdfContract = pdfRecordContract(q);
+            if (pdfContract) return pdfContract.reviewProblem(q);
             if (!String(q?.stem || '').trim()) return '题干为空，请先补充题干。';
             if (!String(q?.type || '').trim()) return '题型为空，请先选择题型。';
             if ([q.stem, ...(Array.isArray(q.options) ? q.options : []), q.answer, q.solution].some(root.Qisi.Utils.hasUnconvertedImagePlaceholder)) {
@@ -50,7 +62,7 @@
 
         const normalizeDraftQuestionBeforeSave = (q) => {
             if (!q) return false;
-            if ((root.Qisi.PdfExternalContract?.isExternal(q) || root.Qisi.PdfMultimodalContract?.isV1(q))) { q.updatedAt = clock(); return false; }
+            if (pdfRecordContract(q)) { q.updatedAt = clock(); return false; }
 
             if (typeof batchDebugLog === 'function' && typeof toBatchDebugQuestion === 'function') {
                 batchDebugLog('before-save', toBatchDebugQuestion(q));
@@ -143,7 +155,8 @@
 
         const draftQuestionProblems = (q) => {
             if (!q) return [];
-            if ((root.Qisi.PdfExternalContract?.isExternal(q) || root.Qisi.PdfMultimodalContract?.isV1(q))) return [...new Set([...(q.warnings || []), (q.pdfExternal ? root.Qisi.PdfExternalContract : root.Qisi.PdfMultimodalContract).reviewProblem(q)].filter(Boolean))];
+            const pdfContract = pdfRecordContract(q);
+            if (pdfContract) return [...new Set([...(q.warnings || []), pdfContract.reviewProblem(q)].filter(Boolean))];
             const problems = [];
             if ((q.warnings || []).length) problems.push(...q.warnings);
             if (!root.Qisi.Utils.cleanRecognizedText(q.stem)) problems.push('题干为空，请先补充题干。');

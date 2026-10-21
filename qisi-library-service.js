@@ -352,8 +352,8 @@
                         summary: { added: 0, filled: 0, skipped: 0 },
                         revertedAt: 0
                     };
-                    // 事务回调必须是同步函数 + Dexie promise 链：async 回调会返回原生
-                    // Promise，Dexie 判定事务提前提交，"撤销"就可能撤一半。
+                    // 本模块沿用可等待的 Dexie promise 链；原子性取决于所有数据库操作
+                    // 都在事务内完成且失败向上传播，并非由是否使用 async 关键字决定。
                     const applyOperation = operation =>
                         tx.get('externalQuestions', operation.externalId)
                             .then(external => {

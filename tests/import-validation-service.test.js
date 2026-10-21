@@ -245,6 +245,36 @@ test('present content with missing ownership cannot enter review', () => {
     );
 });
 
+test('proven support conflicts enter review while formal admission and malformed evidence remain blocked', () => {
+    const reviewValidator = ProductionReviewValidator.createProductionReviewValidator({ policy: FormalAdmissionPolicy });
+    const ports = { ...Validation.createProductionValidationPorts(productionDependencies({ reviewValidator })),
+        context: { files: [{ fileType: 'docx' }] } };
+    let candidate = DocxIdentity.projectDeterministicDocxCandidate({
+        candidate: { id: 'conflict', version: 1, questionNumber: '1', type: '单选题',
+            stem: '求值', options: ['甲', '乙', '丙', '丁'], answer: '', solution: '', images: [] },
+        source: { sourceId: 'questions', format: 'docx', filename: 'questions.docx' }
+    });
+    for (const answer of ['A', 'B']) candidate = DocxIdentity.applyDeterministicDocxSupportField({
+        candidate, field: 'answer', support: { question: '1', answer },
+        source: { sourceId: answer, format: 'docx', filename: answer + '.docx' }, roles: ['answer']
+    });
+    assert.equal(Validation.validateImportDrafts([candidate], ports)[0].answer, '');
+    const decision = reviewValidator.validate(candidate);
+    assert.equal(decision.admissionDecision.accepted, false);
+    assert.ok(decision.errors.some(error => error.code === 'admission-field-rejected'));
+    for (const mutate of [
+        row => { row.answer = 'A'; },
+        row => { row.supportEvidence.answer.declarations = []; },
+        row => { row.supportEvidence.answer.declarations[0].sourceId = 'unowned'; },
+        row => { row.fieldProvenance.answer.reasonCode = 'other-failure'; },
+        row => { row.fieldProvenance.stem.status = row.fieldProvenance.stem.kind = 'rejected'; }
+    ]) {
+        const malformed = structuredClone(candidate);
+        mutate(malformed);
+        assert.throws(() => Validation.validateImportDrafts([malformed], ports), { code: 'IMPORT_VALIDATION_REJECTED' });
+    }
+});
+
 test('production policy owner requires every real validation dependency', () => {
     assert.throws(
         () => Validation.createProductionValidationPorts({}),

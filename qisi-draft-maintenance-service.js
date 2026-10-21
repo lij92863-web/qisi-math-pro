@@ -169,13 +169,16 @@
             const submittedCount = loaded.questions.filter(
                 draft => draft?.status === 'submitted'
             ).length;
+            const immutableIds = new Set(loaded.questions
+                .filter(draft => draft.status === 'submitted').map(draft => draft.id));
+            const immutableImages = loaded.images.filter(image => immutableIds.has(image.questionId));
             const result = dedupeDrafts(
-                loaded.questions.filter(draft => draft?.status !== 'submitted'),
+                clone(loaded.questions.filter(draft => draft?.status !== 'submitted')),
                 {
                     stage: 'manual-active-batch',
                     batchId,
                     files,
-                    draftImages: loaded.images
+                    draftImages: loaded.images.filter(image => !immutableIds.has(image.questionId))
                 }
             );
             if (!result || !Array.isArray(result.drafts) ||
@@ -190,9 +193,9 @@
             const drafts = loaded.questions.flatMap(draft => {
                 if (draft?.status === 'submitted') return [clone(draft)];
                 const merged = mergedById.get(String(draft?.id ?? ''));
-                return merged ? [merged] : [];
+                return merged ? [{ ...merged, order: draft.order }] : [];
             });
-            const images = clone(result.draftImages);
+            const images = clone([...immutableImages, ...result.draftImages]);
             const problemCount = drafts.filter(draft => {
                 const isChoice = draft.type === '单选题' ||
                     draft.type === '多选题';

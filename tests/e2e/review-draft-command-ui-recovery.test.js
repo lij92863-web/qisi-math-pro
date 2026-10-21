@@ -6,6 +6,7 @@ const {
     callProxy,
     seedReviewBatch,
     getDbSnapshot,
+    waitForDbSnapshot,
     clearE2eData,
     assertNoRuntimeErrors
 } = require('./browser-harness.js');
@@ -90,8 +91,15 @@ test('N5/N6 metadata-only edits remain dirty, protect unload and persist before 
    return {dirty:p.activeDraftEditorDirty};
   });assert.equal(result.dirty,true);
   assert.equal(await page.evaluate(()=>{const e=new Event('beforeunload',{cancelable:true});window.dispatchEvent(e);return e.defaultPrevented;}),true);
-  await callProxy(page,'markDraftReviewed');const snapshot=await getDbSnapshot(page),q=snapshot.drafts.find(q=>q.batchId===id);
+  // Exercise the UI action and its durable result. Awaiting the async proxy via
+  // CDP can report "Promise was collected" after the save has already succeeded.
+  const formalCountBefore=(await getDbSnapshot(page)).questions.length;
+  await page.getByRole('button',{name:'仅标记已确认',exact:true}).click();
+  const snapshot=await waitForDbSnapshot(page,s=>s.drafts.some(q=>q.batchId===id&&q.status==='reviewed'));
+  await page.waitForFunction(()=>!window.Qisi.Runtime.getRuntimeDependency('AppProxy').activeDraftEditorDirty);
+  const q=snapshot.drafts.find(q=>q.batchId===id);
   assert.equal(q.year,'2031');assert.equal(q.meta.year,'2031');assert.equal(q.meta.source,'Edited source');assert.equal(q.source.mode,'docx-deterministic');assert.equal(q.status,'reviewed');
+  assert.equal(snapshot.questions.length,formalCountBefore,'confirmation alone must not insert a formal question');
   assert.equal(await page.evaluate(()=>window.Qisi.Runtime.getRuntimeDependency('AppProxy').activeDraftEditorDirty),false);
   assertNoRuntimeErrors(h);await clearE2eData(page);
  }finally{await h.close();}

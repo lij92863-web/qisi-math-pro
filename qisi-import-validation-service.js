@@ -137,13 +137,47 @@
             : typeof value === 'string'
                 ? Boolean(value.trim())
                 : value !== null && value !== undefined;
-        const reviewableMissingFields = (draft, result) =>
-            result.errors.length > 0 &&
-            result.errors.every(error =>
-                error.code === 'admission-required-field-missing' &&
-                draft.fieldProvenance?.[error.field]?.status === 'missing' &&
-                !hasValue(draft[error.field])
-            );
+        const reviewableSupportConflict = (draft, error) => {
+            const field = error.field;
+            const provenance = draft.fieldProvenance?.[field];
+            const evidence = draft.supportEvidence?.[field];
+            return draft.source?.format === 'docx' &&
+                draft.producer?.routeId === 'docx-deterministic-import' &&
+                error.code === 'admission-field-rejected' &&
+                ['answer', 'solution'].includes(field) && !hasValue(draft[field]) &&
+                provenance?.status === 'rejected' &&
+                provenance.reasonCode === 'docx-support-conflicting-values' &&
+                evidence?.state === 'conflict' && evidence.value === '' &&
+                Array.isArray(evidence.declarations) && evidence.declarations.length > 0 &&
+                evidence.declarations.every(row => hasValue(row.value) &&
+                    (row.sourceId === draft.source.sourceId ||
+                        (draft.supportSources || []).some(source => source.sourceId === row.sourceId &&
+                            source.format === 'docx' && source.roles.includes(field)))) &&
+                (new Set(evidence.declarations.map(row => row.value)).size > 1 ||
+                    (field === 'solution' && evidence.declarations.some(row =>
+                        row.evidenceRef === 'unresolved-solution-boundary')));
+        };
+        const reviewableUnconvertedDocxSolution = (draft, error, context) => {
+            const provenance = draft.fieldProvenance?.solution;
+            const support = draft.supportEvidence?.solution;
+            const ownedSource = sourceId => (context.files || []).some(file =>
+                file.id === sourceId && file.fileType === 'docx') &&
+                (sourceId === draft.source?.sourceId ||
+                    (draft.supportSources || []).some(source => source.sourceId === sourceId &&
+                        source.format === 'docx' && source.roles?.includes('solution')));
+            // Preserve unresolved source text in review; the unchanged Formal
+            // Admission check still rejects this marker on every submission.
+            return error.code === 'admission-field-rejected' && error.field === 'solution' &&
+                draft.source?.format === 'docx' && draft.producer?.mode === 'deterministic-docx' &&
+                draft.producer.routeId === 'docx-deterministic-import' &&
+                typeof draft.solution === 'string' && /\[DOCX不可显示图片:[^\]\r\n]+\]/.test(draft.solution) &&
+                provenance?.status === 'deterministic-source' && provenance.kind === 'deterministic-source' &&
+                provenance.reasonCode === 'docx-support-exact-question-match' && ownedSource(provenance.sourceId) &&
+                support?.state === 'unique' && support.value === draft.solution &&
+                Array.isArray(support.values) && support.values.length === 1 && support.values[0] === draft.solution &&
+                Array.isArray(support.declarations) && support.declarations.length > 0 &&
+                support.declarations.every(row => row.value === draft.solution && ownedSource(row.sourceId));
+        };
 
         const validateOwnership = (draft, { context, index }) => {
             if (canonicalPdf(draft)) return rejectedPdf();
@@ -170,33 +204,30 @@
                 id: draft.id || `validation-draft-${index + 1}`,
                 version: Number.isInteger(draft.version) ? draft.version : 1
             });
-            const acceptedMissing = reviewableMissingFields(draft, result);
             const supportDecisions = Array.isArray(
                 draft.controlledWrite?.supportDecisions
             ) ? draft.controlledWrite.supportDecisions : [];
-            const reviewableDocxSupport =
-                draft.source?.format === 'docx' &&
-                draft.producer?.routeId === 'docx-rendered-to-pdf-vision' &&
-                draft.manualReviewRequired === true &&
-                result.errors.length > 0 &&
-                result.errors.every(error => {
-                    if (
-                        error.code !== 'admission-producer-provenance-invalid' ||
-                        !['answer', 'solution'].includes(error.field)
-                    ) return false;
-                    const provenance = draft.fieldProvenance?.[error.field];
-                    return supportDecisions.some(decision =>
-                        decision.field === error.field &&
+            // Review persistence and formal admission are separate decisions.
+            // Every error must be a supported, evidence-backed review state;
+            // a mixed missing/conflict draft must not fail merely for mixing them.
+            const reviewable = result.errors.length > 0 && result.errors.every(error => {
+                const provenance = draft.fieldProvenance?.[error.field];
+                if (error.code === 'admission-required-field-missing' &&
+                    provenance?.status === 'missing' && !hasValue(draft[error.field])) return true;
+                if (reviewableSupportConflict(draft, error)) return true;
+                if (reviewableUnconvertedDocxSolution(draft, error, context)) return true;
+                return draft.source?.format === 'docx' &&
+                    draft.producer?.routeId === 'docx-rendered-to-pdf-vision' &&
+                    draft.manualReviewRequired === true &&
+                    error.code === 'admission-producer-provenance-invalid' &&
+                    ['answer', 'solution'].includes(error.field) &&
+                    supportDecisions.some(decision => decision.field === error.field &&
                         decision.sourceId === provenance?.sourceId &&
-                        decision.decisionId ===
-                            provenance?.controlledWriteDecisionId
-                    );
-                });
+                        decision.decisionId === provenance?.controlledWriteDecisionId);
+            });
             return {
-                valid: result.valid || acceptedMissing ||
-                    reviewableDocxSupport,
-                errors: acceptedMissing || reviewableDocxSupport
-                    ? [] : result.errors,
+                valid: result.valid || reviewable,
+                errors: reviewable ? [] : result.errors,
                 warnings: result.warnings || []
             };
         };

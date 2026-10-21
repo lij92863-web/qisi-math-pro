@@ -356,11 +356,10 @@
         }
 
         const table = name => database.table(name);
-        // 写路径只有一条：atomic()。事务回调必须是**同步函数**，返回 Dexie
-        // 自己的 promise 链（.then/bulkPut/first 都行，Promise.all 与 await 不行）。
-        // async 回调永远返回原生 Promise，Dexie 拿到就判定事务已经结束并提交，
-        // 第二次写抛 PrematureCommitError —— 而第一次写已经落盘。
-        // 所以 run() 只做错误归一，不插入 async 边界；Dexie 必须拿到自己的 promise。
+        // 本仓储统一用同步回调返回数据库 promise 链，便于审计事务范围。
+        // 这是本地约定，不是“Dexie 不支持 async”：原生 async 的数据库请求
+        // 可以正常回滚。事务是否存活取决于工作/等待的范围，需要原子性实测。
+        // run() 只归一错误，不在链中引入数据库之外的异步工作。
         const run = (operation, work) => {
             let result;
             try {
@@ -484,11 +483,7 @@
         ) => {
             const input = clone(question);
             const id = requireId(input?.id, 'question.id');
-            // 事务回调**不能是 async 函数**：async 永远返回原生 Promise，
-            // Dexie 拿到原生 Promise 就判定事务结束并提交，于是第二次写抛
-            // PrematureCommitError —— 而第一次写已经生效，老师看到「保存入库失败」
-            // 但题目其实进库了，重试就多出一道重复题。
-            // 所以这里直接对 Dexie 表操作，让每一步返回的都是 Dexie 自己的 Promise。
+            // 题目与图片共用一个事务链；图片写入失败必须回滚题目写入。
             imageRecords.forEach(image => requireId(image?.id, 'image.id'));
             return transaction(['questions', 'images'], () =>
                 table('questions').get(id).then(existing => {
@@ -609,8 +604,8 @@
                         .equals(draftId).toArray()
                         .then(images => ({
                             batch: clone(batch),
-                            draft: clone(draft),
-                            images: clone(images)
+                            draft: isDraftTombstone(draft) ? undefined : clone(draft),
+                            images: isDraftTombstone(draft) ? [] : clone(images)
                         })))),
             'r'
         );

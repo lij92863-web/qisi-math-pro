@@ -2676,8 +2676,104 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     return true;
                 };
 
-                const openBatchSubmitSummary = async () => {
+                // One-tap review: save the editor, confirm, then submit in one
+                // action. Both steps still go through the same workflow service
+                // and formal-admission gates; this only removes the extra clicks.
+                const confirmAndSubmitDraft = async (questionId = activeDraftQuestionId.value) => {
+                    const id = String(questionId || '');
+                    if (!id) return false;
+                    if (id === activeDraftQuestionId.value && activeDraftEditorDirty.value) {
+                        const saved = await saveActiveDraftQuestion({ silent: true });
+                        if (!saved) return false;
+                    }
+                    const draft = batchDraftQuestions.value.find(item => item.id === id);
+                    if (!draft?.batchId) return false;
                     try {
+                        const confirmed = await reviewWorkflowService.confirmDraft({
+                            batchId: draft.batchId,
+                            draftId: draft.id,
+                            expectedDraftVersion: draft.version,
+                            actorId: 'local-teacher'
+                        });
+                        if (!confirmed.accepted) {
+                            alert(confirmed.validation?.errors?.[0]?.message || '题目校验失败，暂时不能入库。');
+                            return false;
+                        }
+                        const submitted = await reviewWorkflowService.submitDraft({
+                            batchId: draft.batchId,
+                            draftId: draft.id,
+                            expectedDraftVersion: confirmed.draft.version,
+                            actorId: 'local-teacher'
+                        });
+                        if (!submitted.accepted) {
+                            alert(submitted.validation?.errors?.[0]?.message || '正式入库准入校验失败。');
+                            await loadBatchImportData();
+                            return false;
+                        }
+                    } catch (error) {
+                        alert(formalSubmitErrorMessage(error));
+                        await loadBatchImportData();
+                        return false;
+                    }
+                    await loadData();
+                    await loadBatchImportData();
+                    showBatchToast('已确认并入库。');
+                    return true;
+                };
+
+                const selectedDraftIds = ref([]);
+                const draftMetaExpanded = ref(false);
+                const toggleDraftSelection = (id) => {
+                    const key = String(id || '');
+                    if (!key) return;
+                    selectedDraftIds.value = selectedDraftIds.value.includes(key)
+                        ? selectedDraftIds.value.filter(item => item !== key)
+                        : [...selectedDraftIds.value, key];
+                };
+                const selectAllDrafts = () => {
+                    const visible = filteredDraftQuestions.value.map(item => item.id);
+                    const allSelected = visible.length > 0 &&
+                        visible.every(id => selectedDraftIds.value.includes(id));
+                    selectedDraftIds.value = allSelected
+                        ? selectedDraftIds.value.filter(id => !visible.includes(id))
+                        : [...new Set([...selectedDraftIds.value, ...visible])];
+                };
+                const confirmSelectedDrafts = async () => {
+                    const ids = [...selectedDraftIds.value];
+                    if (!ids.length) {
+                        showBatchToast('请先勾选要确认的题目。');
+                        return;
+                    }
+                    if (activeDraftEditorDirty.value &&
+                        !await saveActiveDraftQuestion({ silent: true })) return;
+                    let confirmedCount = 0;
+                    const failed = [];
+                    for (const id of ids) {
+                        const draft = batchDraftQuestions.value.find(item => item.id === id);
+                        if (!draft || draft.status === 'submitted' || draft.status === 'reviewed') continue;
+                        try {
+                            const result = await reviewWorkflowService.confirmDraft({
+                                batchId: draft.batchId,
+                                draftId: draft.id,
+                                expectedDraftVersion: draft.version,
+                                actorId: 'local-teacher'
+                            });
+                            if (result.accepted) confirmedCount += 1;
+                            else failed.push(id);
+                        } catch (error) {
+                            failed.push(id);
+                        }
+                    }
+                    selectedDraftIds.value = failed;
+                    await loadBatchImportData();
+                    showBatchToast(
+                        failed.length
+                            ? `已确认 ${confirmedCount} 题，${failed.length} 题未通过。`
+                            : `已确认 ${confirmedCount} 题。`
+                    );
+                };
+
+                const openBatchSubmitSummary = async () => {                    try {
                     if (!activeBatchId.value) return;
                     submitSummary.value = await reviewWorkflowService
                         .prepareReviewedBatch({
@@ -5077,7 +5173,7 @@ Promise.all([imageReady, fontReady]).then(() => {
                     importBankInput, openImportBankPicker, handleImportBankFileChange, pendingImportPreview, cancelImportPreview, confirmImportBankPreview, exportQuestionBankPackage,
                     undoLatestExternalMerge, deleteExternalBatch, recalculateExternalBatchStatus,
                     batchImportMode, batchImportBatches, recentBatchImportBatches, batchImportFiles, batchDraftQuestions, filteredDraftQuestions, batchDraftImages, batchImportFilter, activeBatchId, activeBatch, activeDraftQuestionId, activeDraftQuestion, batchRecognitionSummary, activeDraftEditorBuffer, activeDraftEditorOriginal, activeDraftSourceLabel, activeDraftEditorDirty, activeDraftEditorPreview, activeDraftEditorTextarea, activeDraftImages, activeDraftRealQuestionImages, activeDraftSourcePageImages, activeDraftPreviewImages, unassignedDraftImages, activeDraftTab, batchUploadInput, isDraggingBatchFiles, batchToast, unassignedImageModal, imagePositionMenuId, cropModalOpen, cropImageRef, cropState, cropSelectionStyle, pendingPurposeFile, pendingPurposeRoles, batchCreateFiles, batchCreateTypeHint, batchCreateWarning, batchExpectedQuestionCount, batchDefaultMeta, unmatchedAnswers, submitSummary,
-                    openBatchCreate, openBatchList, clearBatchDraftWorkspace, openBatchFilePicker, handleBatchFileChange, handleBatchDrop, handleBatchHomeDrop, togglePurposeRole, confirmBatchFilePurpose, cancelBatchFilePurpose, editBatchFilePurpose, removeBatchCreateFile, createDraftImportBatch, runBatchRecognition, cancelBatchRecognition, rerunActiveBatchRecognition, dedupeActiveBatchDraftsNow, openBatchReview, selectDraftQuestion, updateDraftQuestionField, saveActiveDraftQuestion, markDraftReviewed, submitDraftQuestion, openBatchSubmitSummary, confirmBatchSubmit, deleteBatchImport, validatePageRange, batchStatusText, draftQuestionStatusText, roleLabel, rolesLabel, fileTypeText, formatFileSize, draftQuestionProblems, confirmDraftImages, deleteDraftImage, toggleImagePositionMenu, copyDraftImagePlacementLatex, openSourcePageCrop, openPdfSource, closeCropModal, resetCropState, startManualCrop, moveManualCrop, endManualCrop, saveManualCropToDraft, bindUnassignedImage, deleteUnassignedImage, showUnmatchedAnswerList, showActiveRawText, showCropNotice, cleanupActiveBatchDisplayPollution, markActiveDraftUserEdited, choosePdfCandidate, pdfDraftMeta, activePdfReviewPanel, activePdfUnassigned, acknowledgePdfTaskIssues, insertDraftEditorText, discardActiveDraftEditorChanges,
+                    openBatchCreate, openBatchList, clearBatchDraftWorkspace, openBatchFilePicker, handleBatchFileChange, handleBatchDrop, handleBatchHomeDrop, togglePurposeRole, confirmBatchFilePurpose, cancelBatchFilePurpose, editBatchFilePurpose, removeBatchCreateFile, createDraftImportBatch, runBatchRecognition, cancelBatchRecognition, rerunActiveBatchRecognition, dedupeActiveBatchDraftsNow, openBatchReview, selectDraftQuestion, updateDraftQuestionField, saveActiveDraftQuestion, markDraftReviewed, submitDraftQuestion, confirmAndSubmitDraft, selectedDraftIds, draftMetaExpanded, toggleDraftSelection, selectAllDrafts, confirmSelectedDrafts, openBatchSubmitSummary, confirmBatchSubmit, deleteBatchImport, validatePageRange, batchStatusText, draftQuestionStatusText, roleLabel, rolesLabel, fileTypeText, formatFileSize, draftQuestionProblems, confirmDraftImages, deleteDraftImage, toggleImagePositionMenu, copyDraftImagePlacementLatex, openSourcePageCrop, openPdfSource, closeCropModal, resetCropState, startManualCrop, moveManualCrop, endManualCrop, saveManualCropToDraft, bindUnassignedImage, deleteUnassignedImage, showUnmatchedAnswerList, showActiveRawText, showCropNotice, cleanupActiveBatchDisplayPollution, markActiveDraftUserEdited, choosePdfCandidate, pdfDraftMeta, activePdfReviewPanel, activePdfUnassigned, acknowledgePdfTaskIssues, insertDraftEditorText, discardActiveDraftEditorChanges,
                     syncActiveDraftEditorFromQuestion: () => window.Qisi.ReviewDraftState.syncActiveDraftEditorFromQuestion({
                         activeDraftQuestion,
                         activeDraftEditorBuffer,

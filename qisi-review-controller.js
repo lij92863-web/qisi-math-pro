@@ -68,7 +68,7 @@
             // `fieldProvenance` above is the route-independent field-level state carrier;
             // `pdfExternal.states` / `pdfV1.states` are extra per-field mirrors that only
             // the PDF containers carry, so mirror into them when present.
-            const states = (next.pdfExternal || next.pdfV1)?.states;
+            const states = (next.pdfReview || next.pdfExternal || next.pdfV1)?.states;
             if (states) for (const field of explicitFields) states[['questionNumber', 'stem', 'options', 'type'].includes(field) ? 'question' : field] = 'manual';
             next.userEdited = true;
             next.manualEdited = true;

@@ -108,7 +108,10 @@
                             stableCode(error?.code || 'NORMAL_UI_IMPORT_FAILED'),
                             error?.causeCode || error?.code || error?.name
                         );
-                    notifyFailure({ batchId, code: normalized.code, message: normalized.code === 'IMPORT_RUNNING_IN_ANOTHER_WINDOW' ? '此任务正在另一个窗口处理中，请等待完成后再查看。' : normalized.code });
+                    const status = root?.Qisi?.ProductionImportStatusPort || (typeof module !== 'undefined' && module.exports
+                        ? require('./qisi-production-import-status-port.js') : null);
+                    const details = status.failureDetails({ ...error, code: normalized.code, causeCode: normalized.causeCode });
+                    notifyFailure({ batchId, code: normalized.code, details, message: normalized.code === 'IMPORT_RUNNING_IN_ANOTHER_WINDOW' ? '此任务正在另一个窗口处理中，请等待完成后再查看。' : status.failureMessage(details) });
                     throw normalized;
                 })
                 .finally(() => {

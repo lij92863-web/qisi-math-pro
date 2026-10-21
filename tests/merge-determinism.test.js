@@ -82,8 +82,11 @@ test('merged field value and provenance always come from the same candidate', ()
     assert.deepEqual(merged.pdfExternal.optionLabels, ['甲', '乙', '丙', '丁']);
 
     const mergedFrom = merged.sourceTrace.duplicateMergedFrom.at(-1);
-    assert.equal(mergedFrom.answer, complete.answer);
-    assert.equal(mergedFrom.solution, complete.solution);
+    const traced = [complete, rejected].find(row => row.id === mergedFrom.id);
+    assert.ok(traced, '合并来源必须指向实际候选');
+    assert.equal(mergedFrom.answer, traced.answer);
+    assert.equal(mergedFrom.solution, traced.solution);
+    assert.deepEqual(mergedFrom.fieldProvenance, traced.fieldProvenance);
     assert.equal(mergedFrom.rejectedValues, undefined);
 });
 
