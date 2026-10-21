@@ -493,6 +493,10 @@
     {
       "file": "qisi-review-image-projection.js",
       "runtime": "browser"
+    },
+    {
+      "file": "qisi-review-editor-projection.js",
+      "runtime": "browser"
     }
   ]
 }

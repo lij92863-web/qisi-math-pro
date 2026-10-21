@@ -80,11 +80,16 @@ describe('normalizeDraftPreviewOptions', () => {
         }
     });
 
-    it('app.js explicitly calls Qisi ReviewDraftState helper', () => {
+    it('app.js and the editor projection both use the shared ReviewDraftState helper', () => {
         const rootDir = path.join(__dirname, '..');
         const app = fs.readFileSync(path.join(rootDir, 'app.js'), 'utf8');
-        assert.match(app, /window\.Qisi\.ReviewDraftState\.normalizeDraftPreviewOptions\(question\)/);
+        const projection = fs.readFileSync(path.join(rootDir, 'qisi-review-editor-projection.js'), 'utf8');
+        // R1c moved the call into the projection module; app.js still passes the owner
+        // reference, so neither file may reimplement the rule locally.
+        assert.match(app, /normalizePreviewOptions:\s*window\.Qisi\.ReviewDraftState\.normalizeDraftPreviewOptions/);
         assert.doesNotMatch(app, /const\s+normalizeDraftPreviewOptions\s*=/);
+        assert.match(projection, /normalizePreviewOptions\(question\)/);
+        assert.doesNotMatch(projection, /const\s+normalizeDraftPreviewOptions\s*=/);
     });
 });
 

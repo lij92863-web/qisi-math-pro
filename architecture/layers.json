@@ -1294,6 +1294,23 @@
       "status": "production-wired"
     },
     {
+      "id": "review-editor-projection",
+      "file": "qisi-review-editor-projection.js",
+      "layer": 1,
+      "domainOwner": "reviewEditorProjectionOwner",
+      "publicApi": [
+        "buildEditorSource",
+        "buildEditorProjection"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
       "id": "review-draft-normalization",
       "file": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

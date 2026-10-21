@@ -91,5 +91,6 @@
   "paperSegmenterOwner": "qisi-paper-segmenter.js",
   "pdfQuestionDisplayOwner": "qisi-pdf-question-display.js",
   "reviewDraftReadModelOwner": "qisi-review-draft-read-model.js",
-  "reviewImageProjectionOwner": "qisi-review-image-projection.js"
+  "reviewImageProjectionOwner": "qisi-review-image-projection.js",
+  "reviewEditorProjectionOwner": "qisi-review-editor-projection.js"
 }

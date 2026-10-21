@@ -741,59 +741,21 @@
                 window.addEventListener('beforeunload', protectUnsavedDraft);
                 Vue.onUnmounted(() => window.removeEventListener('beforeunload', protectUnsavedDraft));
 
-                const buildDraftEditorSource = (q) => {
-                    if (!q) return '';
-                    if (Boolean(pdfDraftContract(q))) return q.editorSource || pdfDraftContract(q).editorSource(q);
+                const buildDraftEditorSource = (q) => window.Qisi.ReviewEditorProjection.buildEditorSource({
+                    question: q,
+                    pdfContract: pdfDraftContract,
+                    mergeStemWithOptions,
+                    normalizeNewlines: window.Qisi.ReviewDraftState.normalizeDraftEditorNewlines
+                });
 
-                    if (typeof q.editorSource === 'string' && q.editorSource.length > 0) {
-                        return window.Qisi.ReviewDraftState.normalizeDraftEditorNewlines(q.editorSource);
-                    }
-
-                    return window.Qisi.ReviewDraftState.normalizeDraftEditorNewlines(
-                        mergeStemWithOptions(
-                            q.stem || '',
-                            q.options || ['', '', '', ''],
-                            q.type || '解答题'
-                        )
-                    );
-                };
-
-                const splitChoiceSourceForEditor = source =>
-                    window.Qisi.ReviewDraftState.splitChoiceSourceForEditor(source);
-
-                const buildDraftEditorProjection = (source, question) => {
-                    if (Boolean(pdfDraftContract(question))) return pdfDraftContract(question).projectEditorSource(source, question);
-                    const text = window.Qisi.ReviewDraftState.normalizeDraftEditorNewlines(source);
-                    const type = String(question?.type || '解答题').trim();
-                    const isChoice = type === '单选题' || type === '多选题';
-
-                    if (!isChoice) {
-                        return {
-                            stem: text,
-                            options: ['', '', '', ''],
-                            type,
-                            parsedOptions: false
-                        };
-                    }
-
-                    const split = splitChoiceSourceForEditor(text);
-
-                    if (split) {
-                        return {
-                            stem: split.stem,
-                            options: split.options.map(option => String(option || '')),
-                            type,
-                            parsedOptions: true
-                        };
-                    }
-
-                    return {
-                        stem: text,
-                        options: window.Qisi.ReviewDraftState.normalizeDraftPreviewOptions(question),
-                        type,
-                        parsedOptions: false
-                    };
-                };
+                const buildDraftEditorProjection = (source, question) => window.Qisi.ReviewEditorProjection.buildEditorProjection({
+                    source,
+                    question,
+                    pdfContract: pdfDraftContract,
+                    normalizeNewlines: window.Qisi.ReviewDraftState.normalizeDraftEditorNewlines,
+                    splitChoiceSource: window.Qisi.ReviewDraftState.splitChoiceSourceForEditor,
+                    normalizePreviewOptions: window.Qisi.ReviewDraftState.normalizeDraftPreviewOptions
+                });
 
                 const activeDraftEditorPreview = computed(() =>
                     buildDraftEditorProjection(

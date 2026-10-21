@@ -62,7 +62,8 @@
         "mineru-task-store",
         "paper-segmenter",
         "review-draft-read-model",
-        "review-image-projection"
+        "review-image-projection",
+        "review-editor-projection"
       ]
     },
     {
