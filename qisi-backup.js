@@ -50,7 +50,7 @@
 
         const safeName = value =>
             String(value || 'item')
-                .replace(/[\\/:*?"<>|]/g, '_')
+                .replace(/[^a-zA-Z0-9._-]/g, '_')
                 .slice(0, 120);
 
         const mimeExtension = mime => ({
@@ -378,8 +378,12 @@
         const exportFullDatabaseBackup = async db => {
             const result = await createFullDatabaseBackup(db);
             downloadBlob(result.blob, result.filename);
-            localStorage.setItem('qisi_last_full_backup_at', String(Date.now()));
-            localStorage.setItem('qisi_last_full_backup_report', JSON.stringify(result.manifest.verification));
+            try {
+                localStorage.setItem('qisi_last_full_backup_at', String(Date.now()));
+                localStorage.setItem('qisi_last_full_backup_report', JSON.stringify(result.manifest.verification));
+            } catch (error) {
+                console.warn('[QISI_BACKUP][write-report-failed]', error);
+            }
             return result.manifest;
         };
 
