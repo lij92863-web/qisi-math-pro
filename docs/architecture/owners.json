@@ -805,6 +805,26 @@
       "status": "production"
     },
     {
+      "ownerId": "library-image-resources",
+      "module": "qisi-library-image-resources.js",
+      "layer": 2,
+      "responsibilities": [
+        "library-question-image-url-attachment"
+      ],
+      "allowedCallers": [
+        "ui-shell"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "question-repository",
+        "formal-admission",
+        "app-shell"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "none",
+      "status": "production"
+    },
+    {
       "ownerId": "review-draft-normalization",
       "module": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

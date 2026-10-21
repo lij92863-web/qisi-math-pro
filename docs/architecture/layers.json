@@ -105,7 +105,8 @@
         "pdf-external-producer",
         "mineru-task-service",
         "mineru-client",
-        "import-run-commands"
+        "import-run-commands",
+        "library-image-resources"
       ]
     },
     {

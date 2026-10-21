@@ -517,6 +517,10 @@
     {
       "file": "qisi-import-run-commands.js",
       "runtime": "browser"
+    },
+    {
+      "file": "qisi-library-image-resources.js",
+      "runtime": "browser"
     }
   ]
 }

@@ -2971,47 +2971,14 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     showEntryPersonalKnowledge.value = false;
                 };
 
-                const attachQuestionImageUrls = async (items) => {
-                    const list = items || [];
-                    const wantedIds = new Set();
-                    for (const q of list) {
-                        if(!Array.isArray(q.options)) q.options = ['', '', '', ''];
-                        if(!Array.isArray(q.images)) q.images = [];
-                        applyOptionSplit(q);
-                        if(!q.knowledge && !q.meta?.knowledge) q.knowledge = '';
-                        q.knowledgeType = q.knowledgeType || q.meta?.knowledgeType || 'system';
-                        q.systemKnowledge = q.systemKnowledge || q.meta?.systemKnowledge || (q.knowledgeType === 'system' ? q.knowledge || q.meta?.knowledge || '' : '');
-                        q.personalKnowledge = q.personalKnowledge || q.meta?.personalKnowledge || (q.knowledgeType === 'personal' ? q.knowledge || q.meta?.knowledge || '' : '');
-                        for (const img of q.images) {
-                            const id = String(img?.id || '');
-                            if (id) wantedIds.add(id);
-                        }
-                    }
-                    // 一次取全：逐题查询在万题规模下是 3.4s 里的 92%，且 find() 让每张图再走一遍线性扫描。
-                    const blobRows = wantedIds.size
-                        ? await storageRepository.loadImageRecords([...wantedIds])
-                        : [];
-                    const blobById = new Map(blobRows.map(row => [String(row?.id || ''), row]));
-                    for (const q of list) {
-                        for (const img of q.images) {
-                            const b = blobById.get(String(img?.id || ''));
-                            if (b?.blob) {
-                                img.url = URL.createObjectURL(b.blob);
-                                img.displayable = true;
-                                img.missingBlob = false;
-                                objectUrls.add(img.url);
-                            } else {
-                                img.url = '';
-                                img.displayable = false;
-                                img.missingBlob = true;
-                                console.warn('[QUESTION_IMAGE][missing-blob]', {
-                                    questionId: q.id,
-                                    imageId: img.id
-                                });
-                            }
-                        }
-                    }
-                };
+                const attachQuestionImageUrls = async (items) => window.Qisi.LibraryImageResources.attachImageUrls({
+                    items: items || [],
+                    storage: storageRepository,
+                    createObjectUrl: blob => URL.createObjectURL(blob),
+                    rememberUrl: url => objectUrls.add(url),
+                    applyOptionSplit,
+                    warn: (message, payload) => console.warn(message, payload)
+                });
 
                 const loadData = async () => {
                     try {
