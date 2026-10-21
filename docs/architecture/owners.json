@@ -825,6 +825,26 @@
       "status": "production"
     },
     {
+      "ownerId": "library-snapshot",
+      "module": "qisi-library-snapshot.js",
+      "layer": 2,
+      "responsibilities": [
+        "library-domain-readback-snapshot"
+      ],
+      "allowedCallers": [
+        "ui-shell"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "question-repository",
+        "formal-admission",
+        "app-shell"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "none",
+      "status": "production"
+    },
+    {
       "ownerId": "review-draft-normalization",
       "module": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

@@ -521,6 +521,10 @@
     {
       "file": "qisi-library-image-resources.js",
       "runtime": "browser"
+    },
+    {
+      "file": "qisi-library-snapshot.js",
+      "runtime": "browser"
     }
   ]
 }

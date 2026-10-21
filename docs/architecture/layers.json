@@ -106,7 +106,8 @@
         "mineru-task-service",
         "mineru-client",
         "import-run-commands",
-        "library-image-resources"
+        "library-image-resources",
+        "library-snapshot"
       ]
     },
     {

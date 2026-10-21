@@ -1415,6 +1415,21 @@
       "status": "production-wired"
     },
     {
+      "id": "library-snapshot",
+      "file": "qisi-library-snapshot.js",
+      "layer": 2,
+      "domainOwner": "librarySnapshotOwner",
+      "publicApi": [
+        "loadLibrarySnapshot"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
       "id": "review-draft-normalization",
       "file": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

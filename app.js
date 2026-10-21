@@ -2984,41 +2984,24 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     try {
                         objectUrls.forEach(url => URL.revokeObjectURL(url));
                         objectUrls.clear();
-                        const allQs = await storageRepository.loadLibrary();
-                        await attachQuestionImageUrls(allQs);
-                        questions.value = allQs.filter(q => q && typeof q === 'object');
+                        const snapshot = await window.Qisi.LibrarySnapshot.loadLibrarySnapshot({
+                            storage: storageRepository,
+                            draftPersistence: draftPersistenceService,
+                            batchId: activeBatchId.value,
+                            attachImages: attachQuestionImageUrls
+                        });
+                        questions.value = snapshot.questions;
                         buildQuestionFingerprintMaps(questions.value);
-                        const allExternal = await storageRepository.listTable(
-                            'externalQuestions',
-                            { orderBy: 'importedAt', reverse: true }
-                        );
-                        await attachQuestionImageUrls(allExternal);
-                        externalQuestions.value = allExternal.filter(q => q && typeof q === 'object');
-                        importBatches.value = await storageRepository.listTable(
-                            'importBatches',
-                            { orderBy: 'importedAt', reverse: true }
-                        );
-                        batchImportBatches.value =
-                            await storageRepository.listRecentTasks();
-                        if (activeBatchId.value) {
-                            const activeDraft =
-                                await draftPersistenceService.reloadDraftBatch(
-                                    activeBatchId.value
-                                );
-                            batchImportFiles.value = activeDraft.files;
-                            batchDraftQuestions.value = activeDraft.questions;
-                            batchDraftImages.value = activeDraft.images;
+                        externalQuestions.value = snapshot.externalQuestions;
+                        importBatches.value = snapshot.importBatches;
+                        batchImportBatches.value = snapshot.recentTasks;
+                        if (snapshot.activeDraft) {
+                            batchImportFiles.value = snapshot.activeDraft.files;
+                            batchDraftQuestions.value = snapshot.activeDraft.questions;
+                            batchDraftImages.value = snapshot.activeDraft.images;
                         }
-                        customTemplates.value =
-                            await storageRepository.listTable(
-                                'customTemplates',
-                                { orderBy: 'createdAt', reverse: true }
-                            );
-                        const savedPersonal = await storageRepository.get(
-                            'personalKnowledge',
-                            'tree'
-                        );
-                        personalKnowledgeTree.value = Array.isArray(savedPersonal?.nodes) ? savedPersonal.nodes : [];
+                        customTemplates.value = snapshot.customTemplates;
+                        personalKnowledgeTree.value = snapshot.personalKnowledgeTree;
                     } catch (error) {
                         console.error('题库数据加载失败', error);
                         alert(`题库数据加载失败：${error?.message || error}`);
