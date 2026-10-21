@@ -1254,6 +1254,27 @@
       "status": "production-wired"
     },
     {
+      "id": "review-draft-read-model",
+      "file": "qisi-review-draft-read-model.js",
+      "layer": 1,
+      "domainOwner": "reviewDraftReadModelOwner",
+      "publicApi": [
+        "summarizeDrafts",
+        "filterDrafts",
+        "draftHasImageToken"
+      ],
+      "allowedDependencies": [
+        "review-draft-state",
+        "utils"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
       "id": "review-draft-normalization",
       "file": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

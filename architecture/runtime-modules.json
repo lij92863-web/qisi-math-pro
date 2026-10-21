@@ -485,6 +485,10 @@
     {
       "file": "qisi-pdf-question-display.js",
       "runtime": "browser"
+    },
+    {
+      "file": "qisi-review-draft-read-model.js",
+      "runtime": "browser"
     }
   ]
 }

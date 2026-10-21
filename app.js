@@ -899,65 +899,24 @@
                     },
                     { immediate: true }
                 );
-                const draftHasImageToken = (q) => {
-                    const options = Array.isArray(q?.options) ? q.options : [];
-                    const text = [
-                        q?.stem,
-                        ...options,
-                        q?.answer,
-                        q?.solution
-                    ].map(value => String(value || '')).join('\n');
-                    return /\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\]|\\includegraphics(?:\[[^\]]*\])?\{[^}]+\}/.test(text);
-                };
-                const batchRecognitionSummary = computed(() => {
-                    const drafts = batchDraftQuestions.value || [];
-                    const missingAnswers = [];
-                    const missingSolutions = [];
-                    const missingOptions = [];
-                    let withOptions = 0;
-                    let withAnswers = 0;
-                    let withSolutions = 0;
-                    let withImageTokens = 0;
-
-                    drafts.forEach((q, index) => {
-                        const questionNo = window.Qisi.ReviewDraftState.draftSummaryQuestionNo(q, index);
-                        const optionCount = countValidOptions(q?.options);
-                        if (optionCount > 0) withOptions += 1;
-                        if (window.Qisi.Utils.cleanRecognizedText(q?.answer)) {
-                            withAnswers += 1;
-                        } else {
-                            missingAnswers.push(questionNo);
-                        }
-                        if (window.Qisi.Utils.cleanRecognizedText(q?.solution)) {
-                            withSolutions += 1;
-                        } else {
-                            missingSolutions.push(questionNo);
-                        }
-                        if (draftHasImageToken(q)) withImageTokens += 1;
-                        if (isChoiceDraft(q) && optionCount < 4) missingOptions.push(questionNo);
-                    });
-
-                    return {
-                        total: drafts.length,
-                        withOptions,
-                        withAnswers,
-                        withSolutions,
-                        withImageTokens,
-                        missingAnswers,
-                        missingSolutions,
-                        missingOptions
-                    };
-                });
+                // Read-only projection: the rules live in qisi-review-draft-read-model.js.
+                // The page passes the existing owners explicitly; the module never writes.
+                const batchRecognitionSummary = computed(() =>
+                    window.Qisi.ReviewDraftReadModel.summarizeDrafts(batchDraftQuestions.value || [], {
+                        questionNo: window.Qisi.ReviewDraftState.draftSummaryQuestionNo,
+                        countValidOptions,
+                        isChoiceDraft,
+                        cleanText: window.Qisi.Utils.cleanRecognizedText
+                    })
+                );
                 const unassignedDraftImages = computed(() => batchDraftImages.value.filter(image => !image.questionId && image.status === 'unassigned'));
-                const filteredDraftQuestions = computed(() => {
-                    const items = batchDraftQuestions.value || [];
-                    if (batchImportFilter.value === 'pending') return items.filter(q => q.status === 'pending');
-                    if (batchImportFilter.value === 'reviewed') return items.filter(q => q.status === 'reviewed');
-                    if (batchImportFilter.value === 'problems') return items.filter(q => draftQuestionProblems(q).length > 0);
-                    if (batchImportFilter.value === 'images') return items.filter(q => q.hasImage);
-                    if (batchImportFilter.value === 'submitted') return items.filter(q => q.status === 'submitted');
-                    return items;
-                });
+                const filteredDraftQuestions = computed(() =>
+                    window.Qisi.ReviewDraftReadModel.filterDrafts(
+                        batchDraftQuestions.value || [],
+                        batchImportFilter.value,
+                        draftQuestionProblems
+                    )
+                );
 
                 const defaultMetaForStorage = () => ({
                     ...toRaw(batchDefaultMeta),

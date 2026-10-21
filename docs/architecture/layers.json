@@ -60,7 +60,8 @@
         "pdf-external-contract",
         "pdf-page-evidence",
         "mineru-task-store",
-        "paper-segmenter"
+        "paper-segmenter",
+        "review-draft-read-model"
       ]
     },
     {

@@ -642,6 +642,29 @@
       "status": "production"
     },
     {
+      "ownerId": "review-draft-read-model",
+      "module": "qisi-review-draft-read-model.js",
+      "layer": 1,
+      "responsibilities": [
+        "review-draft-read-projection-summary-and-filter"
+      ],
+      "allowedCallers": [
+        "ui-shell"
+      ],
+      "allowedDependencies": [
+        "review-draft-state",
+        "utils"
+      ],
+      "forbiddenDependencies": [
+        "question-repository",
+        "formal-admission",
+        "app-shell"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "none",
+      "status": "production"
+    },
+    {
       "ownerId": "review-draft-normalization",
       "module": "qisi-review-draft-normalization-policy.js",
       "layer": 1,
