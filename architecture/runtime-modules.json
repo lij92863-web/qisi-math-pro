@@ -533,6 +533,10 @@
     {
       "file": "qisi-personal-knowledge-model.js",
       "runtime": "browser"
+    },
+    {
+      "file": "qisi-manual-entry-model.js",
+      "runtime": "browser"
     }
   ]
 }

@@ -68,7 +68,8 @@
         "review-session-commands",
         "review-image-commands",
         "review-batch-confirm",
-        "personal-knowledge-model"
+        "personal-knowledge-model",
+        "manual-entry-model"
       ]
     },
     {

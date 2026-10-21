@@ -885,6 +885,26 @@
       "status": "production"
     },
     {
+      "ownerId": "manual-entry-model",
+      "module": "qisi-manual-entry-model.js",
+      "layer": 1,
+      "responsibilities": [
+        "manual-entry-question-shape"
+      ],
+      "allowedCallers": [
+        "ui-shell"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "question-repository",
+        "formal-admission",
+        "app-shell"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "none",
+      "status": "production"
+    },
+    {
       "ownerId": "review-draft-normalization",
       "module": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

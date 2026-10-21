@@ -3849,16 +3849,14 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
 
                     try {
                         const now = Date.now();
-                        const prepared = splitQuestionForStorage(entryForm.stem, entryForm.type, toRaw(entryForm.options));
-                        const cleanImages = toRaw(entryForm.images)
-                            .filter(i => i && i.id)
-                            .map(i => ({id: i.id, align: i.align || 'center'}));
-                        const tags = String(entryForm.tags || '').split(',').map(x => x.trim()).filter(Boolean);
                         syncEntryLegacyKnowledge();
-                        const systemKnowledge = entryForm.systemKnowledge || '';
-                        const personalKnowledge = entryForm.personalKnowledge || '';
-                        const primaryKnowledge = personalKnowledge || systemKnowledge || '';
-                        const primaryKnowledgeType = personalKnowledge ? 'personal' : 'system';
+                        const plan = window.Qisi.ManualEntryModel.buildManualQuestion({
+                            form: toRaw(entryForm),
+                            now,
+                            splitQuestion: splitQuestionForStorage,
+                            images: toRaw(entryForm.images)
+                        });
+                        const newQ = plan.question;
 
                         const imageRecords = [];
                         const lostImageIds = [];
@@ -3886,33 +3884,6 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                             throw new Error('这几张图片没有存进来：' + lostImageIds.join('、') +
                                 '。请删掉重新粘贴，否则这道题会带着空图入库。');
                         }
-
-                        const newQ = {
-                            id: now.toString(),
-                            grade: entryForm.grade,
-                            diff: entryForm.diff,
-                            type: prepared.type,
-                            knowledge: primaryKnowledge,
-                            knowledgeType: primaryKnowledgeType,
-                            systemKnowledge,
-                            personalKnowledge,
-                            stem: prepared.stem,
-                            options: prepared.options.map(opt => opt || ''),
-                            answer: entryForm.answer,
-                            solution: entryForm.solution,
-                            images: cleanImages,
-                            meta: {
-                                grade: entryForm.grade,
-                                diff: entryForm.diff,
-                                knowledge: primaryKnowledge,
-                                knowledgeType: primaryKnowledgeType,
-                                systemKnowledge,
-                                personalKnowledge,
-                                tags
-                            },
-                            createdAt: now,
-                            updatedAt: now
-                        };
 
                         await libraryService.saveQuestion(newQ, {
                             imageRecords,
