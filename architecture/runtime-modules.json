@@ -276,11 +276,11 @@
     },
     {
       "file": "qisi-pdf-external-producer.js",
-      "runtime": "browser"
+      "runtime": "dormant"
     },
     {
       "file": "qisi-pdf-external-provider.js",
-      "runtime": "browser"
+      "runtime": "dormant"
     },
     {
       "file": "qisi-pdf-multimodal-contract.js",
@@ -292,7 +292,7 @@
     },
     {
       "file": "qisi-pdf-page-evidence.js",
-      "runtime": "browser"
+      "runtime": "dormant"
     },
     {
       "file": "qisi-pdf-safe-partial-pipeline.js",
