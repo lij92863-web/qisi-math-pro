@@ -2570,19 +2570,14 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                 const selectedDraftIds = ref([]);
                 const draftMetaExpanded = ref(false);
                 const toggleDraftSelection = (id) => {
-                    const key = String(id || '');
-                    if (!key) return;
-                    selectedDraftIds.value = selectedDraftIds.value.includes(key)
-                        ? selectedDraftIds.value.filter(item => item !== key)
-                        : [...selectedDraftIds.value, key];
+                    selectedDraftIds.value = window.Qisi.ReviewBatchConfirm
+                        .toggleSelection(selectedDraftIds.value, id);
                 };
                 const selectAllDrafts = () => {
-                    const visible = filteredDraftQuestions.value.map(item => item.id);
-                    const allSelected = visible.length > 0 &&
-                        visible.every(id => selectedDraftIds.value.includes(id));
-                    selectedDraftIds.value = allSelected
-                        ? selectedDraftIds.value.filter(id => !visible.includes(id))
-                        : [...new Set([...selectedDraftIds.value, ...visible])];
+                    selectedDraftIds.value = window.Qisi.ReviewBatchConfirm.selectAllVisible(
+                        selectedDraftIds.value,
+                        filteredDraftQuestions.value.map(item => item.id)
+                    );
                 };
                 const confirmSelectedDrafts = async () => {
                     const ids = [...selectedDraftIds.value];
@@ -2594,9 +2589,8 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         !await saveActiveDraftQuestion({ silent: true })) return;
                     let confirmedCount = 0;
                     const failed = [];
-                    for (const id of ids) {
-                        const draft = batchDraftQuestions.value.find(item => item.id === id);
-                        if (!draft || draft.status === 'submitted' || draft.status === 'reviewed') continue;
+                    for (const draft of window.Qisi.ReviewBatchConfirm
+                        .eligibleDrafts(batchDraftQuestions.value, ids)) {
                         try {
                             const result = await reviewWorkflowService.confirmDraft({
                                 batchId: draft.batchId,
@@ -2612,11 +2606,8 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     }
                     selectedDraftIds.value = failed;
                     await loadBatchImportData();
-                    showBatchToast(
-                        failed.length
-                            ? `已确认 ${confirmedCount} 题，${failed.length} 题未通过。`
-                            : `已确认 ${confirmedCount} 题。`
-                    );
+                    showBatchToast(window.Qisi.ReviewBatchConfirm
+                        .batchConfirmNotice(confirmedCount, failed.length));
                 };
 
                 const openBatchSubmitSummary = async () => {                    try {

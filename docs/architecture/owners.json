@@ -765,6 +765,26 @@
       "status": "production"
     },
     {
+      "ownerId": "review-batch-confirm",
+      "module": "qisi-review-batch-confirm.js",
+      "layer": 1,
+      "responsibilities": [
+        "review-batch-selection-and-confirm-planning"
+      ],
+      "allowedCallers": [
+        "ui-shell"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "question-repository",
+        "formal-admission",
+        "app-shell"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "none",
+      "status": "production"
+    },
+    {
       "ownerId": "review-draft-normalization",
       "module": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

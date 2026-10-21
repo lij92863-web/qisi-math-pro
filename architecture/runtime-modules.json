@@ -509,6 +509,10 @@
     {
       "file": "qisi-review-image-commands.js",
       "runtime": "browser"
+    },
+    {
+      "file": "qisi-review-batch-confirm.js",
+      "runtime": "browser"
     }
   ]
 }
