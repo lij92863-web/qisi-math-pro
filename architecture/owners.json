@@ -90,5 +90,6 @@
   "mineruEvidenceOwner": "qisi-mineru-evidence.js",
   "paperSegmenterOwner": "qisi-paper-segmenter.js",
   "pdfQuestionDisplayOwner": "qisi-pdf-question-display.js",
-  "reviewDraftReadModelOwner": "qisi-review-draft-read-model.js"
+  "reviewDraftReadModelOwner": "qisi-review-draft-read-model.js",
+  "reviewImageProjectionOwner": "qisi-review-image-projection.js"
 }

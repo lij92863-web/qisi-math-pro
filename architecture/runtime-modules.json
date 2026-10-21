@@ -489,6 +489,10 @@
     {
       "file": "qisi-review-draft-read-model.js",
       "runtime": "browser"
+    },
+    {
+      "file": "qisi-review-image-projection.js",
+      "runtime": "browser"
     }
   ]
 }

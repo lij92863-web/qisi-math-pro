@@ -651,93 +651,41 @@
                 const pdfDraftMeta = q => q?.pdfReview || q?.pdfExternal || q?.pdfV1 || null;
                 const activePdfReviewPanel = computed(() => pdfDraftContract(activeDraftQuestion.value)?.reviewPanel?.(activeDraftQuestion.value) || null);
                 const activePdfUnassigned = computed(() => batchImportFiles.value.flatMap(file => ((file.pdfMineruEvidence || file.pdfExternalEvidence)?.unassigned || []).map(fragment => ({ ...fragment, sourceFileName: file.filename }))));
-                const activeDraftImages = computed(() => {
-                    const q = activeDraftQuestion.value;
-                    const qid = q?.id;
-                    if (!q || !qid) return [];
-                    const bound = batchDraftImages.value
-                        .filter(image => image.questionId === qid)
-                        .filter(isRealQuestionFigureImageRow);
-                    const inline = (q.images || [])
-                        .filter(isValidQuestionPreviewImage)
-                        .filter(isRealQuestionFigureImageRow);
-                    return mergeImageListsById(inline, Boolean(pdfDraftContract(q)) ? bound.filter(i => q.images.some(image => image.id === i.id)) : bound);
-                });
+                const activeDraftImages = computed(() => window.Qisi.ReviewImageProjection.projectActiveImages({
+                    question: activeDraftQuestion.value,
+                    boundImages: batchDraftImages.value,
+                    isRealFigureRow: isRealQuestionFigureImageRow,
+                    isPreviewable: isValidQuestionPreviewImage,
+                    mergeById: mergeImageListsById,
+                    pdfContract: pdfDraftContract
+                }));
 
-                const activeDraftRealQuestionImages = computed(() => {
-                    const q = activeDraftQuestion.value;
-                    const qid = q?.id;
-                    if (!q || !qid) return [];
+                const activeDraftRealQuestionImages = computed(() => window.Qisi.ReviewImageProjection.projectRealQuestionImages({
+                    question: activeDraftQuestion.value,
+                    boundImages: batchDraftImages.value,
+                    isRealFigureRow: isRealQuestionFigureImageRow,
+                    isPreviewable: isValidQuestionPreviewImage,
+                    mergeById: mergeImageListsById,
+                    pdfContract: pdfDraftContract
+                }));
 
-                    const bound = batchDraftImages.value
-                        .filter(image => image.questionId === qid)
-                        .filter(isRealQuestionFigureImageRow);
+                const activeDraftSourcePageImages = computed(() => window.Qisi.ReviewImageProjection.projectSourcePageImages({
+                    question: activeDraftQuestion.value,
+                    batchId: activeBatchId.value,
+                    isRealFigureRow: isRealQuestionFigureImageRow,
+                    isPreviewable: isValidQuestionPreviewImage,
+                    mergeById: mergeImageListsById,
+                    pdfContract: pdfDraftContract,
+                    pdfMeta: pdfDraftMeta
+                }));
 
-                    const inline = (q.images || [])
-                        .filter(isValidQuestionPreviewImage)
-                        .filter(image => {
-                            const source = String(image.source || '');
-
-                            return (
-                                source === 'auto-figure-crop' ||
-                                source === 'pdf-layout-figure-crop' ||
-                                source === 'manual-crop' ||
-                                source === 'uploaded-question-image' ||
-                                source === 'docx-inline-figure'
-                            );
-                        });
-
-                    return mergeImageListsById(inline, Boolean(pdfDraftContract(q)) ? bound.filter(i => q.images.some(image => image.id === i.id)) : bound);
-                });
-
-                const activeDraftSourcePageImages = computed(() => {
-                    const q = activeDraftQuestion.value;
-                    const qid = q?.id;
-                    if (!q || !qid) return [];
-
-                    if (Boolean(pdfDraftContract(q))) return pdfDraftMeta(q).sourcePageImages.map((img, i) => ({
-                        ...img, id: `${qid}_source_${i}`, batchId: q.batchId, questionId: qid, sourcePage: img.pageNo, source: 'source-page', status: 'need_confirm'
-                    }));
-                    if (q.sourcePageImage) {
-                        return [{
-                            id: `${qid}_source_page`,
-                            batchId: q.batchId || activeBatchId.value || '',
-                            questionId: qid,
-                            url: q.sourcePageImage,
-                            sourceFileId: q.sourceQuestionFileId || q.sourceFileId || '',
-                            sourcePage: q.sourcePage || q.pageIndex || 0,
-                            bbox: q.sourceBbox || [],
-                            confidence: q.confidence || 0.6,
-                            description: '来源整页图',
-                            status: 'need_confirm',
-                            source: 'source-page'
-                        }].filter(isValidQuestionPreviewImage);
-                    }
-
-                    if (q.sourceTrace?.sourcePageImage) {
-                        return [{
-                            id: `${qid}_trace_page`,
-                            batchId: q.batchId || activeBatchId.value || '',
-                            questionId: qid,
-                            url: q.sourceTrace.sourcePageImage,
-                            sourceFileId: q.sourceTrace.sourceFileId || '',
-                            sourcePage: q.sourceTrace.sourcePage || q.sourceTrace.pageIndex || 0,
-                            bbox: [],
-                            confidence: q.confidence || 0.6,
-                            description: '来源整页图',
-                            status: 'need_confirm',
-                            source: 'source-page'
-                        }].filter(isValidQuestionPreviewImage);
-                    }
-
-                    return [];
-                });
-
-                const activeDraftPreviewImages = computed(() => {
-                    const q = activeDraftQuestion.value;
-                    if (!q) return [];
-                    return mergeImageListsById(q.images || [], activeDraftRealQuestionImages.value || []);
-                });
+                const activeDraftPreviewImages = computed(() => window.Qisi.ReviewImageProjection.projectPreviewImages({
+                    question: activeDraftQuestion.value,
+                    realQuestionImages: activeDraftRealQuestionImages.value,
+                    isRealFigureRow: isRealQuestionFigureImageRow,
+                    isPreviewable: isValidQuestionPreviewImage,
+                    mergeById: mergeImageListsById
+                }));
                 const toggleImagePositionMenu = (imageId = '') => {
                     const id = String(imageId || '').trim();
 

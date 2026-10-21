@@ -61,7 +61,8 @@
         "pdf-page-evidence",
         "mineru-task-store",
         "paper-segmenter",
-        "review-draft-read-model"
+        "review-draft-read-model",
+        "review-image-projection"
       ]
     },
     {

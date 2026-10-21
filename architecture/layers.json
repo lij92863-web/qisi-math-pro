@@ -1275,6 +1275,25 @@
       "status": "production-wired"
     },
     {
+      "id": "review-image-projection",
+      "file": "qisi-review-image-projection.js",
+      "layer": 1,
+      "domainOwner": "reviewImageProjectionOwner",
+      "publicApi": [
+        "projectActiveImages",
+        "projectRealQuestionImages",
+        "projectSourcePageImages",
+        "projectPreviewImages"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
       "id": "review-draft-normalization",
       "file": "qisi-review-draft-normalization-policy.js",
       "layer": 1,
