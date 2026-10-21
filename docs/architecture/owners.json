@@ -925,6 +925,26 @@
       "status": "production"
     },
     {
+      "ownerId": "exam-groups",
+      "module": "qisi-exam-groups.js",
+      "layer": 1,
+      "responsibilities": [
+        "exam-grouping-and-type-local-reorder"
+      ],
+      "allowedCallers": [
+        "ui-shell"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "question-repository",
+        "formal-admission",
+        "app-shell"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "none",
+      "status": "production"
+    },
+    {
       "ownerId": "review-draft-normalization",
       "module": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

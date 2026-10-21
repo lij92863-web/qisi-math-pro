@@ -2810,33 +2810,14 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
 
                 const selectedExamPreset = computed(() => examPresets.value[selectedExamTemplate.value] || examPresets.value[DEFAULT_PRESET_KEY]);
 
-                const getExamGroupsForQuestions = (sourceQuestions) => {
-                    const grouped = {};
-                    sourceQuestions.forEach(q => {
-                        const type = q.type || '其他题型';
-                        if (!grouped[type]) grouped[type] = [];
-                        grouped[type].push(q);
-                    });
-                    return Object.entries(grouped).sort(([a], [b]) => {
-                        const ia = EXAM_TYPE_ORDER.includes(a) ? EXAM_TYPE_ORDER.indexOf(a) : 999;
-                        const ib = EXAM_TYPE_ORDER.includes(b) ? EXAM_TYPE_ORDER.indexOf(b) : 999;
-                        return ia - ib || a.localeCompare(b, 'zh-Hans-CN');
-                    }).map(([type, items]) => {
-                        const cfg = examGroupConfig[type] || DEFAULT_GROUP_CONFIG[type] || { title: QUESTION_TYPE_LABELS[type] || type, points: 0 };
-                        const points = Number(cfg.points || 0);
-                        const total = items.reduce((sum, q) => sum + Number(examQuestionMeta[q.id]?.points || points), 0);
-                        const generatedText = `${cfg.title || type}：本大题共 ${items.length} 小题，每小题 ${points} 分，共计 ${total} 分。`;
-                        return {
-                            type,
-                            items,
-                            count: items.length,
-                            points,
-                            total,
-                            title: cfg.title || type,
-                            text: cfg.text || generatedText
-                        };
-                    });
-                };
+                const getExamGroupsForQuestions = (sourceQuestions) => window.Qisi.ExamGroups.groupQuestions({
+                    questions: sourceQuestions,
+                    groupConfig: examGroupConfig,
+                    questionMeta: examQuestionMeta,
+                    typeOrder: EXAM_TYPE_ORDER,
+                    defaultGroupConfig: DEFAULT_GROUP_CONFIG,
+                    typeLabels: QUESTION_TYPE_LABELS
+                });
 
                 const activeExamGroups = computed(() => getExamGroupsForQuestions(cartQuestionsOrdered.value));
 
@@ -3937,24 +3918,14 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                 };
 
                 const reorderQuestionWithinType = (sourceId, targetIndex) => {
-                    const sourceQ = questions.value.find(q => q?.id === sourceId);
-                    if (!sourceQ) return false;
-                    const type = sourceQ.type || '其他题型';
-                    const typeIds = cart.value.filter(id => {
-                        const q = questions.value.find(item => item?.id === id);
-                        return q && (q.type || '其他题型') === type;
+                    const result = window.Qisi.ExamGroups.reorderWithinType({
+                        sourceId,
+                        targetIndex,
+                        cart: cart.value,
+                        questions: questions.value
                     });
-                    const currentIndex = typeIds.indexOf(sourceId);
-                    const withoutSource = typeIds.filter(id => id !== sourceId);
-                    const nextIndex = Math.max(0, Math.min(targetIndex, withoutSource.length));
-                    if (currentIndex === nextIndex) return false;
-                    withoutSource.splice(nextIndex, 0, sourceId);
-                    const queue = [...withoutSource];
-                    cart.value = cart.value.map(id => {
-                        const q = questions.value.find(item => item?.id === id);
-                        return q && (q.type || '其他题型') === type ? queue.shift() : id;
-                    });
-                    return true;
+                    if (result.changed) cart.value = result.cart;
+                    return result.changed;
                 };
 
                 let examDragCleanup = null;

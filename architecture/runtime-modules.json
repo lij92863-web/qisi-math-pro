@@ -541,6 +541,10 @@
     {
       "file": "qisi-exam-template-model.js",
       "runtime": "browser"
+    },
+    {
+      "file": "qisi-exam-groups.js",
+      "runtime": "browser"
     }
   ]
 }

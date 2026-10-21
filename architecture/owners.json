@@ -103,5 +103,6 @@
   "libraryExternalMergeOwner": "qisi-library-external-merge.js",
   "personalKnowledgeModelOwner": "qisi-personal-knowledge-model.js",
   "manualEntryModelOwner": "qisi-manual-entry-model.js",
-  "examTemplateModelOwner": "qisi-exam-template-model.js"
+  "examTemplateModelOwner": "qisi-exam-template-model.js",
+  "examGroupsOwner": "qisi-exam-groups.js"
 }

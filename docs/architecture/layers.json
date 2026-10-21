@@ -70,7 +70,8 @@
         "review-batch-confirm",
         "personal-knowledge-model",
         "manual-entry-model",
-        "exam-template-model"
+        "exam-template-model",
+        "exam-groups"
       ]
     },
     {
