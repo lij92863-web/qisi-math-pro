@@ -260,7 +260,7 @@
     },
     {
       "file": "qisi-paper-segmenter.js",
-      "runtime": "dormant"
+      "runtime": "browser"
     },
     {
       "file": "qisi-pdf-answer-extraction-quality.js",
@@ -460,7 +460,31 @@
     },
     {
       "file": "qisi-mineru-evidence.js",
-      "runtime": "dormant"
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-mineru-task-store.js",
+      "runtime": "node"
+    },
+    {
+      "file": "qisi-mineru-task-service.js",
+      "runtime": "node"
+    },
+    {
+      "file": "qisi-pdf-review-records.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-pdf-mineru-contract.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-pdf-mineru-producer.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-pdf-question-display.js",
+      "runtime": "browser"
     }
   ]
 }

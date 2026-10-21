@@ -83,6 +83,21 @@ test('file lookup failure retains the legacy best-effort batch failure write', a
     assert.equal(repository.updates[0].table, 'draftImportBatches');
 });
 
+test('import failure retains the safe bridge cause on both batch and files', async () => {
+    for (const causeCode of ['PDF_EXTERNAL_NOT_CONFIGURED', 'DOCX_IDENTITY_DUPLICATE']) {
+        const repository = makeStatusRepositoryStub();
+        const error = Object.assign(new Error('IMPORT_RECOGNITION_FAILED'), { causeCode });
+        const result = await StatusPort.reportImportFailure({ batchId: 'b', error, failFiles: true }, { repository });
+        assert.ok(result.batchPatch.errorMessage.includes(causeCode));
+        if (causeCode === 'PDF_EXTERNAL_NOT_CONFIGURED') assert.match(result.batchPatch.errorMessage, /未启用/);
+        assert.ok(repository.updates.every(row => row.patch.errorMessage === result.batchPatch.errorMessage));
+    }
+    const repository = makeStatusRepositoryStub();
+    const error = Object.assign(new Error('IMPORT_RECOGNITION_FAILED'), { causeCode: 'raw payload with private text' });
+    const result = await StatusPort.reportImportFailure({ batchId: 'b', error }, { repository });
+    assert.equal(result.batchPatch.errorMessage, 'IMPORT_RECOGNITION_FAILED');
+});
+
 test('invalid input, missing repository, and cancellation fail before writes', async () => {
     const repository = makeStatusRepositoryStub();
     await assert.rejects(
@@ -100,6 +115,22 @@ test('invalid input, missing repository, and cancellation fail before writes', a
         error => error.name === 'AbortError' && error.code === 'IMPORT_STATUS_ABORTED'
     );
     assert.equal(repository.updates.length, 0);
+});
+
+test('safe structured errors persist identically and distinguish query-only recovery', async () => {
+    const repository = makeStatusRepositoryStub();
+    const error = Object.assign(new Error('private upstream payload'), {
+        code: 'IMPORT_RECOGNITION_FAILED', causeCode: 'MINERU_SUBMISSION_UNKNOWN',
+        stage: 'submitting', requestId: 'normal-ui:b:source:1:draft:2'
+    });
+    const result = await StatusPort.reportImportFailure({ batchId: 'b', error, failFiles: true }, { repository });
+    const expected = StatusPort.failureDetails(error);
+    assert.equal(expected.retryability, 'query-only');
+    assert.equal(StatusPort.failureDetails({ code: 'IMPORT_FAILED', causeCode: 'MINERU_NOT_CONFIGURED' }).retryability, 'never');
+    assert.ok(repository.updates.every(row => JSON.stringify(row.patch.importError) === JSON.stringify(expected)));
+    assert.equal(result.batchPatch.errorMessage, StatusPort.failureMessage(expected));
+    assert.doesNotMatch(result.batchPatch.errorMessage, /private/);
+    assert.equal(StatusPort.failureDetails({ causeCode: 'secret payload', requestId: 'secret payload' }).causeCode, '');
 });
 
 test('repository errors retain identity and no UI callback runs inside the owner', async () => {

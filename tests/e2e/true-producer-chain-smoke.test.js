@@ -147,7 +147,7 @@ test('true producer smoke enters PDF V2 structured canonical validation', {
         assert.equal(drafts.length, 1);
         assert.equal(drafts[0].answer, 'A');
         assert.match(drafts[0].solution, /Alpha is correct/);
-        assert.equal(drafts[0].fieldProvenance.stem.controlledWriteAccepted, true);
+        assert.equal(drafts[0].fieldProvenance.stem.controlledWriteAccepted, false);
         const stages = (await readImportStageTrace(
             harness.page,
             result.batchId
@@ -156,7 +156,7 @@ test('true producer smoke enters PDF V2 structured canonical validation', {
         assert.equal(stages.includes('ocr-adapter-called'), false);
         assert.equal(stages.includes('pdf-projection-entered'), false);
         assert.equal(stages.includes('controlled-write-evaluated'), false);
-        assert.ok(stages.includes('pdf-external-contract-validated'));
+        assert.ok(stages.includes('pdf-mineru-contract-validated'));
         assert.equal(engine.realApiCalled, false);
     } finally {
         await harness.close();

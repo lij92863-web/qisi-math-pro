@@ -221,10 +221,24 @@ app.post('/api/ai/ocr', aiJsonParser, (req, res) => {
 });
 
 app.use(express.json({ limit: '2mb' }));
-const rootAssets = publicRootAssets(fs.readFileSync(path.join(ROOT, 'main.html'), 'utf8'));
+const MAIN_HTML_PATH = path.join(ROOT, 'main.html');
+// The served file allow-list follows main.html on disk. A server started before a
+// new <script> tag existed must not keep answering 404 for it, because a single
+// missing module leaves the page blank with no visible error.
+let rootAssetSnapshot = { mtimeMs: -1, assets: null };
+const currentRootAssets = () => {
+  const { mtimeMs } = fs.statSync(MAIN_HTML_PATH);
+  if (mtimeMs !== rootAssetSnapshot.mtimeMs) {
+    rootAssetSnapshot = {
+      mtimeMs,
+      assets: publicRootAssets(fs.readFileSync(MAIN_HTML_PATH, 'utf8'))
+    };
+  }
+  return rootAssetSnapshot.assets;
+};
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
-  if (!isPublicAsset(req.path, rootAssets)) return res.sendStatus(404);
+  if (!isPublicAsset(req.path, currentRootAssets())) return res.sendStatus(404);
   next();
 });
 app.use(express.static(ROOT, { extensions: ['html'], maxAge: 0, etag: true }));
@@ -767,7 +781,10 @@ app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => 
 });
 
 // ---- MinerU 精准解析（契约 ai/MINERU_BLOCK_PROTOCOL.md §4） ----
-const mineruClient = createMineruClient({ token: MINERU_TOKEN });
+const mineruClient = createMineruClient({ token: MINERU_TOKEN,
+  store: require('./qisi-mineru-task-store').createMineruTaskStore(path.join(ROOT, 'local-run-artifacts', 'mineru-extractions-v2')) });
+
+app.get('/api/mineru/status', (req, res) => res.json({ configured: Boolean(MINERU_TOKEN) }));
 
 const mineruUpload = multer({
   storage: multer.diskStorage({
@@ -803,10 +820,14 @@ const mineruUploadSingle = (req, res, next) => {
   });
 };
 
-// 未压缩页对象里 /Type /Page 的条目数即页数；读不到就算 0（交给 MinerU 侧限制），读到且超限直接拒绝。
-function estimatePdfPageCount(buffer) {
-  const matches = buffer.toString('latin1').match(/\/Type\s*\/Page[^s]/g);
-  return matches ? matches.length : 0;
+// Read the page tree, including compressed object streams, before any upload.
+async function estimatePdfPageCount(buffer) {
+  const pdfjs = require('./vendor/pdfjs/pdf.min.js');
+  pdfjs.GlobalWorkerOptions.workerSrc = require.resolve('./vendor/pdfjs/pdf.worker.min.js');
+  const task = pdfjs.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false, disableFontFace: true });
+  try { return (await task.promise).numPages; }
+  catch { throw Object.assign(new Error('MINERU_INPUT_INVALID'), { code: 'MINERU_INPUT_INVALID' }); }
+  finally { await task.destroy(); }
 }
 
 function mineruErrorStatus(error) {
@@ -839,7 +860,7 @@ app.post('/api/mineru/parse', mineruUploadSingle, async (req, res) => {
     if (buffer.length > MINERU_MAX_PDF_BYTES) {
       return res.status(413).json({ ok: false, code: 'MINERU_UPLOAD_SIZE_LIMIT', error: 'PDF 超过 200MB 上限。' });
     }
-    const estimatedPages = estimatePdfPageCount(buffer);
+    const estimatedPages = await estimatePdfPageCount(buffer);
     if (estimatedPages > MINERU_MAX_PAGES) {
       return res.status(413).json({
         ok: false, code: 'MINERU_PAGE_LIMIT',
@@ -880,11 +901,10 @@ app.post('/api/mineru/parse', mineruUploadSingle, async (req, res) => {
     return res.status(aborted ? 499 : mineruErrorStatus(error)).json({
       ok: false,
       code,
-      error: error?.message || String(error),
+      error: code,
       ...(error?.stage ? { stage: error.stage } : {}),
       ...(error?.httpStatus ? { httpStatus: error.httpStatus } : {}),
-      ...(error?.mineruCode !== undefined ? { mineruCode: error.mineruCode } : {}),
-      ...(error?.mineruMsg ? { mineruMsg: error.mineruMsg } : {})
+      ...(error?.mineruCode !== undefined ? { mineruCode: error.mineruCode } : {})
     });
   } finally {
     res.removeListener('close', abortOnClose);
@@ -894,7 +914,7 @@ app.post('/api/mineru/parse', mineruUploadSingle, async (req, res) => {
 
 app.get('/api/mineru/image', async (req, res) => {
   try {
-    const { bytes, name } = await mineruClient.readImage(req.query?.name, { job: req.query?.job });
+    const { bytes, name } = await mineruClient.readImage(req.query?.name, { job: req.query?.job, sourceId: req.query?.sourceId });
     const types = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
     res.set('Content-Type', types[path.extname(name).toLowerCase()] || 'application/octet-stream');
     res.set('Cache-Control', 'no-store');

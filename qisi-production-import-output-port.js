@@ -184,49 +184,23 @@
         return leftRank > rightRank ? 'left' : 'right';
     }
 
-    function chooseText(best, other, field, context) {
-        const { ports, questionNo, warnings, rejected } = context;
-        const bestProvenance = best.fieldProvenance?.[field];
-        const otherProvenance = other.fieldProvenance?.[field];
-        const stronger = strongerProvenance(bestProvenance, otherProvenance);
-        if (stronger === 'left') return 'best';
-        if (stronger === 'right') return 'other';
-        const bestText = text(best[field], ports);
-        const otherText = text(other[field], ports);
-        // 补空不算择优：一边为空、另一边有值，直接取有值的一边（凭证随值一起搬）。
-        if (!bestText && otherText) return 'other';
-        if (bestText && !otherText) return 'best';
-        if (!bestText && !otherText) return 'best';
-        // 两条都有值且按凭证判不出高下：不猜。保留主候选，另一条记入候选供人工采用。
-        if (bestText !== otherText) {
-            warnings.push(
-                `题号 ${questionNo || '(未识别)'} 的 ${field} 字段两条候选无法按来源凭证判定高下，已保留主候选原文，另一条取值已记入候选。`
-            );
-            rejected[field] = String(other[field] || '').slice(0, 200);
-        }
-        return 'best';
+    function optionKeyForMerge(options, ports) {
+        return cleanOptions(options, ports)
+            .map(value => meaningfulOption(value, ports) ? value : '').join('\n').trim();
     }
 
-    function chooseOptions(best, other, ports, context) {
-        const bestProvenance = best.fieldProvenance?.options;
-        const otherProvenance = other.fieldProvenance?.options;
-        const stronger = strongerProvenance(bestProvenance, otherProvenance);
-        if (stronger === 'left') return 'best';
-        if (stronger === 'right') return 'other';
-        const bestOptions = Array.isArray(best.options) ? best.options : ['', '', '', ''];
-        const otherOptions = Array.isArray(other.options) ? other.options : ['', '', '', ''];
-        const bestJoined = cleanOptions(bestOptions, ports).join('\n');
-        const otherJoined = cleanOptions(otherOptions, ports).join('\n');
-        if (!bestJoined && otherJoined) return 'other';
-        if (bestJoined && !otherJoined) return 'best';
-        if (!bestJoined && !otherJoined) return 'best';
-        if (bestJoined !== otherJoined) {
-            context.warnings.push(
-                `题号 ${context.questionNo || '(未识别)'} 的 options 两条候选无法按来源凭证判定高下，已保留主候选选项，另一条已记入候选。`
-            );
-            context.rejected.options = otherJoined.slice(0, 200);
-        }
-        return 'best';
+    // The group-level compatibility check has already retained every unresolved
+    // conflict. Here only provenance selection and filling empty fields remain.
+    function chooseText(best, other, field, ports) {
+        const stronger = strongerProvenance(best.fieldProvenance?.[field], other.fieldProvenance?.[field]);
+        if (stronger) return stronger === 'left' ? 'best' : 'other';
+        return !text(best[field], ports) && text(other[field], ports) ? 'other' : 'best';
+    }
+
+    function chooseOptions(best, other, ports) {
+        const stronger = strongerProvenance(best.fieldProvenance?.options, other.fieldProvenance?.options);
+        if (stronger) return stronger === 'left' ? 'best' : 'other';
+        return !optionKeyForMerge(best.options, ports) && optionKeyForMerge(other.options, ports) ? 'other' : 'best';
     }
 
     function mergeCandidate(best, other, ports) {
@@ -234,8 +208,6 @@
         const questionNo = normalizeQuestionNo(best, ports) ||
             normalizeQuestionNo(other, ports);
         const warnings = [];
-        const rejected = {};
-        const context = { ports, questionNo, warnings, rejected };
         const bestProvenance = best.fieldProvenance || {};
         const fieldProvenance = clone(bestProvenance);
         let provenanceAdopted = false;
@@ -248,9 +220,9 @@
             provenanceAdopted = true;
         };
         for (const field of ['stem', 'answer', 'solution']) {
-            if (chooseText(best, other, field, context) === 'other') adopt(field);
+            if (chooseText(best, other, field, ports) === 'other') adopt(field);
         }
-        if (chooseOptions(best, other, ports, context) === 'other') {
+        if (chooseOptions(best, other, ports) === 'other') {
             adopt('options');
             if (best.pdfExternal || other.pdfExternal) {
                 merged.pdfExternal = clone(other.pdfExternal || best.pdfExternal);
@@ -293,18 +265,16 @@
                     badChars: badCharCount(allText(other)),
                     optionCount: countMeaningfulOptions(other.options, ports),
                     stemHead: text(other.stem || '', ports).slice(0, 100),
-                    answer: String(other.answer || '').slice(0, 200),
-                    solution: String(other.solution || '').slice(0, 200),
-                    ...(Object.keys(rejected).length
-                        ? { rejectedValues: { ...rejected } }
-                        : {})
+                    answer: String(other.answer || ''),
+                    solution: String(other.solution || ''),
+                    fieldProvenance: clone(other.fieldProvenance || {})
                 }
             ]
         };
         merged.warnings = [...new Set([
             ...(best.warnings || []), ...(other.warnings || []),
             ...warnings,
-            '检测到重复题号，系统已合并候选并保留主候选；两条取值不同且无法判定的字段已记入候选。'
+            '检测到重复题号，兼容字段已合并并保留来源记录。'
         ])];
         if (provenanceAdopted) merged.fieldProvenance = fieldProvenance;
         return merged;
@@ -342,9 +312,9 @@
 
     function projectImportOutput(input = {}, ports = {}) {
         const drafts = Array.isArray(input.drafts) ? input.drafts : [];
-        const v1 = drafts.filter(draft => ['pdf-multimodal-v1','pdf-external-v2'].includes(draft?.producer?.routeId));
+        const v1 = drafts.filter(draft => ['pdf-multimodal-v1','pdf-external-v2','pdf-mineru-v1'].includes(draft?.producer?.routeId));
         if (v1.length) {
-            const other = drafts.filter(draft => !['pdf-multimodal-v1','pdf-external-v2'].includes(draft?.producer?.routeId));
+            const other = drafts.filter(draft => !['pdf-multimodal-v1','pdf-external-v2','pdf-mineru-v1'].includes(draft?.producer?.routeId));
             const legacy = other.length ? projectImportOutput({ ...input, drafts: other }, ports) : { drafts: [], removedIds: new Set(), idMap: new Map(), diagnostics: { before: [], after: [] } };
             return { ...legacy, drafts: [...v1, ...legacy.drafts], draftImages: input.draftImages || [] };
         }
@@ -374,7 +344,7 @@
         const removedIds = new Set();
         const idMap = new Map();
         // 「识别失败」这类占位文字不是真实题干，不能拿它来判断两条是不是同一题。
-        // 真正的题目题干都是有意义的长文本。
+        // 有效短题干同样参与身份比较。
         const failureStemPattern = /^(?:识别失败|无法识别|未识别|识别不清|图片无法识别|读取失败)$/;
         const stemKey = draft => text(draft?.stem, ports).replace(/\s+/g, '');
         for (const group of groups.values()) {
@@ -388,23 +358,35 @@
             // 只有题干一致（或只剩一条有意义的题干）时才走合并 —— 那才是重复识别。
             const stems = group.map(stemKey);
             const meaningfulStems = stems.filter(stem =>
-                stem.length >= 10 && !failureStemPattern.test(stem));
+                stem.length > 0 && !failureStemPattern.test(stem));
             const stemsDiffer = meaningfulStems.length > 1 &&
                 meaningfulStems.some(stem => stem !== meaningfulStems[0]);
-            if (stemsDiffer) {
+            const fieldValue = (draft, field) => field === 'options'
+                ? optionKeyForMerge(draft.options, ports)
+                : text(draft[field], ports);
+            const fieldsConflict = ['answer', 'solution', 'options'].some(field =>
+                group.some((left, index) => group.slice(index + 1).some(right => {
+                    const a = fieldValue(left, field), b = fieldValue(right, field);
+                    return a && b && a !== b && !strongerProvenance(
+                        left.fieldProvenance?.[field], right.fieldProvenance?.[field]);
+                })));
+            if (stemsDiffer || fieldsConflict) {
                 for (const draft of group) {
                     const questionNo = normalizeQuestionNo(draft, ports);
                     draft.warnings = [...new Set([
                         ...(draft.warnings || []),
-                        `题号 ${questionNo || '(未识别)'} 在同一来源出现 ${group.length} 条题干不同的题目，已全部保留。若这是两个大题各自从头编号，请在正式入库前核对题号。`
+                        `题号 ${questionNo || '(未识别)'} 在同一来源出现 ${group.length} 条${stemsDiffer ? '题干不同' : '字段冲突'}的题目，已完整保留所有候选，请在正式入库前核对。`
                     ])];
                     kept.push(draft);
                 }
                 continue;
             }
-            const ranked = [...group].sort((left, right) =>
-                qualityScore(right, ports) - qualityScore(left, ports)
-            );
+            // Only compatible evidence reaches merging. Prefer an actual stem over
+            // an explicit failure placeholder; ordering never adjudicates a conflict.
+            const ranked = [...group].sort((left, right) => {
+                const usable = row => Boolean(stemKey(row)) && !failureStemPattern.test(stemKey(row));
+                return Number(usable(right)) - Number(usable(left)) || String(left.id || '').localeCompare(String(right.id || ''));
+            });
             let best = ranked[0];
             for (const other of ranked.slice(1)) {
                 const bestId = best.id;

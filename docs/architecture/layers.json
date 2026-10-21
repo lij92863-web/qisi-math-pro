@@ -24,7 +24,11 @@
         "import-equivalence-normalizer",
         "question-duplicate-policy",
         "docx-ole-reader",
-        "support-evidence"
+        "support-evidence",
+        "pdf-review-records",
+        "mineru-evidence",
+        "pdf-mineru-contract",
+        "pdf-question-display"
       ]
     },
     {
@@ -54,7 +58,9 @@
         "docx-mtef-reader",
         "pdf-multimodal-contract",
         "pdf-external-contract",
-        "pdf-page-evidence"
+        "pdf-page-evidence",
+        "mineru-task-store",
+        "paper-segmenter"
       ]
     },
     {
@@ -89,7 +95,9 @@
         "mathtype-local-service",
         "pdf-multimodal-producer",
         "pdf-external-provider",
-        "pdf-external-producer"
+        "pdf-external-producer",
+        "mineru-task-service",
+        "mineru-client"
       ]
     },
     {
@@ -103,7 +111,8 @@
         "route-b",
         "legacy-batch-run",
         "injected-import-path",
-        "import-orchestrator-scaffold"
+        "import-orchestrator-scaffold",
+        "pdf-mineru-producer"
       ]
     },
     {

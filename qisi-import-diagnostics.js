@@ -46,6 +46,9 @@
         'pdf-external-task-start',
         'pdf-external-canonical-produced',
         'pdf-external-contract-validated',
+        'pdf-mineru-task-start',
+        'pdf-mineru-canonical-produced',
+        'pdf-mineru-contract-validated',
         'unknown-stage'
     ]);
     const ALLOWED_COUNTS = new Set([

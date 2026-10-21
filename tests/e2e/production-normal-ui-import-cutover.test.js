@@ -86,7 +86,7 @@ const assertImportSafety = ({ snapshot, batchId, engine, allowFormal = false }) 
         }
         if (
             draft.source?.format === 'pdf' &&
-            draft.producer?.routeId !== 'pdf-external-v2' || Object.values(draft.fieldProvenance || {}).some(p => p.status === 'controlled-write' && (!p.controlledWriteAccepted || !p.controlledWriteDecisionId))
+            draft.producer?.routeId !== 'pdf-mineru-v1' || Object.values(draft.fieldProvenance || {}).some(p => p.status === 'controlled-write' && (!p.controlledWriteAccepted || !p.controlledWriteDecisionId))
         ) controlledWriteBypass += 1;
     }
     assert.equal(wrongAttachment, 0);
@@ -118,7 +118,7 @@ test('normal UI production matrix executes seventeen true producer scenarios', {
         name, producerMode, files, responses = [], expectedQuestionCount
     }) => {
         await clearE2eData(harness.page);
-        engine.setResponses(responses);
+        engine.setResponses(responses, producerMode === 'pdf' ? files.map(entry => entry.file) : []);
         const imported = await createImportThroughUi(harness.page, {
             producerMode, files, expectedQuestionCount
         });
@@ -174,7 +174,7 @@ test('normal UI production matrix executes seventeen true producer scenarios', {
         assert.equal(batchRows(full.snapshot, full.batchId).batch.status, 'review');
         assert.equal(batchRows(full.snapshot, full.batchId).drafts[0].answer, 'A');
         await assertOrderedStages(harness.page, full.batchId, [
-            'pdf-external-task-start', 'pdf-external-canonical-produced', 'pdf-external-contract-validated',
+            'pdf-mineru-task-start', 'pdf-mineru-canonical-produced', 'pdf-mineru-contract-validated',
             'validation-complete', 'draft-persisted', 'readback-verified'
         ]);
         const beforeRepeat = batchRows(full.snapshot, full.batchId);
@@ -211,7 +211,7 @@ test('normal UI production matrix executes seventeen true producer scenarios', {
             JSON.stringify({ partialRows, calls: engine.calls.slice(-4) })
         );
         assert.ok(partialRows.drafts.some(draft =>
-            draft.producer.routeId === 'pdf-external-v2' && draft.fieldProvenance.answer.controlledWriteAccepted
+            draft.producer.routeId === 'pdf-mineru-v1' && draft.fieldProvenance.answer.status === 'rejected'
         ));
 
         const knownBad = await run({
@@ -365,11 +365,10 @@ test('normal UI production matrix executes seventeen true producer scenarios', {
             producerMode: 'pdf', awaitCompletion: false,
             files: [pdf('cancellation-large.pdf', ['full'])]
         });
-        await cancellationHarness.page.evaluate(batchId => {
-            const proxy = window.Qisi?.Runtime
-                ?.getRuntimeDependency('AppProxy');
-            void proxy.runBatchRecognition(batchId).catch(() => {});
-        }, pending.batchId);
+        // The UI schedules its own recognition 80 ms after batch creation. An extra
+        // manual run here is deduplicated while that run is active, but once the run
+        // is cancelled the pending timer starts a *second* run that the user never
+        // asked for. Exercise the real path: wait for the UI run, then cancel it.
         for (let attempt = 0;
             attempt < 100 && !cancellationEngine.calls.some(call =>
                 call.endpoint !== '/api/ai/health'
@@ -399,7 +398,14 @@ test('normal UI production matrix executes seventeen true producer scenarios', {
         cancellationEngine.release();
         await cancellationHarness.page.waitForTimeout(500);
         const snapshot = await getDbSnapshot(cancellationHarness.page);
-        assert.equal(batchRows(snapshot, pending.batchId).drafts.length, 0);
+        assert.equal(batchRows(snapshot, pending.batchId).drafts.length, 0, JSON.stringify({
+            batch: batchRows(snapshot, pending.batchId).batch,
+            files: batchRows(snapshot, pending.batchId).files.map(file => ({ id: file.id, parseStatus: file.parseStatus, errorMessage: file.errorMessage || '' })),
+            drafts: batchRows(snapshot, pending.batchId).drafts.map(draft => ({ id: draft.id, questionNumber: draft.questionNumber, route: draft.producer?.routeId, status: draft.status })),
+            calls: cancellationEngine.calls,
+            blocked: cancellationEngine.blockedRequests,
+            stages: await readImportStageTrace(cancellationHarness.page, pending.batchId).catch(() => [])
+        }));
         assert.equal(snapshot.questions.length, 0);
         evidence.push({ name: '10 cancellation',
             ...assertImportSafety({
@@ -462,7 +468,7 @@ test('normal UI production matrix executes seventeen true producer scenarios', {
             files: [docx('docx-question.docx', ['question'])], responses: []
         },
         {
-            name: '17 controlled-write-missing counterfactual', port: 32328,
+            name: '17 pdf contract-failure counterfactual', port: 32328,
             fault: 'controlled-write-missing', producerMode: 'pdf',
             files: [pdf('pdf-question.pdf', ['full'])],
             responses: fullPdfResponses()

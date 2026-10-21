@@ -19,6 +19,27 @@
         return typeof ports.clock === 'function' ? ports.clock() : Date.now();
     }
 
+    const safeCode = value => typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,100}$/.test(value) ? value : '';
+    function failureDetails(error = {}) {
+        const code = safeCode(error.code) || safeCode(error.message) || 'IMPORT_FAILED';
+        const causeCode = safeCode(error.causeCode);
+        const retryability = /UNKNOWN|SUBMITTING|UPLOADING/.test(causeCode) ? 'query-only'
+            : /NOT_CONFIGURED|INVALID|CANCELLED|AMBIGUOUS/.test(causeCode || code) ? 'never' : 'manual';
+        return { code, causeCode, stage: safeCode(error.stage),
+            requestId: safeCode(error.requestId), retryability };
+    }
+
+    function failureMessage(details) {
+        const messages = {
+            PDF_EXTERNAL_NOT_CONFIGURED: 'PDF 识别服务未启用，当前入口尚未配置可用的识别链路。',
+            MINERU_NOT_CONFIGURED: '本地服务未配置 MinerU，配置完成后再识别。',
+            MINERU_SUBMISSION_UNKNOWN: '上游任务是否受理尚不明确，请查询回执，勿重复提交。',
+            MINERU_UPLOAD_UNKNOWN: '文件上传结果尚不明确，请查询已有任务，勿重复上传。'
+        };
+        const reason = messages[details.causeCode] || details.causeCode;
+        return reason && reason !== details.code ? `${details.code}：${reason}${messages[details.causeCode] ? `（${details.causeCode}）` : ''}` : details.code;
+    }
+
     async function reportProgress(input = {}, ports = {}) {
         requireInput(input, ports);
         if (input.signal?.aborted) throw createError('IMPORT_STATUS_ABORTED', 'AbortError');
@@ -33,10 +54,16 @@
 
     async function reportImportFailure(input = {}, ports = {}) {
         requireInput(input, ports);
-        const errorMessage = input.error?.message || String(input.error);
+        const message = input.error?.message || String(input.error);
+        // The bridge deliberately exposes stable codes, not raw provider payloads.
+        // Keep its cause when persisting the failure so reloads do not erase it.
+        const details = failureDetails(input.error);
+        const errorMessage = safeCode(input.error?.code) || safeCode(message)
+            ? failureMessage(details) : message;
+        const errorPatch = safeCode(input.error?.code) ? { importError: details } : {};
         const updatedAt = now(ports);
         const batchPatch = {
-            status: 'failed', progress: 100, updatedAt, errorMessage
+            status: 'failed', progress: 100, updatedAt, errorMessage, ...errorPatch
         };
         await ports.repository.update('draftImportBatches', input.batchId, batchPatch);
 
@@ -50,13 +77,13 @@
             ).catch(() => []);
             await Promise.all(files.map(file => ports.repository.update(
                 'draftImportFiles', file.id,
-                { parseStatus: 'failed', errorMessage, updatedAt }
+                { parseStatus: 'failed', errorMessage, updatedAt, ...errorPatch }
             )));
         }
         return { batchPatch, fileIds: files.map(file => String(file.id)) };
     }
 
-    const api = Object.freeze({ reportProgress, reportImportFailure });
+    const api = Object.freeze({ reportProgress, reportImportFailure, failureDetails, failureMessage });
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (root) {
         root.Qisi = root.Qisi || {};

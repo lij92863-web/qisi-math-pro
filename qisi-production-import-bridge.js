@@ -160,7 +160,7 @@
         }
         const drafts = result.drafts;
         if (route === 'pdf') {
-            if (!['pdf-multimodal-v1','pdf-external-v2'].includes(result.pdfProtocol)) {
+            if (!['pdf-multimodal-v1','pdf-external-v2','pdf-mineru-v1'].includes(result.pdfProtocol)) {
                 throw createError('PRODUCTION_IMPORT_RESULT_MALFORMED', {
                     causeCode: 'pdf-v1-protocol-required'
                 });
@@ -503,19 +503,19 @@
                         reportStage: event => diagnostics.record(event)
                     }, signal);
                     sourceDrafts('pdf', data.sourceResult);
-                    (data.sourceResult.pdfProtocol === 'pdf-external-v2' ? root.Qisi.PdfExternalContract : root.Qisi.PdfMultimodalContract).validateCanonical(
+                    (data.sourceResult.pdfProtocol === 'pdf-mineru-v1' ? root.Qisi.PdfMineruContract : data.sourceResult.pdfProtocol === 'pdf-external-v2' ? root.Qisi.PdfExternalContract : root.Qisi.PdfMultimodalContract).validateCanonical(
                         data.sourceResult.drafts, batchId,
                         root.Qisi.DocxProducerIdentityContract
                     );
                     diagnostics.record({
-                        stage: data.sourceResult.pdfProtocol === 'pdf-external-v2' ? 'pdf-external-contract-validated' : 'pdf-v1-contract-validated',
+                        stage: data.sourceResult.pdfProtocol === 'pdf-mineru-v1' ? 'pdf-mineru-contract-validated' : data.sourceResult.pdfProtocol === 'pdf-external-v2' ? 'pdf-external-contract-validated' : 'pdf-v1-contract-validated',
                         counts: { candidates: data.sourceResult.drafts.length }
                     });
                 }),
                 normalized: command(async ({ signal }) => {
                     assertActive(signal);
                     const rawDrafts = sourceDrafts(data.route, data.sourceResult);
-                    const value = ['pdf-multimodal-v1','pdf-external-v2'].includes(data.sourceResult.pdfProtocol) ? rawDrafts : await ports.normalizeCandidates(rawDrafts, {
+                    const value = ['pdf-multimodal-v1','pdf-external-v2','pdf-mineru-v1'].includes(data.sourceResult.pdfProtocol) ? rawDrafts : await ports.normalizeCandidates(rawDrafts, {
                         batchId,
                         route: data.route,
                         batchContext: data.loaded.batchContext,
@@ -550,8 +550,8 @@
                 }),
                 'validation-complete': command(async ({ signal }) => {
                     assertActive(signal);
-                    const value = ['pdf-multimodal-v1','pdf-external-v2'].includes(data.sourceResult.pdfProtocol)
-                        ? (data.sourceResult.pdfProtocol === 'pdf-external-v2' ? root.Qisi.PdfExternalContract : root.Qisi.PdfMultimodalContract).validateCanonical(data.projected.drafts, batchId, root.Qisi.DocxProducerIdentityContract)
+                    const value = ['pdf-multimodal-v1','pdf-external-v2','pdf-mineru-v1'].includes(data.sourceResult.pdfProtocol)
+                        ? (data.sourceResult.pdfProtocol === 'pdf-mineru-v1' ? root.Qisi.PdfMineruContract : data.sourceResult.pdfProtocol === 'pdf-external-v2' ? root.Qisi.PdfExternalContract : root.Qisi.PdfMultimodalContract).validateCanonical(data.projected.drafts, batchId, root.Qisi.DocxProducerIdentityContract)
                         : await ports.validateCandidates(
                         data.projected.drafts,
                         {
@@ -616,13 +616,13 @@
                             ) ? data.loaded.batch.draftPersistence.version : 0,
                             batch: data.loaded.batch,
                             sourceFiles: data.loaded.files,
-                            pdfEvidence: ['pdf-multimodal-v1','pdf-external-v2'].includes(data.sourceResult.pdfProtocol) ? { protocol: data.sourceResult.pdfProtocol, windows: data.sourceResult.evidence, tasks: data.sourceResult.evidence, unassigned: data.sourceResult.unassigned || [], errors: data.sourceResult.windowErrors, unmatched: data.sourceResult.unmatched, warnings: data.sourceResult.warnings } : null,
+                            pdfEvidence: ['pdf-multimodal-v1','pdf-external-v2','pdf-mineru-v1'].includes(data.sourceResult.pdfProtocol) ? { protocol: data.sourceResult.pdfProtocol, windows: data.sourceResult.evidence, tasks: data.sourceResult.evidence, unassigned: data.sourceResult.unassigned || [], errors: data.sourceResult.windowErrors, unmatched: data.sourceResult.unmatched, warnings: data.sourceResult.warnings } : null,
                             drafts: data.reviewDrafts,
                             images: data.projected.draftImages,
                             route: data.route,
                             unmatched: Array.isArray(data.sourceResult?.unmatched)
                                 ? data.sourceResult.unmatched
-                                : [],
+                                : (data.sourceResult?.unmatchedAnswers || []),
                             warnings: Array.isArray(data.sourceResult?.warnings)
                                 ? data.sourceResult.warnings
                                 : [],
@@ -813,6 +813,8 @@
                     machine,
                     externalSignal
                 );
+                failure.stage = safeCode(activeCause?.stage || machine?.snapshot?.().state || 'failed');
+                failure.requestId = requestId;
                 try {
                     diagnostics.fail(failure, {
                         stage: failure.code === 'IMPORT_CANCELLED'

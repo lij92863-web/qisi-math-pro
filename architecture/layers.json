@@ -1560,7 +1560,7 @@
         "app-shell",
         "storage-repository"
       ],
-      "status": "production-wired"
+      "status": "deprecated"
     },
     {
       "id": "pdf-external-producer",
@@ -1583,7 +1583,7 @@
         "support-repair",
         "ocr-structure-extractor"
       ],
-      "status": "production-wired"
+      "status": "deprecated"
     },
     {
       "id": "pdf-page-evidence",
@@ -1604,6 +1604,152 @@
         "storage-repository",
         "support-document-parser",
         "support-repair"
+      ],
+      "status": "deprecated"
+    },
+    {
+      "id": "mineru-task-store",
+      "file": "qisi-mineru-task-store.js",
+      "layer": 1,
+      "domainOwner": "mineruTaskStoreOwner",
+      "publicApi": [
+        "createMineruTaskStore"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "mineru-task-service",
+      "file": "qisi-mineru-task-service.js",
+      "layer": 2,
+      "domainOwner": "mineruTaskServiceOwner",
+      "publicApi": [
+        "createMineruTaskService"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "pdf-review-records",
+      "file": "qisi-pdf-review-records.js",
+      "layer": 0,
+      "domainOwner": "pdfReviewRecordsOwner",
+      "publicApi": [
+        "createRecordContract"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "pdf-mineru-contract",
+      "file": "qisi-pdf-mineru-contract.js",
+      "layer": 0,
+      "domainOwner": "pdfMineruContractOwner",
+      "publicApi": [
+        "validateCanonical"
+      ],
+      "allowedDependencies": [
+        "pdf-review-records"
+      ],
+      "forbiddenDependencies": [
+        "app-shell"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "pdf-question-display",
+      "file": "qisi-pdf-question-display.js",
+      "layer": 0,
+      "domainOwner": "pdfQuestionDisplayOwner",
+      "publicApi": [
+        "projectQuestionText",
+        "tableDisplayText",
+        "questionDisplayBlocks"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "pdf-mineru-producer",
+      "file": "qisi-pdf-mineru-producer.js",
+      "layer": 3,
+      "domainOwner": "pdfMineruProducerOwner",
+      "publicApi": [
+        "createProducer"
+      ],
+      "allowedDependencies": [
+        "pdf-mineru-contract",
+        "pdf-review-records",
+        "docx-producer-identity-contract",
+        "pdf-question-display"
+      ],
+      "forbiddenDependencies": [
+        "app-shell"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "mineru-client",
+      "file": "qisi-mineru-client.js",
+      "layer": 2,
+      "domainOwner": "mineruClientOwner",
+      "publicApi": [
+        "createMineruClient",
+        "internals"
+      ],
+      "allowedDependencies": [
+        "mineru-task-service"
+      ],
+      "forbiddenDependencies": [
+        "app-shell",
+        "question-repository"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "mineru-evidence",
+      "file": "qisi-mineru-evidence.js",
+      "layer": 0,
+      "domainOwner": "mineruEvidenceOwner",
+      "publicApi": [
+        "explicitDeclarations",
+        "aggregateAnswers"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
+      ],
+      "status": "production-wired"
+    },
+    {
+      "id": "paper-segmenter",
+      "file": "qisi-paper-segmenter.js",
+      "layer": 1,
+      "domainOwner": "paperSegmenterOwner",
+      "publicApi": [
+        "segmentPaper",
+        "segment",
+        "assemble",
+        "numberOnBlock"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository"
       ],
       "status": "production-wired"
     }

@@ -229,6 +229,18 @@ test('DOCX complete follows the deterministic review-only state path', async () 
     assert.equal(JSON.stringify(result).includes('FORMAL_ADMISSION'), false);
 });
 
+test('DOCX unmatched answer and solution evidence reaches the persistence command intact', async () => {
+    const harness = createHarness();
+    const run = harness.ports.runDocxImport;
+    const unmatchedAnswers = [
+        { question: '20', field: 'answer', answer: 'B', sourceFileName: 'answers.docx' },
+        { question: '21', field: 'solution', solution: '完整解析证据', sourceFileName: 'solutions.docx' }
+    ];
+    harness.ports.runDocxImport = async (...args) => ({ ...(await run(...args)), unmatchedAnswers });
+    await Bridge.createProductionImportBridge(harness.ports).run(productionInput());
+    assert.deepEqual(harness.persisted[0].unmatched, unmatchedAnswers);
+});
+
 test('PDF V1 preserves missing support and bypasses legacy content processing', async () => {
     const harness = createHarness({ files: pdfFiles() });
     const result = await Bridge.createProductionImportBridge(harness.ports)
@@ -298,24 +310,46 @@ test('missing role and duplicate source fail before parsing or persistence', asy
     }
 });
 
-test('multiple PDF support sources fail before PDF producer execution', async () => {
-    const sourceFiles = [
-        { id: 'question-pdf', fileType: 'pdf', roles: ['question'], sourceOrder: 1 },
-        { id: 'answer-pdf', fileType: 'pdf', roles: ['answer'], sourceOrder: 2 },
-        { id: 'solution-pdf', fileType: 'pdf', roles: ['solution'], sourceOrder: 3 }
+test('PDF support roles must be unambiguous before the PDF producer runs', async () => {
+    const question = { id: 'question-pdf', fileType: 'pdf', roles: ['question'], sourceOrder: 1 };
+    const ambiguous = [
+        // Two sources claiming the answer role cannot be ordered or trusted.
+        [question,
+            { id: 'answer-a', fileType: 'pdf', roles: ['answer'], sourceOrder: 2 },
+            { id: 'answer-b', fileType: 'pdf', roles: ['answer'], sourceOrder: 3 }],
+        // Same for the solution role.
+        [question,
+            { id: 'solution-a', fileType: 'pdf', roles: ['solution'], sourceOrder: 2 },
+            { id: 'solution-b', fileType: 'pdf', roles: ['solution'], sourceOrder: 3 }],
+        // Two question sources never describe one paper.
+        [question,
+            { id: 'question-2', fileType: 'pdf', roles: ['question'], sourceOrder: 2 }]
     ];
-    const harness = createHarness({ files: sourceFiles });
-    const bridge = Bridge.createProductionImportBridge(harness.ports);
-    await assert.rejects(
-        bridge.run({
-            mode: 'production', batchId: 'batch-1', requestId: 'request-ambiguity'
-        }),
-        error => error.code === 'PRODUCTION_IMPORT_SOURCE_UNSUPPORTED' &&
-            error.causeCode === 'pdf-support-source-ambiguous'
-    );
-    assert.equal(harness.calls.includes('docx'), false);
-    assert.equal(harness.calls.includes('pdf'), false);
-    assert.equal(harness.persisted.length, 0);
+    for (const sourceFiles of ambiguous) {
+        const harness = createHarness({ files: sourceFiles });
+        await assert.rejects(
+            Bridge.createProductionImportBridge(harness.ports).run({
+                mode: 'production', batchId: 'batch-1', requestId: 'request-ambiguity'
+            }),
+            error => error.code === 'PRODUCTION_IMPORT_SOURCE_UNSUPPORTED' &&
+                error.causeCode === 'pdf-support-source-ambiguous'
+        );
+        assert.equal(harness.calls.includes('pdf'), false);
+        assert.equal(harness.persisted.length, 0);
+    }
+
+    // One question file plus one answer file plus one solution file is a normal
+    // teacher layout and must reach the PDF producer exactly once.
+    const allowed = createHarness({
+        files: [question,
+            { id: 'answer-pdf', fileType: 'pdf', roles: ['answer'], sourceOrder: 2 },
+            { id: 'solution-pdf', fileType: 'pdf', roles: ['solution'], sourceOrder: 3 }]
+    });
+    await Bridge.createProductionImportBridge(allowed.ports).run({
+        mode: 'production', batchId: 'batch-1', requestId: 'request-separated-support'
+    });
+    assert.equal(allowed.calls.filter(call => call === 'pdf').length, 1);
+    assert.equal(allowed.persisted.length, 1);
 });
 
 test('raw JSON draft output is rejected before normalization and persistence', async () => {

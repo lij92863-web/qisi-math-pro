@@ -11,8 +11,7 @@
     const NUMBER_START = /^\s*(?:#{1,6}\s*)?([0-9０-９]{1,3})\s*(?:[.、．](?![0-9０-９])\s*|(?=【(?:答案|解析|详解)】))/;
     const SOLUTION_HEAD = /^\s*(?:#{1,6}\s*)?([0-9０-９]{1,3})\s*[.、．]\s*([A-H]{1,8})\s*$/;
     const ANSWER_HEADING = /^\s*#{0,6}\s*(?:《[^\n]*》\s*)?(?:参考答案(?:与解析)?|答案与解析|答案|解析)\s*$/;
-    const textOf = block => String(block?.text ?? '');
-    const canonical = value => {
+    const textOf = block => String(block?.text ?? '');    const canonical = value => {
         const digits = String(value).replace(/[０-９]/g, c => String(c.charCodeAt(0) - 0xff10));
         return /^\d{1,3}$/.test(digits) ? String(Number(digits)) : 'NaN';
     };
@@ -197,6 +196,24 @@
                     const start = supportPreambleStart(blocks, index, previousMarker);
                     return { index: start, reason: 'numbering-restart', ...(start === index ? {} : { markerIndex: index }) };
                 }
+                // A complete, strictly increasing prefix followed by a restart
+                // at question 1 is the standard "paper then answers" layout.
+                // The suffix may legitimately have gaps (an answer omitted, a
+                // page without one), which must not invalidate the boundary:
+                // per-question binding will leave only the missing ones empty.
+                // Evidence still has to look like support material, not a new
+                // section of questions.
+                const nearbyHeading = blocks
+                    .slice(Math.max(0, index - 4), index)
+                    .some(block => /参考答案|答案与解析/.test(textOf(block)));
+                const restartIsSupport = head.no === '1' &&
+                    (support.runs[0]?.supportEvidence || nearbyHeading);
+                const substantialSupport = support.order.length >=
+                    Math.max(3, Math.ceil(order.length / 2));
+                if (increasing && order.length >= 3 && substantialSupport && restartIsSupport) {
+                    const start = supportPreambleStart(blocks, index, previousMarker);
+                    return { index: start, reason: 'numbering-restart', ...(start === index ? {} : { markerIndex: index }) };
+                }
                 // A malformed first restart cannot be repaired by looking for a
                 // later convenient split. An explicit heading still wins below.
                 const heading = blocks.findIndex((block, at) => at > index && !block.parentId && ANSWER_HEADING.test(textOf(block)));
@@ -240,6 +257,99 @@
 
     function answerStatedInSolution(run) {
         return answerEvidence(run).value || null;
+    }
+
+    // Per-question assembly.
+    //
+    // `assemble` treats ANY issue as fatal for the whole paper: one ambiguous
+    // boundary in the support file wipes every answer and every solution. That
+    // is how a 19-question paper came back with 19 drafts and 0 answers.
+    //
+    // A printed question number still identifies its own run. Therefore only
+    // ownership-corrupting defects stop the whole assembly (duplicate numbers,
+    // missing question markers, broken fragments). A defect that belongs to one
+    // question (ambiguous boundary/head, conflicting evidence) blocks that
+    // question alone; the rest bind normally and the issue stays visible.
+    const ASSEMBLY_GLOBAL_BLOCKERS = Object.freeze(new Set([
+        'duplicate-block-id',
+        'fragment-id-collision',
+        'question-markers-missing',
+        'invalid-expected-sequence',
+        'number-not-increasing',
+        'duplicate-number',
+        'backward-number',
+        'invalid-fragment-source',
+        'invalid-boundary-review',
+        'missing-parent-block'
+    ]));
+
+    function perQuestionBlocker(issue, no) {
+        if (issue.no !== no) return false;
+        return ['ambiguous-support-head', 'ambiguous-boundary', 'unexpected-number', 'unexpected-solution',
+            'answer-evidence-conflict', 'answer-table-conflict'].includes(issue.code);
+    }
+
+    function assemblePartial({ questionSegment, solutionSegment = null, answerTable = null, types = {} }) {
+        const issues = [];
+        const blocksById = Object.create(null);
+        for (const [side, part] of [['question', questionSegment], ['support', solutionSegment]]) {
+            if (!part) continue;
+            issues.push(...part.issues.map(issue => ({ ...issue, side })));
+            for (const [id, block] of Object.entries(part.blocksById)) {
+                if (Object.hasOwn(blocksById, id) && blocksById[id] !== block) issues.push({ code: 'duplicate-block-id', blockId: id, side });
+                else blocksById[id] = block;
+            }
+        }
+        const questionNumbers = new Set(questionSegment?.order || []);
+        if (questionSegment && !questionNumbers.size) issues.push({ code: 'question-markers-missing' });
+
+        // One run per printed number. A duplicated number cannot identify its
+        // owner, so it blocks admission for that number only.
+        const solutionByNo = new Map();
+        const duplicatedSupport = new Set();
+        for (const run of solutionSegment?.runs || []) {
+            if (solutionByNo.has(run.no)) duplicatedSupport.add(run.no);
+            else solutionByNo.set(run.no, run);
+        }
+        for (const no of duplicatedSupport) issues.push({ code: 'duplicate-number', no, side: 'support' });
+        const supportNumbers = new Set(solutionByNo.keys());
+        if (solutionSegment) {
+            for (const no of questionNumbers) if (!supportNumbers.has(no)) issues.push({ code: 'solution-missing', no });
+        }
+        for (const block of Object.values(blocksById)) {
+            if (block.parentId && !Object.hasOwn(blocksById, block.parentId)) issues.push({ code: 'missing-parent-block', blockId: block.id });
+            if (!block.origin || block.origin.blockId === block.id) continue;
+            const source = blocksById[block.origin.blockId];
+            const range = block.origin.range;
+            if (!source || !Array.isArray(range) || range.length !== 2 || !range.every(Number.isSafeInteger) || range[0] < 0 || range[1] < range[0] || range[1] > textOf(source).length || textOf(source).slice(...range) !== textOf(block)) issues.push({ code: 'invalid-fragment-source', blockId: block.id });
+        }
+
+        const globallyBlocked = issues.some(issue => ASSEMBLY_GLOBAL_BLOCKERS.has(issue.code));
+        const questions = (questionSegment?.runs || []).map(run => {
+            const solution = solutionByNo.get(run.no);
+            const stated = solution ? answerStatedInSolution(solution) : null;
+            const fromTable = answerTable?.[run.no] ?? null;
+            const answers = answerEvidence(solution, fromTable);
+            const conflict = answers.state === 'conflicting';
+            if (conflict) issues.push({ code: fromTable == null ? 'answer-evidence-conflict' : 'answer-table-conflict', no: run.no, evidence: answers.evidence, table: fromTable, solution: stated });
+            const blockedHere = duplicatedSupport.has(run.no) ||
+                issues.some(issue => perQuestionBlocker(issue, run.no));
+            const bind = !globallyBlocked && !blockedHere && !conflict;
+            return {
+                questionNo: run.no, type: types[run.no] || null,
+                stemBlocks: run.blocks.filter(block => !['image', 'chart'].includes(block.type)).map(block => block.id),
+                figureBlocks: figureOf(run).map(block => block.id), tableBlocks: tableOf(run).map(block => block.id),
+                answer: bind ? answers.value : '',
+                answerEvidence: answers,
+                contentStatus: 'unverified',
+                contentIssues: [...run.blocks, ...(solution?.blocks || [])].filter(b => !textOf(b).trim() && !b.image).map(b => ({ code: 'empty-source-block', blockId: b.id })),
+                coverage: questionSegment.coverage,
+                answerSource: bind ? (fromTable != null ? 'answer-table' : stated ? 'solution-head' : 'none') : 'none',
+                solutionBlocks: bind && solution ? solution.blocks.map(block => block.id) : [],
+                reviewRequired: true
+            };
+        });
+        return { questions, issues, blocksById, valid: !globallyBlocked, partial: issues.length > 0 };
     }
 
     function assemble({ questionSegment, solutionSegment = null, answerTable = null, types = {} }) {
@@ -300,5 +410,5 @@
         return { questions, issues, blocksById, valid: issues.length === 0 };
     }
 
-    return Object.freeze({ NUMBER_START, SOLUTION_HEAD, ANSWER_HEADING, findAnswerBoundary, segmentPaper, segment, assemble, numberOnBlock, answerEvidence, answerStatedInSolution, figureOf, tableOf });
+    return Object.freeze({ NUMBER_START, SOLUTION_HEAD, ANSWER_HEADING, findAnswerBoundary, segmentPaper, segment, assemble, assemblePartial, numberOnBlock, answerEvidence, answerStatedInSolution, figureOf, tableOf });
 });

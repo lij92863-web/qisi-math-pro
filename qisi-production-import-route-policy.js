@@ -126,9 +126,14 @@
             );
         }
         const route = [...sourceTypes][0];
+        // One question source plus at most one answer source and one solution
+        // source. Roles are explicit in the UI, so a separate answer and solution
+        // file is unambiguous; two sources claiming the same role are not.
         if (
             route === 'pdf' &&
-            active.filter(source => source?.isAnswer || source?.isSolution).length > 1
+            (active.filter(source => source?.isQuestion).length !== 1 ||
+                active.filter(source => source?.isAnswer).length > 1 ||
+                active.filter(source => source?.isSolution).length > 1)
         ) {
             fail(
                 'PRODUCTION_IMPORT_SOURCE_UNSUPPORTED',

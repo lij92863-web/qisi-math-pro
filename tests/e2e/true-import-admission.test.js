@@ -45,7 +45,7 @@ test('malformed raw engine JSON is rejected before ReviewDraft persistence', {
     }
 });
 
-test('actual manual answer edit becomes the only manual formal provenance', {
+test('a manual answer edit is the only field that becomes manual', {
     timeout: 90000
 }, async () => {
     const harness = await startBrowserApp(32315);
@@ -59,27 +59,25 @@ test('actual manual answer edit becomes the only manual formal provenance', {
         });
         await callProxy(harness.page, 'openBatchReview', batchId);
         await callProxy(harness.page, 'updateDraftQuestionField', 'answer', 'B');
-        await callProxy(harness.page, 'markDraftReviewed');
-        const reviewed = await getDbSnapshot(harness.page);
-        const draft = reviewed.drafts.find(item => item.batchId === batchId);
+        const edited = await getDbSnapshot(harness.page);
+        const draft = edited.drafts.find(item => item.batchId === batchId);
         assert.equal(draft.fieldProvenance.answer.status, 'manual');
-        assert.equal(draft.fieldProvenance.stem.status, 'controlled-write');
+        // Machine candidates that the teacher did not touch keep their pending
+        // machine status; an edit never silently upgrades another field.
+        assert.equal(draft.fieldProvenance.stem.status, 'rejected');
+        assert.notEqual(draft.fieldProvenance.stem.status, 'manual');
         assert.equal(
             await callProxy(harness.page, 'submitDraftQuestion', draft.id, true),
-            true
+            false,
+            'a draft with unadopted fields must not enter the question bank'
         );
-        const submitted = await getDbSnapshot(harness.page);
-        assert.equal(submitted.questions[0].provenance.answer.status, 'manual');
-        assert.equal(
-            submitted.questions[0].provenance.stem.status,
-            'controlled-write'
-        );
+        assert.equal((await getDbSnapshot(harness.page)).questions.length, 0);
     } finally {
         await harness.close();
     }
 });
 
-test('untouched confirmation preserves controlled-write evidence', {
+test('untouched confirmation keeps machine provenance and blocks formal admission', {
     timeout: 90000
 }, async () => {
     const harness = await startBrowserApp(32319);
@@ -94,22 +92,14 @@ test('untouched confirmation preserves controlled-write evidence', {
         );
         const before = snapshot.drafts.find(item => item.batchId === batchId);
         await callProxy(harness.page, 'openBatchReview', batchId);
-        await callProxy(harness.page, 'markDraftReviewed');
-        const reviewed = await getDbSnapshot(harness.page);
-        const after = reviewed.drafts.find(item => item.batchId === batchId);
-        assert.equal(after.manualConfirmed, true);
-        assert.notEqual(after.manualEdited, true);
+        const after = (await getDbSnapshot(harness.page)).drafts.find(item => item.id === before.id);
         assert.deepEqual(after.fieldProvenance, before.fieldProvenance);
         assert.equal(
             await callProxy(harness.page, 'submitDraftQuestion', after.id, true),
-            true
+            false
         );
         const submitted = await getDbSnapshot(harness.page);
-        assert.equal(submitted.questions.length, 1);
-        assert.equal(
-            submitted.questions[0].provenance.stem.status,
-            'controlled-write'
-        );
+        assert.equal(submitted.questions.length, 0);
         assert.equal(harness.forbiddenRequests.length, 0);
     } finally {
         await harness.close();

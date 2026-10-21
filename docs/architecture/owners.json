@@ -1761,9 +1761,7 @@
       "responsibilities": [
         "external-direct-or-parse-organize-capability-boundary"
       ],
-      "allowedCallers": [
-        "ui-shell"
-      ],
+      "allowedCallers": [],
       "allowedDependencies": [
         "pdf-external-contract",
         "pdf-page-evidence"
@@ -1772,9 +1770,9 @@
         "ui-shell",
         "question-repository"
       ],
-      "productionEntry": true,
+      "productionEntry": false,
       "writeAuthority": "none",
-      "status": "production"
+      "status": "deprecated"
     },
     {
       "ownerId": "pdf-external-producer",
@@ -1783,9 +1781,7 @@
       "responsibilities": [
         "pdf-owner-context-task-evidence-budget-cache-original-crops"
       ],
-      "allowedCallers": [
-        "ui-shell"
-      ],
+      "allowedCallers": [],
       "allowedDependencies": [
         "pdf-external-contract",
         "pdf-external-provider",
@@ -1796,9 +1792,9 @@
         "ui-shell",
         "question-repository"
       ],
-      "productionEntry": true,
+      "productionEntry": false,
       "writeAuthority": "none",
-      "status": "production"
+      "status": "deprecated"
     },
     {
       "ownerId": "pdf-page-evidence",
@@ -1807,10 +1803,7 @@
       "responsibilities": [
         "raw-page-evidence-contract-and-mechanical-identities"
       ],
-      "allowedCallers": [
-        "pdf-external-provider",
-        "pdf-external-producer"
-      ],
+      "allowedCallers": [],
       "allowedDependencies": [
         "pdf-external-contract"
       ],
@@ -1818,9 +1811,9 @@
         "ui-shell",
         "question-repository"
       ],
-      "productionEntry": true,
+      "productionEntry": false,
       "writeAuthority": "none",
-      "status": "production"
+      "status": "deprecated"
     },
     {
       "ownerId": "support-evidence",
@@ -1832,6 +1825,181 @@
       "allowedCallers": [
         "support-text-parser",
         "docx-producer-identity"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "ui-shell",
+        "question-repository"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "none",
+      "status": "production"
+    },
+    {
+      "ownerId": "mineru-task-store",
+      "module": "qisi-mineru-task-store.js",
+      "layer": 1,
+      "responsibilities": [
+        "mineru-task-store"
+      ],
+      "allowedCallers": [
+        "mineru-task-service"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "ui-shell",
+        "question-repository"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "transport-cache",
+      "status": "production"
+    },
+    {
+      "ownerId": "mineru-task-service",
+      "module": "qisi-mineru-task-service.js",
+      "layer": 2,
+      "responsibilities": [
+        "mineru-task-service"
+      ],
+      "allowedCallers": [
+        "mineru-client"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "ui-shell",
+        "question-repository"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "none",
+      "status": "production"
+    },
+    {
+      "ownerId": "pdf-review-records",
+      "module": "qisi-pdf-review-records.js",
+      "layer": 0,
+      "responsibilities": [
+        "pdf-review-records"
+      ],
+      "allowedCallers": [
+        "pdf-mineru-contract"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "ui-shell",
+        "question-repository"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "none",
+      "status": "production"
+    },
+    {
+      "ownerId": "pdf-mineru-contract",
+      "module": "qisi-pdf-mineru-contract.js",
+      "layer": 0,
+      "responsibilities": [
+        "pdf-mineru-contract"
+      ],
+      "allowedCallers": [
+        "pdf-mineru-producer",
+        "production-import-bridge",
+        "ui-shell"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "ui-shell",
+        "question-repository"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "none",
+      "status": "production"
+    },
+    {
+      "ownerId": "pdf-mineru-producer",
+      "module": "qisi-pdf-mineru-producer.js",
+      "layer": 3,
+      "responsibilities": [
+        "pdf-mineru-producer"
+      ],
+      "allowedCallers": [
+        "ui-shell"
+      ],
+      "allowedDependencies": [
+        "pdf-question-display"
+      ],
+      "forbiddenDependencies": [
+        "ui-shell",
+        "question-repository"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "none",
+      "status": "production"
+    },
+    {
+      "ownerId": "mineru-client",
+      "module": "qisi-mineru-client.js",
+      "layer": 2,
+      "responsibilities": [
+        "mineru-transport"
+      ],
+      "allowedCallers": [],
+      "allowedDependencies": [
+        "mineru-task-service"
+      ],
+      "forbiddenDependencies": [
+        "ui-shell",
+        "question-repository"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "transport-cache",
+      "status": "production"
+    },
+    {
+      "ownerId": "mineru-evidence",
+      "module": "qisi-mineru-evidence.js",
+      "layer": 0,
+      "responsibilities": [
+        "qisi-mineru-evidence"
+      ],
+      "allowedCallers": [
+        "pdf-mineru-producer"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "ui-shell",
+        "question-repository"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "none",
+      "status": "production"
+    },
+    {
+      "ownerId": "paper-segmenter",
+      "module": "qisi-paper-segmenter.js",
+      "layer": 1,
+      "responsibilities": [
+        "qisi-paper-segmenter"
+      ],
+      "allowedCallers": [
+        "pdf-mineru-producer"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "ui-shell",
+        "question-repository"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "none",
+      "status": "production"
+    },
+    {
+      "ownerId": "pdf-question-display",
+      "module": "qisi-pdf-question-display.js",
+      "layer": 0,
+      "responsibilities": [
+        "pdf-question-display"
+      ],
+      "allowedCallers": [
+        "pdf-mineru-producer"
       ],
       "allowedDependencies": [],
       "forbiddenDependencies": [

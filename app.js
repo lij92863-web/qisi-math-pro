@@ -647,10 +647,10 @@
                     return true;
                 };
 
-                const pdfDraftContract = q => window.Qisi.PdfExternalContract.isExternal(q) ? window.Qisi.PdfExternalContract : window.Qisi.PdfMultimodalContract.isV1(q) ? window.Qisi.PdfMultimodalContract : null;
-                const pdfDraftMeta = q => q?.pdfExternal || q?.pdfV1 || null;
-                const activePdfReviewPanel = computed(() => window.Qisi.PdfExternalContract.reviewPanel(activeDraftQuestion.value));
-                const activePdfUnassigned = computed(() => batchImportFiles.value.flatMap(file => (file.pdfExternalEvidence?.unassigned || []).map(fragment => ({ ...fragment, sourceFileName: file.filename }))));
+                const pdfDraftContract = q => window.Qisi.PdfMineruContract.isRecord(q) ? window.Qisi.PdfMineruContract : window.Qisi.PdfExternalContract.isExternal(q) ? window.Qisi.PdfExternalContract : window.Qisi.PdfMultimodalContract.isV1(q) ? window.Qisi.PdfMultimodalContract : null;
+                const pdfDraftMeta = q => q?.pdfReview || q?.pdfExternal || q?.pdfV1 || null;
+                const activePdfReviewPanel = computed(() => pdfDraftContract(activeDraftQuestion.value)?.reviewPanel?.(activeDraftQuestion.value) || null);
+                const activePdfUnassigned = computed(() => batchImportFiles.value.flatMap(file => ((file.pdfMineruEvidence || file.pdfExternalEvidence)?.unassigned || []).map(fragment => ({ ...fragment, sourceFileName: file.filename }))));
                 const activeDraftImages = computed(() => {
                     const q = activeDraftQuestion.value;
                     const qid = q?.id;
@@ -1843,20 +1843,11 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                                     signal: input.signal
                                 })
                         });
-                const pdfExternalExecutor = window.Qisi.PdfExternalProvider.createExecutor({
-                    recognize: qwenOcrRuntime.requestPdfWindow,
-                    getBindings: () => window.Qisi.Config.pdfExternal?.bindings
-                });
-                const runProductionPdfImport = window.Qisi.PdfExternalProducer.createProducer({
+                const runProductionPdfImport = window.Qisi.PdfMineruProducer.createProducer({
                     renderPages: renderPdfFilePages,
-                    renderRegion: browserPdfRenderer.renderPdfRegion,
-                    execute: pdfExternalExecutor,
-                    renderMath: window.katex?.renderToString,
                     getRoles: getBatchFileRoles,
-                    getConfig: () => window.Qisi.Config.pdfExternal,
-                    resolveAsset: (assetId, result) => window.Qisi.Config.pdfExternal?.bindings?.resolveAsset?.(assetId, result),
                     getExistingDrafts: batchId => storageRepository.findBy('draftQuestions', 'batchId', batchId),
-                    persistSourceEvidence: (file, evidence) => storageRepository.put('draftImportFiles', { ...file, pdfExternalEvidence: evidence, updatedAt: Date.now() })
+                    persistSourceEvidence: (file, evidence) => storageRepository.put('draftImportFiles', { ...file, pdfMineruEvidence: evidence, updatedAt: Date.now() })
                 });
 
                 const productionImportBridge =
@@ -1909,7 +1900,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                                 images: command.images,
                                 files: command.sourceFiles.map(file => ({
                                     ...file,
-                                    ...(command.pdfEvidence ? { [command.pdfEvidence.protocol === 'pdf-external-v2' ? 'pdfExternalEvidence' : 'pdfV1Evidence']: { ...command.pdfEvidence, tasks: command.pdfEvidence.tasks?.filter(e => e.sourceId === file.id), unassigned: command.pdfEvidence.unassigned?.filter(e => e.source_id === file.id) }, parseStatus: command.pdfEvidence.errors.some(e => e.sourceId === file.id) ? 'partial' : 'success' } : { parseStatus: 'success' }),
+                                    ...(command.pdfEvidence ? { [command.pdfEvidence.protocol === 'pdf-mineru-v1' ? 'pdfMineruEvidence' : command.pdfEvidence.protocol === 'pdf-external-v2' ? 'pdfExternalEvidence' : 'pdfV1Evidence']: { ...command.pdfEvidence, tasks: command.pdfEvidence.tasks?.filter(e => e.sourceId === file.id), unassigned: command.pdfEvidence.unassigned?.filter(e => e.source_id === file.id) }, parseStatus: command.pdfEvidence.errors.some(e => e.sourceId === file.id) ? 'partial' : 'success' } : { parseStatus: 'success' }),
                                     errorMessage: '',
                                     updatedAt: command.batchPatch.updatedAt
                                 })),
@@ -2081,8 +2072,8 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
 
                 const acknowledgePdfTaskIssues = async () => {
                     const q = activeDraftQuestion.value;
-                    if (!q?.pdfExternal || q.status === 'submitted') return;
-                    const next = window.Qisi.PdfExternalContract.acknowledgeTaskIssues(toRaw(q), reviewController);
+                    if (!pdfDraftContract(q)?.acknowledgeTaskIssues || q.status === 'submitted') return;
+                    const next = pdfDraftContract(q).acknowledgeTaskIssues(toRaw(q), reviewController);
                     const persisted = await runReviewDraftPersistenceCommand({ batchId: q.batchId, draft: next, expectedDraftVersion: q.version });
                     if (persisted) { Object.assign(q, persisted.draft); await loadBatchImportData(); showBatchToast('已记录来源范围检查，请重新确认本题。'); }
                 };
@@ -2735,7 +2726,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                 };
 
                 const showUnmatchedAnswerList = () => {
-                    const text = unmatchedAnswers.value.map(x => `第${x.question}题：${x.answer}｜${x.sourceFile}`).join('\n');
+                    const text = unmatchedAnswers.value.map(x => `第${x.questionNumber || x.question}题 ${x.field === 'solution' ? '解析' : '答案'}：${x.value || x[x.field || 'answer'] || x.evidence?.values?.join('\n') || ''}｜${x.sourceFileName || x.sourceFile || ''}`).join('\n');
                     alert(text || '没有未匹配答案。');
                 };
 

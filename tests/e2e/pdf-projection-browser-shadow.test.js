@@ -23,15 +23,15 @@ test('normal UI PDF V2 persists and reloads structured fields without legacy par
         const draft = drafts[0];
         assert.equal(draft.source.format, 'pdf');
         assert.equal(draft.producer.mode, 'vision-ai');
-        assert.equal(draft.producer.routeId, 'pdf-external-v2');
+        assert.equal(draft.producer.routeId, 'pdf-mineru-v1');
         assert.equal(draft.answer, 'A');
         assert.match(draft.solution, /supplied PDF evidence/);
-        assert.equal(draft.fieldProvenance.answer.status, 'controlled-write');
+        assert.equal(draft.fieldProvenance.answer.status, 'rejected');
         assert.equal(draft.fieldProvenance.answer.sourceId, draft.source.sourceId);
-        assert.equal(draft.pdfExternal.states.question, 'complete');
+        assert.equal(draft.pdfReview.states.question, 'rejected');
         assert.equal(imported.snapshot.questions.length, 0);
         const stages = (await readImportStageTrace(harness.page, imported.batchId)).map(event => event.stage);
-        const required = ['source-producer-entered', 'pdf-external-task-start', 'pdf-external-canonical-produced', 'pdf-external-contract-validated', 'validation-complete', 'draft-persisted', 'readback-verified'];
+        const required = ['source-producer-entered', 'pdf-mineru-task-start', 'pdf-mineru-canonical-produced', 'pdf-mineru-contract-validated', 'validation-complete', 'draft-persisted', 'readback-verified'];
         for (const stage of required) assert.ok(stages.includes(stage), stage);
         const indexes = required.map(stage => stages.indexOf(stage));
         assert.deepEqual(indexes, [...indexes].sort((left, right) => left - right));
@@ -39,7 +39,7 @@ test('normal UI PDF V2 persists and reloads structured fields without legacy par
         await harness.page.reload();
         const reopened = (await getDbSnapshot(harness.page)).drafts.find(row => row.id === draft.id);
         for (const field of ['questionNumber', 'type', 'stem', 'options', 'answer', 'solution', 'fieldProvenance']) assert.deepEqual(reopened[field], draft[field], field);
-        assert.ok(engine.calls.some(call => call.endpoint.endsWith('/chat')));
+        assert.ok(engine.calls.some(call => call.endpoint.endsWith('/parse')));
         assert.equal(engine.realApiCalled, false);
         assert.equal(harness.forbiddenRequests.length, 0);
         assertNoRuntimeErrors(harness);

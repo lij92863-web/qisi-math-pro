@@ -110,19 +110,34 @@ test('unavailable capability has no catch fallback to another producer', () => {
     );
 });
 
-test('PDF support ambiguity remains fail closed in the route owner', () => {
-    assert.throws(
-        () => select({
-            producerMode: 'pdf',
-            manifest: [
-                source('question', 'pdf', ['question'], 1),
-                source('answer', 'pdf', ['answer'], 2),
-                source('solution', 'pdf', ['solution'], 3)
-            ]
-        }),
-        error => error.code === 'PRODUCTION_IMPORT_SOURCE_UNSUPPORTED' &&
-            error.causeCode === 'pdf-support-source-ambiguous'
-    );
+test('PDF support ambiguity is refused while separate answer and solution files are allowed', () => {
+    // Two sources claiming the same role are ambiguous and must never be ordered by guesswork.
+    for (const manifest of [
+        [source('question', 'pdf', ['question'], 1),
+            source('answer-a', 'pdf', ['answer'], 2),
+            source('answer-b', 'pdf', ['answer'], 3)],
+        [source('question', 'pdf', ['question'], 1),
+            source('solution-a', 'pdf', ['solution'], 2),
+            source('solution-b', 'pdf', ['solution'], 3)],
+        [source('question', 'pdf', ['question'], 1),
+            source('question-2', 'pdf', ['question'], 2)]
+    ]) {
+        assert.throws(
+            () => select({ producerMode: 'pdf', manifest }),
+            error => error.code === 'PRODUCTION_IMPORT_SOURCE_UNSUPPORTED' &&
+                error.causeCode === 'pdf-support-source-ambiguous'
+        );
+    }
+    // One question file plus one answer file plus one solution file is unambiguous.
+    const route = select({
+        producerMode: 'pdf',
+        manifest: [
+            source('question', 'pdf', ['question'], 1),
+            source('answer', 'pdf', ['answer'], 2),
+            source('solution', 'pdf', ['solution'], 3)
+        ]
+    });
+    assert.equal(route.sourceIds.length, 3);
 });
 
 

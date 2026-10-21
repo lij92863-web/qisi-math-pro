@@ -80,5 +80,14 @@
   "pdfExternalProviderOwner": "qisi-pdf-external-provider.js",
   "pdfExternalProducerOwner": "qisi-pdf-external-producer.js",
   "pdfPageEvidenceOwner": "qisi-pdf-page-evidence.js",
-  "supportEvidenceOwner": "qisi-support-evidence.js"
+  "supportEvidenceOwner": "qisi-support-evidence.js",
+  "mineruTaskStoreOwner": "qisi-mineru-task-store.js",
+  "mineruTaskServiceOwner": "qisi-mineru-task-service.js",
+  "pdfReviewRecordsOwner": "qisi-pdf-review-records.js",
+  "pdfMineruContractOwner": "qisi-pdf-mineru-contract.js",
+  "pdfMineruProducerOwner": "qisi-pdf-mineru-producer.js",
+  "mineruClientOwner": "qisi-mineru-client.js",
+  "mineruEvidenceOwner": "qisi-mineru-evidence.js",
+  "paperSegmenterOwner": "qisi-paper-segmenter.js",
+  "pdfQuestionDisplayOwner": "qisi-pdf-question-display.js"
 }

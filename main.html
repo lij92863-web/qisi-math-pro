@@ -677,10 +677,10 @@
                                         </div>
                                     </div>
 
-                                    <div v-if="activeDraftQuestion.pdfExternal?.taskProblems.length" class="batch-editor-card">
+                                    <div v-if="pdfDraftMeta(activeDraftQuestion)?.taskProblems?.length" class="batch-editor-card">
                                         <strong>来源范围需要检查</strong>
-                                        <div v-for="(problem, i) in activeDraftQuestion.pdfExternal.taskProblems" :key="i">{{ problem }}</div>
-                                        <button class="material-light-btn" :disabled="activeDraftQuestion.status === 'submitted' || activeDraftQuestion.pdfExternal.taskIssuesAcknowledged" @click="acknowledgePdfTaskIssues">已对照原页，确认本题范围</button>
+                                        <div v-for="(problem, i) in pdfDraftMeta(activeDraftQuestion).taskProblems" :key="i">{{ problem }}</div>
+                                        <button class="material-light-btn" :disabled="activeDraftQuestion.status === 'submitted' || pdfDraftMeta(activeDraftQuestion).taskIssuesAcknowledged" @click="acknowledgePdfTaskIssues">已对照原页，确认本题范围</button>
                                     </div>
                                     <div v-if="activePdfReviewPanel" class="batch-editor-card pdf-model-review" data-testid="pdf-model-review">
                                         <h2>原页与模型候选核对 · 第 {{ activeDraftQuestion.questionNumber }} 题</h2>
@@ -1716,9 +1716,12 @@
     <script src="./qisi-import-state-machine.js?v=app-shell-r3-c2-11-01"></script>
     <script src="./qisi-pdf-multimodal-contract.js?v=pdf-v1-20261002"></script>
     <script src="./qisi-pdf-external-contract.js?v=pdf-external-v2-20261013"></script>
-    <script src="./qisi-pdf-page-evidence.js?v=qwen-staged-20261014"></script>
-    <script src="./qisi-pdf-external-provider.js?v=pdf-external-v2-20261013"></script>
-    <script src="./qisi-pdf-external-producer.js?v=pdf-external-v2-20261013"></script>
+    <script src="./qisi-mineru-evidence.js?v=mineru-20261019"></script>
+    <script src="./qisi-paper-segmenter.js?v=mineru-20261019"></script>
+    <script src="./qisi-pdf-review-records.js?v=mineru-20261019"></script>
+    <script src="./qisi-pdf-mineru-contract.js?v=mineru-20261019"></script>
+    <script src="./qisi-pdf-question-display.js?v=display-20261020"></script>
+    <script src="./qisi-pdf-mineru-producer.js?v=mineru-20261019"></script>
     <script src="./qisi-production-import-bridge.js?v=pdf-external-v2-20261013"></script>
     <script src="./qisi-normal-ui-import-controller.js?v=app-shell-r3-c2-11-01"></script>
     <script src="./qisi-docx-pipeline.js?v=bmr9-docx-helpers-01"></script>
