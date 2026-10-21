@@ -54,6 +54,16 @@
             .trim();
     }
 
+    // Both the gate and the renderer consume this exact source. In particular,
+    // bare LaTeX must be wrapped before either side tokenizes it.
+    function preparePrintSource(value, explicitUtils) {
+        const utils = resolveUtils(explicitUtils);
+        if (!value) return '';
+        const source = utils.normalizeLatexText(utils.normalizeBareLatexForDisplayText(value));
+        const environment = /(?<!\$|\\\()\\begin\{(?:aligned|align\*?|equation\*?|cases|array|[pbBvV]?matrix)\}[\s\S]*?\\end\{(?:aligned|align\*?|equation\*?|cases|array|[pbBvV]?matrix)\}(?!\$|\\\))/g;
+        return source.replace(environment, match => `$$${match}$$`);
+    }
+
     function scanExpression(expression, segment, katex) {
         const blocking = [];
         const warnings = [];
@@ -93,7 +103,7 @@
     }
 
     function checkField(target, field, value, context) {
-        const parsed = context.utils.tokenizeLatexSource(String(value == null ? '' : value));
+        const parsed = context.utils.tokenizeLatexSource(preparePrintSource(value, context.utils));
         for (const issue of parsed.issues || []) {
             target.blocking.push({
                 ...context.label,
@@ -142,13 +152,14 @@
             const target = { blocking, warnings };
             const context = { label, katex, utils };
 
-            for (const field of TEXT_FIELDS) {
+            for (const field of TEXT_FIELDS.filter(field =>
+                field === 'stem' || options[field === 'answer' ? 'includeAnswer' : 'includeSolution'] !== false)) {
                 if (question && question[field] != null && String(question[field]).trim()) checked += 1;
                 checkField(target, field, question && question[field], context);
             }
 
-            const options = Array.isArray(question && question.options) ? question.options : [];
-            options.forEach((option, optionIndex) => {
+            const choices = Array.isArray(question && question.options) ? question.options : [];
+            choices.forEach((option, optionIndex) => {
                 if (option != null && String(option).trim()) checked += 1;
                 checkField(target, 'option-' + String.fromCharCode(65 + optionIndex), option, context);
             });
@@ -191,5 +202,5 @@
             '\n\n点「取消」回去改题；点「确定」仍然导出（这些公式会显示成原文）。'));
     }
 
-    return Object.freeze({ check, describe, confirmBeforeExport, normalizeForKatex });
+    return Object.freeze({ check, describe, confirmBeforeExport, normalizeForKatex, preparePrintSource });
 });

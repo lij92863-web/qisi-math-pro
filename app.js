@@ -4445,12 +4445,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     return { ok, results };
                 };
 
-                const formatLatexForPrint = (t) => {
-                    if(!t) return '';
-                    let out = normalizeLatexText(window.Qisi.Utils.normalizeBareLatexForDisplayText(t));
-                    const mr = /(?<!\$|\\\()\\begin\{(?:aligned|align\*?|equation\*?|cases|array|[pbBvV]?matrix)\}[\s\S]*?\\end\{(?:aligned|align\*?|equation\*?|cases|array|[pbBvV]?matrix)\}(?!\$|\\\))/g;
-                    return out.replace(mr, (match) => `$$${match}$$`);
-                };
+                const formatLatexForPrint = (text) => root.Qisi.HandoutFormulaGate.preparePrintSource(text);
 
                 const escapeHtml = (text) => String(text || '')
                     .replace(/&/g, '&amp;')
@@ -4550,11 +4545,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     return applyPrintWritingRules(restored);
                 };
 
-                const normalizeMathExpressionForPrint = (expression = '') => String(expression || '')
-                    .replace(/\s*\n\s*/g, ' ')
-                    .replace(/\\(?:overparen|wideparen|overarc)\s*\{([^{}]+)\}/g, '\\overset{\\frown}{$1}')
-                    .replace(/\\(?:overparen|wideparen|overarc)\s*([A-Z]{1,4})(?=[^A-Za-z]|$)/g, '\\overset{\\frown}{$1}')
-                    .trim();
+                const normalizeMathExpressionForPrint = root.Qisi.HandoutFormulaGate.normalizeForKatex;
 
                 const renderLatexForPrint = (text, images = []) => {
                     const source = formatLatexForPrint(text).replace(/<br><br>/g, '\n\n');
@@ -4793,7 +4784,7 @@ body {
 .question-flow-body .qisi-flow-options { clear:none !important; display:block !important; width:auto !important; margin-top:10px; padding-left:2.2em; }
 .question-flow-body .qisi-flow-options .gaokao-option { display:block; margin-bottom:5px; }
 .question-flow-body .qisi-flow-options .option-label { display:inline-block; width:1.8em; margin-right:0; }
-.question-flow-body .qisi-flow-options .option-content { display:inline; }
+.question-flow-body .qisi-flow-options .option-content { display:inline; } .question-flow-body .qisi-flow-options .option-content:has(img) { display:inline-block; vertical-align:top; }
 .question-head { display:none; }
 .print-toolbar { position:sticky; top:0; margin:-24px -24px 18px; padding:10px 24px; background:#f8fafc; border-bottom:1px solid #e5e7eb; font-family:"Microsoft YaHei", sans-serif; }
 .print-toolbar button { border:0; background:#1a73e8; color:#fff; border-radius:6px; padding:8px 14px; font-weight:700; cursor:pointer; }
@@ -4833,8 +4824,8 @@ const imageReady = Promise.all(imgs.map(img => img.complete ? Promise.resolve() 
 const fontReady = document.fonts?.ready || Promise.resolve();
 Promise.all([imageReady, fontReady]).then(() => {
     if (btn) {
-        btn.disabled = false;
-        btn.textContent = '渲染已就绪，打印 / 另存为 PDF';
+        btn.disabled = imgs.some(img => !img.naturalWidth) || Boolean(document.querySelector('.missing-image'));
+        btn.textContent = btn.disabled ? '图片未能完整加载，请修复后重新生成' : '渲染已就绪，打印 / 另存为 PDF';
     }
 });
 </script>
@@ -4864,7 +4855,10 @@ Promise.all([imageReady, fontReady]).then(() => {
                         const qs = await hydrateQuestionsForPrint(cartQuestionsOrdered.value);
                         // 导出前逐题验公式。宁可这次不导出，也不让老师拿到
                         // 一份印着红字或空白公式的讲义。
-                        if (!root.Qisi.HandoutFormulaGate.confirmBeforeExport(qs)) return;
+                        if (!root.Qisi.HandoutFormulaGate.confirmBeforeExport(qs, {
+                            includeAnswer: examConfig.showAnswer || ['split', 'withAnswers'].includes(exportMode.value),
+                            includeSolution: examConfig.showSolution || ['split', 'withAnswers'].includes(exportMode.value)
+                        })) return;
                         const questionsContent = buildQuestionContent(qs);
                         if (exportMode.value === 'split') {
                             const answersContent = buildAnswerContent(qs, false);
