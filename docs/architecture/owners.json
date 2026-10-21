@@ -905,6 +905,26 @@
       "status": "production"
     },
     {
+      "ownerId": "exam-template-model",
+      "module": "qisi-exam-template-model.js",
+      "layer": 1,
+      "responsibilities": [
+        "exam-template-record-shapes"
+      ],
+      "allowedCallers": [
+        "ui-shell"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "question-repository",
+        "formal-admission",
+        "app-shell"
+      ],
+      "productionEntry": true,
+      "writeAuthority": "none",
+      "status": "production"
+    },
+    {
       "ownerId": "review-draft-normalization",
       "module": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

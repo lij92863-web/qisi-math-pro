@@ -102,5 +102,6 @@
   "librarySnapshotOwner": "qisi-library-snapshot.js",
   "libraryExternalMergeOwner": "qisi-library-external-merge.js",
   "personalKnowledgeModelOwner": "qisi-personal-knowledge-model.js",
-  "manualEntryModelOwner": "qisi-manual-entry-model.js"
+  "manualEntryModelOwner": "qisi-manual-entry-model.js",
+  "examTemplateModelOwner": "qisi-exam-template-model.js"
 }

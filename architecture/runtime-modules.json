@@ -537,6 +537,10 @@
     {
       "file": "qisi-manual-entry-model.js",
       "runtime": "browser"
+    },
+    {
+      "file": "qisi-exam-template-model.js",
+      "runtime": "browser"
     }
   ]
 }

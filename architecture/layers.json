@@ -1481,6 +1481,24 @@
       "status": "production-wired"
     },
     {
+      "id": "exam-template-model",
+      "file": "qisi-exam-template-model.js",
+      "layer": 1,
+      "domainOwner": "examTemplateModelOwner",
+      "publicApi": [
+        "buildCustomTemplate",
+        "buildSystemOverride",
+        "buildCustomTemplateUpdate"
+      ],
+      "allowedDependencies": [],
+      "forbiddenDependencies": [
+        "app-shell",
+        "storage-repository",
+        "formal-admission"
+      ],
+      "status": "production-wired"
+    },
+    {
       "id": "review-draft-normalization",
       "file": "qisi-review-draft-normalization-policy.js",
       "layer": 1,

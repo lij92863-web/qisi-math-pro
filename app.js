@@ -4704,7 +4704,13 @@ Promise.all([imageReady, fontReady]).then(() => {
                 
                 const saveNewCustomTemplate = async () => {
                     // 模板 = 版式配置 + LaTeX 代码。只存代码会让老师调好的字体字号全部丢失。
-                    const tpl = { id: 'tpl_' + Date.now(), name: editTplName.value, code: ensureImagePackagesForLatex(latexTemplate.value), config: toRaw(examConfig), createdAt: Date.now() };
+                    const tpl = window.Qisi.ExamTemplateModel.buildCustomTemplate({
+                        id: 'tpl_' + Date.now(),
+                        name: editTplName.value,
+                        code: ensureImagePackagesForLatex(latexTemplate.value),
+                        config: toRaw(examConfig),
+                        now: Date.now()
+                    });
                     latexTemplate.value = tpl.code;
                     await db.customTemplates.put(tpl);
                     // 只刷模板表，不跑全库 loadData：后者会把全库图片的 blob URL
@@ -4717,7 +4723,12 @@ Promise.all([imageReady, fontReady]).then(() => {
                     if (PRESET_TEMPLATES[currentPresetKey.value]) {
                         templateOverrides.value = {
                             ...templateOverrides.value,
-                            [currentPresetKey.value]: { name: editTplName.value, code: ensureImagePackagesForLatex(latexTemplate.value), config: toRaw(examConfig), updatedAt: Date.now() }
+                            [currentPresetKey.value]: window.Qisi.ExamTemplateModel.buildSystemOverride({
+                                name: editTplName.value,
+                                code: ensureImagePackagesForLatex(latexTemplate.value),
+                                config: toRaw(examConfig),
+                                now: Date.now()
+                            })
                         };
                         latexTemplate.value = templateOverrides.value[currentPresetKey.value].code;
                         safeStorage.setJson(
@@ -4729,7 +4740,8 @@ Promise.all([imageReady, fontReady]).then(() => {
                     }
                     const nextCode = ensureImagePackagesForLatex(latexTemplate.value);
                     latexTemplate.value = nextCode;
-                    await db.customTemplates.update(currentPresetKey.value, { name: editTplName.value, code: nextCode, config: toRaw(examConfig) });
+                    await db.customTemplates.update(currentPresetKey.value, window.Qisi.ExamTemplateModel
+                        .buildCustomTemplateUpdate({ name: editTplName.value, code: nextCode, config: toRaw(examConfig) }));
                     customTemplates.value = await storageRepository.listTable('customTemplates', { orderBy: 'createdAt', reverse: true });
                     alert('已更新');
                 };
