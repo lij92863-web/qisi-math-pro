@@ -77,7 +77,8 @@ test('browser dependency order loads identity contract before schema and admissi
     const shadowPort = html.indexOf('qisi-production-docx-vision-source-port.js');
     const bridge = html.indexOf('qisi-production-import-bridge.js');
     assert.ok(contract > 0 && contract < schema && schema < admission);
-    assert.ok(shadowPort > 0 && shadowPort < bridge);
+    assert.equal(shadowPort, -1);
+    assert.ok(bridge > 0 && contract < bridge);
 });
 
 test('six frozen PDF high-risk owners match baseline or exact user-approved repairs', () => {

@@ -195,7 +195,7 @@ test('strict visual producer requires its production ports', () => {
 
 test('app shell assembles the engine owner without an inline strict visual file owner', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
-    assert.match(app, /QisiBatchEngineV2\s*\.createStrictVisualQuestionProducer\s*\(/);
+    assert.doesNotMatch(app, /QisiBatchEngineV2\s*\.createStrictVisualQuestionProducer\s*\(/);
     assert.doesNotMatch(app, /const\s+prepareStrictVisualPages\s*=/);
     assert.doesNotMatch(app, /const\s+processStrictVisualQuestionFile\s*=/);
 });

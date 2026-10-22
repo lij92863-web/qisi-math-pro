@@ -120,7 +120,7 @@
     },
     {
       "file": "qisi-docx-vision-reconciler.js",
-      "runtime": "browser"
+      "runtime": "dormant"
     },
     {
       "file": "qisi-draft-maintenance-service.js",
@@ -316,7 +316,7 @@
     },
     {
       "file": "qisi-production-docx-vision-source-port.js",
-      "runtime": "browser"
+      "runtime": "dormant"
     },
     {
       "file": "qisi-production-import-bridge.js",

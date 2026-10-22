@@ -141,10 +141,7 @@ test('production runner rejects late support output after cancellation', async (
 
 test('app only assembles the shared DOCX vision production runner', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
-    assert.match(
-        app,
-        /ProductionDocxVisionSourcePort\s*\.createProductionImportRunner\s*\(/
-    );
+    assert.doesNotMatch(app, /ProductionDocxVisionSourcePort\s*\.createProductionImportRunner\s*\(/);
     assert.doesNotMatch(app, /docxVisionDecisionFromCandidate/);
     assert.doesNotMatch(app, /\.applyDocxVisionSupportField\s*\(/);
 });

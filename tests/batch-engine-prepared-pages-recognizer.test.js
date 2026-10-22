@@ -225,6 +225,6 @@ test('prepared-page recognizer requires every policy and producer port', () => {
 
 test('app shell injects the prepared-page recognizer without retaining its algorithm', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
-    assert.match(app, /QisiBatchEngineV2\s*\.createStrictVisualPreparedPagesRecognizer\s*\(/);
+    assert.doesNotMatch(app, /QisiBatchEngineV2\s*\.createStrictVisualPreparedPagesRecognizer\s*\(/);
     assert.doesNotMatch(app, /const\s+recognizeStrictQuestionsFromPreparedPages\s*=/);
 });

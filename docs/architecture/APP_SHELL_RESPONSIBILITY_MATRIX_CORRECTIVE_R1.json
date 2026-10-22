@@ -8,8 +8,8 @@
       "name": "runBatchRecognition",
       "file": "app.js",
       "range": [
-        1802,
-        1806
+        1673,
+        1677
       ],
       "class": "A",
       "allowedCalls": [
@@ -31,8 +31,8 @@
       "name": "refreshBatchStats",
       "file": "app.js",
       "range": [
-        2421,
-        2426
+        2292,
+        2297
       ],
       "class": "A",
       "allowedCalls": [
@@ -49,8 +49,8 @@
       "name": "markDraftReviewed",
       "file": "app.js",
       "range": [
-        2438,
-        2466
+        2309,
+        2337
       ],
       "class": "A",
       "allowedCalls": [
@@ -73,8 +73,8 @@
       "name": "submitDraftQuestion",
       "file": "app.js",
       "range": [
-        2468,
-        2505
+        2339,
+        2376
       ],
       "class": "A",
       "allowedCalls": [
@@ -100,8 +100,8 @@
       "name": "openBatchSubmitSummary",
       "file": "app.js",
       "range": [
-        2595,
-        2605
+        2466,
+        2476
       ],
       "class": "A",
       "allowedCalls": [
@@ -119,8 +119,8 @@
       "name": "dedupeActiveBatchDraftsNow",
       "file": "app.js",
       "range": [
-        2615,
-        2638
+        2486,
+        2509
       ],
       "class": "A",
       "allowedCalls": [
@@ -142,8 +142,8 @@
       "name": "cleanupActiveBatchDisplayPollution",
       "file": "app.js",
       "range": [
-        2649,
-        2666
+        2520,
+        2537
       ],
       "class": "A",
       "allowedCalls": [
@@ -164,8 +164,8 @@
       "name": "confirmBatchSubmit",
       "file": "app.js",
       "range": [
-        2673,
-        2692
+        2544,
+        2563
       ],
       "class": "A",
       "allowedCalls": [
@@ -186,8 +186,8 @@
       "name": "deleteBatchImport",
       "file": "app.js",
       "range": [
-        2694,
-        2703
+        2565,
+        2574
       ],
       "class": "A",
       "allowedCalls": [

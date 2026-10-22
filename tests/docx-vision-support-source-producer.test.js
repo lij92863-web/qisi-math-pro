@@ -211,16 +211,10 @@ test('DOCX support producer requires every production port', () => {
 
 test('app shell assembles the DOCX support producer without retaining its algorithm', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
-    assert.match(
-        app,
-        /ProductionDocxVisionSourcePort\s*\.createSupportSourceProducer\s*\(/
-    );
+    assert.doesNotMatch(app, /ProductionDocxVisionSourcePort\s*\.createSupportSourceProducer\s*\(/);
     assert.doesNotMatch(
         app,
         /const\s+processStandaloneDocxSupportByVision\s*=/
     );
-    assert.match(
-        app,
-        /requiredKinds:\s*input\.requiredKinds,\s*signal:\s*input\.signal/
-    );
+    assert.doesNotMatch(app, /requiredKinds:\s*input\.requiredKinds,\s*signal:\s*input\.signal/);
 });

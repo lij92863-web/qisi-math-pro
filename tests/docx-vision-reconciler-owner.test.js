@@ -113,7 +113,7 @@ test('DOCX reconciler rejects cancellation and missing production ports', () => 
 
 test('app delegates DOCX reconciliation and has no unreachable option-repair closure', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
-    assert.match(app, /DocxVisionReconciler\s*\.createDocxVisionReconciler\s*\(/);
+    assert.doesNotMatch(app, /DocxVisionReconciler\s*\.createDocxVisionReconciler\s*\(/);
     for (const oldOwner of [
         'reconcileStrictQuestionsWithDocxSkeleton',
         'normalizeDocxOptionEvidenceText',

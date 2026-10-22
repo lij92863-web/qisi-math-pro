@@ -163,10 +163,7 @@ test('DOCX question producer requires every production port', () => {
 
 test('app shell assembles the DOCX question producer without retaining its algorithm', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
-    assert.match(
-        app,
-        /ProductionDocxVisionSourcePort\s*\.createQuestionSourceProducer\s*\(/
-    );
+    assert.doesNotMatch(app, /ProductionDocxVisionSourcePort\s*\.createQuestionSourceProducer\s*\(/);
     assert.doesNotMatch(app, /const\s+buildDocxQuestionFailureSnapshot\s*=/);
     assert.doesNotMatch(
         app,

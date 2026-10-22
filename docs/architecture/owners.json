@@ -1101,9 +1101,9 @@
         "question-repository",
         "formal-admission"
       ],
-      "productionEntry": true,
+      "productionEntry": false,
       "writeAuthority": "none",
-      "status": "production"
+      "status": "deprecated"
     },
     {
       "ownerId": "qwen-vision-source-port",
@@ -1506,9 +1506,9 @@
         "formal-admission",
         "question-repository"
       ],
-      "productionEntry": true,
+      "productionEntry": false,
       "writeAuthority": "none",
-      "status": "production"
+      "status": "deprecated"
     },
     {
       "ownerId": "batch-engine-v2",

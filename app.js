@@ -1556,107 +1556,6 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                                     .projectDocxVisionCandidate(input)
                         });
 
-                const strictVisualPreparedPagesRecognizer =
-                    window.QisiBatchEngineV2
-                        .createStrictVisualPreparedPagesRecognizer({
-                            mapWithConcurrency,
-                            recognizePage:
-                                strictQuestionPageRecognizer,
-                            collectValidFigures:
-                                collectValidRecognizedFigures,
-                            hasFigureCue: questionHasFigureCue,
-                            locateQuestionFigures:
-                                locateQuestionFiguresWithQwen,
-                            normalizeFigure:
-                                normalizeRecognizedFigureDescriptor,
-                            isLikelyRealFigure:
-                                isLikelyRealQuestionFigure,
-                            mergeQuestionItems:
-                                mergeStrictQuestionItemsByNumber,
-                            validateQuestionItems:
-                                validateVisualQuestionItems,
-                            isStrictChoiceType,
-                            repairChoiceAndSolutionDetails:
-                                repairPageChoiceAndSolutionDetailsWithVision,
-                            buildQuestionNumberGapWarning:
-                                window.Qisi.UiEvents
-                                    .buildQuestionNumberGapWarning,
-                            normalizeFourOptions:
-                                normalizeFourOptionsForCheck,
-                            isBadChoiceOption,
-                            cleanRecognizedText:
-                                window.Qisi.Utils.cleanRecognizedText,
-                            isFatalServiceError:
-                                window.Qisi.Utils.isFatalQwenServiceError,
-                            now: () => performance.now()
-                        });
-
-                const strictVisualQuestionProducer =
-                    window.QisiBatchEngineV2.createStrictVisualQuestionProducer({
-                        renderPdfFilePages,
-                        recognizePreparedPages:
-                            strictVisualPreparedPagesRecognizer,
-                        getRoles: getBatchFileRoles,
-                        logDiagnostic: logBatchPdfDiag,
-                        now: () => performance.now()
-                    });
-
-                const docxToPdfConverter =
-                    window.Qisi.DocxConverter.createDocxToPdfConverter({
-                        request: window.fetch.bind(window),
-                        createFormData: () => new FormData(),
-                        dataUrlToBlob,
-                        getBaseUrl: getLocalConvertBaseUrl,
-                        getRoles: getBatchFileRoles,
-                        now: Date.now,
-                        logger: console
-                    });
-
-                const docxVisionQuestionReconciler =
-                    window.Qisi.DocxVisionReconciler
-                        .createDocxVisionReconciler({
-                            normalizeQuestionNumber: normalizeQuestionKey,
-                            cleanText:
-                                window.Qisi.Utils.cleanRecognizedText,
-                            mergeQuestions:
-                                mergeStrictQuestionItemsByNumber
-                        });
-
-                const docxVisionQuestionSourceProducer =
-                    window.Qisi.ProductionDocxVisionSourcePort
-                        .createQuestionSourceProducer({
-                            getImporter: () => window.QisiBatchImporter,
-                            convertDocxToPdf:
-                                docxToPdfConverter,
-                            processStrictQuestionFile:
-                                strictVisualQuestionProducer
-                                    .processQuestionFile,
-                            reconcileQuestions:
-                                docxVisionQuestionReconciler,
-                            validateQuestionItems:
-                                validateVisualQuestionItems,
-                            now: () => performance.now()
-                        });
-
-                const docxVisionSupportSourceProducer =
-                    window.Qisi.ProductionDocxVisionSourcePort
-                        .createSupportSourceProducer({
-                            convertDocxToPdf:
-                                docxToPdfConverter,
-                            renderPdfPages: renderPdfFilePages,
-                            renderOptions: {
-                                scale: PDF_PROCESS_CONFIG.renderScale,
-                                jpegQuality:
-                                    PDF_PROCESS_CONFIG.jpegQuality,
-                                sequential: true
-                            },
-                            recognizePreparedSupport:
-                                recognizeVisualSupportFromPreparedPages,
-                            mathSignalCount:
-                                window.Qisi.Utils.mathSignalCount,
-                            now: () => performance.now()
-                        });
-
                 const runProductionDocxDeterministicImport =
                     window.Qisi.ProductionDocxSourcePort
                         .createProductionImportRunner({
@@ -1673,33 +1572,6 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                             clock: Date.now
                         });
 
-                const runProductionDocxVisionImport =
-                    window.Qisi.ProductionDocxVisionSourcePort
-                        .createProductionImportRunner({
-                            hasQuestionRole: batchHasQuestionRole,
-                            isFullRole: batchIsFullRole,
-                            hasAnswerRole: batchHasAnswerRole,
-                            hasSolutionRole: batchHasSolutionRole,
-                            normalizeQuestionNumber: normalizeQuestionKey,
-                            processQuestionSource: input =>
-                                docxVisionQuestionSourceProducer({
-                                    file: input.source,
-                                    batch: input.batch,
-                                    processFiles: input.sources,
-                                    expectedQuestionCount:
-                                    input.expectedQuestionCount,
-                                    reportStage: input.reportStage,
-                                    signal: input.signal
-                                }),
-                            processSupportSource: input =>
-                                docxVisionSupportSourceProducer({
-                                    file: input.source,
-                                    expectedQuestionNumbers:
-                                        input.expectedQuestionNumbers,
-                                    requiredKinds: input.requiredKinds,
-                                    signal: input.signal
-                                })
-                        });
                 const runProductionPdfImport = window.Qisi.PdfMineruProducer.createProducer({
                     renderPages: renderPdfFilePages,
                     getRoles: getBatchFileRoles,
@@ -1722,7 +1594,6 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                             window.Qisi.ProductionImportRoutePolicy
                                 .resolveProductionImportRoute(input),
                         runDocxImport: runProductionDocxDeterministicImport,
-                        runDocxVisionImport: runProductionDocxVisionImport,
                         runPdfImport: runProductionPdfImport,
                         normalizeCandidates: drafts =>
                             window.Qisi.CandidateNormalizer.normalizeCandidates(

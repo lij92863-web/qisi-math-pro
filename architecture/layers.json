@@ -770,7 +770,7 @@
         "controlled-write",
         "route-b-research"
       ],
-      "status": "production-wired"
+      "status": "deprecated"
     },
     {
       "id": "production-docx-source-port",
@@ -814,7 +814,7 @@
         "storage-repository",
         "route-b-research"
       ],
-      "status": "production-wired"
+      "status": "deprecated"
     },
     {
       "id": "batch-engine-v2",

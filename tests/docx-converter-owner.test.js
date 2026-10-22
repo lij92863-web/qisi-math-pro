@@ -121,7 +121,7 @@ test('DOCX converter stops before conversion when cancellation follows health', 
 
 test('app assembles the DOCX converter owner without retaining conversion transport', () => {
     const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
-    assert.match(app, /DocxConverter\s*\.createDocxToPdfConverter\s*\(/);
+    assert.doesNotMatch(app, /DocxConverter\s*\.createDocxToPdfConverter\s*\(/);
     assert.doesNotMatch(app, /const\s+convertDocxRecordToPdfRecord\s*=/);
     assert.doesNotMatch(app, /const\s+checkLocalDocxConvertService\s*=/);
     assert.doesNotMatch(app, /\/api\/convert\/docx-to-pdf/);

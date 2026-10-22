@@ -59,5 +59,5 @@ test('shared DOCX engine exports only its two active visual factories', () => {
     ]);
     assert.equal(Object.hasOwn(sandbox.window, '__qisiBatchV2SelfTest'), false);
     assert.doesNotMatch(source, /processBatchV2|splitQuestionBlocksV2|parseOptionsV2|chooseEvidenceSourceTextV2|buildAutoFigureDraftImagesV2/);
-    assert.match(read('app.js'), /QisiBatchEngineV2\.createStrictVisualQuestionProducer/);
+    assert.doesNotMatch(read('app.js'), /QisiBatchEngineV2\.createStrictVisualQuestionProducer/);
 });
