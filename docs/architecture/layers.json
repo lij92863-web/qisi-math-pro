@@ -63,17 +63,7 @@
         "paper-segmenter",
         "review-draft-read-model",
         "review-image-projection",
-        "review-editor-projection",
-        "review-editor-commit",
-        "review-session-commands",
-        "review-image-commands",
-        "review-batch-confirm",
-        "personal-knowledge-model",
-        "manual-entry-model",
-        "exam-template-model",
-        "exam-groups",
-        "exam-paper-parts",
-        "print-resources"
+        "review-editor-projection"
       ]
     },
     {
@@ -111,11 +101,9 @@
         "pdf-external-producer",
         "mineru-task-service",
         "mineru-client",
-        "import-run-commands",
         "library-image-resources",
         "library-snapshot",
-        "library-external-merge",
-        "import-draft-command"
+        "review-editor-commit"
       ]
     },
     {
@@ -130,7 +118,18 @@
         "legacy-batch-run",
         "injected-import-path",
         "import-orchestrator-scaffold",
-        "pdf-mineru-producer"
+        "pdf-mineru-producer",
+        "review-session-commands",
+        "review-image-commands",
+        "review-batch-confirm",
+        "import-draft-command",
+        "library-external-merge",
+        "manual-entry-model",
+        "personal-knowledge-model",
+        "exam-template-model",
+        "exam-groups",
+        "exam-paper-parts",
+        "print-resources"
       ]
     },
     {
@@ -140,7 +139,8 @@
         "normal-ui-controller",
         "ui-shell",
         "legacy-process-draft-import-batch",
-        "legacy-process-draft-import-batch-v2"
+        "legacy-process-draft-import-batch-v2",
+        "import-run-commands"
       ]
     },
     {

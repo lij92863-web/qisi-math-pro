@@ -498,3 +498,29 @@ test('bridge is browser-loaded as the production-wired layer-3 owner before the 
         main.indexOf('qisi-draft-persistence-service.js'));
     assert.ok(main.indexOf('qisi-production-import-bridge.js') < main.indexOf('app.js'));
 });
+
+test('retired DOCX vision cannot execute even when an injected route resolver selects it and provides a producer', async () => {
+    const h = createHarness();
+    let visionCalls = 0;
+    h.ports.resolveProductionRoute = () => ({ route: 'docx', producerIdentity: 'docx-vision', sourceIds: ['docx-1'], supplementalSourceIds: [] });
+    h.ports.runDocxVisionImport = async () => { ++visionCalls; return { drafts: [docxDraft()], draftImages: [] }; };
+    await assert.rejects(Bridge.createProductionImportBridge(h.ports).run(productionInput()),
+        error => error.code === 'PRODUCTION_IMPORT_PRODUCER_RETIRED' && error.causeCode === 'docx-vision-retired');
+    assert.equal(visionCalls, 0);
+    assert.equal(h.persisted.length, 0);
+    assert.equal(h.calls.includes('pdf'), false); assert.equal(h.calls.includes('docx'), false);
+});
+
+test('Bridge no longer advertises a DOCX vision capability even if a historical caller supplies the old port', async () => {
+    const h = createHarness();
+    let advertised;
+    h.ports.runDocxVisionImport = async () => { throw new Error('retired port must never run'); };
+    h.ports.resolveProductionRoute = input => {
+        advertised = input.availableCapabilities;
+        return RoutePolicy.resolveProductionImportRoute(input);
+    };
+    await Bridge.createProductionImportBridge(h.ports).run(productionInput());
+    assert.notEqual(advertised.docxVision, true);
+    assert.equal(advertised.docxDeterministic, true); assert.equal(advertised.pdf, true);
+    assert.equal(h.calls.includes('docx'), true); assert.equal(h.calls.includes('pdf'), false);
+});

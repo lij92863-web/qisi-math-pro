@@ -21,12 +21,32 @@ test('app shell has zero formal repository mutation and rollback ownership', () 
         /db\.transaction\s*\([^\n]{0,240}db\.questions/
     );
     assert.doesNotMatch(app, /filledQuestionSnapshots|addedQuestionIds/);
-    assert.match(app, /libraryService\.commitExternalMerge\s*\(/);
-    assert.match(app, /libraryService\.undoExternalMerge\s*\(/);
-    assert.match(app, /libraryService\.saveQuestion\s*\(/);
+    const external = fs.readFileSync(path.join(ROOT, 'qisi-library-external-merge.js'), 'utf8');
+    assert.match(app, /LibraryExternalMerge\.createWorkspace\s*\(/);
+    assert.match(app, /state: externalState, library: libraryService/);
+    assert.match(app, /confirmAddExternalToPersonal = externalWorkspace\.commit/);
+    assert.match(app, /undoLatestExternalMerge = externalWorkspace\.undo/);
+    assert.match(external, /library\.commitExternalMerge\s*\(/);
+    assert.match(external, /library\.undoExternalMerge\s*\(/);
+    assert.doesNotMatch(external, /\bdb\.|indexedDB|filledQuestionSnapshots|addedQuestionIds/);
+    assert.doesNotMatch(external, /repository\.(?:put|deleteMany|saveQuestion|updateQuestion|softDeleteQuestion|confirmDraftToQuestion)\s*\(/);
+
+    const manual = fs.readFileSync(path.join(ROOT, 'qisi-manual-entry-model.js'), 'utf8');
+    assert.match(app, /ManualEntryModel\.createWorkspace\s*\(/);
+    assert.match(app, /state: manualState, library: libraryService, repository: storageRepository/);
+    assert.match(app, /submitQuestion = manualWorkspace\.submit/);
+    assert.match(manual, /library\.saveQuestion\s*\(/);
+    assert.doesNotMatch(manual, /\bdb\.|indexedDB|FormalAdmissionPolicy/);
+    assert.doesNotMatch(manual, /repository\.(?:put|deleteMany|update)\s*\(\s*['"]questions['"]/);
     assert.match(app, /libraryService\.replaceQuestion\s*\(/);
     assert.match(app, /libraryService\.softDelete\s*\(/);
-    assert.match(app, /libraryService\s*\n\s*\.migrateSafeQuestionLatexData\s*\(/);
+    const library = read('qisi-library-service.js');
+    assert.match(app, /LibraryService\.createQuestionMaintenance\s*\(/);
+    assert.match(app, /repository: storageRepository, service: libraryService/);
+    assert.match(app, /migrateSafeQuestionLatexData = questionMaintenance\.migrate/);
+    assert.match(app, /window\.migrateSafeQuestionLatexData = migrateSafeQuestionLatexData/);
+    assert.match(library, /service\.migrateSafeQuestionLatexData\s*\(/);
+    assert.doesNotMatch(app, /questionMaintenance\.migrate\s*\(/);
     assert.doesNotMatch(app, /libraryService\s*\n\s*\.migrateQuestions\s*\(/);
 });
 

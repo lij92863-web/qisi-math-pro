@@ -41,10 +41,13 @@ test('PDF V2 has one active producer and retired entry files cannot be loaded', 
 
 test('V2 Bridge and app have no legacy projection or implicit fallback', () => {
     const app = read('app.js'), bridge = read('qisi-production-import-bridge.js');
-    assert.doesNotMatch(app + bridge, /PdfCandidateProjection|ports\.projectPdfCandidates/);
-    assert.match(app, /PdfMineruProducer\.createProducer/);
-    assert.doesNotMatch(app, /PdfExternalProducer\.createProducer/);
-    assert.doesNotMatch(app, /PdfMultimodalProducer\.createProducer/);
+    const assembly = read('qisi-import-draft-command.js');
+    assert.doesNotMatch(app + bridge + assembly, /PdfCandidateProjection|ports\.projectPdfCandidates/);
+    assert.match(app, /ImportDraftCommand\.createPdfProducer/);
+    assert.match(app, /producer:\s*window\.Qisi\.PdfMineruProducer/);
+    assert.match(assembly, /producer\.createProducer\(/);
+    assert.doesNotMatch(app + assembly, /PdfExternalProducer\.createProducer/);
+    assert.doesNotMatch(app + assembly, /PdfMultimodalProducer\.createProducer/);
     assert.match(bridge, /pdf-v1-protocol-required/);
     assert.match(bridge, /PdfMineruContract[\s\S]*?validateCanonical/);
     assert.doesNotMatch(bridge, /fallbackToLegacy|runLegacyImport|buildPdfSupportFieldLevelControlledWrite/);

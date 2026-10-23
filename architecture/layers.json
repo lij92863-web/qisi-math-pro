@@ -221,7 +221,9 @@
         "deleteMany",
         "confirmDraftToQuestion",
         "createDraftBatch",
-        "persistReviewDraftBatch"
+        "persistReviewDraftBatch",
+        "updatePersonalKnowledgeTree",
+        "applyCustomTemplateChange"
       ],
       "allowedDependencies": [
         "recognition-contracts",
@@ -325,7 +327,9 @@
       "layer": 2,
       "domainOwner": "libraryServiceOwner",
       "publicApi": [
-        "createLibraryService"
+        "createLibraryService",
+        "createExternalQuestionModel",
+        "createQuestionMaintenance"
       ],
       "allowedDependencies": [
         "storage-repository"
@@ -373,7 +377,9 @@
       "layer": 2,
       "domainOwner": "exportServiceOwner",
       "publicApi": [
-        "createExportService"
+        "createExportService",
+        "rekeyQuestionImageTokens",
+        "createPackageService"
       ],
       "allowedDependencies": [
         "storage-repository"
@@ -992,7 +998,6 @@
         "production-import-status-port",
         "production-import-output-port",
         "production-docx-source-port",
-        "production-docx-vision-source-port",
         "batch-engine-v2",
         "docx-import-coordinator",
         "candidate-normalizer",
@@ -1313,12 +1318,17 @@
     {
       "id": "review-editor-commit",
       "file": "qisi-review-editor-commit.js",
-      "layer": 1,
+      "layer": 2,
       "domainOwner": "reviewEditorCommitOwner",
       "publicApi": [
-        "planEditorCommit"
+        "planEditorCommit",
+        "createDraftPreparer"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "review-controller",
+        "review-draft-state",
+        "review-editor-projection"
+      ],
       "forbiddenDependencies": [
         "app-shell",
         "storage-repository",
@@ -1329,16 +1339,20 @@
     {
       "id": "review-session-commands",
       "file": "qisi-review-session-commands.js",
-      "layer": 1,
+      "layer": 3,
       "domainOwner": "reviewSessionCommandsOwner",
       "publicApi": [
         "resolveSelection",
-        "persistDraftCommand"
+        "persistDraftCommand",
+        "createReviewSession"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "review-draft-state",
+        "storage-repository",
+        "draft-persistence-service"
+      ],
       "forbiddenDependencies": [
         "app-shell",
-        "storage-repository",
         "formal-admission"
       ],
       "status": "production-wired"
@@ -1346,13 +1360,22 @@
     {
       "id": "review-image-commands",
       "file": "qisi-review-image-commands.js",
-      "layer": 1,
+      "layer": 3,
       "domainOwner": "reviewImageCommandsOwner",
       "publicApi": [
         "planConfirmImages",
-        "planImageDeletion"
+        "planImageDeletion",
+        "createCropPort",
+        "createImageCommands"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "review-session-commands",
+        "review-controller",
+        "draft-persistence-service",
+        "review-draft-state",
+        "review-image-projection",
+        "browser-pdf-renderer"
+      ],
       "forbiddenDependencies": [
         "app-shell",
         "storage-repository",
@@ -1363,15 +1386,22 @@
     {
       "id": "review-batch-confirm",
       "file": "qisi-review-batch-confirm.js",
-      "layer": 1,
+      "layer": 3,
       "domainOwner": "reviewBatchConfirmOwner",
       "publicApi": [
         "toggleSelection",
         "selectAllVisible",
         "eligibleDrafts",
-        "batchConfirmNotice"
+        "batchConfirmNotice",
+        "createReviewActions"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "review-session-commands",
+        "review-workflow",
+        "review-editor-commit",
+        "review-image-projection",
+        "library-snapshot"
+      ],
       "forbiddenDependencies": [
         "app-shell",
         "storage-repository",
@@ -1382,17 +1412,23 @@
     {
       "id": "import-run-commands",
       "file": "qisi-import-run-commands.js",
-      "layer": 2,
+      "layer": 4,
       "domainOwner": "importRunCommandsOwner",
       "publicApi": [
         "runBatch",
         "cancelBatch",
-        "rerunBatch"
+        "rerunBatch",
+        "createWorkspace"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "normal-ui-import-controller",
+        "production-import-bridge",
+        "storage-repository",
+        "review-session-commands",
+        "production-import-route-policy"
+      ],
       "forbiddenDependencies": [
         "app-shell",
-        "storage-repository",
         "formal-admission"
       ],
       "status": "production-wired"
@@ -1405,7 +1441,9 @@
       "publicApi": [
         "normalizeRows",
         "collectImageIds",
-        "attachImageUrls"
+        "attachImageUrls",
+        "createUrlScope",
+        "retainImageResources"
       ],
       "allowedDependencies": [],
       "forbiddenDependencies": [
@@ -1420,9 +1458,18 @@
       "layer": 2,
       "domainOwner": "librarySnapshotOwner",
       "publicApi": [
-        "loadLibrarySnapshot"
+        "loadLibrarySnapshot",
+        "createLibraryLoader",
+        "readQuestionLibrary",
+        "readExternalLibrary",
+        "readRecentTasks",
+        "readReviewWorkspace",
+        "readTemplates",
+        "readPersonalKnowledge"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "library-image-resources"
+      ],
       "forbiddenDependencies": [
         "app-shell",
         "formal-admission"
@@ -1432,13 +1479,19 @@
     {
       "id": "library-external-merge",
       "file": "qisi-library-external-merge.js",
-      "layer": 2,
+      "layer": 3,
       "domainOwner": "libraryExternalMergeOwner",
       "publicApi": [
         "countUnresolved",
-        "buildMergeOperations"
+        "buildMergeOperations",
+        "createWorkspace",
+        "createExternalState"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "library-service",
+        "export-service",
+        "storage-repository"
+      ],
       "forbiddenDependencies": [
         "app-shell",
         "formal-admission"
@@ -1448,16 +1501,21 @@
     {
       "id": "personal-knowledge-model",
       "file": "qisi-personal-knowledge-model.js",
-      "layer": 1,
+      "layer": 3,
       "domainOwner": "personalKnowledgeModelOwner",
       "publicApi": [
         "flattenRows",
-        "buildNode"
+        "buildNode",
+        "flattenPaths",
+        "applyTreeCommand",
+        "createState",
+        "createWorkspace"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "storage-repository"
+      ],
       "forbiddenDependencies": [
         "app-shell",
-        "storage-repository",
         "formal-admission"
       ],
       "status": "production-wired"
@@ -1465,17 +1523,22 @@
     {
       "id": "manual-entry-model",
       "file": "qisi-manual-entry-model.js",
-      "layer": 1,
+      "layer": 3,
       "domainOwner": "manualEntryModelOwner",
       "publicApi": [
         "cleanEntryImages",
         "splitTags",
-        "buildManualQuestion"
+        "buildManualQuestion",
+        "createEntryState",
+        "createImagePort",
+        "createWorkspace"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "library-service",
+        "storage-repository"
+      ],
       "forbiddenDependencies": [
         "app-shell",
-        "storage-repository",
         "formal-admission"
       ],
       "status": "production-wired"
@@ -1483,17 +1546,20 @@
     {
       "id": "exam-template-model",
       "file": "qisi-exam-template-model.js",
-      "layer": 1,
+      "layer": 3,
       "domainOwner": "examTemplateModelOwner",
       "publicApi": [
         "buildCustomTemplate",
         "buildSystemOverride",
-        "buildCustomTemplateUpdate"
+        "buildCustomTemplateUpdate",
+        "createState",
+        "createWorkspace"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "storage-repository"
+      ],
       "forbiddenDependencies": [
         "app-shell",
-        "storage-repository",
         "formal-admission"
       ],
       "status": "production-wired"
@@ -1501,11 +1567,14 @@
     {
       "id": "exam-groups",
       "file": "qisi-exam-groups.js",
-      "layer": 1,
+      "layer": 3,
       "domainOwner": "examGroupsOwner",
       "publicApi": [
         "groupQuestions",
-        "reorderWithinType"
+        "reorderWithinType",
+        "createState",
+        "createWorkspace",
+        "createPointerDragPort"
       ],
       "allowedDependencies": [],
       "forbiddenDependencies": [
@@ -1518,15 +1587,21 @@
     {
       "id": "exam-paper-parts",
       "file": "qisi-exam-paper-parts.js",
-      "layer": 1,
+      "layer": 3,
       "domainOwner": "examPaperPartsOwner",
       "publicApi": [
         "buildHeaderFields",
         "buildAnswerGrid",
         "buildNotice",
-        "buildAnswerContent"
+        "buildAnswerContent",
+        "escapeHtml",
+        "createDocumentBuilder"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "exam-groups",
+        "question-image-policy",
+        "utils"
+      ],
       "forbiddenDependencies": [
         "app-shell",
         "storage-repository",
@@ -1537,16 +1612,25 @@
     {
       "id": "print-resources",
       "file": "qisi-print-resources.js",
-      "layer": 1,
+      "layer": 3,
       "domainOwner": "printResourcesOwner",
       "publicApi": [
         "collectImageIds",
-        "hydrateQuestionsForPrint"
+        "hydrateQuestionsForPrint",
+        "createState",
+        "buildWindowHtml",
+        "createOutputWorkspace",
+        "createBrowserPort",
+        "createBlobEncoder",
+        "createPrintWorkspace"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "exam-paper-parts",
+        "exam-groups",
+        "storage-repository"
+      ],
       "forbiddenDependencies": [
         "app-shell",
-        "storage-repository",
         "formal-admission"
       ],
       "status": "production-wired"
@@ -1554,14 +1638,18 @@
     {
       "id": "import-draft-command",
       "file": "qisi-import-draft-command.js",
-      "layer": 2,
+      "layer": 3,
       "domainOwner": "importDraftCommandOwner",
       "publicApi": [
         "evidenceFieldFor",
         "filePatchFor",
-        "buildPersistReviewDraftBatchCall"
+        "buildPersistReviewDraftBatchCall",
+        "createPdfProducer"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "pdf-mineru-producer",
+        "storage-repository"
+      ],
       "forbiddenDependencies": [
         "app-shell",
         "formal-admission"

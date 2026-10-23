@@ -287,22 +287,61 @@ const startBrowserApp = async (port, { fault = '' } = {}) => {
     };
 };
 
-const callProxy = (page, method, ...args) =>
-    page.evaluate(
-        async ({ methodName, methodArgs }) => {
-            const proxy =
-                window.Qisi?.Runtime
-                    ?.getRuntimeDependency('AppProxy');
-            if (!proxy || typeof proxy[methodName] !== 'function') {
-                throw new Error(`Vue proxy method unavailable: ${methodName}`);
+// Dispatch each proxy action once. Observe a page-owned result with synchronous
+// protocol reads: no action promise crosses CDP awaitPromise, and no write retries.
+const callProxy = async (page, method, ...args) => {
+    const id = crypto.randomUUID();
+    let navigated = false, primaryError;
+    const onNavigation = frame => { if (frame === page.mainFrame()) navigated = true; };
+    page.on('framenavigated', onNavigation);
+    try {
+        await page.evaluate(({ id, methodName, methodArgs }) => {
+            const proxy = window.Qisi?.Runtime?.getRuntimeDependency('AppProxy');
+            if (!proxy || typeof proxy[methodName] !== 'function') throw new Error('Vue proxy method unavailable: ' + methodName);
+            if (!window.__qisiHarnessProxyTasks) Object.defineProperty(window, '__qisiHarnessProxyTasks', {
+                configurable: true, value: new Map()
+            });
+            const entry = { state: 'pending' };
+            window.__qisiHarnessProxyTasks.set(id, entry);
+            entry.task = Promise.resolve().then(() => proxy[methodName](...methodArgs)).then(value => {
+                entry.value = value; entry.state = 'resolved';
+            }, error => {
+                entry.error = { name: error?.name || 'Error', message: error?.message || String(error),
+                    code: error?.code, causeCode: error?.causeCode, stack: error?.stack };
+                entry.state = 'rejected';
+            });
+        }, { id, methodName: method, methodArgs: args });
+        for (;;) {
+            if (navigated) throw new Error('Execution context was destroyed by unexpected main-frame navigation.');
+            const result = await page.evaluate(id => {
+                const entry = window.__qisiHarnessProxyTasks?.get(id);
+                if (!entry) throw new Error('Proxy action result context unavailable.');
+                return entry.state === 'pending' ? { state: 'pending' }
+                    : entry.state === 'resolved' ? { state: 'resolved', value: entry.value }
+                    : { state: 'rejected', error: entry.error };
+            }, id);
+            if (navigated) throw new Error('Execution context was destroyed by unexpected main-frame navigation.');
+            if (result.state === 'resolved') return result.value;
+            if (result.state === 'rejected') {
+                const error = new Error(result.error.message);
+                Object.assign(error, { name: result.error.name, code: result.error.code,
+                    causeCode: result.error.causeCode, browserStack: result.error.stack });
+                throw error;
             }
-            return proxy[methodName](...methodArgs);
-        },
-        {
-            methodName: method,
-            methodArgs: args
+            await new Promise(resolve => setTimeout(resolve, 10));
         }
-    );
+    } catch (error) { primaryError = error; throw error; }
+    finally {
+        page.off('framenavigated', onNavigation);
+        try {
+            await page.evaluate(id => {
+                const tasks = window.__qisiHarnessProxyTasks;
+                tasks?.delete(id);
+                if (tasks && !tasks.size) delete window.__qisiHarnessProxyTasks;
+            }, id);
+        } catch (cleanupError) { if (!primaryError) throw cleanupError; }
+    }
+};
 
 const withDb = (page, callbackSource, payload) =>
     page.evaluate(

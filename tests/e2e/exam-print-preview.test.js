@@ -161,7 +161,15 @@ test('synthetic DOCX review, submission, cart reload and three print modes prese
         for (const page of splitPages) await page.close();
 
         // A stale selection must stop before opening even the first split page.
-        await H.callProxy(h.page, 'toggleCart', 'synthetic-missing-id');
+        const addRefusal = h.page.waitForEvent('dialog');
+        const attemptedAdd = H.callProxy(h.page, 'toggleCart', 'synthetic-missing-id');
+        const addDialog = await addRefusal;
+        assert.match(addDialog.message(), /题目已不存在/);
+        await addDialog.dismiss();
+        assert.equal(await attemptedAdd, false);
+        assert.equal(await h.page.evaluate(() => Qisi.Runtime.getRuntimeDependency('AppProxy').cart.includes('synthetic-missing-id')), false);
+        // Restored data or a deletion in another window can still leave a stale ID.
+        await h.page.evaluate(() => Qisi.Runtime.getRuntimeDependency('AppProxy').cart.push('synthetic-missing-id'));
         const pagesBefore = h.context.pages().length;
         const alert = h.page.waitForEvent('dialog');
         const print = H.callProxy(h.page, 'printExam');

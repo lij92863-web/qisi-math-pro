@@ -161,9 +161,7 @@
         }
         const capabilityName = producerIdentity === 'docx-deterministic'
             ? 'docxDeterministic'
-            : producerIdentity === 'docx-vision'
-                ? 'docxVision'
-                : 'pdf';
+            : 'pdf';
         if (input.availableCapabilities?.[capabilityName] !== true) {
             fail(
                 'PRODUCTION_IMPORT_PRODUCER_CAPABILITY_UNAVAILABLE',

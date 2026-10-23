@@ -293,27 +293,12 @@
         assertPorts(ports);
         const clock = typeof ports.clock === 'function' ? ports.clock : Date.now;
 
-        async function runDocxVisionShadow(input = {}) {
-            if (typeof ports.runDocxVisionShadow !== 'function') {
-                throw createError('PRODUCTION_IMPORT_PORT_REQUIRED', {
-                    port: 'runDocxVisionShadow'
-                });
-            }
-            const value = await ports.runDocxVisionShadow({
-                ...input,
-                shadow: true
+        // Historical callers get an explicit retirement result; this method
+        // has no producer, projection, transport or write authority anymore.
+        async function runDocxVisionShadow() {
+            throw createError('PRODUCTION_IMPORT_PRODUCER_RETIRED', {
+                causeCode: 'docx-vision-retired'
             });
-            if (
-                !isRecord(value) || value.shadow !== true ||
-                !Array.isArray(value.drafts) || value.drafts.length === 0 ||
-                value.formalWrites !== 0 || value.reviewDraftWrites !== 0 ||
-                value.realApiCalled !== false
-            ) {
-                throw createError('PRODUCTION_IMPORT_RESULT_MALFORMED', {
-                    causeCode: 'docx-vision-shadow-result-malformed'
-                });
-            }
-            return value;
         }
 
         async function run(input = {}) {
@@ -404,8 +389,6 @@
                         availableCapabilities: {
                             docxDeterministic:
                                 typeof ports.runDocxImport === 'function',
-                            docxVision:
-                                typeof ports.runDocxVisionImport === 'function',
                             pdf: typeof ports.runPdfImport === 'function'
                         }
                     });
@@ -417,6 +400,11 @@
                     ) {
                         throw createError('PRODUCTION_IMPORT_RESULT_MALFORMED', {
                             causeCode: 'route-policy-result-malformed'
+                        });
+                    }
+                    if (selected.producerIdentity === 'docx-vision') {
+                        throw createError('PRODUCTION_IMPORT_PRODUCER_RETIRED', {
+                            causeCode: 'docx-vision-retired'
                         });
                     }
                     const hydrated = selectedSources(
@@ -466,34 +454,6 @@
                         stage: 'source-producer-entered',
                         engine: data.producerIdentity
                     });
-                    if (data.producerIdentity === 'docx-vision') {
-                        if (typeof ports.runDocxVisionImport !== 'function') {
-                            throw createError('PRODUCTION_IMPORT_PORT_REQUIRED', {
-                                port: 'runDocxVisionImport'
-                            });
-                        }
-                        data.sourceResult = await ports.runDocxVisionImport({
-                            batchId,
-                            batch: data.loaded.batch,
-                            batchContext: data.loaded.batchContext,
-                            sources: data.sources,
-                            supplementalSources: data.supplementalSources,
-                            reportStage: event => diagnostics.record(event),
-                            mode,
-                            signal
-                        }, signal);
-                        const drafts = sourceDrafts('docx', data.sourceResult);
-                        diagnostics.record({
-                            stage: 'parser-entered',
-                            engine: data.producerIdentity
-                        });
-                        diagnostics.record({
-                            stage: 'candidates-produced',
-                            engine: 'docx-vision',
-                            counts: { candidates: drafts.length }
-                        });
-                        return;
-                    }
                     data.sourceResult = await ports.runPdfImport({
                         batchId,
                         batch: data.loaded.batch,

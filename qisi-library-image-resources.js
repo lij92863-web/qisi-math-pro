@@ -6,9 +6,8 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
     'use strict';
 
-    // Library read projection: normalise question rows and attach display URLs for
-    // their image rows. Object URL creation/ownership and storage stay with app.js
-    // (it passes createObjectUrl / rememberUrl / storage); this module never revokes.
+    // Read projections and an explicitly owned group of display URLs. Each load
+    // owns a fresh scope; callers transfer or dispose the entire scope.
     const requireDependency = (value, code) => {
         if (typeof value !== 'function') {
             const error = new Error(code);
@@ -76,5 +75,54 @@
         return list;
     };
 
-    return Object.freeze({ normalizeRows, collectImageIds, attachImageUrls });
+    const urlOwners = new Map();
+
+    const createUrlScope = ({ createObjectUrl, revokeObjectUrl } = {}) => {
+        const create = requireDependency(createObjectUrl, 'LIBRARY_IMAGE_RESOURCES_URL_FACTORY_REQUIRED');
+        const revoke = requireDependency(revokeObjectUrl, 'LIBRARY_IMAGE_RESOURCES_URL_REVOKER_REQUIRED');
+        const owned = new Set();
+        let disposed = false, released = false, consumers = 0;
+        const releaseIfUnused = () => {
+            if (!disposed || consumers || released) return;
+            released = true;
+            for (const url of owned) { revoke(url); urlOwners.delete(url); }
+            owned.clear();
+        };
+        const scope = Object.freeze({
+            create(blob) {
+                if (disposed) throw new Error('LIBRARY_IMAGE_RESOURCES_SCOPE_DISPOSED');
+                const url = create(blob);
+                owned.add(url);
+                urlOwners.set(url, scope);
+                return url;
+            },
+            retain() {
+                if (released) return () => {};
+                ++consumers;
+                let held = true;
+                return () => {
+                    if (!held) return;
+                    held = false;
+                    --consumers;
+                    releaseIfUnused();
+                };
+            },
+            dispose() {
+                if (disposed) return;
+                disposed = true;
+                releaseIfUnused();
+            }
+        });
+        return scope;
+    };
+
+    // Question cards capture their editor images for the component lifetime.
+    // Hold only the scopes actually referenced; no resource methods enter rows.
+    const retainImageResources = images => {
+        const scopes = new Set((images || []).map(image => urlOwners.get(image?.url)).filter(Boolean));
+        const releases = [...scopes].map(scope => scope.retain());
+        return () => { for (const release of releases) release(); };
+    };
+
+    return Object.freeze({ normalizeRows, collectImageIds, attachImageUrls, createUrlScope, retainImageResources });
 });

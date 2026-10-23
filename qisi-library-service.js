@@ -20,6 +20,25 @@
         }
         return value;
     };
+    // Undo is destructive: only structurally provable stored values may be restored.
+    // Unknown object types deliberately fail closed rather than being JSON-erased.
+    const sameStoredValue = (left, right) => {
+        if (Object.is(left, right)) return true;
+        if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
+        if (left instanceof Date || right instanceof Date) {
+            return left instanceof Date && right instanceof Date && left.getTime() === right.getTime();
+        }
+        if (Array.isArray(left) !== Array.isArray(right)) return false;
+        if (!Array.isArray(left) && (Object.getPrototypeOf(left) !== Object.prototype ||
+            Object.getPrototypeOf(right) !== Object.prototype)) return false;
+        if (Array.isArray(left) && left.length !== right.length) return false;
+        const keys = Object.keys(left);
+        return keys.length === Object.keys(right).length && keys.every(key =>
+            Object.prototype.hasOwnProperty.call(right, key) && sameStoredValue(left[key], right[key]));
+    };
+    const externalStatus = row => ({ id: row.id, processStatus: row.processStatus || 'unprocessed',
+        linkedQuestionId: row.linkedQuestionId || '', processedAt: row.processedAt || 0 });
+
     const fail = (code, message) => {
         const error = new Error(message);
         error.name = 'LibraryServiceError';
@@ -59,6 +78,257 @@
             JSON.stringify(next.options) !==
                 JSON.stringify(question.options || []);
         return changed ? next : null;
+    };
+
+    const createExternalQuestionModel = ({ coreFingerprint, stemFingerprint, getIndexes,
+        getKnowledge, hasText, sameText, clock = Date.now, random = Math.random }) => {
+        const getExternalMatchInfo = (extQ) => {
+            const core = coreFingerprint(extQ);
+            const stem = stemFingerprint(extQ);
+        
+            const exact = getIndexes().core.get(core);
+            if (exact) {
+                const extAnswer = extQ.answer || '';
+                const localAnswer = exact.answer || '';
+                const answerConflict = hasText(extAnswer) && hasText(localAnswer) && !sameText(extAnswer, localAnswer);
+        
+                if (answerConflict) {
+                    return { status: 'answerConflict', matchedQuestion: exact, reason: '题干和选项基本一致，但答案不一致' };
+                }
+        
+                const canFillAnswer = !hasText(exact.answer) && hasText(extQ.answer);
+                const canFillSolution = !hasText(exact.solution) && hasText(extQ.solution);
+                const canFillPersonalKnowledge = !hasText(getKnowledge(exact, 'personal')) && hasText(getKnowledge(extQ, 'personal'));
+                const canFillSystemKnowledge = !hasText(getKnowledge(exact, 'system')) && hasText(getKnowledge(extQ, 'system'));
+        
+                if (canFillAnswer || canFillSolution || canFillPersonalKnowledge || canFillSystemKnowledge) {
+                    return { status: 'fillable', matchedQuestion: exact, reason: '个人题库已有此题，但可补全答案、解析或知识点' };
+                }
+        
+                return { status: 'existing', matchedQuestion: exact, reason: '个人题库已有完整相同题目' };
+            }
+        
+            const similar = stem ? getIndexes().stem.get(stem) : null;
+        
+            if (similar && coreFingerprint(similar) !== core) {
+                return { status: 'similar', matchedQuestion: similar, reason: '题干相同或高度相似，但选项或结构不同，需要人工确认' };
+            }
+        
+            return { status: 'new', matchedQuestion: null, reason: '个人题库中未发现相同题目' };
+        };
+        
+        const copyExternalToPersonalQuestion = (extQ, item) => {
+            const now = clock();
+            const personalKnowledge = item.personalKnowledge || getKnowledge(extQ, 'personal') || '';
+            const systemKnowledge = item.systemKnowledge || getKnowledge(extQ, 'system') || '';
+            const primaryKnowledge = personalKnowledge || systemKnowledge ||
+                extQ.personalKnowledge || extQ.systemKnowledge ||
+                extQ.meta?.personalKnowledge || extQ.meta?.systemKnowledge ||
+                extQ.knowledge || extQ.meta?.knowledge || '';
+            const primaryKnowledgeType = personalKnowledge
+                ? 'personal'
+                : (systemKnowledge ? 'system' : (extQ.knowledgeType || extQ.meta?.knowledgeType || 'system'));
+            const sourceTags = Array.isArray(extQ.meta?.tags) ? extQ.meta.tags : (Array.isArray(extQ.tags) ? extQ.tags : []);
+            const tags = [
+                ...sourceTags,
+                '外部导入',
+                `来源_${extQ.sourceTeacher || '外部教师'}`
+            ].filter(Boolean);
+        
+            return {
+                id: `q_${now}_${random().toString(36).slice(2, 8)}`,
+                grade: extQ.grade || extQ.meta?.grade || '高一',
+                diff: extQ.diff || extQ.meta?.diff || '中等',
+                type: extQ.type || '解答题',
+                stem: extQ.stem || '',
+                options: Array.isArray(extQ.options) ? [...extQ.options] : ['', '', '', ''],
+                answer: extQ.answer || '',
+                solution: extQ.solution || '',
+                images: (extQ.images || []).map(img => ({ id: img.id, align: img.align || 'center' })),
+                knowledge: primaryKnowledge,
+                knowledgeType: primaryKnowledgeType,
+                systemKnowledge,
+                personalKnowledge,
+                meta: {
+                    ...(extQ.meta || {}),
+                    grade: extQ.grade || extQ.meta?.grade || '高一',
+                    diff: extQ.diff || extQ.meta?.diff || '中等',
+                    knowledge: primaryKnowledge,
+                    knowledgeType: primaryKnowledgeType,
+                    systemKnowledge,
+                    personalKnowledge,
+                    tags,
+                    sources: [
+                        ...(extQ.meta?.sources || []),
+                        { type: 'external', sourceTeacher: extQ.sourceTeacher || '外部教师', batchId: extQ.batchId, externalId: extQ.id, addedAt: now }
+                    ]
+                },
+                createdAt: now,
+                updatedAt: now
+            };
+        };
+        
+        const buildFilledQuestionFromExternal = (localQ, extQ, item) => {
+            const now = clock();
+            const next = JSON.parse(JSON.stringify(localQ));
+            if (!hasText(next.answer) && hasText(extQ.answer)) next.answer = extQ.answer;
+            if (!hasText(next.solution) && hasText(extQ.solution)) next.solution = extQ.solution;
+            if (!next.meta) next.meta = {};
+        
+            const personalToFill = item.personalKnowledge || getKnowledge(extQ, 'personal');
+            const systemToFill = item.systemKnowledge || getKnowledge(extQ, 'system');
+        
+            if (!hasText(next.personalKnowledge) && personalToFill) {
+                next.personalKnowledge = personalToFill;
+                next.meta.personalKnowledge = personalToFill;
+            }
+            if (!hasText(next.systemKnowledge) && systemToFill) {
+                next.systemKnowledge = systemToFill;
+                next.meta.systemKnowledge = systemToFill;
+            }
+        
+            const primaryKnowledge = next.personalKnowledge || next.systemKnowledge || next.knowledge || '';
+            const primaryKnowledgeType = next.personalKnowledge ? 'personal' : (next.systemKnowledge ? 'system' : next.knowledgeType || 'system');
+            next.knowledge = primaryKnowledge;
+            next.knowledgeType = primaryKnowledgeType;
+            next.meta.knowledge = primaryKnowledge;
+            next.meta.knowledgeType = primaryKnowledgeType;
+        
+            const oldTags = Array.isArray(next.meta.tags) ? next.meta.tags : (Array.isArray(next.tags) ? next.tags : []);
+            next.meta.tags = [...new Set([...oldTags, '外部补全', `来源_${extQ.sourceTeacher || '外部教师'}`])];
+            next.meta.sources = [
+                ...(next.meta.sources || []),
+                { type: 'external-fill', sourceTeacher: extQ.sourceTeacher || '外部教师', batchId: extQ.batchId, externalId: extQ.id, filledAt: now }
+            ];
+            next.updatedAt = now;
+            return next;
+        };
+        return Object.freeze({ getMatchInfo: getExternalMatchInfo, copyQuestion: copyExternalToPersonalQuestion, fillQuestion: buildFilledQuestionFromExternal });
+    };
+
+    const createQuestionMaintenance = ({ repository, service, tokenize, renderMath, refreshLibrary,
+        report = () => {} }) => {
+        const audit = async () => {
+            const storedQuestions = await repository.listTable('questions');
+            const imageRecords = await repository.listTable('images');
+            const storedImageIds = new Set(
+                imageRecords.map(record => String(record?.id || '')).filter(Boolean)
+            );
+            const issues = [];
+        
+            const inspectField = (question, fieldName, value) => {
+                const source = String(value || '');
+                if (!source) return;
+        
+                const parsed = tokenize(source);
+        
+                for (const issue of parsed.issues) {
+                    issues.push({
+                        questionId: question.id,
+                        field: fieldName,
+                        type: issue.type,
+                        detail: issue.preview
+                    });
+                }
+        
+                for (const segment of parsed.segments) {
+                    if (segment.type !== 'math') continue;
+                    const expression = String(segment.expression || '').replace(/\s*\n\s*/g, ' ').trim();
+                    try {
+                        renderMath(expression, {
+                            throwOnError: true,
+                            strict: 'ignore'
+                        });
+                    } catch (error) {
+                        issues.push({
+                            questionId: question.id,
+                            field: fieldName,
+                            type: 'katex-error',
+                            detail: error?.message || String(error),
+                            source: segment.raw
+                        });
+                    }
+                }
+        
+                const imageRefs = [
+                    ...source.matchAll(/\[\[(?:IMAGE|FORMULA_IMAGE):([^\]]+)\]\]/g),
+                    ...source.matchAll(/\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}/g)
+                ];
+                const questionImageIds = new Set(
+                    (question.images || []).map(image => String(image?.id || '')).filter(Boolean)
+                );
+        
+                for (const match of imageRefs) {
+                    const imageId = String(match[1] || '').trim();
+                    if (!questionImageIds.has(imageId)) {
+                        issues.push({
+                            questionId: question.id,
+                            field: fieldName,
+                            type: 'image-not-in-question',
+                            detail: imageId
+                        });
+                    }
+                    if (!storedImageIds.has(imageId)) {
+                        issues.push({
+                            questionId: question.id,
+                            field: fieldName,
+                            type: 'image-blob-missing',
+                            detail: imageId
+                        });
+                    }
+                }
+        
+                if (/MATHPROTECT|@@QISI_MATH_/.test(source)) {
+                    issues.push({
+                        questionId: question.id,
+                        field: fieldName,
+                        type: 'internal-token-leaked',
+                        detail: source.slice(0, 160)
+                    });
+                }
+            };
+        
+            for (const question of storedQuestions) {
+                inspectField(question, 'stem', question.stem);
+                inspectField(question, 'answer', question.answer);
+                inspectField(question, 'solution', question.solution);
+                (question.options || []).forEach((option, index) => {
+                    inspectField(question, `option${index}`, option);
+                });
+            }
+        
+            report({ kind: 'audit', issues });
+            return issues;
+        };
+        let pending = null;
+        const migrate = () => {
+            if (pending) return pending;
+            pending = (async () => {
+                let changedCount;
+                try { changedCount = await service.migrateSafeQuestionLatexData(); }
+                catch (error) {
+                    const progress = error.migrationProgress || { changedCount: 0 };
+                    let refreshError;
+                    if (progress.changedCount > 0) {
+                        try { await refreshLibrary(); } catch (failure) { refreshError = failure; }
+                    }
+                    report({ kind: 'migration-failed', ...progress, error, refreshError });
+                    throw error;
+                }
+                try { await refreshLibrary(); }
+                catch (cause) {
+                    const error = new Error(`迁移已写入 ${changedCount} 道题，但页面刷新失败：${cause?.message || cause}`);
+                    error.code = 'LIBRARY_MIGRATION_REFRESH_FAILED'; error.cause = cause;
+                    error.migrationProgress = { changedCount, committed: true };
+                    report({ kind: 'migration-refresh-failed', changedCount, error });
+                    throw error;
+                }
+                report({ kind: 'migration-complete', changedCount });
+                return changedCount;
+            })().finally(() => { pending = null; });
+            return pending;
+        };
+        return Object.freeze({ audit, migrate });
     };
 
     const stableSort = (items, sortBy = 'createdAt', direction = 'desc') =>
@@ -271,14 +541,17 @@
             );
             let changedCount = 0;
             for (const row of rows) {
-                const next = await transform(clone(row));
-                if (!next) continue;
-                await requireRepositoryMethod('updateQuestion')(
-                    row.id,
-                    next,
-                    { expectedUpdatedAt: row.updatedAt }
-                );
-                changedCount += 1;
+                try {
+                    const next = await transform(clone(row));
+                    if (!next) continue;
+                    await requireRepositoryMethod('updateQuestion')(
+                        row.id, next, { expectedUpdatedAt: row.updatedAt }
+                    );
+                    changedCount += 1;
+                } catch (error) {
+                    error.migrationProgress = { changedCount, failedQuestionId: row.id };
+                    throw error;
+                }
             }
             return changedCount;
         };
@@ -321,6 +594,17 @@
             };
         };
 
+        const runExternalTransaction = work => {
+            let domainError;
+            return requireRepositoryMethod('transaction')(
+                ['questions', 'externalQuestions', 'mergeBatches'],
+                tx => work(tx).catch(error => {
+                    if (error?.name === 'LibraryServiceError') domainError = error;
+                    throw error; // repository must observe failure and roll back before it is exposed
+                })
+            ).catch(error => { throw domainError || error; });
+        };
+
         const commitExternalMerge = async ({
             id,
             createdAt,
@@ -339,13 +623,20 @@
                 );
             }
             const normalized = operations.map(normalizeExternalOperation);
-            return requireRepositoryMethod('transaction')(
-                ['questions', 'externalQuestions', 'mergeBatches'],
+            if (new Set(normalized.map(row => row.externalId)).size !== normalized.length ||
+                new Set(normalized.filter(row => row.action !== 'skip').map(row => row.question.id)).size !==
+                    normalized.filter(row => row.action !== 'skip').length) {
+                fail('EXTERNAL_MERGE_OPERATION_DUPLICATE', '同一合并请求含重复来源或重复目标，请重新选择。');
+            }
+            return runExternalTransaction(
                 tx => {
                     const mergeBatch = {
                         id,
                         createdAt,
                         source: 'externalConfirm',
+                        undoSnapshotVersion: 1,
+                        writtenQuestionSnapshots: [],
+                        writtenExternalStatuses: [],
                         addedQuestionIds: [],
                         filledQuestionSnapshots: [],
                         externalStatusSnapshots: [],
@@ -362,6 +653,14 @@
                                         'EXTERNAL_MERGE_SOURCE_MISSING',
                                         'External merge source was not found.'
                                     );
+                                }
+                                if (external.linkedQuestionId || ['added', 'filled'].includes(external.processStatus)) {
+                                    if (operation.action !== 'skip') {
+                                        fail('EXTERNAL_MERGE_SOURCE_PROCESSED', '这道外部题已处理，请刷新后重新选择。');
+                                    }
+                                    // A repeated skip must not erase an existing successful association.
+                                    mergeBatch.summary.skipped += 1;
+                                    return;
                                 }
                                 mergeBatch.externalStatusSnapshots.push({
                                     id: external.id,
@@ -463,6 +762,23 @@
                         chain = chain.then(() => applyOperation(operation));
                     }
                     return chain
+                        .then(() => {
+                            let readback = tx.get('externalQuestions', normalized[0].externalId);
+                            for (const questionId of [...mergeBatch.addedQuestionIds,
+                                ...mergeBatch.filledQuestionSnapshots.map(row => row.id)]) {
+                                readback = readback.then(() => tx.get('questions', questionId)).then(row => {
+                                    if (!row) fail('EXTERNAL_MERGE_READBACK_FAILED', '合并题目读回失败。');
+                                    mergeBatch.writtenQuestionSnapshots.push(clone(row));
+                                });
+                            }
+                            for (const before of mergeBatch.externalStatusSnapshots) {
+                                readback = readback.then(() => tx.get('externalQuestions', before.id)).then(row => {
+                                    if (!row) fail('EXTERNAL_MERGE_READBACK_FAILED', '合并来源读回失败。');
+                                    mergeBatch.writtenExternalStatuses.push(externalStatus(row));
+                                });
+                            }
+                            return readback;
+                        })
                         .then(() => tx.put('mergeBatches', mergeBatch))
                         .then(() => tx.get('mergeBatches', id))
                         .then(readback => {
@@ -502,8 +818,7 @@
                     'External merge undo command is invalid.'
                 );
             }
-            return requireRepositoryMethod('transaction')(
-                ['questions', 'externalQuestions', 'mergeBatches'],
+            return runExternalTransaction(
                 tx => tx.get('mergeBatches', mergeBatchId)
                     .then(batch => {
                         if (!batch) {
@@ -518,10 +833,39 @@
                                 'External merge batch was already reverted.'
                             );
                         }
-                        let chain = tx.deleteMany(
-                            'questions',
-                            batch.addedQuestionIds || []
-                        );
+                        if (batch.undoSnapshotVersion !== 1 || !Array.isArray(batch.writtenQuestionSnapshots) ||
+                            !Array.isArray(batch.writtenExternalStatuses)) {
+                            fail('EXTERNAL_MERGE_UNDO_SNAPSHOT_REQUIRED',
+                                '这条历史记录缺少写后快照，无法安全撤销；题库内容已保留。');
+                        }
+                        const questionIds = [...(batch.addedQuestionIds || []),
+                            ...(batch.filledQuestionSnapshots || []).map(row => row.id)];
+                        const sourceIds = (batch.externalStatusSnapshots || []).map(row => row.id);
+                        if (questionIds.length !== batch.writtenQuestionSnapshots.length ||
+                            sourceIds.length !== batch.writtenExternalStatuses.length ||
+                            questionIds.some(id => !batch.writtenQuestionSnapshots.some(row => row.id === id)) ||
+                            sourceIds.some(id => !batch.writtenExternalStatuses.some(row => row.id === id))) {
+                            fail('EXTERNAL_MERGE_UNDO_SNAPSHOT_REQUIRED', '撤销证据不完整，题库内容已保留。');
+                        }
+                        // Every read and subsequent restore stays inside the same repository transaction.
+                        let chain = tx.get('mergeBatches', mergeBatchId);
+                        for (const snapshot of batch.writtenQuestionSnapshots) {
+                            chain = chain.then(() => tx.get('questions', snapshot.id)).then(current => {
+                                if (!sameStoredValue(current, snapshot)) {
+                                    fail('EXTERNAL_MERGE_UNDO_TARGET_CHANGED',
+                                        '合并后的题目已有修改或已删除，无法安全撤销；当前题目已保留。');
+                                }
+                            });
+                        }
+                        for (const snapshot of batch.writtenExternalStatuses) {
+                            chain = chain.then(() => tx.get('externalQuestions', snapshot.id)).then(current => {
+                                if (!current || !sameStoredValue(externalStatus(current), snapshot)) {
+                                    fail('EXTERNAL_MERGE_UNDO_SOURCE_CHANGED',
+                                        '外部题目的处理状态已改变，无法撤销较早记录；当前状态已保留。');
+                                }
+                            });
+                        }
+                        chain = chain.then(() => tx.deleteMany('questions', batch.addedQuestionIds || []));
                         for (const snapshot of
                             batch.filledQuestionSnapshots || []) {
                             if (snapshot?.id) {
@@ -583,6 +927,8 @@
     };
 
     return Object.freeze({
+        createQuestionMaintenance,
+        createExternalQuestionModel,
         stableSort,
         collectKnowledgeNames,
         paginate,

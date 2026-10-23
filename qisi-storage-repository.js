@@ -371,7 +371,7 @@
             if (!result || typeof result.then !== 'function') return result;
             return result.then(
                 value => value,
-                error => { throw normalizeError(error, operation); }
+                error => Promise.reject(normalizeError(error, operation))
             );
         };
         const atomic = (names, build, mode = 'rw') => {
@@ -402,7 +402,7 @@
             }
             return pending.then(
                 value => value,
-                error => { throw normalizeError(error, 'transaction'); }
+                error => Promise.reject(normalizeError(error, 'transaction'))
             );
         };
         // 旧名保留为薄别名，调用点不必改写；实现只有一个。
@@ -425,6 +425,33 @@
         );
         const put = (name, value) => run(`put:${name}`, () =>
             table(name).put(clone(value)).then(() => clone(value)));
+        const updatePersonalKnowledgeTree = (transform, updatedAt = Date.now()) => {
+            if (typeof transform !== 'function' || !Number.isFinite(updatedAt)) {
+                return Promise.reject(new StorageRepositoryError('personal-tree-command-invalid', 'A synchronous tree transform and timestamp are required.'));
+            }
+            return atomic(['personalKnowledge'], () => get('personalKnowledge', 'tree').then(record => {
+                const nodes = transform(clone(record ? record.nodes : []));
+                if (!Array.isArray(nodes)) throw new StorageRepositoryError('personal-tree-command-invalid', 'Tree transforms must return an array synchronously.');
+                return put('personalKnowledge', { ...(record || {}), id: 'tree', nodes, updatedAt })
+                    .then(() => get('personalKnowledge', 'tree')).then(readback => {
+                        if (!Array.isArray(readback?.nodes)) throw new StorageRepositoryError('personal-tree-readback-invalid', '知识点保存后读回失败。');
+                        return clone(readback.nodes);
+                    });
+            }));
+        };
+        const applyCustomTemplateChange = ({ id, expected, patch, remove = false } = {}) => {
+            requireId(id);
+            return atomic(['customTemplates'], () => get('customTemplates', id).then(current => {
+                if (!current || JSON.stringify(current) !== JSON.stringify(expected)) {
+                    throw new StorageRepositoryError('template-version-conflict', '模板已删除或被其他操作修改，请刷新后重试。');
+                }
+                if (remove) return deleteMany('customTemplates', [id]).then(() => ({ id, deleted: true }));
+                if (!patch || typeof patch.code !== 'string' || !isRecord(patch.config)) {
+                    throw new StorageRepositoryError('template-change-invalid', '模板内容无效，已停止更新。');
+                }
+                return put('customTemplates', { ...current, name: patch.name, code: patch.code, config: clone(patch.config) });
+            }));
+        };
         const deleteMany = (name, ids) => run(
             `delete-many:${name}`,
             () => {
@@ -1424,7 +1451,7 @@
         };
 
         const repository = Object.freeze({
-            transaction, listTable, get, put, deleteMany, update, findBy, findAny,
+            transaction, applyCustomTemplateChange, updatePersonalKnowledgeTree, listTable, get, put, deleteMany, update, findBy, findAny,
             loadImageRecords,
             loadLibrary, saveQuestion, updateQuestion, softDeleteQuestion,
             restoreQuestion, listRecentTasks, saveDraft, loadDraft,

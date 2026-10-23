@@ -50,5 +50,40 @@
         return { editorSource, stem, options, optionWarning, projection };
     };
 
-    return Object.freeze({ OPTION_WARNING, planEditorCommit });
+    const createDraftPreparer = ({ controller, state, utils, normalizeDraft,
+        pdfContract, projection, migrateImageTokens, normalizeDuplicates, clock = Date.now } = {}) => {
+        if (typeof controller?.open !== 'function' || typeof controller?.editFields !== 'function' ||
+            typeof state?.applyDraftEditorMetadata !== 'function' || typeof normalizeDraft !== 'function') {
+            throw new Error('REVIEW_EDITOR_PREPARER_DEPENDENCY_REQUIRED');
+        }
+        return ({ question, source, images = [] }) => {
+            const draft = controller.open(question).draft;
+            state.applyDraftEditorMetadata(draft);
+            const contract = pdfContract(draft);
+            let editorSource = source;
+            if (contract) {
+                Object.assign(draft, contract.applyEditorSource(draft, source, controller));
+            } else {
+                const plan = planEditorCommit({ question: draft, source, images,
+                    migrateImageTokens, normalizeDuplicates,
+                    normalizeNewlines: state.normalizeDraftEditorNewlines, buildProjection: projection });
+                editorSource = plan.editorSource;
+                draft.editorSource = editorSource;
+                if (plan.optionWarning) utils.addWarningOnce(draft, plan.optionWarning);
+                else draft.warnings = (draft.warnings || []).filter(warning =>
+                    !String(warning).includes('题目编辑源码暂未识别出选项'));
+                Object.assign(draft, controller.editFields(draft, { stem: plan.stem, options: plan.options }));
+                draft.updatedAt = clock();
+            }
+            if (!contract) {
+                utils.preserveRawEvidence(draft);
+                utils.cleanDisplayFieldsOnly(draft);
+            }
+            draft.updatedAt = clock();
+            normalizeDraft(draft);
+            return { draft, source: editorSource };
+        };
+    };
+
+    return Object.freeze({ OPTION_WARNING, planEditorCommit, createDraftPreparer });
 });

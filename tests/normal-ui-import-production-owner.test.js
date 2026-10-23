@@ -14,7 +14,13 @@ test('every visible batch-import command converges on explicit Bridge production
     assert.match(template, /@click="runBatchRecognition\(batch\.id\)"/);
     assert.match(template, /@click="rerunActiveBatchRecognition"/);
     assert.match(app, /ProductionImportBridge\.createProductionImportBridge/);
-    assert.match(app, /createNormalUiImportController\s*\(\s*\{[\s\S]*bridge:\s*productionImportBridge/);
+    assert.match(app, /ImportRunCommands\.createWorkspace\s*\(\s*\{/);
+    assert.match(app, /createController:\s*window\.Qisi\.NormalUiImportController\.createNormalUiImportController/);
+    assert.match(app, /bridge:\s*productionImportBridge/);
+    const workspace = read('qisi-import-run-commands.js');
+    assert.match(workspace, /const controller = createController\s*\(\s*\{/);
+    assert.match(workspace, /bridge, canReuseCommittedRequest/);
+    assert.match(workspace, /session\.adoptImportResult/);
     assert.match(controller, /ports\.bridge\.run\s*\(\s*\{[\s\S]*mode:\s*'production'/);
     assert.doesNotMatch(app, /legacyBatchRunCoordinator\.run\s*\(/);
     assert.doesNotMatch(app, /InjectedImportPath\.createInjectedImportPath/);

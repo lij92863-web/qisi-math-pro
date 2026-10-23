@@ -42,3 +42,39 @@ test('a real document navigation destroys the pending operation and leaves its f
         await browser.close();
     }
 });
+
+
+const { confirmThroughUi } = require('../../scripts/golden/run.cjs');
+const { startBrowserApp, seedReviewBatch, callProxy, getDbSnapshot, assertNoRuntimeErrors } = require('./browser-harness');
+
+test('golden confirmation clicks once and requires both durable and visible completion; a rejection remains a failure', { timeout: 30000 }, async () => {
+    const h = await startBrowserApp(32792);
+    try {
+        const id = await seedReviewBatch(h.page, { batchId: 'golden_confirmation_boundary' });
+        await callProxy(h.page, 'openBatchReview', id);
+        await h.page.evaluate(() => {
+            const p = window.Qisi.Runtime.getRuntimeDependency('AppProxy');
+            p.view = 'batchImport';
+            window.auditConfirmClicks = 0;
+            document.addEventListener('click', event => {
+                if (event.target.closest('.review-confirm')) window.auditConfirmClicks++;
+            });
+        });
+        const before = await getDbSnapshot(h.page);
+        const draft = before.drafts.find(q => q.id === id + '_q1');
+        await confirmThroughUi(h, draft);
+        const after = await getDbSnapshot(h.page);
+        assert.equal(after.drafts.find(q => q.id === draft.id).status, 'reviewed');
+        assert.equal(after.questions.length, 0);
+        assert.equal(await h.page.evaluate(() => window.auditConfirmClicks), 1);
+        await callProxy(h.page, 'selectDraftQuestion', id + '_q2');
+        const rejected = after.drafts.find(q => q.id === id + '_q2');
+        h.page.once('dialog', dialog => dialog.dismiss());
+        await assert.rejects(confirmThroughUi(h, rejected, { timeout: 300 }), /timed out waiting for IndexedDB state/);
+        const failed = await getDbSnapshot(h.page);
+        assert.equal(failed.drafts.find(q => q.id === rejected.id).status, 'pending');
+        assert.equal(failed.questions.length, 0);
+        assert.equal(await h.page.evaluate(() => window.auditConfirmClicks), 2, 'rejected mutations are never retried');
+        assertNoRuntimeErrors(h);
+    } finally { await h.close(); }
+});

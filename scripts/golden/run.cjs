@@ -83,6 +83,32 @@ const projection = draft => ({
     fieldProvenance: draft.fieldProvenance, sourceTrace: draft.sourceTrace, pdfReview: draft.pdfReview
 });
 
+// Exercise the user's action once, then observe both durable and rendered state.
+// Chromium may collect a promise awaited through Runtime.callFunctionOn even
+// while Dexie has committed the operation. Do not retry the mutation or suppress
+// protocol errors: the ordinary UI action needs no remote promise lifetime.
+async function confirmThroughUi(h, draft, { timeout = 15000 } = {}) {
+    const H = require('../../tests/e2e/browser-harness');
+    let navigated = false;
+    const onNavigation = frame => { if (frame === h.page.mainFrame()) navigated = true; };
+    h.page.on('framenavigated', onNavigation);
+    try {
+        await h.page.getByRole('button', { name: '仅标记已确认', exact: true }).click();
+        await H.waitForDbSnapshot(h.page, snapshot => snapshot.drafts.some(row =>
+            row.id === draft.id && row.status === 'reviewed' && row.version > draft.version), { timeout });
+        await h.page.waitForFunction(id => {
+            const proxy = window.Qisi?.Runtime?.getRuntimeDependency('AppProxy');
+            return proxy?.activeDraftQuestion?.id === id &&
+                proxy.activeDraftQuestion.status === 'reviewed' &&
+                !proxy.activeDraftEditorDirty &&
+                document.querySelector('.batch-toast')?.textContent?.includes('已标记为确认。');
+        }, draft.id, { timeout });
+        if (navigated) throw new Error('GOLDEN_UNEXPECTED_REVIEW_NAVIGATION');
+    } finally {
+        h.page.off('framenavigated', onNavigation);
+    }
+}
+
 async function runCase(item, port) {
     const H = require('../../tests/e2e/browser-harness');
     const { installMineruReplay } = require('../../tests/harness/mineru-replay');
@@ -130,7 +156,7 @@ async function runCase(item, port) {
                     }
                     if (draft.images.length) await step('confirm-images:' + no, () => H.callProxy(h.page, 'confirmDraftImages'));
                 }
-                await step('mark-reviewed:' + no, () => H.callProxy(h.page, 'markDraftReviewed'));
+                await step('mark-reviewed:' + no, () => confirmThroughUi(h, draft));
                 await step('review-invariants:' + no, async () => {
                     const reviewed = (await H.getDbSnapshot(h.page)).drafts.find(row => row.id === draft.id);
                     assert.equal(reviewed.status, 'reviewed', 'Human confirmation must pass existing validation');
@@ -234,4 +260,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { runSuite, readSuite, traceStep, caseFailure, closeTrace };
+module.exports = { runSuite, readSuite, traceStep, caseFailure, closeTrace, confirmThroughUi };

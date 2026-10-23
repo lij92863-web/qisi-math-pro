@@ -111,7 +111,9 @@ describe('bm-a4-r3-ownership-audit', () => {
         assert.doesNotMatch(app, /pdfSupportFusedWarnings/);
         assert.doesNotMatch(app, /pdfSupportFieldWarningsByQuestion/);
         assert.doesNotMatch(app, /PdfCandidateProjection\s*\.projectPdfCandidates\s*\(/);
-        assert.match(app, /PdfMineruProducer\.createProducer/);
+        assert.match(app, /ImportDraftCommand\.createPdfProducer/);
+        assert.match(app, /producer:\s*window\.Qisi\.PdfMineruProducer/);
+        assert.match(fs.readFileSync('qisi-import-draft-command.js', 'utf8'), /producer\.createProducer\(/);
         assert.doesNotMatch(app, /PdfExternalProducer\.createProducer/);
         assert.doesNotMatch(app, /PdfMultimodalProducer\.createProducer/);
         assert.match(owner, /function\s+buildDrafts\s*\(/);
@@ -149,12 +151,11 @@ describe('bm-a4-r3-ownership-audit', () => {
     });
 
     it('unknown context deferred', () => {
-        const site = makeCallsite(
-            'R3-TEST-06',
-            'addWarningOnce',
-            'window.Qisi.Utils.addWarningOnce('
-        );
-        const result = auditCallsite(site, appLines);
+        const editorOwnerLines = fs.readFileSync('qisi-review-editor-commit.js', 'utf8').split('\n');
+        assert.doesNotMatch(appLines.join('\n'), /window\.Qisi\.Utils\.addWarningOnce\(/);
+        const site = { callsiteId: 'R3-TEST-06', helper: 'addWarningOnce',
+            line: findLineIn(editorOwnerLines, 'utils.addWarningOnce(draft, plan.optionWarning)') };
+        const result = auditCallsite(site, editorOwnerLines);
         assert.ok(result.decision.startsWith('BLOCKED') || result.fixtureRequired);
     });
 

@@ -27,7 +27,9 @@
       "responsibilities": [
         "shared-pure-text-and-latex-utilities"
       ],
-      "allowedCallers": [],
+      "allowedCallers": [
+        "exam-paper-parts"
+      ],
       "allowedDependencies": [],
       "forbiddenDependencies": [
         "ui-shell",
@@ -197,7 +199,8 @@
         "question-image-list-policy"
       ],
       "allowedCallers": [
-        "ui-shell"
+        "ui-shell",
+        "exam-paper-parts"
       ],
       "allowedDependencies": [],
       "forbiddenDependencies": [
@@ -388,7 +391,9 @@
       "module": "qisi-storage-repository.js",
       "layer": 1,
       "responsibilities": [
-        "draft-and-formal-question-transactions"
+        "draft-and-formal-question-transactions",
+        "atomic-personal-knowledge-tree-update-and-readback",
+        "atomic-custom-template-versioned-change"
       ],
       "allowedCallers": [
         "batch-formal-submit",
@@ -397,7 +402,15 @@
         "export-service",
         "batch-context",
         "production-status-port",
-        "ui-shell"
+        "ui-shell",
+        "review-session-commands",
+        "import-run-commands",
+        "import-draft-command",
+        "library-external-merge",
+        "manual-entry-model",
+        "personal-knowledge-model",
+        "exam-template-model",
+        "print-resources"
       ],
       "allowedDependencies": [
         "recognition-contracts",
@@ -525,7 +538,8 @@
         "browser-pdf-page-rendering"
       ],
       "allowedCallers": [
-        "ui-shell"
+        "ui-shell",
+        "review-image-commands"
       ],
       "allowedDependencies": [],
       "forbiddenDependencies": [
@@ -672,7 +686,8 @@
         "review-draft-image-display-projection"
       ],
       "allowedCallers": [
-        "ui-shell"
+        "ui-shell",
+        "review-batch-confirm"
       ],
       "allowedDependencies": [],
       "forbiddenDependencies": [
@@ -707,14 +722,20 @@
     {
       "ownerId": "review-editor-commit",
       "module": "qisi-review-editor-commit.js",
-      "layer": 1,
+      "layer": 2,
       "responsibilities": [
-        "review-draft-editor-commit-planning"
+        "review-draft-editor-commit-planning",
+        "detached-draft-save-preparation"
       ],
       "allowedCallers": [
-        "ui-shell"
+        "ui-shell",
+        "review-batch-confirm"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "review-controller",
+        "review-draft-state",
+        "review-editor-projection"
+      ],
       "forbiddenDependencies": [
         "question-repository",
         "formal-admission",
@@ -727,16 +748,23 @@
     {
       "ownerId": "review-session-commands",
       "module": "qisi-review-session-commands.js",
-      "layer": 1,
+      "layer": 3,
       "responsibilities": [
-        "review-draft-session-switch-and-command-boundary"
+        "review-page-state-and-editor-lifecycle",
+        "versioned-save-and-batch-readback-coordination"
       ],
       "allowedCallers": [
-        "ui-shell"
+        "ui-shell",
+        "review-image-commands",
+        "review-batch-confirm",
+        "import-run-commands"
       ],
-      "allowedDependencies": [],
-      "forbiddenDependencies": [
+      "allowedDependencies": [
+        "review-draft-state",
         "question-repository",
+        "draft-persistence"
+      ],
+      "forbiddenDependencies": [
         "formal-admission",
         "app-shell"
       ],
@@ -747,14 +775,22 @@
     {
       "ownerId": "review-image-commands",
       "module": "qisi-review-image-commands.js",
-      "layer": 1,
+      "layer": 3,
       "responsibilities": [
-        "review-image-confirm-and-delete-planning"
+        "review-image-candidate-and-atomic-command-coordination",
+        "manual-crop-browser-pixels-and-source-identity"
       ],
       "allowedCallers": [
         "ui-shell"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "review-session-commands",
+        "review-controller",
+        "draft-persistence",
+        "review-draft-state",
+        "review-image-projection",
+        "browser-pdf-renderer"
+      ],
       "forbiddenDependencies": [
         "question-repository",
         "formal-admission",
@@ -767,14 +803,21 @@
     {
       "ownerId": "review-batch-confirm",
       "module": "qisi-review-batch-confirm.js",
-      "layer": 1,
+      "layer": 3,
       "responsibilities": [
-        "review-batch-selection-and-confirm-planning"
+        "review-selection-planning",
+        "single-and-batch-review-action-order-and-reentrancy"
       ],
       "allowedCallers": [
         "ui-shell"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "review-session-commands",
+        "review-workflow",
+        "review-editor-commit",
+        "review-image-projection",
+        "library-snapshot"
+      ],
       "forbiddenDependencies": [
         "question-repository",
         "formal-admission",
@@ -787,16 +830,22 @@
     {
       "ownerId": "import-run-commands",
       "module": "qisi-import-run-commands.js",
-      "layer": 2,
+      "layer": 4,
       "responsibilities": [
-        "import-run-cancel-rerun-command-decisions"
+        "normal-import-controller-and-request-lifecycle",
+        "import-result-review-visit-adoption"
       ],
       "allowedCallers": [
         "ui-shell"
       ],
-      "allowedDependencies": [],
-      "forbiddenDependencies": [
+      "allowedDependencies": [
+        "normal-ui-controller",
+        "production-import-bridge",
         "question-repository",
+        "review-session-commands",
+        "production-import-route-policy"
+      ],
+      "forbiddenDependencies": [
         "formal-admission",
         "app-shell"
       ],
@@ -809,10 +858,12 @@
       "module": "qisi-library-image-resources.js",
       "layer": 2,
       "responsibilities": [
-        "library-question-image-url-attachment"
+        "library-question-image-url-attachment",
+        "library-image-url-scope-and-consumer-lifetime"
       ],
       "allowedCallers": [
-        "ui-shell"
+        "ui-shell",
+        "library-snapshot"
       ],
       "allowedDependencies": [],
       "forbiddenDependencies": [
@@ -829,12 +880,17 @@
       "module": "qisi-library-snapshot.js",
       "layer": 2,
       "responsibilities": [
-        "library-domain-readback-snapshot"
+        "library-domain-readback-snapshot",
+        "library-snapshot-publication-and-retirement",
+        "domain-specific-read-and-resource-publication"
       ],
       "allowedCallers": [
-        "ui-shell"
+        "ui-shell",
+        "review-batch-confirm"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "library-image-resources"
+      ],
       "forbiddenDependencies": [
         "question-repository",
         "formal-admission",
@@ -847,92 +903,113 @@
     {
       "ownerId": "library-external-merge",
       "module": "qisi-library-external-merge.js",
-      "layer": 2,
+      "layer": 3,
       "responsibilities": [
-        "library-external-merge-operation-planning"
+        "library-external-merge-operation-planning",
+        "external-library-preview-selection-commit-undo-lifecycle"
       ],
       "allowedCallers": [
         "ui-shell"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "library-service",
+        "export-service",
+        "question-repository"
+      ],
       "forbiddenDependencies": [
-        "question-repository",
         "formal-admission",
         "app-shell"
       ],
       "productionEntry": true,
-      "writeAuthority": "none",
+      "writeAuthority": "repository-mediated-only",
       "status": "production"
     },
     {
       "ownerId": "personal-knowledge-model",
       "module": "qisi-personal-knowledge-model.js",
-      "layer": 1,
+      "layer": 3,
       "responsibilities": [
-        "personal-knowledge-tree-rows-and-node-shapes"
+        "personal-knowledge-tree-rows-and-node-shapes",
+        "personal-tree-state-and-transactional-commands",
+        "durable-tree-receipts-and-selection-reconciliation"
       ],
       "allowedCallers": [
         "ui-shell"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "question-repository"
+      ],
       "forbiddenDependencies": [
-        "question-repository",
         "formal-admission",
         "app-shell"
       ],
       "productionEntry": true,
-      "writeAuthority": "none",
+      "writeAuthority": "repository-mediated-only",
       "status": "production"
     },
     {
       "ownerId": "manual-entry-model",
       "module": "qisi-manual-entry-model.js",
-      "layer": 1,
+      "layer": 3,
       "responsibilities": [
-        "manual-entry-question-shape"
+        "manual-entry-question-shape",
+        "manual-form-preferences-and-input-lifecycle",
+        "image-persistence-before-source-publication",
+        "confirmed-manual-save-coordination"
       ],
       "allowedCallers": [
         "ui-shell"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "library-service",
+        "question-repository"
+      ],
       "forbiddenDependencies": [
-        "question-repository",
         "formal-admission",
         "app-shell"
       ],
       "productionEntry": true,
-      "writeAuthority": "none",
+      "writeAuthority": "repository-mediated-only",
       "status": "production"
     },
     {
       "ownerId": "exam-template-model",
       "module": "qisi-exam-template-model.js",
-      "layer": 1,
+      "layer": 3,
       "responsibilities": [
-        "exam-template-record-shapes"
+        "exam-template-record-shapes",
+        "template-editor-and-layout-state",
+        "template-preference-restoration-and-observer-lifecycle",
+        "durable-template-crud-coordination"
       ],
       "allowedCallers": [
         "ui-shell"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "question-repository"
+      ],
       "forbiddenDependencies": [
-        "question-repository",
         "formal-admission",
         "app-shell"
       ],
       "productionEntry": true,
-      "writeAuthority": "none",
+      "writeAuthority": "repository-mediated-only",
       "status": "production"
     },
     {
       "ownerId": "exam-groups",
       "module": "qisi-exam-groups.js",
-      "layer": 1,
+      "layer": 3,
       "responsibilities": [
-        "exam-grouping-and-type-local-reorder"
+        "exam-grouping-and-type-local-reorder",
+        "cart-order-points-groups-preference-state",
+        "immutable-paper-snapshot-for-question-and-answer-numbering",
+        "pointer-drag-listener-frame-timer-lifecycle"
       ],
       "allowedCallers": [
-        "ui-shell"
+        "ui-shell",
+        "exam-paper-parts",
+        "print-resources"
       ],
       "allowedDependencies": [],
       "forbiddenDependencies": [
@@ -947,14 +1024,22 @@
     {
       "ownerId": "exam-paper-parts",
       "module": "qisi-exam-paper-parts.js",
-      "layer": 1,
+      "layer": 3,
       "responsibilities": [
-        "exam-paper-header-grid-notice-answer-fragments"
+        "exam-paper-header-grid-notice-answer-fragments",
+        "complete-question-answer-document-combinations",
+        "pure-text-image-option-and-math-rendering",
+        "fixed-snapshot-mode-order-and-diagnostics"
       ],
       "allowedCallers": [
-        "ui-shell"
+        "ui-shell",
+        "print-resources"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "exam-groups",
+        "question-image-policy",
+        "utils"
+      ],
       "forbiddenDependencies": [
         "question-repository",
         "formal-admission",
@@ -967,16 +1052,23 @@
     {
       "ownerId": "print-resources",
       "module": "qisi-print-resources.js",
-      "layer": 1,
+      "layer": 3,
       "responsibilities": [
-        "print-time-image-hydration"
+        "print-time-image-hydration",
+        "print-preparation-state-and-explicit-formula-gate",
+        "isolated-preview-document-and-channel-lease-lifecycle",
+        "font-image-readiness-and-disabled-print-failures",
+        "abortable-print-image-encoding"
       ],
       "allowedCallers": [
         "ui-shell"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "exam-paper-parts",
+        "exam-groups",
+        "question-repository"
+      ],
       "forbiddenDependencies": [
-        "question-repository",
         "formal-admission",
         "app-shell"
       ],
@@ -987,21 +1079,24 @@
     {
       "ownerId": "import-draft-command",
       "module": "qisi-import-draft-command.js",
-      "layer": 2,
+      "layer": 3,
       "responsibilities": [
-        "import-batch-persistence-command-mapping"
+        "import-batch-persistence-command-mapping",
+        "pdf-source-evidence-repository-port-assembly"
       ],
       "allowedCallers": [
         "ui-shell"
       ],
-      "allowedDependencies": [],
+      "allowedDependencies": [
+        "pdf-mineru-producer",
+        "question-repository"
+      ],
       "forbiddenDependencies": [
-        "question-repository",
         "formal-admission",
         "app-shell"
       ],
       "productionEntry": true,
-      "writeAuthority": "none",
+      "writeAuthority": "repository-mediated-only",
       "status": "production"
     },
     {
@@ -1283,7 +1378,9 @@
       ],
       "allowedCallers": [
         "production-import-bridge",
-        "ui-shell"
+        "ui-shell",
+        "review-session-commands",
+        "review-image-commands"
       ],
       "allowedDependencies": [
         "question-repository"
@@ -1304,7 +1401,8 @@
         "review-workspace-interaction-controller"
       ],
       "allowedCallers": [
-        "ui-shell"
+        "ui-shell",
+        "review-image-commands"
       ],
       "allowedDependencies": [],
       "forbiddenDependencies": [
@@ -1319,10 +1417,16 @@
       "module": "qisi-library-service.js",
       "layer": 2,
       "responsibilities": [
-        "question-library-application-service"
+        "question-library-application-service",
+        "external-match-copy-fill-rules",
+        "versioned-safe-external-undo",
+        "readonly-latex-image-audit",
+        "explicit-migration-progress-and-readback"
       ],
       "allowedCallers": [
-        "ui-shell"
+        "ui-shell",
+        "library-external-merge",
+        "manual-entry-model"
       ],
       "allowedDependencies": [
         "question-repository"
@@ -1339,10 +1443,12 @@
       "module": "qisi-export-service.js",
       "layer": 2,
       "responsibilities": [
-        "question-export-projection"
+        "question-export-projection",
+        "portable-package-parse-projection-and-image-rekey"
       ],
       "allowedCallers": [
-        "ui-shell"
+        "ui-shell",
+        "library-external-merge"
       ],
       "allowedDependencies": [
         "question-repository"
@@ -1494,8 +1600,7 @@
         "docx-vision-question-and-support-source"
       ],
       "allowedCallers": [
-        "docx-import-coordinator",
-        "production-import-bridge"
+        "docx-import-coordinator"
       ],
       "allowedDependencies": [
         "docx-producer-identity",
@@ -1620,7 +1725,8 @@
         "production-import-route-selection"
       ],
       "allowedCallers": [
-        "production-import-bridge"
+        "production-import-bridge",
+        "import-run-commands"
       ],
       "allowedDependencies": [],
       "forbiddenDependencies": [
@@ -1642,7 +1748,8 @@
         "normal-ui-production-import-workflow"
       ],
       "allowedCallers": [
-        "normal-ui-controller"
+        "normal-ui-controller",
+        "import-run-commands"
       ],
       "allowedDependencies": [
         "import-state-machine",
@@ -1652,7 +1759,6 @@
         "production-status-port",
         "production-output-port",
         "production-docx-source-port",
-        "production-docx-vision-source-port",
         "batch-engine-v2",
         "docx-import-coordinator",
         "candidate-normalizer",
@@ -1726,7 +1832,8 @@
         "review-confirmation-and-formal-submit-workflow"
       ],
       "allowedCallers": [
-        "ui-shell"
+        "ui-shell",
+        "review-batch-confirm"
       ],
       "allowedDependencies": [
         "draft-persistence",
@@ -1823,7 +1930,8 @@
         "normal-ui-import-event-controller"
       ],
       "allowedCallers": [
-        "ui-shell"
+        "ui-shell",
+        "import-run-commands"
       ],
       "allowedDependencies": [
         "production-import-bridge"
@@ -2284,7 +2392,8 @@
         "pdf-mineru-producer"
       ],
       "allowedCallers": [
-        "ui-shell"
+        "ui-shell",
+        "import-draft-command"
       ],
       "allowedDependencies": [
         "pdf-question-display"

@@ -82,35 +82,25 @@ test('production DOCX vision source port discards a cancelled result', async () 
     );
 });
 
-test('Bridge DOCX vision shadow delegates to the isolated production port', async () => {
+test('Bridge shadow compatibility entry rejects retirement without invoking any supplied adapter', async () => {
+    let calls = 0;
     const required = Object.fromEntries(Bridge.REQUIRED_PORTS.map(name => [
-        name, async () => { throw new Error(`unused:${name}`); }
+        name, async () => { ++calls; throw new Error('unused:' + name); }
     ]));
-    const bridge = Bridge.createProductionImportBridge({
-        ...required,
-        runDocxVisionShadow: input => VisionPort.runDocxVisionShadow(input, {
-            runVisionProducer: async () => producerResult()
-        })
+    const bridge = Bridge.createProductionImportBridge({ ...required,
+        runDocxVisionShadow: async () => { ++calls; return { shadow: true, drafts: [{}], formalWrites: 0, reviewDraftWrites: 0, realApiCalled: false }; }
     });
-    const result = await bridge.runDocxVisionShadow({ source });
-    assert.equal(result.drafts.length, 1);
-    assert.equal(result.formalWrites, 0);
-    assert.equal(result.reviewDraftWrites, 0);
+    await assert.rejects(bridge.runDocxVisionShadow({ source }),
+        error => error.code === 'PRODUCTION_IMPORT_PRODUCER_RETIRED' && error.causeCode === 'docx-vision-retired');
+    assert.equal(calls, 0);
 });
 
-test('Bridge rejects a shadow adapter that reports a formal write', async () => {
-    const required = Object.fromEntries(Bridge.REQUIRED_PORTS.map(name => [
-        name, async () => { throw new Error(`unused:${name}`); }
-    ]));
-    const bridge = Bridge.createProductionImportBridge({
-        ...required,
-        runDocxVisionShadow: async () => ({
-            shadow: true, drafts: [{}], formalWrites: 1,
-            reviewDraftWrites: 0, realApiCalled: false
-        })
+test('retired Bridge shadow also refuses a supplied adapter claiming a formal write before executing it', async () => {
+    let executed = false;
+    const required = Object.fromEntries(Bridge.REQUIRED_PORTS.map(name => [name, async () => {}]));
+    const bridge = Bridge.createProductionImportBridge({ ...required,
+        runDocxVisionShadow: async () => { executed = true; return { formalWrites: 1 }; }
     });
-    await assert.rejects(
-        bridge.runDocxVisionShadow({ source }),
-        error => error.code === 'PRODUCTION_IMPORT_RESULT_MALFORMED'
-    );
+    await assert.rejects(bridge.runDocxVisionShadow({ source }), error => error.code === 'PRODUCTION_IMPORT_PRODUCER_RETIRED');
+    assert.equal(executed, false);
 });

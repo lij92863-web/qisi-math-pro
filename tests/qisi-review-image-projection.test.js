@@ -110,3 +110,24 @@ test('projection fails closed when the owning helpers are missing', () => {
     assert.throws(() => projection.projectPreviewImages({ question: question(), isRealFigureRow, isPreviewable }),
         error => error.code === 'REVIEW_IMAGE_PROJECTION_MERGE_HELPER_REQUIRED');
 });
+
+
+test('DOCX and PDF image projections preserve frozen evidence and source-page rows', () => {
+    const inline = Object.freeze(image('inline'));
+    const q = Object.freeze(question({ images: Object.freeze([inline]), sourcePageImage: 'blob:source', sourcePage: 2 }));
+    const bound = Object.freeze([Object.freeze(image('bound', { questionId: 'q1' }))]);
+    const sourcePages = Object.freeze([Object.freeze({ pageNo: 3, url: 'blob:page3' })]);
+    const before = JSON.stringify({ q, bound, sourcePages });
+    for (const pdf of [false, true]) {
+        const api = ports({ pdfContract: () => pdf ? {} : null, pdfMeta: () => ({ sourcePageImages: sourcePages }) });
+        const input = { question: q, boundImages: bound, ...api };
+        assert.deepEqual(projection.projectActiveImages(input).map(row => row.id), pdf ? ['inline'] : ['inline', 'bound']);
+        const real = projection.projectRealQuestionImages(input);
+        const pages = projection.projectSourcePageImages(input);
+        assert.equal(pages.length, 1);
+        assert.equal(pages[0].source, 'source-page');
+        assert.ok(real.every(row => row.source !== 'source-page'));
+        projection.projectPreviewImages({ question: q, realQuestionImages: real, ...api });
+    }
+    assert.equal(JSON.stringify({ q, bound, sourcePages }), before);
+});

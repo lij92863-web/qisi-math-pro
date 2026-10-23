@@ -14,11 +14,8 @@ function owners(){
  const utils=require('../qisi-utils');
  const context=vm.createContext({window:{Qisi:{QuestionImagePolicy:policy,Utils:utils}},URL,console,tokenizeLatexSource:utils.tokenizeLatexSource});
  vm.runInContext(fs.readFileSync(path.join(root,'qisi-components.js'),'utf8')+'\nthis.preview=Qisi.Components.renderLatexPreviewHtml;',context);
- const source=fs.readFileSync(path.join(root,'app.js'),'utf8');
- const start=source.indexOf('                const escapeHtml = (text)');
- const end=source.indexOf('                const applyPrintWritingRules',start);
- assert.ok(start>0&&end>start);
- vm.runInContext(source.slice(start,end)+'\nthis.print=printImageHtml;',context);
+ const Parts=require('../qisi-exam-paper-parts'),Gate=require('../qisi-handout-formula-gate'),Groups=require('../qisi-exam-groups'),katex=require('katex');
+ context.print=Parts.createDocumentBuilder({prepareSource:Gate.preparePrintSource,normalizeMath:Gate.normalizeForKatex,tokenize:utils.tokenizeLatexSource,renderMath:katex.renderToString,displayImageUrl:policy.displayImageUrl,groupQuestions:Groups.groupQuestions}).printImageHtml;
  return context;
 }
 test('actual preview and print owners refuse malicious image addresses while retaining allowed ones',()=>{

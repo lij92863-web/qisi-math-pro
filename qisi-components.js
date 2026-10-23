@@ -525,13 +525,18 @@
             },
             emits: ['toggle-cart', 'edit', 'delete', 'toggle-pick'],
             setup(props, { emit }) {
-                const { ref, reactive, computed, toRaw } = root.Vue;
+                const { ref, reactive, computed, toRaw, onUnmounted } = root.Vue;
                 const showAnswer = ref(false);
                 const isEditing = ref(false);
                 const activeEditTab = ref('stem');
                 const showEditKnowledge = ref(false);
                 
                 const q = props.q || {};
+                // The card retains its editor image array across prop refreshes.
+                // Keep those library URLs until this actual consumer unmounts.
+                const releaseImageResources = root.Qisi.LibraryImageResources
+                    ?.retainImageResources(q.images || []) || (() => {});
+                onUnmounted(releaseImageResources);
                 const editStem = ref(mergeStemWithOptions(q.stem || '', q.options || ['', '', '', ''], q.type || '解答题'));
                 const editImages = ref(q.images || []);
                 const editOptions = ref(q.options ? [...q.options] : ['', '', '', '']);

@@ -202,3 +202,60 @@ test('question migration delegates version-aware replacements and rejects malfor
         error => error.code === 'LIBRARY_MIGRATION_TRANSFORM_REQUIRED'
     );
 });
+
+test('stale external confirmation cannot add an already processed source under a fresh command ID', async () => {
+    const database = new FakeDatabase({ externalQuestions: [{ id: 'e1' }] });
+    const service = createService(database);
+    await service.commitExternalMerge({ id: 'first', createdAt: 10, operations: [
+        { action: 'add', externalId: 'e1', question: { id: 'q1', stem: 'first' } }
+    ] });
+    await assert.rejects(service.commitExternalMerge({ id: 'second', createdAt: 11, operations: [
+        { action: 'add', externalId: 'e1', question: { id: 'q2', stem: 'duplicate' } }
+    ] }), error => error.code === 'EXTERNAL_MERGE_SOURCE_PROCESSED');
+    assert.equal(database.table('questions').rows.size, 1);
+    assert.equal(database.table('mergeBatches').rows.size, 1);
+});
+
+for (const action of ['add', 'fill']) test(`undo ${action} refuses to erase a subsequent teacher edit and rolls back the whole undo`, async () => {
+    const database = new FakeDatabase({ questions: action === 'fill' ? [{ id: 'q1', stem: 'before' }] : [],
+        externalQuestions: [{ id: 'e1' }, { id: 'e2' }] });
+    const service = createService(database);
+    await service.commitExternalMerge({ id: 'first', createdAt: 10, operations: [
+        { action: 'add', externalId: 'e2', question: { id: 'q2', stem: 'untouched' } },
+        { action, externalId: 'e1', question: { id: 'q1', stem: 'merged', updatedAt: 10 } }
+    ] });
+    // Same timestamp deliberately: field evidence, not only wall-clock version, must protect edits.
+    await database.table('questions').put({ id: 'q1', stem: 'teacher edit', updatedAt: 10 });
+    const before = await database.table('externalQuestions').toArray();
+    await assert.rejects(service.undoExternalMerge({ mergeBatchId: 'first', revertedAt: 20 }),
+        error => error.code === 'EXTERNAL_MERGE_UNDO_TARGET_CHANGED');
+    assert.equal(database.table('questions').rows.get('q1').stem, 'teacher edit');
+    assert.equal(database.table('questions').rows.get('q2').stem, 'untouched');
+    assert.deepEqual(await database.table('externalQuestions').toArray(), before);
+    assert.equal(database.table('mergeBatches').rows.get('first').revertedAt, 0);
+});
+
+test('legacy undo without after-write proof refuses safely and remains readable', async () => {
+    const database = new FakeDatabase({ questions: [{ id: 'q1', stem: 'keep' }],
+        mergeBatches: [{ id: 'legacy', createdAt: 1, addedQuestionIds: ['q1'], revertedAt: 0 }] });
+    const service = createService(database);
+    assert.equal((await service.getLatestReversibleExternalMerge()).id, 'legacy');
+    await assert.rejects(service.undoExternalMerge({ mergeBatchId: 'legacy', revertedAt: 20 }),
+        error => error.code === 'EXTERNAL_MERGE_UNDO_SNAPSHOT_REQUIRED');
+    assert.equal(database.table('questions').rows.get('q1').stem, 'keep');
+});
+
+test('undo checks external status ownership before restoring older status', async () => {
+    const database = new FakeDatabase({ externalQuestions: [{ id: 'e1' }] });
+    const service = createService(database);
+    await service.commitExternalMerge({ id: 'first', createdAt: 10, operations: [{ action: 'skip', externalId: 'e1' }] });
+    await service.commitExternalMerge({ id: 'second', createdAt: 11, operations: [
+        { action: 'add', externalId: 'e1', question: { id: 'q1', stem: 'added later' } }
+    ] });
+    await assert.rejects(service.undoExternalMerge({ mergeBatchId: 'first', revertedAt: 20 }),
+        error => error.code === 'EXTERNAL_MERGE_UNDO_SOURCE_CHANGED');
+    assert.equal(database.table('externalQuestions').rows.get('e1').processStatus, 'added');
+    await service.undoExternalMerge({ mergeBatchId: 'second', revertedAt: 21 });
+    await service.undoExternalMerge({ mergeBatchId: 'first', revertedAt: 22 });
+    assert.equal(database.table('externalQuestions').rows.get('e1').processStatus, 'unprocessed');
+});

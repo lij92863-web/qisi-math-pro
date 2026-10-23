@@ -60,10 +60,11 @@ test('canonical contract rejects mixed source/producer axes and unsafe bypass ma
     );
 });
 
-test('Bridge shadow delegates projection and has no independent vision algorithm', () => {
+test('Bridge retired shadow has no executable delegation or independent vision algorithm', () => {
     const bridge = read('qisi-production-import-bridge.js');
     const port = read('qisi-production-docx-vision-source-port.js');
-    assert.match(bridge, /ports\.runDocxVisionShadow/);
+    assert.doesNotMatch(bridge, /ports\.runDocxVision(?:Shadow|Import)/);
+    assert.match(bridge, /PRODUCTION_IMPORT_PRODUCER_RETIRED/);
     assert.match(port, /contract\.projectDocxVisionCandidate/);
     assert.doesNotMatch(port, /strictProtocol|parseStrict|postprocessRecognized|OCR|fetch\s*\(/i);
     assert.doesNotMatch(bridge, /strictProtocol|parseStrict|postprocessRecognized|OCR/i);

@@ -55,5 +55,23 @@
         });
     };
 
-    return Object.freeze({ evidenceFieldFor, filePatchFor, buildPersistReviewDraftBatchCall });
+    // Bind current PDF source reads/evidence to the same repository boundary as
+    // import draft commands. The producer and its protocol/transport stay intact.
+    const createPdfProducer = ({ producer, storage, renderPages, getRoles, clock = Date.now } = {}) => {
+        for (const port of [producer?.createProducer, storage?.findBy, storage?.put, renderPages, getRoles, clock]) {
+            if (typeof port !== 'function') {
+                const error = new Error('IMPORT_DRAFT_COMMAND_SOURCE_PORT_REQUIRED');
+                error.code = 'IMPORT_DRAFT_COMMAND_SOURCE_PORT_REQUIRED'; throw error;
+            }
+        }
+        return producer.createProducer({
+            renderPages, getRoles,
+            getExistingDrafts: batchId => storage.findBy('draftQuestions', 'batchId', batchId),
+            persistSourceEvidence: (file, evidence) => storage.put('draftImportFiles', {
+                ...file, pdfMineruEvidence: evidence, updatedAt: clock()
+            })
+        });
+    };
+
+    return Object.freeze({ evidenceFieldFor, filePatchFor, buildPersistReviewDraftBatchCall, createPdfProducer });
 });

@@ -35,7 +35,11 @@ function removeTemp(name) {
 test('BM-AUTO inventory: scans app.js and finds functions', () => {
     const result = runScript(inventoryPath);
     assert.ok(typeof result.appJsLines === 'number', 'has appJsLines');
-    assert.ok(result.appJsLines > 4000, 'app.js still contains the UI shell');
+    const appSource = fs.readFileSync(path.join(rootDir, 'app.js'), 'utf8');
+    assert.equal(result.appJsLines, appSource.split('\n').length, 'scanner reports actual source lines');
+    assert.match(appSource, /Runtime\.boot/);
+    assert.match(appSource, /setup\(\)\s*\{/);
+    assert.ok(result.functions.some(item => item.name === 'loadData'), 'live UI loading entry is still inventoried');
     assert.ok(result.appJsLines <= 12000, 'app.js stays within the C2-12 shell convergence ceiling');
     assert.ok(Array.isArray(result.functions), 'functions is array');
     assert.ok(result.functions.length > 50, 'finds many functions');
@@ -103,12 +107,10 @@ test('BM-AUTO score: eligible functions must have no risk markers', () => {
 // ─── Classification tests ───
 
 test('BM-AUTO verify: SCAFFOLD_ONLY — app.js unchanged + new module added', () => {
-    // Simulate: before == after (no change), module exists but app doesn't call it
-    // Use a temp file without window.Qisi.Utils references to test SCAFFOLD_ONLY
+    // Independent no-module fixture: adding an injected Utils port to the real
+    // app must not silently invalidate this verifier's scaffold counterexample.
     const { classify } = require(verifyPath);
-    const appContent = fs.readFileSync(path.join(rootDir, 'app.js'), 'utf8');
-    // Remove all window.Qisi.Utils references to simulate an app that doesn't call the module
-    const stripped = appContent.replace(/window\.Qisi\.Utils\./g, '');
+    const stripped = 'const unchangedScaffold = () => 0;\n';
     writeTemp('.bm_test_scaffold_app.js', stripped);
 
     const args = [
@@ -119,6 +121,8 @@ test('BM-AUTO verify: SCAFFOLD_ONLY — app.js unchanged + new module added', ()
     ];
     const result = classify(args);
     removeTemp('.bm_test_scaffold_app.js');
+    assert.equal(result.delta, 0);
+    assert.equal(result.appCallsNewModule, false);
     assert.equal(result.classification, 'SCAFFOLD_ONLY');
 });
 

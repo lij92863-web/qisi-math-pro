@@ -30,7 +30,7 @@ const allTables = page => page.evaluate(async () => {
     } finally { database.close(); }
 });
 
-test('normal PDF import survives UI backup and restore on another isolated origin with sources, drafts and printable images', { timeout: 120000 }, async () => {
+test('full PDF import, edit, search, print, backup and isolated restore preserve 11 tables and image bytes', { timeout: 120000 }, async () => {
     const source = await H.startBrowserApp(33300);
     let target, preview;
     const safetyWrites = [];
@@ -54,14 +54,50 @@ test('normal PDF import survives UI backup and restore on another isolated origi
         const draft = imported.snapshot.drafts.find(q => q.questionNumber === '1');
         await H.callProxy(source.page, 'selectDraftQuestion', draft.id);
         for (const field of ['question', 'answer', 'solution']) await H.callProxy(source.page, 'choosePdfCandidate', field, 0);
+        const editorSource = await source.page.evaluate(() => Qisi.Runtime.getRuntimeDependency('AppProxy').activeDraftEditorBuffer);
+        await source.page.locator('.batch-latex-source-editor').fill('A1-DRAFT-EDIT\n\n' + editorSource);
+        assert.equal(await H.callProxy(source.page, 'saveActiveDraftQuestion', { silent:true }), true);
+        const savedDraft = (await H.getDbSnapshot(source.page)).drafts.find(row=>row.id===draft.id);
+        assert.match(savedDraft.stem, /A1-DRAFT-EDIT/);
+        assert.equal((await H.getDbSnapshot(source.page)).questions.length, 0);
         await H.callProxy(source.page, 'confirmDraftImages');
         await H.callProxy(source.page, 'markDraftReviewed');
         assert.equal((await H.getDbSnapshot(source.page)).questions.length, 0);
         assert.equal(await H.callProxy(source.page, 'submitDraftQuestion', draft.id, true), true);
+        const beforeFormalEdit = await allTables(source.page);
+        const formal = beforeFormalEdit.questions[0];
+        await H.callProxy(source.page, 'saveEditedQuestion', formal.id, formal.stem+'\n\nA1-CHAIN-EDIT', formal.images,
+            formal.grade, formal.type, formal.diff, formal.answer, formal.solution,
+            Array.isArray(formal.tags)?formal.tags.join(','):String(formal.tags||''),formal.options,formal.knowledge||'',formal.systemKnowledge||'',formal.personalKnowledge||'');
+        const afterFormalEdit = await allTables(source.page);
+        assert.match(afterFormalEdit.questions[0].stem,/A1-CHAIN-EDIT/);
+        assert.equal(afterFormalEdit.questions[0].answer,formal.answer);assert.equal(afterFormalEdit.questions[0].solution,formal.solution);
+        for(const table of Object.keys(beforeFormalEdit).filter(name=>name!=='questions'))assert.deepEqual(afterFormalEdit[table],beforeFormalEdit[table]);
+        await source.page.getByRole('button',{name:'题库与检索',exact:true}).click();
+        await source.page.getByPlaceholder('搜索题干、答案、解析',{exact:true}).fill('A1-NONEXISTENT-SEARCH-MARKER');
+        await source.page.waitForFunction(()=>Qisi.Runtime.getRuntimeDependency('AppProxy').filteredQuestions.length===0);
+        await source.page.getByPlaceholder('搜索题干、答案、解析',{exact:true}).fill('A1-CHAIN-EDIT');
+        await source.page.waitForFunction(()=>{const app=Qisi.Runtime.getRuntimeDependency('AppProxy');return app.filteredQuestions.length===1&&app.filteredQuestions[0].stem.includes('A1-CHAIN-EDIT');});
+        await source.page.getByPlaceholder('搜索题干、答案、解析',{exact:true}).fill('');
+        await source.page.waitForFunction(()=>Qisi.Runtime.getRuntimeDependency('AppProxy').librarySearchInput==='');
+        await source.page.evaluate(()=>{Qisi.Runtime.getRuntimeDependency('AppProxy').personalL1Name='A1 personal tree';});
+        assert.equal(await H.callProxy(source.page,'createPersonalL1'),true);
+        await H.callProxy(source.page,'triggerNewCustomTemplate');
+        await source.page.evaluate(()=>{const app=Qisi.Runtime.getRuntimeDependency('AppProxy');app.editTplName='A1 portable template';app.examConfig.fontFamily='霞鹜文楷';app.examConfig.fontSize='四号';});
+        assert.equal(await H.callProxy(source.page,'saveNewCustomTemplate'),true);
+        const savedTemplate=await source.page.evaluate(()=>Qisi.Runtime.getRuntimeDependency('AppProxy').customTemplates[0]);
+        await H.callProxy(source.page,'selectCustomTemplate',savedTemplate);
+        await H.callProxy(source.page,'toggleCart',formal.id);await H.callProxy(source.page,'openExamBuilder');
+        await source.page.evaluate(()=>{const app=Qisi.Runtime.getRuntimeDependency('AppProxy');app.exportMode='questions';app.examConfig.showAnswer=false;app.examConfig.showSolution=false;});
+        const sourceOpening=source.context.waitForEvent('page');await source.page.getByRole('button',{name:'打印 PDF',exact:true}).click();preview=await sourceOpening;
+        await preview.locator('#printBtn:not([disabled])').waitFor();assert.match(await preview.locator('.question-flow-body').textContent(),/A1-CHAIN-EDIT/);
+        assert.equal(await preview.locator('.missing-image,.latex-render-error').count(),0);await preview.close();preview=null;
         const original = await allTables(source.page);
         assert.equal(Object.keys(original).length, 11);
         assert.equal(original.questions.length, 1);
         assert.equal(original.images.length, 1);
+        assert.equal(original.customTemplates.length, 1);assert.equal(original.personalKnowledge.length, 1);
+        assert.equal(original.customTemplates[0].config.fontFamily,'霞鹜文楷');assert.equal(original.customTemplates[0].config.fontSize,'四号');
         assert.equal(original.draftQuestions.length, 2);
         assert.equal(original.draftImportFiles.length, 2);
         assert.equal(original.draftQuestions.find(q => q.questionNumber === '2').status, 'pending');
@@ -132,7 +168,12 @@ test('normal PDF import survives UI backup and restore on another isolated origi
         }, Array.from(safety.bytes));
         assert.deepEqual(safetyQuestions, empty.questions);
         await target.page.waitForFunction(() => Qisi.Runtime.getRuntimeDependency('AppProxy').questions.length === 1);
-        await H.callProxy(target.page, 'toggleCart', original.questions[0].id);
+        await target.page.waitForFunction(()=>{const app=Qisi.Runtime.getRuntimeDependency('AppProxy');return app.personalKnowledgeTree.length===1&&app.customTemplates.length===1;});
+        const restoredOwners=await target.page.evaluate(()=>{const app=Qisi.Runtime.getRuntimeDependency('AppProxy');return {tree:app.personalKnowledgeTree,template:app.customTemplates[0],cart:app.cart};});
+        assert.deepEqual(restoredOwners.tree,original.personalKnowledge[0].nodes);assert.deepEqual(restoredOwners.template,original.customTemplates[0]);
+        await H.callProxy(target.page,'selectCustomTemplate',restoredOwners.template);
+        assert.deepEqual(await target.page.evaluate(()=>{const app=Qisi.Runtime.getRuntimeDependency('AppProxy');return {font:app.examConfig.fontFamily,size:app.examConfig.fontSize};}),{font:'霞鹜文楷',size:'四号'});
+        if(!restoredOwners.cart.includes(original.questions[0].id))await H.callProxy(target.page,'toggleCart',original.questions[0].id);
         await H.callProxy(target.page, 'openExamBuilder');
         await target.page.getByRole('button', { name: '只打印题目', exact: true }).click();
         const opening = target.context.waitForEvent('page');
@@ -169,6 +210,7 @@ test('normal PDF import survives UI backup and restore on another isolated origi
                 archiveSha256: hash(bytes), archiveBytes: bytes.length,
                 tableCounts: Object.fromEntries(Object.entries(original).map(([table, rows]) => [table, rows.length])),
                 allDefinedValuesAndBinaryBytesRetained: true, pendingNeighbourRetained: true,
+                draftEditConfirmedBeforeAdmission:true,formalEditAndSearchVerified:true,sourcePrintBeforeBackup:true,personalTreeAndTemplateRestored:true,
                 safetyArchivePersistedBeforeRestore: true, restoredPrintImageMatchesSourceBytes: true,
                 systemPrintPerformed: false, realAiOcrCalls: 0, productionUserDataWritten: false,
                 limit: 'Undefined optional object properties are omitted as in JSON. Synthetic portability proof only; no real-paper or production-database certification.'

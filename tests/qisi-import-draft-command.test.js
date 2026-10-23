@@ -73,3 +73,37 @@ test('buildPersistReviewDraftBatchCall fails closed without a persist callback',
     assert.throws(() => command.buildPersistReviewDraftBatchCall({ command: null, persist: () => {} }),
         error => error.code === 'IMPORT_DRAFT_COMMAND_SERVICE_REQUIRED');
 });
+
+test('PDF producer assembly preserves source bytes and evidence while using the exact batch read scope', async () => {
+    let ports;
+    const calls = [], runner = () => {};
+    const renderPages = () => {}, getRoles = file => file.roles;
+    const factory = { createProducer(value) { ports = value; return runner; } };
+    const storage = { async findBy(...args) { calls.push(['read', ...args]); return [{ id: 'old', batchId: 'b' }]; },
+        async put(...args) { calls.push(['write', ...args]); return 'stored'; } };
+    assert.equal(command.createPdfProducer({ producer: factory, storage, renderPages, getRoles, clock: () => 90 }), runner);
+    assert.equal(ports.renderPages, renderPages); assert.equal(ports.getRoles, getRoles);
+    assert.deepEqual(await ports.getExistingDrafts('b'), [{ id: 'old', batchId: 'b' }]);
+    const file = Object.freeze({ id: 'f', batchId: 'b', uploadPath: 'data:application/pdf;base64,EXACT_BYTES',
+        sourceVersion: 7, roles: Object.freeze(['question']), updatedAt: 1 });
+    const evidence = Object.freeze({ protocol: 'pdf-mineru-v1', sourceSha256: 'a'.repeat(64), blocks: Object.freeze([]) });
+    assert.equal(await ports.persistSourceEvidence(file, evidence), 'stored');
+    assert.deepEqual(calls[0], ['read', 'draftQuestions', 'batchId', 'b']);
+    assert.deepEqual(calls[1], ['write', 'draftImportFiles', { ...file, pdfMineruEvidence: evidence, updatedAt: 90 }]);
+    assert.equal(file.updatedAt, 1); assert.equal(file.pdfMineruEvidence, undefined);
+});
+
+test('PDF assembly exposes read and source-evidence rejection without manufacturing empty drafts or success', async () => {
+    let ports;
+    const storage = { async findBy() { throw new Error('read rejected'); }, async put() { throw new Error('evidence rejected'); } };
+    command.createPdfProducer({ producer: { createProducer(value) { ports = value; return () => {}; } },
+        storage, renderPages() {}, getRoles() {} });
+    await assert.rejects(ports.getExistingDrafts('b'), /read rejected/);
+    const file = { id: 'f', batchId: 'b', updatedAt: 1 };
+    await assert.rejects(ports.persistSourceEvidence(file, {}), /evidence rejected/);
+    assert.deepEqual(file, { id: 'f', batchId: 'b', updatedAt: 1 });
+});
+
+test('PDF producer assembly requires explicit source, storage and renderer ports', () => {
+    assert.throws(() => command.createPdfProducer(), error => error.code === 'IMPORT_DRAFT_COMMAND_SOURCE_PORT_REQUIRED');
+});

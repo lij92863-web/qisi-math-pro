@@ -67,8 +67,228 @@
         return content + `</div>`;
     };
 
+    const escapeHtml = (text) => String(text || '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+    const createDocumentBuilder = ({ prepareSource, normalizeMath, tokenize, renderMath, displayImageUrl, groupQuestions,
+        typeOrder = [], defaultGroupConfig = {}, typeLabels = {}, sectionNumbers = [], warn = () => {} } = {}) => {
+        if ([prepareSource, normalizeMath, tokenize, renderMath, displayImageUrl, groupQuestions].some(port => typeof port !== 'function')) throw new Error('EXAM_PAPER_DEPENDENCY_REQUIRED');
+        const formatLatexForPrint = prepareSource, normalizeMathExpressionForPrint = normalizeMath, CHINESE_SECTION_NUMBERS = sectionNumbers;
+        const report = (diagnostics, event, details) => { diagnostics.push({ event, ...details }); warn(event, details); };
+        const groupSummaryText = group => group.text || `${group.title}：本大题共 ${group.count} 小题，每小题 ${Number(group.points || 0)} 分，共计 ${group.total} 分。`;
+        const printImageHtml = (img, align = 'center') => {
+                    const imageUrl = displayImageUrl(img?.url);
+                    if (!imageUrl) return `<span class="missing-image">[图片未加载]</span>`;
+                    const src = escapeHtml(imageUrl);
+                    const placement = align || img.align || 'center';
+                    if (placement === 'flushleft') return `<img class="print-image float-left" src="${src}" alt="题图" />`;
+                    if (placement === 'flushright') return `<img class="print-image float-right" src="${src}" alt="题图" />`;
+                    return `<img class="print-image centered" src="${src}" alt="题图" />`;
+                };
+        const applyPrintWritingRules = (html) => html
+                    .replace(/（\s*）/g, '<span class="answer-blank">（&nbsp;&nbsp;）</span>')
+                    .replace(/\(\s*\)/g, '<span class="answer-blank">(&nbsp;&nbsp;)</span>')
+                    .replace(/([（(])(<span class="katex[\s\S]*?<\/span>)([）)])/g, '<span class="nowrap">$1$2$3</span>');
+        const renderPrintPositionedImageBlocks = (source = '', images = []) => {
+                    const findPrintImage = (id) => {
+                        const key = String(id || '').trim();
+                        return (images || []).find(item =>
+                            String(item.id || '') === key ||
+                            String(item.filename || '') === key ||
+                            String(item.name || '') === key
+                        );
+                    };
+
+                    return String(source || '')
+                        .replace(
+                            /\\begin\{wrapfigure\}\s*\{([lr])\}\s*\{[^}]+\}[\s\S]*?\[\[(?:IMAGE|FORMULA_IMAGE):([^\]]+)\]\][\s\S]*?\\end\{wrapfigure\}/g,
+                            (block, side, id) => {
+                                const image = findPrintImage(id);
+                                return image
+                                    ? printImageHtml(image, side === 'l' ? 'flushleft' : 'flushright')
+                                    : `<span class="missing-image">[丢失:${escapeHtml(id)}]</span>`;
+                            }
+                        )
+                        .replace(
+                            /\\begin\{(center|flushleft|flushright)\}[\s\S]*?\[\[(?:IMAGE|FORMULA_IMAGE):([^\]]+)\]\][\s\S]*?\\end\{\1\}/g,
+                            (block, environment, id) => {
+                                const image = findPrintImage(id);
+                                return image
+                                    ? printImageHtml(image, environment)
+                                    : `<span class="missing-image">[丢失:${escapeHtml(id)}]</span>`;
+                            }
+                        )
+                        .replace(
+                            /\[\[(?:IMAGE|FORMULA_IMAGE):([^\]]+)\]\]/g,
+                            (match, id) => {
+                                const image = findPrintImage(id);
+                                return image
+                                    ? printImageHtml(image, 'center')
+                                    : `<span class="missing-image">[丢失:${escapeHtml(id)}]</span>`;
+                            }
+                        );
+                };
+        const renderPrintTextChunk = (text, images = []) => {
+                    const htmlChunks = [];
+                    const protectHtml = (html) => {
+                        const token = `@@QISI_PRINT_IMAGE_${htmlChunks.length}@@`;
+                        htmlChunks.push(html);
+                        return token;
+                    };
+                    const withTokenImages = renderPrintPositionedImageBlocks(text, images)
+                        .replace(/<img class="print-image[\s\S]*?alt="题图" \/>|<span class="missing-image">[\s\S]*?<\/span>/g, protectHtml);
+                    const escaped = escapeHtml(withTokenImages)
+                        .replace(/\n{2,}/g, '<br><br>')
+                        .replace(/\n/g, '');
+                    const withWrapFigures = escaped.replace(
+                        /\\begin\{wrapfigure\}\s*\{([lr])\}\s*\{[^}]+\}[\s\S]*?\\includegraphics(?:\[.*?\])?\{([^}]+)\}[\s\S]*?\\end\{wrapfigure\}/g,
+                        (match, side, id) => {
+                            const img = (images || []).find(item => String(item.id) === String(id).trim());
+                            return img
+                                ? printImageHtml(img, side === 'l' ? 'flushleft' : 'flushright')
+                                : `<span class="missing-image">[丢失:${escapeHtml(id)}]</span>`;
+                        }
+                    );
+                    const withImages = withWrapFigures.replace(/(?:\\begin\{(center|flushleft|flushright)\}\s*)?\\includegraphics(?:\[.*?\])?\{([^}]+)\}(?:\s*\\end\{(?:center|flushleft|flushright)\})?/g, (match, align, id) => {
+                        const img = (images || []).find(item =>
+                            String(item.id || '') === String(id).trim() ||
+                            String(item.filename || '') === String(id).trim() ||
+                            String(item.name || '') === String(id).trim()
+                        );
+                        return img ? printImageHtml(img, align) : `<span class="missing-image">[丢失:${escapeHtml(id)}]</span>`;
+                    });
+                    let restored = withImages;
+                    htmlChunks.forEach((chunk, index) => {
+                        restored = restored.replace(`@@QISI_PRINT_IMAGE_${index}@@`, chunk);
+                    });
+                    return applyPrintWritingRules(restored);
+                };
+        const renderSource = (text, images = [], diagnostics = []) => {
+                    const source = formatLatexForPrint(text).replace(/<br><br>/g, '\n\n');
+                    if (!source) return '';
+
+                    const parsed = tokenize(source);
+
+                    if (parsed.issues.length) {
+                        report(diagnostics, '[PRINT_LATEX][delimiter-issues]', { content: source, issues: parsed.issues });
+                    }
+
+                    return parsed.segments
+                        .map(segment => {
+                            if (segment.type !== 'math') {
+                                return renderPrintTextChunk(segment.raw, images);
+                            }
+
+                            if (
+                                /\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\]/.test(segment.raw) ||
+                                /\\includegraphics(?:\[[^\]]*\])?\{[^}]+\}/.test(segment.raw)
+                            ) {
+                                return renderPrintTextChunk(segment.expression || '', images);
+                            }
+
+                            const expression = normalizeMathExpressionForPrint(segment.expression);
+
+                            try {
+                                return renderMath(expression, {
+                                    displayMode: Boolean(segment.displayMode),
+                                    throwOnError: true,
+                                    strict: 'ignore',
+                                    trust: false
+                                });
+                            } catch (error) {
+                                report(diagnostics, '[PRINT_LATEX][failed]', {
+                                    raw: segment.raw,
+                                    expression,
+                                    message: error?.message || String(error)
+                                });
+
+                                return '<span class="latex-render-error">[公式语法错误] ' + escapeHtml(segment.raw || expression) + '</span>';
+                            }
+                        })
+                        .join('');
+                };
+        const buildPrintOptionsHtml = (q, diagnostics = []) => { const renderLatexForPrint = (text, images) => renderSource(text, images, diagnostics);
+                    if (!(q.type === '单选题' || q.type === '多选题')) {
+                        return '';
+                    }
+
+                    if (!Array.isArray(q.options) || !q.options.some(option => String(option || '').trim())) {
+                        return '';
+                    }
+
+                    const rows = q.options
+                        .map((option, index) => {
+                            if (!String(option || '').trim()) {
+                                return '';
+                            }
+
+                            return (
+                                '<div class="gaokao-option">' +
+                                    '<span class="option-label">' +
+                                        String.fromCharCode(65 + index) +
+                                        '.' +
+                                    '</span>' +
+                                    '<span class="option-content">' +
+                                        renderLatexForPrint(option, q.images || []) +
+                                    '</span>' +
+                                '</div>'
+                            );
+                        })
+                        .join('');
+
+                    return '<div class="gaokao-options qisi-flow-options">' + rows + '</div>';
+                };
+        const buildQuestionContent = (qs, paper, diagnostics) => {
+                    const renderLatexForPrint = (text, images) => renderSource(text, images, diagnostics);
+                    const examConfig = paper.config, examQuestionMeta = paper.questionMeta;
+                    const selectedExamTemplate = { value: paper.template }, examTitle = { value: paper.title };
+                    const groups = groupQuestions({ questions: qs, groupConfig: paper.groupConfig, questionMeta: paper.questionMeta, typeOrder, defaultGroupConfig, typeLabels });
+                    const headerClass = selectedExamTemplate.value === 'quizSheet' ? 'header quiz-sheet-header' : 'header';
+                    let content = `${examConfig.showCornerMarks ? '<div class="corner-marks"><i></i><i></i><i></i><i></i></div>' : ''}<main class="${examConfig.compactMode ? 'paper-compact' : ''} ${selectedExamTemplate.value === 'quizSheet' ? 'paper-quiz-sheet' : ''}">${selectedExamTemplate.value === 'examZh' && examConfig.showSecretMark ? '<div class="secret-mark">绝密 ★ 启用前</div>' : ''}<div class="${headerClass}">
+                        <div class="title" style="font-size:24px;font-weight:bold;margin-bottom:8px;">${escapeHtml(examConfig.title || examTitle.value)}</div>
+                        ${examConfig.subtitle ? `<div class="subtitle">${escapeHtml(examConfig.subtitle)}</div>` : ''}
+                        ${examConfig.organizer ? `<div class="organizer">组卷人：${escapeHtml(examConfig.organizer)}</div>` : ''}
+                        ${buildHeaderFields({ show: paper.config.showHeaderFields, template: paper.template })}
+                        ${buildAnswerGrid({ show: paper.config.showAnswerGrid, count: qs.length, config: paper.config })}
+                        ${buildNotice({ show: paper.config.showNotice, template: paper.template })}
+                    </div>`;
+
+                    let printIndex = 1;
+                    groups.forEach((group, groupIndex) => {
+                        const sectionNo = CHINESE_SECTION_NUMBERS[groupIndex] || String(groupIndex + 1);
+                        content += `<div class="group-title">${sectionNo}、${escapeHtml(groupSummaryText(group))}</div>`;
+                        group.items.forEach((q) => {
+                            const meta = examQuestionMeta[q.id] || {};
+                            const safeStem = renderLatexForPrint(q.stem, q.images || []);
+                            const optionsHtml = buildPrintOptionsHtml(q, diagnostics);
+
+                            content += `<div class="exam-question">
+                                <div class="question-row"><span class="q-index">${printIndex}.</span><div class="question-flow-body">${safeStem}${optionsHtml}</div></div>`;
+                            if (meta.note) content += `<div class="q-note">${escapeHtml(meta.note)}</div>`;
+                            if (examConfig.showAnswer && q.answer) content += `<div class="print-answer"><b>答案：</b>${renderLatexForPrint(q.answer, q.images || [])}</div>`;
+                            if (examConfig.showSolution && q.solution) content += `<div class="print-solution"><b>解析：</b>${renderLatexForPrint(q.solution, q.images || [])}</div>`;
+                            content += `</div>`;
+                            printIndex += 1;
+                        });
+                    });
+                    return content + `</main>`;
+                };
+        const buildPaper = ({ paper, questions = paper?.questions } = {}) => {
+            if (!['questions','withAnswers','split'].includes(paper?.mode)) throw new Error('EXAM_PAPER_MODE_INVALID');
+            if (!Array.isArray(questions) || !Array.isArray(paper.questions) || JSON.stringify(questions.map(q=>q?.id)) !== JSON.stringify(paper.questions.map(q=>q?.id))) throw new Error('EXAM_PAPER_SNAPSHOT_MISMATCH');
+            const diagnostics = [], questionsContent = buildQuestionContent(questions, paper, diagnostics);
+            const answersContent = paper.mode === 'questions' ? '' : buildAnswerContent({ questions, forceNewPage: paper.mode === 'withAnswers', render: (text, images) => renderSource(text, images, diagnostics) });
+            const documents = paper.mode === 'split' ? [{ title:'试题卷',content:questionsContent },{ title:'答案卷',content:answersContent }]
+                : [{ title:paper.mode==='withAnswers'?'试卷与答案':'试题卷',content:questionsContent+answersContent }];
+            return { questionsContent, answersContent, documents, diagnostics };
+        };
+        return Object.freeze({ buildPaper, render: renderSource, printImageHtml });
+    };
     return Object.freeze({
-        HEADER_FIELDS, NOTICE_EXAM_ZH, NOTICE_DEFAULT,
+        escapeHtml, createDocumentBuilder, HEADER_FIELDS, NOTICE_EXAM_ZH, NOTICE_DEFAULT,
         buildHeaderFields, buildAnswerGrid, buildNotice, buildAnswerContent
     });
 });

@@ -55,5 +55,57 @@
         return true;
     };
 
-    return Object.freeze({ runBatch, cancelBatch, rerunBatch });
+    const createWorkspace = ({ createController, bridge, storage, session,
+        canReuseCommittedRequest, sourceFor, afterRender, notify } = {}) => {
+        for (const port of [createController, bridge?.run, storage?.get, session?.captureNavigation,
+            session?.adoptImportResult, canReuseCommittedRequest, sourceFor, afterRender, notify]) {
+            requireDependency(port, 'IMPORT_WORKSPACE_PORT_REQUIRED');
+        }
+        const pending = new Map();
+        let disposed = false;
+        const controller = createController({
+            bridge, canReuseCommittedRequest,
+            loadBatch: batchId => storage.get('draftImportBatches', batchId),
+            applyReviewModel: async result => {
+                const activity = pending.get(result.batchId);
+                if (!activity || disposed) return;
+                activity.completed = true;
+                activity.applied = await session.adoptImportResult(result, activity.visit, { sourceFor, afterRender });
+            },
+            notifySuccess: ({ batchId, draftCount }) => {
+                if (disposed) return;
+                notify(`批量识别完成：生成 ${draftCount} 道草稿。` +
+                    (pending.get(batchId)?.applied ? '' : '当前页面有更新，请从任务列表打开审核。'));
+            },
+            notifyFailure: ({ batchId, code, message }) => {
+                if (!disposed) notify((pending.get(batchId)?.completed
+                    ? '草稿已生成，审核页面加载未完成：' : '批量识别失败：') + (message || code));
+            }
+        });
+        for (const name of ['run', 'cancel', 'isRunning']) requireDependency(controller?.[name], 'IMPORT_WORKSPACE_CONTROLLER_REQUIRED');
+        const run = (batchId, options) => {
+            if (disposed) return Promise.reject(Object.assign(new Error('IMPORT_WORKSPACE_DISPOSED'), { code: 'IMPORT_WORKSPACE_DISPOSED' }));
+            if (pending.has(batchId)) {
+                return pending.get(batchId).promise;
+            }
+            const activity = { visit: session.captureNavigation(), completed: false, applied: false, promise: null };
+            pending.set(batchId, activity);
+            try {
+                activity.promise = Promise.resolve(controller.run(batchId, options)).finally(() => {
+                    if (pending.get(batchId) === activity) pending.delete(batchId);
+                });
+                return activity.promise;
+            } catch (error) { pending.delete(batchId); return Promise.reject(error); }
+        };
+        const dispose = () => {
+            if (disposed) return;
+            disposed = true;
+            for (const batchId of pending.keys()) controller.cancel(batchId);
+            pending.clear();
+        };
+        return Object.freeze({ run, cancel: batchId => controller.cancel(batchId),
+            isRunning: batchId => controller.isRunning(batchId), dispose });
+    };
+
+    return Object.freeze({ runBatch, cancelBatch, rerunBatch, createWorkspace });
 });

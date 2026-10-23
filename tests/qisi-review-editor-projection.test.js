@@ -80,3 +80,17 @@ test('editor projection fails closed when the owning helpers are missing', () =>
     assert.throws(() => projection.buildEditorProjection({ source: 'x', question: question(), normalizeNewlines }),
         error => error.code === 'REVIEW_EDITOR_PROJECTION_SPLIT_HELPER_REQUIRED');
 });
+
+
+test('readonly source and preview preserve frozen zero, partial and full option evidence', () => {
+    for (const options of [[], ['first', 'second'], ['first', 'second', 'third', 'fourth']]) {
+        const q = Object.freeze(question({ options: Object.freeze(options) }));
+        const before = JSON.stringify(q);
+        const source = projection.buildEditorSource({ question: q, ...ports() });
+        assert.match(source, /stem/);
+        const preview = projection.buildEditorProjection({ source: 'unparsed source', question: q, ...ports() });
+        assert.deepEqual(preview.options, options);
+        assert.equal(preview.parsedOptions, false);
+        assert.equal(JSON.stringify(q), before);
+    }
+});
