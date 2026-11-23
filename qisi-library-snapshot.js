@@ -62,7 +62,7 @@
     const loadLibrarySnapshot = async (ports = {}) => {
         requireStorage(ports.storage, ['loadLibrary', 'listTable']);
         // Deliberately sequential, retaining the compatibility entry's read order.
-        const library = await readQuestionLibrary(ports);
+        const library = await (ports.readLibrary ? ports.readLibrary() : readQuestionLibrary(ports));
         const external = await readExternalLibrary(ports);
         const recent = await readRecentTasks(ports);
         const review = await readReviewWorkspace(ports);
@@ -73,7 +73,7 @@
 
     const createLibraryLoader = ({
         storage, draftPersistence, imageResources, urlPort, applyOptionSplit,
-        fingerprint, publish, afterPublish = async () => {}, warn
+        fingerprint, publish, afterPublish = async () => {}, warn, managedQuestions, deferImages = false
     } = {}) => {
         if (typeof imageResources?.createUrlScope !== 'function' ||
             typeof imageResources?.attachImageUrls !== 'function' ||
@@ -89,6 +89,7 @@
         };
         const run = async (domain, batchId = '') => {
             if (disposed) return false;
+            if (domain === 'library' && managedQuestions) return managedQuestions.refresh();
             const keys = domain === 'library' ? ['library'] : domain === 'external' ? ['external'] : ['library', 'external'];
             const request = Object.fromEntries(keys.map(key => [key, ++epochs[key]]));
             const current = () => !disposed && keys.every(key => request[key] === epochs[key]);
@@ -97,13 +98,16 @@
             }));
             const releasePrepared = () => { for (const scope of preparedScopes.values()) release(scope); };
             const ports = { storage, draftPersistence, batchId,
-                attachImages: (items, key) => imageResources.attachImageUrls({ items, storage,
-                    applyOptionSplit, createObjectUrl: preparedScopes.get(key).create, warn }) };
+                attachImages: (items, key) => deferImages ? imageResources.prepareStoredRows(items, applyOptionSplit)
+                    : imageResources.attachImageUrls({ items, storage,
+                        applyOptionSplit, createObjectUrl: preparedScopes.get(key).create, warn }) };
+            if (managedQuestions) ports.readLibrary = async () => { await managedQuestions.refresh(); return {}; };
             let snapshot;
             try {
                 if (domain === 'all') snapshot = { ...await loadLibrarySnapshot(ports), batchId };
                 else if (domain === 'banks') {
-                    const library = await readQuestionLibrary(ports), external = await readExternalLibrary(ports);
+                    const library = await (ports.readLibrary ? ports.readLibrary() : readQuestionLibrary(ports));
+                    const external = await readExternalLibrary(ports);
                     snapshot = { ...library, ...external, domain };
                 } else snapshot = { ...await (domain === 'library' ? readQuestionLibrary(ports) : readExternalLibrary(ports)), domain };
                 if (Object.hasOwn(snapshot, 'questions')) {
@@ -139,5 +143,89 @@
             refreshQuestionBanks: () => run('banks'), dispose });
     };
 
-    return Object.freeze({ readQuestionLibrary, readExternalLibrary, readRecentTasks, readReviewWorkspace, readTemplates, readPersonalKnowledge, loadLibrarySnapshot, createLibraryLoader });
+    // Dexie reports primary-key changes after commit, including commits in other tabs.
+    // A clear/restore reports a range, so only those operations require a fresh snapshot.
+    const createQuestionChangeFeed = ({
+        storage, databaseName, mutationEvents, replace, apply, report,
+        onStale = () => {}, schedule = setTimeout, cancel = clearTimeout
+    }) => {
+        let reset = true, pending, disposed = false, ids = new Set();
+        const retryDelays = [500, 2000, 5000];
+        let failures = 0, retryTimer;
+        const cancelRetry = () => {
+            if (retryTimer === undefined) return;
+            cancel(retryTimer);
+            retryTimer = undefined;
+        };
+        const read = () => {
+            if (pending) return pending;
+            pending = Promise.resolve().then(async () => {
+                try {
+                    while (!disposed && (reset || ids.size)) {
+                        const full = reset, changed = [...ids];
+                        reset = false;
+                        ids = new Set();
+                        try {
+                            const records = await (full ? storage.loadLibrary() : storage.loadQuestionsById(changed));
+                            if (!disposed) full ? replace(records) : apply(changed, records);
+                        } catch (error) {
+                            if (full) reset = true;
+                            else changed.forEach(id => ids.add(id));
+                            throw error;
+                        }
+                    }
+                    if (!disposed && failures) {
+                        failures = 0;
+                        onStale(false);
+                    }
+                    return !disposed;
+                } catch (error) {
+                    if (!disposed) {
+                        const delay = retryDelays[failures++];
+                        onStale(true);
+                        if (failures === 1) report?.(error);
+                        if (delay !== undefined) retryTimer = schedule(() => {
+                            retryTimer = undefined;
+                            read().catch(() => {});
+                        }, delay);
+                    }
+                    throw error;
+                } finally {
+                    // A later notification must start a new read after this queue drains.
+                    pending = undefined;
+                }
+            });
+            return pending;
+        };
+        const refresh = () => {
+            cancelRetry();
+            return read();
+        };
+        const onChange = parts => {
+            const range = parts?.[`idb://${databaseName}/questions/`];
+            if (!range || disposed) return;
+            const nodes = [range];
+            while (nodes.length && !reset) {
+                const node = nodes.pop();
+                if (!node.d) continue;
+                if (node.from !== node.to || !['number', 'string'].includes(typeof node.from)) {
+                    reset = true;
+                    ids.clear();
+                    break;
+                }
+                ids.add(node.from);
+                if (node.l) nodes.push(node.l);
+                if (node.r) nodes.push(node.r);
+            }
+            if (!failures) read().catch(() => {});
+        };
+        mutationEvents.subscribe(onChange);
+        return Object.freeze({ refresh, dispose() {
+            disposed = true;
+            cancelRetry();
+            mutationEvents.unsubscribe(onChange);
+        } });
+    };
+
+    return Object.freeze({ readQuestionLibrary, readExternalLibrary, readRecentTasks, readReviewWorkspace, readTemplates, readPersonalKnowledge, loadLibrarySnapshot, createLibraryLoader, createQuestionChangeFeed });
 });

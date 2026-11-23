@@ -11,7 +11,7 @@ const {
     assertNoRuntimeErrors
 } = require('./browser-harness.js');
 
-test('seeded-review-ui-lifecycle: seeded drafts reach edit, confirm, and formal insertion', {
+test('seeded-review-ui-lifecycle: direct admission saves the current answer and solution', {
     timeout: 90000
 }, async () => {
     const harness = await startBrowserApp(32102);
@@ -58,21 +58,13 @@ test('seeded-review-ui-lifecycle: seeded drafts reach edit, confirm, and formal 
         await page.getByRole('button', { name: /保存修改/ }).click();
 
         await page.getByRole('button', { name: '答案内容' }).click();
-        await page.locator('.batch-editor-card.content textarea').fill('B');
+        await page.getByRole('textbox', { name: '答案源码', exact: true }).fill('B');
 
         await page.getByRole('button', { name: '解析内容' }).click();
-        await page.locator('.batch-editor-card.content textarea')
+        await page.getByRole('textbox', { name: '解析源码', exact: true })
             .fill('E2E updated solution');
-        await page.getByRole('button', { name: /保存修改/ }).click();
-
-        await page.getByRole('button', { name: /标记已确认/ }).click();
-        await waitForDbSnapshot(page, snapshot =>
-            snapshot.drafts.some(item =>
-                item.questionNumber === '1' &&
-                item.status === 'reviewed'
-            )
-        );
-        await page.getByRole('button', { name: /提交入库/ }).click();
+        await page.getByRole('button', { name: '确认审核', exact: true }).click();
+        await page.getByRole('button', { name: '入库并下一题', exact: true }).click();
 
         const snapshot = await waitForDbSnapshot(
             page,

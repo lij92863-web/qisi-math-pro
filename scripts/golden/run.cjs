@@ -93,7 +93,10 @@ async function confirmThroughUi(h, draft, { timeout = 15000 } = {}) {
     const onNavigation = frame => { if (frame === h.page.mainFrame()) navigated = true; };
     h.page.on('framenavigated', onNavigation);
     try {
-        await h.page.getByRole('button', { name: '仅标记已确认', exact: true }).click();
+        await h.page.getByRole('button', { name: '总览', exact: true }).click();
+        const number = draft.questionNumber || draft.order;
+        await h.page.getByRole('checkbox', { name: '选择第 ' + number + ' 题', exact: true }).check();
+        await h.page.getByRole('button', { name: '确认选中 1 题', exact: true }).click();
         await H.waitForDbSnapshot(h.page, snapshot => snapshot.drafts.some(row =>
             row.id === draft.id && row.status === 'reviewed' && row.version > draft.version), { timeout });
         await h.page.waitForFunction(id => {
@@ -101,7 +104,7 @@ async function confirmThroughUi(h, draft, { timeout = 15000 } = {}) {
             return proxy?.activeDraftQuestion?.id === id &&
                 proxy.activeDraftQuestion.status === 'reviewed' &&
                 !proxy.activeDraftEditorDirty &&
-                document.querySelector('.batch-toast')?.textContent?.includes('已标记为确认。');
+                document.querySelector('.batch-toast')?.textContent?.includes('已确认 1 题。');
         }, draft.id, { timeout });
         if (navigated) throw new Error('GOLDEN_UNEXPECTED_REVIEW_NAVIGATION');
     } finally {

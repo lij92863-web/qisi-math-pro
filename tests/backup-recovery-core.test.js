@@ -80,3 +80,14 @@ test('N27 preference allowlist roundtrips and can roll back without exporting cr
   Backup.restorePreferences(undefined);assert.equal(values.get('qisi_teacher_name'),'Other');
  }finally{if(old===undefined)delete globalThis.localStorage;else globalThis.localStorage=old;}
 });
+
+test('large JSON tables split into compatible ZIP members and restore in record order', async () => {
+    const rows = data();
+    rows.questions = Array.from({ length: 10 }, (_, index) =>
+        ({ id: 'large-' + index, stem: String(index).repeat(1024 * 1024) }));
+    const created = await Backup.createFullDatabaseBackup(db(rows));
+    assert.equal(created.manifest.version, 2);
+    assert.equal(created.manifest.tables.questions.parts, 2);
+    const restored = await Backup.readFullDatabaseBackupBlob(created.blob);
+    assert.deepEqual(restored.backup.tables.questions, rows.questions);
+});

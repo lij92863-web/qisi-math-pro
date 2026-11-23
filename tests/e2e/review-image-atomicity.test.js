@@ -24,6 +24,7 @@ test('real delete button leaves draft, image and editor unchanged on storage fai
         }, batchId);
         await H.callProxy(h.page, 'openBatchReview', batchId);
         await h.page.evaluate(() => { window.Qisi.Runtime.getRuntimeDependency('AppProxy').view = 'batchImport'; });
+        await h.page.locator('.v-review-diagnostics').evaluate(el => { el.open = true; });
         const before = await H.getDbSnapshot(h.page);
         const beforeUi = await h.page.evaluate(() => {
             const p = window.Qisi.Runtime.getRuntimeDependency('AppProxy');

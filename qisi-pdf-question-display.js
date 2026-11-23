@@ -5,8 +5,24 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function() {
     'use strict';
     // Pure display projection. Raw evidence, source identity and admission are owned elsewhere.
-    const pureSectionHeading = block => block.type === 'text' && !block.parentId &&
-        /^(?:[一二三四五六七八九十]+[、．.]\s*)?(?:单项选择题|单选题|多项选择题|多选题|填空题|解答题)[：:]?$/.test(String(block.text || '').trim());
+    const SECTION_TYPES = { 单项选择题: 'single_choice', 单选题: 'single_choice',
+        多项选择题: 'multiple_choice', 多选题: 'multiple_choice', 填空题: 'fill_blank', 解答题: 'free_response' };
+    const SECTION_HEADING = /^(?:[一二三四五六七八九十]+[、．.]\s*)?(单项选择题|单选题|多项选择题|多选题|填空题|解答题|选择题)(?=[：:（(\s]|$)/;
+    const SCORE_SUMMARY = /^本(?:题|大题)共\d+小题[，,](?:每小题\d+分[，,])?共\d+分[.。]?/;
+    function sectionHeading(block) {
+        if (block.type !== 'text' || block.parentId) return null;
+        const text = String(block.text || '').trim();
+        const match = text.match(SECTION_HEADING);
+        if (!match) return null;
+        const instructions = text.slice(match[0].length).replace(/^\s*[：:]?\s*/, '').replace(/[ \t]/g, '');
+        const directions = instructions.replace(SCORE_SUMMARY, '');
+        const single = /^在每小题给出的(?:四个|4个)选项中[，,]只有一个选项是正确的[.。]请把正确的选项填涂在答题卡相应的位置上[.。]?$/.test(directions);
+        const multiple = /^在每小题给出的选项中[，,]有多项符合题目要求[.。]全部选对得\d+分[，,]选对但不全的得部分分[，,]有选错的得0分[.。]?$/.test(directions);
+        const type = SECTION_TYPES[match[1]] || (single ? 'single_choice' : multiple ? 'multiple_choice' : 'unknown');
+        const standalone = !instructions || (SCORE_SUMMARY.test(instructions) &&
+            (!directions || single || multiple || /^解答应写出文字说明、证明过程或演算步骤[.。]?$/.test(directions)));
+        return { type, standalone };
+    }
     function projectQuestionText(text, type, utils) {
         if (type === 'free_response' || type === 'fill_blank') return { stem: text, options: [], optionLabels: [] };
         const original = utils.splitOptionLabels(text);
@@ -55,7 +71,7 @@
         return output.join('\n');
     }
     function questionDisplayBlocks(blocks, type, utils, numberStart) {
-        const kept = blocks.filter(block => !pureSectionHeading(block));
+        const kept = blocks.filter(block => !sectionHeading(block)?.standalone);
         if (!['single_choice', 'multiple_choice'].includes(type)) return kept;
         const parents = new Map(kept.map(block => [block.id, block])), captions = new Map();
         for (const block of kept) {
@@ -73,5 +89,5 @@
         const split = projectQuestionText(preview, type, utils);
         return split.optionLabels.join('') === 'ABCD' && split.options.every(text => text.trim()) ? ordered : kept;
     }
-    return Object.freeze({ projectQuestionText, tableDisplayText, questionDisplayBlocks });
+    return Object.freeze({ projectQuestionText, tableDisplayText, questionDisplayBlocks, sectionHeading });
 });

@@ -94,7 +94,9 @@ test('N5/N6 metadata-only edits remain dirty, protect unload and persist before 
   // Exercise the UI action and its durable result. Awaiting the async proxy via
   // CDP can report "Promise was collected" after the save has already succeeded.
   const formalCountBefore=(await getDbSnapshot(page)).questions.length;
-  await page.getByRole('button',{name:'仅标记已确认',exact:true}).click();
+  await page.getByRole('button',{name:'总览',exact:true}).click();
+  await page.getByRole('checkbox',{name:'选择第 1 题',exact:true}).check();
+  await page.getByRole('button',{name:'确认选中 1 题',exact:true}).click();
   const snapshot=await waitForDbSnapshot(page,s=>s.drafts.some(q=>q.batchId===id&&q.status==='reviewed'));
   await page.waitForFunction(()=>!window.Qisi.Runtime.getRuntimeDependency('AppProxy').activeDraftEditorDirty);
   const q=snapshot.drafts.find(q=>q.batchId===id);

@@ -92,7 +92,7 @@
                     .replace(/（\s*）/g, '<span class="answer-blank">（&nbsp;&nbsp;）</span>')
                     .replace(/\(\s*\)/g, '<span class="answer-blank">(&nbsp;&nbsp;)</span>')
                     .replace(/([（(])(<span class="katex[\s\S]*?<\/span>)([）)])/g, '<span class="nowrap">$1$2$3</span>');
-        const renderPrintPositionedImageBlocks = (source = '', images = []) => {
+        const renderPrintPositionedImageBlocks = (source, images, protectHtml) => {
                     const findPrintImage = (id) => {
                         const key = String(id || '').trim();
                         return (images || []).find(item =>
@@ -107,49 +107,49 @@
                             /\\begin\{wrapfigure\}\s*\{([lr])\}\s*\{[^}]+\}[\s\S]*?\[\[(?:IMAGE|FORMULA_IMAGE):([^\]]+)\]\][\s\S]*?\\end\{wrapfigure\}/g,
                             (block, side, id) => {
                                 const image = findPrintImage(id);
-                                return image
+                                return protectHtml(image
                                     ? printImageHtml(image, side === 'l' ? 'flushleft' : 'flushright')
-                                    : `<span class="missing-image">[丢失:${escapeHtml(id)}]</span>`;
+                                    : `<span class="missing-image">[丢失:${escapeHtml(id)}]</span>`);
                             }
                         )
                         .replace(
                             /\\begin\{(center|flushleft|flushright)\}[\s\S]*?\[\[(?:IMAGE|FORMULA_IMAGE):([^\]]+)\]\][\s\S]*?\\end\{\1\}/g,
                             (block, environment, id) => {
                                 const image = findPrintImage(id);
-                                return image
+                                return protectHtml(image
                                     ? printImageHtml(image, environment)
-                                    : `<span class="missing-image">[丢失:${escapeHtml(id)}]</span>`;
+                                    : `<span class="missing-image">[丢失:${escapeHtml(id)}]</span>`);
                             }
                         )
                         .replace(
                             /\[\[(?:IMAGE|FORMULA_IMAGE):([^\]]+)\]\]/g,
                             (match, id) => {
                                 const image = findPrintImage(id);
-                                return image
+                                return protectHtml(image
                                     ? printImageHtml(image, 'center')
-                                    : `<span class="missing-image">[丢失:${escapeHtml(id)}]</span>`;
+                                    : `<span class="missing-image">[丢失:${escapeHtml(id)}]</span>`);
                             }
                         );
                 };
         const renderPrintTextChunk = (text, images = []) => {
                     const htmlChunks = [];
+                    // Only HTML generated from image references is trusted. Source
+                    // text cannot claim a slot, even if it resembles our markup.
+                    let prefix = '@@QISI_PRINT_IMAGE_';
+                    while (String(text).replace(/\n/g, '').includes(prefix)) prefix += '_';
                     const protectHtml = (html) => {
-                        const token = `@@QISI_PRINT_IMAGE_${htmlChunks.length}@@`;
+                        const token = `${prefix}${htmlChunks.length}@@`;
                         htmlChunks.push(html);
                         return token;
                     };
-                    const withTokenImages = renderPrintPositionedImageBlocks(text, images)
-                        .replace(/<img class="print-image[\s\S]*?alt="题图" \/>|<span class="missing-image">[\s\S]*?<\/span>/g, protectHtml);
-                    const escaped = escapeHtml(withTokenImages)
-                        .replace(/\n{2,}/g, '<br><br>')
-                        .replace(/\n/g, '');
-                    const withWrapFigures = escaped.replace(
+                    const withTokenImages = renderPrintPositionedImageBlocks(text, images, protectHtml);
+                    const withWrapFigures = withTokenImages.replace(
                         /\\begin\{wrapfigure\}\s*\{([lr])\}\s*\{[^}]+\}[\s\S]*?\\includegraphics(?:\[.*?\])?\{([^}]+)\}[\s\S]*?\\end\{wrapfigure\}/g,
                         (match, side, id) => {
                             const img = (images || []).find(item => String(item.id) === String(id).trim());
-                            return img
+                            return protectHtml(img
                                 ? printImageHtml(img, side === 'l' ? 'flushleft' : 'flushright')
-                                : `<span class="missing-image">[丢失:${escapeHtml(id)}]</span>`;
+                                : `<span class="missing-image">[丢失:${escapeHtml(id)}]</span>`);
                         }
                     );
                     const withImages = withWrapFigures.replace(/(?:\\begin\{(center|flushleft|flushright)\}\s*)?\\includegraphics(?:\[.*?\])?\{([^}]+)\}(?:\s*\\end\{(?:center|flushleft|flushright)\})?/g, (match, align, id) => {
@@ -158,12 +158,15 @@
                             String(item.filename || '') === String(id).trim() ||
                             String(item.name || '') === String(id).trim()
                         );
-                        return img ? printImageHtml(img, align) : `<span class="missing-image">[丢失:${escapeHtml(id)}]</span>`;
+                        return protectHtml(img ? printImageHtml(img, align) : `<span class="missing-image">[丢失:${escapeHtml(id)}]</span>`);
                     });
-                    let restored = withImages;
-                    htmlChunks.forEach((chunk, index) => {
-                        restored = restored.replace(`@@QISI_PRINT_IMAGE_${index}@@`, chunk);
-                    });
+                    const escaped = escapeHtml(withImages)
+                        .replace(/\n{2,}/g, '<br><br>')
+                        .replace(/\n/g, '');
+                    // A single pass never interprets placeholder-like text in
+                    // generated URLs as another slot.
+                    const restored = escaped.replace(new RegExp(prefix + '(\\d+)@@', 'g'),
+                        (token, index) => htmlChunks[Number(index)] ?? token);
                     return applyPrintWritingRules(restored);
                 };
         const renderSource = (text, images = [], diagnostics = []) => {

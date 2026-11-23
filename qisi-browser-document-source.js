@@ -314,53 +314,56 @@
                 './vendor/pdfjs/pdf.worker.min.js';
 
             const buffer = await (await dataUrlToBlob(file.uploadPath)).arrayBuffer();
-            const pdf = await root.pdfjsLib.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false }).promise;
-            const pages = root.Qisi.Utils.expandPageRange(file.pageRange, pdf.numPages);
-            const pageTexts = [];
+            const task = root.pdfjsLib.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false });
+            try {
+                const pdf = await task.promise;
+                const pages = root.Qisi.Utils.expandPageRange(file.pageRange, pdf.numPages);
+                const pageTexts = [];
 
-            for (const pageNo of pages) {
-                const page = await pdf.getPage(pageNo);
-                const content = await page.getTextContent();
-                const items = (content.items || [])
-                    .map(item => {
-                        const t = item.transform || [1, 0, 0, 1, 0, 0];
-                        return {
-                            str: item.str || '',
-                            x: t[4] || 0,
-                            y: t[5] || 0
-                        };
-                    })
-                    .filter(item => item.str.trim());
+                for (const pageNo of pages) {
+                    const page = await pdf.getPage(pageNo);
+                    const content = await page.getTextContent();
+                    const items = (content.items || [])
+                        .map(item => {
+                            const t = item.transform || [1, 0, 0, 1, 0, 0];
+                            return {
+                                str: item.str || '',
+                                x: t[4] || 0,
+                                y: t[5] || 0
+                            };
+                        })
+                        .filter(item => item.str.trim());
 
-                items.sort((a, b) => {
-                    if (Math.abs(b.y - a.y) > 4) return b.y - a.y;
-                    return a.x - b.x;
-                });
+                    items.sort((a, b) => {
+                        if (Math.abs(b.y - a.y) > 4) return b.y - a.y;
+                        return a.x - b.x;
+                    });
 
-                const lines = [];
-                let current = [];
-                let lastY = null;
+                    const lines = [];
+                    let current = [];
+                    let lastY = null;
 
-                for (const item of items) {
-                    if (lastY === null || Math.abs(item.y - lastY) <= 4) {
-                        current.push(item);
-                    } else {
-                        lines.push(current);
-                        current = [item];
+                    for (const item of items) {
+                        if (lastY === null || Math.abs(item.y - lastY) <= 4) {
+                            current.push(item);
+                        } else {
+                            lines.push(current);
+                            current = [item];
+                        }
+                        lastY = item.y;
                     }
-                    lastY = item.y;
+
+                    if (current.length) lines.push(current);
+
+                    pageTexts.push(
+                        lines
+                            .map(line => line.sort((a, b) => a.x - b.x).map(x => x.str).join(' '))
+                            .join('\n')
+                    );
                 }
 
-                if (current.length) lines.push(current);
-
-                pageTexts.push(
-                    lines
-                        .map(line => line.sort((a, b) => a.x - b.x).map(x => x.str).join(' '))
-                        .join('\n')
-                );
-            }
-
-            return pageTexts.join('\n\n');
+                return pageTexts.join('\n\n');
+            } finally { await task.destroy?.(); }
         };
 
         const extractPdfLayoutWithPdfJs = async (file, options = {}) => {
@@ -373,109 +376,112 @@
                 './vendor/pdfjs/pdf.worker.min.js';
 
             const buffer = await (await dataUrlToBlob(file.uploadPath)).arrayBuffer();
-            const pdf = await root.pdfjsLib.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false }).promise;
-            const pages = root.Qisi.Utils.expandPageRange(file.pageRange, pdf.numPages);
-            const layouts = [];
+            const task = root.pdfjsLib.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false });
+            try {
+                const pdf = await task.promise;
+                const pages = root.Qisi.Utils.expandPageRange(file.pageRange, pdf.numPages);
+                const layouts = [];
 
-            for (const pageNo of pages) {
-                const page = await pdf.getPage(pageNo);
-                const viewport = page.getViewport({ scale: PDF_PROCESS_CONFIG.renderScale || 2 });
-                const content = await page.getTextContent();
-                const operatorCount = options.includeOperatorCount === true
-                    ? (await page.getOperatorList()).fnArray.length
-                    : undefined;
-                const annotationCount = options.includeOperatorCount === true
-                    ? (await page.getAnnotations({ intent: 'display' })).length
-                    : undefined;
+                for (const pageNo of pages) {
+                    const page = await pdf.getPage(pageNo);
+                    const viewport = page.getViewport({ scale: PDF_PROCESS_CONFIG.renderScale || 2 });
+                    const content = await page.getTextContent();
+                    const operatorCount = options.includeOperatorCount === true
+                        ? (await page.getOperatorList()).fnArray.length
+                        : undefined;
+                    const annotationCount = options.includeOperatorCount === true
+                        ? (await page.getAnnotations({ intent: 'display' })).length
+                        : undefined;
 
-                const items = (content.items || [])
-                    .map(item => {
-                        const str = String(item.str || '').trim();
-                        if (!str) return null;
+                    const items = (content.items || [])
+                        .map(item => {
+                            const str = String(item.str || '').trim();
+                            if (!str) return null;
 
-                        const t = root.pdfjsLib.Util.transform(viewport.transform, item.transform || [1, 0, 0, 1, 0, 0]);
-                        const x = t[4] || 0;
-                        const y = t[5] || 0;
-                        const w = Math.max(1, (item.width || 0) * (PDF_PROCESS_CONFIG.renderScale || 2));
-                        const h = Math.max(8, Math.abs(item.height || 10) * (PDF_PROCESS_CONFIG.renderScale || 2));
+                            const t = root.pdfjsLib.Util.transform(viewport.transform, item.transform || [1, 0, 0, 1, 0, 0]);
+                            const x = t[4] || 0;
+                            const y = t[5] || 0;
+                            const w = Math.max(1, (item.width || 0) * (PDF_PROCESS_CONFIG.renderScale || 2));
+                            const h = Math.max(8, Math.abs(item.height || 10) * (PDF_PROCESS_CONFIG.renderScale || 2));
+
+                            return {
+                                str,
+                                x1: x,
+                                y1: y - h,
+                                x2: x + w,
+                                y2: y,
+                                cx: x + w / 2,
+                                cy: y - h / 2
+                            };
+                        })
+                        .filter(Boolean);
+
+                    items.sort((a, b) => {
+                        if (Math.abs(a.y1 - b.y1) > 5) return a.y1 - b.y1;
+                        return a.x1 - b.x1;
+                    });
+
+                    const lines = [];
+                    let current = [];
+                    let lastY = null;
+
+                    for (const item of items) {
+                        if (lastY === null || Math.abs(item.y1 - lastY) <= 6) {
+                            current.push(item);
+                        } else {
+                            if (current.length) lines.push(current);
+                            current = [item];
+                        }
+                        lastY = item.y1;
+                    }
+                    if (current.length) lines.push(current);
+
+                    const normalizedLines = lines.map(lineItems => {
+                        const sorted = [...lineItems].sort((a, b) => a.x1 - b.x1);
+                        const text = sorted.map(item => item.str).join(' ').replace(/\s+/g, ' ').trim();
+
+                        const x1 = Math.min(...sorted.map(item => item.x1));
+                        const y1 = Math.min(...sorted.map(item => item.y1));
+                        const x2 = Math.max(...sorted.map(item => item.x2));
+                        const y2 = Math.max(...sorted.map(item => item.y2));
 
                         return {
-                            str,
-                            x1: x,
-                            y1: y - h,
-                            x2: x + w,
-                            y2: y,
-                            cx: x + w / 2,
-                            cy: y - h / 2
+                            text,
+                            tokens: sorted.map(item => ({ text: item.str,
+                                bbox: [item.x1 / viewport.width, item.y1 / viewport.height,
+                                    item.x2 / viewport.width, item.y2 / viewport.height].map(value => Math.round(value * 1000)) })),
+                            x1,
+                            y1,
+                            x2,
+                            y2,
+                            nx1: Math.round(x1 / viewport.width * 1000),
+                            ny1: Math.round(y1 / viewport.height * 1000),
+                            nx2: Math.round(x2 / viewport.width * 1000),
+                            ny2: Math.round(y2 / viewport.height * 1000)
                         };
-                    })
-                    .filter(Boolean);
+                    }).filter(line => line.text);
 
-                items.sort((a, b) => {
-                    if (Math.abs(a.y1 - b.y1) > 5) return a.y1 - b.y1;
-                    return a.x1 - b.x1;
-                });
-
-                const lines = [];
-                let current = [];
-                let lastY = null;
-
-                for (const item of items) {
-                    if (lastY === null || Math.abs(item.y1 - lastY) <= 6) {
-                        current.push(item);
-                    } else {
-                        if (current.length) lines.push(current);
-                        current = [item];
-                    }
-                    lastY = item.y1;
+                    layouts.push({
+                        pageNo,
+                        width: viewport.width,
+                        height: viewport.height,
+                        ...(operatorCount === undefined ? {} : { operatorCount }),
+                        ...(annotationCount === undefined ? {} : { annotationCount }),
+                        lines: normalizedLines
+                    });
                 }
-                if (current.length) lines.push(current);
 
-                const normalizedLines = lines.map(lineItems => {
-                    const sorted = [...lineItems].sort((a, b) => a.x1 - b.x1);
-                    const text = sorted.map(item => item.str).join(' ').replace(/\s+/g, ' ').trim();
+                console.groupCollapsed(`[BATCH_V2][pdf-layout] ${file.filename || ''}`);
+                console.table(layouts.flatMap(page => page.lines.map(line => ({
+                    pageNo: page.pageNo,
+                    y: `${line.ny1}-${line.ny2}`,
+                    x: `${line.nx1}-${line.nx2}`,
+                    text: line.text.slice(0, 120)
+                }))));
+                console.groupEnd();
 
-                    const x1 = Math.min(...sorted.map(item => item.x1));
-                    const y1 = Math.min(...sorted.map(item => item.y1));
-                    const x2 = Math.max(...sorted.map(item => item.x2));
-                    const y2 = Math.max(...sorted.map(item => item.y2));
-
-                    return {
-                        text,
-                        tokens: sorted.map(item => ({ text: item.str,
-                            bbox: [item.x1 / viewport.width, item.y1 / viewport.height,
-                                item.x2 / viewport.width, item.y2 / viewport.height].map(value => Math.round(value * 1000)) })),
-                        x1,
-                        y1,
-                        x2,
-                        y2,
-                        nx1: Math.round(x1 / viewport.width * 1000),
-                        ny1: Math.round(y1 / viewport.height * 1000),
-                        nx2: Math.round(x2 / viewport.width * 1000),
-                        ny2: Math.round(y2 / viewport.height * 1000)
-                    };
-                }).filter(line => line.text);
-
-                layouts.push({
-                    pageNo,
-                    width: viewport.width,
-                    height: viewport.height,
-                    ...(operatorCount === undefined ? {} : { operatorCount }),
-                    ...(annotationCount === undefined ? {} : { annotationCount }),
-                    lines: normalizedLines
-                });
-            }
-
-            console.groupCollapsed(`[BATCH_V2][pdf-layout] ${file.filename || ''}`);
-            console.table(layouts.flatMap(page => page.lines.map(line => ({
-                pageNo: page.pageNo,
-                y: `${line.ny1}-${line.ny2}`,
-                x: `${line.nx1}-${line.nx2}`,
-                text: line.text.slice(0, 120)
-            }))));
-            console.groupEnd();
-
-            return layouts;
+                return layouts;
+            } finally { await task.destroy?.(); }
         };
 
         const extractTextFromDraftFile = async (file) => {

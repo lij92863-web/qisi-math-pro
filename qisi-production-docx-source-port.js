@@ -123,9 +123,12 @@
                 throw createError('DOCX_SUPPORT_PARSER_REQUIRED');
             }
             assertActive(signal);
+            const roles = supportRoles(source);
             const parsed = await importer.parseDocxFile(source, {
                 batch,
                 expectedQuestionNumbers,
+                supportAnswerMode: !isQuestionSource(source) && roles.includes('answer')
+                    ? (roles.length === 1 ? 'answer-only' : 'answer-and-solution') : '',
                 defaultMeta: batch.defaultMeta || defaultMeta(),
                 helpers: {
                     cleanDisplayTextForBatchSave: cleanText,
@@ -136,7 +139,7 @@
             if (!parsed || !Array.isArray(parsed.drafts)) {
                 throw createError('DOCX_SUPPORT_RESULT_MALFORMED');
             }
-            const text = parsed.supportText || parsed.drafts.map(draft =>
+            const text = parsed.supportSectionDeclared ? (parsed.supportText || '') : parsed.supportText || parsed.drafts.map(draft =>
                 draft.renderableText || draft.rawBlock || draft.stem || ''
             ).filter(Boolean).join('\n');
             // Word support often has a bare number followed immediately by an explicit label.
@@ -150,7 +153,8 @@
             // identities when answers are embedded in stems/options; do not ask
             // a second text parser to rediscover their question boundaries.
             const parserSource = isQuestionSource(source) || parsed.supportSectionDeclared
-                ? { ...source, supportBlocks: parsed.supportSectionDeclared
+                ? { ...source, expectedQuestionNumbers, supportSectionDeclared: parsed.supportSectionDeclared,
+                    supportBlocks: parsed.supportSectionDeclared
                     ? parsed.supportBlocks
                     : parsed.drafts.map(draft => ({
                         questionNumber: draft.questionNumber || draft.question,
@@ -190,7 +194,13 @@
                 !Array.isArray(result.solutions)) {
                 throw createError('DOCX_SUPPORT_RESULT_MALFORMED');
             }
-            return { ...result, images: parsed.supportImages || [] };
+            const unmatched = [...(result.unmatched || [])];
+            if (roles.includes('answer') && parsed.supportSectionDeclared &&
+                !result.answers.some(item => String(item.answer || '').trim()) && !unmatched.length) {
+                unmatched.push({ code: 'DOCX_SUPPORT_ANSWER_SECTION_EMPTY', field: 'answer', sourceFileId: source.id,
+                    sourceFileName: source.filename, value: '检测到参考答案标题，但未找到能可靠配对的答案。', rawText: anchored });
+            }
+            return { ...result, unmatched, images: parsed.supportImages || [] };
         };
 
         return async function runProductionDocxImport(context = {}, signal) {

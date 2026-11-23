@@ -13,7 +13,7 @@ test('isolated full backup survives clear, restore and reopen with every table a
         const context = await browser.newContext();
         const page = await context.newPage();
         await page.goto('http://127.0.0.1:' + server.address().port);
-        for (const file of ['vendor/jszip/jszip.min.js', 'qisi-archive-security.js', 'vendor/dexie/dexie.min.js',
+        for (const file of ['vendor/zip-js/zip.min.js', 'qisi-archive-security.js', 'vendor/dexie/dexie.min.js',
             'qisi-backup-snapshot-policy.js', 'qisi-storage-repository.js', 'qisi-backup.js']) {
             await page.addScriptTag({ path: path.resolve(__dirname, '..', file) });
         }
@@ -69,7 +69,7 @@ test('isolated full backup survives clear, restore and reopen with every table a
                 };
             } finally { db.close(); await Dexie.delete(name); }
         });
-        assert.equal(result.tables, 11);
+        assert.equal(result.tables, 12);
         assert.equal(result.everyTableRetained, true);
         assert.equal(result.formalImageReference, true);
         assert.equal(result.draftImageReference, true);

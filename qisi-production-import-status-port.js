@@ -33,9 +33,13 @@
         const messages = {
             PDF_EXTERNAL_NOT_CONFIGURED: 'PDF 识别服务未启用，当前入口尚未配置可用的识别链路。',
             MINERU_NOT_CONFIGURED: '本地服务未配置 MinerU，配置完成后再识别。',
+            MINERU_PAGE_RANGE_INVALID: '所选页码无效或无法提取。请检查页码是否超出原卷，页码可写成 1-3,5,7-9。',
+            MINERU_PAGE_SELECTION_UNAVAILABLE: '本地服务尚未支持只上传所选页面。请重启本地服务后再试，本次没有上传。',
+            MINERU_PAGE_LIMIT: '一次最多识别 200 页。请缩小所选范围后再试。',
             MINERU_SUBMISSION_UNKNOWN: '上游任务是否受理尚不明确，请查询回执，勿重复提交。',
             MINERU_UPLOAD_UNKNOWN: '文件上传结果尚不明确，请查询已有任务，勿重复上传。'
         };
+        if (messages[details.code]) return messages[details.code] + `（${details.code}）`;
         const reason = messages[details.causeCode] || details.causeCode;
         return reason && reason !== details.code ? `${details.code}：${reason}${messages[details.causeCode] ? `（${details.causeCode}）` : ''}` : details.code;
     }

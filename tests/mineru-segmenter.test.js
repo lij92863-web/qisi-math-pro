@@ -116,6 +116,47 @@ test('a heading still splits a paper whose answer side has no numbers', () => {
     assert.equal(paper.combined, true);
 });
 
+test('an explicitly bracketed commentary list retains its numbers inside the owning solution', () => {
+    const questions = [
+        b('title', 1, 'text', '高二综合训练（1）'),
+        b('q1', 1, 'text', '1. 第一题'), b('q2', 1, 'text', '2. 第二题'), b('q3', 2, 'text', '3. 第三题')
+    ];
+    const support = [
+        b('answer-title', 3, 'text', '高二综合训练(1)答案'),
+        b('s1', 3, 'text', '1. 【答案】A【解析】第一题解析'),
+        b('s2', 3, 'text', '2. 【答案】B【解析】第二题解析'),
+        b('s3', 3, 'text', '3. 【答案】C【解析】第三题解析'),
+        b('method', 4, 'text', '综上所述，$x=1$。【点睛】方法点睛：1. 第一种方法'),
+        b('steps', 4, 'text', '（1）写出算式；（2）合并同类项。'),
+        b('nested', 4, 'text', '2. 第二种方法是先分类，再分别计算。')
+    ];
+    const paper = S.segmentPaper([...questions, ...support]);
+    assert.deepEqual(paper.questionSegment.runs.at(-1).blocks.map(block => block.id), ['q3']);
+    assert.deepEqual(paper.solutionSegment.preamble.map(block => block.id), ['answer-title']);
+    assert.deepEqual(paper.solutionSegment.order, ['1', '2', '3']);
+    const result = S.assemblePartial(paper);
+    assert.deepEqual(result.issues, []);
+    assert.deepEqual(result.questions.map(question => question.answer), ['A', 'B', 'C']);
+    assert.deepEqual(result.questions[2].solutionBlocks, ['s3', 'method', 'steps', 'nested']);
+    assert.deepEqual(paper.solutionSegment.runs[2].commentaryHeadings, [{ blockId: 'nested', listStartBlockId: 'method', ordinal: 2 }]);
+
+    for (const [name, invalid] of [
+        ['duplicate answer label', support.map(block => block.id === 'nested' ? { ...block, text: '2. 【答案】D【解析】另一份解析' } : block)],
+        ['labelled choice without brackets', support.map(block => block.id === 'nested' ? { ...block, text: '2. D\n【详解】另一份解析' } : block)],
+        ['out of order', [support[0], support[2], support[1], ...support.slice(3)]],
+        ['missing anchor', support.filter(block => block.id !== 's2')],
+        ['other page', support.map(block => block.id === 'nested' ? { ...block, page: 5 } : block)],
+        ['skipped ordinal', support.map(block => block.id === 'nested' ? { ...block, text: '1. 独立编号并未延续。' } : block)],
+        ['annotation without an explicitly started list', support.map(block => block.id === 'method' ? { ...block, text: '【点睛】方法应用。' } : block)]
+    ]) {
+        const supportSegment = S.segment(invalid, { numbers: ['1', '2', '3'], role: 'support' });
+        assert.ok(supportSegment.order.length !== 3 || !supportSegment.valid, name);
+        assert.ok(supportSegment.runs.every(run => !run.commentaryHeadings), name);
+        const built = S.assemblePartial({ questionSegment: S.segment(questions), solutionSegment: supportSegment });
+        assert.ok(built.questions.every(q => q.questionNo !== '2' || !q.answer), name);
+    }
+});
+
 test('a question-only file reports itself as not combined', () => {
     const paper = S.segmentPaper([b('a', 1, 'text', '1. 一'), b('b', 1, 'text', '2. 二')]);
     assert.equal(paper.combined, false);

@@ -167,7 +167,12 @@
             if (unresolved && !confirm(`还有 ${unresolved} 道疑似同题或答案冲突题未处理。是否跳过这些题并继续？`)) return false;
             let result;
             try {
-                const operations = buildMergeOperations({ items, findQuestion: id => read.questions().find(q => q.id === id),
+                let byId;
+                const findQuestion = read.questionById || (id => {
+                    byId ||= new Map(read.questions().map(question => [question.id, question]));
+                    return byId.get(id);
+                });
+                const operations = buildMergeOperations({ items, findQuestion,
                     getMatchInfo: model.getMatchInfo, fillQuestion: model.fillQuestion, copyQuestion: model.copyQuestion });
                 if (!operations.length) { tell('没有有效的待处理题目。'); return false; }
                 const now = clock();

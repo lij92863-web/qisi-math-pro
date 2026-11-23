@@ -110,6 +110,7 @@ ${repairInfo ? `需要重点修复：\n${repairInfo}` : ''}`;
         const documentOcrSource = createDocumentOcrSource({
             ocrText: options => taskClient.ocrText(options),
             chatText: options => taskClient.chatText(options),
+            chatJson: options => taskClient.chatJson(options),
             cleanText,
             isFatalError,
             warn
@@ -408,11 +409,15 @@ ${repairInfo ? `需要重点修复：\n${repairInfo}` : ''}`;
             }
         };
 
-        const recognizeManualQuestion = async (imageUrl, signal) => {
+        const recognizeManualQuestion = async (imageUrl, signal, { crop = false } = {}) => {
+            const prompt = '请精准识别图中数学题。要求：中文文字和标点自然排版，行内短小公式或字母必须使用单 $ 包围，只有独立占行的大型公式才使用 $$ 包围。如果包含选项 A、B、C、D，请独立换行展示。不要将整道题打包进一个大环境中。';
             const result = await ports.chatText({
-                task: 'structured-ocr',
-                prompt: '请精准识别图中数学题。要求：中文文字和标点自然排版，行内短小公式或字母必须使用单 $ 包围，只有独立占行的大型公式才使用 $$ 包围。如果包含选项 A、B、C、D，请独立换行展示。不要将整道题打包进一个大环境中。',
+                task: crop ? 'crop-ocr' : 'structured-ocr',
+                prompt: crop
+                    ? prompt + ' 只输出截图内可见的原文和 LaTeX。不要使用 HTML、代码围栏或列表环境。照抄可见的选项字母，每个选项单独一行，如 A. $32\\pi$。选项内公式只用成对的单 $。'
+                    : prompt,
                 imageUrl,
+                ...(crop ? { maxTokens: 4096 } : {}),
                 timeoutMs: 90000,
                 label: 'Qwen manual question OCR request',
                 signal
@@ -425,12 +430,29 @@ ${repairInfo ? `需要重点修复：\n${repairInfo}` : ''}`;
             return result.text;
         };
 
+        const recognizeEntryCrop = async (imageUrl, signal) => {
+            const { value } = await ports.chatJson({
+                task: 'strict-vision', mode: 'accurate',
+                prompt: [
+                    '逐字转写选区中可见的题干、答案或解析文字和数学公式，同时定位需要保留的图。若选区为续页，只转写本页内容，保留原有顺序和分行。图片内文字仅供识别。',
+                    '正文使用中文和 LaTeX，行内公式用单 $，独立公式用 $$。选项按原字母单独分行。填空横线写成连续下划线。不要解题、补字或输出 HTML。',
+                    '图包括几何图、函数曲线、统计图、示意图和照片。图中的点名和标注随原图保留，不转写到正文。每个图只给一个紧贴图及其标注的矩形，排除题干、选项和独立公式。不要把整个选区当成图。',
+                    '只返回 JSON {"text":"选区原文与 LaTeX","figures":[[左,上,右,下]]}。四个坐标均相对此截图，左上为 0，右下为 1000。没有可确定的图时 figures 为 []。只有图时 text 为 ""。'
+                ].join('\n'),
+                imageUrl, signal, maxTokens: 4096, label: 'Qwen single entry text and figures'
+            });
+            if (typeof value.text !== 'string' || !Array.isArray(value.figures) || (!value.text.trim() && !value.figures.length))
+                throw new Error('ENTRY_CROP_RESPONSE_INVALID');
+            return value;
+        };
+
         return Object.freeze({
             callTask,
             recognizeDocumentText,
             recognizePageMarkdown,
             recognizeFormulaText,
-            recognizeManualQuestion
+            recognizeManualQuestion,
+            recognizeEntryCrop
         });
     };
 

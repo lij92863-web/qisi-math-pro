@@ -1,9 +1,9 @@
 (function (root, factory) {
-    const api = factory();
+    const api = factory(root);
     root.Qisi = root.Qisi || {};
     root.Qisi.LibraryService = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
     'use strict';
 
     const isRecord = value => Boolean(
@@ -144,7 +144,7 @@
                 options: Array.isArray(extQ.options) ? [...extQ.options] : ['', '', '', ''],
                 answer: extQ.answer || '',
                 solution: extQ.solution || '',
-                images: (extQ.images || []).map(img => ({ id: img.id, align: img.align || 'center' })),
+                images: (extQ.images || []).map(img => (root.Qisi?.QuestionImagePolicy || require('./qisi-question-image-policy')).imageReference(img)),
                 knowledge: primaryKnowledge,
                 knowledgeType: primaryKnowledgeType,
                 systemKnowledge,
@@ -171,8 +171,30 @@
         const buildFilledQuestionFromExternal = (localQ, extQ, item) => {
             const now = clock();
             const next = JSON.parse(JSON.stringify(localQ));
-            if (!hasText(next.answer) && hasText(extQ.answer)) next.answer = extQ.answer;
-            if (!hasText(next.solution) && hasText(extQ.solution)) next.solution = extQ.solution;
+            const copiedFields = ['answer', 'solution'].filter(field => !hasText(next[field]) && hasText(extQ[field]));
+            const referenced = new Set();
+            for (const field of copiedFields) {
+                next[field] = extQ[field];
+                for (const match of String(extQ[field]).matchAll(/\[\[(?:IMAGE|FORMULA_IMAGE):([^\]\r\n]+)\]\]|\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}/g)) {
+                    referenced.add((match[1] || match[2]).trim());
+                }
+            }
+            const portableImage = image => {
+                const result = { ...clone(image), align: image.align || 'center' };
+                for (const key of ['url', 'displayable', 'missingBlob', 'storageImage']) delete result[key];
+                return result;
+            };
+            // Only adopted fields may introduce image associations. Ambiguous
+            // declarations must stop the merge before any transaction begins.
+            for (const id of referenced) {
+                const sources = (extQ.images || []).filter(image => String(image?.id || '') === id);
+                const existing = (next.images || []).filter(image => String(image?.id || '') === id);
+                if (sources.length !== 1 || existing.length > 1 || (existing.length &&
+                    !sameStoredValue(portableImage(existing[0]), portableImage(sources[0])))) {
+                    fail('EXTERNAL_FILL_IMAGE_INVALID', '补全字段的图片引用缺失或冲突，请核对后再加入：' + id);
+                }
+                if (!existing.length) (next.images ||= []).push(portableImage(sources[0]));
+            }
             if (!next.meta) next.meta = {};
         
             const personalToFill = item.personalKnowledge || getKnowledge(extQ, 'personal');
@@ -210,9 +232,10 @@
         report = () => {} }) => {
         const audit = async () => {
             const storedQuestions = await repository.listTable('questions');
-            const imageRecords = await repository.listTable('images');
+            const ids = repository.listImageIds ? await repository.listImageIds()
+                : (await repository.listTable('images')).map(record => record?.id);
             const storedImageIds = new Set(
-                imageRecords.map(record => String(record?.id || '')).filter(Boolean)
+                ids.map(id => String(id || '')).filter(Boolean)
             );
             const issues = [];
         
@@ -368,6 +391,152 @@
         };
     };
 
+    // AVL ordered by the same keys as IndexedDB's descending createdAt cursor.
+    // Subtree sizes permit a page lookup without walking earlier pages.
+    const createQuestionOrder = compare => {
+        let root = null;
+        const height = node => node?.height || 0;
+        const size = node => node?.size || 0;
+        const update = node => {
+            node.height = 1 + Math.max(height(node.left), height(node.right));
+            node.size = 1 + size(node.left) + size(node.right);
+            return node;
+        };
+        const rotate = (node, near, far) => {
+            const next = node[far];
+            node[far] = next[near];
+            next[near] = update(node);
+            return update(next);
+        };
+        const balance = node => {
+            update(node);
+            for (const [near, far] of [['left', 'right'], ['right', 'left']]) {
+                if (height(node[far]) - height(node[near]) <= 1) continue;
+                const branch = node[far];
+                if (height(branch[near]) > height(branch[far])) node[far] = rotate(branch, far, near);
+                return rotate(node, near, far);
+            }
+            return node;
+        };
+        const make = (row, left = null, right = null) => update({ row, left, right });
+        const change = (node, row, remove) => {
+            if (!node) return remove ? null : make(row);
+            const order = compare(row, node.row);
+            if (order < 0) node.left = change(node.left, row, remove);
+            else if (order > 0) node.right = change(node.right, row, remove);
+            else if (!remove) node.row = row;
+            else {
+                if (!node.left || !node.right) return node.left || node.right;
+                let successor = node.right;
+                while (successor.left) successor = successor.left;
+                node.row = successor.row;
+                node.right = change(node.right, successor.row, true);
+            }
+            return balance(node);
+        };
+        const build = (rows, start, end) => {
+            if (start >= end) return null;
+            const middle = start + Math.floor((end - start) / 2);
+            return make(rows[middle], build(rows, start, middle), build(rows, middle + 1, end));
+        };
+        const slice = (start = 0, end = size(root)) => {
+            const rows = [];
+            const visit = (node, offset) => {
+                if (!node || end <= offset || offset + node.size <= start) return;
+                const position = offset + size(node.left);
+                visit(node.left, offset);
+                if (position >= start && position < end) rows.push(node.row);
+                visit(node.right, position + 1);
+            };
+            visit(root, 0);
+            return rows;
+        };
+        return { reset: rows => { root = build(rows, 0, rows.length); }, insert: row => { root = change(root, row, false); },
+            remove: row => { root = change(root, row, true); }, slice, get length() { return size(root); } };
+    };
+
+    const createLiveQuestionIndex = ({ compareKeys, fingerprint, normalize, classify, onChange }) => {
+        const compare = (a, b) => compareKeys(b.createdAt, a.createdAt) || compareKeys(b.id, a.id);
+        const ordered = createQuestionOrder(compare), byId = new Map(), totals = new Map();
+        const keysByRow = new WeakMap();
+        const fingerprints = [new Map(), new Map()];
+        let selection, predicate, selected;
+        const rowKeys = row => {
+            let keys = keysByRow.get(row);
+            if (!keys) {
+                const classification = classify(row);
+                keys = [row.duplicateCoreV2 ?? fingerprint.core(row), row.duplicateStemV2 ?? fingerprint.stem(row),
+                    JSON.stringify(classification), classification];
+                keysByRow.set(row, keys);
+            }
+            return keys;
+        };
+        const index = (row, difference) => {
+            const keys = rowKeys(row);
+            fingerprints.forEach((map, i) => {
+                const key = keys[i];
+                if (!key) return;
+                const bucket = map.get(key);
+                if (difference > 0) {
+                    if (!bucket) map.set(key, { only: row });
+                    else if (bucket.order) bucket.order.insert(row);
+                    else {
+                        const order = createQuestionOrder(compare);
+                        order.insert(bucket.only);
+                        order.insert(row);
+                        map.set(key, { order });
+                    }
+                } else if (bucket.order) {
+                    bucket.order.remove(row);
+                    if (bucket.order.length === 1) map.set(key, { only: bucket.order.slice(0, 1)[0] });
+                } else map.delete(key);
+            });
+            const count = (totals.get(keys[2])?.count || 0) + difference;
+            if (count) totals.set(keys[2], { ...keys[3], count });
+            else totals.delete(keys[2]);
+        };
+        const prepare = record => record && !record.deletedAt && !Number.isNaN(compareKeys(record.createdAt, record.createdAt))
+            ? normalize(record) : null;
+        const apply = (ids, records) => {
+            const prepared = records.map(prepare);
+            prepared.forEach(row => { if (row) rowKeys(row); });
+            const classifications = [];
+            ids.forEach((id, i) => {
+                const before = byId.get(id), after = prepared[i];
+                if (before && (!after || rowKeys(before)[2] !== rowKeys(after)[2])) classifications.push([rowKeys(before)[3], -1]);
+                if (after && (!before || rowKeys(before)[2] !== rowKeys(after)[2])) classifications.push([rowKeys(after)[3], 1]);
+                if (before) { ordered.remove(before); selected?.remove(before); index(before, -1); byId.delete(id); }
+                if (!after) return;
+                byId.set(id, after); ordered.insert(after); index(after, 1);
+                if (predicate && predicate(after)) selected.insert(after);
+            });
+            onChange(ids, classifications);
+        };
+        const replace = records => {
+            const rows = records.map(prepare).filter(Boolean);
+            rows.forEach(rowKeys);
+            byId.clear(); totals.clear(); fingerprints.forEach(map => map.clear());
+            for (const row of rows) { byId.set(row.id, row); index(row, 1); }
+            ordered.reset(rows);
+            selection = undefined; predicate = undefined; selected = undefined;
+            onChange(null);
+        };
+        const select = (criteria, makePredicate) => {
+            if (criteria !== selection) {
+                selection = criteria;
+                predicate = makePredicate(criteria);
+                selected = predicate ? createQuestionOrder(compare) : undefined;
+                if (selected) selected.reset(ordered.slice().filter(predicate));
+            }
+            return selected || ordered;
+        };
+        const lookup = map => Object.freeze({ get(key) {
+            const bucket = map.get(key);
+            return bucket?.only || bucket?.order?.slice(0, 1)[0];
+        } });
+        return Object.freeze({ apply, replace, ordered, select, byId, totals, core: lookup(fingerprints[0]), stem: lookup(fingerprints[1]) });
+    };
+
     const selectBatch = (availableIds, selectedIds, mode = 'all') => {
         const available = new Set((availableIds || []).map(String));
         const selected = new Set(
@@ -443,43 +612,72 @@
         matchesFilters,
         getKnowledge,
         findKnowledgeNode,
+        compareNodeId,
+        cacheSearchText = false,
         fingerprint = defaultFingerprint
     } = {}) => {
         if (typeof matchesFilters !== 'function') {
             throw new TypeError('matchesFilters dependency is required.');
         }
 
-        const filterAndSort = (
-            items,
+        const textCache = cacheSearchText ? new WeakMap() : undefined;
+        const makePredicate = (
             {
                 keyword = '',
                 filters = {},
                 knowledge = '',
+                knowledgeId = '',
                 knowledgeType = 'system',
                 knowledgeTree = [],
-                sortBy = 'createdAt',
-                direction = 'desc'
+                personalKnowledgeTree = knowledgeType === 'personal' ? knowledgeTree : []
             } = {}
         ) => {
-            let result = (items || []).filter(Boolean);
-            if (knowledge) {
-                const node = typeof findKnowledgeNode === 'function'
+            let matchesKnowledge;
+            if (knowledge || knowledgeId) {
+                const node = knowledgeId && compareNodeId ? compareNodeId(knowledgeTree, knowledgeId)
+                    : typeof findKnowledgeNode === 'function'
                     ? findKnowledgeNode(knowledgeTree, knowledge)
                     : null;
                 const allowed = new Set(
                     node ? collectKnowledgeNames(node) : [knowledge]
                 );
-                result = result.filter(item => allowed.has(
-                    typeof getKnowledge === 'function'
-                        ? getKnowledge(item, knowledgeType)
-                        : item?.knowledge
-                ));
+                const allowedIds = new Set();
+                const collectIds = current => {
+                    if (current.id) allowedIds.add(current.id);
+                    for (const child of current.children || []) collectIds(child);
+                };
+                if (node && knowledgeType === 'personal') collectIds(node);
+                matchesKnowledge = item => {
+                    const references = item.personalKnowledgeIds ?? item.meta?.personalKnowledgeIds;
+                    if (knowledgeType === 'personal' && Array.isArray(references)) {
+                        return references.some(id => allowedIds.has(id));
+                    }
+                    const name = typeof getKnowledge === 'function' ? getKnowledge(item, knowledgeType) : item.knowledge;
+                    return !(!node && knowledgeId) && allowed.has(name);
+                };
             }
-            result = result.filter(item => matchesFilters(item, {
-                keyword,
-                filters
-            }));
-            return stableSort(result, sortBy, direction);
+            const namesById = new Map();
+            const indexNames = nodes => {
+                for (const node of nodes) {
+                    if (node.id) namesById.set(node.id, node.name);
+                    indexNames(node.children || []);
+                }
+            };
+            if (keyword) indexNames(personalKnowledgeTree);
+            if (!matchesKnowledge && !keyword && !Object.values(filters).some(Boolean)) return null;
+            return item => {
+                if (matchesKnowledge && !matchesKnowledge(item)) return false;
+                const ids = item.personalKnowledgeIds ?? item.meta?.personalKnowledgeIds;
+                const personalKnowledgeNames = keyword && Array.isArray(ids)
+                    ? ids.map(id => namesById.get(id)).filter(Boolean)
+                    : undefined;
+                return matchesFilters(item, { keyword, filters, personalKnowledgeNames, textCache });
+            };
+        };
+        const filterAndSort = (items, criteria = {}) => {
+            const predicate = makePredicate(criteria);
+            const result = (items || []).filter(item => item && (!predicate || predicate(item)));
+            return stableSort(result, criteria.sortBy, criteria.direction);
         };
 
         const query = (items, criteria = {}) => {
@@ -908,6 +1106,7 @@
 
         return Object.freeze({
             filterAndSort,
+            makePredicate,
             query,
             paginate,
             selectBatch,
@@ -929,7 +1128,7 @@
     return Object.freeze({
         createQuestionMaintenance,
         createExternalQuestionModel,
-        stableSort,
+        stableSort, createLiveQuestionIndex,
         collectKnowledgeNames,
         paginate,
         selectBatch,

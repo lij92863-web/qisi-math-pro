@@ -45,7 +45,8 @@ test('role-only full DOCX keeps OMML, MathType and formula letters through norma
  const batch=imported.snapshot.batches.find(b=>b.id===imported.batchId),draft=imported.snapshot.drafts.find(d=>d.batchId===batch.id);
  assert.equal(batch.producerMode,'docx-deterministic');assert.equal(batch.status,'review');assert.equal(calls,1);
  assert.match(draft.stem,/\\frac\{x\^\{2\}\+1\}\{x-1\}/);assert.deepEqual(draft.options,['$A=B$','$B\\subseteq A$','$A\\cap B$','$C_A B$']);
- await h.page.locator('.katex').first().waitFor({state:'visible'});
+ await h.page.locator('.v-review-right .katex').first().waitFor({state:'visible'});
+ await h.page.getByRole('button',{name:/分屏编辑/}).click();
  assert.match(await h.page.locator('textarea').filter({visible:true}).first().inputValue(),/A=B/);
  assert.equal(draft.answer,'A');assert.match(draft.solution,/集合定义/);assert.equal(await h.page.locator('#batch-producer-mode').count(),0);assertNoRuntimeErrors(h);
  }finally{await h.close();}

@@ -37,6 +37,7 @@
         refreshBatchStats,
         mergeImages,
         dataUrlToBlob,
+        confirmSelectedContent = draft => draft,
         resolveImageRecords = async () => [],
         clock = () => Date.now()
     } = {}) => {
@@ -94,12 +95,34 @@
                 : copy;
         };
 
+        const adoptCurrentContent = (draft, actorId) => {
+            let next = confirmSelectedContent(draft);
+            const hasContent = value => Array.isArray(value) ? value.length > 0 : Boolean(String(value ?? '').trim());
+            const fields = ['questionNumber', 'stem', 'options', 'answer', 'solution', 'images'];
+            const unconfirmed = fields.filter(field => hasContent(next[field]) &&
+                [undefined, 'rejected', 'missing'].includes(next.fieldProvenance?.[field]?.status));
+            if (unconfirmed.length) next = reviewController.recordFieldReview(next, unconfirmed, actorId);
+            for (const field of ['answer', 'solution', 'options', 'images']) {
+                if (hasContent(next[field])) continue;
+                next[field] = field === 'answer' || field === 'solution' ? '' : [];
+                next.fieldProvenance = {
+                    ...next.fieldProvenance,
+                    [field]: { ...next.fieldProvenance?.[field], field, kind: 'missing', status: 'missing' }
+                };
+                const states = (next.pdfReview || next.pdfExternal || next.pdfV1)?.states;
+                if (states && ['answer', 'solution'].includes(field)) states[field] = 'missing';
+            }
+            return next;
+        };
+
         const confirmDraft = async ({
             batchId,
             draftId,
             expectedDraftVersion,
             actorId = 'local-teacher',
-            signal
+            signal,
+            selectedContentConfirmed = false,
+            refreshStats = true
         } = {}) => {
             const current = await loadCurrent({
                 batchId,
@@ -110,8 +133,9 @@
             if (current.draft.status === 'submitted') {
                 throw error('REVIEW_WORKFLOW_SUBMITTED_IMMUTABLE');
             }
+            const candidate = normalize(current.draft);
             const confirmation = reviewController.confirm(
-                normalize(current.draft),
+                selectedContentConfirmed ? adoptCurrentContent(candidate, actorId) : candidate,
                 { actorId }
             );
             if (!confirmation || typeof confirmation.accepted !== 'boolean') {
@@ -133,7 +157,7 @@
                 signal
             });
             assertActive(signal);
-            const stats = await refreshBatchStats({ batchId, signal });
+            const stats = refreshStats ? await refreshBatchStats({ batchId, signal }) : null;
             const readback = await loadCurrent({ batchId, draftId, signal });
             if (readback.draft.status !== 'reviewed') {
                 throw error('REVIEW_WORKFLOW_READBACK_MISMATCH');
@@ -288,6 +312,47 @@
             };
         };
 
+        const prepareSelectedBatch = async ({ batchId, draftIds, signal } = {}) => {
+            assertActive(signal);
+            const loaded = await persistence.reloadDraftBatch(batchId);
+            assertActive(signal);
+            const ids = new Set(Array.isArray(draftIds) ? draftIds : []);
+            const drafts = loaded.questions.filter(draft => ids.has(draft.id) && draft.status === 'reviewed');
+            return {
+                count: drafts.length,
+                selection: drafts.map(draft => ({
+                    id: draft.id, version: draft.version, number: draft.questionNumber || draft.order || draft.id
+                }))
+            };
+        };
+
+        const submitSelectedBatch = async ({
+            batchId, selection, selectedContentConfirmed = false, actorId = 'local-teacher', signal
+        } = {}) => {
+            if (!selectedContentConfirmed || !Array.isArray(selection) || !selection.length ||
+                selection.some(row => !row?.id || !Number.isInteger(row.version))) {
+                throw error('REVIEW_WORKFLOW_SELECTION_NOT_CONFIRMED');
+            }
+            const results = [];
+            for (const row of new Map(selection.map(item => [item.id, item])).values()) {
+                assertActive(signal);
+                const draftId = row.id;
+                try {
+                    const { draft } = await loadCurrent({ batchId, draftId, expectedDraftVersion: row.version, signal });
+                    const command = { batchId, draftId, expectedDraftVersion: draft.version, actorId, signal, refreshStats: false };
+                    if (draft.status !== 'reviewed') throw error('REVIEW_WORKFLOW_DRAFT_NOT_REVIEWED');
+                    results.push({ draftId, ...await submitDraft(command) });
+                } catch (cause) {
+                    if (cause?.name === 'AbortError') throw cause;
+                    results.push({ draftId, accepted: false, code: cause?.code || 'REVIEW_WORKFLOW_SUBMIT_FAILED',
+                        message: cause?.message, details: cause?.details });
+                }
+            }
+            const stats = await refreshBatchStats({ batchId, signal });
+            const okCount = results.filter(item => item.accepted).length;
+            return { okCount, failedCount: results.length - okCount, results, stats };
+        };
+
         const submitReviewedBatch = async ({
             batchId,
             draftIds,
@@ -352,6 +417,8 @@
             confirmDraft,
             submitDraft,
             prepareReviewedBatch,
+            prepareSelectedBatch,
+            submitSelectedBatch,
             submitReviewedBatch
         });
     };

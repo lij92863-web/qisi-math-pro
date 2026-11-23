@@ -24,7 +24,7 @@
         'questions', 'images', 'customTemplates', 'personalKnowledge',
         'externalQuestions', 'importBatches', 'mergeBatches',
         'draftImportBatches', 'draftImportFiles', 'draftQuestions',
-        'draftImages'
+        'draftImages', 'handoutEntries'
     ]);
 
     const isRecord = value => Boolean(
@@ -345,6 +345,8 @@
             clock = () => Date.now(),
             admission = {},
             duplicatePolicy = defaultDuplicatePolicy,
+            personalKnowledgeModel,
+            getQuestionKnowledge,
             waitFor = defaultSnapshotWaitFor
         } = {}
     ) => {
@@ -356,6 +358,7 @@
         }
 
         const table = name => database.table(name);
+        const nextQuestionVersion = previous => Math.max(Number.isFinite(previous) ? previous + 1 : 0, clock());
         // 本仓储统一用同步回调返回数据库 promise 链，便于审计事务范围。
         // 这是本地约定，不是“Dexie 不支持 async”：原生 async 的数据库请求
         // 可以正常回滚。事务是否存活取决于工作/等待的范围，需要原子性实测。
@@ -425,19 +428,43 @@
         );
         const put = (name, value) => run(`put:${name}`, () =>
             table(name).put(clone(value)).then(() => clone(value)));
-        const updatePersonalKnowledgeTree = (transform, updatedAt = Date.now()) => {
+        const updatePersonalKnowledgeTree = (transform, updatedAt = Date.now(), bindLegacy) => {
             if (typeof transform !== 'function' || !Number.isFinite(updatedAt)) {
                 return Promise.reject(new StorageRepositoryError('personal-tree-command-invalid', 'A synchronous tree transform and timestamp are required.'));
             }
-            return atomic(['personalKnowledge'], () => get('personalKnowledge', 'tree').then(record => {
-                const nodes = transform(clone(record ? record.nodes : []));
+            return atomic(bindLegacy ? ['personalKnowledge', 'questions'] : ['personalKnowledge'], () => get('personalKnowledge', 'tree').then(record => {
+                const previous = record ? record.nodes : [];
+                const nodes = transform(clone(previous));
                 if (!Array.isArray(nodes)) throw new StorageRepositoryError('personal-tree-command-invalid', 'Tree transforms must return an array synchronously.');
-                return put('personalKnowledge', { ...(record || {}), id: 'tree', nodes, updatedAt })
+                const binding = bindLegacy?.(previous);
+                const migrate = binding ? bindLegacyQuestions(binding) : Promise.resolve();
+                return migrate.then(() => put('personalKnowledge', { ...(record || {}), id: 'tree', nodes, updatedAt }))
                     .then(() => get('personalKnowledge', 'tree')).then(readback => {
                         if (!Array.isArray(readback?.nodes)) throw new StorageRepositoryError('personal-tree-readback-invalid', '知识点保存后读回失败。');
                         return clone(readback.nodes);
                     });
             }));
+        };
+        const bindLegacyQuestions = ({ id, name }) => {
+            const questions = table('questions');
+            const indexes = ['personalKnowledge', 'knowledge', 'meta.personalKnowledge', 'meta.knowledge'];
+            const matches = row => {
+                if (Array.isArray(row.personalKnowledgeIds ?? row.meta?.personalKnowledgeIds)) return false;
+                const legacy = row.meta?.personalKnowledge || row.personalKnowledge ||
+                    ((row.meta?.knowledgeType || row.knowledgeType) === 'personal' ? row.meta?.knowledge || row.knowledge : '');
+                return legacy === name;
+            };
+            const bind = row => {
+                row.personalKnowledgeIds = [id];
+                row.meta = { ...row.meta, personalKnowledgeIds: [id] };
+                row.updatedAt = nextQuestionVersion(row.updatedAt);
+            };
+            if (!indexes.every(index => questions.schema?.idxByName?.[index])) {
+                return questions.toCollection().filter(matches).modify(bind);
+            }
+            let query = questions.where(indexes[0]).equals(name);
+            for (const index of indexes.slice(1)) query = query.or(index).equals(name);
+            return query.and(matches).modify(bind);
         };
         const applyCustomTemplateChange = ({ id, expected, patch, remove = false } = {}) => {
             requireId(id);
@@ -494,25 +521,59 @@
                 ? findAny('images', 'id', normalized)
                 : Promise.resolve([]);
         };
+        const listImageIds = () => run('list-image-ids', () => {
+            const images = table('images'), collection = images.toCollection?.();
+            return collection?.primaryKeys ? collection.primaryKeys()
+                : images.toArray().then(rows => rows.map(row => row.id));
+        });
 
         const loadLibrary = () => listTable('questions', {
             orderBy: 'createdAt', reverse: true, includeDeleted: false
         });
+        const loadQuestionsById = ids => run('load-questions-by-id', () => {
+            const questions = table('questions');
+            return questions.bulkGet ? questions.bulkGet(ids) : Promise.all(ids.map(id => questions.get(id)));
+        });
+        const saveManualEntryImages = records => atomic(['images'], () => table('images').bulkPut(clone(records)));
 
+        const prepareQuestionTagEdit = (input, existing, edit, updatedAt) => get('personalKnowledge', 'tree').then(record => {
+            const nodes = record ? record.nodes : [];
+            const { question, tree, released } = personalKnowledgeModel.planQuestionTagEdit(
+                nodes, input, existing, edit, getQuestionKnowledge
+            );
+            const unused = new Set(released);
+            // Read the other questions in the same transaction as the tag and question updates.
+            const findReferences = unused.size ? table('questions').filter(other => {
+                if (other.id === input.id || other.deletedAt) return false;
+                for (const tag of unused) {
+                    if (personalKnowledgeModel.questionUsesTag(other, tag, getQuestionKnowledge)) unused.delete(tag);
+                }
+                return unused.size === 0;
+            }).first() : Promise.resolve();
+            return findReferences.then(() => {
+                const nextNodes = unused.size
+                    ? personalKnowledgeModel.removeQuestionTags(tree || nodes, new Set([...unused].map(tag => tag.id)))
+                    : tree;
+                return nextNodes ? put('personalKnowledge', { ...record, id: 'tree', nodes: nextNodes, updatedAt })
+                    .then(() => question) : question;
+            });
+        });
         const saveQuestion = async (
             question,
             {
                 allowUpdate = false,
                 expectedUpdatedAt,
                 confirmationToken = '',
-                imageRecords = []
+                imageRecords = [],
+                personalKnowledgeEdit
             } = {}
         ) => {
             const input = clone(question);
             const id = requireId(input?.id, 'question.id');
             // 题目与图片共用一个事务链；图片写入失败必须回滚题目写入。
             imageRecords.forEach(image => requireId(image?.id, 'image.id'));
-            return transaction(['questions', 'images'], () =>
+            const tables = personalKnowledgeEdit ? ['questions', 'images', 'personalKnowledge'] : ['questions', 'images'];
+            return transaction(tables, () =>
                 table('questions').get(id).then(existing => {
                     if (
                         existing && confirmationToken &&
@@ -526,36 +587,39 @@
                         );
                     }
                     if (
-                        existing && expectedUpdatedAt !== undefined &&
-                        existing.updatedAt !== expectedUpdatedAt
+                        expectedUpdatedAt !== undefined &&
+                        (!existing || existing.deletedAt || (existing.updatedAt ?? null) !== expectedUpdatedAt)
                     ) {
                         throw new StorageRepositoryError(
                             'write-conflict',
                             `Question ${id} changed in another writer.`,
-                            { id, expectedUpdatedAt, actualUpdatedAt: existing.updatedAt }
+                            { id, expectedUpdatedAt, actualUpdatedAt: existing?.updatedAt }
                         );
                     }
                     const now = clock();
-                    const next = {
-                        ...input,
-                        createdAt: existing?.createdAt ?? input.createdAt ?? now,
-                        updatedAt: now,
-                        storageMeta: {
-                            ...(isRecord(existing?.storageMeta)
-                                ? existing.storageMeta
-                                : {}),
-                            ...(isRecord(input.storageMeta) ? input.storageMeta : {}),
-                            ...(confirmationToken ? { confirmationToken } : {})
-                        }
-                    };
-                    delete next.deletedAt;
-                    delete next.deletedBy;
-                    return table('questions').put(next).then(() => {
-                        if (!imageRecords.length) {
-                            return { question: clone(next), idempotent: false };
-                        }
-                        return table('images').bulkPut(imageRecords)
-                            .then(() => ({ question: clone(next), idempotent: false }));
+                    const prepared = personalKnowledgeEdit
+                        ? prepareQuestionTagEdit(input, existing, personalKnowledgeEdit, now)
+                        : Promise.resolve(input);
+                    return prepared.then(draft => {
+                        const next = {
+                            ...draft,
+                            createdAt: existing?.createdAt ?? draft.createdAt ?? now,
+                            updatedAt: nextQuestionVersion(existing?.updatedAt),
+                            storageMeta: {
+                                ...(isRecord(existing?.storageMeta) ? existing.storageMeta : {}),
+                                ...(isRecord(draft.storageMeta) ? draft.storageMeta : {}),
+                                ...(confirmationToken ? { confirmationToken } : {})
+                            }
+                        };
+                        delete next.deletedAt;
+                        delete next.deletedBy;
+                        return table('questions').put(next).then(() => {
+                            if (!imageRecords.length) {
+                                return { question: clone(next), idempotent: false };
+                            }
+                            return table('images').bulkPut(imageRecords)
+                                .then(() => ({ question: clone(next), idempotent: false }));
+                        });
                     });
                 })
             );
@@ -576,7 +640,7 @@
                     }
                     if (
                         expectedUpdatedAt !== undefined &&
-                        existing.updatedAt !== expectedUpdatedAt
+                        (existing.updatedAt ?? null) !== expectedUpdatedAt
                     ) {
                         throw new StorageRepositoryError(
                             'write-conflict',
@@ -584,36 +648,29 @@
                             { id, expectedUpdatedAt, actualUpdatedAt: existing.updatedAt }
                         );
                     }
-                    const next = { ...existing, ...clone(patch), updatedAt: clock() };
+                    const next = { ...existing, ...clone(patch), updatedAt: nextQuestionVersion(existing.updatedAt) };
                     next.id = id;
                     return tx.put('questions', next);
                 })
             );
         };
 
-        const softDeleteQuestion = async (id, deletedBy = 'user') => {
-            const existing = await get('questions', requireId(id));
-            if (!existing) return { deleted: false, reason: 'not-found' };
-            if (existing.deletedAt) return { deleted: true, idempotent: true };
-            await update('questions', id, {
-                deletedAt: clock(), deletedBy, updatedAt: clock()
-            });
-            return { deleted: true, idempotent: false };
-        };
+        const softDeleteQuestion = (id, deletedBy = 'user') => transaction(['questions'], tx =>
+            tx.get('questions', requireId(id)).then(existing => {
+                if (!existing) return { deleted: false, reason: 'not-found' };
+                if (existing.deletedAt) return { deleted: true, idempotent: true };
+                return tx.update('questions', id, {
+                    deletedAt: Math.max(1, clock()), deletedBy, updatedAt: nextQuestionVersion(existing.updatedAt)
+                }).then(() => ({ deleted: true, idempotent: false }));
+            }));
 
-        const restoreQuestion = async id => {
-            const existing = await get('questions', requireId(id));
-            if (!existing) {
-                throw new StorageRepositoryError(
-                    'not-found', `Question ${id} was not found.`, { id }
-                );
-            }
+        const restoreQuestion = id => transaction(['questions'], tx => tx.get('questions', requireId(id)).then(existing => {
+            if (!existing) throw new StorageRepositoryError('not-found', `Question ${id} was not found.`, { id });
             delete existing.deletedAt;
             delete existing.deletedBy;
-            existing.updatedAt = clock();
-            await put('questions', existing);
-            return clone(existing);
-        };
+            existing.updatedAt = nextQuestionVersion(existing.updatedAt);
+            return tx.put('questions', existing);
+        }));
 
         const listRecentTasks = () => listTable('draftImportBatches', {
             orderBy: 'createdAt', reverse: true
@@ -1017,9 +1074,16 @@
                     const imageTable = table('images');
                     const batchTable = table('draftImportBatches');
 
+                    const hasIndexes = (target, names) => {
+                        // Dexie's declared schema can be ahead of the installed IndexedDB schema.
+                        const nativeTransaction = database.constructor.currentTransaction?.idbtrans;
+                        const nativeIndexes = nativeTransaction?.objectStore(target.name).indexNames;
+                        return names.every(name => target.schema?.idxByName?.[name] &&
+                            (!nativeIndexes || nativeIndexes.contains(name)));
+                    };
                     const loadDuplicateEvidence = fresh => {
-                        const indexed = ['duplicateCoreV2', 'duplicateStemV2', 'formalRequestId', 'formalIdempotencyKey']
-                            .every(key => questionTable.schema?.idxByName?.[key]) &&
+                        const indexed = hasIndexes(questionTable,
+                            ['duplicateCoreV2', 'duplicateStemV2', 'formalRequestId', 'formalIdempotencyKey']) &&
                             typeof duplicatePolicy.canonicalCoreFingerprint === 'function' &&
                             typeof duplicatePolicy.canonicalStemFingerprint === 'function';
                         if (!indexed) {
@@ -1169,6 +1233,8 @@
                                     );
                                 }
 
+                            })
+                            .then(() => {
                                 const clockValue = clock();
                                 const committedAt = new Date(clockValue).toISOString();
                                 const context = {
@@ -1272,8 +1338,7 @@
                                         : imageTable.put(clone(images[index]))
                                             .then(() => putImageAt(index + 1));
                                     const updateBatchStats = () => {
-                                        const submittedCount = draftTable.schema
-                                            ?.idxByName?.['[batchId+status]']
+                                        const submittedCount = hasIndexes(draftTable, ['[batchId+status]'])
                                             ? draftTable.where('[batchId+status]')
                                                 .equals([fresh.batchId, 'submitted']).count()
                                             : draftTable.where('batchId')
@@ -1331,6 +1396,16 @@
                 }
             ));
         };
+
+        const importLegacyHandouts = (records, migrationId) => transaction(['localSettings', 'handoutEntries'], () => {
+            const settings = table('localSettings');
+            const entries = table('handoutEntries');
+            return settings.get(migrationId).then(done => {
+                if (done) return;
+                return entries.count().then(count => !count && records.length ? entries.bulkPut(records) : undefined)
+                    .then(() => settings.put({ id: migrationId, value: true }));
+            });
+        });
 
         const createBackup = async () => {
             const tables = {};
@@ -1452,15 +1527,15 @@
 
         const repository = Object.freeze({
             transaction, applyCustomTemplateChange, updatePersonalKnowledgeTree, listTable, get, put, deleteMany, update, findBy, findAny,
-            loadImageRecords,
-            loadLibrary, saveQuestion, updateQuestion, softDeleteQuestion,
+            loadImageRecords, listImageIds,
+            loadLibrary, loadQuestionsById, saveManualEntryImages, saveQuestion, updateQuestion, softDeleteQuestion,
             restoreQuestion, listRecentTasks, saveDraft, loadDraft,
             loadDraftBatch, loadDraftReview, refreshDraftBatchStats,
             createDraftBatch, persistReviewDraftBatch,
             deleteDraftBatch,
             confirmDraftToQuestion,
             importExternalBatch, deleteExternalBatch, recalcExternalBatchStatus,
-            createBackup, restoreBackup
+            createBackup, restoreBackup, importLegacyHandouts
         });
         return repository;
     };

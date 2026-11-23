@@ -350,14 +350,14 @@
             image.src = url;
         });
 
-        const cropDataUrlByBbox = async (dataUrl, bbox, padding = 8) => {
+        const cropDataUrlByBbox = async (dataUrl, bbox, padding = 8, { normalized = false } = {}) => {
             if (!Array.isArray(bbox) || bbox.length !== 4 || bbox.some(v => !Number.isFinite(Number(v)))) return dataUrl;
             const image = await loadImageElement(dataUrl);
             const imageWidth = image.naturalWidth || image.width;
             const imageHeight = image.naturalHeight || image.height;
             let [x1, y1, x2, y2] = bbox.map(Number);
             const maxCoord = Math.max(x1, y1, x2, y2);
-            if (maxCoord <= 1000 && (imageWidth > 1200 || imageHeight > 1200)) {
+            if (normalized || (maxCoord <= 1000 && (imageWidth > 1200 || imageHeight > 1200))) {
                 x1 = x1 / 1000 * imageWidth;
                 x2 = x2 / 1000 * imageWidth;
                 y1 = y1 / 1000 * imageHeight;

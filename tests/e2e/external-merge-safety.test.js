@@ -3,6 +3,56 @@ const assert = require('node:assert/strict');
 const JSZip = require('jszip');
 const H = require('./browser-harness');
 
+for (const [index, valid] of [true, false].entries()) {
+    test(`actual external fill image association: ${valid ? 'durable and visible' : 'missing declaration refuses all writes'}`, { timeout: 45000 }, async () => {
+        const h = await H.startBrowserApp(32955 + index);
+        try {
+            const dialogs = []; h.page.on('dialog', async dialog => { dialogs.push(dialog.message()); await dialog.accept(); });
+            await h.page.evaluate(async valid => {
+                const base = { stem: '合成补全题', type: '填空题', options: [], answer: '1', meta: {} };
+                await db.questions.put({ ...base, id: 'local', solution: '', images: [], createdAt: 1, updatedAt: 1 });
+                const bytes = Uint8Array.from(atob('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'), c => c.charCodeAt(0));
+                await db.images.put({ id: 'fill-image', blob: new Blob([bytes], { type: 'image/gif' }), createdAt: 1 });
+                await db.externalQuestions.put({ ...base, id: 'external', batchId: 'batch', importedAt: 1, processStatus: 'unprocessed',
+                    solution: '解析 [[IMAGE:fill-image]]', images: valid ? [{ id: 'fill-image', align: 'center' }] : [] });
+                await db.importBatches.put({ id: 'batch', importedAt: 1 });
+            }, valid);
+            await h.page.reload();
+            await h.page.waitForFunction(() => Qisi.Runtime.getRuntimeDependency('AppProxy')?.externalQuestions.length === 1);
+            await h.page.evaluate(() => { Qisi.Runtime.getRuntimeDependency('AppProxy').selectedExternalIds = ['external']; });
+            await H.callProxy(h.page, 'openExternalConfirmPage');
+            assert.equal(await h.page.evaluate(() => Qisi.Runtime.getRuntimeDependency('AppProxy').confirmItems[0].action), 'fill');
+            const feedback = h.page.waitForEvent('dialog');
+            await h.page.getByRole('button', { name: '确认加入', exact: true }).first().click();
+            await feedback;
+            if (valid) {
+                await H.callProxy(h.page, 'videoNav', 'library');
+                await H.callProxy(h.page, 'switchLibraryKnowledgeMode', 'system');
+                const card = h.page.locator('.library-layout .question-card').filter({ hasText: '合成补全题' });
+                await card.getByRole('button', { name: '解析', exact: true }).click();
+                await card.locator('img[alt="题图"]').evaluate(async img => { await img.decode(); });
+            }
+            const result = await h.page.evaluate(async () => {
+                const row = await db.questions.get('local'), external = await db.externalQuestions.get('external');
+                return { row, external, merges: await db.mergeBatches.count(), count: await db.questions.count() };
+            });
+            assert.equal(result.count, 1);
+            if (valid) {
+                assert.equal(result.row.solution, '解析 [[IMAGE:fill-image]]');
+                assert.equal(result.row.images[0].id, 'fill-image');assert.equal(result.row.images[0].url, undefined);
+                assert.equal(result.external.processStatus, 'filled');assert.equal(result.merges, 1);
+                await H.callProxy(h.page, 'undoLatestExternalMerge');
+                assert.deepEqual(await h.page.evaluate(async () => { const q = await db.questions.get('local'); return [q.solution, q.images]; }), ['', []]);
+            } else {
+                assert.equal(result.row.solution, '');assert.deepEqual(result.row.images, []);
+                assert.equal(result.external.processStatus, 'unprocessed');assert.equal(result.merges, 0);
+                assert.ok(dialogs.some(message => message.includes('图片引用缺失或冲突')));
+            }
+            H.assertNoRuntimeErrors(h);
+        } finally { await h.close(); }
+    });
+}
+
 test('actual ZIP file input keeps remapped picture references and bytes consistent with raw evidence preserved', { timeout: 45000 }, async () => {
     const h = await H.startBrowserApp(32865);
     try {

@@ -83,6 +83,10 @@ test('local server keeps browser and API usable while blocking foreign requests 
     assert.equal((await fetch(`${base}/qisi-local-server.js`)).status, 404);
     assert.equal((await fetch(`${base}/package.json`)).status, 404);
     assert.equal((await fetch(`${base}/api/ai/health`, { headers: { Origin: 'http://evil.example' } })).status, 403);
+    assert.equal((await fetch(`${base}/api/health`, { headers: { 'Sec-Fetch-Site': 'cross-site' } })).status, 403);
+    const health = await fetch(`${base}/api/health`);
+    assert.equal(health.headers.get('cache-control'), 'no-store');
+    assert.equal(health.headers.get('x-content-type-options'), 'nosniff');
     assert.equal(await requestWithHost(port, `evil.example:${port}`), 403);
     const preflight = await fetch(`${base}/api/ai/${'chat'}`, {
       method: 'OPTIONS',

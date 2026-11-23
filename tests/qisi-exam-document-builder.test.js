@@ -4,6 +4,38 @@ const cases=require('./fixtures/exam-paper-characterization.json');
 const build=extra=>Parts.createDocumentBuilder({prepareSource:Gate.preparePrintSource,normalizeMath:Gate.normalizeForKatex,tokenize:Utils.tokenizeLatexSource,renderMath:katex.renderToString,
     displayImageUrl:Images.displayImageUrl,groupQuestions:Groups.groupQuestions,typeOrder:Config.EXAM_TYPE_ORDER,defaultGroupConfig:Config.DEFAULT_GROUP_CONFIG,typeLabels:Config.QUESTION_TYPE_LABELS,sectionNumbers:Config.CHINESE_SECTION_NUMBERS,...extra});
 const freeze=value=>{if(value&&typeof value==='object'){Object.values(value).forEach(freeze);Object.freeze(value);}return value;};
+test('untrusted print image and missing-image HTML stays text through the actual formula and document pipeline',()=>{
+    const payloads=[
+        '<img class="print-image" src="data:image/png;base64,AA==" onerror="window.__audit_marker=1" alt="题图" />',
+        '<span class="missing-image"><img src="data:image/png;base64,AA==" onerror="window.__audit_marker=1"></span>'
+    ];
+    for(const payload of payloads) for(const field of ['stem','answer','solution','option']){
+        const paper=structuredClone(cases[0].paper);paper.mode='withAnswers';
+        const q=paper.questions[0],source='$'+payload+' [[IMAGE:missing]]$';
+        if(field==='option'){q.type='单选题';q.options=[source,'B'];}else q[field]=source;
+        const html=build().buildPaper({paper}).documents[0].content;
+        assert.ok(html.includes('&lt;img'),field);
+        assert.doesNotMatch(html,/<img[^>]*onerror=/,field);
+    }
+});
+test('source placeholder lookalikes cannot steal generated print images',()=>{
+    for(const source of ['@@QISI_PRINT_IMAGE_0@@ [[IMAGE:real]]','@@QISI_PRINT_\nIMAGE_0@@ [[IMAGE:real]]']){
+        const html=build({prepareSource:x=>x,tokenize:raw=>({issues:[],segments:[{type:'text',raw}]})}).render(source,[{id:'real',url:'data:image/png;base64,YQ=='}]);
+        assert.ok(html.startsWith('@@QISI_PRINT_IMAGE_0@@ '));
+        assert.equal((html.match(/<img /g)||[]).length,1);
+        assert.ok(html.endsWith('alt="题图" />'));
+    }
+    // A policy-accepted URL for pure rendering only; this test makes no request.
+    const data='https://example.invalid/@@QISI_PRINT_IMAGE_1@@';
+    const nested=build({prepareSource:x=>x,tokenize:raw=>({issues:[],segments:[{type:'text',raw}]})}).render('[[IMAGE:first]] [[IMAGE:second]]',
+        [{id:'first',url:data},{id:'second',url:'data:image/png;base64,YQ=='}]);
+    assert.ok(nested.includes(`src="${data}"`));
+    assert.equal((nested.match(/<img /g)||[]).length,2);
+    const include=build({prepareSource:x=>x,tokenize:raw=>({issues:[],segments:[{type:'text',raw}]})}).render('\\includegraphics{first} [[IMAGE:second]]',
+        [{id:'first',url:data},{id:'second',url:'data:image/png;base64,YQ=='}]);
+    assert.ok(include.includes(`src="${data}"`));
+    assert.equal((include.match(/<img /g)||[]).length,2);
+});
 for(const fixture of cases)test('complete document is byte-equivalent to pre-migration output: '+fixture.name,()=>{
     const input=structuredClone(fixture.paper),before=structuredClone(input),result=build().buildPaper({paper:freeze(input)});
     assert.deepEqual({questionsContent:result.questionsContent,answersContent:result.answersContent,documents:result.documents},fixture.expected);assert.deepEqual(input,before);

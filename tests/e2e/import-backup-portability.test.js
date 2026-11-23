@@ -30,7 +30,7 @@ const allTables = page => page.evaluate(async () => {
     } finally { database.close(); }
 });
 
-test('full PDF import, edit, search, print, backup and isolated restore preserve 11 tables and image bytes', { timeout: 120000 }, async () => {
+test('full PDF import, edit, search, print, backup and isolated restore preserve all backup tables and image bytes', { timeout: 120000 }, async () => {
     const source = await H.startBrowserApp(33300);
     let target, preview;
     const safetyWrites = [];
@@ -73,7 +73,7 @@ test('full PDF import, edit, search, print, backup and isolated restore preserve
         assert.match(afterFormalEdit.questions[0].stem,/A1-CHAIN-EDIT/);
         assert.equal(afterFormalEdit.questions[0].answer,formal.answer);assert.equal(afterFormalEdit.questions[0].solution,formal.solution);
         for(const table of Object.keys(beforeFormalEdit).filter(name=>name!=='questions'))assert.deepEqual(afterFormalEdit[table],beforeFormalEdit[table]);
-        await source.page.getByRole('button',{name:'题库与检索',exact:true}).click();
+        await source.page.locator('.v-topnav nav').getByRole('button',{name:'题库',exact:true}).click();
         await source.page.getByPlaceholder('搜索题干、答案、解析',{exact:true}).fill('A1-NONEXISTENT-SEARCH-MARKER');
         await source.page.waitForFunction(()=>Qisi.Runtime.getRuntimeDependency('AppProxy').filteredQuestions.length===0);
         await source.page.getByPlaceholder('搜索题干、答案、解析',{exact:true}).fill('A1-CHAIN-EDIT');
@@ -93,7 +93,7 @@ test('full PDF import, edit, search, print, backup and isolated restore preserve
         await preview.locator('#printBtn:not([disabled])').waitFor();assert.match(await preview.locator('.question-flow-body').textContent(),/A1-CHAIN-EDIT/);
         assert.equal(await preview.locator('.missing-image,.latex-render-error').count(),0);await preview.close();preview=null;
         const original = await allTables(source.page);
-        assert.equal(Object.keys(original).length, 11);
+        assert.equal(Object.keys(original).length, 12);
         assert.equal(original.questions.length, 1);
         assert.equal(original.images.length, 1);
         assert.equal(original.customTemplates.length, 1);assert.equal(original.personalKnowledge.length, 1);
@@ -101,7 +101,7 @@ test('full PDF import, edit, search, print, backup and isolated restore preserve
         assert.equal(original.draftQuestions.length, 2);
         assert.equal(original.draftImportFiles.length, 2);
         assert.equal(original.draftQuestions.find(q => q.questionNumber === '2').status, 'pending');
-        await source.page.getByRole('button', { name: '题库与检索', exact: true }).click();
+        await source.page.getByRole('button',{name:'个人知识点与备份',exact:true}).click();
         const downloading = source.page.waitForEvent('download');
         await source.page.getByRole('button', { name: '下载完整备份', exact: true }).click();
         let download;
@@ -143,7 +143,7 @@ test('full PDF import, edit, search, print, backup and isolated restore preserve
         const empty = await allTables(target.page);
         assert.equal(empty.questions.length, 0);
         assert.equal(empty.draftQuestions.length, 0);
-        await target.page.getByRole('button', { name: '题库与检索', exact: true }).click();
+        await target.page.getByRole('button',{name:'个人知识点与备份',exact:true}).click();
         await target.page.getByTestId('restore-file').setInputFiles({ name: 'synthetic-full-backup.zip', mimeType: 'application/zip', buffer: bytes });
         await target.page.getByTestId('restore-preview').waitFor();
         assert.equal(await target.page.getByTestId('restore-confirm').isDisabled(), true);

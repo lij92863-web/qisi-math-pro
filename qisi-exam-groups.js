@@ -8,8 +8,9 @@
 
     // Exam state, pure grouping, fixed paper snapshots and explicitly injected drag lifecycle.
 
+    const own = (record, key) => Object.hasOwn(record, key) ? record[key] : undefined;
     const groupQuestions = ({ questions, groupConfig = {}, questionMeta = {}, typeOrder = [], defaultGroupConfig = {}, typeLabels = {} } = {}) => {
-        const grouped = {};
+        const grouped = Object.create(null);
         (Array.isArray(questions) ? questions : []).forEach(question => {
             const type = question.type || '其他题型';
             if (!grouped[type]) grouped[type] = [];
@@ -20,10 +21,10 @@
             const ib = typeOrder.includes(b) ? typeOrder.indexOf(b) : 999;
             return ia - ib || a.localeCompare(b, 'zh-Hans-CN');
         }).map(([type, items]) => {
-            const config = groupConfig[type] || defaultGroupConfig[type] ||
-                { title: typeLabels[type] || type, points: 0 };
+            const config = own(groupConfig, type) || own(defaultGroupConfig, type) ||
+                { title: own(typeLabels, type) || type, points: 0 };
             const points = Number(config.points || 0);
-            const total = items.reduce((sum, question) => sum + Number(questionMeta[question.id]?.points ?? points), 0);
+            const total = items.reduce((sum, question) => sum + Number(own(questionMeta, question.id)?.points ?? points), 0);
             const generatedText = `${config.title || type}：本大题共 ${items.length} 小题，每小题 ${points} 分，共计 ${total} 分。`;
             return {
                 type,
@@ -38,7 +39,8 @@
     };
 
     const reorderWithinType = ({ sourceId, targetIndex, cart = [], questions = [] } = {}) => {
-        const findQuestion = id => questions.find(question => question?.id === id);
+        const byId = new Map(questions.filter(Boolean).map(question => [question.id, question]));
+        const findQuestion = id => byId.get(id);
         const source = findQuestion(sourceId);
         if (!source) return { cart, changed: false };
         const type = source.type || '其他题型';
@@ -52,11 +54,11 @@
         const nextIndex = Math.max(0, Math.min(targetIndex, withoutSource.length));
         if (currentIndex === nextIndex) return { cart, changed: false };
         withoutSource.splice(nextIndex, 0, sourceId);
-        const queue = [...withoutSource];
+        let position = 0;
         return {
             cart: cart.map(id => {
                 const question = findQuestion(id);
-                return question && (question.type || '其他题型') === type ? queue.shift() : id;
+                return question && (question.type || '其他题型') === type ? withoutSource[position++] : id;
             }),
             changed: true
         };
@@ -78,23 +80,24 @@
         return value;
     };
     const createState = ({ ref, reactive, preferences }) => Object.freeze({
-        cart: ref([]), questionMeta: reactive({}), groupConfig: reactive({}), dragging: ref(''), dragOver: ref(''),
+        cart: ref([]), questionMeta: reactive(Object.create(null)), groupConfig: reactive(Object.create(null)), dragging: ref(''), dragOver: ref(''),
         title: ref('高中数学期末模拟测试'), mode: ref(preferences.get('qisi_export_mode', 'questions') || 'questions')
     });
-    const createWorkspace = ({ state, getQuestions, getLayout, preferences, typeOrder, defaultGroupConfig, typeLabels,
+    const createWorkspace = ({ state, getQuestions, getQuestion, getLayout, preferences, typeOrder, defaultGroupConfig, typeLabels,
         confirm, notify, onOpen = () => {}, observeCart = () => () => {}, observeMeta = () => () => {},
         observeGroups = () => () => {}, observeQuestions = () => () => {}, observeMode = () => () => {}, observeNavigation = () => () => {} } = {}) => {
         let disposed = false, guarding = 0, pointer = null, restored = false;
         const guarded = work => { guarding++; try { return work(); } finally { guarding--; } };
         const questions = () => getQuestions() || [];
-        const ordered = () => state.cart.value.map(id => questions().find(question => question?.id === id)).filter(Boolean);
-        const missing = () => state.cart.value.filter(id => !questions().some(question => question?.id === id));
+        const lookup = getQuestion || (id => questions().find(question => question?.id === id));
+        const ordered = () => state.cart.value.map(lookup).filter(Boolean);
+        const missing = () => state.cart.value.filter(id => !lookup(id));
         const groups = (source = ordered(), paper = null) => groupQuestions({ questions: source,
             groupConfig: paper?.groupConfig || state.groupConfig, questionMeta: paper?.questionMeta || state.questionMeta,
             typeOrder, defaultGroupConfig, typeLabels });
         const groupSummary = group => group.text || `${group.title}：本大题共 ${group.count} 小题，每小题 ${Number(group.points || 0)} 分，共计 ${group.total} 分。`;
         const groupConfig = type => {
-            if (!state.groupConfig[type]) state.groupConfig[type] = clonePaperValue(defaultGroupConfig[type] || { title: typeLabels[type] || type || '其他题型', points: 0 });
+            if (!state.groupConfig[type]) state.groupConfig[type] = clonePaperValue(own(defaultGroupConfig, type) || { title: own(typeLabels, type) || type || '其他题型', points: 0 });
             return state.groupConfig[type];
         };
         const persist = () => {
@@ -141,16 +144,16 @@
             if (disposed) return false;
             if (!restored) restore();
             if (state.cart.value.includes(id)) return remove(id);
-            if (!questions().some(question => question?.id === id)) { notify('题目已不存在，请刷新题库后重新选择。'); return false; }
+            if (!lookup(id)) { notify('题目已不存在，请刷新题库后重新选择。'); return false; }
             cancel(); guarded(() => { state.cart.value = [...state.cart.value,id]; }); syncMeta(); return true;
         };
         const typeIds = id => {
-            const source = questions().find(question => question?.id === id); if (!source) return [];
-            return state.cart.value.filter(cartId => { const question = questions().find(item => item?.id === cartId); return question && (question.type || '其他题型') === (source.type || '其他题型'); });
+            const source = lookup(id); if (!source) return [];
+            return state.cart.value.filter(cartId => { const question = lookup(cartId); return question && (question.type || '其他题型') === (source.type || '其他题型'); });
         };
         const reorder = (id,index,expectedIds) => {
             if (disposed || (expectedIds && JSON.stringify(typeIds(id)) !== JSON.stringify(expectedIds))) return false;
-            const result = reorderWithinType({ sourceId:id,targetIndex:index,cart:state.cart.value,questions:questions() });
+            const result = reorderWithinType({ sourceId:id,targetIndex:index,cart:state.cart.value,questions:ordered() });
             if (result.changed) { guarded(() => { state.cart.value = result.cart; }); persist(); } return result.changed;
         };
         const move = (id,direction) => { if (![1,-1].includes(direction)) return false; const ids = typeIds(id),index = ids.indexOf(id),next = index+direction; if(index<0||next<0||next>=ids.length)return false;cancel();return reorder(id,next); };
@@ -182,15 +185,15 @@
             observeGroups(()=>{if(!disposed&&restored&&!guarding)persist();}),observeQuestions(()=>{if(!disposed&&restored){cancel();syncMeta();}}),
             observeMode(value=>{if(!disposed)preferences.set('qisi_export_mode',value);}),observeNavigation(cancel)];
         const attachPointer = port => { pointer?.dispose();pointer=port; };
-        const startPointer = (id,event) => { if(!disposed&&state.cart.value.includes(id)&&questions().some(question=>question?.id===id))pointer?.start(id,event); };
+        const startPointer = (id,event) => { if(!disposed&&state.cart.value.includes(id)&&lookup(id))pointer?.start(id,event); };
         const open = () => { if(!disposed){if(!restored)restore();syncGroups();onOpen();} };
         const dispose = () => { if(disposed)return;disposed=true;pointer?.dispose();stops.forEach(stop=>stop?.());state.dragging.value='';state.dragOver.value=''; };
-        return Object.freeze({state,questions,ordered,missing,groups,groupConfig,groupSummary,syncMeta,syncGroups,restore,toggle,remove,typeIds,reorder,move,displayIndex,drop,reset,clear,snapshot,attachPointer,startPointer,open,dispose});
+        return Object.freeze({state,questions,lookup,ordered,missing,groups,groupConfig,groupSummary,syncMeta,syncGroups,restore,toggle,remove,typeIds,reorder,move,displayIndex,drop,reset,clear,snapshot,attachPointer,startPointer,open,dispose});
     };
 
     const createPointerDragPort = ({ document, window, raf, caf, later, cancelLater, afterRender, workspace }) => {
         let disposed = false, epoch = 0, examDragCleanup = null, expectedTypeIds = [], baselineSelect = '';
-        const questions = { get value() { return workspace.questions(); } }, cart = workspace.state.cart;
+        const cart = workspace.state.cart;
         const draggingExamQuestionId = workspace.state.dragging, dragOverExamQuestionId = workspace.state.dragOver;
         const frames = new Set(), timers = new Set(), styles = new Map();
         const restoreStyles = () => { for (const [element, original] of styles) Object.assign(element.style, original); styles.clear(); document.body.classList.remove('exam-drag-active'); };
@@ -223,10 +226,10 @@
                     const cardsInSection = () => [...section.querySelectorAll('.exam-edit-card[data-exam-qid]')]
                         .filter(el => el.dataset.examQid);
                     const typeIndexOf = () => {
-                        const sourceQ = questions.value.find(q => q?.id === id);
+                        const sourceQ = workspace.lookup(id);
                         const type = sourceQ?.type || '其他题型';
                         return cart.value.filter(cartId => {
-                            const q = questions.value.find(item => item?.id === cartId);
+                            const q = workspace.lookup(cartId);
                             return q && (q.type || '其他题型') === type;
                         }).indexOf(id);
                     };

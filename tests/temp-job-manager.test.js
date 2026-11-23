@@ -76,6 +76,29 @@ test('startup cleanup removes expired jobs but preserves fresh jobs', async t =>
     assert.equal(fs.existsSync(fresh), true);
 });
 
+test('capacity cleanup evicts the oldest idle job and manual cleanup keeps active paths across both roots', async t => {
+    const dirs = await fixture();
+    t.after(() => fsp.rm(dirs.root, { recursive: true, force: true }));
+    const oldest = path.join(dirs.uploads, 'oldest.pdf');
+    const newest = path.join(dirs.converted, 'newest');
+    const active = path.join(dirs.uploads, 'active.pdf');
+    await fsp.mkdir(newest);
+    await Promise.all([fsp.writeFile(oldest, Buffer.alloc(9)), fsp.writeFile(active, Buffer.alloc(8)),
+        fsp.writeFile(path.join(newest, 'result.pdf'), Buffer.alloc(9))]);
+    const now = Date.now();
+    await fsp.utimes(oldest, new Date(now - 120000), new Date(now - 120000));
+    await fsp.utimes(active, new Date(now - 7200000), new Date(now - 7200000));
+    const manager = createTempJobManager({ roots: [dirs.uploads, dirs.converted], maxBytes: 20, maxAgeMs: 3600000, now: () => now });
+    const untrack = manager.track({ uploadPath: active });
+    assert.deepEqual(await manager.cleanupExpired(), { removed: 1, freedBytes: 9, remainingBytes: 17, maxBytes: 20, failed: 0 });
+    assert.equal(fs.existsSync(oldest), false);
+    assert.equal(fs.existsSync(newest), true);
+    assert.deepEqual(await manager.cleanupInactive(), { removed: 1, freedBytes: 9, remainingBytes: 8, maxBytes: 20, failed: 0 });
+    assert.equal(fs.existsSync(active), true);
+    untrack();
+    assert.equal((await manager.cleanupInactive()).removed, 1);
+});
+
 test('cleanup failure logs only a stable error code', async () => {
     const secret = 'C:\\private\\teacher-answer.docx';
     const logs = [];

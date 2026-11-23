@@ -33,3 +33,36 @@ test('ambiguous duplicate image IDs within one question fail closed instead of c
     zip.file('a.png','a'); zip.file('b.png','b'); const service=makeService(zip);
     const parsed=await service.read(file); assert.throws(()=>service.project(parsed),/标识冲突/);
 });
+
+test('a package with over ten thousand image entries round-trips through the production archive policy', { timeout: 45000 }, async () => {
+    const security = require('../qisi-archive-security');
+    const shared = new Blob(['shared fixture'], { type: 'image/png' });
+    const images = Array.from({ length: 10005 }, (_, index) => ({ id: 'source/' + index, blob: shared }));
+    const questions = images.map(({ id }, index) => ({ id: 'q' + index,
+        stem: 'Question ' + index + ' [[IMAGE:' + id + ']]',
+        images: [{ id, file: 'images/' + id + '.png' }] }));
+    const blob = await Export.writeQuestionBank({ manifest: { schemaVersion: '1.0', questionCount: questions.length }, questions, images }, security);
+    const file = new File([blob], 'large.zip', { type: blob.type });
+    const service = makeService(null, { loadArchive: input => security.openBlob(input, 'question-bank') });
+    const restored = service.project(await service.read(file));
+    assert.equal(restored.questions.length, questions.length);
+    assert.equal(restored.images.length, images.length);
+    const last = restored.questions.at(-1);
+    assert.equal(last.stem, 'Question 10004 [[IMAGE:' + last.images[0].id + ']]');
+    assert.equal(await restored.images.at(-1).blob.text(), await shared.text());
+});
+
+test('a sharded question bank cannot be mistaken for a complete legacy package', async () => {
+    const security = require('../qisi-archive-security');
+    const questions = Array.from({ length: 3 }, (_, index) => ({
+        id: 'large-' + index, stem: String(index).repeat(3 * 1024 * 1024), images: []
+    }));
+    const blob = await Export.writeQuestionBank({ manifest: { schemaVersion: '1.0', questionCount: questions.length }, questions, images: [] }, security);
+    const file = new File([blob], 'sharded.zip', { type: blob.type });
+    const archive = await security.openBlob(file, 'question-bank');
+    assert.equal(archive.file('questions.json'), null);
+    assert.ok(archive.file('questions-1.json'));
+    assert.ok(archive.file('questions-2.json'));
+    const decoded = await makeService(archive).read(file);
+    assert.deepEqual(decoded.rawQuestions, questions);
+});

@@ -8,6 +8,9 @@ describe('expandPageRange', () => {
         const result = expandPageRange('1,3-5,7', 10);
         assert.deepEqual(result, [1, 3, 4, 5, 7]);
     });
+    it('the Chinese help example expands to the same printed page numbers', () => {
+        assert.deepEqual(expandPageRange('1-3， 5、7-9', 10), [1, 2, 3, 5, 7, 8, 9]);
+    });
 
     it('empty input: returns all pages 1..maxPage', () => {
         const result = expandPageRange('', 5);

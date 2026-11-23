@@ -8,6 +8,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const fsp = require('fs/promises');
+const { randomUUID } = require('node:crypto');
 const { spawn } = require('child_process');
 const { createTempJobManager } = require('./qisi-temp-job-manager');
 const { createSecureLogger } = require('./qisi-secure-logger');
@@ -50,10 +51,19 @@ for (const dir of [TMP_DIR, UPLOAD_DIR, CONVERTED_DIR, TOOLS_DIR]) {
 
 const tempJobManager = createTempJobManager({
   roots: [UPLOAD_DIR, CONVERTED_DIR],
+  rootBoundary: ROOT,
   maxAgeMs: TEMP_JOB_MAX_AGE_MS
 });
 
+function trackIncomingUpload(req, filename, callback) {
+  const release = tempJobManager.track({ uploadPath: path.join(UPLOAD_DIR, filename) });
+  req.res.once('finish', release);
+  req.res.once('close', release);
+  callback(null, filename);
+}
+
 const app = express();
+app.disable('x-powered-by');
 // The pipeline legitimately issues page-parallel requests (a 21-page paper opens
 // up to 12 in flight). The old fixed cap of 4 turned that into AI_PROXY_BUSY,
 // which is a local rejection and looks like a provider failure to the caller.
@@ -64,10 +74,15 @@ const aiRequestLimiter = createAiRequestLimiter({
 const aiJsonParser = express.json({ limit: AI_BODY_LIMIT, type: 'application/json' });
 
 app.use((req, res, next) => {
+  res.set('X-Content-Type-Options', 'nosniff');
   if (!isAllowedLocalHost(req.get('host'), PORT)) return res.sendStatus(403);
   const origin = req.get('origin');
   res.vary('Origin');
   if (!isAllowedLocalOrigin(origin, PORT)) return res.sendStatus(403);
+  if (req.path.startsWith('/api/')) {
+    res.set('Cache-Control', 'no-store');
+    if (req.get('sec-fetch-site') === 'cross-site') return res.sendStatus(403);
+  }
   if (origin) res.set('Access-Control-Allow-Origin', origin);
   if (req.method === 'OPTIONS') {
     res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -75,6 +90,11 @@ app.use((req, res, next) => {
     return res.sendStatus(204);
   }
   next();
+});
+
+app.post('/api/maintenance/temp-files/cleanup', async (req, res) => {
+  if (req.get('origin') !== `http://${req.get('host')}` || req.get('x-qisi-temp-cleanup') !== '1') return res.sendStatus(403);
+  return res.json(await tempJobManager.cleanupInactive());
 });
 
 app.get('/api/ai/health', (req, res) => {
@@ -220,7 +240,6 @@ app.post('/api/ai/ocr', aiJsonParser, (req, res) => {
   forwardDashScopeRequest(req, res, 'ocr', DASHSCOPE_OCR_UPSTREAM);
 });
 
-app.use(express.json({ limit: '2mb' }));
 const MAIN_HTML_PATH = path.join(ROOT, 'main.html');
 // The served file allow-list follows main.html on disk. A server started before a
 // new <script> tag existed must not keep answering 404 for it, because a single
@@ -249,7 +268,7 @@ const storage = multer.diskStorage({
     const safe = sanitizeFilename(file.originalname || 'upload.docx');
     const ext = path.extname(safe) || '.docx';
     const base = path.basename(safe, ext);
-    cb(null, `${Date.now()}_${base}${ext}`);
+    trackIncomingUpload(req, `${Date.now()}_${randomUUID()}_${base}${ext}`, cb);
   }
 });
 
@@ -259,7 +278,7 @@ const upload = multer({
     try { assertDocxUploadType(file); callback(null, true); }
     catch (error) { callback(error); }
   },
-  limits: { fileSize: 80 * 1024 * 1024 }
+  limits: { fileSize: 80 * 1024 * 1024, files: 1, fields: 0 }
 });
 
 function sanitizeFilename(name) {
@@ -512,7 +531,7 @@ async function convertWithLibreOffice(inputPath, outputDir) {
 }
 
 async function convertDocxToPdf(inputPath, job = {}) {
-  const jobId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const jobId = `${Date.now()}_${randomUUID()}`;
   const outDir = path.join(CONVERTED_DIR, jobId);
   const errors = [];
 
@@ -706,6 +725,7 @@ app.post('/api/convert/mathtype-mtef', express.json({ limit: '8mb' }), async (re
 app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => {
   const uploaded = req.file;
   const cleanupJob = { uploadPath: uploaded?.path || '', outputDir: '' };
+  const releaseTempJob = tempJobManager.track(cleanupJob);
 
   try {
     if (!uploaded) {
@@ -777,6 +797,7 @@ app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => 
     });
   } finally {
     await tempJobManager.cleanupRequest(cleanupJob);
+    releaseTempJob();
   }
 });
 
@@ -784,7 +805,7 @@ app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => 
 const mineruClient = createMineruClient({ token: MINERU_TOKEN,
   store: require('./qisi-mineru-task-store').createMineruTaskStore(path.join(ROOT, 'local-run-artifacts', 'mineru-extractions-v2')) });
 
-app.get('/api/mineru/status', (req, res) => res.json({ configured: Boolean(MINERU_TOKEN) }));
+app.get('/api/mineru/status', (req, res) => res.json({ configured: Boolean(MINERU_TOKEN), pageSelection: true }));
 
 const mineruUpload = multer({
   storage: multer.diskStorage({
@@ -793,7 +814,7 @@ const mineruUpload = multer({
       const safe = sanitizeFilename(decodeMultipartFilename(file.originalname) || 'upload.pdf');
       const ext = path.extname(safe) || '.pdf';
       const base = path.basename(safe, ext);
-      cb(null, `mineru_${Date.now()}_${base}${ext}`);
+      trackIncomingUpload(req, `mineru_${Date.now()}_${randomUUID()}_${base}${ext}`, cb);
     }
   }),
   fileFilter: (req, file, callback) => {
@@ -803,7 +824,7 @@ const mineruUpload = multer({
     }
     callback(null, true);
   },
-  limits: { fileSize: MINERU_MAX_PDF_BYTES, files: 1 }
+  limits: { fileSize: MINERU_MAX_PDF_BYTES, files: 1, fields: 0 }
 });
 
 const mineruUploadSingle = (req, res, next) => {
@@ -830,11 +851,39 @@ async function estimatePdfPageCount(buffer) {
   finally { await task.destroy(); }
 }
 
+async function selectMineruPdf(buffer, range, totalPages) {
+  const { validatePageRange, expandPageRange } = require('./qisi-utils.js');
+  if (typeof range !== 'string' || !range || range.length > 1024 || !validatePageRange(range) ||
+      [...range.matchAll(/\d+/g)].some(([number]) => Number(number) > totalPages)) {
+    throw Object.assign(new Error(`页码范围无效。原 PDF 共 ${totalPages} 页，示例：1-3,5,7-9。`), { code: 'MINERU_PAGE_RANGE_INVALID' });
+  }
+  const pages = expandPageRange(range, totalPages);
+  if (pages.length > MINERU_MAX_PAGES) throw Object.assign(new Error(`一次最多识别 ${MINERU_MAX_PAGES} 页。`), { code: 'MINERU_PAGE_LIMIT' });
+  const { PDFDocument, PDFName } = require('pdf-lib');
+  let selected;
+  try {
+    const original = await PDFDocument.load(buffer, { updateMetadata: false });
+    selected = await PDFDocument.create({ updateMetadata: false });
+    const indices = pages.map(page => page - 1);
+    // Drop annotations and page-level actions before copying their object graphs.
+    for (const index of indices) for (const key of ['Annots', 'AA', 'Metadata', 'PieceInfo', 'B']) {
+      original.getPage(index).node.delete(PDFName.of(key));
+    }
+    for (const page of await selected.copyPages(original, indices)) selected.addPage(page);
+  } catch {
+    throw Object.assign(new Error('无法安全提取所选页面。请检查 PDF 是否加密或损坏。'), { code: 'MINERU_PAGE_RANGE_INVALID' });
+  }
+  const bytes = Buffer.from(await selected.save({ updateFieldAppearances: false }));
+  if (bytes.length > MINERU_MAX_PDF_BYTES) throw Object.assign(new Error('所选页面的 PDF 超过 200MB 上限。'), { code: 'MINERU_UPLOAD_SIZE_LIMIT' });
+  return { bytes, originalSource: { sha256: require('node:crypto').createHash('sha256').update(buffer).digest('hex'), pages, totalPages } };
+}
+
 function mineruErrorStatus(error) {
   const code = String(error?.code || '');
   if (code === 'MINERU_NOT_CONFIGURED') return 503;
   if (code === 'MINERU_INPUT_INVALID' || code === 'MINERU_UPLOAD_TYPE_INVALID' || code === 'MINERU_IMAGE_NAME_INVALID') return 400;
-  if (code === 'MINERU_PAGE_LIMIT') return 413;
+  if (code === 'MINERU_PAGE_RANGE_INVALID') return 400;
+  if (code === 'MINERU_PAGE_LIMIT' || code === 'MINERU_UPLOAD_SIZE_LIMIT') return 413;
   if (code === 'MINERU_PARSE_TIMEOUT') return 504;
   if (code === 'MINERU_IMAGE_NOT_FOUND' || code === 'MINERU_JOB_NOT_FOUND') return 404;
   if (code.startsWith('MINERU_')) return 502;
@@ -851,6 +900,8 @@ app.post('/api/mineru/parse', mineruUploadSingle, async (req, res) => {
   const abortOnClose = () => { if (!res.writableEnded) controller.abort(); };
   res.once('close', abortOnClose);
   const startedAt = Date.now();
+  const cleanupJob = { uploadPath: uploaded.path };
+  const releaseTempJob = tempJobManager.track(cleanupJob);
 
   try {
     const buffer = await fsp.readFile(uploaded.path);
@@ -861,14 +912,16 @@ app.post('/api/mineru/parse', mineruUploadSingle, async (req, res) => {
       return res.status(413).json({ ok: false, code: 'MINERU_UPLOAD_SIZE_LIMIT', error: 'PDF 超过 200MB 上限。' });
     }
     const estimatedPages = await estimatePdfPageCount(buffer);
-    if (estimatedPages > MINERU_MAX_PAGES) {
+    const range = req.query?.pages;
+    const selection = range === undefined ? null : await selectMineruPdf(buffer, range, estimatedPages);
+    if (!selection && estimatedPages > MINERU_MAX_PAGES) {
       return res.status(413).json({
         ok: false, code: 'MINERU_PAGE_LIMIT',
         error: `PDF 共 ${estimatedPages} 页，超过 ${MINERU_MAX_PAGES} 页上限。`
       });
     }
 
-    const result = await mineruClient.parse(buffer, {
+    const result = await mineruClient.parse(selection?.bytes || buffer, {
       filename: decodeMultipartFilename(uploaded.originalname) || path.basename(uploaded.path),
       signal: controller.signal
     });
@@ -887,7 +940,7 @@ app.post('/api/mineru/parse', mineruUploadSingle, async (req, res) => {
     });
 
     if (res.destroyed || res.writableEnded) return;
-    return res.json(result);
+    return res.json(selection ? { ...result, originalSource: selection.originalSource } : result);
   } catch (error) {
     const aborted = error?.name === 'AbortError' || controller.signal.aborted;
     const code = aborted ? 'MINERU_CANCELLED' : (error?.code || 'MINERU_PARSE_FAILED');
@@ -908,7 +961,8 @@ app.post('/api/mineru/parse', mineruUploadSingle, async (req, res) => {
     });
   } finally {
     res.removeListener('close', abortOnClose);
-    await tempJobManager.cleanupRequest({ uploadPath: uploaded.path });
+    await tempJobManager.cleanupRequest(cleanupJob);
+    releaseTempJob();
   }
 });
 
@@ -931,7 +985,7 @@ app.get('/api/mineru/image', async (req, res) => {
 
 app.use((error, req, res, next) => {
   if (res.headersSent) return next(error);
-  const code = error?.code === 'LIMIT_FILE_SIZE' ? 'UPLOAD_SIZE_LIMIT'
+  const code = error?.code === 'LIMIT_FILE_SIZE' || error?.type === 'entity.too.large' ? 'UPLOAD_SIZE_LIMIT'
     : error?.code === 'DOCX_UPLOAD_TYPE_INVALID' ? error.code
       : error instanceof SyntaxError ? 'INVALID_JSON_BODY' : 'LOCAL_SERVICE_FAILURE';
   res.status(code === 'UPLOAD_SIZE_LIMIT' ? 413 : code === 'LOCAL_SERVICE_FAILURE' ? 500 : 400)
@@ -949,7 +1003,9 @@ async function startServer() {
     console.log('[qisi-local-server] LibreOffice candidates:');
     findLibreOfficeExecutable().forEach(p => console.log(`  - ${p}`));
   });
-  server.once('close', closeDashScopeConnections);
+  const expiredJobs = setInterval(() => void tempJobManager.cleanupExpired(), 60 * 60 * 1000);
+  expiredJobs.unref();
+  server.once('close', () => { clearInterval(expiredJobs); closeDashScopeConnections(); });
 }
 
 startServer().catch(error => {

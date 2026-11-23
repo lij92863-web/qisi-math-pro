@@ -30,6 +30,26 @@
         .map(token => token.match(/\{([^}]+)\}/)?.[1])
         .filter(Boolean))];
 
+    function normalizeLayout(layout) {
+        if (!layout || !Number.isFinite(layout.width) || layout.width <= 0) return undefined;
+        const limit = (value, min, max, fallback) =>
+            Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+        return {
+            width: limit(layout.width, 24, 1500, 180),
+            ...(Number.isFinite(layout.height) && layout.height > 0 ? { height: limit(layout.height, 24, 1500, 180) } : {}),
+            x: limit(layout.x, 0, 1, .5),
+            y: limit(layout.y, 0, 1500, 0),
+            ...(['stem', 'options', 'origin'].includes(layout.anchor) ? { anchor: layout.anchor } : {}),
+            ...(['stem', 'options'].includes(layout.anchor) ? { gap: limit(layout.gap, 0, 1500, 0) } : {}),
+            caption: String(layout.caption || '').slice(0, 120)
+        };
+    }
+
+    function imageReference(image) {
+        const layout = normalizeLayout(image.layout);
+        return { id: image.id, align: image.align || 'center', ...(layout ? { layout } : {}) };
+    }
+
     const normalizeInlineImageList = (images = []) => {
         const rows = Array.isArray(images) ? images : [];
         const seen = new Set();
@@ -43,11 +63,10 @@
                 return true;
             })
             .map(img => ({
-                id: img.id,
+                ...imageReference(img),
                 filename: img.filename || img.name || `${img.id}.png`,
                 name: img.name || img.filename || `${img.id}.png`,
                 url: img.url,
-                align: img.align || 'center',
                 source: img.source || '',
                 displayable: img.displayable !== false,
                 ext: img.ext || '',
@@ -72,6 +91,8 @@
 
     return Object.freeze({
         displayImageUrl,
+        normalizeLayout,
+        imageReference,
         extractGraphicRefs,
         normalizeInlineImageList,
         mergeImageListsById

@@ -271,7 +271,7 @@
                 const math = match[1] ?? match[2];
                 try {
                     if (/\\\\[a-zA-Z]/.test(math)) throw new Error('公式反斜杠重复转义');
-                    if (renderMath) renderMath(math, { throwOnError: true, strict: 'ignore' });
+                    if (renderMath) resolveUtils().renderLatexFormula(renderMath, math, { throwOnError: true, strict: 'ignore' });
                 } catch (error) { problems.push({ field, message: '公式需要对照原卷修正：' + error.message }); break; }
             }
         }

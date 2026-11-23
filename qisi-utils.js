@@ -377,6 +377,12 @@
             return out.replace(/\n/g, '');
         };
 
+        const renderLatexFormula = (render, expression, options) => render(expression, {
+            ...options,
+            // KaTeX mutates this object for global definitions. Scope it to one formula.
+            macros: { '\\vect': '\\overrightarrow', ...options?.macros }
+        });
+
         const normalizeBareLatexExpressionForDisplay = (expression = '') => String(expression || '')
             .replace(/鈭歿2\}/g, '\\sqrt{2}')
             .replace(/鈭\?/g, '\\sqrt{2}')
@@ -386,7 +392,8 @@
             .trim();
 
         const BARE_LATEX_DISPLAY_SIGNAL_RE =
-            /\\(?:frac|dfrac|sqrt|angle|sin|cos|tan|log|ln|pi|theta|alpha|beta|gamma|Delta|overline|vec|overrightarrow)\b|鈭\?|鈭歿2\}|√\s*2|蟺|π/;
+            /\\(?:frac|dfrac|sqrt|angle|sin|cos|tan|log|ln|pi|theta|alpha|beta|gamma|Delta|overline|vec|vect|overrightarrow)\b|鈭\?|鈭歿2\}|√\s*2|蟺|π/;
+        const BARE_INDEXED_LABEL_RE = /^(?:[A-Za-z]_(?:[A-Za-z0-9]|\{[A-Za-z0-9]+(?:[+-][A-Za-z0-9]+)*\}))+$/;
 
         const normalizeBareLatexForDisplaySpan = (span = '') => {
             const source = String(span || '');
@@ -407,6 +414,8 @@
                 if (/[=<>]|\u2264|\u2265/.test(body) && /[A-Za-z0-9]/.test(body)) return true;
                 // geometry / point / vector labels: AB, ABCD, PQ
                 if (/^[A-Za-z]{2,4}$/.test(body)) return true;
+                // Indexed labels such as F_1, F_2 and a_{n+1}.
+                if (body.includes('_') && body.split(/[ \t]*,[ \t]*/).every(label => BARE_INDEXED_LABEL_RE.test(label))) return true;
                 // labelled point / coordinate: A(1,2), (1,2)
                 if (/^[A-Za-z]\([^()]*\d[^()]*\)$/.test(body)) return true;
                 if (/^\(\s*-?\d[^()]*\)$/.test(body)) return true;
@@ -516,15 +525,23 @@
                 .replace(/\r/g, '\n')
                 .replace(/([A-D])\s*[．.、:：]\s*/g, '$1. ');
 
-            const labelRegex = /(^|[\n\r\s　]|[（(])([A-D])\s*(?:[\.．、:：\)）]|(?=\s*[$\\\u4e00-\u9fa5A-Za-z0-9（(]))/g;
+            const labelRegex = /(^|[\n\r\s　]|[（(])([A-D])\s*(?:([.．、:：)）])|(?=\s*[$\\\u4e00-\u9fa5A-Za-z0-9（(]))/g;
 
+            const parsed = tokenizeLatexSource(source);
+            const formulas = parsed.segments.filter(segment => segment.type === 'math');
+            let formulaIndex = 0;
             const hits = [];
             let match;
 
             while ((match = labelRegex.exec(source)) !== null) {
+                const start = match.index + match[1].length;
+                while (formulas[formulaIndex]?.end <= start) formulaIndex++;
+                // A vertex such as A in \angle ABC is part of the formula.
+                if (formulas[formulaIndex]?.start <= start) continue;
                 hits.push({
                     label: match[2],
-                    start: match.index + match[1].length,
+                    explicit: Boolean(match[3]),
+                    start,
                     contentStart: labelRegex.lastIndex
                 });
             }
@@ -549,7 +566,8 @@
 
             if (!candidates.length) return null;
 
-            const ordered = candidates[0];
+            // Explicit labels take priority over guesses such as A(0,b) in a stem.
+            const ordered = candidates.find(candidate => candidate.every(hit => hit.explicit)) || candidates[0];
 
             const stem = source.slice(0, ordered[0].start).trim();
             if (!stem) return null;
@@ -560,9 +578,12 @@
                 const next = ordered[idx + 1];
                 const end = next ? next.start : source.length;
 
-                const value = source.slice(item.contentStart, end)
-                    .replace(/^[\s　]*[A-D]\s*[\.\．、:：\)）]?\s*/i, '')
+                let value = source.slice(item.contentStart, end)
+                    .replace(new RegExp('^\\s*' + item.label + '\\s*[.．、:：)）]\\s*'), '')
                     .trim();
+                if (next && !parsed.issues.length) {
+                    value = value.replace(/(?:\s*(?<!\\)\\(?:quad|qquad)\b)+$/, '').trimEnd();
+                }
 
                 const optionIndex = item.label.charCodeAt(0) - 65;
 
@@ -638,18 +659,20 @@
             return null;
         };
 
+        const normalizePageRange = value => String(value ?? '').trim()
+            .replace(/[，、]/g, ',').split(',').map(part => part.trim()).join(',');
+
         const validatePageRange = (value) => {
-            const text = String(value || '').trim();
+            const text = normalizePageRange(value);
             if (!text) return true;
-            if (/[，；、\s]/.test(text)) return false;
             const parts = text.split(',');
             return parts.every(part => {
-                if (/^\d+$/.test(part)) return Number(part) > 0;
+                if (/^\d+$/.test(part)) return Number.isSafeInteger(Number(part)) && Number(part) > 0;
                 const range = part.match(/^(\d+)-(\d+)$/);
                 if (!range) return false;
                 const start = Number(range[1]);
                 const end = Number(range[2]);
-                return start > 0 && end > 0 && start <= end;
+                return Number.isSafeInteger(start) && Number.isSafeInteger(end) && start > 0 && start <= end;
             });
         };
 
@@ -692,7 +715,7 @@
         };
 
         const expandPageRange = (range, maxPage) => {
-            const text = String(range || '').trim();
+            const text = normalizePageRange(range);
             if (!text) return Array.from({ length: maxPage }, (_, idx) => idx + 1);
             const pages = new Set();
             text.split(',').forEach(part => {
@@ -846,6 +869,13 @@
             item.solution
         ].some(hasUnconvertedImagePlaceholder);
 
+        const normalizeMathSearch = value => value.normalize('NFKC')
+            .replace(/\\(?:left|right|mleft|mright|bigl|bigr|Bigl|Bigr|biggl|biggr|Biggl|Biggr)(?![A-Za-z])/g, '')
+            .replace(/\\(?:quad\b|qquad\b|[,;!: ]|[()[\]])/g, '')
+            .replace(/\\(?:mathrm|mathit|mathnormal|mathbf)\s*\{\s*([A-Za-z])\s*\}/g, '$1')
+            .replace(/[$\s]+/g, '')
+            .toLowerCase();
+
         const questionMatchesLibraryFilters = (q, options = {}) => {
             if (!q) return false;
 
@@ -855,12 +885,6 @@
                 ? options.hasText
                 : (value) => String(value || '').trim().length > 0;
 
-            if (keyword) {
-                const haystack = [q.stem, q.answer, q.solution]
-                    .map(value => String(value || '').toLowerCase())
-                    .join('\n');
-                if (!haystack.includes(keyword)) return false;
-            }
             if (filters.type && q.type !== filters.type) return false;
             if (filters.diff && (q.diff || q.meta?.diff || '') !== filters.diff) return false;
             if (filters.grade && (q.grade || q.meta?.grade || '') !== filters.grade) return false;
@@ -871,6 +895,25 @@
             if (filters.imageState === 'hasImage' && !hasImages) return false;
             if (filters.imageState === 'noImage' && hasImages) return false;
 
+            if (keyword) {
+                const names = options.personalKnowledgeNames;
+                let cached = options.textCache?.get(q);
+                if (!cached) {
+                    const fields = [q.stem, ...(Array.isArray(q.options) ? q.options : []), q.answer, q.solution,
+                        names && q.knowledgeType === 'personal' ? '' : q.knowledge, q.systemKnowledge,
+                        names ? '' : q.personalKnowledge].map(value => String(value || '').toLowerCase());
+                    cached = { fields };
+                    options.textCache?.set(q, cached);
+                }
+                if (!cached.fields.some(value => value.includes(keyword)) &&
+                    !names?.some(value => value.toLowerCase().includes(keyword))) {
+                    const math = /[()（）\\$^_=]/.test(keyword) && normalizeMathSearch(keyword);
+                    if (!math) return false;
+                    cached.math ||= cached.fields.map(normalizeMathSearch);
+                    if (!cached.math.some(value => value.includes(math)) &&
+                        !names?.some(value => normalizeMathSearch(value).includes(math))) return false;
+                }
+            }
             return true;
         };
 
@@ -1084,6 +1127,7 @@
             mathSignalCount,
             normalizeAnswerSolutionSource,
             normalizeLatexText,
+            renderLatexFormula,
             normalizeFigureBbox,
             preserveRawEvidence,
             questionMatchesLibraryFilters,

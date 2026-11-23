@@ -235,12 +235,13 @@ test('windowed organize overlaps windows yet merges observations in page order',
     const h=harness({pages:[1,2,3],config:{profileVersion:E.PROFILE_WINDOW,windowMode:'window',outputPages:1,contextPages:0,maxConcurrency:2},perWindowQuestion:true,
         delayMs:task=>task.inputMode==='text'?(task.metadata.sources[0].output_pages[0]===1?400:30):10});
     const result=await h.run();
-    const organizes=h.calls.filter(call=>call.inputMode==='text');
+    const organizes=h.calls.filter(call=>call.inputMode==='text')
+        .sort((left,right)=>left.metadata.sources[0].output_pages[0] - right.metadata.sources[0].output_pages[0]);
     assert.equal(organizes.length,3,'one organize call per window');
     assert.deepEqual(organizes.map(call=>call.metadata.sources[0].output_pages),[[1],[2],[3]]);
     // 两个窗口立即重叠；第三个在第一个（慢窗口）结束前就拿到空出的槽位。
     // 判据是调用区间相交，不是耗时，所以并行跑测试时也不会抖动。
-    assert.ok(organizes[1].at<organizes[0].end,'the first two windows were serialized');
+    assert.ok(organizes[0].at<organizes[1].end && organizes[1].at<organizes[0].end,'the first two windows were serialized');
     assert.ok(organizes[2].at<organizes[0].end,'the third window waited for the slow window');
     assert.deepEqual(result.drafts.map(draft=>draft.questionNumber),['1','2','3']);
     assert.deepEqual(result.drafts.map(draft=>draft.stem),['第1题正文','第2题正文','第3题正文']);

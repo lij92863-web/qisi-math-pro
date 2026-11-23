@@ -22,11 +22,12 @@ describe('validatePageRange', () => {
         assert.equal(validatePageRange(undefined), true);
     });
 
-    it('whitespace and punctuation: rejects spaces and Chinese separators', () => {
-        assert.equal(validatePageRange('1, 2'), false);
-        assert.equal(validatePageRange('1，2'), false);
+    it('accepts displayed Chinese separators and spaces around listed pages', () => {
+        assert.equal(validatePageRange('1, 2'), true);
+        assert.equal(validatePageRange('1-3，5，7-9'), true);
         assert.equal(validatePageRange('1；2'), false);
-        assert.equal(validatePageRange('1、2'), false);
+        assert.equal(validatePageRange('1、2'), true);
+        assert.equal(validatePageRange('1 2'), false);
     });
 
     it('malformed input: rejects bad range syntax', () => {

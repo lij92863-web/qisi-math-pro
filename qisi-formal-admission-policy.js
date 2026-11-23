@@ -32,6 +32,7 @@
     ]);
     const PROVENANCE_STATUSES = Object.freeze([
         'manual',
+        'review-confirmed',
         'deterministic-source',
         'controlled-write',
         'rejected',
@@ -74,10 +75,10 @@
     const requiresAnswer = type => isObjective(type) || /填空|blank/i.test(
         String(type || '')
     );
-    const requiredField = (field, draft) => {
+    const requiredField = (field, draft, context) => {
         if (field === 'questionNumber' || field === 'stem') return true;
         if (field === 'options') return isObjective(draft?.type);
-        if (field === 'answer') return requiresAnswer(draft?.type);
+        if (field === 'answer') return !context.allowMissingAnswer && requiresAnswer(draft?.type);
         return false;
     };
 
@@ -86,6 +87,7 @@
         mode: input.mode || '',
         actorId: input.actorId || '',
         explicitConfirmation: input.explicitConfirmation === true,
+        allowMissingAnswer: input.explicitConfirmation === true && input.allowMissingAnswer === true,
         requestId: input.requestId || '',
         idempotencyKey: input.idempotencyKey || '',
         evaluatedAt: input.evaluatedAt || new Date().toISOString(),
@@ -261,8 +263,9 @@
     };
 
     const validateFieldDecision = (
-        field, value, provenance, mode, draft, errors, identity
+        field, value, provenance, context, draft, errors, identity
     ) => {
+        const { mode } = context;
         if (!isRecord(provenance)) {
             errors.push(errorOf(
                 'admission-provenance-missing',
@@ -302,7 +305,7 @@
             return;
         }
         if (status === 'missing') {
-            if (present || requiredField(field, draft)) {
+            if (present || requiredField(field, draft, context)) {
                 errors.push(errorOf(
                     'admission-required-field-missing',
                     field,
@@ -329,6 +332,17 @@
                     field,
                     `Manual field ${field} requires an actual edit revision.`
                 ));
+            }
+            return;
+        }
+        if (status === 'review-confirmed') {
+            const reviewedTime = Date.parse(provenance.reviewedAt);
+            if (provenance.kind !== status || provenance.manuallyEdited !== false || provenance.manualEditRevision !== undefined ||
+                typeof provenance.reviewedBy !== 'string' || !provenance.reviewedBy.trim() || !Number.isFinite(reviewedTime) ||
+                new Date(reviewedTime).toISOString() !== provenance.reviewedAt ||
+                provenance.engineConfidence !== undefined || provenance.controlledWriteDecisionId !== undefined) {
+                errors.push(errorOf('admission-field-review-invalid', field,
+                    `Field ${field} requires a valid human review record.`));
             }
             return;
         }
@@ -426,7 +440,7 @@
                 field,
                 draft[field],
                 item,
-                context.mode,
+                context,
                 draft,
                 errors,
                 identity
@@ -600,7 +614,8 @@
                 confirmedBy: context.actorId,
                 confirmedAt: now,
                 requestId: context.requestId,
-                idempotencyKey: context.idempotencyKey
+                idempotencyKey: context.idempotencyKey,
+                ...(context.allowMissingAnswer && !hasValue(draft.answer) ? { allowMissingAnswer: true } : {})
             },
             provenance: fieldProvenance,
             recognition: clone(draft.recognition ?? null),
@@ -613,6 +628,7 @@
             knowledgeType: draft.knowledgeType,
             systemKnowledge: draft.systemKnowledge,
             personalKnowledge: draft.personalKnowledge,
+            ...(Array.isArray(draft.personalKnowledgeIds) ? { personalKnowledgeIds: clone(draft.personalKnowledgeIds) } : {}),
             tags: clone(draft.tags || []),
             meta: clone(draft.meta || {})
         });

@@ -112,6 +112,45 @@ test('ordinary numeric conclusions are not missing question boundaries', () => {
     assert.deepEqual(result.order, ['1', '2']);
 });
 
+test('decimal answer notation stays within its question and a single formula-led answer can close a proven gap', () => {
+    const numbers = ['12', '13', '14', '15'];
+    const questionSegment = S.segment(numbers.map(no => b('q' + no, no + '. 原题')));
+    const blocks = [
+        b('s12', '12【答案】$\\frac{4}{9}$【解析】概率计算'),
+        b('s13', '13 $x=2$ 或 $3x-4y-6=0$ 由题意可得'),
+        b('detail', '若斜率存在，代入距离公式。\n14. 【答案】$\\frac{3}{4}$ #0.75【解析】使用向量'),
+        b('s15', '15【详解】解题过程')
+    ];
+    const solutionSegment = S.segment(blocks, { numbers, role: 'support' });
+    assert.deepEqual(solutionSegment.order, numbers);
+    assert.deepEqual(solutionSegment.issues, []);
+    assert.deepEqual(solutionSegment.runs[0].blocks.map(block => block.id), ['s12']);
+    const built = S.assemble({ questionSegment, solutionSegment });
+    assert.equal(built.valid, true);
+    assert.equal(built.questions[1].answer, '$x=2$ 或 $3x-4y-6=0$');
+    const declaration = built.questions[1].answerEvidence.evidence[0];
+    assert.equal(blocks[1].text.slice(...declaration.range), built.questions[1].answer);
+    assert.equal(built.questions[2].answer, '$\\frac{3}{4}$ #0.75');
+    assert.match(built.blocksById[built.questions[2].solutionBlocks[0]].text, /#0\.75【解析】/);
+});
+
+test('bare formula headings with competing candidates cannot attach to the preceding solution', () => {
+    const numbers = ['12', '13', '14'];
+    const questionSegment = S.segment(numbers.map(no => b('q' + no, no + '. 原题')));
+    const solutionSegment = S.segment([
+        b('s12', '12【答案】A'),
+        b('a', '13 $x=1$ 或 $x=2$ 原文'),
+        b('b', '13 $x=3$ 或 $x=4$ 原文'),
+        b('s14', '14【答案】B')
+    ], { numbers, role: 'support' });
+    assert.deepEqual(solutionSegment.order, ['12', '14']);
+    const built = S.assemblePartial({ questionSegment, solutionSegment });
+    assert.deepEqual(built.questions[0].solutionBlocks, []);
+    assert.equal(built.questions[0].answer, '');
+    assert.equal(built.questions[1].answer, '');
+    assert.equal(built.questions[2].answer, 'B');
+});
+
 test('invalid answer tables cannot disappear behind a second valid table', () => {
     const table = (numbers, answers) => '<table><tr><td>题号</td>' + numbers.map(x => '<td>' + x + '</td>').join('') + '</tr><tr><td>答案</td>' + answers.map(x => '<td>' + x + '</td>').join('') + '</tr></table>';
     const valid = { type: 'table', text: table(['1', '2'], ['A', 'B']) };

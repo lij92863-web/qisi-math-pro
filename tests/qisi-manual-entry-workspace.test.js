@@ -57,6 +57,20 @@ test('manual image editing does not consume neighboring wrappers and also update
         options:['[[FORMULA_IMAGE:b]]'],images:[{id:'a'},{id:'b'}]});
     h.workspace.removeImage('b');assert.equal(h.state.form.stem,'\\begin{center}[[IMAGE:a]]\\end{center} X ');assert.deepEqual([...h.state.form.options],['']);h.workspace.dispose();
 });
+test('manual image removal and alignment escape special IDs and preserve neighboring references',()=>{
+    for(const id of ['figure.1','figure(1)','figure+1','figure$1','figure{1}','figure\\1']){
+        const h=setup(),neighbor='figureX1';
+        const source=`before [[IMAGE:${neighbor}]] \\begin{center}[[IMAGE:${id}]]\\end{center} after`;
+        Object.assign(h.state.form,{stem:source,answer:`[[FORMULA_IMAGE:${id}]]`,solution:`\\includegraphics{${id}}`,options:[`[[IMAGE:${id}]]`],images:[{id},{id:neighbor}]});
+        h.workspace.alignImage(id,'flushleft');
+        assert.ok(h.state.form.stem.includes(`\\begin{flushleft}[[IMAGE:${id}]]\\end{flushleft}`));
+        assert.ok(h.state.form.stem.includes(`[[IMAGE:${neighbor}]]`));
+        h.workspace.removeImage(id);
+        assert.equal(h.state.form.stem,`before [[IMAGE:${neighbor}]]  after`);
+        assert.equal(h.state.form.answer,'');assert.equal(h.state.form.solution,'');assert.deepEqual([...h.state.form.options],['']);
+        assert.deepEqual(h.state.form.images.map(image=>image.id),[neighbor]);h.workspace.dispose();
+    }
+});
 test('clearing a draft removes its persisted text so it cannot reappear on refresh',()=>{
     const h=setup();h.state.form.stem='old';assert.equal(h.draft.stem,'old');h.state.form.stem='';assert.equal(h.draft,null);h.workspace.dispose();
 });

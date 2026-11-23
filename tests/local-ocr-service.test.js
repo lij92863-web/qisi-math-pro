@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const http = require('node:http');
 
 const {
     createLocalOcrService,
@@ -46,6 +47,18 @@ test('service refuses non-loopback binding', () => {
         () => createLocalOcrService({ host: '0.0.0.0' }),
         /loopback/
     );
+});
+
+test('the loopback service also refuses unexpected HTTP Host values', async t => {
+    const { service, endpoint } = await start({ engine: mockEngine(), tempRoot: tempRoot() });
+    t.after(() => service.stop());
+    const status = await new Promise((resolve, reject) => {
+        http.get(endpoint + '/health', { headers: { Host: 'example.invalid:8765' } }, response => {
+            response.resume();
+            resolve(response.statusCode);
+        }).on('error', reject);
+    });
+    assert.equal(status, 403);
 });
 
 test('health exposes service and engine metadata without source content', async t => {

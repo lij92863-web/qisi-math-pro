@@ -70,13 +70,13 @@
             String(value ?? '').replace(/\r\n?/g, '\n');
 
         const EDITOR_FIELDS = Object.freeze(['stem', 'editorSource', 'type', 'options', 'answer', 'solution', 'grade', 'diff', 'year',
-            'source', 'province', 'tags', 'systemKnowledge', 'personalKnowledge', 'meta']);
+            'source', 'province', 'tags', 'systemKnowledge', 'personalKnowledge', 'personalKnowledgeIds', 'meta']);
         const snapshotDraftEditorFields = question => JSON.parse(JSON.stringify(Object.fromEntries(
             EDITOR_FIELDS.map(key => [key, question?.[key]])
         )));
         const applyDraftEditorMetadata = question => {
             const metadata = { ...(question.meta || {}) };
-            for (const key of ['grade', 'diff', 'year', 'province', 'tags', 'systemKnowledge', 'personalKnowledge']) {
+            for (const key of ['grade', 'diff', 'year', 'province', 'tags', 'systemKnowledge', 'personalKnowledge', 'personalKnowledgeIds']) {
                 if (question[key] !== undefined) metadata[key] = question[key];
             }
             question.meta = metadata;

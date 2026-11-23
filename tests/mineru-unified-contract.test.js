@@ -148,9 +148,44 @@ test('real HTTP parse handler propagates the complete evidence contract', async 
         AbortController, Date, console: { log() {}, error() {} },
         fsp: { readFile: async () => Buffer.from('%PDF-mock') }, MINERU_MAX_PDF_BYTES: 100, MINERU_MAX_PAGES: 200,
         estimatePdfPageCount: () => 1, decodeMultipartFilename: x => x,
-        mineruClient: { parse: async () => expected }, tempJobManager: { cleanupRequest: async () => { cleaned = true; } }
+        mineruClient: { parse: async () => expected }, tempJobManager: { track: () => () => {}, cleanupRequest: async () => { cleaned = true; } }
     });
     const res = { once() {}, removeListener() {}, json(data) { actual = data; } };
     await fn({ file: { path: 'mock', originalname: 'mock.pdf' } }, res);
     assert.equal(actual, expected); assert.equal(cleaned, true);
+});
+
+test('the production selection copies only selected PDF pages and sends those bytes to MinerU', async () => {
+    const fs = require('node:fs'), vm = require('node:vm'), acorn = require('acorn');
+    const { PDFDocument } = require('pdf-lib');
+    const { createHash } = require('node:crypto');
+    const original = await PDFDocument.create();
+    for (const width of [501, 502, 503, 504, 505]) original.addPage([width, 600]);
+    const bytes = Buffer.from(await original.save());
+    const code = fs.readFileSync(require.resolve('../qisi-local-server'), 'utf8');
+    const { body } = acorn.parse(code, { ecmaVersion: 'latest' });
+    const select = body.find(node => node.id?.name === 'selectMineruPdf');
+    const handler = body.find(node => node.expression?.arguments?.[0]?.value === '/api/mineru/parse').expression.arguments.at(-1);
+    let outbound;
+    const context = vm.createContext({
+        AbortController, Date, Buffer,
+        require: require('node:module').createRequire(require.resolve('../qisi-local-server')),
+        console: { log() {}, error() {} },
+        fsp: { readFile: async () => bytes }, MINERU_MAX_PDF_BYTES: 200 * 1024 * 1024, MINERU_MAX_PAGES: 200,
+        estimatePdfPageCount: () => 5, decodeMultipartFilename: value => value, mineruErrorStatus: () => 400,
+        mineruClient: { parse: async pdf => { outbound = pdf; return { source: { pages: 3 }, pages: [] }; } },
+        tempJobManager: { track: () => () => {}, cleanupRequest: async () => {} }
+    });
+    vm.runInContext(code.slice(select.start, select.end), context);
+    const route = vm.runInContext('(' + code.slice(handler.start, handler.end) + ')', context);
+    const request = pages => route({ query: { pages }, file: { path: 'fixture', originalname: 'original.pdf' } },
+        { once() {}, removeListener() {}, status() { return this; }, json: value => JSON.parse(JSON.stringify(value)) });
+    assert.equal((await request('1,6')).code, 'MINERU_PAGE_RANGE_INVALID');
+    assert.equal(outbound, undefined);
+    const response = await request('1-2,5');
+    assert.deepEqual(response.originalSource, { sha256: createHash('sha256').update(bytes).digest('hex'), pages: [1, 2, 5], totalPages: 5 });
+    assert.deepEqual((await PDFDocument.load(outbound)).getPages().map(page => page.getWidth()), [501, 502, 505]);
+    const before = outbound;
+    await request('1-2,5');
+    assert.deepEqual(outbound, before);
 });

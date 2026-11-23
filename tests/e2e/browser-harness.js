@@ -295,7 +295,7 @@ const callProxy = async (page, method, ...args) => {
     const onNavigation = frame => { if (frame === page.mainFrame()) navigated = true; };
     page.on('framenavigated', onNavigation);
     try {
-        await page.evaluate(({ id, methodName, methodArgs }) => {
+        const documentOrigin = await page.evaluate(({ id, methodName, methodArgs }) => {
             const proxy = window.Qisi?.Runtime?.getRuntimeDependency('AppProxy');
             if (!proxy || typeof proxy[methodName] !== 'function') throw new Error('Vue proxy method unavailable: ' + methodName);
             if (!window.__qisiHarnessProxyTasks) Object.defineProperty(window, '__qisiHarnessProxyTasks', {
@@ -310,18 +310,27 @@ const callProxy = async (page, method, ...args) => {
                     code: error?.code, causeCode: error?.causeCode, stack: error?.stack };
                 entry.state = 'rejected';
             });
+            return performance.timeOrigin;
         }, { id, methodName: method, methodArgs: args });
         for (;;) {
             if (navigated) throw new Error('Execution context was destroyed by unexpected main-frame navigation.');
-            const result = await page.evaluate(id => {
+            const result = await page.evaluate(({ id, documentOrigin }) => {
+                if (performance.timeOrigin !== documentOrigin) return { state: 'navigated' };
                 const entry = window.__qisiHarnessProxyTasks?.get(id);
                 if (!entry) throw new Error('Proxy action result context unavailable.');
                 return entry.state === 'pending' ? { state: 'pending' }
                     : entry.state === 'resolved' ? { state: 'resolved', value: entry.value }
                     : { state: 'rejected', error: entry.error };
-            }, id);
-            if (navigated) throw new Error('Execution context was destroyed by unexpected main-frame navigation.');
-            if (result.state === 'resolved') return result.value;
+            }, { id, documentOrigin });
+            if (navigated || result.state === 'navigated') throw new Error('Execution context was destroyed by unexpected main-frame navigation.');
+            if (result.state === 'resolved') {
+                // Source-editing fixtures open the source pane explicitly in the video UI.
+                if (method === 'openBatchReview') await page.evaluate(() => {
+                    const proxy = window.Qisi.Runtime.getRuntimeDependency('AppProxy');
+                    if (proxy.video) proxy.video.split = true;
+                });
+                return result.value;
+            }
             if (result.state === 'rejected') {
                 const error = new Error(result.error.message);
                 Object.assign(error, { name: result.error.name, code: result.error.code,
@@ -577,7 +586,7 @@ const createImportThroughUi = async (page, input) => {
     const awaitCompletion = input?.awaitCompletion !== false;
     const before = await getDbSnapshot(page);
     const existingIds = new Set(before.batches.map(batch => batch.id));
-    await page.locator('nav .nav-item').nth(1).click();
+    await page.locator('.v-topnav').getByRole('button', { name: '批量录题', exact: true }).click();
     await page.locator('.batch-home-upload').click();
     await page.locator('input[type="file"][accept*=".docx"]')
         .setInputFiles(files.map(entry => entry.file));
@@ -610,6 +619,7 @@ const createImportThroughUi = async (page, input) => {
         }, producerMode);
     }
     if (Number.isInteger(input?.expectedQuestionCount)) {
+        await page.locator('.v-more').evaluate(el => { el.open = true; });
         await page.locator('input[type="number"][placeholder*="0"]')
             .first()
             .fill(String(input.expectedQuestionCount));

@@ -61,3 +61,40 @@ test('dispose before queued command prevents persistence and publication',async(
     const h=setup();h.state.name1.value='cancelled';const pending=h.workspace.create1();h.workspace.dispose();
     assert.equal(await pending,false);assert.deepEqual(h.database.table('personalKnowledge').rows.get('tree').nodes,initial);
 });
+
+test('multi-tag creation is atomic, idempotent and reuses normalized method names', async () => {
+    const nodes = [{ id: 'existing', name: '不联立' }];
+    const h = setup(nodes);
+    const input = ['圆锥曲线', '点差法', '不联立解法'].join('\\');
+    h.database.failAfterWork = true;
+    assert.equal(await h.workspace.ensureTags(input), false);
+    assert.deepEqual(h.state.tree.value, nodes);
+    h.database.failAfterWork = false;
+    const first = await h.workspace.ensureTags(input);
+    const second = await h.workspace.ensureTags(input);
+    assert.equal(first.length, 3);
+    assert.deepEqual(first, second);
+    assert.equal(first[2].id, 'existing');
+    assert.deepEqual(h.state.tree.value.map(node => node.name), ['不联立', '圆锥曲线', '点差法']);
+    assert.equal(await h.workspace.ensureTags('甲\\乙\\丙\\丁'), false);
+});
+
+test('AI matches are limited to the per-concept candidate IDs and do not invent tags', () => {
+    const rows = [
+        { id: 'direct', name: '不联立', path: '方法 / 不联立' },
+        { id: 'tangent', name: '切点弦', path: '方法 / 切点弦' },
+        { id: 'related', name: '切点法', path: '方法 / 切点法' }
+    ];
+    const allowed = { type: ['单选题'], diff: ['较难'], grade: ['高二'] };
+    const plan = Model.planReviewMetadata({
+        type: '单选题', diff: '较难', grade: '高二',
+        concepts: [{ name: '不联立解法' }, { name: '切点连线', aliases: ['切点弦'] }, { name: '方差' }]
+    }, rows, allowed);
+    assert.deepEqual(plan.entries.map(row => row.existing?.id || null), ['direct', null, null]);
+    assert.equal(plan.entries[1].candidates[0].id, 'tangent');
+    assert.deepEqual(Model.resolveReviewMatches(plan, { matches: [
+        { index: 1, id: 'tangent', equivalent: true },
+        { index: 2, id: 'direct', equivalent: true }
+    ] }).map(row => row.node?.id || null), ['direct', 'tangent', null]);
+    assert.equal(Model.planReviewMetadata({ ...plan.fields, grade: '大学', concepts: [{ name: '方差' }] }, rows, allowed), null);
+});

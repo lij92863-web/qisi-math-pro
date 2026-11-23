@@ -28,8 +28,8 @@ const snapshot = (page, bytes) => page.evaluate(async input => {
     } finally { db.close(); }
 }, bytes ? [...bytes] : null);
 
-for (const [index, key] of ['qisi_last_full_backup_at', 'qisi_last_full_backup_report'].entries()) {
-    test(key + ': a bookkeeping quota error cannot turn a verified native download into backup failure', { timeout: 90000 }, async () => {
+for (const [index, key] of ['qisi_last_verified_full_backup_at', 'qisi_last_full_backup_report'].entries()) {
+    test(key + ': native download verifies the archive without recording a confirmed save', { timeout: 90000 }, async () => {
         const h = await H.startBrowserApp(33650 + index);
         try {
             const suite = readSuite(path.join(root, 'golden/synthetic-suite.json'));
@@ -46,7 +46,7 @@ for (const [index, key] of ['qisi_last_full_backup_at', 'qisi_last_full_backup_r
             await H.callProxy(h.page, 'markDraftReviewed');
             assert.equal(await H.callProxy(h.page, 'submitDraftQuestion', draft.id, true), true);
             const original = await snapshot(h.page);
-            assert.equal(Object.keys(original).length, 11);
+            assert.equal(Object.keys(original).length, 12);
             assert.equal(original.questions.length, 1);
             assert.equal(original.images.length, 1);
             assert.equal(original.draftQuestions.find(row => row.questionNumber === '2').status, 'pending');
@@ -62,7 +62,7 @@ for (const [index, key] of ['qisi_last_full_backup_at', 'qisi_last_full_backup_r
                     return setItem.call(this, name, value);
                 };
             }, key);
-            await h.page.getByRole('button', { name: '题库与检索', exact: true }).click();
+        await h.page.getByRole('button',{name:'个人知识点与备份',exact:true}).click();
             for (const attempt of [1, 2]) {
                 const downloading = h.page.waitForEvent('download');
                 await h.page.getByRole('button', { name: '下载完整备份', exact: true }).click();
@@ -86,7 +86,7 @@ for (const [index, key] of ['qisi_last_full_backup_at', 'qisi_last_full_backup_r
                     await fs.writeFile(path.join(directory, name + '.zip'), bytes, { flag: 'wx' });
                     await fs.writeFile(path.join(directory, name + '.json'), JSON.stringify({ ...status, key, attempt, tablesMatched: true, binaryBytesMatched: true, archiveVerified: true }, null, 2), { flag: 'wx' });
                 }
-                assert.equal(status.fired, 1);
+                assert.equal(status.fired, 0);
                 assert.equal(status.error, '', 'Bookkeeping failure must not misreport a valid download as failed');
                 assert.match(status.notice, /已发起完整备份下载.*确认下载文件已保存/);
             }

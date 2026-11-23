@@ -24,6 +24,7 @@ test('actual knowledge tree add, rename, reload, counts and delete keep parent a
     const h=await H.startBrowserApp(32880);
     try{
         const promptNames=['child','leaf','renamed leaf'];h.page.on('dialog',d=>d.type()==='prompt'?d.accept(promptNames.shift()):d.accept());
+        await h.page.waitForFunction(() => window.Qisi?.Runtime?.getRuntimeDependency('AppProxy')?.databaseStatus === '');
         await h.page.evaluate(()=>{Qisi.Runtime.getRuntimeDependency('AppProxy').view='personal';});
         await h.page.getByPlaceholder('如：函数',{exact:true}).fill('root');
         await h.page.locator('.personal-layout').getByRole('button',{name:'添加知识点',exact:true}).click();
@@ -32,11 +33,20 @@ test('actual knowledge tree add, rename, reload, counts and delete keep parent a
         await h.page.waitForFunction(()=>Qisi.Runtime.getRuntimeDependency('AppProxy').personalTreeRows.length===2);
         await h.page.locator('.personal-tree-row.level-2').getByRole('button',{name:'新增子节点',exact:true}).click();
         await h.page.waitForFunction(()=>Qisi.Runtime.getRuntimeDependency('AppProxy').personalTreeRows.length===3);
+        await h.page.evaluate(() => db.questions.put({ id: 'knowledge-fixture', stem: 'keep question',
+            images: [], options: [], createdAt: 1, meta: { personalKnowledge: 'leaf' } }));
         await h.page.locator('.personal-tree-row.level-3').getByRole('button',{name:'修改',exact:true}).click();
         await h.page.waitForFunction(()=>Qisi.Runtime.getRuntimeDependency('AppProxy').personalTreeRows[2].node.name==='renamed leaf');
-        await h.page.evaluate(async()=>{await db.questions.put({id:'knowledge-fixture',stem:'keep question',images:[],options:[],personalKnowledge:'renamed leaf',createdAt:1,meta:{}});});
+        const binding = await h.page.evaluate(async () => {
+            const app = Qisi.Runtime.getRuntimeDependency('AppProxy');
+            return { leaf: app.personalTreeRows[2].node.id, stored: (await db.questions.get('knowledge-fixture')).personalKnowledgeIds };
+        });
+        assert.deepEqual(binding.stored, [binding.leaf]);
         await h.page.reload();await h.page.waitForFunction(()=>Qisi.Runtime.getRuntimeDependency('AppProxy')?.personalTreeRows.length===3);
-        const counts=await h.page.evaluate(()=>Qisi.Runtime.getRuntimeDependency('AppProxy').personalKnowledgeCounts);
+        const counts = await h.page.evaluate(() => {
+            const app = Qisi.Runtime.getRuntimeDependency('AppProxy');
+            return Object.fromEntries(app.personalTreeRows.map(({ node }) => [node.name, app.personalKnowledgeCounts[node.id]]));
+        });
         assert.deepEqual(counts,{'renamed leaf':1,child:1,root:1});
         await h.page.evaluate(()=>{const app=Qisi.Runtime.getRuntimeDependency('AppProxy');app.view='personal';app.selectedPersonalL1Id=app.personalKnowledgeTree[0].id;app.selectedPersonalL2Id=app.personalKnowledgeTree[0].children[0].id;});
         await h.page.locator('.personal-tree-row.level-1').getByRole('button',{name:'删除',exact:true}).click();

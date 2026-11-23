@@ -43,7 +43,7 @@ test('seeded-export-delete: export and task deletion preserve formal questions',
             localStorage.setItem('qisi_teacher_name', 'E2E Teacher');
         }, batchId);
 
-        await page.getByRole('button', { name: '题库与检索' }).click();
+        await page.locator('.v-topnav nav').getByRole('button',{name:'题库',exact:true}).click();
         const downloadPromise = page.waitForEvent('download');
         await page.getByRole('button', { name: /导出题库数据/ }).click();
         const download = await downloadPromise;
@@ -58,6 +58,7 @@ test('seeded-export-delete: export and task deletion preserve formal questions',
         page.once('dialog', dialog => dialog.accept());
         const row = page.locator('.batch-job-row')
             .filter({ hasText: 'E2E export delete task' });
+        await row.locator('summary').click();
         await row.getByRole('button', { name: '删除' }).click();
 
         await page.waitForFunction(async id => {

@@ -51,13 +51,14 @@ test('golden confirmation clicks once and requires both durable and visible comp
     const h = await startBrowserApp(32792);
     try {
         const id = await seedReviewBatch(h.page, { batchId: 'golden_confirmation_boundary' });
+        await h.page.evaluate(id => db.draftQuestions.update(id, { type: '单选题', options: [] }), id + '_q2');
         await callProxy(h.page, 'openBatchReview', id);
         await h.page.evaluate(() => {
             const p = window.Qisi.Runtime.getRuntimeDependency('AppProxy');
             p.view = 'batchImport';
             window.auditConfirmClicks = 0;
             document.addEventListener('click', event => {
-                if (event.target.closest('.review-confirm')) window.auditConfirmClicks++;
+                if (event.target.closest('button')?.getAttribute('aria-label') === '确认选中 1 题') window.auditConfirmClicks++;
             });
         });
         const before = await getDbSnapshot(h.page);

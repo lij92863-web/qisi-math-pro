@@ -66,19 +66,31 @@
         return deps.mergeById(inline, deps.pdfContract(question) ? pdfBound(question, bound) : bound);
     };
 
-    const projectSourcePageImages = ({ question, batchId = '', ...ports } = {}) => {
+    const indexSourcePages = files => {
+        const index = new Map();
+        for (const file of files) for (const task of file.pdfMineruEvidence?.tasks || []) {
+            for (const page of task.pageImages || []) {
+                index.set(file.id + '\0' + page.pageNo, { ...page, sourcePage: page.pageNo,
+                    sourceFileId: file.id, sourceFileName: file.filename });
+            }
+        }
+        return index;
+    };
+
+    const projectSourcePageImages = ({ question, batchId = '', sourcePageIndex = new Map(), ...ports } = {}) => {
         const deps = dependencies(ports, ['isRealFigureRow', 'isPreviewable']);
         if (!question?.id) return [];
         if (deps.pdfContract(question)) {
-            return deps.pdfMeta(question).sourcePageImages.map((image, index) => ({
+            return (deps.pdfMeta(question).sourcePageImages || []).map((image, index) => ({
                 ...image,
+                url: image.url || sourcePageIndex.get(image.sourceFileId + '\0' + image.pageNo)?.url,
                 id: question.id + '_source_' + index,
                 batchId: question.batchId,
                 questionId: question.id,
                 sourcePage: image.pageNo,
                 source: 'source-page',
                 status: 'need_confirm'
-            }));
+            })).filter(image => image.url);
         }
         if (question.sourcePageImage) {
             return [{
@@ -123,6 +135,7 @@
         QUESTION_FIGURE_SOURCES,
         projectActiveImages,
         projectRealQuestionImages,
+        indexSourcePages,
         projectSourcePageImages,
         projectPreviewImages
     });

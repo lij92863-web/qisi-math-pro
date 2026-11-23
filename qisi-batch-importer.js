@@ -958,6 +958,9 @@
     // 结果答案区被当成题目正文，凭空多出一批假题目。
     // 这里统一成一个模式：可带书名号前缀、可带【】或[]、可带冒号、可带"及/与解析"。
     const SUPPORT_HEADING_PATTERN = /^(?:《[^》]+》\s*)?[【\[]?\s*(?:参考答案|答案)\s*(?:及|与)?\s*(?:解析|详解|解答)?\s*[】\]]?\s*[:：]?\s*$/;
+    const SOLUTION_HEADING_PATTERN = /^(?:【)?(?:解析|详解|解答)(?:】)?\s*[:：]?\s*$/;
+    const SUPPORT_SOLUTION_LABEL = /【(?:解析|分析|详解|解答)】|(?:解析|分析|详解|解答)\s*[:：]/;
+    const BARE_ANSWER_VALUE = /^(?:[+\-−]?\d+(?:[./]\d+)?[%％]?[。；;]?|(?:\$[^$]+\$\s*)(?:\/?\s*\$[^$]+\$\s*)*)$/;
 
     const parseDocxFile = async (fileRecord, context = {}) => {
         const helpers = context.helpers || {};
@@ -978,10 +981,17 @@
         // 分步列表，展开它就会把解析切成假题目。
         const numberingEntry = zip.file('word/numbering.xml');
         const numberingXml = numberingEntry ? await numberingEntry.async('string') : '';
-        const heading = splitDocxParagraphs(expanded.xml).find(paragraph =>
+        const paragraphs = splitDocxParagraphs(expanded.xml);
+        const heading = paragraphs.find(paragraph =>
             !paragraph.inTable && SUPPORT_HEADING_PATTERN.test(paragraph.text));
+        // In a separately assigned answer sheet, the top-level Word list
+        // after the title is answer identity. Stop expansion at the solution section.
+        const answerMode = context.supportAnswerMode;
+        const solutionStart = answerMode && heading && paragraphs.find(paragraph =>
+            paragraph.paragraphIndex > heading.paragraphIndex && !paragraph.inTable &&
+            (SOLUTION_HEADING_PATTERN.test(paragraph.text) || SUPPORT_SOLUTION_LABEL.test(paragraph.text)));
         expanded.xml = window.Qisi.DocxNumbering.expand(expanded.xml, numberingXml, {
-            beforeIndex: heading?.paragraphIndex ?? -1
+            beforeIndex: answerMode && heading ? solutionStart?.paragraphIndex ?? -1 : heading?.paragraphIndex ?? -1
         }).xml;
 
         const mediaMap = await buildMediaMaps(zip, relsXml, fileRecord.filename);
@@ -1009,6 +1019,7 @@
             let section = 0;
             let sequenceRejected = false;
             let seen = new Set();
+            let inAnswerSection = Boolean(answerMode);
             for (let rowIndex = 0; rowIndex < supportRows.length; rowIndex++) {
                 const row = supportRows[rowIndex];
                 if (/^题号\s*[:：]?/.test(row.text) && /^答案\s*[:：]?/.test(supportRows[rowIndex + 1]?.text || '')) {
@@ -1019,8 +1030,10 @@
                     active = null;
                     continue;
                 }
-                if (SUPPORT_HEADING_PATTERN.test(row.text) || /^(?:【)?(?:解析|详解|解答)(?:】)?\s*[:：]?\s*$/.test(row.text)) {
+                const answerHeading = SUPPORT_HEADING_PATTERN.test(row.text);
+                if (answerHeading || SOLUTION_HEADING_PATTERN.test(row.text)) {
                     active = null; nextIndex = 0; seen = new Set(); sequenceRejected = false; section++;
+                    inAnswerSection = Boolean(answerMode && answerHeading);
                     continue;
                 }
                 const marker = parseLeadingQuestionMarker(row.text);
@@ -1028,16 +1041,23 @@
                 const questionNumber = marker.questionNumber || nativeMarker?.[1] || '';
                 const index = expectedOrder.get(questionNumber);
                 const afterMarker = marker.source.slice(marker.markerLength).trim();
-                const declared = Boolean(nativeMarker) || /^(?:【(?:答案|参考答案|解析|分析|详解|解答)】|(?:答案|参考答案|解析|分析|详解|解答)\s*[:：]|[（(]\s*1\s*[)）]|[A-DＡ-Ｄ]{1,4}(?=$|[\s，,；;。]))/.test(afterMarker);
+                const solutionLabel = SUPPORT_SOLUTION_LABEL.test(row.text);
+                const directAnswer = inAnswerSection && !solutionLabel && /\d/.test(marker.rawMarker) &&
+                    !/^\s*[（(]/.test(marker.rawMarker) && (answerMode === 'answer-only' || BARE_ANSWER_VALUE.test(afterMarker))
+                    ? afterMarker : '';
+                const declared = Boolean(nativeMarker || directAnswer) || /^(?:【(?:答案|参考答案|解析|分析|详解|解答)】|(?:答案|参考答案|解析|分析|详解|解答)\s*[:：]|[（(]\s*1\s*[)）]|[A-DＡ-Ｄ]{1,4}(?=$|[\s，,；;。]))/.test(afterMarker);
+                if (solutionLabel) inAnswerSection = false;
                 if (questionNumber && declared) {
                     const numericAnswer = row.literalText.match(/^\s*(\d{1,3})[．。]\s*(\d+)\s*$/);
+                    const independent = answerMode === 'answer-only';
                     const reason = seen.has(questionNumber) ? 'duplicate'
-                        : index === undefined ? 'unknown' : index < nextIndex ? 'backward'
-                        : sequenceRejected ? 'after-invalid-boundary' : '';
+                        : index === undefined ? 'unknown' : !independent && index < nextIndex ? 'backward'
+                        : !independent && sequenceRejected ? 'after-invalid-boundary' : '';
                     if (reason) sequenceRejected = true;
                     active = {
                         questionNumber,
                         lines: [row.text],
+                        directAnswer,
                         numericAnswer: numericAnswer?.[1] === questionNumber ? numericAnswer[2] : '',
                         sourceStart: row.sourceStart,
                         sourceEnd: row.sourceEnd,

@@ -3,8 +3,32 @@ const assert = require('node:assert/strict');
 const http = require('node:http');
 const path = require('node:path');
 const fs = require('node:fs');
+const vm = require('node:vm');
 const { chromium } = require('playwright');
 const { makeDraft } = require('./fixtures/formal-admission-transaction');
+
+test('production database declares every schema version before attaching question index hooks', () => {
+    const calls = [];
+    class Dexie {
+        version(version) {
+            return { stores() { calls.push(['stores', version]); return { upgrade() {} }; } };
+        }
+        table(name) {
+            return { hook(event) { calls.push(['hook', name, event]); } };
+        }
+    }
+    const context = vm.createContext({ Dexie });
+    context.window = context;
+    for (const file of ['qisi-question-index-storage.js', 'qisi-db.js']) {
+        vm.runInContext(fs.readFileSync(path.resolve(__dirname, '..', file), 'utf8'), context, { filename: file });
+    }
+    assert.ok(calls.some(([op]) => op === 'stores'));
+    const hooks = [
+        ['hook', 'questions', 'creating'], ['hook', 'questions', 'updating']
+    ];
+    assert.deepEqual(calls.filter(([op]) => op === 'hook'), hooks);
+    assert.deepEqual(calls.slice(calls.findLastIndex(([op]) => op === 'stores') + 1), hooks);
+});
 
 const runNative = async work => {
     const server = http.createServer((_request, response) => response.end('<!doctype html>'));
@@ -40,11 +64,12 @@ const runNative = async work => {
                 evaluateDraftAdmission: policy.evaluateDraftAdmission, validateAdmissionDecision: policy.validateAdmissionDecision,
                 buildQuestionV2: policy.buildQuestionV2, validateQuestionV2: Qisi.RecognitionContracts.validateQuestionV2
             } });
-            window.formalCommit = (repo, draft = fixture, key = draft.id) => {
+            window.formalCommit = (repo, draft = fixture, key = draft.id, legacyOverrides = {}) => {
                 const context = policy.createAdmissionContext({ mode: 'pdf-ai', actorId: 'fixture-teacher', explicitConfirmation: true,
                     requestId: key, idempotencyKey: key, evaluatedAt: new Date().toISOString(), source: draft.source });
                 return repo.confirmDraftToQuestion(draft.id, policy.evaluateDraftAdmission(draft, context), {
-                    expectedDraftVersion: draft.version, requestId: key, idempotencyKey: key, actorId: 'fixture-teacher', questionId: 'formal-' + draft.id, context
+                    expectedDraftVersion: draft.version, requestId: key, idempotencyKey: key, actorId: 'fixture-teacher', questionId: 'formal-' + draft.id,
+                    context: { ...context, ...legacyOverrides }
                 });
             };
             window.makePersistence = repo => Object.fromEntries(['reloadDraftBatch', 'persistReviewDraftBatch', 'deleteDraftBatch', 'refreshDraftBatchStats']
@@ -96,7 +121,7 @@ test('native v8 upgrade and all question writers maintain content-derived indexe
                 rollback, unchanged: JSON.stringify(before) === JSON.stringify(after), rollbackIndexCount: await db.questions.where('duplicateStemV2').equals('rollback').count() };
         } finally { db.close(); await Dexie.delete('isolated-index-maintenance'); }
     }));
-    assert.equal(result.version, 9); assert.deepEqual(result.upgradedContent, result.originalContent); assert.equal(result.blobSame, true);
+    assert.equal(result.version, 12); assert.deepEqual(result.upgradedContent, result.originalContent); assert.equal(result.blobSame, true);
     assert.equal(result.upgradedKey, result.expectedKey); assert.equal(result.nestedKey, result.nestedExpected);
     assert.equal(result.nestedRequest, 'new-request'); assert.equal(result.oldRequestCount, 0);
     assert.equal(result.inactiveCount, 0); assert.equal(result.restoredCount, 1);
@@ -130,7 +155,8 @@ test('native indexed formal decisions preserve first exact priority and cross-co
             const active = (await db.questions.toArray()).filter(q => !q.deletedAt);
             const reference = Qisi.QuestionDuplicatePolicy.evaluate({ candidate: fixture, existingQuestions: active });
             let indexedDecision;
-            try { await formalCommit(repo); } catch (error) { indexedDecision = error.details.duplicateDecision; }
+            try { await formalCommit(repo, fixture, fixture.id, { acceptCurrentContent: true }); }
+            catch (error) { indexedDecision = error.details.duplicateDecision; }
             // Same request used by a different draft is rejected before content admission.
             await db.questions.clear();
             await db.questions.put({ id: 'request-conflict', stem: 'other content', options: [], admission: { requestId: fixture.id, draftId: 'different' } });
@@ -144,6 +170,37 @@ test('native indexed formal decisions preserve first exact priority and cross-co
     assert.deepEqual(result.race, ['DUPLICATE_EXACT', 'accepted']); assert.equal(result.fullReads, 0);
     assert.equal(result.version, 1); assert.equal(result.replay, true); assert.equal(result.replayUnchanged, true);
     assert.deepEqual(result.indexedDecision, result.reference); assert.equal(result.requestCode, 'idempotency-conflict');
+});
+
+test('formal commit works when installed indexes differ from the declared schema', { timeout: 30000 }, async () => {
+    const result = await runNative(page => page.evaluate(async () => {
+        const old = new Dexie('isolated-index-maintenance');
+        old.version(12).stores(schema);
+        await old.open();
+        await seedDrafts(old, [fixture, { ...fixture, id: 'draft-peer' }]);
+        old.close();
+
+        const db = await openFixture();
+        try {
+            const repo = makeRepo(db);
+            const oldStore = db.backendDB().transaction('questions').objectStore('questions');
+            const indexMissing = !oldStore.indexNames.contains('formalRequestId');
+            const declared = Boolean(db.questions.schema.idxByName.formalRequestId);
+            await formalCommit(repo);
+            let duplicate;
+            try { await formalCommit(repo, { ...fixture, id: 'draft-peer' }); }
+            catch (error) { duplicate = error.code; }
+            return {
+                indexMissing, declared, duplicate,
+                stored: await db.questions.count(),
+                submitted: (await db.draftImportBatches.get(fixture.batchId)).submittedCount
+            };
+        } finally { db.close(); await Dexie.delete('isolated-index-maintenance'); }
+    }));
+    assert.deepEqual(result, {
+        indexMissing: true, declared: true, duplicate: 'DUPLICATE_EXACT',
+        stored: 1, submitted: 1
+    });
 });
 
 test('native dedupe cleanup and draft-edit snapshots cannot undo a later formal commit', { timeout: 30000 }, async () => {
@@ -235,5 +292,5 @@ test('failed native index upgrade keeps the complete v8 database and can retry',
         finally { upgraded.close(); await Dexie.delete('isolated-index-maintenance'); }
     }));
     assert.equal(result.failure, true); assert.equal(result.oldVersion, 8); assert.deepEqual(result.oldRecord, result.original);
-    assert.equal(result.newVersion, 9); assert.equal(result.key, result.expectedKey);
+    assert.equal(result.newVersion, 12); assert.equal(result.key, result.expectedKey);
 });

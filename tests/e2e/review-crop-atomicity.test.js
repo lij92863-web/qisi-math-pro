@@ -20,11 +20,14 @@ test('manual crop actual pixels, source identity and token persist together only
         await H.callProxy(h.page, 'openBatchReview', batchId);
         await h.page.evaluate(() => { window.Qisi.Runtime.getRuntimeDependency('AppProxy').view = 'batchImport'; });
         const before = await H.getDbSnapshot(h.page);
+        await h.page.locator('.v-review-diagnostics > summary').click();
+        await h.page.locator('.v-review-diagnostics').evaluate(el => { el.open = true; });
         await h.page.getByRole('button', { name: '重新裁剪', exact: true }).first().click();
         const modal = h.page.locator('.batch-crop-modal');
         await modal.waitFor();
         await modal.getByRole('button', { name: '关闭', exact: true }).click();
         assert.deepEqual(await H.getDbSnapshot(h.page), before, 'cancel never writes');
+        await h.page.locator('.v-review-diagnostics').evaluate(el => { el.open = true; });
         await h.page.getByRole('button', { name: '重新裁剪', exact: true }).first().click();
         const image = modal.locator('.batch-crop-image-wrap > img');
         await image.evaluate(img => img.decode());
@@ -114,6 +117,7 @@ test('retained PDF crop saves real rotated pixels to the selected option and pre
         const before = await H.getDbSnapshot(h.page);
         await H.callProxy(h.page, 'openBatchReview', batchId);
         await h.page.evaluate(() => { window.Qisi.Runtime.getRuntimeDependency('AppProxy').view = 'batchImport'; });
+        await h.page.locator('.v-review-diagnostics').evaluate(el => { el.open = true; });
         await h.page.getByRole('button', { name: '重新裁剪', exact: true }).first().click();
         const modal = h.page.locator('.batch-crop-modal'), image = modal.locator('.batch-crop-image-wrap > img');
         await image.evaluate(img => img.decode());

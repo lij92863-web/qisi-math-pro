@@ -65,12 +65,12 @@ for(const [index,mode]of ['failure','new-input','refresh-failure','double-click'
                 Object.defineProperty(window.Qisi,'LibraryService',{configurable:true,set(owner){Object.defineProperty(window.Qisi,'LibraryService',{configurable:true,value:{...owner,createLibraryService(...args){
                     const service=owner.createLibraryService(...args);return {...service,async saveQuestion(...args){window.manualCalls++;await window.manualGate;
                         if(window.manualMode==='failure')throw new Error('MANUAL_WRITE_REFUSED');
-                        const result=await service.saveQuestion(...args);window.manualCommitted=true;return result;
+                        return service.saveQuestion(...args);
                     }};
                 }}});}});
                 Object.defineProperty(window.Qisi,'StorageRepository',{configurable:true,set(owner){Object.defineProperty(window.Qisi,'StorageRepository',{configurable:true,value:{...owner,createRepository(...args){
-                    const repository=owner.createRepository(...args);return {...repository,async loadLibrary(...args){
-                        if(window.manualCommitted&&window.manualMode==='refresh-failure')throw new Error('MANUAL_READ_REFUSED');return repository.loadLibrary(...args);
+                    const repository=owner.createRepository(...args);return {...repository,async loadQuestionsById(...args){
+                        if(window.manualMode==='refresh-failure')throw new Error('MANUAL_READ_REFUSED');return repository.loadQuestionsById(...args);
                     }};
                 }}});}});
             },mode);
@@ -79,7 +79,7 @@ for(const [index,mode]of ['failure','new-input','refresh-failure','double-click'
             const button=h.page.getByRole('button',{name:'确认无误，保存入库',exact:true});await button.click();
             await h.page.waitForFunction(()=>window.manualCalls===1);
             if(mode==='double-click')await button.click();
-            if(mode==='new-input')await h.page.locator('textarea[placeholder^="[当前激活区域：stem]"]').fill('new input after save started');
+            if(mode==='new-input')await h.page.getByRole('textbox',{name:'单题 LaTeX 源码',exact:true}).fill('new input after save started');
             const failureDialog=['failure','refresh-failure'].includes(mode) ? h.page.waitForEvent('dialog',{timeout:5000}) : null;
             await h.page.evaluate(()=>window.releaseManual());
             if(failureDialog)await failureDialog;

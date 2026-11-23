@@ -26,3 +26,21 @@ test('external copy and fill retain provenance, knowledge precedence, images and
     assert.equal(filled.answer,'teacher answer'); assert.equal(filled.solution,'solution');
     assert.equal(filled.meta.sources[0].type,'external-fill'); assert.deepEqual(local,localBefore); assert.deepEqual(external,before);
 });
+test('external fill carries only exact images referenced by fields actually copied and preserves inputs',()=>{
+    const local={id:'local',stem:'S [[IMAGE:local]]',answer:'teacher answer',solution:'',images:[{id:'local',align:'flushleft',caption:'keep'}],meta:{}};
+    const external={id:'e',answer:'[[IMAGE:ignored]]',solution:'proof [[FORMULA_IMAGE:solution]] \\includegraphics{other} [[IMAGE:solution]]',
+        images:[{id:'ignored'},{id:'unused'},{id:'solution',align:'center',sourceFileId:'source',url:'blob:preview'},{id:'other',align:'flushright'}]};
+    const before=structuredClone({local,external}),result=model([]).fillQuestion(local,external,{});
+    assert.equal(result.answer,'teacher answer');assert.equal(result.solution,external.solution);
+    assert.deepEqual(result.images,[local.images[0],{id:'solution',align:'center',sourceFileId:'source'},{id:'other',align:'flushright'}]);
+    assert.deepEqual({local,external},before);
+});
+test('external fill rejects missing or conflicting image declarations before publication',()=>{
+    const local={id:'local',stem:'S',answer:'',solution:'',images:[],meta:{}};
+    for(const images of [[],[{id:'x'},{id:'x',align:'flushright'}]]){
+        assert.throws(()=>model([]).fillQuestion(local,{id:'e',answer:'[[IMAGE:x]]',images},{}),error=>error.code==='EXTERNAL_FILL_IMAGE_INVALID');
+    }
+    assert.throws(()=>model([]).fillQuestion({...local,images:[{id:'x',align:'flushleft'}]},
+        {id:'e',solution:'[[IMAGE:x]]',images:[{id:'x',align:'flushright'}]},{}),error=>error.code==='EXTERNAL_FILL_IMAGE_INVALID');
+    assert.deepEqual(local.images,[]);
+});

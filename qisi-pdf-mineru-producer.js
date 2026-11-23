@@ -39,9 +39,12 @@
         };
         return async (context, signal) => {
             active(signal);
-            const status = await (await request('/api/mineru/status', { signal })).json();
+            const status = await (await request('/api/mineru/status', { signal, cache: 'no-store' })).json();
             if (status.configured !== true) throw fail('MINERU_NOT_CONFIGURED');
             const files = [...context.sources, ...(context.supplementalSources || [])].filter((f, i, all) => all.findIndex(x => x.id === f.id) === i);
+            if (status.pageSelection !== true && files.some(file => String(file.pageRange || '').trim())) {
+                throw fail('MINERU_PAGE_SELECTION_UNAVAILABLE');
+            }
             const rolesOf = file => ports.getRoles(file);
             const questionFiles = files.filter(f => rolesOf(f).some(r => r === 'question' || r === 'full'));
             if (questionFiles.length !== 1 || files.some(f => f.fileType !== 'pdf' || f.convertedFromDocx)) throw fail('PDF_MINERU_SOURCE_SCOPE_INVALID');
@@ -56,26 +59,35 @@
                 if (!sourceResponse.ok) throw fail('MINERU_INPUT_INVALID');
                 const blob = await sourceResponse.blob(), sha256 = await digest(await blob.arrayBuffer());
                 const form = new FormData(); form.append('file', blob, file.filename);
-                const result = await (await request('/api/mineru/parse', { method: 'POST', body: form, signal })).json();
+                const range = String(file.pageRange || '').trim();
+                const endpoint = range ? '/api/mineru/parse?' + new URLSearchParams({ pages: range }) : '/api/mineru/parse';
+                const result = await (await request(endpoint, { method: 'POST', body: form, signal })).json();
                 // The parse may resolve after the caller cancelled (held/ignored fetch
                 // signal); never continue into projection or persistence then.
                 active(signal);
-                if (result.protocol !== 'mineru-blocks-v1' || result.source?.sha256 !== sha256 || result.job !== sha256 || !Array.isArray(result.pages) || !Array.isArray(result.evidence?.items)) throw fail('MINERU_RESPONSE_INVALID');
+                if (result.protocol !== 'mineru-blocks-v1' || !/^[a-f0-9]{64}$/.test(result.job || '') ||
+                    result.source?.sha256 !== result.job || (range ? result.originalSource?.sha256 : result.job) !== sha256 ||
+                    !Array.isArray(result.pages) || !Array.isArray(result.evidence?.items)) throw fail('MINERU_RESPONSE_INVALID');
                 const source = { sourceId: file.id, format: 'pdf', filename: file.filename, mimeType: 'application/pdf', sourceOrder: sourceResults.length };
                 const pages = await ports.renderPages(file, { sequential: true, requireAllPages: true, suppressCostEstimate: true });
                 active(signal);
                 const totalPages = pages.totalPages;
                 if (!Number.isSafeInteger(totalPages) || totalPages < 1) throw fail('PDF_MINERU_RENDER_CONTRACT_INVALID');
-                // Page selection is applied to blocks by exact original page, never renumbered.
-                const selected = new Set(pages.map(p => p.pageNo));
-                if (!selected.size || pages.some((p, i) => !Number.isSafeInteger(p.pageNo) || p.pageNo < 1 || i && p.pageNo !== pages[i - 1].pageNo + 1) || result.pages.some(p => !Number.isSafeInteger(p.page) || p.page < 1 || p.page > totalPages)) throw fail('PDF_MINERU_PAGE_SCOPE_INVALID');
+                const selected = pages.map(p => p.pageNo);
+                const mapping = range ? result.originalSource.pages : selected;
+                if (!selected.length || selected.some((page, i) => !Number.isSafeInteger(page) || page < 1 || page > totalPages || i && page <= selected[i - 1]) ||
+                    range && (result.originalSource.totalPages !== totalPages || !Array.isArray(mapping) || mapping.length !== selected.length ||
+                        mapping.some((page, i) => page !== selected[i])) ||
+                    result.pages.some(p => !Number.isSafeInteger(p.page) || p.page < 1 || p.page > (range ? mapping.length : totalPages))) {
+                    throw fail('PDF_MINERU_PAGE_SCOPE_INVALID');
+                }
                 allPages.set(file.id, pages);
-                const blocks = result.pages.filter(p => selected.has(p.page)).flatMap(p => p.blocks).map(block => ({ ...block,
+                const blocks = result.pages.flatMap(p => p.blocks.map(block => ({ ...block, page: range ? mapping[p.page - 1] : p.page,
                     id: file.id + '/' + block.id, ...(block.parentId ? { parentId: file.id + '/' + block.parentId } : {}),
-                    origin: { ...block.origin, sourceId: sha256, blockId: file.id + '/' + block.origin.blockId }, sourceFileId: file.id }));
+                    origin: { ...block.origin, sourceId: sha256, blockId: file.id + '/' + block.origin.blockId }, sourceFileId: file.id })));
                 const row = { file, source, sha256, result, blocks, roles: rolesOf(file) }; sourceResults.push(row);
                 const saved = { sourceId: file.id, sha256, job: result.job, receipt: result.receipt, roles: row.roles,
-                    selectedPages: [...selected], rawEvidence: copy(result.evidence), blocks: copy(blocks) };
+                    selectedPages: selected, rawEvidence: copy(result.evidence), blocks: copy(blocks), pageImages: pages };
                 evidence.push(saved);
                 active(signal);
                 await ports.persistSourceEvidence?.(file, { protocol: C.PROTOCOL, tasks: [saved], unassigned: [], errors: [] });
@@ -104,12 +116,31 @@
             const runsByNo = new Map(paper.questionSegment.runs.map(run => [run.no, run]));
             const types = new Map();
             let printedType = 'unknown';
-            for (const block of primary.blocks) {
-                const heading = String(block.text || '').trim().match(/^(?:[一二三四五六七八九十]+[、．.]\s*)?(单项选择题|单选题|多项选择题|多选题|填空题|解答题)(?:[：:（(\s]|$)/);
-                if (heading) printedType = ({ 单项选择题: 'single_choice', 单选题: 'single_choice', 多项选择题: 'multiple_choice', 多选题: 'multiple_choice', 填空题: 'fill_blank', 解答题: 'free_response' })[heading[1]];
+            for (const block of primary.blocks.slice(0, paper.combined ? paper.boundary.index : undefined)) {
+                const heading = Display.sectionHeading(block);
+                if (heading) printedType = heading.type;
                 const no = S.numberOnBlock(block); if (no && !types.has(no)) types.set(no, printedType);
             }
-            const taskProblems = issues.map(issue => `${issue.sourceId}: ${issue.code}${issue.no ? ' (' + issue.no + ')' : ''}`);
+            const issueMessage = issue => `${issue.sourceId}: ${issue.code}${issue.no ? ' (' + issue.no + ')' : ''}`;
+            const taskProblems = issues.map(issueMessage);
+            const issuesByQuestion = new Map();
+            const globalIssues = [];
+            const knownNumbers = new Set(base.questions.map(question => question.questionNo));
+            const blockOwners = new Map();
+            for (const { built } of assemblies) for (const question of built.questions) {
+                for (const id of [...question.stemBlocks, ...question.figureBlocks, ...question.tableBlocks, ...question.solutionBlocks]) {
+                    const previous = blockOwners.get(id);
+                    blockOwners.set(id, previous === undefined || previous === question.questionNo ? question.questionNo : null);
+                }
+            }
+            for (const issue of issues) {
+                const owner = issue.no || blockOwners.get(issue.blockId);
+                if (!owner) globalIssues.push(issueMessage(issue));
+                else if (knownNumbers.has(owner)) {
+                    if (!issuesByQuestion.has(owner)) issuesByQuestion.set(owner, []);
+                    issuesByQuestion.get(owner).push(issueMessage(issue));
+                }
+            }
             const sourceByFile = new Map(sourceResults.map(row => [row.file.id, row]));
             const assetCache = new Map();
             const drafts = [];
@@ -130,7 +161,7 @@
                             const row = sourceByFile.get(block.sourceFileId), key = row.sha256 + '/' + block.image;
                             let url = assetCache.get(key);
                             if (!url) {
-                                const response = await request('/api/mineru/image?' + new URLSearchParams({ job: row.result.job, sourceId: row.sha256, name: block.image }), { signal });
+                                const response = await request('/api/mineru/image?' + new URLSearchParams({ job: row.result.job, sourceId: row.result.source.sha256, name: block.image }), { signal });
                                 active(signal);
                                 const blob = await response.blob();
                                 if (!/^image\/(png|jpeg|webp)$/.test(blob.type) || !blob.size) throw fail('MINERU_IMAGE_INVALID');
@@ -196,7 +227,7 @@
                         (isSupport && !hasExplicitAnswer && anySupportRole);
                     const contributesSolution = row.roles.some(role => ['full', 'solution'].includes(role)) ||
                         (isSupport && !hasExplicitSolution && anySupportRole);
-                    if (contributesAnswer) {
+                    if (contributesAnswer && (q.answer || q.answerEvidence.state === 'conflicting')) {
                         for (const declaration of q.answerEvidence.evidence) {
                             declarations.push({ ...declaration, sourceFileId: row.file.id });
                             declarationBlocks.push({ sourceFileId: row.file.id, block: evidenceBlockOf(row, built, declaration) });
@@ -209,7 +240,10 @@
                 }
                 const answers = E.aggregateAnswers([...declarations, ...comparison]), conflict = answers.state === 'conflicting' || solutions.length > 1;
                 const solution = !conflict && solutions.length === 1 ? await materialize(solutions[0].blocks, 'solution') : '';
-                const answer = !conflict ? E.aggregateAnswers(declarations).value : '';
+                const printedAnswer = !conflict ? E.aggregateAnswers(declarations).value : '';
+                const type = types.get(no);
+                const answer = ['single_choice', 'multiple_choice'].includes(type) && /^[A-H](?:[ \t]+[A-H])+$/.test(printedAnswer)
+                    ? printedAnswer.replace(/[ \t]+/g, '') : printedAnswer;
                 const reason = 'mineru-evidence-projection';
                 const candidates = { question: [], answer: [], solution: [] };
                 const variant = (field, text, row, blocks, selectedImages = []) => ({ source: copy(row.source), images: copy(selectedImages), cropErrors: [],
@@ -242,9 +276,9 @@
                     .map(issue => built.blocksById[issue.blockId]))
                     .map(block => '原PDF“' + sourceByFile.get(block.sourceFileId).file.filename + '”第' + block.page + '页表格内容未读取，请对照原页检查并补全。');
                 const draftProblems = [...new Set([
+                    ...globalIssues, ...(issuesByQuestion.get(no) || []),
                     ...(!answer && supportFailureCodes.length
-                        ? [...taskProblems, `第${no}题答案未绑定：支持文件序列未通过整体校验（${supportFailureCodes.join('、')}），请对照原页确认。`]
-                        : taskProblems),
+                        ? [`第${no}题答案未绑定：支持文件序列未通过整体校验（${supportFailureCodes.join('、')}），请对照原页确认。`] : []),
                     ...tableProblems, ...imagePlacementProblems,
                     ...[...tableComparisons.values()].map(block => '原PDF“' + sourceByFile.get(block.sourceFileId).file.filename +
                         '”第' + block.page + '页同时保留表格识别文字和图片，请核对二者及跨页续行。')
@@ -276,10 +310,12 @@
                 draft.fieldProvenance.images.imageEvidence = images.map(i => ({ imageId: i.id, sourceId: i.sourceFileId, field: i.position, evidenceRef: i.sourceSha256 + '/' + i.assetPath }));
                 for (const row of sourceResults) {
                     const usedPages = new Set(Object.values(candidates).flat().filter(v => v.source.sourceId === row.file.id).flatMap(v => v.item.source_pages));
-                    for (const page of allPages.get(row.file.id).filter(page => usedPages.has(page.pageNo))) draft.pdfReview.sourcePageImages.push({ ...page, sourcePage: page.pageNo, sourceFileId: row.file.id, sourceFileName: row.file.filename });
+                    for (const page of allPages.get(row.file.id).filter(page => usedPages.has(page.pageNo))) {
+                        const { url, ...reference } = page;
+                        draft.pdfReview.sourcePageImages.push({ ...reference, sourcePage: page.pageNo, sourceFileId: row.file.id, sourceFileName: row.file.filename });
+                    }
                 }
-                draft.sourcePageImage = draft.pdfReview.sourcePageImages.find(p => p.sourceFileId === primary.file.id && p.sourcePage === draft.sourcePage)?.url || '';
-                draft.sourceTrace = { source: C.PROTOCOL, sourceFileId: primary.file.id, sourcePage: draft.sourcePage, sourceSha256: primary.sha256, sourcePageImage: draft.sourcePageImage };
+                draft.sourceTrace = { source: C.PROTOCOL, sourceFileId: primary.file.id, sourcePage: draft.sourcePage, sourceSha256: primary.sha256 };
                 drafts.push(draft);
             }
             active(signal);

@@ -116,6 +116,7 @@
 
     const TASK_MODELS = Object.freeze({
         'structured-ocr': Object.freeze(['qwen-vl-ocr-latest']),
+        'crop-ocr': Object.freeze(['qwen-vl-ocr']),
         'text-structure': Object.freeze(['qwen-plus']),
         'general-vision': Object.freeze([
             'qwen3.5-plus', 'qwen3-vl-plus',
@@ -134,15 +135,13 @@
     };
 
     const extractProxyText = data => {
-        const dashScope = data?.output?.choices?.[0]?.message?.content;
-        if (Array.isArray(dashScope)) {
-            return dashScope.map(part =>
+        const content = data?.output?.choices?.[0]?.message?.content || data?.choices?.[0]?.message?.content;
+        if (Array.isArray(content)) {
+            return content.map(part =>
                 String(part?.text || part?.content || '').trim()
             ).filter(Boolean).join('\n');
         }
-        return String(
-            dashScope || data?.choices?.[0]?.message?.content || ''
-        ).trim();
+        return typeof content === 'string' ? content.trim() : '';
     };
 
     const parseTaskJson = text => {

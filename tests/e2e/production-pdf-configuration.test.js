@@ -33,7 +33,7 @@ test('unconfigured production PDF UI reports its cause without enabling a mock p
         await h.page.reload();
         const saved = (await getDbSnapshot(h.page)).batches.find(row => row.id === batch.id);
         assert.equal(saved.errorMessage, batch.errorMessage);
-        await h.page.getByRole('button', { name: '批量录题', exact: true }).click();
+        await h.page.locator('.v-topnav').getByRole('button', { name: '批量录题', exact: true }).click();
         await h.page.getByText(batch.errorMessage, { exact: true }).waitFor();
         const expectedFailure = '[QISI_LOG] {stage: normal-ui-import-controller, code: IMPORT_RECOGNITION_FAILED}';
         assert.deepEqual(h.consoleErrors, [expectedFailure]);

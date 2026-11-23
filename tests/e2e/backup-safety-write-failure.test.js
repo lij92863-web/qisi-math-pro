@@ -66,8 +66,8 @@ for (const [index, failureName] of ['QuotaExceededError', 'NotAllowedError'].ent
                 return { incoming, bytes: Array.from(new Uint8Array(await backup.blob.arrayBuffer())) };
             });
             const original = await snapshot(h.page);
-            assert.equal(Object.keys(original.counts).length, 11);
-            await h.page.getByRole('button', { name: '题库与检索', exact: true }).click();
+            assert.equal(Object.keys(original.counts).length, 12);
+        await h.page.getByRole('button',{name:'个人知识点与备份',exact:true}).click();
             await h.page.getByTestId('restore-file').setInputFiles({ name: 'synthetic-incoming.zip', mimeType: 'application/zip', buffer: Buffer.from(prepared.bytes) });
             await h.page.getByTestId('restore-preview').waitFor();
             await h.page.getByRole('button', { name: '选择备份文件夹', exact: true }).click();

@@ -38,7 +38,10 @@ const allowedFiles = new Set([
     'scripts/smoke-ai-proxy.js',
     'scripts/smoke-ai-vision-proxy.js',
     'scripts/verify-no-real-ai.js',
-    'tests/batch-smoke-mock.test.js'
+    'tests/batch-smoke-mock.test.js',
+    // The crop UI test intercepts this same-origin route with a fixture response;
+    // the browser harness aborts any request that escapes the explicit mock.
+    'tests/e2e/video-workspace.test.js'
 ]);
 
 // Only these already reviewed production transport lines may contain real endpoint markers.
@@ -47,7 +50,7 @@ const reviewedProductionLines = {
         "const DASHSCOPE_API_KEY = String(process.env.DASHSCOPE_API_KEY || '').trim();",
         "const MINERU_TOKEN = String(process.env.MINERU_TOKEN || '').trim();",
         "const mineruClient = createMineruClient({ token: MINERU_TOKEN,",
-        "app.get('/api/mineru/status', (req, res) => res.json({ configured: Boolean(MINERU_TOKEN) }));",
+        "app.get('/api/mineru/status', (req, res) => res.json({ configured: Boolean(MINERU_TOKEN), pageSelection: true }));",
         "const DASHSCOPE_CHAT_UPSTREAM = 'https://dashscope.aliyuncs.com/' + 'compatible-mode/v1/' + 'chat/completions';",
         "const DASHSCOPE_OCR_UPSTREAM = 'https://dashscope.aliyuncs.com/' + 'api/v1/services/aigc/' + 'multimodal-generation/' + 'generation';",
         "configured: Boolean(DASHSCOPE_API_KEY)",

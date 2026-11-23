@@ -72,7 +72,7 @@ for (const failingTable of ['images', 'draftImages']) {
                 }
             }, failingTable);
             assert.equal(result.errorCode, 'quota-exceeded');
-            assert.equal(result.names.length, 11);
+            assert.equal(result.names.length, 12);
             assert.ok(result.firstAttempt.indexOf('questions') >= 0);
             assert.ok(result.firstAttempt.indexOf(failingTable) > result.firstAttempt.indexOf('questions'));
             assert.deepEqual(result.firstAttempt, result.names.slice(0, result.names.indexOf(failingTable) + 1));

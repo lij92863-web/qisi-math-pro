@@ -84,23 +84,29 @@ async function actionFixture() {
     return { owner, session, workflow, persistence, getRows, events, notices, failures, sourceFor };
 }
 
-test('quick action explicitly saves, confirms the saved version, submits the confirmed version and reads back', async () => {
+test('review saves and confirms the edited version, and submission requires a separate action', async () => {
     const f = await actionFixture();
     f.session.refs.activeDraftEditorBuffer.value = 'edited source';
-    assert.equal(await f.owner.confirmAndSubmit(), true);
-    assert.deepEqual(f.events, ['save:b_q1', 'confirm:b_q1:v2', 'submit:b_q1:v3', 'library', 'read:b']);
+    assert.equal(await f.owner.submitReviewed(), false);
+    assert.deepEqual(f.events, []);
+    assert.equal(await f.owner.reviewDraft(), true);
+    assert.deepEqual(f.events, ['save:b_q1', 'confirm:b_q1:v2', 'read:b']);
+    assert.equal(f.session.current().status, 'reviewed');
+    assert.equal(await f.owner.submitReviewed(), true);
+    assert.deepEqual(f.events, ['save:b_q1', 'confirm:b_q1:v2', 'read:b', 'submit:b_q1:v3', 'library', 'read:b']);
     assert.equal(f.session.current().status, 'submitted'); assert.equal(f.session.current().version, 4);
     assert.equal(f.session.dirty(), false);
 });
 
 test('explicit retry of failed formal admission never repeats a durable confirmation', async () => {
     const f = await actionFixture(), submit = f.workflow.submitDraft;
+    assert.equal(await f.owner.reviewDraft(), true);
     f.workflow.submitDraft = async () => { throw new Error('storage failed'); };
-    assert.equal(await f.owner.confirmAndSubmit(), false);
+    assert.equal(await f.owner.submitReviewed(), false);
     assert.equal(f.session.current().status, 'reviewed');
     assert.match(f.failures[0], /已确认/);
     f.workflow.submitDraft = submit;
-    assert.equal(await f.owner.confirmAndSubmit(), true);
+    assert.equal(await f.owner.submitReviewed(), true);
     assert.equal(f.events.filter(event => event.startsWith('confirm')).length, 1);
     assert.equal(f.events.filter(event => event.startsWith('submit')).length, 1);
 });
@@ -154,9 +160,10 @@ test('a completed formal insert remains submitted when library refresh fails and
         editor: { imagesFor: () => [], refreshStats: async () => {}, prepareDraft: () => { throw new Error('unused'); } },
         refreshLibrary: async () => { throw new Error('library unavailable'); }, notify: value => f.notices.push(value),
         reportFailure: value => f.failures.push(value), errorText: error => error.message });
-    assert.equal(await broken.confirmAndSubmit(), false);
+    assert.equal(await broken.reviewDraft(), true);
+    assert.equal(await broken.submitReviewed(), false);
     assert.equal(f.session.current().status, 'submitted'); assert.match(f.failures.at(-1), /已入库/);
-    assert.equal(await broken.confirmAndSubmit(), true);
+    assert.equal(await broken.submitReviewed(), true);
     assert.equal(f.events.filter(event => event.startsWith('submit')).length, 1);
 });
 

@@ -135,6 +135,14 @@
       "runtime": "browser"
     },
     {
+      "file": "qisi-clipboard-files.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-question-ai.js",
+      "runtime": "browser"
+    },
+    {
       "file": "qisi-file-dispatcher.js",
       "runtime": "browser"
     },
@@ -351,6 +359,10 @@
       "runtime": "browser"
     },
     {
+      "file": "qisi-figure-editor.js",
+      "runtime": "browser"
+    },
+    {
       "file": "qisi-question-index-storage.js",
       "runtime": "browser"
     },
@@ -556,6 +568,26 @@
     },
     {
       "file": "qisi-import-draft-command.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-handout-layout.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-handout-document.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-handout-composer.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-crop-ocr-text.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "qisi-video-workspace.js",
       "runtime": "browser"
     }
   ]

@@ -1,11 +1,12 @@
 (function (root, factory) {
     const api = factory(root,
+        typeof module !== 'undefined' && module.exports ? require('./qisi-utils.js') : root.Qisi.Utils,
         typeof module !== 'undefined' && module.exports ? require('./qisi-docx-ole-reader.js') : root.Qisi.DocxOleReader,
         typeof module !== 'undefined' && module.exports ? require('./qisi-docx-mtef-reader.js') : root.Qisi.DocxMtefReader);
     root.Qisi = root.Qisi || {};
     root.Qisi.DocxFormulaSource = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (root, ole, reader) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root, utils, ole, reader) {
     'use strict';
     const attr = (xml, name) => xml.match(new RegExp('\\b' + name + '=["\']([^"\']+)["\']'))?.[1] || '';
     const escapeXml = text => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -32,7 +33,9 @@
         else if (/^\$[\s\S]*\$$/.test(latex)) latex = latex.slice(1, -1).trim();
         else if (/^\\\[[\s\S]*\\\]$|^\\\([\s\S]*\\\)$/.test(latex)) latex = latex.slice(2, -2).trim();
         if (!latex || /[\u0000-\u0008\u000b-\u001f]/.test(latex)) return '';
-        try { if (root.katex) root.katex.renderToString(latex, { throwOnError: true, strict: 'ignore' }); }
+        try {
+            if (root.katex) utils.renderLatexFormula(root.katex.renderToString, latex, { throwOnError: true, strict: 'ignore' });
+        }
         catch { return ''; }
         return latex;
     }

@@ -44,17 +44,29 @@
         const read = async (file) => {
             const zip = await loadArchive(file);
             const manifestText = await zip.file('manifest.json')?.async('string');
-            const questionsText = await zip.file('questions.json')?.async('string');
-            if (!questionsText) throw new Error('题库数据包格式不正确：缺少 questions.json。');
-        
             const manifest = manifestText ? JSON.parse(manifestText) : {};
-            const rawQuestions = JSON.parse(questionsText);
-            if (!Array.isArray(rawQuestions)) throw new Error('题库数据包格式不正确：questions.json 不是数组。');
+            const parts = manifest?.questionParts ?? 1;
+            if (!Number.isSafeInteger(parts) || parts < 1 || (parts > 1 && parts > Object.keys(zip.files || {}).length)) {
+                throw new Error('题库数据包的题目分片数量不正确。');
+            }
+            const rawQuestions = [];
+            for (let part = 0; part < parts; part++) {
+                const name = parts > 1 ? questionPartPath(part) : 'questions.json';
+                const text = await zip.file(name)?.async('string');
+                if (!text) throw new Error('题库数据包缺少文件：' + name);
+                const rows = JSON.parse(text);
+                if (!Array.isArray(rows)) throw new Error('题库数据包格式不正确：' + name + ' 不是数组。');
+                for (const row of rows) rawQuestions.push(row);
+            }
+            if (manifest?.questionParts !== undefined && manifest.questionCount !== rawQuestions.length) {
+                throw new Error('题库包题目数量与清单不一致。');
+            }
         
             const sourceTeacher = manifest?.createdBy?.name || '外部教师';
             const batchTitle = manifest?.title || file.name.replace(/\.zip$/i, '') || '导入题库';
             const exportedAt = manifest?.exportedAt || '';
             const imagePayloads = [];
+            const imagesByPath = new Map();
             const preparedQuestions = [];
         
             let importOrder = 0;
@@ -62,14 +74,16 @@
                 const cleanImages = [];
                 for (const img of raw.images || []) {
                     const oldId = img.id;
-                    const newImgId = `img_pending_${importOrder}_${cleanImages.length}`;
                     const filePath = img.file || (oldId ? `images/${oldId}.png` : '');
-                    const imgFile = filePath ? zip.file(filePath) : null;
-                    if (!imgFile) throw new Error('题库包缺少图片文件：' + filePath);
-                    if (imgFile) {
-                        imagePayloads.push({ tempId: newImgId, oldId, filePath, blob: await imgFile.async('blob') });
+                    let payload = imagesByPath.get(filePath);
+                    if (!payload) {
+                        const image = filePath && zip.file(filePath);
+                        if (!image) throw new Error('题库包缺少图片文件：' + filePath);
+                        payload = { tempId: `img_pending_${imagePayloads.length}`, oldId, filePath, blob: await image.async('blob') };
+                        imagesByPath.set(filePath, payload);
+                        imagePayloads.push(payload);
                     }
-                    cleanImages.push({ ...img, tempId: newImgId, oldId, align: img.align || 'center' });
+                    cleanImages.push({ ...img, file: filePath, tempId: payload.tempId, oldId, align: img.align || 'center' });
                 }
                 preparedQuestions.push({ raw, cleanImages, importOrder });
                 importOrder += 1;
@@ -125,7 +139,7 @@
                 });
                 const tokenIds = new Map();
                 for (const image of cleanImages) {
-                    for (const oldId of [image.oldId, image.file].filter(Boolean)) {
+                    for (const oldId of [image.oldId, image.file, image.sourcePackagePath].filter(Boolean)) {
                         if (tokenIds.has(oldId) && tokenIds.get(oldId) !== image.id) {
                             throw new Error('题库图片标识冲突，无法确定正文引用：' + oldId);
                         }
@@ -241,5 +255,44 @@
         return Object.freeze({ build });
     };
 
-    return Object.freeze({ ExportError, safeFilename, rekeyQuestionImageTokens, createPackageService, createExportService });
+    const questionPartPath = index => `questions-${index + 1}.json`;
+    const writeQuestionBank = async (plan, archive) => {
+        const encoder = new TextEncoder();
+        const paths = new Map(plan.images.map((row, index) => [row.id, `images/image-${index}.png`]));
+        const entries = [];
+        let part = 0, rows = [], bytes = 2;
+        const flush = () => {
+            entries.push({ path: questionPartPath(part++), source: encoder.encode('[' + rows.join(',') + ']') });
+            rows = [];
+            bytes = 2;
+        };
+        for (const question of plan.questions) {
+            const images = question.images.map(image => {
+                const file = paths.get(image.id);
+                if (!file) throw new ExportError('image-resolution-failed', '题库缺少图片数据：' + image.id);
+                return { ...image, file, sourcePackagePath: image.file };
+            });
+            const json = JSON.stringify({ ...question, images });
+            const size = encoder.encode(json).byteLength;
+            if (rows.length && bytes + size + 1 > 8 * 1024 * 1024) flush();
+            bytes += size + (rows.length ? 1 : 0);
+            rows.push(json);
+        }
+        flush();
+        // Older readers look only for questions.json. Leave that name absent
+        // in a sharded package so they reject it instead of importing one part.
+        if (part === 1) entries[0].path = 'questions.json';
+        const manifest = part > 1 ? { ...plan.manifest, schemaVersion: '2.0', questionParts: part } : plan.manifest;
+        entries.push({ path: 'manifest.json', source: encoder.encode(JSON.stringify(manifest)) });
+        for (const row of plan.images) entries.push({ path: paths.get(row.id), source: row.blob });
+        let blob;
+        try { blob = await archive.writeBlob(entries, 'question-bank'); }
+        catch (error) {
+            if (error?.code !== 'ARCHIVE_COMPRESSION_RATIO_LIMIT') throw error;
+            blob = await archive.writeBlob(entries, 'question-bank', { store: true });
+        }
+        await archive.openBlob(blob, 'question-bank');
+        return blob;
+    };
+    return Object.freeze({ ExportError, safeFilename, rekeyQuestionImageTokens, createPackageService, createExportService, writeQuestionBank });
 });

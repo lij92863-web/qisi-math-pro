@@ -30,6 +30,15 @@ test('ocr fill-in blanks render as underscores, not literal backslashes', () => 
     assert.doesNotMatch(normalized, /^.*[^$]\\_\\_\\_\\_[^$]/);
 });
 
+test('bare indexed points and sequence terms render alongside existing LaTeX', () => {
+    const source = '已知F_1, F_2为椭圆的焦点，求 $\\angle F_1MF_2$。设a_n、a_{n+1}为相邻两项。';
+    const expected = '已知$F_1, F_2$为椭圆的焦点，求 $\\angle F_1MF_2$。设$a_n$、$a_{n+1}$为相邻两项。';
+    assert.equal(Utils.normalizeBareLatexForDisplayText(source), expected);
+    assert.equal(Utils.normalizeBareLatexForDisplayText(expected), expected);
+    assert.equal(Utils.normalizeBareLatexForDisplayText('线段F_1F_2，图像[[IMAGE:F_1]]，文件file_1和F_1.png'),
+        '线段$F_1F_2$，图像[[IMAGE:F_1]]，文件file_1和F_1.png');
+});
+
 test('existing math and Chinese prose are left untouched', () => {
     const source = '已有 $\\frac{1}{2}$ 和 $AB$ 不重复，解析文字保持原样。';
     assert.equal(Utils.normalizeBareLatexForDisplayText(source), source);

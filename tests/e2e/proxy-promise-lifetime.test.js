@@ -48,3 +48,25 @@ test('proxy driver preserves rejection and does not turn a real navigation into 
         await navigation;
     } finally { await h.close(); }
 });
+
+test('proxy result polling detects a replacement document before a navigation listener observes it', { timeout: 30000 }, async () => {
+    const h = await H.startBrowserApp(32863);
+    try {
+        await h.page.evaluate(() => {
+            const proxy = window.Qisi.Runtime.getRuntimeDependency('AppProxy');
+            proxy.auditNavigatePromise = () => new Promise(() => { setTimeout(() => location.reload(), 20); });
+        });
+        const replacement = h.page.waitForEvent('framenavigated', { predicate: frame => frame === h.page.mainFrame() });
+        let dispatched = false;
+        const laggingNavigationListener = {
+            on() {},
+            off() {},
+            async evaluate(callback, arg) {
+                if (dispatched) await replacement;
+                dispatched = true;
+                return h.page.evaluate(callback, arg);
+            }
+        };
+        await assert.rejects(H.callProxy(laggingNavigationListener, 'auditNavigatePromise'), /context was destroyed|navigation/i);
+    } finally { await h.close(); }
+});

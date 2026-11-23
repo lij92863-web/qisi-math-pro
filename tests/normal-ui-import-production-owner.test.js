@@ -10,8 +10,9 @@ test('every visible batch-import command converges on explicit Bridge production
     const app = read('app.js');
     const controller = read('qisi-normal-ui-import-controller.js');
     const template = read('main.html');
-    assert.match(template, /@click="createDraftImportBatch"/);
-    assert.match(template, /@click="runBatchRecognition\(batch\.id\)"/);
+    assert.match(template, /@click="videoCreate"/);
+    assert.match(read('qisi-video-workspace.js'), /await this\.createDraftImportBatch\(\)/);
+    assert.match(template, /@click="runBatchRecognition\(b\.id\)"/);
     assert.match(template, /@click="rerunActiveBatchRecognition"/);
     assert.match(app, /ProductionImportBridge\.createProductionImportBridge/);
     assert.match(app, /ImportRunCommands\.createWorkspace\s*\(\s*\{/);

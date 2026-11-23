@@ -23,7 +23,7 @@ test('a globally shifted support document is rejected whole, never attached by e
 });
 test('V2 task issues remain blocking until explicit source-scope review',()=>{
  const q=C.buildDrafts([observation(clone(f.result))],{batchId:'exam1',identityContract:I,taskProblems:['unassigned tail']}).drafts[0];
- assert.match(C.reviewProblem(q),/来源|原页/);const controller=R.createReviewController({formalFields:I.FORMAL_FIELDS});const reviewed=C.acknowledgeTaskIssues(q,controller);assert.equal(reviewed.pdfExternal.taskIssuesAcknowledged,true);assert.equal(reviewed.manualConfirmed,false);assert.equal(reviewed.fieldProvenance.questionNumber.status,'manual');assert.equal(q.pdfExternal.taskIssuesAcknowledged,false);
+ assert.match(C.reviewProblem(q),/来源|原页/);const reviewed=C.acknowledgeTaskIssues(q);assert.equal(reviewed.pdfExternal.taskIssuesAcknowledged,true);assert.equal(reviewed.manualConfirmed,false);assert.deepEqual(reviewed.fieldProvenance.questionNumber,q.fieldProvenance.questionNumber);assert.equal(q.pdfExternal.taskIssuesAcknowledged,false);
 });
 test('V2 edits invalidate prior confirmation and preserve raw machine candidate',()=>{
  const q=build(clone(f.result)).drafts[0];q.manualConfirmed=true;q.status='reviewed';q.confirmedAt=123;const before=clone(q.pdfExternal.candidates);const controller=R.createReviewController({formalFields:I.FORMAL_FIELDS});const changed=controller.editField(q,'solution','teacher corrected');assert.equal(changed.manualConfirmed,false);assert.equal(changed.confirmedAt,null);assert.deepEqual(changed.pdfExternal.candidates,before);assert.equal(changed.fieldProvenance.solution.status,'manual');

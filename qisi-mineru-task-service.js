@@ -2,6 +2,8 @@
 
 const crypto = require('node:crypto');
 const VERSION = 'mineru-extraction-v2';
+const UPLOAD_CONFIRMATION_POLLS = 4;
+const UPLOAD_RECEIVED_STATES = new Set(['uploading', 'pending', 'running', 'converting', 'done', 'failed']);
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const fail = (code, stage, extra = {}) => Object.assign(new Error(code), { code, stage, ...extra });
 
@@ -81,17 +83,26 @@ function createMineruTaskService({ token = '', fetchImpl = fetch, store = memory
             // retried against the SAME accepted batch. Re-uploading bytes is
             // not re-submitting a job: MinerU has one batch row for this file.
             let uploadUrl = String(receipt.uploadUrl || '');
-            const uploadNow = async () => {
+            const uploadNow = async ({ reconcile = false } = {}) => {
                 if (!uploadUrl) throw fail('MINERU_UPLOAD_URL_MISSING', 'accepted');
                 await save('uploading');
-                const uploaded = await request(uploadUrl, { method: 'PUT', body: bytes });
+                let uploaded;
+                try {
+                    uploaded = await request(uploadUrl, { method: 'PUT', body: bytes });
+                } catch (error) {
+                    if (!reconcile || signal.aborted) throw error;
+                    // The request may have reached OSS before the response was lost.
+                    return false;
+                }
                 if (uploaded.status !== 200) {
                     // Definitely not accepted: keep the batch + URL so the next
                     // run can retry the upload instead of polling a dead row.
                     throw fail('MINERU_UPLOAD_UNKNOWN', 'uploading', { httpStatus: uploaded.status });
                 }
                 await save('processing');
+                return true;
             };
+            let awaitingUploadConfirmation = false;
             if (!receipt.batchId) {
                 if (receipt.owner !== owner) throw fail('MINERU_TASK_BUSY', receipt.state);
                 await save('submitting');
@@ -109,16 +120,15 @@ function createMineruTaskService({ token = '', fetchImpl = fetch, store = memory
                 if (typeof batchId !== 'string' || !batchId || typeof acceptedUrl !== 'string' || !/^https:\/\//.test(acceptedUrl)) throw fail('MINERU_SUBMISSION_UNKNOWN', 'submitting');
                 uploadUrl = acceptedUrl;
                 await save('accepted', { batchId, uploadUrl });
-                await uploadNow();
-            } else if (receipt.state === 'accepted' || receipt.state === 'uploading') {
-                // The previous run stopped before the bytes were accepted. The
-                // batch already exists, so finish its upload - never POST again.
-                await uploadNow();
+                awaitingUploadConfirmation = !(await uploadNow({ reconcile: true }));
+            } else if (receipt.state === 'accepted') {
+                awaitingUploadConfirmation = !(await uploadNow({ reconcile: true }));
             }
-            // An existing batch is only queried. POST is never replayed.
-            stage = 'processing';
+            // An interrupted PUT is queried before attempting another upload.
+            if (!awaitingUploadConfirmation) stage = 'processing';
             let result;
             let repairedUpload = false;
+            let uploadConfirmationPolls = 0;
             for (;;) {
                 let polled;
                 for (let attempt = 0; ; attempt++) {
@@ -135,6 +145,15 @@ function createMineruTaskService({ token = '', fetchImpl = fetch, store = memory
                 const rows = polled.body?.data?.extract_result;
                 if (!Array.isArray(rows) || rows.length !== 1 || rows[0].data_id && rows[0].data_id !== sourceId) throw fail('MINERU_RESPONSE_INVALID', stage);
                 const row = rows[0];
+                if (awaitingUploadConfirmation) {
+                    if (row.state === 'waiting-file' && ++uploadConfirmationPolls < UPLOAD_CONFIRMATION_POLLS) {
+                        await delay();
+                        continue;
+                    }
+                    if (!UPLOAD_RECEIVED_STATES.has(row.state)) throw fail('MINERU_UPLOAD_UNKNOWN', 'uploading');
+                    await save('processing');
+                    awaitingUploadConfirmation = false;
+                }
                 if (row.state === 'done') { result = row; break; }
                 if (row.state === 'failed') {
                     await save('failed', { errorCode: 'MINERU_PARSE_FAILED' });
@@ -147,7 +166,7 @@ function createMineruTaskService({ token = '', fetchImpl = fetch, store = memory
                     // out of a lost PUT (polling this row forever cannot work).
                     if (!repairedUpload && uploadUrl) {
                         repairedUpload = true;
-                        await uploadNow();
+                        awaitingUploadConfirmation = !(await uploadNow({ reconcile: true }));
                         continue;
                     }
                     await save('accepted', { batchId: receipt.batchId, uploadUrl });
@@ -211,11 +230,35 @@ function createMineruTaskService({ token = '', fetchImpl = fetch, store = memory
     function parse(input, options = {}) {
         const bytes = Buffer.from(input);
         if (bytes.subarray(0, 5).toString() !== '%PDF-') return Promise.reject(fail('MINERU_INPUT_INVALID', 'prepared'));
+        const cancelled = () => fail('MINERU_CANCELLED', 'cancelled');
+        if (options.signal?.aborted) return Promise.reject(cancelled());
         const sourceId = hash(bytes);
-        if (active.has(sourceId)) return active.get(sourceId);
-        const promise = run(bytes, options, sourceId).finally(() => active.delete(sourceId));
-        active.set(sourceId, promise);
-        return promise;
+        let task = active.get(sourceId);
+        if (task?.controller.signal.aborted) return task.promise.catch(() => {}).then(() => parse(bytes, options));
+        if (!task) {
+            const controller = new AbortController();
+            const promise = run(bytes, { ...options, signal: controller.signal }, sourceId).finally(() => active.delete(sourceId));
+            task = { controller, promise, readers: 0 };
+            active.set(sourceId, task);
+        }
+        task.readers++;
+        return new Promise((resolve, reject) => {
+            const release = () => {
+                options.signal?.removeEventListener('abort', onAbort);
+                task.readers--;
+            };
+            const finish = (callback, value) => { release(); callback(value); };
+            const onAbort = () => {
+                finish(reject, cancelled());
+                if (!task.readers) task.controller.abort();
+            };
+            options.signal?.addEventListener('abort', onAbort, { once: true });
+            task.promise.then(value => {
+                if (!options.signal?.aborted) finish(resolve, value);
+            }, error => {
+                if (!options.signal?.aborted) finish(reject, error);
+            });
+        });
     }
     async function readZip({ job, sourceId } = {}) {
         if (!/^[a-f0-9]{64}$/.test(job || '') || job !== sourceId) throw fail('MINERU_ASSET_IDENTITY_REQUIRED', 'asset');

@@ -14,18 +14,18 @@
 
     const PROFILES = {
         'question-bank': {
-            maxEntries: 10002,
-            maxTotalUncompressedBytes: 256 * MB,
-            maxEntryUncompressedBytes: 32 * MB,
+            maxEntries: 60000,
+            maxTotalUncompressedBytes: 2048 * MB,
+            maxEntryUncompressedBytes: 64 * MB,
             maxCompressionRatio: 100,
             inputExtensions: ['zip'],
             inputMimes: ZIP_MIMES,
             allowedEntry: path =>
-                /^(?:manifest\.json|questions\.json|images\/[a-zA-Z0-9._-]+\.(?:png|jpe?g|gif|webp))$/i.test(path)
+                /^(?:manifest\.json|questions(?:-\d+)?\.json|images\/[a-zA-Z0-9._-]+\.(?:png|jpe?g|gif|webp))$/i.test(path)
         },
         'full-backup': {
-            maxEntries: 20002,
-            maxTotalUncompressedBytes: 512 * MB,
+            maxEntries: 60000,
+            maxTotalUncompressedBytes: 2048 * MB,
             maxEntryUncompressedBytes: 64 * MB,
             maxCompressionRatio: 100,
             inputExtensions: ['zip'],
@@ -105,8 +105,8 @@
                 return archiveError('ARCHIVE_ENTRY_NOT_ALLOWED');
             }
 
-            const compressed = Number(item?._data?.compressedSize);
-            const uncompressed = Number(item?._data?.uncompressedSize);
+            const compressed = item.compressedSize ?? item._data?.compressedSize;
+            const uncompressed = item.uncompressedSize ?? item._data?.uncompressedSize;
             if (!Number.isFinite(compressed) || compressed < 0 ||
                 !Number.isFinite(uncompressed) || uncompressed < 0) {
                 return archiveError('ARCHIVE_SIZE_METADATA_REQUIRED');
@@ -147,17 +147,127 @@
             error.code = 'ARCHIVE_READER_REQUIRED';
             throw error;
         }
+        const policy = createArchivePolicy(profile, overrides);
         const zip = await JSZip.loadAsync(source);
-        assertArchive(zip, createArchivePolicy(profile, overrides), input);
-        // Check payload CRC only after decompression sizes and paths pass the bounded policy.
-        if (profile === 'full-backup') return JSZip.loadAsync(source, { checkCRC32: true });
+        assertArchive(zip, policy, input);
         return zip;
     };
+
+    const zipLibrary = () => globalThis.zip || (typeof module === 'object' && module.exports
+        ? require('./vendor/zip-js/zip.min.js') : null);
+    const fail = code => { throw Object.assign(new Error(code), { code }); };
+    const openBlob = async (blob, profile, input = {}) => {
+        const zip = zipLibrary();
+        if (!zip?.ZipReader) fail('ARCHIVE_READER_REQUIRED');
+        const policy = createArchivePolicy(profile);
+        if (!(blob instanceof Blob)) fail('ARCHIVE_INVALID');
+        const overhead = policy.maxEntries * 1024 + MB;
+        if (blob.size > policy.maxTotalUncompressedBytes + overhead) fail('ARCHIVE_TOTAL_SIZE_LIMIT');
+        class BoundedReader extends zip.BlobReader {
+            readUint8Array(offset, length) {
+                if (length > policy.maxEntryUncompressedBytes + overhead) fail('ARCHIVE_ENTRY_SIZE_LIMIT');
+                return super.readUint8Array(offset, length);
+            }
+        }
+        const reader = new zip.ZipReader(new BoundedReader(blob), { useWebWorkers: false });
+        const files = Object.create(null);
+        let count = 0;
+        try {
+            for await (const entry of reader.getEntriesGenerator({ filenameValidation: 'tolerant', normalizeFilename: false })) {
+                if (hasTraversal(entry.filename)) fail('ARCHIVE_PATH_TRAVERSAL');
+                if (++count > policy.maxEntries + 16) fail('ARCHIVE_ENTRY_COUNT_LIMIT');
+                if (entry.directory) continue;
+                if (files[entry.filename]) fail('ARCHIVE_DUPLICATE_ENTRY');
+                if (entry.encrypted) fail('ARCHIVE_ENTRY_NOT_ALLOWED');
+                const file = { name: entry.filename, compressedSize: entry.compressedSize, uncompressedSize: entry.uncompressedSize };
+                file.read = async ({ collect = true, type = '' } = {}) => {
+                    let size = 0;
+                    const chunks = [];
+                    try {
+                        await entry.getData(new WritableStream({
+                            write(chunk) {
+                                size += chunk.byteLength;
+                                if (size > file.uncompressedSize) fail('ARCHIVE_ENTRY_CORRUPT');
+                                if (collect) chunks.push(chunk);
+                            }
+                        }), { checkCrc32: true, strictness: 'strict' });
+                        if (size !== file.uncompressedSize) fail('ARCHIVE_ENTRY_CORRUPT');
+                    } catch (_) { fail('ARCHIVE_ENTRY_CORRUPT'); }
+                    return collect ? new Blob(chunks, { type }) : size;
+                };
+                file.async = async format => {
+                    const result = await file.read();
+                    return format === 'blob' ? result : result.text();
+                };
+                files[file.name] = file;
+            }
+        } catch (error) {
+            if (error?.code) throw error;
+            fail('ARCHIVE_UNREADABLE');
+        }
+        const archive = { files, file: name => files[name] || null };
+        assertArchive(archive, policy, { name: blob.name, type: blob.type, ...input });
+        return archive;
+    };
+    const writeBlob = async (entries, profile, { store = false } = {}) => {
+        const zip = zipLibrary();
+        if (!zip?.ZipWriter) fail('ARCHIVE_WRITER_REQUIRED');
+        const policy = createArchivePolicy(profile);
+        const files = Object.create(null);
+        for (const { path, source } of entries) {
+            if (files[path]) fail('ARCHIVE_DUPLICATE_ENTRY');
+            const size = source instanceof Blob ? source.size : source.byteLength;
+            files[path] = { name: path, compressedSize: size, uncompressedSize: size };
+        }
+        assertArchive({ files }, policy);
+        const writer = new zip.ZipWriter(new zip.BlobWriter('application/zip'), { useWebWorkers: false, bufferedWrite: false });
+        try {
+            for (const { path, source } of entries) {
+                const blob = source instanceof Blob;
+                const alreadyCompressed = blob && /^(?:image\/(?:png|jpe?g|gif|webp)|application\/(?:pdf|zip|vnd\.openxmlformats-officedocument\.[^;]+))$/i.test(source.type);
+                const entry = await writer.add(path, blob ? new zip.BlobReader(source) : new zip.Uint8ArrayReader(source),
+                    { level: store || alreadyCompressed ? 0 : 6 });
+                if (entry.uncompressedSize > policy.maxCompressionRatio * Math.max(1, entry.compressedSize)) fail('ARCHIVE_COMPRESSION_RATIO_LIMIT');
+            }
+            return await writer.close();
+        } catch (error) {
+            try { await writer.close(); } catch (_) {}
+            throw error;
+        }
+    };
+    const crcTable = Uint32Array.from({ length: 256 }, (_, index) => {
+        for (let bit = 0; bit < 8; bit++) index = (index >>> 1) ^ (index & 1 ? 0xedb88320 : 0);
+        return index;
+    });
+    // Consume each validated ZIP member once. Central-directory sizes are
+    // untrusted until the stream ends, so stop as soon as bytes exceed them.
+    const readCheckedEntry = (file, options = {}) => file.read ? file.read(options) : readLegacyEntry(file, options);
+    const readLegacyEntry = (file, { collect = true, type = '' } = {}) => new Promise((resolve, reject) => {
+        const expectedSize = file._data.uncompressedSize, expectedCrc = file._data.crc32 >>> 0;
+        const chunks = [];
+        let size = 0, crc = 0xffffffff;
+        const stream = file.internalStream('uint8array');
+        const corrupt = () => {
+            const error = new Error('Invalid ZIP entry size or CRC');
+            error.code = 'ARCHIVE_ENTRY_CORRUPT';
+            reject(error);
+        };
+        stream.on('data', bytes => {
+            size += bytes.length;
+            if (size > expectedSize) { stream.pause(); corrupt(); return; }
+            for (let i = 0; i < bytes.length; i++) crc = (crc >>> 8) ^ crcTable[(crc ^ bytes[i]) & 255];
+            if (collect) chunks.push(bytes);
+        }).on('error', corrupt).on('end', () => {
+            if (size !== expectedSize || ((crc ^ 0xffffffff) >>> 0) !== expectedCrc) { corrupt(); return; }
+            resolve(collect ? new Blob(chunks, { type }) : size);
+        });
+        stream.resume();
+    });
 
     return {
         createArchivePolicy,
         validateArchive,
         assertArchive,
-        load
+        load, openBlob, writeBlob, readCheckedEntry
     };
 });

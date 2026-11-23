@@ -79,3 +79,12 @@ test('repository failure is terminal FAILED and never reports formal success', a
         false
     );
 });
+
+test('formal submission exposes the structured storage error while keeping the state failed', async () => {
+    const error = Object.assign(new Error('Unindexed question store'), {
+        stage: 'storage', code: 'storage-failure'
+    });
+    const value = harness({ repositoryError: error });
+    await assert.rejects(value.service.submit({ draft: draft() }), cause => cause === error);
+    assert.equal(value.machine().snapshot().state, 'FAILED');
+});

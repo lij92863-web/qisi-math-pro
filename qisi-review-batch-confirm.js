@@ -52,12 +52,14 @@
         const saveCurrent = () => session.save({ images: editor.imagesFor(session.current()),
             prepareDraft: editor.prepareDraft, refreshStats: editor.refreshStats, notify, silent: true });
         const getDraft = (batchId, id) => session.refs.batchDraftQuestions.value.find(row => row.batchId === batchId && row.id === id);
+        const confirmReviewedContent = draft => workflow.confirmDraft({ batchId: draft.batchId, draftId: draft.id,
+            expectedDraftVersion: draft.version, actorId, selectedContentConfirmed: true });
         const sync = async token => {
             if (!session.isCurrent(token)) return false;
             try { return await session.reconcile(token, sourceFor); }
             catch (error) { if (session.isCurrent(token)) notify('操作结果需刷新核对：' + errorText(error)); return false; }
         };
-        const confirmAndSubmit = async (questionId = session.current()?.id) => {
+        const runSingle = async (questionId, submit) => {
             const id = String(questionId || ''), initial = session.capture();
             if (!id || !initial) return false;
             const key = initial.batchId + ':' + id;
@@ -65,23 +67,28 @@
             let draft = getDraft(initial.batchId, id);
             if (!draft) return false;
             if (draft.status === 'submitted') { notify('该题已经入库。'); return true; }
+            if (submit && (draft.status !== 'reviewed' || (id === initial.draftId && session.dirty()))) {
+                notify('请先确认审核当前版本，再单独入库。');
+                return false;
+            }
             activeSingles.add(key);
             let token = initial, stage = 'save';
             try {
-                if (id === session.current()?.id && session.dirty() && !await saveCurrent()) return false;
+                if (!submit && id === session.current()?.id && session.dirty() && !await saveCurrent()) return false;
                 if (!session.isCurrent(initial)) return false;
                 token = session.capture(); draft = getDraft(token.batchId, id);
                 if (!draft || (id === token.draftId && session.dirty())) return false;
-                if (draft.status !== 'reviewed') {
+                if (!submit) {
                     stage = 'confirm';
-                    const confirmed = await workflow.confirmDraft({ batchId: draft.batchId, draftId: id,
-                        expectedDraftVersion: draft.version, actorId });
+                    const confirmed = await confirmReviewedContent(draft);
                     if (!confirmed.accepted) {
-                        if (session.isCurrent(token)) reportFailure(confirmed.validation?.errors?.[0]?.message || '题目校验失败，暂时不能入库。');
+                        if (session.isCurrent(token)) reportFailure(confirmed.validation?.errors?.[0]?.message || '题目校验失败，暂时不能确认审核。');
                         return false;
                     }
                     if (session.isCurrent(token)) session.acceptCommandResult(token, { draft: confirmed.draft }, sourceFor);
-                    draft = confirmed.draft;
+                    const refreshed = await sync(token);
+                    if (session.isCurrent(token)) notify(refreshed ? '已确认审核，可单独入库。' : '审核已保存，请刷新后核对。');
+                    return refreshed && !session.dirty();
                 }
                 // A confirmation already persisted is never described as rolled
                 // back. New input or navigation stops the automatic next action.
@@ -104,7 +111,7 @@
                 await refreshLibrary();
                 if (!await sync(token)) return false;
                 const clean = !session.dirty();
-                notify(clean ? '已确认并入库。' : '已确认并入库；后续新输入尚未入库，请保留并核对。'); return clean;
+                notify(clean ? '已入库。' : '已入库，后续新输入仍在编辑器中。'); return clean;
             } catch (error) {
                 await sync(token);
                 if (session.isCurrent(token)) {
@@ -135,8 +142,7 @@
                     const draft = getDraft(token.batchId, drafts[index].id);
                     if (!draft || draft.status === 'submitted' || draft.status === 'reviewed') continue;
                     try {
-                        const result = await workflow.confirmDraft({ batchId: draft.batchId, draftId: draft.id,
-                            expectedDraftVersion: draft.version, actorId });
+                        const result = await confirmReviewedContent(draft);
                         if (result.accepted) {
                             ++confirmedCount;
                             if (session.isCurrent(token)) session.acceptCommandResult(token, { draft: result.draft }, sourceFor);
@@ -154,7 +160,45 @@
                 return refreshed && failed.length === 0;
             } finally { activeBatches.delete(initial.batchId); }
         };
-        return Object.freeze({ confirmAndSubmit, confirmSelected });
+        const submitSelected = async () => {
+            const draftIds = [...new Set(session.refs.selectedDraftIds.value)];
+            const initial = session.capture();
+            if (!draftIds.length || !initial || activeBatches.has(initial.batchId) ||
+                [...activeSingles].some(key => key.startsWith(initial.batchId + ':'))) return false;
+            activeBatches.add(initial.batchId);
+            let token = initial;
+            try {
+                if (session.dirty()) { notify('请先确认审核当前编辑内容。'); return false; }
+                if (!session.isCurrent(initial)) return false;
+                token = session.capture();
+                const { selection } = await workflow.prepareSelectedBatch({ batchId: token.batchId, draftIds });
+                if (!session.isCurrent(token) || session.dirty()) return false;
+                if (selection.length !== draftIds.length) { notify('入库只接受已审核题目，请核对勾选范围。'); return false; }
+                const result = await workflow.submitSelectedBatch({
+                    batchId: token.batchId, selection, actorId, selectedContentConfirmed: true
+                });
+                if (session.isCurrent(token)) {
+                    const done = new Set(result.results.filter(row => row.accepted).map(row => row.draftId));
+                    session.refs.selectedDraftIds.value = session.refs.selectedDraftIds.value.filter(id => !done.has(id));
+                }
+                const refreshed = await sync(token);
+                if (result.okCount) await refreshLibrary();
+                const failure = result.results.find(row => !row.accepted);
+                const message = failure?.validation?.errors?.[0]?.message || failure?.decision?.errors?.[0]?.message;
+                if (session.isCurrent(token)) notify(failure
+                    ? '已入库 ' + result.okCount + ' 题，' + result.failedCount + ' 题未入库。' + (message || errorText(failure))
+                    : '已入库 ' + result.okCount + ' 题。');
+                return refreshed && !failure;
+            } catch (error) {
+                if (session.isCurrent(token)) notify('请核对入库结果。' + errorText(error));
+                return false;
+            } finally { activeBatches.delete(initial.batchId); }
+        };
+        return Object.freeze({
+            reviewDraft: (id = session.current()?.id) => runSingle(id, false),
+            submitReviewed: (id = session.current()?.id) => runSingle(id, true),
+            confirmSelected, submitSelected
+        });
     };
 
     return Object.freeze({ toggleSelection, selectAllVisible, eligibleDrafts, batchConfirmNotice, createReviewActions });

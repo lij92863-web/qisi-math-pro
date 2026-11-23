@@ -24,9 +24,9 @@ test('visible run, retry, rerun, and cancel commands converge on the controller'
     const html = read('main.html');
     const app = read('app.js');
     const commands = read('qisi-import-run-commands.js');
-    assert.match(html, /runBatchRecognition\(batch\.id\)/);
+    assert.match(html, /runBatchRecognition\(b\.id\)/);
     assert.match(html, /rerunActiveBatchRecognition/);
-    assert.match(html, /cancelBatchRecognition\(batch\.id\)/);
+    assert.match(html, /cancelBatchRecognition\(b\.id\)/);
     // R3a moved the calls into the command module; app.js still composes the one controller.
     assert.match(app, /controller:\s*normalUiImportController/);
     assert.match(commands, /controller\?\.run/);

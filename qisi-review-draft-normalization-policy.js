@@ -41,9 +41,9 @@
         const getDefaultType = ports.getDefaultType;
         const clock = ports.clock;
 
-        const validateDraftContentForReview = (q) => {
+        const validateDraftContentForReview = (q, { allowMissingAnswer = false } = {}) => {
             const pdfContract = pdfRecordContract(q);
-            if (pdfContract) return pdfContract.reviewProblem(q);
+            if (pdfContract) return pdfContract.reviewProblem(q, { allowMissingAnswer });
             if (!String(q?.stem || '').trim()) return '题干为空，请先补充题干。';
             if (!String(q?.type || '').trim()) return '题型为空，请先选择题型。';
             if ([q.stem, ...(Array.isArray(q.options) ? q.options : []), q.answer, q.solution].some(root.Qisi.Utils.hasUnconvertedImagePlaceholder)) {
@@ -51,7 +51,7 @@
             }
             const optionIssue = choiceOptionIssue(q.type, q.options, q.answer);
             if (optionIssue) return optionIssue;
-            if (['单选题', '多选题', '填空题'].includes(q.type) && !String(q.answer || '').trim()) return '答案为空，请先补充答案。';
+            if (!allowMissingAnswer && ['单选题', '多选题', '填空题'].includes(q.type) && !String(q.answer || '').trim()) return '答案为空，请先补充答案。';
             const solutionIssue = solutionQualityIssue(q.stem, q.options, q.solution);
             if (solutionIssue) return `${solutionIssue} 请先核对解析。`;
             // 安全审核版：图片未确认只 warning，不阻塞入库。

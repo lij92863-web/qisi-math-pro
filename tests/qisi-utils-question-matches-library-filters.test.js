@@ -24,6 +24,14 @@ describe('questionMatchesLibraryFilters', () => {
         assert.equal(questionMatchesLibraryFilters(baseQuestion, { keyword: 'parabola', hasText }), false);
     });
 
+    it('finds expressions in LaTeX stems and options using ordinary typed math', () => {
+        const matches = (question, keyword) => questionMatchesLibraryFilters(question, { keyword });
+        assert.equal(matches({ stem: String.raw`已知 $f\left( x \right)=2$。` }, 'f(x)'), true);
+        assert.equal(matches({ options: [String.raw`\(\mathrm{f}\!\bigl(x\bigr)\)`] }, 'f（x）'), true);
+        assert.equal(matches({ stem: '求 $f(y)$。' }, 'f(x)'), false);
+        assert.equal(matches({ knowledge: '函数单调性' }, '函数单调性'), true);
+    });
+
     it('filters by type diff and grade', () => {
         assert.equal(questionMatchesLibraryFilters(baseQuestion, {
             filters: { type: '单选题', diff: '中等', grade: '高一' },

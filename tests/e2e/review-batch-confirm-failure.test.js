@@ -48,6 +48,9 @@ async function prepare(mode, port) {
             try {
                 const first = await db.table('draftQuestions').get(batchId + '_q1');
                 await db.table('draftQuestions').put({ ...first, id: batchId + '_q3', order: 3, questionNumber: '3', stem: 'Last valid fixture question' });
+                if (mode === 'reject') {
+                    await db.table('draftQuestions').update(batchId + '_q2', { type: '单选题', options: [] });
+                }
                 if (mode === 'all-success') {
                     await db.table('draftQuestions').put({ ...first, id: batchId + '_q2', order: 2, questionNumber: '2', stem: 'Middle valid fixture question' });
                 }
@@ -90,7 +93,10 @@ for (const [index, mode] of ['reject', 'throw', 'all-fail', 'all-success', 'filt
                 await h.page.locator('.batch-latex-source-editor').fill('Unsaved fixture edit\nA. a\nB. b\nC. c\nD. d');
             }
             if (mode === 'empty') await callProxy(h.page, 'confirmSelectedDrafts');
-            else await h.page.getByRole('button', { name: /确认选中 \d+ 题/ }).click();
+            else {
+                await h.page.getByRole('button', { name: '总览', exact: true }).click();
+                await h.page.getByRole('button', { name: /确认选中 \d+ 题/ }).click();
+            }
             await h.page.waitForFunction(() => window.auditReviewErrors.length || document.querySelector('.batch-toast')?.textContent?.trim());
             const ui = await h.page.evaluate(() => {
                 const p = window.Qisi.Runtime.getRuntimeDependency('AppProxy');
@@ -110,6 +116,7 @@ for (const [index, mode] of ['reject', 'throw', 'all-fail', 'all-success', 'filt
                 assert.deepEqual(ui.selected, mode === 'empty' ? [] : ids);
                 if (mode === 'save-failure') {
                     assert.equal(ui.dirty, true);
+                    await h.page.getByRole('button', { name: '逐题审核', exact: true }).click();
                     assert.match(await h.page.locator('.batch-latex-source-editor').inputValue(), /Unsaved fixture edit/);
                     assert.equal(snapshot.drafts.find(q => q.id === ids[0]).version, 1);
                 }
@@ -119,6 +126,7 @@ for (const [index, mode] of ['reject', 'throw', 'all-fail', 'all-success', 'filt
                     assert.equal(call.batchId, batchId);
                     assert.equal(call.expectedDraftVersion, 1);
                     assert.equal(call.actorId, 'local-teacher');
+                    assert.equal(call.selectedContentConfirmed, true);
                 }
                 const failedIds = mode === 'all-fail' ? ids : ['reject', 'throw'].includes(mode) ? [ids[1]] : [];
                 assert.deepEqual(ui.selected, failedIds);

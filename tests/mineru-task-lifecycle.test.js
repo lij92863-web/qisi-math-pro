@@ -54,6 +54,28 @@ test('concurrent submissions coalesce; disk receipts recover after restart and r
     } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });
 
+test('cancelling the first subscriber does not cancel a coalesced request still in use', async () => {
+    let enter, finish;
+    const entered = new Promise(resolve => { enter = resolve; });
+    const upload = new Promise(resolve => { finish = resolve; });
+    const net = network(await archive(), (_url, init) => {
+        if (init.method !== 'PUT') return null;
+        enter(init.signal);
+        return upload.then(() => ({ status: 200 }));
+    });
+    const client = createMineruClient({ token: 'offline-token', ...net });
+    const controller = new AbortController();
+    const first = client.parse(pdf, { signal: controller.signal });
+    const second = client.parse(pdf);
+    const upstream = await entered;
+    controller.abort();
+    await assert.rejects(first, { code: 'MINERU_CANCELLED' });
+    assert.equal(upstream.aborted, false);
+    finish();
+    assert.equal((await second).job, sha(pdf));
+    assert.equal(net.calls.filter(call => call.method === 'PUT').length, 1);
+});
+
 test('lost submission response is durable and can never replay POST', async () => {
     const store = memoryStore();
     const net = network(await archive(), (url, init) => init.method === 'POST' ? Promise.reject(new Error('lost response private-data')) : null);
@@ -64,12 +86,44 @@ test('lost submission response is durable and can never replay POST', async () =
 
 test('lost upload response recovers by querying the exact accepted batch, never resubmitting or reuploading', async () => {
     const store = memoryStore();
-    const net = network(await archive(), (url, init) => init.method === 'PUT' ? Promise.reject(new Error('lost')) : null);
-    await assert.rejects(createMineruClient({ token: 'test', store, ...net }).parse(pdf), { code: 'MINERU_UPLOAD_UNKNOWN' });
+    const net = network(await archive(), (url, init) => {
+        if (init.method === 'PUT') return Promise.reject(new Error('lost'));
+        if (url.includes('extract-results')) return response({ code: 0, data: { extract_result: [{ state: 'waiting-file' }] } });
+        return null;
+    });
+    await assert.rejects(createMineruClient({ token: 'test', store, ...net, pollIntervalMs: 1 }).parse(pdf), { code: 'MINERU_UPLOAD_UNKNOWN' });
+    assert.equal(net.calls.filter(c => c.method === 'PUT').length, 1);
     const resumed = network(await archive());
     const result = await createMineruClient({ token: 'test', store, ...resumed }).parse(pdf);
     assert.equal(result.job, sha(pdf)); assert.ok(resumed.calls.every(c => c.method === 'GET'));
     assert.ok(resumed.calls[0].url.endsWith('/batch-1'));
+});
+
+test('an accepted upload with a lost response is recovered in the same import without another PUT', async () => {
+    const store = memoryStore();
+    let polls = 0;
+    const net = network(await archive(), (url, init) => {
+        if (init.method === 'PUT') return Promise.reject(new Error('connection closed after sending the PDF'));
+        if (url.includes('extract-results') && ++polls === 1) {
+            return response({ code: 0, data: { extract_result: [{ data_id: sha(pdf), state: 'waiting-file' }] } });
+        }
+        return null;
+    });
+    const result = await createMineruClient({ token: 'test', store, ...net, pollIntervalMs: 1 }).parse(pdf);
+    assert.equal(result.receipt.batchId, 'batch-1');
+    assert.equal((await store.read(sha(pdf))).state, 'ready');
+    assert.deepEqual(net.calls.map(call => call.method), ['POST', 'PUT', 'GET', 'GET', 'GET']);
+});
+
+test('a restart during PUT queries the existing batch before sending any bytes', async () => {
+    const store = memoryStore();
+    const net = network(await archive());
+    const sourceId = sha(pdf);
+    await store.write(sourceId, { version: 'mineru-extraction-v2', sourceId, state: 'uploading',
+        batchId: 'batch-1', uploadUrl: 'https://upload.invalid/pdf', filename: 'upload.pdf' });
+    const result = await createMineruClient({ token: 'test', store, ...net }).parse(pdf);
+    assert.equal(result.receipt.batchId, 'batch-1');
+    assert.deepEqual(net.calls.map(call => call.method), ['GET', 'GET']);
 });
 
 test('one deadline covers hung POST, PUT, poll and ZIP response body', async () => {
@@ -96,8 +150,8 @@ test('one deadline covers hung POST, PUT, poll and ZIP response body', async () 
 test('a batch that never received the file re-uploads the same bytes instead of blocking forever', async () => {
     const zip = await archive();
     const store = memoryStore();
-    const first = network(zip, (url, init) => init.method === 'PUT' ? Promise.reject(new Error('lost')) : null);
-    await assert.rejects(createMineruClient({ token: 'test', store, ...first }).parse(pdf), { code: 'MINERU_UPLOAD_UNKNOWN' });
+    const first = network(zip, (url, init) => init.method === 'PUT' ? Promise.resolve({ status: 503 }) : null);
+    await assert.rejects(createMineruClient({ token: 'test', store, ...first }).parse(pdf), { code: 'MINERU_UPLOAD_UNKNOWN', httpStatus: 503 });
     assert.equal(first.calls.filter(call => call.method === 'POST').length, 1);
 
     let puts = 0;
@@ -217,7 +271,7 @@ test('a definite submission rejection is reported as an API failure, not as an u
 
 function producerHarness({ configured = true, questionRoles = ['question'], supportRoles = ['answer', 'solution'],
     withTotalPages = true, twoQuestionSources = false, abortedAtParse = false, responseOverride = null,
-    separateSupports = false, threeQuestions = false, descendingSupport = false } = {}) {
+    separateSupports = false, threeQuestions = false, descendingSupport = false, withPageSelection = false, oldServer = false } = {}) {
     const { createProducer } = require('../qisi-pdf-mineru-producer');
     const bytes = Buffer.from('%PDF-1.4\n%%EOF\n');
     const digest = sha(bytes);
@@ -239,6 +293,12 @@ function producerHarness({ configured = true, questionRoles = ['question'], supp
         : [block('p1b0', 0, '参考答案'), block('p1b1', 1, '1【答案】A')];
     const questionResult = { protocol: 'mineru-blocks-v1', job: digest, source: { sha256: digest, pages: 1 },
         pages: [{ page: 1, blocks: questionBlocks }], evidence: { items: [] }, answerTable: null, receipt: { state: 'ready' } };
+    if (withPageSelection) {
+        const job = sha(Buffer.from('Mock subset PDF'));
+        question.pageRange = '1,3';
+        Object.assign(questionResult, { job, source: { sha256: job, pages: 2 }, originalSource: { sha256: digest, pages: [1, 3], totalPages: 3 },
+            pages: [{ page: 1, blocks: [questionBlocks[0]] }, { page: 2, blocks: questionBlocks.slice(1).map(row => ({ ...row, page: 2 })) }] });
+    }
     const supportResult = { protocol: 'mineru-blocks-v1', job: digest, source: { sha256: digest, pages: 1 },
         pages: [{ page: 1, blocks: supportBlocks }], evidence: { items: [] }, answerTable: null, receipt: { state: 'ready' } };
     const solutionResult = { protocol: 'mineru-blocks-v1', job: digest, source: { sha256: digest, pages: 1 },
@@ -253,21 +313,23 @@ function producerHarness({ configured = true, questionRoles = ['question'], supp
     if (withTotalPages) Object.defineProperty(pages, 'totalPages', { value: 1 });
     const run = createProducer({
         fetch: async url => {
-            if (url === '/api/mineru/status') return { ok: true, json: async () => ({ configured }) };
-            if (url === '/api/mineru/parse') {
+            if (url === '/api/mineru/status') return { ok: true, json: async () => ({ configured, ...(!oldServer && withPageSelection ? { pageSelection: true } : {}) }) };
+            if (url === '/api/mineru/parse' || url === '/api/mineru/parse?pages=1%2C3') {
+                if (withPageSelection && call === 0) assert.equal(url, '/api/mineru/parse?pages=1%2C3');
                 if (abortedAtParse) controller.abort();
                 return { ok: true, json: async () => responseOverride || responses[call++] };
             }
             if (url.startsWith('data:')) return { ok: true, blob: async () => new Blob([bytes], { type: 'application/pdf' }) };
             throw new Error('unexpected request ' + url);
         },
-        renderPages: async () => pages,
+        renderPages: async file => !file.pageRange ? pages : Object.defineProperty([...pages, { ...pages[0], pageNo: 3 }], 'totalPages', { value: 3 }),
         getRoles: file => file.roles,
         getExistingDrafts: async () => [],
         persistSourceEvidence: async () => { persisted.push(true); }
     });
     return {
         persisted,
+        get parseCalls() { return call; },
         controller,
         run: () => run({ batchId: 'batch_mineru_contract',
             sources: twoQuestionSources ? [question, second]
@@ -275,6 +337,23 @@ function producerHarness({ configured = true, questionRoles = ['question'], supp
             controller.signal)
     };
 }
+
+test('noncontiguous PDF subset maps extraction pages back to printed source pages', async () => {
+    const result = await producerHarness({ withPageSelection: true }).run();
+    const draft = result.drafts[0];
+    assert.equal(draft.sourcePage, 3);
+    assert.equal(draft.answer, 'A');
+    assert.deepEqual(result.evidence[0].selectedPages, [1, 3]);
+    assert.deepEqual(draft.pdfReview.sourcePageImages.map(row => row.sourcePage), [3, 1]);
+    assert.ok(draft.pdfReview.sourcePageImages.every(row => !row.url));
+});
+
+test('an old local service is refused before a requested selection can upload the full PDF', async () => {
+    const harness = producerHarness({ withPageSelection: true, oldServer: true });
+    await assert.rejects(harness.run(), { code: 'MINERU_PAGE_SELECTION_UNAVAILABLE' });
+    assert.equal(harness.parseCalls, 0);
+    assert.deepEqual(harness.persisted, []);
+});
 
 test('producer ports and page-count contract fail closed at the boundary', async () => {
     const { createProducer } = require('../qisi-pdf-mineru-producer');

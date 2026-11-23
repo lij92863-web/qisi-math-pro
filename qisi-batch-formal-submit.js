@@ -95,6 +95,7 @@
             });
             let decision = null;
             let committed = null;
+            let writeFailure = null;
             const questionId = inputQuestionId ||
                 `q_${clockValue}_${random().toString(36).slice(2, 7)}`;
             const machine = createStateMachine({
@@ -107,19 +108,24 @@
                         );
                     },
                     admitted: async () => {
-                        committed = await repository.confirmDraftToQuestion(
-                            draftId,
-                            decision,
-                            {
-                                expectedDraftVersion,
-                                idempotencyKey,
-                                actorId,
-                                requestId,
-                                questionId,
-                                context,
-                                imageRecords
-                            }
-                        );
+                        try {
+                            committed = await repository.confirmDraftToQuestion(
+                                draftId,
+                                decision,
+                                {
+                                    expectedDraftVersion,
+                                    idempotencyKey,
+                                    actorId,
+                                    requestId,
+                                    questionId,
+                                    context,
+                                    imageRecords
+                                }
+                            );
+                        } catch (error) {
+                            if (error?.stage === 'storage') writeFailure = error;
+                            throw error;
+                        }
                     }
                 }
             });
@@ -158,7 +164,11 @@
                     trace: Object.freeze([...trace])
                 };
             }
-            await transition('admitted');
+            try {
+                await transition('admitted');
+            } catch (error) {
+                throw writeFailure || error;
+            }
             await transition('repository-committed');
             return {
                 accepted: true,

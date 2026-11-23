@@ -95,6 +95,28 @@
         const editField = (draft, field, value) =>
             editFields(draft, { [field]: value });
 
+        const recordFieldReview = (draft, fields, actorId) => {
+            const next = clone(draft);
+            const reviewedAt = new Date(clock()).toISOString();
+            next.fieldProvenance ||= {};
+            for (const field of fields) {
+                if (!formalFieldSet.has(field)) continue;
+                next.fieldProvenance[field] = {
+                    kind: 'review-confirmed', status: 'review-confirmed', manuallyEdited: false,
+                    sourceId: next.fieldProvenance[field]?.sourceId || next.source?.sourceId || '',
+                    reviewedBy: actorId, reviewedAt
+                };
+            }
+            const states = (next.pdfReview || next.pdfExternal || next.pdfV1)?.states;
+            if (states) for (const field of ['answer', 'solution']) {
+                if (fields.includes(field)) states[field] = 'review-confirmed';
+            }
+            if (states && fields.some(field => ['questionNumber', 'stem', 'options'].includes(field))) {
+                states.question = 'review-confirmed';
+            }
+            return next;
+        };
+
         const addWarning = (draft, warning) => {
             const next = clone(draft);
             next.warnings = [...new Set([
@@ -132,7 +154,7 @@
             }));
         };
 
-        const requestValidation = draft => {
+        const requestValidation = (draft, options) => {
             if (typeof validateDraft !== 'function') {
                 return {
                     valid: false,
@@ -145,7 +167,7 @@
             }
             let result;
             try {
-                result = validateDraft(clone(draft));
+                result = validateDraft(clone(draft), options);
             } catch (_error) {
                 return {
                     valid: false,
@@ -180,8 +202,8 @@
             };
         };
 
-        const confirm = draft => {
-            const validation = requestValidation(draft);
+        const confirm = (draft, options) => {
+            const validation = requestValidation(draft, options);
             if (!validation.valid) {
                 return { accepted: false, draft: clone(draft), validation };
             }
@@ -208,6 +230,7 @@
             editField,
             editFields,
             markFieldsManual,
+            recordFieldReview,
             addWarning,
             removeWarning,
             provenanceDisplay,

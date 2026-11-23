@@ -45,6 +45,7 @@
         ]);
         const PROVENANCE_STATUSES = Object.freeze([
             'manual',
+            'review-confirmed',
             'deterministic-source',
             'controlled-write',
             'rejected',
@@ -509,10 +510,13 @@
 
         const requiresV2Field = (field, question) => {
             if (field === 'questionNumber' || field === 'stem') return true;
+            if (question?.admission?.acceptCurrentContent === true) return false;
             if (field === 'options') return isObjectiveType(question?.type);
             if (field === 'answer') {
-                return isObjectiveType(question?.type) ||
-                    /(?:填空|blank)/i.test(String(question?.type || ''));
+                return question?.admission?.allowMissingAnswer !== true && (
+                    isObjectiveType(question?.type) ||
+                    /(?:填空|blank)/i.test(String(question?.type || ''))
+                );
             }
             return false;
         };
@@ -760,6 +764,14 @@
                             ));
                         }
                     }
+                    if (item.status === 'review-confirmed' && (
+                        item.kind !== 'review-confirmed' || item.manuallyEdited !== false || item.manualEditRevision !== undefined ||
+                        typeof item.reviewedBy !== 'string' || !item.reviewedBy.trim() || !isIsoUtcTime(item.reviewedAt) ||
+                        item.engineConfidence !== undefined || item.controlledWriteDecisionId !== undefined
+                    )) {
+                        errors.push(errorOf('field-review-invalid', `provenance.${field}`,
+                            `Field ${field} requires a valid human review record.`));
+                    }
                     if (item.status === 'deterministic-source') {
                         if (!item.sourceId || !item.evidenceRef) {
                             errors.push(errorOf(
@@ -790,7 +802,7 @@
                     }
                     if (
                         identity.status === 'canonical' &&
-                        !['manual', 'missing', 'rejected'].includes(item.status)
+                        !['manual', 'review-confirmed', 'missing', 'rejected'].includes(item.status)
                     ) {
                         let expectedSource = question.source;
                         let expectedBoundary = question.source?.format === 'pdf'
@@ -817,6 +829,27 @@
                                 expectedSource = support;
                                 expectedBoundary =
                                     'docx-deterministic-support-to-candidate';
+                            }
+                        }
+                        const pdfSupportBoundary = {
+                            'pdf-mineru-v1': 'pdf-mineru-support-to-candidate',
+                            'pdf-external-v2': 'pdf-external-support-to-candidate',
+                            'pdf-multimodal-v1': 'pdf-multimodal-support-to-candidate'
+                        }[identity.producer?.routeId];
+                        if (
+                            pdfSupportBoundary &&
+                            item.sourceId !== question.source?.sourceId &&
+                            question.source?.format === 'pdf' &&
+                            ['answer', 'solution'].includes(field)
+                        ) {
+                            const support = (question.supportSources || []).find(source =>
+                                source?.sourceId === item.sourceId &&
+                                source?.format === 'pdf' &&
+                                Array.isArray(source?.roles) && source.roles.includes(field)
+                            );
+                            if (support) {
+                                expectedSource = support;
+                                expectedBoundary = pdfSupportBoundary;
                             }
                         }
                         if (
@@ -849,6 +882,7 @@
             }
 
             if (
+                question.admission?.acceptCurrentContent !== true &&
                 isObjectiveType(question.type) &&
                 typeof question.answer === 'string' &&
                 question.answer.trim() &&

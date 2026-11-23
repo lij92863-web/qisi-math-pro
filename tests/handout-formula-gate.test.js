@@ -2,6 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const Gate = require('../qisi-handout-formula-gate.js');
+const { renderLatexFormula } = require('../qisi-utils.js');
+const katex = require('../vendor/katex/katex.min.js');
 
 const good = () => ({ id: 'q1', stem: '已知 $x^2+1=0$，求 $x$。', answer: '$x=\\pm i$', solution: '', options: [] });
 
@@ -28,6 +30,24 @@ test('a command KaTeX cannot compile is blocked, not silently printed as red tex
     const hit = result.blocking.find(item => item.kind === 'compile-error');
     assert.ok(hit);
     assert.match(hit.message, /Undefined control sequence/i);
+});
+
+test('vect matches the stretched arrow for multi-letter vectors in both marked and bare formulas', () => {
+    const source = String.raw`\vect{AS}+\vect{AT}=2\vect{AB}`;
+    const expected = String.raw`\overrightarrow{AS}+\overrightarrow{AT}=2\overrightarrow{AB}`;
+    const options = { throwOnError: true, trust: false, output: 'html' };
+    assert.equal(renderLatexFormula(katex.renderToString, source, options), katex.renderToString(expected, options));
+    for (const solution of [String.raw`由 $${source}$，得`, `由 ${source}，得`]) {
+        assert.equal(Gate.check([{ ...good(), solution }]).ok, true);
+    }
+    assert.equal(Gate.check([{ ...good(), solution: String.raw`$\vectUnsupported{AS}$` }]).ok, false);
+});
+
+test('a global definition inside one formula cannot change the next formula vector arrow', () => {
+    const options = { throwOnError: true, trust: false, output: 'html' };
+    renderLatexFormula(katex.renderToString, String.raw`\gdef\vect#1{#1}\vect{AS}`, options);
+    assert.equal(renderLatexFormula(katex.renderToString, String.raw`\vect{AS}`, options),
+        katex.renderToString(String.raw`\overrightarrow{AS}`, options));
 });
 
 // 这条是重点：\includegraphics 在 KaTeX 里「不抛错但输出空白」。

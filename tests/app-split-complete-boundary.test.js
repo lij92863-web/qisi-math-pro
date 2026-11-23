@@ -14,7 +14,7 @@ test('new critical handlers are single-owner adapters without another app busine
         saveNewCustomTemplate:'templateWorkspace.saveNew',updateExistingCustomTemplate:'templateWorkspace.update',deleteCustomTemplate:'templateWorkspace.remove',
         toggleCart:'examWorkspace.toggle',moveCartQuestion:'examWorkspace.move',startExamPointerDrag:'examWorkspace.startPointer',printExam:'printWorkspace.print',finishExamBuild:'printWorkspace.print'};
     for(const [name,owner]of Object.entries(direct))assert.equal(member(defs.get(name)),owner,name);
-    for(const [name,owner]of Object.entries({confirmAndSubmitDraft:'reviewActions.confirmAndSubmit',confirmSelectedDrafts:'reviewActions.confirmSelected'})){const node=defs.get(name);assert.equal(node.type,'ArrowFunctionExpression');assert.equal(node.body.type,'CallExpression');assert.equal(member(node.body.callee),owner);}
+    for(const [name,owner]of Object.entries({reviewCurrentDraft:'reviewActions.reviewDraft',submitReviewedDraft:'reviewActions.submitReviewed',confirmSelectedDrafts:'reviewActions.confirmSelected'})){const node=defs.get(name);assert.equal(node.type,'ArrowFunctionExpression');assert.equal(node.body.type,'CallExpression');assert.equal(member(node.body.callee),owner);}
     for(const retired of ['buildQuestionContent','buildPrintOptionsHtml','renderLatexForPrint','renderPrintTextChunk','printImageHtml','openPrintWindow'])assert.equal(defs.has(retired),false,retired);
 });
 test('form, tree, template, paper and print-busy refs are aliases to their one state owner',()=>{

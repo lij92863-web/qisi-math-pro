@@ -33,16 +33,15 @@ async function fixture({ writeFault, databaseFault, downloadFault, invalidRows }
     }
 }
 
-for (const key of ['qisi_last_full_backup_at', 'qisi_last_full_backup_report']) {
-    test(key + ': only bookkeeping failure is warned after a verified download', async () => {
-        await fixture({ writeFault: key }, async ({ database, failure, warnings, anchors }) => {
+for (const key of ['qisi_last_verified_full_backup_at', 'qisi_last_full_backup_report']) {
+    test(key + ': browser download does not write verified save status', async () => {
+        await fixture({ writeFault: key }, async ({ database, writes, warnings, anchors }) => {
             const manifest = await Backup.exportFullDatabaseBackup(database);
             assert.equal(manifest.verification.ok, true);
             assert.equal(anchors.length, 1);
             assert.equal(anchors[0].download, manifest.filename);
-            assert.equal(warnings.length, 1);
-            assert.equal(warnings[0][0], '[QISI_BACKUP][write-report-failed]');
-            assert.equal(warnings[0][1], failure);
+            assert.deepEqual(writes, []);
+            assert.deepEqual(warnings, []);
         });
     });
 }

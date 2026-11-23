@@ -4,12 +4,12 @@ const Client=require('../qisi-mineru-client').internals,Producer=require('../qis
 const Contract=require('../qisi-pdf-mineru-contract');
 const item=text=>({page_idx:0,type:'text',text});
 const image=Buffer.from('offline-image');
-async function produce(items){
+async function produce(items, role = 'question'){
     const bytes=fs.readFileSync(path.join(__dirname,'fixtures/true-import/pdf-question.pdf'));
     const hash=crypto.createHash('sha256').update(bytes).digest('hex');
     const parsed=Client.parseContentList(items,{sourceId:hash});
     const pages=[{pageNo:1,url:'data:image/png;base64,AA=='}];pages.totalPages=1;
-    const source={id:'question-source',filename:'fixture.pdf',fileType:'pdf',roles:['question'],uploadPath:'fixture:pdf'};
+    const source={id:'question-source',filename:'fixture.pdf',fileType:'pdf',roles:[role],uploadPath:'fixture:pdf'};
     const result=await Producer.createProducer({
         getRoles:file=>file.roles,renderPages:async()=>pages,
         fetch:async(url,options)=>{
@@ -56,6 +56,21 @@ test('standalone next-section heading is excluded from display while its raw evi
     assert.equal(first.options[3],'丁');assert.equal(second.options[3],'四');
     assert.equal(first.type,'单选题');assert.equal(second.type,'多选题');
     assert.ok(first.pdfReview.candidates.question[0].evidence.length>=2,'source evidence must retain the excluded heading block');
+});
+
+test('printed one-choice and multiple-choice instructions identify the section and stay out of option D', async () => {
+    const single = '一、选择题：本题共1小题，每小题5分，共5分.在每小题给出的四个选项中，只有一个选项是正确的.请把正确的选项填涂在答题卡相应的位置上.';
+    const multiple = '二、选择题：本题共1小题，每小题6分，共6分.在每小题给出的选项中，有多项符合题目要求.全部选对得6分，选对但不全的得部分分，有选错的得0分.';
+    const [first, second] = await produce([
+        item(single), item('1. 求值（）A.甲 B.乙 C.丙 D.丁'),
+        item(multiple), item('2. 下列正确（）A.一 B.二 C.三 D.四'),
+        item('参考答案'), item('1【答案】D'), item('2【答案】A C【解析】由原文可得。故选：AC。')
+    ], 'full');
+    assert.deepEqual([first.type, second.type], ['单选题', '多选题']);
+    assert.deepEqual(first.options, ['甲', '乙', '丙', '丁']);
+    assert.deepEqual(second.options, ['一', '二', '三', '四']);
+    assert.equal(second.answer, 'AC');
+    assert.ok(first.pdfReview.candidates.question[0].evidence.length >= 2);
 });
 
 test('math spans and image tokens cannot supply labels for glued-label recovery',async()=>{

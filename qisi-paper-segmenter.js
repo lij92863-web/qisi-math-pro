@@ -11,6 +11,9 @@
     const NUMBER_START = /^\s*(?:#{1,6}\s*)?([0-9０-９]{1,3})\s*(?:[.、．](?![0-9０-９])\s*|(?=【(?:答案|解析|详解)】))/;
     const SOLUTION_HEAD = /^\s*(?:#{1,6}\s*)?([0-9０-９]{1,3})\s*[.、．]\s*([A-H]{1,8})\s*$/;
     const ANSWER_HEADING = /^\s*#{0,6}\s*(?:《[^\n]*》\s*)?(?:参考答案(?:与解析)?|答案与解析|答案|解析)\s*$/;
+    const COMMENTARY_LIST_START = /【(?:点睛|方法总结)】\s*(?:(?:方法点睛|方法总结)\s*[:：]\s*)?[1１]\s*[.、．](?![0-9０-９])\s*(?=\S)/u;
+    const SUPPORT_FIELD_LABEL = /【(?:答案|解析|分析|详解)】/;
+    const FORMULA_ANSWER_HEAD = /^[ \t]*([0-9０-９]{1,3})[ \t]+(\$[^$\n]*=[^$\n]*\$(?:[ \t]*或[ \t]*\$[^$\n]*=[^$\n]*\$)+)(?=[\s。，；;]|$)/u;
     const textOf = block => String(block?.text ?? '');    const canonical = value => {
         const digits = String(value).replace(/[０-９]/g, c => String(c.charCodeAt(0) - 0xff10));
         return /^\d{1,3}$/.test(digits) ? String(Number(digits)) : 'NaN';
@@ -68,7 +71,7 @@
             const cuts = [];
             const ambiguous = new Set();
             const leadingSpace = text.match(/^\s*/)[0].length;
-            const pattern = /(^|[\s。；;.!！?？])[ \t]*(?:#{1,6}[ \t]*)?([0-9０-９]{1,3})[ \t]*(?:[.、．](?![0-9０-９])[ \t]*|(?=【(?:答案|解析|详解)】))/g;
+            const pattern = /(^|[\s。；;!！?？]|(?<![0-9０-９])\.)[ \t]*(?:#{1,6}[ \t]*)?([0-9０-９]{1,3})[ \t]*(?:[.、．](?![0-9０-９])[ \t]*|(?=【(?:答案|解析|详解)】))/g;
             const candidates = [...masked.matchAll(pattern)];
             for (let n = 0; n < candidates.length; n++) {
                 const match = candidates[n];
@@ -111,6 +114,78 @@
         return out;
     }
 
+    function bracketedFormulaHeads(blocks, expected, issues) {
+        const heads = new Map();
+        let previous = null;
+        let candidates = [];
+        for (const block of [...blocks, null]) {
+            const next = headOf(block);
+            if (block && !next) {
+                if (block.type !== 'text' || block.parentId || (block.origin?.range?.[0] || 0) !== 0) continue;
+                const text = textOf(block);
+                const match = text.match(FORMULA_ANSWER_HEAD);
+                if (match) {
+                    const offset = match[0].length - match[2].length;
+                    candidates.push({ no: canonical(match[1]), value: match[2], blockId: block.id,
+                        range: [offset, match[0].length], kind: 'bracketed-formula-head' });
+                }
+                continue;
+            }
+            // Without punctuation, only a unique printed number and equation
+            // pair between explicit adjacent anchors can fix a one-number gap.
+            const candidate = candidates[0];
+            const explicit = next && !block.boundaryAmbiguity && supportEvidence(textOf(block).slice(next.end)) === 'explicit-label';
+            if (candidates.length === 1 && previous?.explicit && explicit && expected.has(candidate.no) &&
+                expected.has(previous.no) && expected.has(next.no) &&
+                Number(candidate.no) === Number(previous.no) + 1 && Number(next.no) === Number(candidate.no) + 1) {
+                heads.set(candidate.blockId, candidate);
+            } else if (previous && candidates.length) {
+                // A suspect boundary cannot be swallowed by the preceding run.
+                issues.push({ code: 'ambiguous-boundary', no: previous.no, blockId: candidate.blockId });
+            }
+            previous = next && { no: next.no, explicit };
+            candidates = [];
+        }
+        return heads;
+    }
+
+    function commentaryHeadings(blocks, expected) {
+        const headings = new Map();
+        if (!expected.length) return headings;
+        const entries = blocks.map(block => ({ block, head: headOf(block) }));
+        const anchors = entries.filter(({ block, head }) => head &&
+            supportEvidence(textOf(block).slice(head.end)) === 'explicit-label');
+        // Explicit, unique headers must already prove the entire section. An
+        // apparent commentary list cannot supply missing top-level evidence.
+        if (anchors.length !== expected.length ||
+            anchors.some(({ head }, index) => head.no !== expected[index])) return headings;
+
+        const explicitBlocks = new Set(anchors.map(({ block }) => block));
+        let owner = null;
+        let list = null;
+        for (const [index, { block, head }] of entries.entries()) {
+            if (block.type !== 'text' || block.parentId) continue;
+            const mask = maskMath(textOf(block));
+            if (head) {
+                const ordinal = Number(head.no);
+                const continuingList = list && ordinal === list.next && ordinal < Number(owner) &&
+                    !block.boundaryReview &&
+                    block.page === list.start.page && block.origin?.sourceId === list.start.origin?.sourceId &&
+                    !SUPPORT_FIELD_LABEL.test(mask) &&
+                    !supportEvidence(textOf(block).slice(head.end), textOf(blocks[index + 1]));
+                if (continuingList) {
+                    headings.set(block.id, { blockId: block.id, listStartBlockId: list.start.id, ordinal });
+                    list.next++;
+                    continue;
+                }
+                owner = explicitBlocks.has(block) ? head.no : null;
+                list = null;
+            }
+            if (owner && COMMENTARY_LIST_START.test(mask)) list = { start: block, next: 2 };
+        }
+        return headings;
+    }
+
     function segment(blocks, { numbers = null, role = 'question', sourceRegistry = null, boundaryReviews = [] } = {}) {
         const issues = [];
         const blocksById = Object.assign(Object.create(null), sourceRegistry);
@@ -130,15 +205,25 @@
         const expectedSet = new Set(expectedNumbers);
         const reviews = reviewIndex(blocks, boundaryReviews, issues);
         const source = expand(blocks, expectedSet, issues, role, reviews);
+        const formulaHeads = role === 'support' ? bracketedFormulaHeads(source, expectedSet, issues) : new Map();
+        const nestedHeadings = role === 'support' ? commentaryHeadings(source, expectedNumbers) : new Map();
         const runs = [];
         const preamble = [];
         let current = null;
         for (const block of source) {
             if (!Object.hasOwn(blocksById, block.id)) blocksById[block.id] = block;
             else if (blocksById[block.id] !== block && !inputBlocks.has(block)) issues.push({ code: 'fragment-id-collision', blockId: block.id });
-            const head = headOf(block);
+            const nestedHeading = nestedHeadings.get(block.id);
+            if (nestedHeading && current) {
+                (current.commentaryHeadings ||= []).push(nestedHeading);
+                current.blocks.push(block);
+                continue;
+            }
+            const formula = formulaHeads.get(block.id);
+            const head = headOf(block) || formula;
             if (head) {
                 current = { no: head.no, blocks: [block], marker: textOf(block) };
+                if (formula) current.formulaAnswer = formula;
                 runs.push(current);
             } else if (current) current.blocks.push(block);
             else preamble.push(block);
@@ -148,7 +233,8 @@
             if (seen.has(run.no)) issues.push({ code: 'duplicate-number', no: run.no });
             seen.add(run.no);
             if (index && Number(run.no) <= Number(runs[index - 1].no)) issues.push({ code: 'number-not-increasing', no: run.no, after: runs[index - 1].no });
-            run.supportEvidence = supportEvidence(textOf(run.blocks[0]).slice(headOf(run.blocks[0]).end), textOf(run.blocks[1]));
+            run.supportEvidence = run.formulaAnswer?.kind ||
+                supportEvidence(textOf(run.blocks[0]).slice(headOf(run.blocks[0]).end), textOf(run.blocks[1]));
             if (role === 'support' && !run.supportEvidence) issues.push({ code: 'ambiguous-support-head', no: run.no, blockId: run.blocks[0].id });
         }
         if (!numbers && runs.length) {
@@ -162,7 +248,9 @@
 
     // A restart identifies the answer stream, but its title/table may precede
     // the first numbered answer. Keep that contiguous metadata in its preamble.
-    function supportPreambleStart(blocks, markerIndex, previousMarker) {
+    const compactTitle = text => text.normalize('NFKC').replace(/^\s*#{1,6}\s*/, '').replace(/\s+/g, '');
+
+    function supportPreambleStart(blocks, markerIndex, previousMarker, title) {
         let start = markerIndex;
         while (start > previousMarker + 1) {
             let at = start - 1;
@@ -173,7 +261,11 @@
             const attachments = blocks.slice(at + 1, start).every(item => item.parentId === block.id);
             if (table && attachments) { start = at; continue; }
             if (at === start - 1 && block.type === 'text' && !block.parentId &&
-                (ANSWER_HEADING.test(textOf(block)) || /^\s*#{0,6}\s*《[^\n]*》\s*参考\s*$/.test(textOf(block)))) { start = at; continue; }
+                (ANSWER_HEADING.test(textOf(block)) || /^\s*#{0,6}\s*《[^\n]*》\s*参考\s*$/.test(textOf(block)) ||
+                    (title && ['答案', '参考答案', '答案与解析'].some(suffix => compactTitle(textOf(block)) === title + suffix)))) {
+                start = at;
+                continue;
+            }
             break;
         }
         return start;
@@ -183,17 +275,22 @@
         const seen = new Set();
         const order = [];
         let previousMarker = -1;
+        let title = '';
         for (let index = 0; index < blocks.length; index++) {
             if (!blocks[index].parentId && ANSWER_HEADING.test(textOf(blocks[index]))) return { index, reason: 'heading' };
             const head = headOf(blocks[index]);
-            if (!head) continue;
+            if (!head) {
+                const block = blocks[index];
+                if (!title && !order.length && block.type === 'text' && !block.parentId) title = compactTitle(textOf(block));
+                continue;
+            }
             if (seen.has(head.no)) {
                 const suffix = blocks.slice(index);
                 const ids = new Set(suffix.map(b => b.id));
                 const support = segment(suffix, { numbers: order, role: 'support', boundaryReviews: boundaryReviews.filter(r => ids.has(r.blockId)) });
                 const increasing = order.every((no, i) => !i || Number(no) > Number(order[i - 1]));
                 if (increasing && support.valid && support.order.length === order.length && support.order.every((no, i) => no === order[i])) {
-                    const start = supportPreambleStart(blocks, index, previousMarker);
+                    const start = supportPreambleStart(blocks, index, previousMarker, title);
                     return { index: start, reason: 'numbering-restart', ...(start === index ? {} : { markerIndex: index }) };
                 }
                 // A complete, strictly increasing prefix followed by a restart
@@ -211,7 +308,7 @@
                 const substantialSupport = support.order.length >=
                     Math.max(3, Math.ceil(order.length / 2));
                 if (increasing && order.length >= 3 && substantialSupport && restartIsSupport) {
-                    const start = supportPreambleStart(blocks, index, previousMarker);
+                    const start = supportPreambleStart(blocks, index, previousMarker, title);
                     return { index: start, reason: 'numbering-restart', ...(start === index ? {} : { markerIndex: index }) };
                 }
                 // A malformed first restart cannot be repaired by looking for a
@@ -244,6 +341,7 @@
 
     function answerEvidence(run, tableValue = null) {
         const declarations = Evidence.explicitDeclarations(run?.blocks || []);
+        if (run?.formulaAnswer) declarations.unshift(run.formulaAnswer);
         const head = run && headOf(run.blocks[0]);
         if (head) {
             const body = textOf(run.blocks[0]).slice(head.end).trim();

@@ -41,38 +41,45 @@
             : '';
     };
 
-    const buildKnowledgeCounts = (tree, type, questions = [], getQuestionKnowledge) => {
-        const counts = {};
-        const addCount = (name) => { counts[name] = (counts[name] || 0) + 1; };
-
-        const parentMap = {};
-        (tree || []).forEach(l1 => {
-            if (l1.children) l1.children.forEach(l2 => {
-                parentMap[l2.name] = [l1.name];
-                if (l2.children) l2.children.forEach(l3 => {
-                    parentMap[l3.name] = [l2.name, l1.name];
-                });
-            });
-        });
-
-        if (typeof getQuestionKnowledge !== 'function') return counts;
-
-        (questions || []).forEach(q => {
-            const kn = getQuestionKnowledge(q, type);
-            if (q && kn) {
-                addCount(kn);
-                if (parentMap[kn]) {
-                    parentMap[kn].forEach(p => addCount(p));
-                }
+    const createKnowledgeCounter = (tree, type, getQuestionKnowledge, { byId = false, counts = Object.create(null) } = {}) => {
+        const addCount = (name, weight) => {
+            const count = (Object.hasOwn(counts, name) ? counts[name] : 0) + weight;
+            if (count) counts[name] = count;
+            else delete counts[name];
+        };
+        const parentMap = new Map();
+        const pathsById = new Map();
+        const visit = (nodes, parents = []) => {
+            for (const node of nodes || []) {
+                const path = [byId ? node.id : node.name, ...parents];
+                if (!parentMap.has(node.name)) parentMap.set(node.name, path);
+                if (node.id) pathsById.set(node.id, path);
+                visit(node.children, path);
             }
-        });
+        };
+        visit(tree);
 
-        return counts;
+        const adjust = (q, count = 1) => {
+            const references = q?.personalKnowledgeIds ?? q?.meta?.personalKnowledgeIds;
+            if (type === 'personal' && Array.isArray(references)) {
+                new Set(references.flatMap(id => pathsById.get(id) || [])).forEach(name => addCount(name, count));
+                return;
+            }
+            const name = getQuestionKnowledge?.(q, type);
+            if (name) new Set(parentMap.get(name) || (byId ? [] : [name])).forEach(key => addCount(key, count));
+        };
+        return { counts, adjust };
+    };
+    const buildKnowledgeCounts = (tree, type, questions = [], getQuestionKnowledge, options) => {
+        if (typeof getQuestionKnowledge !== 'function') return {};
+        const counter = createKnowledgeCounter(tree, type, getQuestionKnowledge, options);
+        for (const question of questions || []) counter.adjust(question);
+        return { ...counter.counts };
     };
 
     return {
         bindClick,
         buildQuestionNumberGapWarning,
-        buildKnowledgeCounts
+        buildKnowledgeCounts, createKnowledgeCounter
     };
 });

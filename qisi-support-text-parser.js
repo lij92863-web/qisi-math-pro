@@ -324,6 +324,7 @@
                 const multipart = orderedMultipart && !hasUnconvertedFormula;
                 let answer = '';
                 if (answerLabel) answer = normalizeAnswerValue(answerArea.slice(answerLabel.index + answerLabel[0].length));
+                else if (block.directAnswer) answer = normalizeAnswerValue(block.directAnswer);
                 else if (/^\d+$/.test(String(block.numericAnswer || ''))) answer = String(block.numericAnswer);
                 else if (multipart) answer = root.Qisi.Utils.cleanDisplayTextForBatchSave(answerArea);
                 else if (/^[A-DＡ-Ｄ]{1,4}\s*[。；;，,]?\s*$/.test(answerArea.trim())) answer = normalizeAnswerValue(answerArea);
@@ -400,8 +401,48 @@
             return { answers, solutions, conflicts: collectConflicts(answers, solutions), unmatched };
         };
 
+        const parseEmptySupportBlocks = (text, sourceFile) => {
+            const rawText = String(text || '').trim();
+            const hasContent = line => line.trim() && !/^\s*[【「]?\s*(?:参考答案|答案)\s*[】」:：]?\s*$/.test(line);
+            const lines = rawText.split(/\r?\n/).filter(hasContent);
+            const roles = new Set(sourceFile.roles || []);
+            const expected = new Set((sourceFile.expectedQuestionNumbers || []).map(number => normalizeQuestionKey(number)));
+            const unmatchedRow = (value, questionNumber) => ({
+                code: 'DOCX_SUPPORT_BOUNDARY_UNRESOLVED', field: roles.has('solution') && !roles.has('answer') ? 'solution' : 'answer',
+                sourceFileId: sourceFile.id, sourceFileName: sourceFile.filename,
+                questionNumber, value, rawText: value
+            });
+            const rowPattern = new RegExp(`^\\s*([0-9０-９]{1,3})[.．、]\\s*${answerSolutionLabelPattern}\\s*(.*)$`);
+            const solutionLabel = new RegExp(solutionLabelPattern);
+            const rows = lines.map(line => rowPattern.exec(line));
+            // Only a standalone answer list with explicit labels and known question identities
+            // can recover here. An unstructured question or proof can contain similar numbering.
+            if (roles.size === 1 && roles.has('answer') && expected.size && rows.length &&
+                rows.every(row => row && !solutionLabel.test(row[2]))) {
+                const supportBlocks = [], unmatched = [];
+                for (const [index, [line, number, value]] of rows.entries()) {
+                    const questionNumber = normalizeQuestionKey(number);
+                    if (!expected.has(questionNumber) || /\[DOCX不可显示图片:/.test(value) || !normalizeAnswerValue(value)) {
+                        unmatched.push(unmatchedRow(line, questionNumber));
+                        continue;
+                    }
+                    supportBlocks.push({ text: line, questionNumber, expectedQuestion: true,
+                        blockId: `explicit-answer-row-${index}` });
+                }
+                const parsed = parseStructuredSupport({ ...sourceFile, supportBlocks });
+                return { ...parsed, unmatched: [...unmatched, ...parsed.unmatched] };
+            }
+            const unmatched = rawText ? [unmatchedRow(rawText)] : [];
+            if (!unmatched.length && sourceFile.supportSectionDeclared) {
+                unmatched.push({ ...unmatchedRow(''), value: '识别到参考答案标题，未找到能可靠配对的内容。' });
+            }
+            return { answers: [], solutions: [], conflicts: [], unmatched };
+        };
+
         const parseAnswerAndSolutionItemsFromText = (text, sourceFile) => {
-            if (Array.isArray(sourceFile.supportBlocks)) return parseStructuredSupport(sourceFile);
+            if (Array.isArray(sourceFile.supportBlocks)) {
+                return sourceFile.supportBlocks.length ? parseStructuredSupport(sourceFile) : parseEmptySupportBlocks(text, sourceFile);
+            }
             const directAnswers = parseAnswerItemsFromText(text, sourceFile);
             const directSolutions = parseSolutionItemsFromText(text, sourceFile);
             const inlineAnswers = parseInlineAnswerBlocks(text, sourceFile);

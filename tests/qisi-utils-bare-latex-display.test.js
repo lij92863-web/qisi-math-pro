@@ -7,8 +7,21 @@ const {
     normalizeBareLatexForDisplayOptions,
     normalizeBareLatexForDisplaySpan,
     normalizeBareLatexForDisplayText,
-    normalizeBareLatexForDisplayTextBody
+    normalizeBareLatexForDisplayTextBody,
+    splitQuestionForStorage
 } = require('../qisi-utils.js');
+
+test('splitting OCR options preserves angle formulas and removes inter-option LaTeX spacing', () => {
+    const stem = String.raw`4. 若圆弧 $\overarc{DE}$ 和 $\overarc{AC}$ 的半径分别为 12 和 27，且 $\angle ABC=120^{\circ}$，求侧面积。`;
+    const options = String.raw`A. $292\pi$ \quad B. $\frac{1330\sqrt{2}}{3}\pi$ \qquad C. $195\pi$ \quad D. $243\pi$`;
+    assert.deepEqual(splitQuestionForStorage(stem + '\n' + options, '解答题'), {
+        stem,
+        options: [String.raw`$292\pi$`, String.raw`$\frac{1330\sqrt{2}}{3}\pi$`, String.raw`$195\pi$`, String.raw`$243\pi$`],
+        type: '单选题'
+    });
+    const formulaSpacing = String.raw`$x\quad y$`;
+    assert.equal(splitQuestionForStorage('请选出公式\nA. ' + formulaSpacing + '\nB. $z$', '单选题').options[0], formulaSpacing);
+});
 
 test('BMR7: normalizeBareLatexExpressionForDisplay normalizes project OCR variants', () => {
     assert.equal(normalizeBareLatexExpressionForDisplay('\\frac{1330鈭?}{3}蟺'), '\\frac{1330\\sqrt{2}}{3}\\pi');

@@ -98,7 +98,7 @@ test('all production archive readers are wired through the security owner', () =
     for (const file of ['app.js', 'qisi-backup.js', 'qisi-batch-importer.js']) {
         const source = fs.readFileSync(path.join(root, file), 'utf8');
         assert.doesNotMatch(source, /JSZip\.loadAsync\s*\(/, file);
-        assert.match(source, /ArchiveSecurity\.load\s*\(/, file);
+        assert.match(source, /ArchiveSecurity\.(?:load|openBlob)\s*\(/, file);
     }
     const main = fs.readFileSync(path.join(root, 'main.html'), 'utf8');
     assert.ok(

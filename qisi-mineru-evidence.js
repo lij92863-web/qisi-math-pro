@@ -46,7 +46,8 @@
         // 同一个答案在题源里常被印成 "A" / "A." / "（A）" / "A、"。先剥掉首尾
         // 括号与标点再比较；否则会被当成「两个不同的答案」而判定冲突，整卷拒绝绑定。
         const text = raw.replace(/^[\s（(【\[]+/, '').replace(/[\s。．.、，,；;：:）)】\]]+$/, '').trim();
-        return /^[A-Ha-h]{1,8}$/.test(text) ? [...new Set(text.toUpperCase())].sort().join('') : text;
+        const choiceLabels = text.replace(/[ \t]+/g, '');
+        return /^[A-Ha-h]{1,8}$/.test(choiceLabels) ? [...new Set(choiceLabels.toUpperCase())].sort().join('') : text;
     }
 
     function aggregateAnswers(declarations) {

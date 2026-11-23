@@ -31,7 +31,8 @@ function createRecordContract(PROTOCOL, metadataKey) {
         return drafts;
     }
     function retainReviewDrafts(drafts, previous) {
-        const protectedDraft = q => q.status === 'submitted' || q.userEdited || q.manualEdited || Object.values(q.fieldProvenance || {}).some(p => p.status === 'manual');
+        const protectedDraft = q => q.status === 'submitted' || q.manualConfirmed || q.userEdited || q.manualEdited ||
+            Object.values(q.fieldProvenance || {}).some(p => ['manual', 'review-confirmed'].includes(p.status));
         const byId = new Map(previous.filter(protectedDraft).map(q => [q.id, q]));
         const result = drafts.map(fresh => {
             const prior = byId.get(fresh.id);
@@ -62,9 +63,9 @@ function createRecordContract(PROTOCOL, metadataKey) {
         }
         return result;
     }
-    function acknowledgeTaskIssues(draft, reviewController) {
+    function acknowledgeTaskIssues(draft) {
         assert(isExternal(draft), 'review.task');
-        const next = reviewController.markFieldsManual(draft, ['questionNumber']);
+        const next = clone(draft);
         next[metadataKey].taskIssuesAcknowledged = true;
         return next;
     }
@@ -92,7 +93,7 @@ function createRecordContract(PROTOCOL, metadataKey) {
         }) }));
         return { fields, sources: clone(draft[metadataKey].sourcePageImages || []), findings, summaries, humanLabel: draft.status === 'submitted' ? '已入库' : draft.manualConfirmed ? '已人工确认' : '待人工核对' };
     }
-    function reviewProblem(draft) {
+    function reviewProblem(draft, { allowMissingAnswer = false } = {}) {
         if (draft[metadataKey].taskProblems.length && !draft[metadataKey].taskIssuesAcknowledged) return '本任务存在未归属内容或未完成页，请先对照来源并确认本题范围。';
         if (!String(draft.stem || '').trim()) return '题干为空，请对照原页补充。';
         if (!Object.values(TYPES).filter(t => t !== '待确认').includes(draft.type)) return '请选择原卷题型。';
@@ -100,8 +101,8 @@ function createRecordContract(PROTOCOL, metadataKey) {
         if (rejected.length) return `尚未处理不完整或冲突字段：${rejected.join('、')}。请修改或明确采用候选。`;
         if (['单选题', '多选题'].includes(draft.type) && !draft[metadataKey].optionLabels?.length && resolveUtils().hasUnrecognizedOptionRows(draft.stem || '')) return '选项格式未识别：本题按 A/B/C/D 字母标签切分选项，检测到的是数字标签行，请改成 A. B. C. D. 后再确认。';
         if (['单选题', '多选题'].includes(draft.type) && (draft.options.length < 2 || draft.options.some(o => !o.trim()) || draft[metadataKey].optionLabels?.length !== draft.options.length || draft[metadataKey].optionLabels.some((label, i) => label !== String.fromCharCode(65 + i)))) return '选项标签或正文不完整，请对照原页；缺失标签不会自动重编号。';
-        if (['单选题', '多选题', '填空题'].includes(draft.type) && !draft.answer.trim()) return '答案缺失，请人工补充。';
-        if (['单选题', '多选题'].includes(draft.type)) {
+        if (!allowMissingAnswer && ['单选题', '多选题', '填空题'].includes(draft.type) && !draft.answer.trim()) return '答案缺失，请人工补充。';
+        if (['单选题', '多选题'].includes(draft.type) && draft.answer.trim()) {
             const labels = draft[metadataKey].optionLabels;
             const answer = draft.answer.replace(/\[\[IMAGE:[^\]]+\]\]/g, '').trim();
             if (!(draft.type === '单选题' ? /^[A-Z]$/ : /^[A-Z]+$/).test(answer) || [...answer].some(label => !labels.includes(label)) || new Set(answer).size !== answer.length) return '答案标签与当前题型或选项不一致，请对照原 PDF；程序不会猜改题型。';
@@ -200,8 +201,9 @@ function createRecordContract(PROTOCOL, metadataKey) {
                 for (const match of String(text).matchAll(/\$\$([\s\S]*?)\$\$|(?<!\\)\$([^$\n]+)\$/g)) {
                     const math = match[1] ?? match[2];
                     try {
-                        if (/\\\\[a-zA-Z]/.test(math)) throw new Error('公式反斜杠重复转义');
-                        if (renderMath) renderMath(math, { throwOnError: true, strict: 'ignore' });
+                        const rowEnvironment = /\\begin\{(?:aligned|alignedat|gathered|cases|array|(?:[bBpvV]|small)?matrix)\}/.test(math);
+                        if (!rowEnvironment && /\\\\[a-zA-Z]/.test(math)) throw new Error('公式反斜杠重复转义');
+                        if (renderMath) resolveUtils().renderLatexFormula(renderMath, math, { throwOnError: true, strict: 'ignore' });
                     } catch (error) { problems.push({ field, message: '公式需要对照原卷修正：' + error.message }); break; }
                 }
             }

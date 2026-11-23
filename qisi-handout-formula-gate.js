@@ -64,7 +64,7 @@
         return source.replace(environment, match => `$$${match}$$`);
     }
 
-    function scanExpression(expression, segment, katex) {
+    function scanExpression(expression, segment, { katex, utils }) {
         const blocking = [];
         const warnings = [];
         const raw = String(segment.raw || '');
@@ -78,7 +78,7 @@
 
         const strictFindings = [];
         try {
-            katex.renderToString(normalizeForKatex(expression), {
+            utils.renderLatexFormula(katex.renderToString, normalizeForKatex(expression), {
                 displayMode: Boolean(segment.displayMode),
                 throwOnError: true,
                 trust: false,
@@ -115,7 +115,7 @@
         }
         for (const segment of parsed.segments || []) {
             if (segment.type !== 'math') continue;
-            const result = scanExpression(segment.expression || '', segment, context.katex);
+            const result = scanExpression(segment.expression || '', segment, context);
             for (const item of result.blocking) target.blocking.push({ ...context.label, field, ...item });
             for (const item of result.warnings) target.warnings.push({ ...context.label, field, ...item });
         }
@@ -147,7 +147,8 @@
         list.forEach((question, index) => {
             const label = {
                 questionId: question && question.id != null ? question.id : null,
-                questionNo: index + 1
+                questionNo: question?.printLabel ? null : (question?.printQuestionNo ?? index + 1),
+                ...(question?.printLabel ? { printLabel: question.printLabel } : {})
             };
             const target = { blocking, warnings };
             const context = { label, katex, utils };
@@ -178,12 +179,19 @@
     function describe(result) {
         if (!result || result.ok) return '';
         const byQuestion = new Map();
+        const contentLabels = new Set();
         for (const item of result.blocking) {
+            if (item.printLabel) { contentLabels.add('「' + item.printLabel + '」'); continue; }
             const key = item.questionNo == null ? '?' : item.questionNo;
             if (!byQuestion.has(key)) byQuestion.set(key, []);
             byQuestion.get(key).push(item.field);
         }
         const numbers = [...byQuestion.keys()].sort((a, b) => Number(a) - Number(b));
+        if (contentLabels.size) {
+            const labels = [...contentLabels];
+            if (numbers.length) labels.unshift('第 ' + numbers.join('、') + ' 题');
+            return labels.join('、') + '的公式有 ' + result.blocking.length + ' 处问题，导出会印成红字或空白。';
+        }
         return '第 ' + numbers.join('、') + ' 题的公式有 ' + result.blocking.length + ' 处问题，导出会印成红字或空白。';
     }
 
@@ -195,7 +203,7 @@
         const ask = options.confirm || (root && typeof root.confirm === 'function' ? root.confirm.bind(root) : null);
         if (typeof ask !== 'function') return false;
         const detail = result.blocking.slice(0, 6)
-            .map(item => '第 ' + item.questionNo + ' 题 · ' + item.field + '：' + item.message)
+            .map(item => (item.printLabel || (item.questionNo ? '第 ' + item.questionNo + ' 题' : '校验')) + ' · ' + (item.field || '公式') + '：' + item.message)
             .join('\n');
         const more = result.blocking.length > 6 ? '\n……另有 ' + (result.blocking.length - 6) + ' 处' : '';
         return Boolean(ask(describe(result) + '\n\n' + detail + more +

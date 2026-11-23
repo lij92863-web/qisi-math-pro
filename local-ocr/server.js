@@ -289,6 +289,12 @@ const createLocalOcrService = ({
 
     const requestHandler = async (request, response) => {
         response.setHeader('x-content-type-options', 'nosniff');
+        const requestedHost = /^(?:127\.0\.0\.1|localhost|\[::1\])(?::(\d{1,5}))?$/i.exec(request.headers.host || '');
+        if (!requestedHost || Number(requestedHost[1] || 80) !== server.address()?.port) {
+            request.resume();
+            sendJson(response, 403, { ok: false, code: 'host-not-allowed' });
+            return;
+        }
         if (request.method === 'GET' && request.url === '/health') {
             await handleHealth(response);
             return;

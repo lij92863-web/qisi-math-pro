@@ -64,6 +64,32 @@ const project = questionNumber => DocxIdentity.projectDeterministicDocxCandidate
     index: Number(questionNumber) - 1
 });
 
+test('empty producer blocks recover only explicitly labelled answers with known printed numbers', () => {
+    const source = { id: 'answer-file', filename: 'answers.docx', roles: ['answer'],
+        supportBlocks: [], expectedQuestionNumbers: ['1', '2', '3'] };
+    const parsed = Parser.parseAnswerAndSolutionItemsFromText(
+        '参考答案\n2. 【答案】D\n99. 【答案】C\n1. 【答案】B\n3. 【答案】', source);
+    assert.deepEqual(parsed.answers.map(row => [row.question, row.answer]), [['2', 'D'], ['1', 'B']]);
+    assert.deepEqual(parsed.unmatched.map(row => [row.questionNumber, row.sourceFileId]), [
+        ['99', 'answer-file'], ['3', 'answer-file']
+    ]);
+    const conflict = Parser.parseAnswerAndSolutionItemsFromText('1. 【答案】A\n1. 【答案】B', source);
+    assert.equal(conflict.answers[0].evidence.state, 'conflict');
+});
+
+test('empty producer blocks retain ambiguous support text without copying proof numbers into answers', () => {
+    const source = { id: 'proof-file', filename: 'proof.docx', roles: ['answer', 'solution'],
+        supportBlocks: [], expectedQuestionNumbers: ['1'] };
+    const input = '参考答案\n1. 【答案】B\n【解析】由第 1 步计算';
+    const parsed = Parser.parseAnswerAndSolutionItemsFromText(input, source);
+    assert.deepEqual(parsed.answers, []);
+    assert.deepEqual(parsed.solutions, []);
+    assert.equal(parsed.unmatched[0].code, 'DOCX_SUPPORT_BOUNDARY_UNRESOLVED');
+    assert.equal(parsed.unmatched[0].rawText, input);
+    assert.equal(parsed.unmatched[0].sourceFileName, 'proof.docx');
+    assert.equal(Parser.parseAnswerAndSolutionItemsFromText('参考答案', source).unmatched.length, 1);
+});
+
 test('descending multipart support heads keep their own blocks and never fabricate an answer', async () => {
     const result = await importDocx([
         '1. 第一题', '2. 第二题', '参考答案',

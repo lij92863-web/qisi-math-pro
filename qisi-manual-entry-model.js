@@ -3,13 +3,13 @@
     root.Qisi = root.Qisi || {};
     root.Qisi.ManualEntryModel = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
     'use strict';
 
     // Manual-entry state, image input and confirmed save coordination. Formal writes use LibraryService.
     const cleanEntryImages = images => (Array.isArray(images) ? images : [])
         .filter(image => image && image.id)
-        .map(image => ({ id: image.id, align: image.align || 'center' }));
+        .map(image => (root.Qisi?.QuestionImagePolicy || require('./qisi-question-image-policy')).imageReference(image));
 
     const splitTags = tags => String(tags || '').split(',').map(tag => tag.trim()).filter(Boolean);
 
@@ -27,6 +27,7 @@
         const prepared = splitQuestion(form.stem, form.type, form.options);
         const tags = splitTags(form.tags);
         const systemKnowledge = form.systemKnowledge || '';
+        const systemId = systemKnowledge && form.systemKnowledgeId ? { systemKnowledgeId: form.systemKnowledgeId } : {};
         const personalKnowledge = form.personalKnowledge || '';
         const primaryKnowledge = personalKnowledge || systemKnowledge || '';
         const primaryKnowledgeType = personalKnowledge ? 'personal' : 'system';
@@ -41,6 +42,7 @@
                 knowledge: primaryKnowledge,
                 knowledgeType: primaryKnowledgeType,
                 systemKnowledge,
+                ...systemId,
                 personalKnowledge,
                 stem: prepared.stem,
                 options: prepared.options.map(option => option || ''),
@@ -53,6 +55,7 @@
                     knowledge: primaryKnowledge,
                     knowledgeType: primaryKnowledgeType,
                     systemKnowledge,
+                    ...systemId,
                     personalKnowledge,
                     tags
                 },
@@ -64,7 +67,7 @@
 
     const createEntryState = ({ reactive, ref }) => Object.freeze({
         form: reactive({ grade: '高一', diff: '中等', type: '解答题', knowledge: '', knowledgeType: 'system',
-            systemKnowledge: '', personalKnowledge: '', tags: '', stem: '', options: ['', '', '', ''],
+            systemKnowledge: '', systemKnowledgeId: '', personalKnowledge: '', tags: '', stem: '', options: ['', '', '', ''],
             answer: '', solution: '', images: [] }), tab: ref('stem')
     });
     const createImagePort = ({ FileReader, fetch }) => {
@@ -85,7 +88,7 @@
         return Object.freeze({ read, fromDataUrl, dispose() { disposed = true; for (const reader of [...readers]) reader.abort(); } });
     };
     const imagePattern = id => {
-        const escaped = String(id).replace(/[.*+?^${}()|[\]\\]/g, '\\    return Object.freeze({ cleanEntryImages,');
+        const escaped = String(id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         return `\\[\\[(?:IMAGE|FORMULA_IMAGE):${escaped}\\]\\]|\\\\includegraphics(?:\\[[^\\]]*\\])?\\{${escaped}\\}`;
     };
     const editImageReference = (value, id, replacement) => {
@@ -95,7 +98,7 @@
         return String(value || '').replace(references, () => replacement);
     };
     const createWorkspace = ({ state, library, repository, imagePort, preferences, splitQuestion,
-        refreshLibrary, notify, onSaved, observeForm = () => () => {}, observeNavigation = () => () => {}, clock = Date.now, random = Math.random } = {}) => {
+        refreshLibrary, notify, onSaved, resolvePersonalKnowledge, observeForm = () => () => {}, observeNavigation = () => () => {}, clock = Date.now, random = Math.random } = {}) => {
         const form = state.form; let disposed = false, internal = false, revision = 0, pending = null, uploads = 0, imageSequence = 0;
         let visit = 0;
         const stopNavigation = observeNavigation(() => { visit++; });
@@ -139,6 +142,13 @@
             }
             return true;
         };
+        const nextImageId = () => `img_${clock()}_${++imageSequence}_${random().toString(36).slice(2, 8)}`;
+        const imageSnippet = (id, align = 'center') => `\\begin{${align}}[[IMAGE:${id}]]\\end{${align}}`;
+        const insertFigures = (field, source, block) => {
+            const optionStart = field === 'stem' ? source.search(/^[ \t]*[AＡ][.．、:：][ \t]*/m) : -1;
+            return optionStart < 0 ? source + '\n' + block + '\n'
+                : source.slice(0, optionStart).trimEnd() + '\n' + block + '\n' + source.slice(optionStart);
+        };
         const upload = async file => {
             if (disposed || !file) return false;
             const field = state.tab.value;
@@ -147,16 +157,41 @@
             try {
                 const url = await imagePort.read(file);
                 if (disposed) return false;
-                const id = `img_${clock()}_${++imageSequence}_${random().toString(36).slice(2, 8)}`;
+                const id = nextImageId();
                 await repository.put('images', { id, blob: file, createdAt: clock() });
                 if (disposed) return false;
                 change(() => {
                     form.images.push({ id, url, align: 'center' });
-                    form[field] += `\n\\begin{center}[[IMAGE:${id}]]\\end{center}\n`;
+                    form[field] = insertFigures(field, form[field], imageSnippet(id));
                 });
                 return true;
             } catch (error) { tell(`图片保存失败，未插入短码：${error?.message || error}`); return false; }
             finally { uploads--; }
+        };
+        const applyRecognition = async ({ field, original, text, figures, isCurrent }) => {
+            if (!['stem', 'answer', 'solution'].includes(field)) return false;
+            const savedVisit = visit;
+            const current = () => !disposed && visit === savedVisit && form[field] === original && isCurrent();
+            if (!current()) return false;
+            uploads++;
+            try {
+                const images = figures.map(url => ({ id: nextImageId(), url, align: 'center' }));
+                const records = await Promise.all(images.map(async image => ({
+                    id: image.id, blob: await imagePort.fromDataUrl(image.url), createdAt: clock()
+                })));
+                if (!current()) return false;
+                await repository.saveManualEntryImages(records);
+                if (!current()) {
+                    await repository.deleteMany('images', records.map(record => record.id));
+                    return false;
+                }
+                const block = images.map(image => imageSnippet(image.id)).join('\n');
+                change(() => {
+                    form.images.push(...images);
+                    form[field] = insertFigures(field, text, block).trim();
+                });
+                return true;
+            } finally { uploads--; }
         };
         const paste = async event => {
             const files = [...(event.clipboardData?.items || [])].filter(item => item.kind === 'file').map(item => item.getAsFile()).filter(Boolean);
@@ -174,7 +209,7 @@
                 editFields(id, `\\begin{${align}}[[IMAGE:${id}]]\\end{${align}}`); });
         };
         const removeImage = id => change(() => { editFields(id, ''); form.images = form.images.filter(image => image.id !== id); });
-        const snippet = id => { const image = form.images.find(row => row.id === id); return image ? `\\begin{${image.align || 'center'}}[[IMAGE:${id}]]\\end{${image.align || 'center'}}` : ''; };
+        const snippet = id => { const image = form.images.find(row => row.id === id); return image ? imageSnippet(id, image.align) : ''; };
         const appendText = (field, text) => {
             if (['stem', 'answer', 'solution'].includes(field)) change(() => { form[field] += (form[field] ? '\n\n' : '') + text; });
         };
@@ -189,6 +224,8 @@
                 try {
                     const now = clock();
                     const { question } = buildManualQuestion({ form: captured, now, splitQuestion, images: captured.images });
+                    const knowledgeId = resolvePersonalKnowledge?.(captured.personalKnowledge);
+                    if (knowledgeId) question.personalKnowledgeIds = question.meta.personalKnowledgeIds = [knowledgeId];
                     const declared = new Set(question.images.map(image => image.id));
                     for (const source of [question.stem, question.answer, question.solution, ...question.options]) {
                         for (const match of String(source || '').matchAll(/\[\[(?:IMAGE|FORMULA_IMAGE):([^\]]+)\]\]|\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}/g)) {
@@ -217,7 +254,7 @@
             return pending;
         };
         const dispose = () => { if (disposed) return; disposed = true; stopObserve(); stopNavigation(); imagePort.dispose(); };
-        return Object.freeze({ restore, syncKnowledge, upload, paste, alignImage, removeImage, snippet, appendText, submit, dispose });
+        return Object.freeze({ restore, syncKnowledge, upload, applyRecognition, paste, alignImage, removeImage, snippet, appendText, submit, dispose });
     };
 
     return Object.freeze({ createEntryState, createImagePort, createWorkspace, cleanEntryImages, splitTags, buildManualQuestion });
