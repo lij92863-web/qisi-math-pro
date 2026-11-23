@@ -1,70 +1,20 @@
 # 奇思数学 Pro
 
-奇思数学 Pro 是一个面向教师的本地题库与批量录题系统，用于将 DOCX / PDF / 图片等资料转为可审核、可入库的题目草稿。
+奇思数学 Pro 是面向教师的本地题库。支持单题录入、批量导入 DOCX／PDF／图片、草稿审核、题库检索、试卷和讲义编辑、打印及备份恢复。
 
-## 项目定位
+## 安装与启动
 
-本项目用于本地题库管理、批量录题、DOCX-PDF 支持、草稿审核与人工确认入库。系统优先保护题库数据质量：缺失答案可以接受，错挂答案或解析不可接受。
+安装 Node.js 后，在项目目录运行：
 
-## 当前稳定能力
-
-- DOCX+DOCX 是当前稳定主链。
-- PDF+PDF 当前采用 safe partial + manual review。
-- PDF 不追求 12/12 全自动 complete。
-- Route B answer-only AI pass 已冻结为 research-only。
-- controlled-write 是 PDF 答案写入的唯一 truth gate。
-
-## 运行方式
-
-安装依赖：
-
-```bat
-npm install
-```
-
-启动本地服务：
-
-```bat
+```text
+npm ci
 npm start
 ```
 
-本仓库也包含 Windows 本地启动入口：
+启动后在浏览器访问 [本地题库](http://127.0.0.1:3000/main.html)。Windows 安装依赖后也可以双击 `启动奇思数学.bat`。
 
-```bat
-open-app.cmd
-start-app.vbs
-```
+## 配置与数据
 
-## 安全测试命令
+需要配置 OCR 或 AI 服务时，请参照 `.env.example`，在本机创建 `.env` 并填入服务配置。可选的本地 OCR 服务见 [使用说明](local-ocr/README.md)。需要调用 Microsoft Word 转换文件的功能依赖本机安装 Word。
 
-常用安全验证：
-
-```bat
-npm.cmd run verify:safe
-npm.cmd run verify:batch-safety
-npm.cmd run smoke:batch:mock
-npm.cmd run verify:pdf-known-bad
-node --test tests/pdf-route-b-hold.test.js
-node scripts/pdf-master-browser-runner.js preflight
-node scripts/pdf-master-browser-runner.js dry-run
-```
-
-默认开发和验证禁止执行 `real-run`，也禁止调用真实 AI/OCR。
-
-## 目录说明
-
-- `app.js`：当前主应用入口，仍在迁移中。
-- `qisi-*.js`：逐步拆分出的业务模块。
-- `scripts/`：验证、runner、迁移控制脚本。
-- `tests/`：Node 测试。
-- `docs/refactor/`：重构与迁移文档。
-- `docs/testing/`：测试与链路验证文档。
-
-## 开发者注意
-
-- 不要接 Route B 到生产链路。
-- 不要绕过 controlled-write。
-- 不要把 scaffold 当作 real migration。
-- 不要在未授权情况下执行 real-run。
-- 不要在未授权情况下调用 AI/OCR。
-- DOCX+DOCX 稳定主链优先。
+题库保存在当前浏览器的本地数据库。换设备或浏览器时，请从原题库导出备份，再到新环境恢复。

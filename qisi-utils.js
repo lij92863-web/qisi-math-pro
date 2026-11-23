@@ -1,4 +1,4 @@
-﻿        const storageRepositoryApi =
+        const storageRepositoryApi =
             typeof Qisi !== 'undefined' && Qisi.StorageRepository
                 ? Qisi.StorageRepository
                 : typeof require === 'function'
@@ -172,9 +172,66 @@
         const restoreLatexMathSegments = (source = '', chunks = []) => {
             let output = String(source || '');
             chunks.forEach((chunk, index) => {
-                output = output.replace(`@@QISI_MATH_SEGMENT_${index}@@`, chunk);
+                output = output.replace(`@@QISI_MATH_SEGMENT_${index}@@`, () => chunk);
             });
             return output;
+        };
+
+        // Lexical offsets always refer to the caller's text. Math spans cannot
+        // supply option labels. Unpunctuated labels require a complete A-D row.
+        const findOptionLabels = (value) => {
+            const source = String(value ?? '').replace(/\r/g, '\n')
+                .replace(/[Ａ-Ｚ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248));
+            const masked = source.split('');
+            const parsed = tokenizeLatexSource(source);
+            for (const part of parsed.segments.filter(part => part.type === 'math')) {
+                for (let i = part.start; i < part.end; i++) masked[i] = ' ';
+            }
+            for (const issue of parsed.issues) {
+                for (let i = issue.index; i < masked.length; i++) masked[i] = ' ';
+            }
+            const search = masked.join('');
+            const hits = [];
+            const pattern = /(^|[\n\r\u3000 \t])([（(][ \t]*|)([A-Z])[ \t\u3000]*[.．。、:：)）]/g;
+            let match;
+            while ((match = pattern.exec(search)) !== null) {
+                hits.push({ label: match[3], rowStart: match.index,
+                    markerStart: match.index + match[1].length + match[2].length,
+                    contentStart: pattern.lastIndex + source.slice(pattern.lastIndex).match(/^[ \t\u3000]*/)[0].length });
+            }
+            const bare = /(^|[\n\r\u3000 \t])([A-D])[ \t\u3000]+(?=\S)/g;
+            const candidates = [...hits];
+            while ((match = bare.exec(source)) !== null) {
+                const markerStart = match.index + match[1].length;
+                if (search[markerStart] !== match[2] || hits.some(hit => hit.markerStart === markerStart)) continue;
+                candidates.push({ label: match[2], rowStart: match.index,
+                    markerStart, contentStart: bare.lastIndex });
+            }
+            candidates.sort((a, b) => a.markerStart - b.markerStart);
+            return candidates.map(hit => hit.label).join('') === 'ABCD' ? candidates : hits;
+        };
+
+        // 宽口径候选：单选/多选题的 source 里出现了行首数字标签行，说明老师写了
+        // 选项但不是本产品支持的写法。它只用来报"格式未识别"，不被当作选项解析。
+        const hasUnrecognizedOptionRows = (value) => {
+            const source = String(value ?? '').replace(/\r/g, '\n');
+            return /(^|\n)[ \t\u3000]*[0-9０-９]{1,2}[ \t\u3000]*[.．。、)）]/.test(source);
+        };
+
+        // 按标签把一段文本切成题干 + 选项。没有标签时题干是原文，一个字都不切。
+        const splitOptionLabels = (value) => {
+            const source = String(value ?? '');
+            const hits = findOptionLabels(source);
+            if (!hits.length) return { stem: source, optionLabels: [], options: [] };
+
+            const options = hits.map((hit, index) =>
+                source.slice(hit.contentStart, hits[index + 1]?.rowStart ?? source.length).replace(/\s+$/, ''));
+
+            return {
+                stem: source.slice(0, hits[0].rowStart).replace(/\s+$/, ''),
+                optionLabels: hits.map(hit => hit.label),
+                options
+            };
         };
 
         const cleanRecognizedText = (value) => {
@@ -285,11 +342,9 @@
 
             if (/^[A-D]{1,4}$/.test(compact)) return compact;
 
-            const direct = raw.match(/(?:答案|故选|选|应选|正确答案|为|是)\s*[:：]?\s*([A-D]{1,4})(?![A-Z])/);
+            const direct = raw.match(/(?:正确答案|答案|故选|应选)(?:为|是)?\s*[:：]?\s*([A-D]{1,4})(?![A-Z])/);
             if (direct?.[1]) return direct[1];
 
-            const tail = raw.match(/([A-D]{1,4})\s*$/);
-            if (tail?.[1] && tail[1].length <= 4) return tail[1];
 
             return '';
         };
@@ -332,25 +387,57 @@
 
         const BARE_LATEX_DISPLAY_SIGNAL_RE =
             /\\(?:frac|dfrac|sqrt|angle|sin|cos|tan|log|ln|pi|theta|alpha|beta|gamma|Delta|overline|vec|overrightarrow)\b|鈭\?|鈭歿2\}|√\s*2|蟺|π/;
+        const BARE_INDEXED_LABEL_RE = /^(?:[A-Za-z]_(?:[A-Za-z0-9]|\{[A-Za-z0-9]+(?:[+-][A-Za-z0-9]+)*\}))+$/;
 
         const normalizeBareLatexForDisplaySpan = (span = '') => {
             const source = String(span || '');
-            if (!BARE_LATEX_DISPLAY_SIGNAL_RE.test(source)) return source;
+            if (!source) return source;
 
-            return source.replace(
+            // Sub-question labels are mathematical enumerations in this domain:
+            // (i)/(ii)/(iii) must render as math, never as italic prose.
+            const labelled = source.replace(
+                /\((i{1,3}|iv|vi{1,3}|ix|x|I{1,3}|IV|VI{1,3}|IX|X)\)/g,
+                (match, roman) => `$(\\mathrm{${roman}})$`
+            );
+
+            const isMathLikeRun = (run = '') => {
+                if (BARE_LATEX_DISPLAY_SIGNAL_RE.test(run)) return true;
+                const body = run.trim();
+                if (!body) return false;
+                // equations / inequalities: AB=3, x<0, S=12
+                if (/[=<>]|\u2264|\u2265/.test(body) && /[A-Za-z0-9]/.test(body)) return true;
+                // geometry / point / vector labels: AB, ABCD, PQ
+                if (/^[A-Za-z]{2,4}$/.test(body)) return true;
+                // Indexed labels such as F_1, F_2 and a_{n+1}.
+                if (body.includes('_') && body.split(/[ \t]*,[ \t]*/).every(label => BARE_INDEXED_LABEL_RE.test(label))) return true;
+                // labelled point / coordinate: A(1,2), (1,2)
+                if (/^[A-Za-z]\([^()]*\d[^()]*\)$/.test(body)) return true;
+                if (/^\(\s*-?\d[^()]*\)$/.test(body)) return true;
+                // a single variable: x, A, m
+                if (/^[A-Za-z]$/.test(body)) return true;
+                // a standalone quantity: 3, 12, 3.14
+                if (/^\d+(?:\.\d+)?$/.test(body)) return true;
+                return false;
+            };
+
+            // Fill-in blanks: OCR emits \_\_\_\_, which is only valid inside
+            // math. Outside math the renderer prints the backslashes verbatim
+            // ("\ \ \ \"), which is the artifact users see in the preview.
+            const BLANK_TOKEN = '\u0001';
+            const blanked = labelled.replace(/(?:\\_){2,}/g, BLANK_TOKEN);
+
+            const replaced = blanked.replace(
                 /[A-Za-z0-9\\{}()[\]^_+\-*/=.,:;|<>!~ \t鈭歿?√蟺π]+/g,
                 (run) => {
-                    if (!BARE_LATEX_DISPLAY_SIGNAL_RE.test(run)) return run;
+                    if (!isMathLikeRun(run)) return run;
 
                     const leading = run.match(/^\s*/)?.[0] || '';
                     const trailing = run.match(/\s*$/)?.[0] || '';
                     let body = run.slice(leading.length, run.length - trailing.length);
                     if (!body) return run;
 
-                    if (!BARE_LATEX_DISPLAY_SIGNAL_RE.test(body)) return run;
-
                     const normalized = normalizeBareLatexExpressionForDisplay(body);
-                    if (!normalized || !BARE_LATEX_DISPLAY_SIGNAL_RE.test(normalized)) return run;
+                    if (!normalized) return run;
                     if (/^\$[\s\S]*\$$/.test(normalized) || /^\\\([\s\S]*\\\)$/.test(normalized) || /^\\\[[\s\S]*\\\]$/.test(normalized)) {
                         return run;
                     }
@@ -358,11 +445,13 @@
                     return `${leading}$${normalized}$${trailing}`;
                 }
             );
+
+            return replaced.split(BLANK_TOKEN).join('$\\_\\_\\_\\_$');
         };
 
         const normalizeBareLatexForDisplayTextBody = (text) => {
             const source = String(text ?? '');
-            if (!source || !BARE_LATEX_DISPLAY_SIGNAL_RE.test(source)) return source;
+            if (!source) return source;
 
             const {
                 protectedText,
@@ -396,6 +485,18 @@
             const source = String(text ?? '');
             if (!source) return source;
 
+            // A display block spans lines:
+            //     $$
+            //     \overrightarrow{...}
+            //     $$
+            // Splitting it per line wraps the middle line as if it were bare
+            // prose, producing $$\n$...$\n$$ and a guaranteed KaTeX failure.
+            // Math delimiters therefore force one whole-document pass, where the
+            // protected segments keep their inner text untouched.
+            if (/\$\$|\\\[|\\\(/.test(source)) {
+                return normalizeBareLatexForDisplayTextBody(source);
+            }
+
             return source.split('\n').map(line => {
                 const optionLine = normalizeBareLatexForDisplayOptionLine(line);
                 return optionLine === null
@@ -418,15 +519,23 @@
                 .replace(/\r/g, '\n')
                 .replace(/([A-D])\s*[．.、:：]\s*/g, '$1. ');
 
-            const labelRegex = /(^|[\n\r\s　]|[（(])([A-D])\s*(?:[\.．、:：\)）]|(?=\s*[$\\\u4e00-\u9fa5A-Za-z0-9（(]))/g;
+            const labelRegex = /(^|[\n\r\s　]|[（(])([A-D])\s*(?:([.．、:：)）])|(?=\s*[$\\\u4e00-\u9fa5A-Za-z0-9（(]))/g;
 
+            const parsed = tokenizeLatexSource(source);
+            const formulas = parsed.segments.filter(segment => segment.type === 'math');
+            let formulaIndex = 0;
             const hits = [];
             let match;
 
             while ((match = labelRegex.exec(source)) !== null) {
+                const start = match.index + match[1].length;
+                while (formulas[formulaIndex]?.end <= start) formulaIndex++;
+                // A vertex such as A in \angle ABC is part of the formula.
+                if (formulas[formulaIndex]?.start <= start) continue;
                 hits.push({
                     label: match[2],
-                    start: match.index + match[1].length,
+                    explicit: Boolean(match[3]),
+                    start,
                     contentStart: labelRegex.lastIndex
                 });
             }
@@ -451,7 +560,8 @@
 
             if (!candidates.length) return null;
 
-            const ordered = candidates[0];
+            // Explicit labels take priority over guesses such as A(0,b) in a stem.
+            const ordered = candidates.find(candidate => candidate.every(hit => hit.explicit)) || candidates[0];
 
             const stem = source.slice(0, ordered[0].start).trim();
             if (!stem) return null;
@@ -462,9 +572,12 @@
                 const next = ordered[idx + 1];
                 const end = next ? next.start : source.length;
 
-                const value = source.slice(item.contentStart, end)
-                    .replace(/^[\s　]*[A-D]\s*[\.\．、:：\)）]?\s*/i, '')
+                let value = source.slice(item.contentStart, end)
+                    .replace(new RegExp('^\\s*' + item.label + '\\s*[.．、:：)）]\\s*'), '')
                     .trim();
+                if (next && !parsed.issues.length) {
+                    value = value.replace(/(?:\s*(?<!\\)\\(?:quad|qquad)\b)+$/, '').trimEnd();
+                }
 
                 const optionIndex = item.label.charCodeAt(0) - 65;
 
@@ -598,14 +711,16 @@
             if (!text) return Array.from({ length: maxPage }, (_, idx) => idx + 1);
             const pages = new Set();
             text.split(',').forEach(part => {
+                part = part.trim();
                 const rangeMatch = part.match(/^(\d+)-(\d+)$/);
                 if (rangeMatch) {
                     const start = Number(rangeMatch[1]);
                     const end = Number(rangeMatch[2]);
-                    for (let page = start; page <= end; page++) if (page <= maxPage) pages.add(page);
+                    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 1 || end < start) return;
+                    for (let page = start; page <= Math.min(end, maxPage); page++) pages.add(page);
                 } else {
                     const page = Number(part);
-                    if (page > 0 && page <= maxPage) pages.add(page);
+                    if (/^\d+$/.test(part) && Number.isSafeInteger(page) && page > 0 && page <= maxPage) pages.add(page);
                 }
             });
             return [...pages].sort((a, b) => a - b);
@@ -718,6 +833,7 @@
         };
 
         const hasUnconvertedImagePlaceholder = (value = '') => {
+            if (/\[DOCX不可显示图片:/i.test(String(value || ''))) return true;
             const raw = String(value || '');
 
             // Legal media tokens are not unconverted-image errors.
@@ -745,6 +861,13 @@
             item.solution
         ].some(hasUnconvertedImagePlaceholder);
 
+        const normalizeMathSearch = value => value.normalize('NFKC')
+            .replace(/\\(?:left|right|mleft|mright|bigl|bigr|Bigl|Bigr|biggl|biggr|Biggl|Biggr)(?![A-Za-z])/g, '')
+            .replace(/\\(?:quad\b|qquad\b|[,;!: ]|[()[\]])/g, '')
+            .replace(/\\(?:mathrm|mathit|mathnormal|mathbf)\s*\{\s*([A-Za-z])\s*\}/g, '$1')
+            .replace(/[$\s]+/g, '')
+            .toLowerCase();
+
         const questionMatchesLibraryFilters = (q, options = {}) => {
             if (!q) return false;
 
@@ -754,12 +877,6 @@
                 ? options.hasText
                 : (value) => String(value || '').trim().length > 0;
 
-            if (keyword) {
-                const haystack = [q.stem, q.answer, q.solution]
-                    .map(value => String(value || '').toLowerCase())
-                    .join('\n');
-                if (!haystack.includes(keyword)) return false;
-            }
             if (filters.type && q.type !== filters.type) return false;
             if (filters.diff && (q.diff || q.meta?.diff || '') !== filters.diff) return false;
             if (filters.grade && (q.grade || q.meta?.grade || '') !== filters.grade) return false;
@@ -770,6 +887,25 @@
             if (filters.imageState === 'hasImage' && !hasImages) return false;
             if (filters.imageState === 'noImage' && hasImages) return false;
 
+            if (keyword) {
+                const names = options.personalKnowledgeNames;
+                let cached = options.textCache?.get(q);
+                if (!cached) {
+                    const fields = [q.stem, ...(Array.isArray(q.options) ? q.options : []), q.answer, q.solution,
+                        names && q.knowledgeType === 'personal' ? '' : q.knowledge, q.systemKnowledge,
+                        names ? '' : q.personalKnowledge].map(value => String(value || '').toLowerCase());
+                    cached = { fields };
+                    options.textCache?.set(q, cached);
+                }
+                if (!cached.fields.some(value => value.includes(keyword)) &&
+                    !names?.some(value => value.toLowerCase().includes(keyword))) {
+                    const math = /[()（）\\$^_=]/.test(keyword) && normalizeMathSearch(keyword);
+                    if (!math) return false;
+                    cached.math ||= cached.fields.map(normalizeMathSearch);
+                    if (!cached.math.some(value => value.includes(math)) &&
+                        !names?.some(value => normalizeMathSearch(value).includes(math))) return false;
+                }
+            }
             return true;
         };
 
@@ -919,7 +1055,7 @@
         const cleanDisplayOptionsForBatchSave = (options) => {
             const arr = Array.isArray(options) ? options : ['', '', '', ''];
 
-            return [0, 1, 2, 3].map(idx => {
+            return Array.from({ length: Math.max(4, arr.length) }, (_, idx) => {
                 const raw = cleanRecognizedText(arr[idx] || '');
                 if (!raw) return '';
 
@@ -964,6 +1100,7 @@
             expandPageRange,
             extractRelevanceTokens,
             findNode,
+            findOptionLabels,
             finalChoiceAnswerText,
             normalizeBareLatexExpressionForDisplay,
             normalizeBareLatexForDisplayOptionLine,
@@ -975,11 +1112,13 @@
             hasBatchMediaToken,
             hasUnconvertedImagePlaceholder,
             hasUnconvertedOptionPlaceholder,
+            hasUnrecognizedOptionRows,
             isFatalQwenServiceError,
             isRawJsonPayloadText,
             itemHasUnconvertedImagePlaceholder,
             mathSignalCount,
             normalizeAnswerSolutionSource,
+            normalizeLatexText,
             normalizeFigureBbox,
             preserveRawEvidence,
             questionMatchesLibraryFilters,
@@ -989,9 +1128,11 @@
             restoreLatexMathSegments,
             sanitizeLatexWrapperArtifacts,
             splitAnswerSolutionSections,
+            splitOptionLabels,
             stripBatchImagePlaceholders,
             splitQuestionForStorage,
             stripAnswerSolution,
+            tokenizeLatexSource,
             validatePageRange
         };
 

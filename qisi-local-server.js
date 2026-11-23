@@ -1,14 +1,23 @@
-require('dotenv').config();
+// The project .env is this machine's explicit configuration and must win over a
+// stale machine-wide variable of the same name: an inherited key silently
+// shadowed a corrected .env and produced a misleading invalid_api_key.
+require('dotenv').config({ override: true });
 
 const express = require('express');
-const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const fsp = require('fs/promises');
+const { randomUUID } = require('node:crypto');
 const { spawn } = require('child_process');
 const { createTempJobManager } = require('./qisi-temp-job-manager');
 const { createSecureLogger } = require('./qisi-secure-logger');
+const { instanceIdFor } = require('./qisi-local-instance');
+const { createAiRequestLimiter, networkFailureCode } = require('./qisi-local-ai-request-policy');
+const { assertDocxUploadType, validateDocxPackage } = require('./qisi-docx-upload-policy');
+const { postDashScope, closeDashScopeConnections } = require('./qisi-local-https-transport');
+const { isAllowedLocalHost, isAllowedLocalOrigin, publicRootAssets, isPublicAsset } = require('./qisi-local-http-boundary');
+const { createMineruClient } = require('./qisi-mineru-client');
 
 createSecureLogger(console).install();
 
@@ -18,13 +27,20 @@ const UPLOAD_DIR = path.join(TMP_DIR, 'uploads');
 const CONVERTED_DIR = path.join(TMP_DIR, 'converted');
 const TOOLS_DIR = path.join(ROOT, 'tools');
 const PS_CONVERTER = path.join(TOOLS_DIR, 'convert-docx-to-pdf.ps1');
+const { validateEquations, createNativeTranslator } = require('./qisi-mathtype-local-service');
+const translateLocalMtef = createNativeTranslator(ROOT);
 const PORT = Number(process.env.PORT || 3000);
+const HOST = '127.0.0.1';
 const CONVERT_TIMEOUT_MS = Number(process.env.DOCX_CONVERT_TIMEOUT_MS || 120000);
 const CONVERTER_MODE = String(process.env.QISI_DOCX_CONVERTER || 'auto').toLowerCase();
 const DASHSCOPE_API_KEY = String(process.env.DASHSCOPE_API_KEY || '').trim();
 const AI_BODY_LIMIT = String(process.env.AI_BODY_LIMIT || '60mb');
-const AI_REQUEST_TIMEOUT_MS = Math.max(10000, Number(process.env.AI_REQUEST_TIMEOUT_MS || 90000));
+const AI_REQUEST_TIMEOUT_MS = Math.max(10000, Number(process.env.AI_REQUEST_TIMEOUT_MS || 180000));
 const TEMP_JOB_MAX_AGE_MS = Math.max(60000, Number(process.env.QISI_TEMP_JOB_MAX_AGE_MS || 24 * 60 * 60 * 1000));
+// MinerU 精准解析：token 只在服务端 .env 读取，浏览器永远拿不到。
+const MINERU_TOKEN = String(process.env.MINERU_TOKEN || '').trim();
+const MINERU_MAX_PDF_BYTES = 200 * 1024 * 1024;
+const MINERU_MAX_PAGES = 200;
 const DASHSCOPE_CHAT_UPSTREAM = 'https://dashscope.aliyuncs.com/' + 'compatible-mode/v1/' + 'chat/completions';
 const DASHSCOPE_OCR_UPSTREAM = 'https://dashscope.aliyuncs.com/' + 'api/v1/services/aigc/' + 'multimodal-generation/' + 'generation';
 // Supported modes: auto / libreoffice-first / word-first / libreoffice-only / word-only
@@ -39,9 +55,34 @@ const tempJobManager = createTempJobManager({
 });
 
 const app = express();
+app.disable('x-powered-by');
+// The pipeline legitimately issues page-parallel requests (a 21-page paper opens
+// up to 12 in flight). The old fixed cap of 4 turned that into AI_PROXY_BUSY,
+// which is a local rejection and looks like a provider failure to the caller.
+const aiRequestLimiter = createAiRequestLimiter({
+    maxConcurrent: Math.max(1, Number(process.env.AI_MAX_CONCURRENT || 16) | 0),
+    capacity: Math.max(1, Number(process.env.AI_RATE_CAPACITY || 600) | 0)
+});
 const aiJsonParser = express.json({ limit: AI_BODY_LIMIT, type: 'application/json' });
 
-app.use(cors({ origin: true, credentials: false }));
+app.use((req, res, next) => {
+  res.set('X-Content-Type-Options', 'nosniff');
+  if (!isAllowedLocalHost(req.get('host'), PORT)) return res.sendStatus(403);
+  const origin = req.get('origin');
+  res.vary('Origin');
+  if (!isAllowedLocalOrigin(origin, PORT)) return res.sendStatus(403);
+  if (req.path.startsWith('/api/')) {
+    res.set('Cache-Control', 'no-store');
+    if (req.get('sec-fetch-site') === 'cross-site') return res.sendStatus(403);
+  }
+  if (origin) res.set('Access-Control-Allow-Origin', origin);
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, X-Request-Id');
+    return res.sendStatus(204);
+  }
+  next();
+});
 
 app.get('/api/ai/health', (req, res) => {
   res.json({
@@ -87,8 +128,20 @@ async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
     });
   }
 
+  const lease = aiRequestLimiter.acquire();
+  if (!lease.ok) {
+    res.set('Retry-After', String(lease.retryAfter));
+    return res.status(429).json({ ok: false, code: lease.code,
+      error: 'Local AI request limit reached. Please retry later.' });
+  }
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
+  let abortReason = null;
+  const abort = reason => {
+    if (!controller.signal.aborted) { abortReason = reason; controller.abort(); }
+  };
+  const abortOnClose = () => { if (!res.writableEnded) abort('client_disconnected'); };
+  res.once('close', abortOnClose);
+  const timer = setTimeout(() => abort('deadline'), AI_REQUEST_TIMEOUT_MS);
   const bodyText = JSON.stringify(req.body);
   const model = validation.model;
   const startedAt = Date.now();
@@ -103,18 +156,23 @@ async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
       engine: model
     });
 
-    const upstream = await fetch(upstreamUrl, {
-      method: 'POST',
+    const upstream = await postDashScope({
+      url: upstreamUrl,
       headers: {
         Authorization: `Bearer ${DASHSCOPE_API_KEY}`,
         'Content-Type': 'application/json'
       },
       body: bodyText,
-      signal: controller.signal
+      signal: controller.signal,
+      onPhase: event => console.log('[AI_PROXY][transport]', {
+        requestId,
+        stage: `${routeName}.transport.${event.stage}`,
+        durationMs: event.elapsedMs,
+        code: event.reusedSocket ? 'SOCKET_REUSED' : 'SOCKET_FRESH'
+      })
     });
-
-    const responseBuffer = Buffer.from(await upstream.arrayBuffer());
-    const contentType = upstream.headers.get('content-type') || 'application/json; charset=utf-8';
+    const responseBuffer = upstream.buffer;
+    const contentType = upstream.contentType;
 
     console.log('[AI_PROXY][response]', {
       requestId,
@@ -124,28 +182,40 @@ async function forwardDashScopeRequest(req, res, routeName, upstreamUrl) {
       code: upstream.ok ? 'AI_PROXY_OK' : `AI_PROXY_HTTP_${upstream.status}`
     });
 
+    if (res.destroyed || res.writableEnded) return;
     res.status(upstream.status);
     res.set('content-type', contentType);
     return res.send(responseBuffer);
   } catch (error) {
     const aborted = error?.name === 'AbortError';
+    const timedOut = aborted && abortReason === 'deadline';
+    const cancelled = aborted && !timedOut;
+    const causeCode = aborted ? 'REQUEST_ABORTED' : networkFailureCode(error);
+    const code = timedOut ? 'AI_PROXY_TIMEOUT' : cancelled ? 'AI_PROXY_CANCELLED' : 'AI_PROXY_FETCH_FAILED';
     console.error('[AI_PROXY][error]', {
       requestId,
       stage: `${routeName}.error`,
       engine: model,
       durationMs: Date.now() - startedAt,
-      code: aborted ? 'AI_PROXY_TIMEOUT' : 'AI_PROXY_FETCH_FAILED'
+      code: aborted ? code : `AI_PROXY_FETCH_FAILED:${causeCode}`
     });
 
-    return res.status(aborted ? 504 : 502).json({
+    if (res.destroyed || res.writableEnded || abortReason === 'client_disconnected') return;
+    return res.status(timedOut ? 504 : cancelled ? 499 : 502).json({
       ok: false,
-      code: aborted ? 'AI_PROXY_TIMEOUT' : 'AI_PROXY_FETCH_FAILED',
-      error: aborted
+      code,
+      causeCode,
+      ...(error.transportDiagnostic ? { transportDiagnostic: error.transportDiagnostic } : {}),
+      ...(abortReason ? { abortReason } : {}),
+      error: timedOut
         ? `DashScope upstream request timed out after ${AI_REQUEST_TIMEOUT_MS}ms.`
-        : 'DashScope upstream request failed.'
+        : cancelled ? 'DashScope upstream request cancelled.'
+        : `DashScope upstream connection failed (${causeCode}).`
     });
   } finally {
     clearTimeout(timer);
+    res.removeListener('close', abortOnClose);
+    lease.release();
   }
 }
 
@@ -157,8 +227,27 @@ app.post('/api/ai/ocr', aiJsonParser, (req, res) => {
   forwardDashScopeRequest(req, res, 'ocr', DASHSCOPE_OCR_UPSTREAM);
 });
 
-app.use(express.json({ limit: '2mb' }));
-app.use(express.static(ROOT, { extensions: ['html'], maxAge: 0, etag: false }));
+const MAIN_HTML_PATH = path.join(ROOT, 'main.html');
+// The served file allow-list follows main.html on disk. A server started before a
+// new <script> tag existed must not keep answering 404 for it, because a single
+// missing module leaves the page blank with no visible error.
+let rootAssetSnapshot = { mtimeMs: -1, assets: null };
+const currentRootAssets = () => {
+  const { mtimeMs } = fs.statSync(MAIN_HTML_PATH);
+  if (mtimeMs !== rootAssetSnapshot.mtimeMs) {
+    rootAssetSnapshot = {
+      mtimeMs,
+      assets: publicRootAssets(fs.readFileSync(MAIN_HTML_PATH, 'utf8'))
+    };
+  }
+  return rootAssetSnapshot.assets;
+};
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  if (!isPublicAsset(req.path, currentRootAssets())) return res.sendStatus(404);
+  next();
+});
+app.use(express.static(ROOT, { extensions: ['html'], maxAge: 0, etag: true }));
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
@@ -166,13 +255,17 @@ const storage = multer.diskStorage({
     const safe = sanitizeFilename(file.originalname || 'upload.docx');
     const ext = path.extname(safe) || '.docx';
     const base = path.basename(safe, ext);
-    cb(null, `${Date.now()}_${base}${ext}`);
+    cb(null, `${Date.now()}_${randomUUID()}_${base}${ext}`);
   }
 });
 
 const upload = multer({
   storage,
-  limits: { fileSize: 80 * 1024 * 1024 }
+  fileFilter: (req, file, callback) => {
+    try { assertDocxUploadType(file); callback(null, true); }
+    catch (error) { callback(error); }
+  },
+  limits: { fileSize: 80 * 1024 * 1024, files: 1, fields: 0 }
 });
 
 function sanitizeFilename(name) {
@@ -181,6 +274,18 @@ function sanitizeFilename(name) {
     .replace(/\s+/g, '_')
     .replace(/_+/g, '_')
     .slice(0, 160);
+}
+
+// multipart 的 filename 按 latin1 解码，中文名会变成乱码，这里还原成 UTF-8。
+function decodeMultipartFilename(name) {
+  const value = String(name || '');
+  if (!value || !/[\u0080-\u00ff]/.test(value)) return value;
+  try {
+    const decoded = Buffer.from(value, 'latin1').toString('utf8');
+    return decoded.includes('\ufffd') ? value : decoded;
+  } catch {
+    return value;
+  }
 }
 
 function killProcessTree(child) {
@@ -413,7 +518,7 @@ async function convertWithLibreOffice(inputPath, outputDir) {
 }
 
 async function convertDocxToPdf(inputPath, job = {}) {
-  const jobId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const jobId = `${Date.now()}_${randomUUID()}`;
   const outDir = path.join(CONVERTED_DIR, jobId);
   const errors = [];
 
@@ -479,6 +584,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
     service: 'qisi-local-server',
+    instanceId: instanceIdFor(ROOT),
     platform: process.platform,
     port: PORT
   });
@@ -596,6 +702,13 @@ app.get('/api/convert/self-test', async (req, res) => {
   }
 });
 
+// Local structured formula conversion only; no AI transport is involved.
+app.post('/api/convert/mathtype-mtef', express.json({ limit: '8mb' }), async (req, res) => {
+  if (!validateEquations(req.body)) return res.status(400).json({ ok: false, code: 'MTEF_BATCH_INVALID', equations: [] });
+  try { return res.json(await translateLocalMtef(req.body.equations)); }
+  catch { return res.status(503).json({ ok: false, code: 'MATHTYPE_NATIVE_UNAVAILABLE', equations: [] }); }
+});
+
 app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => {
   const uploaded = req.file;
   const cleanupJob = { uploadPath: uploaded?.path || '', outputDir: '' };
@@ -617,6 +730,7 @@ app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => 
       });
     }
 
+    await validateDocxPackage(await fsp.readFile(uploaded.path), uploaded);
     const pdfPath = await convertDocxToPdf(uploaded.path, cleanupJob);
     const pdfBuffer = await fsp.readFile(pdfPath);
     const pdfHeader = pdfBuffer.slice(0, 5).toString('latin1');
@@ -648,9 +762,11 @@ app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => 
       code: error?.code || 'DOCX_CONVERT_FAILED'
     });
 
-    res.status(500).json({
+    const unsafeInput = /^DOCX_UPLOAD_|^ARCHIVE_/.test(error?.code || '');
+    res.status(unsafeInput ? 400 : 500).json({
       ok: false,
-      error: error.message || String(error),
+      error: unsafeInput ? 'DOCX文件格式或安全校验未通过。' : error.message || String(error),
+      code: error?.code || 'DOCX_CONVERT_FAILED',
       detail: {
         file: uploaded?.originalname || '',
         server: 'qisi-local-server',
@@ -670,9 +786,167 @@ app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => 
   }
 });
 
+// ---- MinerU 精准解析（契约 ai/MINERU_BLOCK_PROTOCOL.md §4） ----
+const mineruClient = createMineruClient({ token: MINERU_TOKEN,
+  store: require('./qisi-mineru-task-store').createMineruTaskStore(path.join(ROOT, 'local-run-artifacts', 'mineru-extractions-v2')) });
+
+app.get('/api/mineru/status', (req, res) => res.json({ configured: Boolean(MINERU_TOKEN) }));
+
+const mineruUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+    filename: (req, file, cb) => {
+      const safe = sanitizeFilename(decodeMultipartFilename(file.originalname) || 'upload.pdf');
+      const ext = path.extname(safe) || '.pdf';
+      const base = path.basename(safe, ext);
+      cb(null, `mineru_${Date.now()}_${randomUUID()}_${base}${ext}`);
+    }
+  }),
+  fileFilter: (req, file, callback) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (ext !== '.pdf' || (file.mimetype && file.mimetype !== 'application/pdf' && file.mimetype !== 'application/octet-stream')) {
+      return callback(Object.assign(new Error('Only .pdf is supported.'), { code: 'MINERU_UPLOAD_TYPE_INVALID' }));
+    }
+    callback(null, true);
+  },
+  limits: { fileSize: MINERU_MAX_PDF_BYTES, files: 1, fields: 0 }
+});
+
+const mineruUploadSingle = (req, res, next) => {
+  mineruUpload.single('file')(req, res, error => {
+    if (!error) return next();
+    const code = error.code === 'LIMIT_FILE_SIZE' ? 'MINERU_UPLOAD_SIZE_LIMIT' : 'MINERU_UPLOAD_TYPE_INVALID';
+    return res.status(code === 'MINERU_UPLOAD_SIZE_LIMIT' ? 413 : 400).json({
+      ok: false,
+      code,
+      error: code === 'MINERU_UPLOAD_SIZE_LIMIT'
+        ? `PDF 超过 ${Math.round(MINERU_MAX_PDF_BYTES / 1024 / 1024)}MB 上限。`
+        : '只接受 .pdf 文件，表单字段名必须是 file。'
+    });
+  });
+};
+
+// Read the page tree, including compressed object streams, before any upload.
+async function estimatePdfPageCount(buffer) {
+  const pdfjs = require('./vendor/pdfjs/pdf.min.js');
+  pdfjs.GlobalWorkerOptions.workerSrc = require.resolve('./vendor/pdfjs/pdf.worker.min.js');
+  const task = pdfjs.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false, disableFontFace: true });
+  try { return (await task.promise).numPages; }
+  catch { throw Object.assign(new Error('MINERU_INPUT_INVALID'), { code: 'MINERU_INPUT_INVALID' }); }
+  finally { await task.destroy(); }
+}
+
+function mineruErrorStatus(error) {
+  const code = String(error?.code || '');
+  if (code === 'MINERU_NOT_CONFIGURED') return 503;
+  if (code === 'MINERU_INPUT_INVALID' || code === 'MINERU_UPLOAD_TYPE_INVALID' || code === 'MINERU_IMAGE_NAME_INVALID') return 400;
+  if (code === 'MINERU_PAGE_LIMIT') return 413;
+  if (code === 'MINERU_PARSE_TIMEOUT') return 504;
+  if (code === 'MINERU_IMAGE_NOT_FOUND' || code === 'MINERU_JOB_NOT_FOUND') return 404;
+  if (code.startsWith('MINERU_')) return 502;
+  return 500;
+}
+
+app.post('/api/mineru/parse', mineruUploadSingle, async (req, res) => {
+  const uploaded = req.file;
+  if (!uploaded) {
+    return res.status(400).json({ ok: false, code: 'MINERU_FILE_MISSING', error: '未收到 PDF，表单字段名必须是 file。' });
+  }
+
+  const controller = new AbortController();
+  const abortOnClose = () => { if (!res.writableEnded) controller.abort(); };
+  res.once('close', abortOnClose);
+  const startedAt = Date.now();
+
+  try {
+    const buffer = await fsp.readFile(uploaded.path);
+    if (buffer.length < 5 || buffer.subarray(0, 5).toString('latin1') !== '%PDF-') {
+      return res.status(400).json({ ok: false, code: 'MINERU_FILE_INVALID', error: '上传内容不是有效的 PDF。' });
+    }
+    if (buffer.length > MINERU_MAX_PDF_BYTES) {
+      return res.status(413).json({ ok: false, code: 'MINERU_UPLOAD_SIZE_LIMIT', error: 'PDF 超过 200MB 上限。' });
+    }
+    const estimatedPages = await estimatePdfPageCount(buffer);
+    if (estimatedPages > MINERU_MAX_PAGES) {
+      return res.status(413).json({
+        ok: false, code: 'MINERU_PAGE_LIMIT',
+        error: `PDF 共 ${estimatedPages} 页，超过 ${MINERU_MAX_PAGES} 页上限。`
+      });
+    }
+
+    const result = await mineruClient.parse(buffer, {
+      filename: decodeMultipartFilename(uploaded.originalname) || path.basename(uploaded.path),
+      signal: controller.signal
+    });
+
+    console.log('[MINERU_PARSE]', {
+      stage: 'mineru.parse',
+      code: 'MINERU_PARSE_OK',
+      durationMs: Date.now() - startedAt,
+      pages: result.source.pages,
+      blocks: result.pages.reduce((sum, page) => sum + page.blocks.length, 0),
+      answerTable: result.answerTable ? 'parsed' : 'null',
+      submitMs: result.timings?.submitMs,
+      uploadMs: result.timings?.uploadMs,
+      pollMs: result.timings?.pollMs,
+      fetchZipMs: result.timings?.fetchZipMs
+    });
+
+    if (res.destroyed || res.writableEnded) return;
+    return res.json(result);
+  } catch (error) {
+    const aborted = error?.name === 'AbortError' || controller.signal.aborted;
+    const code = aborted ? 'MINERU_CANCELLED' : (error?.code || 'MINERU_PARSE_FAILED');
+    console.error('[MINERU_PARSE][error]', {
+      stage: error?.stage || 'mineru.parse',
+      code,
+      durationMs: Date.now() - startedAt,
+      mineruCode: error?.mineruCode ?? null
+    });
+    if (res.destroyed || res.writableEnded) return;
+    return res.status(aborted ? 499 : mineruErrorStatus(error)).json({
+      ok: false,
+      code,
+      error: code,
+      ...(error?.stage ? { stage: error.stage } : {}),
+      ...(error?.httpStatus ? { httpStatus: error.httpStatus } : {}),
+      ...(error?.mineruCode !== undefined ? { mineruCode: error.mineruCode } : {})
+    });
+  } finally {
+    res.removeListener('close', abortOnClose);
+    await tempJobManager.cleanupRequest({ uploadPath: uploaded.path });
+  }
+});
+
+app.get('/api/mineru/image', async (req, res) => {
+  try {
+    const { bytes, name } = await mineruClient.readImage(req.query?.name, { job: req.query?.job, sourceId: req.query?.sourceId });
+    const types = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
+    res.set('Content-Type', types[path.extname(name).toLowerCase()] || 'application/octet-stream');
+    res.set('Cache-Control', 'no-store');
+    return res.send(Buffer.from(bytes));
+  } catch (error) {
+    if (res.writableEnded) return;
+    return res.status(mineruErrorStatus(error)).json({
+      ok: false,
+      code: error?.code || 'MINERU_IMAGE_FAILED',
+      error: error?.message || String(error)
+    });
+  }
+});
+
+app.use((error, req, res, next) => {
+  if (res.headersSent) return next(error);
+  const code = error?.code === 'LIMIT_FILE_SIZE' || error?.type === 'entity.too.large' ? 'UPLOAD_SIZE_LIMIT'
+    : error?.code === 'DOCX_UPLOAD_TYPE_INVALID' ? error.code
+      : error instanceof SyntaxError ? 'INVALID_JSON_BODY' : 'LOCAL_SERVICE_FAILURE';
+  res.status(code === 'UPLOAD_SIZE_LIMIT' ? 413 : code === 'LOCAL_SERVICE_FAILURE' ? 500 : 400)
+    .json({ ok: false, code, error: 'Local request validation failed.' });
+});
+
 async function startServer() {
   await tempJobManager.cleanupExpired();
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, HOST, () => {
     console.log(`[qisi-local-server] running at http://localhost:${PORT}`);
     console.log(`[qisi-local-server] open http://localhost:${PORT}/main.html`);
     console.log(`[qisi-local-server] health check: http://localhost:${PORT}/api/health`);
@@ -681,6 +955,7 @@ async function startServer() {
     console.log('[qisi-local-server] LibreOffice candidates:');
     findLibreOfficeExecutable().forEach(p => console.log(`  - ${p}`));
   });
+  server.once('close', closeDashScopeConnections);
 }
 
 startServer().catch(error => {

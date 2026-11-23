@@ -97,6 +97,13 @@
             draftImages: 'id, batchId, questionId, status, createdAt'
         });
 
+        const normalizeCompareText = (...args) => window.Qisi.QuestionDuplicatePolicy.normalizeText(...args);
+        const questionCoreFingerprint = (...args) => window.Qisi.QuestionDuplicatePolicy.canonicalCoreFingerprint(...args);
+        const questionStemFingerprint = (...args) => window.Qisi.QuestionDuplicatePolicy.canonicalStemFingerprint(...args);
+        window.Qisi.QuestionIndexStorage.configure(db, {
+            policy: { canonicalCoreFingerprint: questionCoreFingerprint, canonicalStemFingerprint: questionStemFingerprint }
+        });
+
         const getQuestionKnowledge = (q, type) => {
             if (!q) return '';
 
@@ -117,26 +124,8 @@
             return q.meta?.knowledge || q.knowledge || '';
         };
 
-        const normalizeCompareText = (text) => String(text || '')
-            .replace(/\\left|\\right/g, '')
-            .replace(/\s+/g, '')
-            .replace(/[，。；：、,.．]/g, '')
-            .replace(/[（）]/g, match => match === '（' ? '(' : ')')
-            .replace(/[Ａ-Ｄ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
-            .toLowerCase();
-
-        const normalizeOptionsForCompare = (options) => {
-            if (!Array.isArray(options)) return '';
-            return options.map(opt => normalizeCompareText(opt)).join('|');
-        };
-
-        const questionCoreFingerprint = (q) => {
-            const stem = normalizeCompareText(q?.stem || '');
-            const options = normalizeOptionsForCompare(q?.options || []);
-            return `${stem}__${options}`;
-        };
-
-        const questionStemFingerprint = (q) => normalizeCompareText(q?.stem || '');
+        const normalizeOptionsForCompare = options => Array.isArray(options)
+            ? options.map(normalizeCompareText).join('|') : '';
         const hasText = (text) => String(text || '').trim().length > 0;
         const sameTextLoose = (a, b) => normalizeCompareText(a) === normalizeCompareText(b);
 

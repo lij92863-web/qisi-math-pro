@@ -20,8 +20,13 @@
 
     const createReviewController = ({
         validateDraft,
+        formalFields = [],
         clock = () => Date.now()
     } = {}) => {
+        const formalFieldSet = new Set(
+            Array.isArray(formalFields) ? formalFields : []
+        );
+
         const open = draft => ({
             draft: clone(draft),
             baseline: clone(draft),
@@ -29,13 +34,86 @@
             cancelled: false
         });
 
-        const editField = (draft, field, value) => {
+        const markFieldsManual = (draft, fields = []) => {
             if (!draft || draft.status === 'submitted') return clone(draft);
             const next = clone(draft);
-            next[field] = clone(value);
+            const explicitFields = [...new Set(
+                (Array.isArray(fields) ? fields : [fields])
+                    .map(field => String(field || '').trim())
+                    .filter(Boolean)
+            )];
+            if (!explicitFields.length) return next;
+
+            const fieldProvenance = clone(next.fieldProvenance || {});
+            for (const field of explicitFields) {
+                if (!formalFieldSet.has(field)) continue;
+                const current = fieldProvenance[field] || {};
+                fieldProvenance[field] = {
+                    kind: 'manual',
+                    status: 'manual',
+                    sourceId:
+                        current.sourceId || next?.source?.sourceId || '',
+                    manuallyEdited: true,
+                    manualEditRevision:
+                        (Number.isInteger(current.manualEditRevision)
+                            ? current.manualEditRevision
+                            : 0) + 1
+                };
+            }
+            next.fieldProvenance = fieldProvenance;
+            // Manual edits invalidate any earlier human confirmation on every route,
+            // not only the PDF ones: the edited content must be confirmed again.
+            next.status = 'pending'; next.manualConfirmed = false; next.confirmedAt = null;
+            if (explicitFields.includes('images')) next.imageReviewStatus = next.images?.length ? 'need_confirm' : 'none';
+            // `fieldProvenance` above is the route-independent field-level state carrier;
+            // `pdfExternal.states` / `pdfV1.states` are extra per-field mirrors that only
+            // the PDF containers carry, so mirror into them when present.
+            const states = (next.pdfReview || next.pdfExternal || next.pdfV1)?.states;
+            if (states) for (const field of explicitFields) states[['questionNumber', 'stem', 'options', 'type'].includes(field) ? 'question' : field] = 'manual';
             next.userEdited = true;
             next.manualEdited = true;
             next.updatedAt = clock();
+            return next;
+        };
+
+        const editFields = (draft, changes = {}) => {
+            if (!draft || draft.status === 'submitted') return clone(draft);
+            const next = clone(draft);
+            const changedFields = [];
+            for (const [field, value] of Object.entries(changes || {})) {
+                if (JSON.stringify(next[field]) === JSON.stringify(value)) {
+                    continue;
+                }
+                next[field] = clone(value);
+                changedFields.push(field);
+            }
+            return changedFields.length
+                ? markFieldsManual(next, changedFields)
+                : next;
+        };
+
+        const editField = (draft, field, value) =>
+            editFields(draft, { [field]: value });
+
+        const recordFieldReview = (draft, fields, actorId) => {
+            const next = clone(draft);
+            const reviewedAt = new Date(clock()).toISOString();
+            next.fieldProvenance ||= {};
+            for (const field of fields) {
+                if (!formalFieldSet.has(field)) continue;
+                next.fieldProvenance[field] = {
+                    kind: 'review-confirmed', status: 'review-confirmed', manuallyEdited: false,
+                    sourceId: next.fieldProvenance[field]?.sourceId || next.source?.sourceId || '',
+                    reviewedBy: actorId, reviewedAt
+                };
+            }
+            const states = (next.pdfReview || next.pdfExternal || next.pdfV1)?.states;
+            if (states) for (const field of ['answer', 'solution']) {
+                if (fields.includes(field)) states[field] = 'review-confirmed';
+            }
+            if (states && fields.some(field => ['questionNumber', 'stem', 'options'].includes(field))) {
+                states.question = 'review-confirmed';
+            }
             return next;
         };
 
@@ -59,7 +137,8 @@
         };
 
         const provenanceDisplay = draft => {
-            const provenance = draft?.provenance || draft?.sourceTrace || {};
+            const provenance = draft?.fieldProvenance ||
+                draft?.provenance || draft?.sourceTrace || {};
             return Object.entries(provenance).map(([field, evidence]) => ({
                 field,
                 sourceFile: evidence?.file || evidence?.sourceFileName || '',
@@ -68,13 +147,14 @@
                 engine: evidence?.engine || provenance.engine || '',
                 repair: Boolean(evidence?.repair || evidence?.repaired),
                 manualEdit: Boolean(
-                    evidence?.manualEdit || draft?.manualEdited || draft?.userEdited
+                    evidence?.manualEdit || evidence?.manuallyEdited ||
+                    evidence?.status === 'manual' || evidence?.kind === 'manual'
                 ),
                 decision: evidence?.decision || evidence?.reason || ''
             }));
         };
 
-        const requestValidation = draft => {
+        const requestValidation = (draft, options) => {
             if (typeof validateDraft !== 'function') {
                 return {
                     valid: false,
@@ -87,7 +167,7 @@
             }
             let result;
             try {
-                result = validateDraft(clone(draft));
+                result = validateDraft(clone(draft), options);
             } catch (_error) {
                 return {
                     valid: false,
@@ -122,15 +202,13 @@
             };
         };
 
-        const confirm = draft => {
-            const validation = requestValidation(draft);
+        const confirm = (draft, options) => {
+            const validation = requestValidation(draft, options);
             if (!validation.valid) {
                 return { accepted: false, draft: clone(draft), validation };
             }
             const next = clone(draft);
             next.status = 'reviewed';
-            next.userEdited = true;
-            next.manualEdited = true;
             next.manualConfirmed = true;
             next.confirmedAt = new Date(clock()).toISOString();
             next.updatedAt = clock();
@@ -150,6 +228,9 @@
         return Object.freeze({
             open,
             editField,
+            editFields,
+            markFieldsManual,
+            recordFieldReview,
             addWarning,
             removeWarning,
             provenanceDisplay,

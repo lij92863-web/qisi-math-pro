@@ -1,9 +1,14 @@
 (function (root, factory) {
-    const api = factory();
+    const identityContract = root?.Qisi?.DocxProducerIdentityContract || (
+        typeof module !== 'undefined' && module.exports
+            ? require('./qisi-docx-producer-identity-contract.js')
+            : null
+    );
+    const api = factory(identityContract);
     root.Qisi = root.Qisi || {};
     root.Qisi.FormalAdmissionPolicy = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (identityContract) {
     'use strict';
 
     const ADMISSION_SCHEMA_VERSION = 'qisi.admission.v1';
@@ -12,7 +17,10 @@
         'manual',
         'docx-deterministic',
         'pdf-ai',
-        'imported-package'
+        'imported-package',
+        'deterministic-docx',
+        'deterministic-pdf',
+        'vision-ai'
     ]);
     const FORMAL_FIELDS = Object.freeze([
         'questionNumber',
@@ -24,6 +32,7 @@
     ]);
     const PROVENANCE_STATUSES = Object.freeze([
         'manual',
+        'review-confirmed',
         'deterministic-source',
         'controlled-write',
         'rejected',
@@ -66,10 +75,10 @@
     const requiresAnswer = type => isObjective(type) || /填空|blank/i.test(
         String(type || '')
     );
-    const requiredField = (field, draft) => {
+    const requiredField = (field, draft, context) => {
         if (field === 'questionNumber' || field === 'stem') return true;
         if (field === 'options') return isObjective(draft?.type);
-        if (field === 'answer') return requiresAnswer(draft?.type);
+        if (field === 'answer') return !context.allowMissingAnswer && requiresAnswer(draft?.type);
         return false;
     };
 
@@ -78,10 +87,13 @@
         mode: input.mode || '',
         actorId: input.actorId || '',
         explicitConfirmation: input.explicitConfirmation === true,
+        allowMissingAnswer: input.explicitConfirmation === true && input.allowMissingAnswer === true,
         requestId: input.requestId || '',
         idempotencyKey: input.idempotencyKey || '',
         evaluatedAt: input.evaluatedAt || new Date().toISOString(),
         source: isRecord(input.source) ? input.source : {},
+        producer: isRecord(input.producer) ? input.producer : {},
+        route: isRecord(input.route) ? input.route : {},
         packageSchemaValid: input.packageSchemaValid,
         policyVersion: POLICY_VERSION
     });
@@ -105,7 +117,16 @@
         return { entries: [], duplicateFields: [] };
     };
 
-    const validateContext = (context, draft, errors) => {
+    const modeFamily = mode => {
+        if (mode === 'manual') return 'manual';
+        if (['docx-deterministic', 'deterministic-docx', 'deterministic-pdf']
+            .includes(mode)) return 'deterministic';
+        if (['pdf-ai', 'vision-ai'].includes(mode)) return 'vision';
+        if (mode === 'imported-package') return 'imported-package';
+        return 'unknown';
+    };
+
+    const validateContext = (context, draft, errors, identity) => {
         if (!isRecord(context) || !ADMISSION_MODES.includes(context.mode)) {
             errors.push(errorOf(
                 'admission-mode-unsupported',
@@ -128,15 +149,24 @@
                 'Explicit teacher confirmation is required.'
             ));
         }
-        if (
-            draft?.source?.mode &&
-            String(draft.source.mode) !== String(context.mode)
-        ) {
+        if (!identity || ['invalid', 'legacy-unknown'].includes(identity.status)) {
             errors.push(errorOf(
-                'admission-context-invalid',
-                'source.mode',
-                'Draft source mode does not match admission mode.'
+                'admission-producer-identity-invalid',
+                'producer',
+                'Draft producer identity is missing, unknown, or invalid.',
+                identity?.errors || identity?.status || ''
             ));
+        } else {
+            const expectedMode = identity.status === 'canonical'
+                ? identity.producer?.mode
+                : identity.legacyMode;
+            if (String(expectedMode || '') !== String(context.mode)) {
+                errors.push(errorOf(
+                    'admission-context-invalid',
+                    identity.status === 'canonical' ? 'producer.mode' : 'source.mode',
+                    'Draft producer mode does not match admission mode.'
+                ));
+            }
         }
         if (
             context.mode === 'imported-package' &&
@@ -150,7 +180,92 @@
         }
     };
 
-    const validateFieldDecision = (field, value, provenance, mode, draft, errors) => {
+    const validateCanonicalProvenance = (
+        field, provenance, identity, draft, errors
+    ) => {
+        if (identity?.status !== 'canonical' ||
+            ['manual', 'missing', 'rejected'].includes(provenance.status)) return;
+        let expectedSource = identity.source;
+        let expectedBoundary = identity.source?.format === 'pdf'
+            ? identity.producer?.mode === 'vision-ai'
+                ? 'pdf-vision-engine-output-to-candidate'
+                : 'pdf-deterministic-source-to-candidate'
+            : identity.producer?.mode === 'vision-ai'
+                ? 'docx-vision-engine-output-to-candidate'
+                : 'docx-deterministic-source-to-candidate';
+        if (
+            provenance.sourceId !== identity.source?.sourceId &&
+            identity.source?.format === 'docx' &&
+            identity.producer?.mode === 'deterministic-docx' &&
+            ['answer', 'solution'].includes(field)
+        ) {
+            const support = (draft?.supportSources || []).find(item =>
+                item?.sourceId === provenance.sourceId &&
+                item?.format === 'docx' &&
+                Array.isArray(item?.roles) &&
+                item.roles.includes(field)
+            );
+            if (support) {
+                expectedSource = support;
+                expectedBoundary =
+                    'docx-deterministic-support-to-candidate';
+            }
+        }
+        const pdfV1 = identity.source?.format === 'pdf' && ['pdf-multimodal-v1','pdf-external-v2','pdf-mineru-v1'].includes(identity.producer?.routeId);
+        if (pdfV1 && provenance.sourceId !== identity.source.sourceId && ['answer', 'solution'].includes(field)) {
+            const support = (draft.supportSources || []).find(s => s.sourceId === provenance.sourceId && s.format === 'pdf' && s.roles.includes(field));
+            if (support) { expectedSource = support; expectedBoundary = identity.producer.routeId === 'pdf-mineru-v1' ? 'pdf-mineru-support-to-candidate' : identity.producer.routeId === 'pdf-external-v2' ? 'pdf-external-support-to-candidate' : 'pdf-multimodal-support-to-candidate'; }
+        }
+        if (field === 'images' && Array.isArray(provenance.imageEvidence)) {
+            const evidence = new Map(provenance.imageEvidence.map(item => [item.imageId, item]));
+            const validImages = evidence.size === provenance.imageEvidence.length &&
+                evidence.size === (draft.images || []).length && (draft.images || []).every(image => {
+                    const item = evidence.get(image.id);
+                    if (!item || !item.evidenceRef || item.sourceId !== (image.sourceFileId || identity.source.sourceId)) return false;
+                    if (item.sourceId === identity.source.sourceId) return true;
+                    const support = (draft.supportSources || []).find(source => source.sourceId === item.sourceId &&
+                        source.format === (pdfV1 ? 'pdf' : 'docx') && source.roles.includes(item.field));
+                    return Boolean(support && ['answer', 'solution'].includes(item.field) &&
+                        String(draft[item.field] || '').includes('[[IMAGE:' + image.id + ']]'));
+                });
+            if (!validImages) errors.push(errorOf('admission-producer-provenance-invalid', 'images',
+                'Each DOCX support image requires its own source, role and exact field token.'));
+        }
+        if (
+            (identity.producer?.mode === 'vision-ai' &&
+                provenance.status !== 'controlled-write') ||
+            (identity.producer?.mode === 'deterministic-docx' &&
+                provenance.status !== 'deterministic-source')
+        ) {
+            errors.push(errorOf(
+                'admission-producer-provenance-invalid',
+                field,
+                `Producer mode and provenance kind disagree for ${field}.`
+            ));
+        }
+        if (
+            provenance.kind !== provenance.status ||
+            provenance.sourceId !== expectedSource?.sourceId ||
+            provenance.sourceFormat !== expectedSource?.format ||
+            provenance.producerMode !== identity.producer?.mode ||
+            provenance.routeId !== identity.route?.identity ||
+            !provenance.engine ||
+            provenance.manuallyEdited !== false ||
+            provenance.producerBoundary !== expectedBoundary ||
+            provenance.contractVersion !== identityContract?.CONTRACT_VERSION
+        ) {
+            errors.push(errorOf(
+                'admission-producer-provenance-invalid',
+                field,
+                `Canonical producer-time provenance is invalid for ${field}.`
+            ));
+        }
+    };
+
+    const validateFieldDecision = (
+        field, value, provenance, context, draft, errors, identity
+    ) => {
+        const { mode } = context;
         if (!isRecord(provenance)) {
             errors.push(errorOf(
                 'admission-provenance-missing',
@@ -168,6 +283,17 @@
             ));
             return;
         }
+        if (provenance.kind && provenance.kind !== status) {
+            errors.push(errorOf(
+                'admission-producer-provenance-invalid',
+                field,
+                `Provenance kind and status disagree for ${field}.`
+            ));
+        }
+        if (/\[DOCX不可显示图片:/.test(JSON.stringify(value))) {
+            errors.push(errorOf('admission-field-rejected', field, 'Unconverted DOCX formula or image cannot enter formal data.'));
+            return;
+        }
         const present = hasValue(value);
         if (status === 'rejected') {
             errors.push(errorOf(
@@ -179,7 +305,7 @@
             return;
         }
         if (status === 'missing') {
-            if (present || requiredField(field, draft)) {
+            if (present || requiredField(field, draft, context)) {
                 errors.push(errorOf(
                     'admission-required-field-missing',
                     field,
@@ -209,7 +335,22 @@
             }
             return;
         }
-        if (mode === 'manual') {
+        if (status === 'review-confirmed') {
+            const reviewedTime = Date.parse(provenance.reviewedAt);
+            if (provenance.kind !== status || provenance.manuallyEdited !== false || provenance.manualEditRevision !== undefined ||
+                typeof provenance.reviewedBy !== 'string' || !provenance.reviewedBy.trim() || !Number.isFinite(reviewedTime) ||
+                new Date(reviewedTime).toISOString() !== provenance.reviewedAt ||
+                provenance.engineConfidence !== undefined || provenance.controlledWriteDecisionId !== undefined) {
+                errors.push(errorOf('admission-field-review-invalid', field,
+                    `Field ${field} requires a valid human review record.`));
+            }
+            return;
+        }
+        validateCanonicalProvenance(
+            field, provenance, identity, draft, errors
+        );
+        const family = modeFamily(mode);
+        if (family === 'manual') {
             errors.push(errorOf(
                 'admission-provenance-missing',
                 field,
@@ -217,7 +358,7 @@
             ));
             return;
         }
-        if (mode === 'docx-deterministic' || mode === 'imported-package') {
+        if (family === 'deterministic' || family === 'imported-package') {
             if (status !== 'deterministic-source') {
                 errors.push(errorOf(
                     'admission-provenance-missing',
@@ -233,7 +374,7 @@
             }
             return;
         }
-        if (mode === 'pdf-ai') {
+        if (family === 'vision') {
             if (status !== 'controlled-write') {
                 errors.push(errorOf(
                     'admission-controlled-write-required',
@@ -269,7 +410,10 @@
                 policyVersion: POLICY_VERSION
             });
         }
-        validateContext(context, draft, errors);
+        const identity = typeof identityContract?.resolveIdentity === 'function'
+            ? identityContract.resolveIdentity(draft, { allowLegacyRead: true })
+            : { status: 'invalid', errors: [{ code: 'identity-contract-missing' }] };
+        validateContext(context, draft, errors, identity);
         if (!draft.id || !Number.isInteger(draft.version) || !draft.type) {
             errors.push(errorOf(
                 'admission-context-invalid',
@@ -296,9 +440,10 @@
                 field,
                 draft[field],
                 item,
-                context.mode,
+                context,
                 draft,
-                errors
+                errors,
+                identity
             );
             return {
                 field,
@@ -429,6 +574,18 @@
         const fieldProvenance = Object.fromEntries(
             decision.fieldDecisions.map(item => [item.field, clone(item)])
         );
+        const identity = identityContract.resolveIdentity(
+            draft, { allowLegacyRead: true }
+        );
+        const formalSource = {
+            ...clone(draft.source || {}),
+            ...clone(context.source)
+        };
+        if (identity.status === 'canonical') {
+            delete formalSource.mode;
+        } else {
+            formalSource.mode = context.mode;
+        }
         return immutable({
             id,
             schemaVersion: 'qisi.question.v2',
@@ -439,7 +596,14 @@
             answer: draft.answer || '',
             solution: draft.solution || '',
             images: clone(draft.images || []),
-            source: { ...clone(draft.source || {}), ...clone(context.source), mode: context.mode },
+            source: formalSource,
+            ...(identity.status === 'canonical' ? {
+                producer: clone(draft.producer),
+                route: clone(draft.route),
+                ...(Array.isArray(draft.supportSources)
+                    ? { supportSources: clone(draft.supportSources) }
+                    : {})
+            } : {}),
             admission: {
                 schemaVersion: ADMISSION_SCHEMA_VERSION,
                 decisionId: decision.decisionId,
@@ -449,7 +613,9 @@
                 draftVersion: decision.draftVersion,
                 confirmedBy: context.actorId,
                 confirmedAt: now,
-                idempotencyKey: context.idempotencyKey
+                requestId: context.requestId,
+                idempotencyKey: context.idempotencyKey,
+                ...(context.allowMissingAnswer && !hasValue(draft.answer) ? { allowMissingAnswer: true } : {})
             },
             provenance: fieldProvenance,
             recognition: clone(draft.recognition ?? null),
@@ -462,6 +628,7 @@
             knowledgeType: draft.knowledgeType,
             systemKnowledge: draft.systemKnowledge,
             personalKnowledge: draft.personalKnowledge,
+            ...(Array.isArray(draft.personalKnowledgeIds) ? { personalKnowledgeIds: clone(draft.personalKnowledgeIds) } : {}),
             tags: clone(draft.tags || []),
             meta: clone(draft.meta || {})
         });

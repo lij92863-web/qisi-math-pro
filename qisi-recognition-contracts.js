@@ -1,5 +1,10 @@
 (function (root, factory) {
-    const api = factory();
+    const identityContract = root?.Qisi?.DocxProducerIdentityContract || (
+        typeof module !== 'undefined' && module.exports
+            ? require('./qisi-docx-producer-identity-contract.js')
+            : null
+    );
+    const api = factory(identityContract);
 
     root.Qisi = root.Qisi || {};
     root.Qisi.RecognitionContracts = api;
@@ -14,7 +19,7 @@
     typeof globalThis !== 'undefined'
         ? globalThis
         : this,
-    function () {
+    function (identityContract) {
         'use strict';
 
         const SCHEMA_VERSION = 'qisi.question.v1';
@@ -25,7 +30,10 @@
             'manual',
             'docx-deterministic',
             'pdf-ai',
-            'imported-package'
+            'imported-package',
+            'deterministic-docx',
+            'deterministic-pdf',
+            'vision-ai'
         ]);
         const FORMAL_FIELDS = Object.freeze([
             'questionNumber',
@@ -37,6 +45,7 @@
         ]);
         const PROVENANCE_STATUSES = Object.freeze([
             'manual',
+            'review-confirmed',
             'deterministic-source',
             'controlled-write',
             'rejected',
@@ -186,7 +195,7 @@
             /(?:choice|select|单选|多选|选择)/i.test(String(value || ''));
 
         const isLabelAnswer = value =>
-            /^[A-D](?:[\s,，、]*[A-D])*$/i.test(String(value || '').trim());
+            /^[A-F](?:[\s,，、]*[A-F])*$/i.test(String(value || '').trim());
 
         const resultOf = (errors, warnings = []) => immutable({
             valid: errors.length === 0,
@@ -501,10 +510,13 @@
 
         const requiresV2Field = (field, question) => {
             if (field === 'questionNumber' || field === 'stem') return true;
+            if (question?.admission?.acceptCurrentContent === true) return false;
             if (field === 'options') return isObjectiveType(question?.type);
             if (field === 'answer') {
-                return isObjectiveType(question?.type) ||
-                    /(?:填空|blank)/i.test(String(question?.type || ''));
+                return question?.admission?.allowMissingAnswer !== true && (
+                    isObjectiveType(question?.type) ||
+                    /(?:填空|blank)/i.test(String(question?.type || ''))
+                );
             }
             return false;
         };
@@ -558,13 +570,23 @@
                 errors
             );
 
-            const mode = sourceValid ? question.source.mode : '';
-            if (sourceValid && !ADMISSION_MODES.includes(mode)) {
+            const identity = typeof identityContract?.resolveIdentity === 'function'
+                ? identityContract.resolveIdentity(question, { allowLegacyRead: true })
+                : { status: 'invalid', errors: [] };
+            const mode = identity.status === 'canonical'
+                ? identity.producer?.mode || ''
+                : identity.status === 'legacy-exact'
+                    ? identity.legacyMode || ''
+                    : '';
+            if (sourceValid && (
+                !ADMISSION_MODES.includes(mode) ||
+                ['invalid', 'legacy-unknown'].includes(identity.status)
+            )) {
                 errors.push(errorOf(
                     'invalid-source-mode',
-                    'source.mode',
-                    'Question source mode is unsupported.',
-                    mode
+                    identity.status === 'canonical' ? 'producer.mode' : 'source.mode',
+                    'Question producer identity is unsupported.',
+                    identity.errors || mode
                 ));
             }
             if (sourceValid) {
@@ -742,6 +764,14 @@
                             ));
                         }
                     }
+                    if (item.status === 'review-confirmed' && (
+                        item.kind !== 'review-confirmed' || item.manuallyEdited !== false || item.manualEditRevision !== undefined ||
+                        typeof item.reviewedBy !== 'string' || !item.reviewedBy.trim() || !isIsoUtcTime(item.reviewedAt) ||
+                        item.engineConfidence !== undefined || item.controlledWriteDecisionId !== undefined
+                    )) {
+                        errors.push(errorOf('field-review-invalid', `provenance.${field}`,
+                            `Field ${field} requires a valid human review record.`));
+                    }
                     if (item.status === 'deterministic-source') {
                         if (!item.sourceId || !item.evidenceRef) {
                             errors.push(errorOf(
@@ -752,7 +782,7 @@
                         }
                     }
                     if (item.status === 'controlled-write') {
-                        if (mode !== 'pdf-ai') {
+                        if (!['pdf-ai', 'vision-ai'].includes(mode)) {
                             errors.push(errorOf(
                                 'controlled-write-mode-invalid',
                                 `provenance.${field}`,
@@ -770,6 +800,75 @@
                             ));
                         }
                     }
+                    if (
+                        identity.status === 'canonical' &&
+                        !['manual', 'review-confirmed', 'missing', 'rejected'].includes(item.status)
+                    ) {
+                        let expectedSource = question.source;
+                        let expectedBoundary = question.source?.format === 'pdf'
+                            ? mode === 'vision-ai'
+                                ? 'pdf-vision-engine-output-to-candidate'
+                                : 'pdf-deterministic-source-to-candidate'
+                            : mode === 'vision-ai'
+                                ? 'docx-vision-engine-output-to-candidate'
+                                : 'docx-deterministic-source-to-candidate';
+                        if (
+                            item.sourceId !== question.source?.sourceId &&
+                            question.source?.format === 'docx' &&
+                            mode === 'deterministic-docx' &&
+                            ['answer', 'solution'].includes(field)
+                        ) {
+                            const support = (question.supportSources || [])
+                                .find(source =>
+                                    source?.sourceId === item.sourceId &&
+                                    source?.format === 'docx' &&
+                                    Array.isArray(source?.roles) &&
+                                    source.roles.includes(field)
+                                );
+                            if (support) {
+                                expectedSource = support;
+                                expectedBoundary =
+                                    'docx-deterministic-support-to-candidate';
+                            }
+                        }
+                        const pdfSupportBoundary = {
+                            'pdf-mineru-v1': 'pdf-mineru-support-to-candidate',
+                            'pdf-external-v2': 'pdf-external-support-to-candidate',
+                            'pdf-multimodal-v1': 'pdf-multimodal-support-to-candidate'
+                        }[identity.producer?.routeId];
+                        if (
+                            pdfSupportBoundary &&
+                            item.sourceId !== question.source?.sourceId &&
+                            question.source?.format === 'pdf' &&
+                            ['answer', 'solution'].includes(field)
+                        ) {
+                            const support = (question.supportSources || []).find(source =>
+                                source?.sourceId === item.sourceId &&
+                                source?.format === 'pdf' &&
+                                Array.isArray(source?.roles) && source.roles.includes(field)
+                            );
+                            if (support) {
+                                expectedSource = support;
+                                expectedBoundary = pdfSupportBoundary;
+                            }
+                        }
+                        if (
+                            item.kind !== item.status ||
+                            item.sourceId !== expectedSource?.sourceId ||
+                            item.sourceFormat !== expectedSource?.format ||
+                            item.producerMode !== mode ||
+                            item.routeId !== question.route?.identity ||
+                            !item.engine ||
+                            item.producerBoundary !== expectedBoundary ||
+                            item.contractVersion !== identityContract.CONTRACT_VERSION
+                        ) {
+                            errors.push(errorOf(
+                                'producer-provenance-invalid',
+                                `provenance.${field}`,
+                                `Canonical producer-time provenance for ${field} is invalid.`
+                            ));
+                        }
+                    }
                 }
                 for (const field of Object.keys(question.provenance)) {
                     if (!FORMAL_FIELDS.includes(field)) {
@@ -783,6 +882,7 @@
             }
 
             if (
+                question.admission?.acceptCurrentContent !== true &&
                 isObjectiveType(question.type) &&
                 typeof question.answer === 'string' &&
                 question.answer.trim() &&

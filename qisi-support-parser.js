@@ -274,9 +274,6 @@
                         offset >= range.start &&
                         offset < range.end
                 ) ||
-                pageRanges[
-                    pageRanges.length - 1
-                ] ||
                 null
             );
         };

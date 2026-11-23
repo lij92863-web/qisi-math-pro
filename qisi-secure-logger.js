@@ -9,6 +9,11 @@
         'log', 'warn', 'error', 'info', 'debug', 'table',
         'group', 'groupCollapsed', 'dir', 'trace'
     ];
+    const SAFE_ERROR_NAMES = new Set(['RangeError', 'TypeError', 'ReferenceError', 'SyntaxError', 'AbortError', 'TimeoutError']);
+    const SAFE_ERROR_REASONS = new Map([
+        ['Maximum call stack size exceeded', 'CALL_STACK_EXCEEDED'],
+        ['Failed to fetch', 'FETCH_FAILED']
+    ]);
 
     const safeToken = value => {
         const text = String(value ?? '').trim();
@@ -27,6 +32,12 @@
         for (const item of args || []) {
             if (!item || typeof item !== 'object') continue;
 
+            if (item instanceof Error && SAFE_ERROR_NAMES.has(item.name)) {
+                payload.errorClass = item.name;
+                const reason = SAFE_ERROR_REASONS.get(item.message);
+                if (reason) payload.reason = reason;
+            }
+
             const requestId = safeToken(item.requestId);
             const stage = safeToken(item.stage || item.route);
             const engine = safeToken(item.engine || item.model);
@@ -44,7 +55,9 @@
             stage: payload.stage,
             ...(payload.duration !== undefined ? { duration: payload.duration } : {}),
             ...(payload.engine ? { engine: payload.engine } : {}),
-            ...(payload.code ? { code: payload.code } : {})
+            ...(payload.code ? { code: payload.code } : {}),
+            ...(payload.errorClass ? { errorClass: payload.errorClass } : {}),
+            ...(payload.reason ? { reason: payload.reason } : {})
         }];
     };
 

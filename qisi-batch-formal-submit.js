@@ -6,11 +6,15 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
     'use strict';
 
-    const clone = value => JSON.parse(JSON.stringify(value));
+    const dependencyError = message => Object.assign(
+        new TypeError(message),
+        { code: 'BATCH_FORMAL_SUBMIT_DEPENDENCY_REQUIRED' }
+    );
 
     const createBatchFormalSubmit = ({
         policy,
         repository,
+        createStateMachine,
         clock = () => Date.now(),
         random = () => Math.random()
     } = {}) => {
@@ -18,73 +22,164 @@
             typeof policy?.createAdmissionContext !== 'function' ||
             typeof policy?.evaluateDraftAdmission !== 'function'
         ) {
-            throw new TypeError('Formal Admission Policy is required.');
+            throw dependencyError('Formal Admission Policy is required.');
         }
-        if (typeof repository?.confirmDraftToQuestion !== 'function') {
-            throw new TypeError('Formal question repository is required.');
+        if (
+            typeof repository?.loadDraft !== 'function' ||
+            typeof repository?.confirmDraftToQuestion !== 'function'
+        ) {
+            throw dependencyError('Formal question repository is required.');
         }
-
-        const buildManualFieldProvenance = (draft, field) => {
-            const existing = clone(draft?.fieldProvenance || {});
-            if (!policy.FORMAL_FIELDS.includes(field)) return existing;
-            const current = existing[field] || {};
-            existing[field] = {
-                status: 'manual',
-                sourceId: current.sourceId || draft?.source?.sourceId || '',
-                manualEditRevision:
-                    (Number.isInteger(current.manualEditRevision)
-                        ? current.manualEditRevision
-                        : 0) + 1
-            };
-            return existing;
-        };
-
-        const nextDraftVersion = version =>
-            Number.isInteger(version) ? version + 1 : 1;
+        if (typeof createStateMachine !== 'function') {
+            throw dependencyError('Import State Machine is required.');
+        }
 
         const submit = async ({
             draft,
+            draftId: inputDraftId,
+            batchId = '',
+            expectedDraftVersion: inputExpectedVersion,
             imageRecords = [],
-            actorId = 'local-teacher'
+            actorId = 'local-teacher',
+            requestId: inputRequestId = '',
+            idempotencyKey: inputIdempotencyKey = '',
+            questionId: inputQuestionId = '',
+            signal
         } = {}) => {
+            const draftId = String(inputDraftId || draft?.id || '').trim();
+            const expectedDraftVersion = Number.isInteger(inputExpectedVersion)
+                ? inputExpectedVersion
+                : draft?.version;
+            if (!draftId || !Number.isInteger(expectedDraftVersion)) {
+                const error = new TypeError('Draft identity and version are required.');
+                error.code = 'BATCH_FORMAL_SUBMIT_INPUT_INVALID';
+                throw error;
+            }
+            if (signal?.aborted) {
+                const error = new Error('Formal submission was cancelled.');
+                error.name = 'AbortError';
+                error.code = 'FORMAL_SUBMIT_CANCELLED';
+                throw error;
+            }
+            const freshDraft = await repository.loadDraft(draftId);
+            if (
+                !freshDraft || freshDraft.id !== draftId ||
+                freshDraft.version !== expectedDraftVersion ||
+                (batchId && freshDraft.batchId !== batchId)
+            ) {
+                const error = new Error('Formal submission draft is stale.');
+                error.code = 'BATCH_FORMAL_SUBMIT_STALE_DRAFT';
+                throw error;
+            }
+            if (freshDraft.status !== 'reviewed') {
+                const error = new Error('Draft must be reviewed before submission.');
+                error.code = 'BATCH_FORMAL_SUBMIT_NOT_REVIEWED';
+                throw error;
+            }
             const clockValue = clock();
             const evaluatedAt = new Date(clockValue).toISOString();
-            const requestId = `batch-submit:${draft?.id}:${draft?.version}`;
+            const requestId = inputRequestId ||
+                `batch-submit:${draftId}:${expectedDraftVersion}`;
+            const idempotencyKey = inputIdempotencyKey || requestId;
             const context = policy.createAdmissionContext({
-                mode: draft?.source?.mode || '',
+                mode: freshDraft?.producer?.mode ||
+                    freshDraft?.source?.mode || '',
                 actorId,
                 explicitConfirmation: true,
                 requestId,
-                idempotencyKey: requestId,
+                idempotencyKey,
                 evaluatedAt,
-                source: draft?.source || {}
+                source: freshDraft?.source || {},
+                producer: freshDraft?.producer || {},
+                route: freshDraft?.route || {}
             });
-            const decision = policy.evaluateDraftAdmission(draft, context);
-            if (!decision.accepted) {
-                return { accepted: false, decision };
-            }
-            const questionId = `q_${clockValue}_${random().toString(36).slice(2, 7)}`;
-            const committed = await repository.confirmDraftToQuestion(
-                draft.id,
-                decision,
-                {
-                    expectedDraftVersion: draft.version,
-                    idempotencyKey: requestId,
-                    actorId,
-                    requestId,
-                    questionId,
-                    context,
-                    imageRecords
+            let decision = null;
+            let committed = null;
+            let writeFailure = null;
+            const questionId = inputQuestionId ||
+                `q_${clockValue}_${random().toString(36).slice(2, 7)}`;
+            const machine = createStateMachine({
+                initialState: 'WAITING_CONFIRMATION',
+                commands: {
+                    'teacher-confirm': () => {
+                        decision = policy.evaluateDraftAdmission(
+                            freshDraft,
+                            context
+                        );
+                    },
+                    admitted: async () => {
+                        try {
+                            committed = await repository.confirmDraftToQuestion(
+                                draftId,
+                                decision,
+                                {
+                                    expectedDraftVersion,
+                                    idempotencyKey,
+                                    actorId,
+                                    requestId,
+                                    questionId,
+                                    context,
+                                    imageRecords
+                                }
+                            );
+                        } catch (error) {
+                            if (error?.stage === 'storage') writeFailure = error;
+                            throw error;
+                        }
+                    }
                 }
-            );
-            return { accepted: true, decision, committed };
+            });
+            if (
+                !machine || typeof machine.transition !== 'function' ||
+                typeof machine.snapshot !== 'function'
+            ) throw new TypeError('Import State Machine is malformed.');
+            const trace = [machine.snapshot()];
+            const transition = async trigger => {
+                try {
+                    const snapshot = await machine.transition(trigger);
+                    trace.push(snapshot);
+                    return snapshot;
+                } catch (error) {
+                    trace.push(machine.snapshot());
+                    throw error;
+                }
+            };
+            const stopIfCancelled = async () => {
+                if (!signal?.aborted) return;
+                await transition('cancel');
+                const error = new Error('Formal submission was cancelled.');
+                error.name = 'AbortError';
+                error.code = 'FORMAL_SUBMIT_CANCELLED';
+                throw error;
+            };
+            await stopIfCancelled();
+            await transition('teacher-confirm');
+            await stopIfCancelled();
+            if (!decision.accepted) {
+                await transition('admission-rejected');
+                return {
+                    accepted: false,
+                    decision,
+                    state: machine.snapshot(),
+                    trace: Object.freeze([...trace])
+                };
+            }
+            try {
+                await transition('admitted');
+            } catch (error) {
+                throw writeFailure || error;
+            }
+            await transition('repository-committed');
+            return {
+                accepted: true,
+                decision,
+                committed,
+                state: machine.snapshot(),
+                trace: Object.freeze([...trace])
+            };
         };
 
-        return Object.freeze({
-            buildManualFieldProvenance,
-            nextDraftVersion,
-            submit
-        });
+        return Object.freeze({ submit });
     };
 
     return Object.freeze({ createBatchFormalSubmit });

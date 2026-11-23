@@ -36,7 +36,7 @@
             const fn = utils().cleanDisplayOptionsForBatchSave;
             if (typeof fn === 'function') return fn(options);
             const arr = Array.isArray(options) ? options : ['', '', '', ''];
-            return [0, 1, 2, 3].map(idx => cleanRecognizedText(arr[idx] || ''));
+            return Array.from({ length: Math.max(4, arr.length) }, (_, idx) => cleanRecognizedText(arr[idx] || ''));
         };
 
         const summarizeDraftStatus = drafts => {
@@ -57,10 +57,10 @@
 
         const normalizeDraftPreviewOptions = (question) => {
             const options = Array.isArray(question?.options)
-                ? question.options.slice(0, 4).map(option => String(option || ''))
+                ? question.options.map(option => String(option || ''))
                 : [];
 
-            const normalized = [0, 1, 2, 3].map(index => options[index] || '');
+            const normalized = Array.from({ length: Math.max(4, options.length) }, (_, index) => options[index] || '');
             return normalized.some(option => option.trim())
                 ? normalized
                 : ['', '', '', ''];
@@ -69,10 +69,52 @@
         const normalizeDraftEditorNewlines = (value) =>
             String(value ?? '').replace(/\r\n?/g, '\n');
 
+        const EDITOR_FIELDS = Object.freeze(['stem', 'editorSource', 'type', 'options', 'answer', 'solution', 'grade', 'diff', 'year',
+            'source', 'province', 'tags', 'systemKnowledge', 'personalKnowledge', 'personalKnowledgeIds', 'meta']);
+        const snapshotDraftEditorFields = question => JSON.parse(JSON.stringify(Object.fromEntries(
+            EDITOR_FIELDS.map(key => [key, question?.[key]])
+        )));
+        const applyDraftEditorMetadata = question => {
+            const metadata = { ...(question.meta || {}) };
+            for (const key of ['grade', 'diff', 'year', 'province', 'tags', 'systemKnowledge', 'personalKnowledge', 'personalKnowledgeIds']) {
+                if (question[key] !== undefined) metadata[key] = question[key];
+            }
+            question.meta = metadata;
+        };
+        const draftEditorFieldSignature = question => JSON.stringify(snapshotDraftEditorFields(question));
+        const restoreDraftEditorFields = (question, original) => {
+            for (const key of EDITOR_FIELDS) {
+                if (Object.hasOwn(original || {}, key)) question[key] = JSON.parse(JSON.stringify(original[key]));
+                else delete question[key];
+            }
+        };
+        const splitChoiceSourceForEditor = source => {
+            const text = normalizeDraftEditorNewlines(source), hits = [];
+            const regex = /(^|\n)[ \t　]*([A-FＡ-Ｆa-fａ-ｆ])\s*[.．。、:：)）]/g;
+            let match;
+            while ((match = regex.exec(text))) hits.push({
+                label: match[2].replace(/[Ａ-Ｆａ-ｆ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248)).toUpperCase(),
+                start: match.index + match[1].length, contentStart: regex.lastIndex
+            });
+            const next = new Map(); let best;
+            // Backward DP stores the earliest continuation per label. An earlier next label
+            // leaves every later continuation available, so it dominates all later choices.
+            for (let i = hits.length - 1; i >= 0; i--) {
+                const hit = hits[i], sequence = [hit, ...(next.get(String.fromCharCode(hit.label.charCodeAt(0) + 1)) || [])];
+                next.set(hit.label, sequence);
+                if (hit.label === 'A' && sequence.length >= 2 && (!best || sequence.length >= best.length)) best = sequence;
+            }
+            if (!best || !text.slice(0, best[0].start).trim()) return null;
+            const options = Array.from({ length: Math.max(4, best.length) }, () => '');
+            best.forEach((hit, i) => { options[i] = text.slice(hit.contentStart, best[i + 1]?.start ?? text.length).trim(); });
+            return { stem: text.slice(0, best[0].start).trimEnd(), options };
+        };
+
         const syncActiveDraftEditorFromQuestion = ({
             activeDraftQuestion,
             activeDraftEditorBuffer,
             activeDraftEditorOriginal,
+            activeDraftEditorOriginalFields,
             activeDraftEditorQuestionId,
             buildDraftEditorSource
         } = {}) => {
@@ -81,6 +123,7 @@
             if (!q) {
                 if (activeDraftEditorBuffer) activeDraftEditorBuffer.value = '';
                 if (activeDraftEditorOriginal) activeDraftEditorOriginal.value = '';
+                if (activeDraftEditorOriginalFields) activeDraftEditorOriginalFields.value = {};
                 if (activeDraftEditorQuestionId) activeDraftEditorQuestionId.value = '';
                 return;
             }
@@ -90,6 +133,7 @@
                 : '';
             activeDraftEditorBuffer.value = source;
             activeDraftEditorOriginal.value = source;
+            if (activeDraftEditorOriginalFields) activeDraftEditorOriginalFields.value = snapshotDraftEditorFields(q);
             activeDraftEditorQuestionId.value = q.id || '';
         };
 
@@ -365,6 +409,164 @@
             return output;
         };
 
+        const escapeImageIdForRegExp = (value = '') =>
+            String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        const escapeRegExpForImageId = escapeImageIdForRegExp;
+
+        const extractQisiImageIdFromCode = (source = '') => {
+            const text = String(source || '');
+            const tokenMatch = text.match(/\[\[(?:IMAGE|FORMULA_IMAGE):([^\]]+)\]\]/);
+
+            if (tokenMatch?.[1]) {
+                return String(tokenMatch[1]).trim();
+            }
+
+            const graphicMatch = text.match(/\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}/);
+            return graphicMatch?.[1] ? String(graphicMatch[1]).trim() : '';
+        };
+
+        const normalizeImagePlacementDuplicates = (source = '') => {
+            let output = String(source || '');
+            const protectedBlocks = [];
+            const protectBlock = (block) => {
+                const placeholder = `@@QISI_POSITIONED_IMAGE_${protectedBlocks.length}@@`;
+                protectedBlocks.push(block);
+                return placeholder;
+            };
+
+            output = output.replace(
+                /\\begin\{wrapfigure\}\s*\{[lr]\}\s*\{[^}]+\}[\s\S]*?\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\][\s\S]*?\\end\{wrapfigure\}/g,
+                protectBlock
+            );
+
+            output = output.replace(
+                /\\begin\{(?:center|flushleft|flushright)\}[\s\S]*?\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\][\s\S]*?\\end\{(?:center|flushleft|flushright)\}/g,
+                protectBlock
+            );
+
+            const positionedIds = protectedBlocks
+                .map(extractQisiImageIdFromCode)
+                .filter(Boolean);
+
+            for (const imageId of positionedIds) {
+                const escapedId = escapeRegExpForImageId(imageId);
+                const bareTokenPattern = new RegExp(
+                    `\\n?\\[\\[(?:IMAGE|FORMULA_IMAGE):${escapedId}\\]\\]`,
+                    'g'
+                );
+
+                output = output.replace(bareTokenPattern, '');
+            }
+
+            protectedBlocks.forEach((block, index) => {
+                output = output.replace(`@@QISI_POSITIONED_IMAGE_${index}@@`, block);
+            });
+
+            return output
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+        };
+
+        const migrateLegacyIncludegraphicsToQisiTokens = (source = '', images = []) => {
+            const validIds = new Set(
+                (images || [])
+                    .map(image => String(image?.id || '').trim())
+                    .filter(Boolean)
+            );
+
+            return String(source || '').replace(
+                /\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}/g,
+                (match, rawId) => {
+                    const id = String(rawId || '').trim();
+                    return validIds.has(id) ? `[[IMAGE:${id}]]` : match;
+                }
+            );
+        };
+
+        const ensureLatexPackage = (source = '', packageName = '') => {
+            let output = String(source || '');
+            const name = String(packageName || '').trim();
+
+            if (!name) return output;
+
+            const escapedName = escapeImageIdForRegExp(name);
+            const packagePattern = new RegExp(
+                `\\\\usepackage(?:\\[[^\\]]*\\])?\\{${escapedName}\\}`
+            );
+
+            if (packagePattern.test(output)) {
+                return output;
+            }
+
+            return output.replace(
+                /\\begin\{document\}/,
+                `\\usepackage{${name}}\n\n\\begin{document}`
+            );
+        };
+
+        const ensureImagePackagesForLatex = (source = '') => {
+            let output = String(source || '');
+
+            if (/\\includegraphics|\[\[(?:IMAGE|FORMULA_IMAGE):[^\]]+\]\]/.test(output)) {
+                output = ensureLatexPackage(output, 'graphicx');
+            }
+
+            if (/\\begin\{wrapfigure\}/.test(output)) {
+                output = ensureLatexPackage(output, 'wrapfig');
+            }
+
+            return output;
+        };
+
+        const removeImageTokenFromStemForV2 = (stem = '', imageId = '') => {
+            const id = String(imageId || '').trim();
+            if (!id) return String(stem || '');
+
+            const escapedId = escapeRegExpForImageId(id);
+            let output = String(stem || '');
+            const tokenSource = `\\[\\[(?:IMAGE|FORMULA_IMAGE):${escapedId}\\]\\]`;
+            const includeSource =
+                `\\\\includegraphics` +
+                `(?:\\[[^\\]]*\\])?` +
+                `\\{${escapedId}\\}`;
+
+            const wrapFigurePattern = new RegExp(
+                `\\n?\\\\begin\\{wrapfigure\\}` +
+                `\\s*\\{[lr]\\}` +
+                `\\s*\\{[^}]+\\}` +
+                `[\\s\\S]*?` +
+                `(?:${tokenSource}|${includeSource})` +
+                `[\\s\\S]*?` +
+                `\\\\end\\{wrapfigure\\}`,
+                'g'
+            );
+            const alignedBlockPattern = new RegExp(
+                `\\n?\\\\begin\\{(center|flushleft|flushright)\\}` +
+                `[\\s\\S]*?` +
+                `(?:${tokenSource}|${includeSource})` +
+                `[\\s\\S]*?` +
+                `\\\\end\\{\\1\\}`,
+                'g'
+            );
+            const includeGraphicsPattern = new RegExp(`\\n?${includeSource}`, 'g');
+            const bareTokenPattern = new RegExp(
+                `\\n?${tokenSource}`,
+                'g'
+            );
+
+            output = output
+                .replace(wrapFigurePattern, '')
+                .replace(alignedBlockPattern, '')
+                .replace(includeGraphicsPattern, '')
+                .replace(bareTokenPattern, '');
+
+            return output
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+        };
+
+
         const attachDraftImageTokensIntoStemsForV2 = (drafts = [], draftImages = []) => {
             if (!Array.isArray(drafts) || !drafts.length) return drafts;
 
@@ -402,6 +604,7 @@
         };
 
         return {
+            applyDraftEditorMetadata, snapshotDraftEditorFields, draftEditorFieldSignature, restoreDraftEditorFields, splitChoiceSourceForEditor,
             summarizeDraftStatus,
             normalizeDraftPreviewOptions,
             normalizeDraftEditorNewlines,
@@ -414,6 +617,11 @@
             mergeDocxVisualDraftsByQuestionNumberForV2,
             buildDraftImagePlacementCode,
             shouldInlineDraftImageInStemForV2,
+            appendImageTokensToStemForV2,
+            normalizeImagePlacementDuplicates,
+            migrateLegacyIncludegraphicsToQisiTokens,
+            ensureImagePackagesForLatex,
+            removeImageTokenFromStemForV2,
             attachDraftImageTokensIntoStemsForV2
         };
     }

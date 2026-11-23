@@ -1,5 +1,11 @@
-﻿const { createApp, ref, reactive, watch, onMounted, nextTick, computed, toRaw } = Vue;
-
+(function (root, factory) {
+    const api = factory(root);
+    root.Qisi = root.Qisi || {};
+    root.Qisi.Config = api;
+    if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
+    'use strict';
+﻿
         const PRESET_TEMPLATES = {
             quizSheet: {
                 name: '测验模板',
@@ -118,6 +124,22 @@
                 name: '高考模板',
                 desc: '左侧装订线、绝密标识、考试标题、注意事项与标准大题结构。',
                 config: { title: '2024年普通高等学校招生全国统一考试', subtitle: '理 科 数 学', organizer: '', subject: '理 科 数 学', mode: '普通', paperType: '普通试卷', paperSize: 'A4', fontSize: '小四', fontFamily: '思源宋体', themeColor: '#111827', showDifficulty: false, showSource: false, showAnswer: false, showSolution: false, answerSpace: true, showNotice: true, showScore: true, showQuestionName: false, includeAnswerSection: true, showHeaderFields: false, showAnswerGrid: false, showCornerMarks: false, compactMode: false, showSecretMark: true }
+            },
+            // 讲义类预设：和试卷的区别是「例题下面直接跟解析」，而不是把答案集中印在最后。
+            handoutLesson: {
+                name: '新授课讲义',
+                desc: '例题下方直接跟解析，题间留白，适合课堂上边讲边练。',
+                config: { title: '课 题', subtitle: '', organizer: '', subject: '数学', mode: '讲义', paperType: '教师版', paperSize: 'A4', fontSize: '小四', fontFamily: '思源宋体', themeColor: '#111827', showDifficulty: false, showSource: false, showAnswer: true, showSolution: true, answerSpace: true, showNotice: false, showScore: false, showQuestionName: false, includeAnswerSection: false, showHeaderFields: true, showAnswerGrid: false, answerGridCount: 9, answerLineStart: 10, answerLineCount: 3, showCornerMarks: false, compactMode: false, showSecretMark: false }
+            },
+            handoutReview: {
+                name: '复习讲义',
+                desc: '题量偏大、排版紧凑，带解析，适合单元复习和专题梳理。',
+                config: { title: '专题复习', subtitle: '', organizer: '', subject: '数学', mode: '讲义', paperType: '教师版', paperSize: 'A4', fontSize: '五号', fontFamily: '思源宋体', themeColor: '#111827', showDifficulty: false, showSource: false, showAnswer: true, showSolution: true, answerSpace: false, showNotice: false, showScore: false, showQuestionName: false, includeAnswerSection: false, showHeaderFields: false, showAnswerGrid: false, answerGridCount: 9, answerLineStart: 10, answerLineCount: 3, showCornerMarks: false, compactMode: true, showSecretMark: false }
+            },
+            handoutHomework: {
+                name: '作业纸',
+                desc: '学生版：只有题目和作答空间，不印答案，带班级姓名栏。',
+                config: { title: '课后作业', subtitle: '', organizer: '', subject: '数学', mode: '讲义', paperType: '学生版', paperSize: 'A4', fontSize: '五号', fontFamily: '思源宋体', themeColor: '#111827', showDifficulty: false, showSource: false, showAnswer: false, showSolution: false, answerSpace: true, showNotice: false, showScore: false, showQuestionName: false, includeAnswerSection: false, showHeaderFields: true, showAnswerGrid: false, answerGridCount: 9, answerLineStart: 10, answerLineCount: 3, showCornerMarks: false, compactMode: true, showSecretMark: false }
             }
         };
         const QUESTION_TYPE_LABELS = {
@@ -138,3 +160,8 @@
         const CHINESE_SECTION_NUMBERS = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
 
 
+
+    const pdfPrices = [{ maxInput: 32000, inputYuanPerMillion: 0.2, outputYuanPerMillion: 0.8 }, { maxInput: 256000, inputYuanPerMillion: 0.6, outputYuanPerMillion: 2.4 }, { maxInput: 1000000, inputYuanPerMillion: 1.2, outputYuanPerMillion: 4.8 }];
+    const pdfExternal = { enabled: false, mode: 'parse-organize-text', strictTextSchema: true, wireVersion: 'pdf-external-v2.2', model: 'qwen3.7-flash-2026-07-15', reviewModel: 'qwen3.7-flash-2026-07-15', parserVersion: 'pdf-page-evidence-v2', profileVersion: 'qwen37-simple-model-led-v1', maxPromptBytes: 500000, maxRequestImages: 256, priceCheckedOn: '2026-10-14', priceTiers: pdfPrices, parserPriceTiers: pdfPrices, reviewPriceTiers: pdfPrices, requireCrossWindowLock: true, bindings: { parseUsesRecognizer: true, organizeUsesRecognizer: true, reviewUsesRecognizer: true } };
+    return { PRESET_TEMPLATES, DEFAULT_PRESET_KEY, DEFAULT_TEMPLATE, EXAM_LAYOUT_PRESETS, QUESTION_TYPE_LABELS, DEFAULT_GROUP_CONFIG, EXAM_TYPE_ORDER, CHINESE_SECTION_NUMBERS, pdfExternal };
+});
