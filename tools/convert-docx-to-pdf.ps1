@@ -1,13 +1,34 @@
 param(
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory=$true, ParameterSetName='Convert')]
     [string]$InputPath,
 
-    [Parameter(Mandatory=$true)]
-    [string]$OutputDir
+    [Parameter(Mandatory=$true, ParameterSetName='Convert')]
+    [string]$OutputDir,
+
+    [Parameter(Mandatory=$true, ParameterSetName='Cleanup')]
+    [int]$OwnedWordPid,
+
+    [Parameter(Mandatory=$true, ParameterSetName='Cleanup')]
+    [long]$OwnedWordStart
 )
 
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+if ($PSCmdlet.ParameterSetName -eq 'Cleanup') {
+    $process = Get-Process -Id $OwnedWordPid -ErrorAction SilentlyContinue
+    if ($null -ne $process) {
+        try {
+            [void]$process.Handle
+            if ($process.ProcessName -eq 'WINWORD' -and $process.MainWindowHandle -eq [IntPtr]::Zero -and
+                $process.StartTime.ToUniversalTime().Ticks -eq $OwnedWordStart) {
+                $process.Kill()
+                [void]$process.WaitForExit(4000)
+            }
+        } finally { $process.Dispose() }
+    }
+    exit 0
+}
 
 function Write-JsonAndExit($obj, $code) {
     $json = $obj | ConvertTo-Json -Compress -Depth 10
@@ -35,10 +56,10 @@ try {
     $doc = $null
 
     try {
+        $existingWordPids = @(Get-Process -Name WINWORD -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
         $word = New-Object -ComObject Word.Application
         $word.Visible = $false
         $word.DisplayAlerts = 0
-
         try {
             # 3 = msoAutomationSecurityForceDisable
             $word.AutomationSecurity = 3
@@ -53,6 +74,21 @@ try {
         if ($doc -eq $null) {
             throw "Word failed to open DOCX: document object is null"
         }
+
+        try {
+            Add-Type -Namespace Qisi -Name WordWindow -MemberDefinition @'
+[DllImport("user32.dll")]
+public static extern uint GetWindowThreadProcessId(System.IntPtr window, out uint processId);
+'@
+            [uint32]$wordPid = 0
+            [void][Qisi.WordWindow]::GetWindowThreadProcessId([IntPtr][long]$doc.ActiveWindow.Hwnd, [ref]$wordPid)
+            if ($wordPid -and $wordPid -notin $existingWordPids) {
+                $owned = Get-Process -Id $wordPid
+                if ($owned.ProcessName -eq 'WINWORD') {
+                    [Console]::WriteLine("QISI_WORD_OWNER {0} {1}", $wordPid, $owned.StartTime.ToUniversalTime().Ticks)
+                }
+            }
+        } catch { }
 
         try {
             $doc.ExportAsFixedFormat($pdfPath, 17)

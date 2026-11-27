@@ -18,9 +18,9 @@
     <script src="./vendor/pdfjs/pdf.min.js" integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e" crossorigin="anonymous"></script>
     <script src="./vendor/lucide/lucide.min.js" integrity="sha384-qhUDVxItfTfdldcM+OXATzmed102bu7gbQzEzi7677Xh/Swfmh1R3gajkj18PhRK" crossorigin="anonymous"></script>
     <link rel="stylesheet" href="./qisi-noto-serif-sc.css">
-    <link rel="stylesheet" href="./app.css?v=stageC2-recognition-summary-01">
+    <link rel="stylesheet" href="./app.css?v=middle-scroll-1">
     <link rel="stylesheet" href="./vendor/cropper/cropper.min.css" integrity="sha384-6LFfkTKLRlzFtgx8xsWyBdKGpcMMQTkv+dB7rAbugeJAu1Ym2q1Aji1cjHBG12Xh" crossorigin="anonymous">
-    <link rel="stylesheet" href="./qisi-video-workspace.css?v=entry-workflow-1">
+    <link rel="stylesheet" href="./qisi-video-workspace.css?v=library-scroll-2">
     <link rel="stylesheet" href="./qisi-handout-composer.css?v=paper-coordinates-1">
     <link rel="stylesheet" href="./qisi-figure-editor.css?v=entry-workflow-1">
 </head>
@@ -255,6 +255,7 @@ window.addEventListener('load', () => {
                 </div>
                 <div v-if="!externalMode && !pickMode" class="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 pt-2">
                     <button v-if="isEditing" type="button" class="v-btn small" :disabled="saving || !undoHistory.length" @click="undoEditor" title="Ctrl+Z">撤回</button>
+                    <button v-if="isEditing" type="button" class="v-btn small" :disabled="saving || !redoHistory.length" @click="redoEditor" title="Ctrl+Y 或 Ctrl+Shift+Z">重做</button>
                     <button type="button" @click="handleDelete" :disabled="saving" class="px-2 py-1 text-[11px] font-bold text-gray-600 hover:text-red-600 disabled:opacity-50">
                         移出题库
                     </button>
@@ -276,8 +277,12 @@ window.addEventListener('load', () => {
             <p v-else>题库数据库打开失败。请刷新重试，并确认浏览器允许本地站点保存数据。</p>
             <button v-if="!['blocked','opening'].includes(databaseStatus)" type="button" class="v-btn primary" @click="reloadDatabasePage">刷新页面</button>
         </div>
-        <div v-if="backupStatus.restoring" role="status" class="fixed inset-0 z-[100] bg-white/90 flex items-center justify-center text-lg">正在保护当前数据并恢复备份，请等待完成。</div>
+        <div v-if="backupStatus.restoring" role="status" class="fixed inset-0 z-[100] bg-white/90 flex items-center justify-center text-lg">正在处理备份恢复，请等待完成。</div>
         <div class="app-container" :inert="backupStatus.restoring||!!databaseStatus">
+            <div v-if="backupStatus.needsPermission" class="bg-amber-100 text-amber-900 px-4 py-2 flex gap-3 items-center text-sm" role="status">
+                <span>自动备份已暂停，需要重新授权「{{ backupStatus.folderName }}」。</span>
+                <button type="button" class="border border-amber-700 rounded px-2 py-1" :disabled="backupStatus.busy || backupStatus.reading" @click="backupWorkspace.resumeAutomatic">重新授权</button>
+            </div>
 <header class="v-topnav">
  <button class="v-brand" @click="videoNav('library')"><span class="v-logo">∑</span>奇思数学 <b>LaTeX 题库</b></button>
  <nav aria-label="主导航">
@@ -301,14 +306,14 @@ window.addEventListener('load', () => {
  <span role="alert">讲义和试卷存储暂时不可用，题库仍可使用。</span>
  <button type="button" class="v-btn" @click="initHandoutStorage">重试讲义存储</button>
 </div>
-<div v-if="video.region" class="v-selection-result">
+<div v-if="video.region" class="v-selection-result" v-latex-selection>
  <div class="v-section-title">
   <icon name="scan-text" size="15"></icon> 截图识别结果
   <button class="v-link" :disabled="video.busy" @click="videoRecognize">重新识别选区</button>
   <button v-if="video.region.owner" class="v-link" :disabled="video.assigning || (view==='entry' && video.busy)" @click="videoKeepSelection">保留并继续框选</button>
   <button class="v-link muted" @click="videoCancel" aria-label="关闭截图识别结果">×</button>
  </div>
- <div class="v-result-preview" aria-live="polite">
+ <div class="v-result-preview" aria-live="polite" data-latex-preview="crop">
   <span v-if="video.busy" class="v-muted">正在使用千问 OCR 识别选区…</span>
   <div v-else-if="videoResultOptions" class="v-options">
    <div v-for="(row,i) in videoResultOptions" :key="i"><span>{{row[1]}}.</span><latex-preview :content="row[2]"></latex-preview></div>
@@ -322,7 +327,7 @@ window.addEventListener('load', () => {
   <summary>查看选区 / 修改识别 LaTeX 源码</summary>
   <div class="v-selection-content">
    <img :src="video.region.url" alt="当前框选内容"/>
-   <textarea ref="cropLatex" v-model="video.result" placeholder="点击识别选区，或手动输入识别结果…" aria-label="截图识别结果"></textarea>
+   <textarea ref="cropLatex" v-model="video.result" data-latex-source="crop" placeholder="点击识别选区，或手动输入识别结果…" aria-label="截图识别结果"></textarea>
   </div>
  </details>
  <div v-if="videoStemPlan?.changes?.length && !videoFormatError" class="v-ocr-changes">
@@ -373,6 +378,7 @@ window.addEventListener('load', () => {
                     <p v-if="!backupStatus.folderReady && !backupStatus.lastBackupAt" class="text-xs mt-2 p-2 rounded bg-red-50 text-red-700 font-bold leading-relaxed">还没有设置备份位置：现在没有任何自动备份。题库只存在这台电脑的浏览器里，一旦清理浏览器数据就找不回来了，建议点上面的「选择备份文件夹」。</p>
                     <p v-else-if="backupStatus.folderReady && backupStatus.lastBackupAt && (Date.now() - backupStatus.lastBackupAt > 7 * 86400000)" class="text-xs mt-2 p-2 rounded bg-amber-50 text-amber-800 leading-relaxed">距离上一次成功备份已经超过一周，中间录的题都还没有副本。</p>
                     <p v-if="backupStatus.lastBackupAt" class="text-xs mt-1">最近保存：{{ new Date(backupStatus.lastBackupAt).toLocaleString() }} ｜ {{ backupStatus.lastSavedFile }}</p>
+                    <p v-if="backupStatus.persistence" class="text-xs mt-1">浏览器持久存储：{{ {granted:'已开启',denied:'未获授权',unsupported:'浏览器不支持',unavailable:'状态无法读取'}[backupStatus.persistence] }}</p>
                     <p v-if="backupStatus.busy || backupStatus.reading" class="text-xs mt-2">正在处理，请稍候。</p>
                     <p v-if="backupStatus.notice" class="text-xs text-blue-700 mt-2" role="status">{{ backupStatus.notice }}</p>
                     <p v-if="backupStatus.error" class="text-xs text-red-700 mt-2" role="alert">{{ backupStatus.error }}</p>
@@ -388,20 +394,25 @@ window.addEventListener('load', () => {
                         <label class="block text-xs mt-2"><input type="checkbox" v-model="backupStatus.confirmOverwrite" data-testid="restore-consent" /> 我已核对备份，确认覆盖当前数据库，未包含的数据表保留；备份内的个人设置会同步恢复。</label>
                         <label class="block text-xs mt-2">输入“恢复备份”确认：<input class="border rounded p-1" v-model="backupStatus.confirmWord" data-testid="restore-word" /></label>
                         <p class="text-xs mt-2">恢复前会先把当前数据保存到所选文件夹。请关闭其他窗口中的编辑操作；若检测到新变化，将取消恢复。</p>
-                        <button class="border rounded px-3 py-1 mt-2 text-sm" @click="backupWorkspace.restoreSelected" :disabled="backupStatus.busy || backupStatus.reading || !backupStatus.folderReady || !backupStatus.confirmOverwrite || backupStatus.confirmWord !== '恢复备份'" data-testid="restore-confirm">保护当前数据并恢复</button>
+                        <button class="border rounded px-3 py-1 mt-2 text-sm" @click="backupWorkspace.restoreSelected" :disabled="backupStatus.busy || backupStatus.reading || !backupStatus.confirmOverwrite || backupStatus.confirmWord !== '恢复备份'" data-testid="restore-confirm">保护当前数据并恢复</button>
                         <button class="border rounded px-3 py-1 mt-2 ml-2 text-sm" @click="backupWorkspace.cancelRestore" :disabled="backupStatus.busy || backupStatus.reading">取消恢复</button>
+                        <div v-if="backupStatus.safetyFailed" class="mt-3 rounded bg-amber-50 p-2 text-sm text-amber-900">
+                            <p>当前数据未能保存。可以选择备份文件夹后重试，或使用紧急恢复。</p>
+                            <label class="block mt-2"><input type="checkbox" v-model="backupStatus.confirmWithoutSafety" /> 我明白当前数据将被覆盖，无法撤销。</label>
+                            <button class="border border-amber-700 rounded px-3 py-1 mt-2" @click="backupWorkspace.restoreWithoutSafety" :disabled="backupStatus.busy || backupStatus.reading || !backupStatus.confirmWithoutSafety || !backupStatus.confirmOverwrite || backupStatus.confirmWord !== '恢复备份'">紧急恢复</button>
+                        </div>
                     </div>
                 </section>
 
 
 <section v-show="view==='entry'" class="v-single-entry">
  <video-source ref="entrySource" :locked="video.assigning || (video.busy && !!video.region)" @selection="videoRegion" @stage-crop="videoStageEntryCrop" @insert-crop="videoInsertEntryCrop" @resume="videoResume" @cancel-selection="videoCancelSelection"></video-source>
- <section class="v-entry-right">
+ <section class="v-entry-right" v-latex-selection>
   <div class="v-card v-entry-toolbar"><div class="v-row"><span class="v-entry-heading">编辑单题</span><button v-if="videoEntrySupportLabel" type="button" class="v-btn small" :disabled="!entryForm[entryTab].trim()" @click="videoCopyEntryLatex('entryLatex')">复制{{videoEntrySupportLabel}} LaTeX</button><small v-if="videoEntrySupportLabel && video.latexCopyNotice?.source === 'entryLatex'" role="status">{{video.latexCopyNotice.text}}</small><button v-if="videoCleanEntryStem !== null" class="v-btn small" @click="entryForm.stem = videoCleanEntryStem">整理识别文本</button></div><div class="v-row"><span class="v-muted">学科：高中数学</span><button class="v-btn primary" @click="submitQuestion" aria-label="确认无误，保存入库"><icon name="send" size="14"></icon> 提交题目</button></div></div>
   <div class="v-tabs"><button v-for="t in [{id:'stem',n:'题目内容',icon:'file-text'},{id:'answer',n:'答案内容',icon:'circle-check'},{id:'solution',n:'解析内容',icon:'lightbulb'}]" :key="t.id" :class="{active:entryTab===t.id&&!video.entryExtra}" @click="entryTab=t.id;video.entryExtra=false"><icon :name="t.icon" size="14"></icon>{{t.n}}</button><button :class="{active:video.entryExtra}" @click="video.entryExtra=true">拓展内容</button><button class="v-ai-link" :disabled="video.busy||!videoCanGenerate||!!video.region" @click="videoGenerate">{{video.busy?'生成中…':'AI 补全答案与解析'}}</button></div>
-  <textarea v-if="!video.entryExtra" ref="entryLatex" class="v-source-editor v-card" v-model="entryForm[entryTab]" @select="videoTrackSelection" @click="videoTrackSelection" @keyup="videoTrackSelection" @paste="handleEntryPaste" spellcheck="false" placeholder="框选原卷内容，或在这里输入 LaTeX 源码…" aria-label="单题 LaTeX 源码"></textarea><textarea v-else class="v-source-editor v-card" v-model="video.entryExtraText" placeholder="拓展笔记（当前会话）"></textarea>
+  <textarea v-if="!video.entryExtra" ref="entryLatex" class="v-source-editor v-card" v-model="entryForm[entryTab]" :data-latex-source="entryTab" @select="videoTrackSelection" @click="videoTrackSelection" @keyup="videoTrackSelection" @paste="handleEntryPaste" spellcheck="false" placeholder="框选原卷内容，或在这里输入 LaTeX 源码…" aria-label="单题 LaTeX 源码"></textarea><textarea v-else class="v-source-editor v-card" v-model="video.entryExtraText" data-latex-source="extra" placeholder="拓展笔记（当前会话）"></textarea>
   <p v-if="video.entryCropNotice" class="v-muted" role="status">{{video.entryCropNotice}}</p>
-  <div class="v-card v-entry-preview">
+  <div class="v-card v-entry-preview" :data-latex-preview="video.entryExtra?'extra':entryTab">
    <figure-preview :images="entryForm.images" :disabled="video.entryExtra" removable @layout="videoSetEntryImageLayout" @remove="removeEntryImage">
     <latex-preview :content="video.entryExtra?video.entryExtraText:entryTab==='stem'?entryPreviewStem:entryForm[entryTab]"
      :images="entryForm.images" :flow-options="!video.entryExtra && entryTab==='stem'" :options="entryPreviewOptions" :question-type="entryPreviewType"></latex-preview>
@@ -509,7 +520,7 @@ window.addEventListener('load', () => {
   <div class="v-card v-task-status"><div class="v-row"><icon name="file-text" class="v-red" size="17"></icon><strong>{{activeBatch.title}}</strong><span class="v-status completed">{{batchStatusText(activeBatch.status)}}</span><span>已审核 {{videoCount('reviewed')+videoCount('submitted')}}/{{batchDraftQuestions.length}}</span><div class="v-progress"><i :style="{width:(videoCount('reviewed')+videoCount('submitted'))/Math.max(1,batchDraftQuestions.length)*100+'%'}"></i></div><span>已入库 {{videoCount('submitted')}}/{{batchDraftQuestions.length}}</span></div><div class="v-row"><span class="v-segment"><button :class="{active:!video.overview}" @click="videoOverview(false)">逐题审核</button><button :class="{active:video.overview}" @click="videoOverview(true)">总览</button></span><button class="v-btn small" @click="video.help=true" title="快捷键">⌨</button><details class="v-task-more"><summary title="更多任务操作">⋯</summary><button class="v-btn small" @click="rerunActiveBatchRecognition">重新识别</button></details><button class="v-btn small" @click="videoOverview(false);openBatchList()">← 返回列表</button></div></div>
   <div v-if="!video.overview" :key="activeBatchId" class="v-review-grid">
    <div class="v-source-column"><video-source ref="reviewSource" review :sources="videoSources" :documents="batchImportFiles" :question="activeDraftQuestion" :questions="batchDraftQuestions" @selection="videoRegion" @resume="videoResume" @cancel-selection="videoCancelSelection" @locate="videoSelect"></video-source></div>
-   <section class="v-card v-review-right" v-if="activeDraftQuestion">
+   <section class="v-card v-review-right" v-if="activeDraftQuestion" v-latex-selection>
     <div class="v-compass"><icon name="compass" size="16"></icon><div class="v-compass-list"><button v-for="q in batchDraftQuestions" :key="q.id" :class="{active:q.id===activeDraftQuestionId,done:q.status==='submitted'}" @click="videoSelect(q.id)">{{q.questionNumber||q.order}}<span v-if="q.status==='submitted'">✓</span><i v-else-if="videoDuplicates(q).length">重</i></button></div><small>共 {{batchDraftQuestions.length}} 题</small></div>
     <div class="v-question-heading"><h2>题目 {{activeDraftQuestion.questionNumber||activeDraftQuestion.order}}</h2><span class="v-status pending">{{videoStatus(activeDraftQuestion)}}</span><button v-if="videoDuplicates(activeDraftQuestion).length" class="v-duplicate-tag" @click="video.duplicate=videoDuplicates(activeDraftQuestion)[0]">疑似重复 {{videoDuplicates(activeDraftQuestion).length}}</button><span v-if="activeDraftEditorDirty" class="v-unsaved">未保存</span></div>
     <div class="v-attributes">
@@ -586,18 +597,18 @@ window.addEventListener('load', () => {
     <div v-if="videoSupportField" class="v-review-body batch-editor-card content v-support-editor">
         <div class="v-support-source">
             <label for="review-support-source">{{videoSupportField}} LaTeX 源码</label>
-            <textarea id="review-support-source" :key="activeDraftTab" v-model="activeDraftQuestion[activeDraftTab]" @select="videoTrackSelection" @click="videoTrackSelection" @keyup="videoTrackSelection" :readonly="videoReadOnly" @input="markActiveDraftUserEdited(activeDraftTab)" @keydown.ctrl.s.prevent="saveActiveDraftQuestion" class="v-source-editor" spellcheck="false" :placeholder="'输入'+videoSupportField+'。行内公式用 $…$，独立公式用 $$…$$。'" :aria-label="videoSupportField+'源码'"></textarea>
+            <textarea id="review-support-source" :key="activeDraftTab" v-model="activeDraftQuestion[activeDraftTab]" :data-latex-source="activeDraftTab" @select="videoTrackSelection" @click="videoTrackSelection" @keyup="videoTrackSelection" :readonly="videoReadOnly" @input="markActiveDraftUserEdited(activeDraftTab)" @keydown.ctrl.s.prevent="saveActiveDraftQuestion" class="v-source-editor" spellcheck="false" :placeholder="'输入'+videoSupportField+'。行内公式用 $…$，独立公式用 $$…$$。'" :aria-label="videoSupportField+'源码'"></textarea>
             <p v-if="videoSupportFormatError" class="v-error" role="status">{{videoSupportFormatError}}</p>
         </div>
         <section class="v-question-render v-support-preview" aria-label="渲染预览">
             <h3>渲染预览</h3>
-            <latex-preview v-if="activeDraftQuestion[activeDraftTab]" :content="activeDraftQuestion[activeDraftTab]" :images="activeDraftPreviewImages" preserve-line-breaks></latex-preview>
+            <latex-preview v-if="activeDraftQuestion[activeDraftTab]" :data-latex-preview="activeDraftTab" :content="activeDraftQuestion[activeDraftTab]" :images="activeDraftPreviewImages" preserve-line-breaks></latex-preview>
             <p v-else class="v-preview-empty">输入内容后在这里预览。</p>
         </section>
     </div>
     <div v-else class="v-review-body batch-editor-card content" :class="{split:video.split}">
-        <div v-if="video.split" class="v-code-pane"><textarea ref="activeDraftEditorTextarea" v-model="activeDraftEditorBuffer" @select="videoTrackSelection" @click="videoTrackSelection" @keyup="videoTrackSelection" :readonly="videoReadOnly" spellcheck="false" class="v-source-editor batch-latex-source-editor" aria-label="题目 LaTeX 源码" @keydown.tab.prevent="insertDraftEditorText('    ')" @keydown.ctrl.s.prevent="saveActiveDraftQuestion"></textarea></div>
-        <div class="v-question-render">
+        <div v-if="video.split" class="v-code-pane"><textarea ref="activeDraftEditorTextarea" v-model="activeDraftEditorBuffer" data-latex-source="stem" @select="videoTrackSelection" @click="videoTrackSelection" @keyup="videoTrackSelection" :readonly="videoReadOnly" spellcheck="false" class="v-source-editor batch-latex-source-editor" aria-label="题目 LaTeX 源码" @keydown.tab.prevent="insertDraftEditorText('    ')" @keydown.ctrl.s.prevent="saveActiveDraftQuestion"></textarea></div>
+        <div class="v-question-render" data-latex-preview="stem">
             <latex-preview :content="activeDraftEditorPreview.stem" :images="activeDraftPreviewImages"></latex-preview>
             <div class="v-options"><div v-for="(o,i) in activeDraftEditorPreview.options" :key="i" v-show="String(o||'').trim()"><span>{{activeDraftEditorPreview.optionLabels?.[i]||String.fromCharCode(65+i)}}.</span><latex-preview :content="o" :images="activeDraftPreviewImages"></latex-preview></div></div>
         </div>
@@ -1492,6 +1503,7 @@ window.addEventListener('load', () => {
     <script src="./qisi-storage-repository.js?v=entry-workflow-1"></script>
     <script src="./qisi-batch-formal-submit.js?v=post-r2-correction-r1-submit-01"></script>
     <script src="./qisi-utils.js?v=vector-latex-1"></script>
+    <script src="./qisi-latex-selection.js?v=1"></script>
     <script src="./qisi-library-service.js?v=figure-editor-1"></script>
     <script src="./qisi-production-review-validator.js?v=post-r2-correction-r1-review-validation-01"></script>
     <script src="./qisi-review-controller.js?v=pdf-external-v2-20261013"></script>
@@ -1515,7 +1527,7 @@ window.addEventListener('load', () => {
     <script src="./qisi-db.js?v=tuple-index-v2-01"></script>
     <script src="./qisi-backup.js?v=consistent-backup-01"></script>
     <script src="./qisi-question-ai.js?v=vector-latex-1"></script>
-    <script src="./qisi-components.js?v=vector-latex-1"></script>
+    <script src="./qisi-components.js?v=library-scroll-2"></script>
     <script src="./qisi-file-dispatcher.js?v=white-fix-3"></script>
     <script src="./qisi-docx-ole-reader.js?v=local-mtef-20261001"></script>
     <script src="./qisi-docx-mtef-reader.js?v=local-mtef-20261001"></script>
@@ -1523,7 +1535,6 @@ window.addEventListener('load', () => {
     <script src="./qisi-docx-numbering.js?v=auto-numbering-01"></script>
     <script src="./qisi-batch-importer.js?v=foundation-01"></script>
     <script src="./qisi-batch-engine-v2.js?v=pdf-v1-retirement-20261003"></script>
-    <script src="./qisi-support-parser.js?v=stage1a-support-parser-04"></script>
     <script src="./qisi-support-repair.js?v=stage1a-support-repair-01"></script>
     <script src="./qisi-candidate-normalizer.js?v=app-shell-r3-candidate-normalizer-01"></script>
     <script src="./qisi-pdf-support-aligner.js?v=stageC5A-pdf-support-aligner-01"></script>
@@ -1552,13 +1563,12 @@ window.addEventListener('load', () => {
     <script src="./qisi-figure-editor.js?v=entry-workflow-1"></script>
     <script src="./qisi-page-question-parser.js?v=app-shell-r3-c2-12-01"></script>
     <script src="./qisi-solution-quality-policy.js?v=app-shell-r3-c2-12-01"></script>
-    <script src="./qisi-visual-support-source.js?v=app-shell-r3-c2-12-01"></script>
     <script src="./qisi-support-text-parser.js?v=app-shell-r3-c2-12-01"></script>
     <script src="./qisi-support-latex-policy.js?v=app-shell-r3-c2-12-01"></script>
     <script src="./qisi-recognition-structure-policy.js?v=app-shell-r3-c2-12-01"></script>
     <script src="./qisi-visual-question-source.js?v=entry-workflow-1"></script>
     <script src="./qisi-strict-question-policy.js?v=app-shell-r3-c2-12-01"></script>
-    <script src="./qisi-ui-events.js?v=bmr5-question-gap-warning-01"></script>
+    <script src="./qisi-ui-events.js?v=middle-scroll-1"></script>
     <script src="./qisi-review-draft-state.js?v=bmr3-review-draft-01"></script>
     <script src="./qisi-review-draft-read-model.js?v=r1a-20261022"></script>
     <script src="./qisi-review-image-projection.js?v=r1b-20261022"></script>
@@ -1585,11 +1595,11 @@ window.addEventListener('load', () => {
     <script src="./vendor/cropper/cropper.min.js" integrity="sha384-jrOgQzBlDeUNdmQn3rUt/PZD+pdcRBdWd/HWRqRo+n2OR2QtGyjSaJC0GiCeH+ir" crossorigin="anonymous"></script>
     <script src="./vendor/sortable/Sortable.min.js" integrity="sha384-HZZ/fukV+9G8gwTNjN7zQDG0Sp7MsZy5DDN6VfY3Be7V9dvQpEpR2jF2HlyFUUjU" crossorigin="anonymous"></script>
     <script src="./qisi-handout-layout.js?v=2"></script>
-    <script src="./qisi-handout-document.js?v=paper-coordinates-1"></script>
-    <script src="./qisi-handout-composer.js?v=entry-workflow-1"></script>
+    <script src="./qisi-handout-document.js?v=latex-selection-1"></script>
+    <script src="./qisi-handout-composer.js?v=latex-selection-1"></script>
     <script src="./qisi-clipboard-files.js?v=1"></script>
     <script src="./qisi-crop-ocr-text.js?v=entry-workflow-1"></script>
     <script src="./qisi-video-workspace.js?v=entry-support-latex-1"></script>
-    <script src="./app.js?v=vector-latex-1"></script>
+    <script src="./app.js?v=middle-scroll-1"></script>
 </body>
 </html>

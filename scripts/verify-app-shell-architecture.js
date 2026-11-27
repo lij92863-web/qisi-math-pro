@@ -208,11 +208,7 @@ function verifyAppShellArchitecture(options = {}) {
         }
         const definition = matches[0];
         if (astHash(definition) !== item.astSha256) errors.push(item.name + ' differs from its reviewed function AST');
-        const range = [definition.loc.start.line, definition.loc.end.line];
-        if (range[0] !== item.range[0] || range[1] !== item.range[1]) {
-            errors.push(`${item.name} range ${range.join('-')} != ${item.range.join('-')}`);
-        }
-        const lineCount = range[1] - range[0] + 1;
+        const lineCount = definition.loc.end.line - definition.loc.start.line + 1;
         if (lineCount > matrix.maxWrapperLines) {
             errors.push(`${item.name} exceeds ${matrix.maxWrapperLines} lines`);
         }

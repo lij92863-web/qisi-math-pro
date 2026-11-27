@@ -23,7 +23,8 @@ Before editing files, read:
 4. `ai/ACCEPTANCE_CRITERIA.md`
 5. `ai/TESTING_GUIDE.md`
 6. `ai/CODEX_WORKFLOW.md`
-7. `ai/CODEX_TASK.local.md`
+
+Use the current user request for task scope. Earlier `CODEX_TASK*.md` files and handoffs are historical records unless the user explicitly resumes one.
 
 For domain-specific work, also read the matching skill:
 

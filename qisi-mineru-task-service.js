@@ -4,6 +4,9 @@ const crypto = require('node:crypto');
 const VERSION = 'mineru-extraction-v2';
 const UPLOAD_CONFIRMATION_POLLS = 4;
 const UPLOAD_RECEIVED_STATES = new Set(['uploading', 'pending', 'running', 'converting', 'done', 'failed']);
+const definitelyRejected = status => [401, 403, 429].includes(status);
+const canRetrySubmission = receipt => !receipt?.batchId && receipt?.errorCode === 'MINERU_API_ERROR' &&
+    ['failed', 'rejected'].includes(receipt.state) && definitelyRejected(receipt.httpStatus);
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const fail = (code, stage, extra = {}) => Object.assign(new Error(code), { code, stage, ...extra });
 
@@ -13,6 +16,10 @@ function memoryStore() {
         read: async key => receipts.has(key) ? structuredClone(receipts.get(key)) : null,
         write: async (key, value) => { receipts.set(key, structuredClone(value)); },
         prepare: async (key, value) => { if (!receipts.has(key)) receipts.set(key, structuredClone(value)); return structuredClone(receipts.get(key)); },
+        claimRetry: async (key, value) => {
+            if (!canRetrySubmission(receipts.get(key))) return false;
+            receipts.set(key, structuredClone(value)); return true;
+        },
         writeZip: async (key, bytes) => { archives.set(key, Buffer.from(bytes)); return hash(bytes); },
         readZip: async (key, digest) => {
             const bytes = archives.get(key);
@@ -50,7 +57,10 @@ function createMineruTaskService({ token = '', fetchImpl = fetch, store = memory
             });
             let body;
             try { body = await bounded(() => response.json()); }
-            catch (error) { if (signal.aborted) throw error; throw fail('MINERU_RESPONSE_INVALID', 'response'); }
+            catch (error) {
+                if (signal.aborted) throw error;
+                if (!definitelyRejected(response.status)) throw fail('MINERU_RESPONSE_INVALID', 'response');
+            }
             return { status: response.status, body };
         };
         const delay = () => bounded(() => new Promise(resolve => {
@@ -72,10 +82,11 @@ function createMineruTaskService({ token = '', fetchImpl = fetch, store = memory
                 const projected = await bounded(() => projectZip(zip, { sourceId, filename: receipt.filename }));
                 return { ...projected, job: sourceId, receipt: { batchId: receipt.batchId, state: 'ready', version: VERSION }, timings: { totalMs: Date.now() - startedAt } };
             }
-            if (receipt?.state === 'failed') throw fail(receipt.errorCode || 'MINERU_PARSE_FAILED', receipt.stage || 'failed', {
+            const retry = canRetrySubmission(receipt);
+            if (receipt?.state === 'failed' && !retry) throw fail(receipt.errorCode || 'MINERU_PARSE_FAILED', receipt.stage || 'failed', {
                 ...(receipt.httpStatus ? { httpStatus: receipt.httpStatus } : {}),
                 ...(receipt.mineruCode !== undefined ? { mineruCode: receipt.mineruCode } : {}) });
-            if (receipt && !receipt.batchId && receipt.state !== 'prepared') throw fail('MINERU_SUBMISSION_UNKNOWN', receipt.state);
+            if (receipt && !receipt.batchId && receipt.state !== 'prepared' && !retry) throw fail('MINERU_SUBMISSION_UNKNOWN', receipt.state);
             if (!token) throw fail('MINERU_NOT_CONFIGURED', 'prepared');
             if (!receipt) receipt = await store.prepare(sourceId, { version: VERSION, sourceId, owner,
                 state: 'prepared', filename: String(options.filename || 'upload.pdf').replace(/[\\/:*?"<>|]/g, '_').slice(0, 160), createdAt: startedAt });
@@ -104,15 +115,24 @@ function createMineruTaskService({ token = '', fetchImpl = fetch, store = memory
             };
             let awaitingUploadConfirmation = false;
             if (!receipt.batchId) {
-                if (receipt.owner !== owner) throw fail('MINERU_TASK_BUSY', receipt.state);
-                await save('submitting');
+                if (retry) {
+                    const claimed = { ...receipt, state: 'submitting', owner, updatedAt: Date.now() };
+                    if (!await store.claimRetry(sourceId, claimed)) throw fail('MINERU_TASK_BUSY', receipt.state);
+                    receipt = claimed; stage = 'submitting';
+                } else {
+                    if (receipt.owner !== owner) throw fail('MINERU_TASK_BUSY', receipt.state);
+                    await save('submitting');
+                }
                 const applied = await api('/api/v4/file-urls/batch', { method: 'POST', body: JSON.stringify({
                     enable_formula: true, enable_table: true, language: 'ch', model_version: 'vlm',
                     files: [{ name: receipt.filename, is_ocr: true, data_id: sourceId }]
                 }) });
                 if (applied.status !== 200 || applied.body?.code !== 0) {
-                    await save('failed', { errorCode: 'MINERU_API_ERROR', httpStatus: applied.status,
-                        ...(applied.body?.code !== undefined ? { mineruCode: applied.body.code } : {}) });
+                    if (applied.status >= 500 || applied.status === 408) {
+                        throw fail('MINERU_SUBMISSION_UNKNOWN', 'submitting', { httpStatus: applied.status });
+                    }
+                    await save(definitelyRejected(applied.status) ? 'rejected' : 'failed', {
+                        errorCode: 'MINERU_API_ERROR', httpStatus: applied.status, mineruCode: applied.body?.code });
                     throw fail('MINERU_API_ERROR', 'submitting', { httpStatus: applied.status,
                         ...(applied.body?.code !== undefined ? { mineruCode: applied.body.code } : {}) });
                 }
@@ -209,7 +229,7 @@ function createMineruTaskService({ token = '', fetchImpl = fetch, store = memory
             // persisted receipt already says failed, so the thrown code must agree.
             if (stage === 'submitting' && code !== 'MINERU_API_ERROR') code = 'MINERU_SUBMISSION_UNKNOWN';
             if (stage === 'uploading') code = 'MINERU_UPLOAD_UNKNOWN';
-            if (receipt && !['ready', 'failed'].includes(receipt.state) && (receipt.owner === owner || receipt.batchId)) {
+            if (receipt && !['ready', 'failed', 'rejected'].includes(receipt.state) && (receipt.owner === owner || receipt.batchId)) {
                 const nextState = /UNKNOWN/.test(code) ? 'unknown'
                     : code === 'MINERU_PARSE_TIMEOUT' ? 'interrupted'
                         : signal.aborted ? 'cancelled' : 'interrupted';
@@ -269,4 +289,4 @@ function createMineruTaskService({ token = '', fetchImpl = fetch, store = memory
     return Object.freeze({ parse, readZip });
 }
 
-module.exports = { createMineruTaskService, memoryStore, VERSION };
+module.exports = { createMineruTaskService, memoryStore, canRetrySubmission, VERSION };

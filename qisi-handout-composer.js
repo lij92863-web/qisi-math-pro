@@ -140,7 +140,7 @@
     }
 
     const Field = {
-        props: ['label', 'modelValue', 'kind', 'options', 'min', 'max', 'step'],
+        props: ['label', 'modelValue', 'kind', 'options', 'min', 'max', 'step', 'sourceField'],
         emits: ['update:modelValue'],
         methods: {
             update(event) {
@@ -152,9 +152,9 @@
         template: `<label class="hc-field" :class="{'hc-field-toggle':kind==='check'}">
             <span>{{label}}</span>
             <select v-if="options" :value="modelValue" @change="update"><option v-for="[value, name] in options" :key="value" :value="value">{{name}}</option></select>
-            <textarea v-else-if="kind==='textarea'" :value="modelValue" @input="update" rows="3"></textarea>
+            <textarea v-else-if="kind==='textarea'" :value="modelValue" :data-latex-source="sourceField" @input="update" rows="3"></textarea>
             <input v-else-if="kind==='check'" type="checkbox" :checked="modelValue" @change="update">
-            <input v-else :type="kind||'text'" :value="modelValue" :min="min" :max="max" :step="step||1" @input="update">
+            <input v-else :type="kind||'text'" :value="modelValue" :data-latex-source="sourceField" :min="min" :max="max" :step="step||1" @input="update">
             <output v-if="kind==='range'">{{modelValue}}</output>
         </label>`
     };
@@ -169,7 +169,7 @@
                 modal: '', search: '', importSort: 'basket', importSource: 'basket', importSelected: [], chosenAsset: '', imageTarget: null, copied: [], questionLimit: 60, assetLimit: 48,
                 edit: null, pages: [], revision: 0, rendering: false, printing: false, width: 0, message: '', error: '',
                 layoutImages: new Map(), galleryImages: [], chosenAssetKey: '', studioActive: true,
-                inspectorSize: { min: 0, max: 0, current: 0 }, undoAvailable: false,
+                inspectorSize: { min: 0, max: 0, current: 0 }, undoAvailable: false, redoAvailable: false,
                 labels, modes, fonts, lines, boxStyles, paperOptions: Object.entries(L.papers).map(([key, [name, w, h]]) => [key, w ? `${name} · ${w} × ${h} mm` : name]),
                 savedBodyTemplate: null, templateDraft: null, templateSaving: false, templateModuleId: '',
                 moduleKinds: [['box','带框模块'], ['text','正文段'], ['heading','小节标题']],
@@ -289,7 +289,7 @@
                 if (!this.edit) return '';
                 const previewSupport = ['answer', 'solution'].filter(name => this.s.answerPlacement !== 'inline' ||
                     !(name === 'answer' ? this.s.showAnswer : this.s.showSolution));
-                const s = { ...this.s, showAnswer: true, showSolution: true, answerPlacement: 'inline', previewSupport };
+                const s = { ...this.s, showAnswer: true, showSolution: true, answerPlacement: 'inline', previewSupport, latexSelection: true };
                 return D.wrap(this.edit, this.editorQuestion, s, this.questionIndex(this.edit.id), D.contentParts(this.edit, this.editorQuestion, s));
             },
             editorImages() { return D.imageLayouts(this.edit, this.editorQuestion); }
@@ -300,6 +300,7 @@
                 if (!this.ready) return;
                 if (!this._restoringUndo) {
                     this.undoAvailable = true;
+                    this.redoAvailable = false;
                     clearTimeout(this._undoTimer);
                     // Keep edits from one continuous input or slider gesture together.
                     this._undoTimer = setTimeout(() => this.commitUndo(), 300);
@@ -395,6 +396,8 @@
             this.studioActive = false;
             ++this.revision;
             clearTimeout(this._layoutTimer);
+            cancelAnimationFrame(this._spaceFrame || 0);
+            this._spaceFrame = 0;
             this._layoutImageLease?.release();
             this._layoutImageLease = null;
             this.layoutImages = new Map();
@@ -430,8 +433,10 @@
                 clearTimeout(this._undoTimer);
                 this._undoTimer = null;
                 this._undoPast = [];
+                this._undoFuture = [];
                 this._undoBase = this.undoSnapshot();
                 this.undoAvailable = false;
+                this.redoAvailable = false;
             },
             commitUndo() {
                 if (this._undoTimer == null) return;
@@ -440,6 +445,7 @@
                 const current = this.undoSnapshot();
                 if (this._undoBase !== current) {
                     this._undoPast.push(this._undoBase);
+                    this._undoFuture = [];
                     this._undoBase = current;
                     let characters = this._undoPast.reduce((sum, state) => sum + state.length, 0);
                     while (this._undoPast.length > 30 || (characters > 16_000_000 && this._undoPast.length > 1)) {
@@ -447,17 +453,23 @@
                     }
                 }
                 this.undoAvailable = this._undoPast.length > 0;
+                this.redoAvailable = this._undoFuture.length > 0;
             },
-            undo() {
+            undo() { this.applyHistory(false); },
+            redo() { this.applyHistory(true); },
+            applyHistory(redo) {
                 this.commitUndo();
-                const previous = this._undoPast?.pop();
+                const [from, to] = redo ? [this._undoFuture, this._undoPast] : [this._undoPast, this._undoFuture];
+                const previous = from?.pop();
                 if (!previous) return;
+                to.push(this._undoBase);
                 this._stopPaperDrag?.();
                 this._paperDrop?.clear();
                 const [name, blocks, settings] = JSON.parse(previous);
                 const { zoom, zoomFit, autosave } = this.s;
                 this._undoBase = previous;
                 this.undoAvailable = this._undoPast.length > 0;
+                this.redoAvailable = this._undoFuture.length > 0;
                 this._restoringUndo = true;
                 Object.assign(this.doc, { name, blocks, settings: { ...settings, zoom, zoomFit, autosave } });
                 const ids = new Set(blocks.map(block => block.id));
@@ -468,7 +480,7 @@
                 this.prefixModelDraft = this.currentItem?.prefixModel ?? this.s.prefixModel;
                 if (this.panel === 'style') this.syncStyle();
                 this.$nextTick(() => { this._restoringUndo = false; });
-                this.notice('已撤回上一步');
+                this.notice(redo ? '已重做上一步' : '已撤回上一步');
             },
             studioKey(event) {
                 const target = event.target;
@@ -477,12 +489,13 @@
                     target.closest('textarea, input:not([type=checkbox], [type=radio], [type=range], [type=color])')) return;
                 if (event.key === 'Backspace' || event.key === 'Enter' || event.key === ' ' ||
                     (event.altKey && ['ArrowUp', 'ArrowDown'].includes(event.key))) this.commitUndo();
-                if (this.modal || event.shiftKey || event.altKey || !(event.ctrlKey || event.metaKey)) return;
+                if (this.modal || event.altKey || !(event.ctrlKey || event.metaKey)) return;
                 const key = event.key.toLowerCase();
-                if (key !== 'z' && !(key === 'a' && this.$refs.canvas.contains(target))) return;
+                if (!['z', 'y'].includes(key) && !(key === 'a' && !event.shiftKey && this.$refs.canvas.contains(target))) return;
                 event.preventDefault();
                 event.stopPropagation();
                 if (key === 'a') this.selectKind();
+                else if (key === 'y' || event.shiftKey) this.redo();
                 else this.undo();
             },
             setZoom(value) {
@@ -1333,6 +1346,7 @@
                 this.notice(`已移除 ${before - this.doc.blocks.length} 个重复引用`);
             },
             scheduleLayout() {
+                if (!this.studioActive) return;
                 const revision = ++this.revision;
                 this.rendering = true;
                 clearTimeout(this._layoutTimer);
@@ -1343,7 +1357,7 @@
                 }, 36);
             },
             scheduleSpaceLayout() {
-                if (this._spaceFrame) return;
+                if (!this.studioActive || this._spaceFrame) return;
                 this._spaceFrame = requestAnimationFrame(() => {
                     this._spaceFrame = 0;
                     if (this.ready && this._measured) this.applyMeasured(this._measured, this.geo, this.s);
@@ -1617,6 +1631,7 @@
             <span class="hc-save-state" aria-live="polite">{{dirty?'待保存':saved.some(row=>row.id===doc.id)?'已保存':''}}</span>
             <div class="hc-command-actions">
                 <button class="hc-button" @click="undo" :disabled="!undoAvailable" aria-keyshortcuts="Control+Z Meta+Z" title="撤回上一步（Ctrl+Z）"><icon name="undo-2" size="15"></icon> 撤回</button>
+                <button class="hc-button" @click="redo" :disabled="!redoAvailable" aria-keyshortcuts="Control+Y Control+Shift+Z Meta+Shift+Z" title="重做上一步（Ctrl+Y 或 Ctrl+Shift+Z）"><icon name="redo-2" size="15"></icon> 重做</button>
                 <button class="hc-button" @click="pickImage('crop')">图片处理</button>
                 <button class="hc-button" @click="share" :disabled="!doc.blocks.length"><icon name="share-2" size="15"></icon> 分享{{documentTerm}}</button>
                 <button class="hc-button" @click="print" :disabled="!doc.blocks.length||rendering||printing"><icon name="printer" size="15"></icon> 导出 PDF</button>
@@ -1924,16 +1939,16 @@
                 </template>
 
                 <template v-if="modal==='editor'&&edit">
-                    <div class="hc-edit-grid">
+                    <div class="hc-edit-grid" v-latex-selection>
                         <div class="hc-edit-form">
                             <template v-if="edit.kind==='question'">
-                                <hc-field label="题干 LaTeX" kind="textarea" v-model="edit.override.stem"></hc-field>
+                                <hc-field label="题干 LaTeX" kind="textarea" source-field="stem" v-model="edit.override.stem"></hc-field>
                                 <hc-field label="选项布局" v-model="edit.optionsMode" :options="[['auto','自动'],['4','一行四项'],['2','两列'],['1','一列']]"></hc-field>
-                                <div class="hc-two"><hc-field v-for="(_,i) in edit.override.options" :key="i" :label="'选项 '+String.fromCharCode(65+i)" v-model="edit.override.options[i]"></hc-field></div>
+                                <div class="hc-two"><hc-field v-for="(_,i) in edit.override.options" :key="i" :label="'选项 '+String.fromCharCode(65+i)" :source-field="'option-'+i" v-model="edit.override.options[i]"></hc-field></div>
                                 <button class="hc-button" @click="edit.override.options.push('')" :disabled="edit.override.options.length>=12">添加选项</button>
-                                <hc-field label="答案" kind="textarea" v-model="edit.override.answer"></hc-field><hc-field label="解析" kind="textarea" v-model="edit.override.solution"></hc-field>
+                                <hc-field label="答案" kind="textarea" source-field="answer" v-model="edit.override.answer"></hc-field><hc-field label="解析" kind="textarea" source-field="solution" v-model="edit.override.solution"></hc-field>
                             </template>
-                            <template v-else><hc-field v-if="edit.bodyRole==='theorem'||edit.moduleBox" :label="edit.moduleBox?'模块标题':'定理标题'" v-model="edit.bodyLabel"></hc-field><hc-field label="文本内容" kind="textarea" v-model="edit.text"></hc-field>
+                            <template v-else><hc-field v-if="edit.bodyRole==='theorem'||edit.moduleBox" :label="edit.moduleBox?'模块标题':'定理标题'" v-model="edit.bodyLabel"></hc-field><hc-field label="文本内容" kind="textarea" source-field="text" v-model="edit.text"></hc-field>
                                 <div v-if="edit.moduleBox" class="hc-two"><hc-field v-for="[key,label] in moduleColors.slice(0,3)" :key="key" :label="label" kind="color" v-model="edit.moduleBox[key]"></hc-field><hc-field label="文字色" kind="color" v-model="edit.style.color"></hc-field></div>
                             </template>
                             <button class="hc-button" @click="pickImage('editor')">添加配图</button>

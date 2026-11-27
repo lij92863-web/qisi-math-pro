@@ -9,7 +9,7 @@ const path = require('path');
 // 只读事务（Dexie mode 'r'）不写库，按 Dexie 语义不可能成为第二条写门，因此不计入 1、2。
 
 const REPOSITORY_FILE = 'qisi-storage-repository.js';
-const RUNTIME_FILE_PATTERN = /^qisi-[a-z0-9-]+\.js$|^app\.js$/;
+const RUNTIME_FILE_PATTERN = /^(?:qisi-[a-z0-9-]+|app|review-pane-layout)\.js$/;
 
 function listRuntimeFiles(root) {
     return fs.readdirSync(root, { withFileTypes: true })

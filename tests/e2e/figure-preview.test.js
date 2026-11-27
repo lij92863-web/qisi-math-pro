@@ -48,6 +48,12 @@ test('题库选择题拖图到中间时保留选项网格且保存和刷新不�
         await page.keyboard.press('Control+z');
         await card.locator('.qisi-flow-stacked').waitFor({state:'detached'});
         assert.equal(await undo.isDisabled(), true);
+        const redo = card.getByRole('button', { name: '重做', exact: true });
+        assert.equal(await redo.isEnabled(), true);
+        await page.keyboard.press('Control+Shift+z');
+        await card.locator('.qisi-flow-stacked img:visible').waitFor();
+        await page.keyboard.press('Control+z');
+        await card.locator('.qisi-flow-stacked').waitFor({ state: 'detached' });
         await dragToCenter();
         const editor = card.getByRole('textbox', { name: '题干源码' });
         const source = await editor.inputValue();

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const RUNTIME_FILE = /^(?:qisi-[a-z0-9-]+|app|review-pane-layout)\.js$/;
 function validateInventory({ inventory, actualFiles, browserFiles } = {}) {
     const errors = [];
     if (inventory?.schemaVersion !== 'qisi.runtime-file-inventory.v1' || !Array.isArray(inventory.modules)) {
@@ -7,7 +8,7 @@ function validateInventory({ inventory, actualFiles, browserFiles } = {}) {
     }
     const byFile = new Map();
     for (const item of inventory.modules) {
-        if (!/^qisi-[a-z0-9-]+\.js$|^app\.js$/.test(item?.file || '') ||
+        if (!RUNTIME_FILE.test(item?.file || '') ||
             !['browser', 'node', 'dormant'].includes(item.runtime)) errors.push('invalid-module-record');
         if (byFile.has(item.file)) errors.push(`duplicate-module:${item.file}`);
         byFile.set(item.file, item);
@@ -22,10 +23,10 @@ function validateInventory({ inventory, actualFiles, browserFiles } = {}) {
 }
 function verify(root = path.resolve(__dirname, '..')) {
     const inventory = JSON.parse(fs.readFileSync(path.join(root, 'architecture/runtime-modules.json'), 'utf8'));
-    const actualFiles = fs.readdirSync(root).filter(file => /^qisi-.*\.js$/.test(file) || file === 'app.js');
+    const actualFiles = fs.readdirSync(root).filter(file => /^qisi-.*\.js$/.test(file) || RUNTIME_FILE.test(file));
     const html = fs.readFileSync(path.join(root, 'main.html'), 'utf8');
-    const browserFiles = [...html.matchAll(/<script\b[^>]*src=["']\.\/((?:qisi-[a-z0-9-]+|app)\.js)(?:[?"'])/g)]
-        .map(match => match[1]);
+    const browserFiles = [...html.matchAll(/<script\b[^>]*src=["']\.\/([^"'?]+)(?:[?"'])/g)]
+        .map(match => match[1]).filter(file => RUNTIME_FILE.test(file));
     const result = validateInventory({ inventory, actualFiles, browserFiles });
     for (const file of ['architecture/layers.json', 'docs/architecture/layers.json']) {
         const catalogPath = path.join(root, file);

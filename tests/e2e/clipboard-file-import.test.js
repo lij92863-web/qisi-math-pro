@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { PDFDocument } = require('pdf-lib');
 const { startBrowserApp, getDbSnapshot, assertNoRuntimeErrors } = require('./browser-harness');
 
 const fixture = name => fs.readFileSync(path.join(__dirname, '../fixtures/true-import', name)).toString('base64');
@@ -122,6 +123,33 @@ test('单题录入将剪贴板截图和 PDF 打开为原卷，文本输入保留
             clipboardData: new DataTransfer(), bubbles: true, cancelable: true
         })));
         assert.equal(textPaste, true);
+        assertNoRuntimeErrors(harness);
+    } finally { await harness.close(); }
+});
+
+test('原卷 PDF 按需绘制，翻走释放页面，缩放保留页面节点', { timeout: 60000 }, async () => {
+    const harness = await startBrowserApp(32357);
+    const { page } = harness;
+    try {
+        const pdf = await PDFDocument.create();
+        for (let i = 0; i < 12; i++) pdf.addPage().drawText(`Page ${i + 1}`, { x: 25, y: 50 });
+        await openPage(page, '单题录入');
+        const source = page.locator('.v-single-entry .v-source');
+        await source.locator('input[type=file]').setInputFiles({
+            name: 'lazy-original.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await pdf.save())
+        });
+        const first = source.locator('[data-page="1"] .v-source-page');
+        const last = source.locator('[data-page="12"] .v-source-page');
+        const raster = ':scope > img[draggable="false"]';
+        await first.locator(raster).waitFor({ state: 'attached' });
+        assert.equal(await last.locator(raster).count(), 0);
+        const element = await first.elementHandle();
+        await source.getByRole('button', { name: '原卷缩放 100%' }).click();
+        await source.getByRole('button', { name: '原卷缩放 125%' }).waitFor();
+        assert.equal(await element.evaluate(el => el.isConnected), true);
+        await last.evaluate(el => el.scrollIntoView({ block: 'center' }));
+        await last.locator(raster).waitFor({ state: 'attached' });
+        await first.locator(raster).waitFor({ state: 'detached' });
         assertNoRuntimeErrors(harness);
     } finally { await harness.close(); }
 });

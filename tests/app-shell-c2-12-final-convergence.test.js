@@ -16,6 +16,7 @@ test('AST gate accepts the corrective app-shell responsibility matrix', () => {
     assert.equal(result.decision, 'APP_SHELL_CORRECTIVE_CLOSURE_ACCEPTED');
     assert.equal(result.functionCount, 9);
     assert.deepEqual(result.errors, []);
+    assert.deepEqual(verifyAppShellArchitecture({ appSource: '\n' + read('app.js') }).errors, []);
 });
 
 test('responsibility matrix owns every Program C UI command as a bounded class A wrapper', () => {

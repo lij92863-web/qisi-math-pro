@@ -75,6 +75,24 @@ test('numbering after the question region is left untouched', () => {
     assert.doesNotMatch(tail, /xml:space="preserve">3/);
 });
 
+test('inherited paragraph styles share the declared list and direct cancellation wins', () => {
+    const stylesXml = `<w:styles>
+        <w:style w:type="paragraph" w:styleId="ListBase"><w:pPr>
+            <w:numPr><w:numId w:val="10"/></w:numPr></w:pPr></w:style>
+        <w:style w:type="paragraph" w:styleId="Question"><w:basedOn w:val="ListBase"/></w:style>
+        </w:styles>`;
+    const styled = (text, direct = '') => `<w:p><w:pPr><w:pStyle w:val="Question"/>${direct}</w:pPr>
+        <w:r><w:t>${text}</w:t></w:r></w:p>`;
+    const result = numbering.expand(styled('题目一') +
+        styled('取消编号', '<w:numPr><w:numId w:val="0"/></w:numPr>') +
+        paragraph(10, '题目二') + styled('解析步骤'), numberingXml, { stylesXml, beforeIndex: 3 });
+    assert.equal(result.expanded, 2);
+    assert.equal(result.skipped, 1);
+    assert.match(result.xml, />1\. <\/w:t><\/w:r>\s*<w:r><w:t>题目一/);
+    assert.match(result.xml, />2\. <\/w:t><\/w:r><w:r><w:t>题目二/);
+    assert.doesNotMatch(result.xml, />3\. <\/w:t>/);
+});
+
 test('a paragraph that already types its own number is not prefixed twice', () => {
     const xml = paragraph(10, '1. 已经手打了编号');
     const result = numbering.expand(xml, numberingXml);

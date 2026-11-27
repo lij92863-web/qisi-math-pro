@@ -202,8 +202,8 @@
         return rows;
     }
 
-    // Absence and invalid evidence are different states. Invalid printed tables
-    // must stop conversion, not disappear while another table is accepted.
+    // Absence and invalid evidence are different states. An invalid printed
+    // table cannot contribute answers, even when the archive contains other tables.
     function answerTableFromHtml(html) {
         const rows = tableRows(html);
         const table = {};
@@ -274,8 +274,14 @@
                 if (!entry) throw fail('MINERU_IMAGE_NOT_FOUND');
                 await readZipEntry(zip, entry);
             }
+            let answerTable = null, answerTableIssue;
+            try { answerTable = parseAnswerTable(blocks); }
+            catch (error) {
+                if (error.code !== 'MINERU_ANSWER_TABLE_INVALID') throw error;
+                answerTableIssue = error.code;
+            }
             return { protocol: PROTOCOL, source: { filename, pages: pages.length, sha256: sourceId },
-                pages, evidence, answerTable: parseAnswerTable(blocks),
+                pages, evidence, answerTable, answerTableIssue,
                 notes: [droppedPageNumbers ? `page_number 块已丢弃（${droppedPageNumbers} 个）` : '',
                     retainedUnknown ? `未支持的块已保留，需核查（${retainedUnknown} 个）` : ''].filter(Boolean) };
         } });

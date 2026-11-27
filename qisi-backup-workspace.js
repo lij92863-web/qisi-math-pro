@@ -14,7 +14,8 @@
     };
     function createBackupWorkspace(ports, state = {}) {
         Object.assign(state, { automatic: false, busy: false, reading: false, restoring: false, folderReady: false,
-            folderName: '', folderRemembered: false, preview: null, confirmWord: '', confirmOverwrite: false,
+            folderName: '', folderRemembered: false, needsPermission: false, persistence: '',
+            preview: null, confirmWord: '', confirmOverwrite: false, safetyFailed: false, confirmWithoutSafety: false,
             lastBackupAt: readLastFullBackupAt(),
             lastSavedFile: '', pendingChanges: false, notice: '', error: '', supported: ports.supported === true });
         const timer = ports.setTimer || root.setTimeout, cancelTimer = ports.clearTimer || root.clearTimeout;
@@ -82,17 +83,26 @@
             state.folderName = selected.name || '所选文件夹';
             state.folderRemembered = true;
             state.folderReady = true;
+            state.needsPermission = false;
             state.automatic = automatic;
         };
+        async function checkPersistence() {
+            const storage = ports.storage;
+            if (!storage?.persist) { state.persistence = 'unsupported'; return; }
+            try { state.persistence = await storage.persist() ? 'granted' : 'denied'; }
+            catch { state.persistence = 'unavailable'; }
+        }
         async function start() {
             if (started || disposed) return; started = true;
             ports.mutationEvents.subscribe(onWrites);
+            void checkPersistence();
             try {
                 const saved = await ports.loadFolder?.();
                 if (!saved?.folder || disposed) return;
                 folder = saved.folder;
                 state.folderRemembered = true;
                 state.folderName = folder.name || '所选文件夹';
+                state.needsPermission = saved.automatic === true;
                 if (await folder.queryPermission({ mode: 'readwrite' }) === 'granted' && !disposed) {
                     useFolder(folder, saved.automatic === true);
                     if (state.automatic) markDirty();
@@ -166,8 +176,10 @@
                         blockedRevision = capturedRevision;
                         state.notice = '上次成功备份已保留。数据再次变更后会自动重试，也可手动重试。';
                     } else if (['NotAllowedError', 'SecurityError'].includes(error?.name)) {
+                        state.needsPermission ||= state.automatic;
+                        state.folderReady = false;
                         pauseAutomatic();
-                        state.notice = '自动备份已暂停，请重新选择备份文件夹。';
+                        state.notice = '文件夹权限已失效，请重新授权或选择备份文件夹。';
                     } else {
                         retryDelay = Math.min(15 * 60000, Math.max(interval, retryDelay) * 2);
                         state.notice = '上次成功备份已保留。自动备份稍后会重试。';
@@ -194,16 +206,20 @@
             finally { if (acquired) state.busy = false; schedule(); }
         }
         async function resumeAutomatic() {
+            let acquired = false;
             try {
                 idle();
                 if (!folder) fail('FOLDER_REQUIRED');
+                acquired = true; state.busy = true;
                 if (await folder.requestPermission({ mode: 'readwrite' }) !== 'granted') fail('NotAllowedError');
+                if (disposed) return { ok: false, cancelled: true };
                 useFolder(folder, true);
                 await rememberFolder(true);
-                state.error = '';
+                state.error = ''; state.notice = '';
                 markDirty();
                 return { ok: true };
             } catch (error) { return reportFailure(error); }
+            finally { if (acquired) state.busy = false; schedule(); }
         }
         async function downloadBackup() {
             let acquired = false;
@@ -213,7 +229,10 @@
                 state.notice = '已发起完整备份下载，请确认下载文件已保存。'; state.error = ''; return { ok: true };
             } catch (error) { return reportFailure(error); } finally { if (acquired) state.busy = false; schedule(); }
         }
-        function cancelRestore() { selection++; candidate = null; state.preview = null; state.confirmWord = ''; state.confirmOverwrite = false; }
+        function cancelRestore() {
+            selection++; candidate = null; state.preview = null; state.confirmWord = ''; state.confirmOverwrite = false;
+            state.safetyFailed = false; state.confirmWithoutSafety = false;
+        }
         async function inspectRestoreFile(file) {
             let acquired = false;
             try {
@@ -230,20 +249,27 @@
             } catch (error) { if (acquired) { candidate = null; state.preview = null; } return reportFailure(error); }
             finally { if (acquired) state.reading = false; schedule(); }
         }
-        async function restoreSelected() {
+        async function restoreSelected(withoutSafety = false) {
             let acquired = false, restored = false;
             try {
                 idle(); if (!candidate || state.confirmWord !== '恢复备份' || state.confirmOverwrite !== true) fail('CONFIRMATION_REQUIRED');
-                if (!folder) fail('FOLDER_REQUIRED');
+                if (withoutSafety && (!state.safetyFailed || !state.confirmWithoutSafety)) fail('CONFIRMATION_REQUIRED');
                 acquired = true; state.restoring = true; const selected = candidate;
-                const safety = await backupToFolder('before-restore');
-                if (!safety.ok) return safety;
+                let expectedSnapshot;
+                if (!withoutSafety) {
+                    state.confirmWithoutSafety = false;
+                    const safety = await backupToFolder('before-restore');
+                    state.safetyFailed = !safety.ok;
+                    if (!safety.ok) return safety;
+                    expectedSnapshot = safety.result.snapshot;
+                }
                 const rollbackPreferences = selected.preferences === undefined ? () => {} :
                     ports.backup.restorePreferences(selected.preferences);
-                try { await ports.repository.restoreBackup(selected.backup, { expectedSnapshot: safety.result.snapshot }); }
+                try { await ports.repository.restoreBackup(selected.backup, { expectedSnapshot }); }
                 catch (cause) { rollbackPreferences(); throw cause; }
                 restored = true;
-                cancelRestore(); state.notice = '备份恢复完成。'; pauseAutomatic(); await rememberFolder(false);
+                cancelRestore(); state.notice = '备份恢复完成。'; state.error = ''; state.needsPermission = false;
+                pauseAutomatic(); await rememberFolder(false);
                 await ports.onRestored?.(selected.preferences !== undefined, Object.hasOwn(selected.backup.tables, 'handoutEntries')); return { ok: true };
             } catch (error) { if (restored) { state.notice = '数据已恢复，请手动刷新页面。'; return { ok: true, refreshRequired: true }; } return reportFailure(error); }
             finally { if (acquired) state.restoring = false; schedule(); }
@@ -252,8 +278,9 @@
             disposed = true; pauseAutomatic();
             if (started) ports.mutationEvents.unsubscribe(onWrites);
         }
-        return Object.freeze({ start, dispose, chooseFolder, resumeAutomatic, pauseAutomatic: () => { pauseAutomatic(); return rememberFolder(false); }, downloadBackup, inspectRestoreFile,
-            cancelRestore: () => { if (state.restoring) return reportFailure({ code: 'BACKUP_BUSY' }); cancelRestore(); return { ok: true }; }, restoreSelected, backupNow: () => {
+        return Object.freeze({ start, dispose, chooseFolder, resumeAutomatic, pauseAutomatic: () => { pauseAutomatic(); state.needsPermission = false; return rememberFolder(false); }, downloadBackup, inspectRestoreFile,
+            cancelRestore: () => { if (state.restoring) return reportFailure({ code: 'BACKUP_BUSY' }); cancelRestore(); return { ok: true }; }, restoreSelected: () => restoreSelected(),
+            restoreWithoutSafety: () => restoreSelected(true), backupNow: () => {
                 try { idle(); return backupToFolder('manual'); } catch (error) { return Promise.resolve(reportFailure(error)); }
             } });
     }

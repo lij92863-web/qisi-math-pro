@@ -251,7 +251,7 @@ test('canonical projection resolves fragment answer evidence back to its source 
     }
 });
 
-test('a definite submission rejection is reported as an API failure, not as an unknown receipt', async () => {
+test('a definite submission rejection is reported and a corrected token can retry the same PDF', async () => {
     const store = memoryStore();
     const net = network(await archive(), (url, init) => init.method === 'POST'
         ? { status: 401, json: async () => ({ code: 1001, msg: 'invalid token' }) } : null);
@@ -259,14 +259,42 @@ test('a definite submission rejection is reported as an API failure, not as an u
         code: 'MINERU_API_ERROR', httpStatus: 401
     });
     const receipt = await store.read(sha(pdf));
-    assert.equal(receipt.state, 'failed');
+    assert.equal(receipt.state, 'rejected');
     assert.equal(receipt.errorCode, 'MINERU_API_ERROR');
     assert.equal(receipt.httpStatus, 401);
     assert.equal(receipt.mineruCode, 1001);
-    await assert.rejects(createMineruClient({ token: 'bad', store, ...net }).parse(pdf), {
-        code: 'MINERU_API_ERROR', httpStatus: 401, mineruCode: 1001
-    });
+    const retry = network(await archive());
+    assert.equal((await createMineruClient({ token: 'corrected', store, ...retry }).parse(pdf)).job, sha(pdf));
     assert.equal(net.calls.filter(call => call.method === 'POST').length, 1);
+    assert.equal(retry.calls.filter(call => call.method === 'POST').length, 1);
+});
+
+test('older authentication failures are eligible for a single claimed retry on disk', async t => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'qisi-mineru-retry-'));
+    t.after(() => fs.rm(dir, { recursive: true, force: true }));
+    const store = createMineruTaskStore(dir);
+    const sourceId = sha(pdf);
+    await store.write(sourceId, { version: 'mineru-extraction-v2', sourceId, state: 'failed',
+        errorCode: 'MINERU_API_ERROR', httpStatus: 401, filename: 'legacy.pdf' });
+    const net = network(await archive());
+    const clients = [store, createMineruTaskStore(dir)].map(store =>
+        createMineruClient({ token: 'corrected', store, ...net }));
+    const outcomes = await Promise.allSettled(clients.map(client => client.parse(pdf)));
+    assert.ok(outcomes.some(outcome => outcome.status === 'fulfilled'));
+    assert.equal(net.calls.filter(call => call.method === 'POST').length, 1);
+});
+
+test('an unreadable answer table keeps the extracted question blocks and withholds the table', async () => {
+    const list = [{ page_idx: 0, type: 'text', text: '1. 题' }, {
+        page_idx: 0, type: 'table', table_body: '<table><tr><td>题号</td><td>1</td></tr>' +
+            '<tr><td>答案</td><td></td></tr></table>'
+    }];
+    const net = network(await archive({ 'paper_content_list.json': JSON.stringify(list) }));
+    const result = await createMineruClient({ token: 'offline-token', ...net }).parse(pdf);
+    assert.equal(result.answerTable, null);
+    assert.equal(result.answerTableIssue, 'MINERU_ANSWER_TABLE_INVALID');
+    assert.equal(result.pages[0].blocks[0].text, '1. 题');
+    assert.equal(result.evidence.items.length, 2);
 });
 
 function producerHarness({ configured = true, questionRoles = ['question'], supportRoles = ['answer', 'solution'],

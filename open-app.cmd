@@ -122,10 +122,33 @@ echo.
 echo     This black window will close by itself in 5 seconds.
 echo   ==========================================================
 echo.
+if exist "%APP_DIR%\launcher-browser.local.txt" (
+    findstr /x /i /c:"edge-default" "%APP_DIR%\launcher-browser.local.txt" >nul 2>nul
+    if not errorlevel 1 goto :open_edge
+)
 start "" "%APP_URL%"
+if errorlevel 1 goto :browser_failed
+goto :launch_done
+
+:open_edge
+set "EDGE_EXE="
+if exist "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe" set "EDGE_EXE=%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
+if exist "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" set "EDGE_EXE=%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
+if exist "%LocalAppData%\Microsoft\Edge\Application\msedge.exe" set "EDGE_EXE=%LocalAppData%\Microsoft\Edge\Application\msedge.exe"
+if not defined EDGE_EXE goto :browser_failed
+start "" "%EDGE_EXE%" --profile-directory=Default "%APP_URL%"
+if errorlevel 1 goto :browser_failed
+
+:launch_done
 timeout /t 5 /nobreak >nul 2>nul
 endlocal
 exit /b 0
+
+:browser_failed
+echo   The selected browser could not be opened. Check that it is installed.
+if /i not "%~1"=="/quiet" pause
+endlocal
+exit /b 6
 
 rem ============================================================
 rem  Subroutine: find node.exe
@@ -179,9 +202,9 @@ echo   Port %PORT% is used by another or older Qisi service.
 echo   Close that service, then start this desktop copy again.
 echo   No browser page was opened.
 echo.
-pause
+if /i not "%~1"=="/quiet" pause
 endlocal
-exit /b 1
+exit /b 3
 
 rem ============================================================
 rem  Error paths - plain language, ask the user to call for help
@@ -199,9 +222,9 @@ echo.
 echo     What to do: please send a screenshot of THIS black
 echo     window to the AI assistant who set up this program.
 echo.
-pause
+if /i not "%~1"=="/quiet" pause
 endlocal
-exit /b 1
+exit /b 4
 
 :no_node
 echo.
@@ -216,9 +239,9 @@ echo     What to do: please send a screenshot of THIS black
 echo     window to the AI assistant who set up this program,
 echo     and ask them to install Node.js (the LTS version).
 echo.
-pause
+if /i not "%~1"=="/quiet" pause
 endlocal
-exit /b 1
+exit /b 5
 
 :start_failed
 echo.
@@ -239,6 +262,6 @@ echo     Quick check: close this window and double click the
 echo     launcher icon one more time. If it fails again, please
 echo     ask for help as described above.
 echo.
-pause
+if /i not "%~1"=="/quiet" pause
 endlocal
 exit /b 1

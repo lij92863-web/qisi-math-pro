@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const Formula=require('../qisi-docx-formula-source.js');
-const {validateEquations}=require('../qisi-mathtype-local-service.js');
+const {validateEquations, createNativeTranslator}=require('../qisi-mathtype-local-service.js');
 const {buildOleContainer,equationNativeStream}=require('./helpers/ole-container.js');
 const tex=source=>{const b=Buffer.from('TeX Input Language\0'+source+'\0','latin1');return Buffer.concat([Buffer.from([5,1,0,7,8]),Buffer.from('DSMT7\0'),Buffer.from([1,102,b.length]),b,Buffer.from([0])]);};
 const object=id=>`<w:object><o:OLEObject ProgID="Equation.DSMT4" r:id="${id}"/></w:object>`;
@@ -26,6 +26,29 @@ test('missing equation bytes remain unresolved and local endpoint rejects bad ID
  const row={id:'r1',mtefBase64:tex('x').toString('base64')};assert.equal(validateEquations({equations:[row]}),true);
  assert.equal(validateEquations({equations:[row,row]}),false);assert.equal(validateEquations({equations:[{...row,id:'../ bad'}]}),false);
  assert.equal(validateEquations({equations:Array.from({length:513},(_,i)=>({...row,id:'r'+i}))}),false);
+});
+
+test('a timed-out native translator is retried on the next document', async () => {
+ const { EventEmitter } = require('node:events');
+ const fs = require('node:fs');
+ let calls = 0;
+ const translate = createNativeTranslator(process.cwd(), {
+  timeoutMs: 20,
+  spawnProcess: (_program, args) => {
+   const child = new EventEmitter();
+   child.kill = () => child.emit('exit', null);
+   if (++calls === 2) setImmediate(() => {
+    const output = args[args.indexOf('-OutputPath') + 1];
+    fs.writeFileSync(output, JSON.stringify({ equations: [{ id: 'r1', ok: true, latex: 'x' }] }));
+    child.emit('exit', 0);
+   });
+   return child;
+  }
+ });
+ const rows = [{ id: 'r1', mtefBase64: tex('x').toString('base64') }];
+ assert.equal((await translate(rows)).equations[0].code, 'MATHTYPE_NATIVE_TIMEOUT');
+ assert.equal((await translate(rows)).equations[0].latex, 'x');
+ assert.equal(calls, 2);
 });
 
 test('role-only full DOCX keeps OMML, MathType and formula letters through normal review', {timeout:60000},async()=>{

@@ -65,14 +65,36 @@ test('saved folder resumes after restart or asks for permission to the same fold
         await workspace.start();
         assert.equal(state.folderRemembered, true);
         assert.equal(state.automatic, initial === 'granted');
+        assert.equal(state.needsPermission, initial === 'prompt');
         if (initial === 'prompt') assert.equal((await workspace.resumeAutomatic()).ok, true);
         assert.equal(state.folderReady, true);
         assert.equal(state.automatic, true);
+        assert.equal(state.needsPermission, false);
         assert.equal(picks, 0);
         await workspace.pauseAutomatic();
         assert.equal(saved.automatic, false);
         workspace.dispose();
     }
+});
+test('emergency restore requires a verified candidate, a failed safety backup and separate consent', async () => {
+    const h = harness();
+    let restores = 0;
+    h.ports.repository.restoreBackup = async (backup, options) => {
+        assert.equal(backup.tables.questions[0].id, 'old');
+        assert.equal(options.expectedSnapshot, undefined);
+        restores++;
+    };
+    await h.workspace.inspectRestoreFile({ name: 'fixture.zip' });
+    h.state.confirmOverwrite = true;
+    h.state.confirmWord = '恢复备份';
+    assert.equal((await h.workspace.restoreWithoutSafety()).code, 'CONFIRMATION_REQUIRED');
+    assert.equal((await h.workspace.restoreSelected()).code, 'FOLDER_REQUIRED');
+    assert.equal(h.state.safetyFailed, true);
+    assert.equal((await h.workspace.restoreWithoutSafety()).code, 'CONFIRMATION_REQUIRED');
+    h.state.confirmWithoutSafety = true;
+    assert.equal((await h.workspace.restoreWithoutSafety()).ok, true);
+    assert.equal(restores, 1);
+    assert.equal(h.state.safetyFailed, false);
 });
 test('new changes during compression stay pending and concurrent calls cannot clear its busy flag',async()=>{
  const h=harness();await h.workspace.chooseFolder();let release;h.ports.block=new Promise(resolve=>release=resolve);

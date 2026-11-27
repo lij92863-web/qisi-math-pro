@@ -29,7 +29,7 @@
             maxEntryUncompressedBytes: 64 * MB,
             maxCompressionRatio: 100,
             inputExtensions: ['zip'],
-            inputMimes: ZIP_MIMES,
+            inputMimes: [...ZIP_MIMES, 'application/x-zip', 'application/x-compressed', 'application/force-download'],
             allowedEntry: path =>
                 /^(?:manifest\.json|tables\/[a-zA-Z0-9._-]+\.json|image-blobs\/[a-zA-Z0-9._-]+\.(?:png|jpe?g|gif|webp|svg|bmp|bin))$/i.test(path)
         },

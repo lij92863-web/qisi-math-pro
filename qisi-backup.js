@@ -94,7 +94,7 @@
             anchor.click();
             anchor.remove();
 
-            setTimeout(() => URL.revokeObjectURL(url), 1500);
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
         };
 
         const readZipJson = async (zip, path) => {

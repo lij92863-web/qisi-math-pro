@@ -104,9 +104,9 @@ test('app shell assembles owners but contains zero AI proxy requests', () => {
     assert.match(app, /createProductionOcrRuntime\s*\(/);
     assert.doesNotMatch(app, /Qisi\.OcrQwenAdapter/);
     assert.doesNotMatch(app, /qwenTaskClient\.(?:ocrText|chatText|chatJson)\s*\(/);
-    assert.match(
+    assert.doesNotMatch(
         app,
-        /createVisualSupportSource\s*\(\{[\s\S]*?qwenTaskClient[\s\S]*?\}\)/
+        /createVisualSupportSource\s*\(/
     );
     assert.match(visualSupport, /qwenTaskClient\.chatJson\s*\(/);
     const source = fs.readFileSync(

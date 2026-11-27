@@ -14,6 +14,7 @@
     const { Icon, LatexPreview, KnowledgeTree, QuestionCard, renderQuestionOptionsHtml, renderLatexPreviewHtml } = root.Qisi.Components;
 ﻿        const App = {
             components: { Icon, LatexPreview, KnowledgeTree, QuestionCard },
+            mixins: Qisi.VideoWorkspace ? [Qisi.VideoWorkspace.workspace] : [],
             setup() {
                 console.log('当前运行版本：batch-refactor-01-DOCX批量录题模块拆分');
                 const storageRepository = Qisi.StorageRepository.createRepository(db, {
@@ -931,7 +932,7 @@
                         return window.location.origin;
                     }
 
-                    return 'http://localhost:3000';
+                    return 'http://127.0.0.1:3000';
                 };
 
                 window.__qisiCheckLocalConvert = async function () {
@@ -971,7 +972,7 @@
                     jpegQuality: 0.86
                 };
                 const DOCX_TEXT_ONLY_WARNING =
-                    '当前 Word 文件未能通过本地服务转成 PDF，只能使用文本层兜底，复杂公式和选项可能不完整。请确认已运行 npm start，并从 http://localhost:3000/main.html 打开软件。';
+                    '当前 Word 文件未能转成 PDF。文本识别可能漏掉复杂公式和选项，请用桌面的「启动奇思数学」打开后再试。';
                 let activeRecognitionMode = 'standard';
                 let activeBatchCostStats = null;
 
@@ -1415,28 +1416,6 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         pdfProcessConfig: PDF_PROCESS_CONFIG
                     });
                 const { renderPdfFilePages } = browserPdfRenderer;
-
-                const visualSupportSource =
-                    Qisi.VisualSupportSource.createVisualSupportSource({
-                        normalizeQuestionKey,
-                        normalizeAnswerForLatex,
-                        normalizeRecognizedSupportLatex,
-                        extractGraphicRefs,
-                        extractAnswerArray,
-                        extractSolutionArray,
-                        cleanRecognizedText,
-                        buildSupportLeadingMissingBlockEvidence,
-                        parseAnswerAndSolutionItemsFromText,
-                        recognizePageAsDocumentText,
-                        attachPdfPageTrace:
-                            Qisi.PdfSafePartialPipeline.attachPdfPageTrace,
-                        getBatchFileRoles,
-                        logBatchPdfDiag,
-                        qwenTaskClient
-                    });
-                const {
-                    recognizeVisualSupportFromPreparedPages
-                } = visualSupportSource;
 
                 const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
                     const reader = new FileReader();
@@ -2493,7 +2472,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     finally { tempCleanup.busy = false; }
                 };
                 const backupWorkspace = Qisi.BackupWorkspace.createBackupWorkspace({
-                    database: db, backup: Qisi.Backup, repository: storageRepository,
+                    database: db, backup: Qisi.Backup, repository: storageRepository, storage: navigator.storage,
                     handoutsReady: () => handoutStatus.value === '',
                     supported: typeof window.showDirectoryPicker === 'function',
                     mutationEvents,
@@ -2523,7 +2502,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     anchor.href = url;
                     anchor.download = `qisi-question-backup-${Date.now()}.json`;
                     anchor.click();
-                    URL.revokeObjectURL(url);
+                    setTimeout(() => URL.revokeObjectURL(url), 60000);
                 };
 
                 const migrateSafeQuestionLatexData = questionMaintenance.migrate;
@@ -2692,11 +2671,6 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         if (databaseStatus.value === 'blocked') databaseStatus.value = 'opening';
                         await initHandoutStorage();
                         await backupWorkspace.start();
-                        try {
-                            if (navigator.storage?.persist) await navigator.storage.persist();
-                        } catch (error) {
-                            console.warn('持久化存储权限申请被跳过', error);
-                        }
                         await loadData();
                         examWorkspace.restore();
                         templateWorkspace.restore();
@@ -2850,25 +2824,6 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                         });
                     }
                     await loadData(q ? 'library' : 'all');
-                };
-
-                const installLatexDisplayNormalizer = () => {
-                    if (!LatexPreview?.computed?.htmlContent || LatexPreview.__qisiDisplayLatexNormalizerInstalled) return;
-                    const originalHtmlContent = LatexPreview.computed.htmlContent;
-                    LatexPreview.computed.htmlContent = function () {
-                        return originalHtmlContent.call({
-                            // Vue component instances expose computed properties through accessors.
-                            // Spreading the instance reads htmlContent again and recurses.
-                            questionType: this.questionType,
-                            flowOptions: this.flowOptions,
-                            content: window.Qisi.Utils.normalizeBareLatexForDisplayText(this.content),
-                            options: window.Qisi.Utils.normalizeBareLatexForDisplayOptions(this.options),
-                            images: this.images || [],
-                            displayImages: this.displayImages,
-                            preserveLineBreaks: this.preserveLineBreaks
-                        });
-                    };
-                    LatexPreview.__qisiDisplayLatexNormalizerInstalled = true;
                 };
 
                 window.__qisiLatexDisplayNormalizeSelfTest = function () {
@@ -3027,7 +2982,9 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
                     });
                 }
 
-                installLatexDisplayNormalizer();
+                const middleButtonScroll = Qisi.UiEvents.createMiddleButtonScroll(root.document);
+                watch(view, middleButtonScroll.stop);
+                Vue.onUnmounted(middleButtonScroll.dispose);
 
                 return {
                     videoCropFigure: input => reviewImageCommands.crop({ ...input, token: reviewImageCommands.captureCrop(input.source) }),
@@ -3095,6 +3052,7 @@ const logBatchPdfDiag = (stage, payload = {}, level = 'log') => {
 
                 const app = createApp(App);
                 root.Qisi.FigureEditor?.install(app);
+                Qisi.LatexSelection?.install(app);
                 if (Qisi.VideoWorkspace) Qisi.VideoWorkspace.install(app);
                 app.config.errorHandler = (error, instance, info) => {
                     console.error('Vue 运行错误已捕获', { error, info, instance });

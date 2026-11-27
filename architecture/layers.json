@@ -1116,7 +1116,7 @@
         "app-shell",
         "storage-repository"
       ],
-      "status": "production-wired"
+      "status": "deprecated"
     },
     {
       "id": "support-repair",
@@ -1726,7 +1726,7 @@
         "storage-repository",
         "formal-admission"
       ],
-      "status": "production-wired"
+      "status": "deprecated"
     },
     {
       "id": "app-shell",

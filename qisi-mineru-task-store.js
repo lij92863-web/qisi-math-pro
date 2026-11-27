@@ -3,6 +3,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { canRetrySubmission } = require('./qisi-mineru-task-service');
 
 // Only transport receipts and immutable extraction ZIPs live here. Draft and
 // formal assets continue to belong to the existing application repositories.
@@ -33,6 +34,20 @@ function createMineruTaskStore(directory) {
         await fs.rename(pending, file(key, '.zip'));
         return crypto.createHash('sha256').update(bytes).digest('hex');
     }
+    async function claimRetry(key, receipt) {
+        const lockPath = file(key, '.retry-lock');
+        let lock;
+        try { lock = await fs.open(lockPath, 'wx'); }
+        catch (error) { if (error.code === 'EEXIST') return false; throw error; }
+        try {
+            if (!canRetrySubmission(await read(key))) return false;
+            await write(key, receipt);
+            return true;
+        } finally {
+            await lock.close();
+            await fs.unlink(lockPath);
+        }
+    }
     async function readZip(key, digest) {
         const bytes = await fs.readFile(file(key, '.zip'));
         if (crypto.createHash('sha256').update(bytes).digest('hex') !== digest) {
@@ -40,7 +55,7 @@ function createMineruTaskStore(directory) {
         }
         return bytes;
     }
-    return Object.freeze({ read, write, prepare, writeZip, readZip });
+    return Object.freeze({ read, write, prepare, claimRetry, writeZip, readZip });
 }
 
 module.exports = { createMineruTaskStore };

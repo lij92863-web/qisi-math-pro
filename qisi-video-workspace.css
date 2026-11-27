@@ -479,6 +479,22 @@ body{font-family:'Microsoft YaHei','Segoe UI',sans-serif;font-size:14px;line-hei
     line-height: 1.6;
 }
 
+.library-layout .question-card {
+    transition: none;
+}
+
+.library-layout .question-card:hover {
+    transform: none;
+}
+
+@media screen {
+    .library-support-chunk {
+        content-visibility: auto;
+        contain-intrinsic-block-size: auto var(--library-support-height);
+        overflow-x: auto;
+    }
+}
+
 @media (max-width: 1180px) {
     .library-layout .library-search-bar {
         grid-template-columns: repeat(3, minmax(0, 1fr));

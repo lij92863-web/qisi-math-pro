@@ -359,6 +359,10 @@
       "runtime": "browser"
     },
     {
+      "file": "qisi-latex-selection.js",
+      "runtime": "browser"
+    },
+    {
       "file": "qisi-figure-editor.js",
       "runtime": "browser"
     },
@@ -436,7 +440,7 @@
     },
     {
       "file": "qisi-support-parser.js",
-      "runtime": "browser"
+      "runtime": "dormant"
     },
     {
       "file": "qisi-support-repair.js",
@@ -468,7 +472,7 @@
     },
     {
       "file": "qisi-visual-support-source.js",
-      "runtime": "browser"
+      "runtime": "dormant"
     },
     {
       "file": "qisi-mineru-evidence.js",
@@ -588,6 +592,10 @@
     },
     {
       "file": "qisi-video-workspace.js",
+      "runtime": "browser"
+    },
+    {
+      "file": "review-pane-layout.js",
       "runtime": "browser"
     }
   ]

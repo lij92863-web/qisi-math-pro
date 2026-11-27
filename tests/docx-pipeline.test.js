@@ -63,6 +63,8 @@ test('BMR2: extracts DOCX table fallback option text', () => {
         'A. alpha B. beta C. gamma D. delta'
     );
     assert.equal(extractDocxTableTextFallback('<w:p />'), '');
+    const dataRow = '<w:tbl><w:tr>' + ['组别', '人数', '均值', '方差'].map(cell).join('') + '</w:tr></w:tbl>';
+    assert.equal(extractDocxTableTextFallback(dataRow), '组别 人数 均值 方差');
 });
 
 test('BMR2: parses relationship targets and media MIME safely', () => {

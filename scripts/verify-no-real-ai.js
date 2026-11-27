@@ -112,7 +112,7 @@ function collectScanFiles() {
     const files = [];
 
     for (const name of fs.readdirSync(rootDir)) {
-        if (isScannableFile(name) && (/^qisi-.*\.(js|cjs)$/.test(name) || name === 'app.js')) {
+        if (isScannableFile(name) && (/^qisi-.*\.(js|cjs)$/.test(name) || ['app.js', 'review-pane-layout.js'].includes(name))) {
             files.push(path.join(rootDir, name));
         }
     }

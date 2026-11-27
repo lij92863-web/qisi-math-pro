@@ -322,10 +322,10 @@
                         displayMode: Boolean(segment.displayMode),
                         throwOnError: true,
                         // KaTeX distinguishes prose in math mode from text inside \text{}.
-                        strict: (code, _message, token) => {
+                        strict: /\p{Script=Han}/u.test(expression) ? (code, _message, token) => {
                             bareChinese = code === 'unicodeTextInMathMode' && /\p{Script=Han}/u.test(token?.text || '');
                             return bareChinese ? 'error' : 'ignore';
-                        },
+                        } : 'ignore',
                         trust: false
                     });
                 } catch (error) {
@@ -522,6 +522,25 @@
             template: '#knowledge-tree-tpl'
         };
 
+        // Group plain text and math at rendered line breaks. Keep diagrams in
+        // the original flow so floats and saved image anchors still work.
+        const chunkLibrarySupport = html => {
+            if (html.length < 64000 || /data-image-id=|class="latex-image-placeholder"/.test(html)) return html;
+            const lines = html.split('<br>');
+            const groupSize = 16;
+            if (lines.length < groupSize * 2) return html;
+            const groups = [];
+            for (let start = 0; start < lines.length; start += groupSize) {
+                const end = Math.min(start + groupSize, lines.length);
+                const content = lines.slice(start, end).join('<br>');
+                const displayCount = (content.match(/class="katex-display"/g) || []).length;
+                const mathRows = (content.match(/<mtr\b/g) || []).length;
+                const estimatedHeight = ((end - start) * 1.75 + displayCount * 3.4 + mathRows * 1.3).toFixed(1);
+                groups.push(`<div class="library-support-chunk" style="--library-support-height:${estimatedHeight}em">${content}</div>`);
+            }
+            return groups.join('');
+        };
+
         const QuestionPreview = {
             template: '#latex-preview-tpl',
             props: {
@@ -531,20 +550,26 @@
                 class: { type: String, default: '' }
             },
             computed: {
-                htmlContent() {
+                promptHtml() {
                     const question = this.question;
-                    const render = source => renderLatexPreviewHtml(source, this.images);
-                    const stem = '<div data-question-stem>' + render(question.stem) + '</div>';
+                    const stem = '<div data-question-stem>' + renderLatexPreviewHtml(question.stem, this.images) + '</div>';
                     const options = ['单选题', '多选题'].includes(question.type)
                         ? renderQuestionOptionsHtml(question.options, this.images, false) : '';
-                    const support = this.showAnswer ? [
+                    return stem + options;
+                },
+                supportHtml() {
+                    return [
                         ['answer', '参考答案', 'text-green-700'],
                         ['solution', '深度解析', 'text-blue-600']
                     ].flatMap(([field, label, color]) => {
-                        if (!question[field]) return [];
-                        return [`<section class="qisi-question-support" data-image-region="${field}"><b class="library-answer-heading ${color}">【${label}】</b><div>${render(question[field])}</div></section>`];
-                    }).join('') : '';
-                    const html = `<div data-qisi-question-flow>${stem}${options}${support}</div>`;
+                        if (!this.question[field]) return [];
+                        const html = chunkLibrarySupport(renderLatexPreviewHtml(this.question[field], this.images));
+                        return [`<section class="qisi-question-support" data-image-region="${field}"><b class="library-answer-heading ${color}">【${label}】</b><div>${html}</div></section>`];
+                    }).join('');
+                },
+                htmlContent() {
+                    const support = this.showAnswer ? this.supportHtml : '';
+                    const html = `<div data-qisi-question-flow>${this.promptHtml}${support}</div>`;
                     return root.Qisi.FigureEditor?.layoutHtml(html, this.images) ?? html;
                 }
             }
@@ -612,6 +637,7 @@
                 const personalKnowledgeEdit = ref(null);
                 const hoverL1 = ref(null);
                 const undoHistory = shallowRef([]);
+                const redoHistory = shallowRef([]);
                 const editorFields = [
                     editStem, editImages, editOptions, editAnswer, editSolution, editTagsStr, editGrade, editType,
                     editDiff, editKnowledge, editSystemKnowledge, editSystemKnowledgeId, personalKnowledgeEdit
@@ -621,19 +647,26 @@
                 watch(editorFields, snapshot => {
                     if (!isEditing.value || snapshot.every((value, index) => value === lastEditorSnapshot[index])) return;
                     undoHistory.value = [...undoHistory.value.slice(-49), lastEditorSnapshot];
+                    redoHistory.value = [];
                     lastEditorSnapshot = snapshot;
                 });
-                const undoEditor = () => {
-                    if (!isEditing.value || saving.value || !undoHistory.value.length) return;
-                    lastEditorSnapshot = undoHistory.value.at(-1);
-                    undoHistory.value = undoHistory.value.slice(0, -1);
+                const restoreEditorHistory = (from, to) => {
+                    if (!isEditing.value || saving.value || !from.value.length) return;
+                    to.value = [...to.value, lastEditorSnapshot];
+                    lastEditorSnapshot = from.value.at(-1);
+                    from.value = from.value.slice(0, -1);
                     editorFields.forEach((field, index) => { field.value = lastEditorSnapshot[index]; });
                 };
+                const undoEditor = () => restoreEditorHistory(undoHistory, redoHistory);
+                const redoEditor = () => restoreEditorHistory(redoHistory, undoHistory);
                 const handleEditorUndo = event => {
-                    if ((!event.ctrlKey && !event.metaKey) || event.shiftKey || event.altKey || event.isComposing ||
-                        event.key.toLowerCase() !== 'z' || !isEditing.value || !undoHistory.value.length) return;
+                    const key = event.key.toLowerCase();
+                    const redo = key === 'y' || (key === 'z' && event.shiftKey);
+                    if ((!event.ctrlKey && !event.metaKey) || event.altKey || event.isComposing ||
+                        (key !== 'z' && !redo) || !isEditing.value || !(redo ? redoHistory : undoHistory).value.length) return;
                     event.preventDefault();
-                    undoEditor();
+                    if (redo) redoEditor();
+                    else undoEditor();
                     if (event.target.matches('img')) event.currentTarget.focus({ preventScroll: true });
                 };
 
@@ -760,6 +793,7 @@
                         personalKnowledgeEdit.value = null;
                         lastEditorSnapshot = snapshotEditor();
                         undoHistory.value = [];
+                        redoHistory.value = [];
                         saveError.value = '';
                         isEditing.value = true;
                     }
@@ -993,7 +1027,7 @@
 
                 return { showAnswer, isEditing, saving, saveError, previewQuestion, activeEditTab, editorText, editStem, editImages, cardImages, editorImages, editOptions, editAnswer, editSolution, editTagsStr, editGrade, editType, editDiff, editKnowledge, editSystemKnowledge, editPersonalKnowledge, showEditKnowledge, knowledgeTree, hoverL1, currentEditText, isPropsModified, hasAnswer, toggleEditor, editField, updateFigureLayout, handleToggleAnswer, handleDelete, handleSaveProps, handleToggleCart, externalStatusText, externalStatusClassName, externalStatusTip, externalProcessText, handleTogglePick, handleImageUploadEvent, handleEditPaste, changeImageAlign, selectKnowledge, removeImage, copySnippet,
                     personalKnowledgeChoice, savedPersonalKnowledge, editPersonalKnowledgeLabel, editSystemLevels, selectEditSystemKnowledge, aiPanel, aiSuggestion, aiMetadata, requestAi,
-                    applyAiSuggestion, clearAiSuggestion, cardKnowledge, undoHistory, undoEditor, handleEditorUndo };
+                    applyAiSuggestion, clearAiSuggestion, cardKnowledge, undoHistory, redoHistory, undoEditor, redoEditor, handleEditorUndo };
             },
             template: '#question-card-tpl'
         };

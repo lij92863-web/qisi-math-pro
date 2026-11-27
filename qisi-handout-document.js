@@ -219,6 +219,8 @@
         return String(entry.prefix ?? settings.prefix).replace(/\[(autoNum|number|title|year)\]/g, (_, key) => values[key] ?? '');
     }
 
+    const previewSource = (settings, field) => settings.latexSelection ? ` data-latex-preview="${field}"` : '';
+
     function questionParts(entry, q, s, answerOnly = false, splitSupport = entry.split) {
         if (!q) return ['<div class="hc-missing">题库里的原题已移除。请重新选择题目，或删除此引用。</div>'];
         const data = { ...q, ...entry.override };
@@ -276,15 +278,16 @@
             const regionStyle = `font-family:${font(style[`${name}Font`])};font-size:${limit(style[`${name}Size`], 9, 70, 14)}px;color:${color(style[`${name}Color`])}`;
             const heading = s.theme === 'body24' && name === 'solution' ? '解' : label;
             const previewOnly = s.previewSupport?.includes(name) ? ' data-preview-only' : '';
-            return (splitSupport ? separateText(body) : [body]).map((part, index) => `<div class="hc-support"${previewOnly} style="${escape(regionStyle)}">${index === 0 ? `<b>${heading}　</b>` : ''}${renderContent(part, false) || '<br>'}</div>`);
+            const ignoreHeading = s.latexSelection ? ' data-latex-ignore' : '';
+            return (splitSupport ? separateText(body) : [body]).map((part, index) => `<div class="hc-support"${previewOnly}${previewSource(s, name)} style="${escape(regionStyle)}">${index === 0 ? `<b${ignoreHeading}>${heading}　</b>` : ''}${renderContent(part, false) || '<br>'}</div>`);
         };
         const supporting = [...(s.showAnswer ? solution('answer', '答案') : []), ...(s.showSolution ? solution('solution', '解析') : [])];
         if (answerOnly) return supporting;
-        const optionHtml = options.map((option, index) => string(option).trim() ? `<div class="hc-option"><span>${String.fromCharCode(65 + index)}.</span><div>${renderContent(option)}</div></div>` : '').join('');
+        const optionHtml = options.map((option, index) => string(option).trim() ? `<div class="hc-option"><span>${String.fromCharCode(65 + index)}.</span><div${previewSource(s, 'option-' + index)}>${renderContent(option)}</div></div>` : '').join('');
         const optionsMode = ['1', '2', '4'].includes(entry.optionsMode) ? entry.optionsMode : 'auto';
         const figureSide = (left, middle, right) => `<div class="hc-figure-row">${left.join('')}<div class="hc-figure-main">${middle}</div>${right.join('')}</div>`;
         const stemStyle = `color:${color(entry.style.stemColor || s.style.stemColor)};font-weight:${entry.style.stemBold ?? s.style.stemBold ? 700 : 'inherit'}`;
-        const renderStem = value => `<div class="hc-stem" style="${stemStyle}">${renderContent(value) || '<br>'}</div>`;
+        const renderStem = value => `<div class="hc-stem"${previewSource(s, 'stem')} style="${stemStyle}">${renderContent(value) || '<br>'}</div>`;
         const renderedOptions = optionHtml ? `<div class="hc-options" data-options="${optionsMode}">${optionHtml}</div>` : '';
         const withOptions = (placement.optionLeft.length || placement.optionRight.length ? figureSide(placement.optionLeft, renderedOptions, placement.optionRight) : renderedOptions) + afterOptions.join('');
         const meta = [s.sourceTitle && q.title, s.sourceYear && q.year, s.sourceNumber && q.original && `原第 ${q.original} 题`,
@@ -311,7 +314,7 @@
         const text = string(entry.text);
         const overview = s.theme === 'body24' && entry.bodyRole === 'overview';
         const paragraphs = overview ? separateText(text).filter(Boolean) : entry.split ? separateText(text) : [text];
-        const parts = paragraphs.map(value => `<div>${render(value) || '<br>'}</div>`);
+        const parts = paragraphs.map(value => `<div${previewSource(s, 'text')}>${render(value) || '<br>'}</div>`);
         if (entry.image) parts.unshift(figureHtml({ id: 'block-image', url: entry.image }, entry.figures['block-image'], 220));
         return parts.filter(Boolean);
     }
@@ -380,7 +383,7 @@
             try { doc = JSON.parse(raw); } catch (_) { continue; }
             if (!doc?.id || key !== pendingPrefix + doc.id || !Number.isFinite(doc.updatedAt) || !Array.isArray(doc.blocks)) continue;
             await transaction(['handoutEntries'], repo => repo.get('handoutEntries', 'doc:' + doc.id).then(previous =>
-                !previous || previous.value.updatedAt < doc.updatedAt ? store.save(doc) : undefined));
+                (previous?.value?.updatedAt || 0) < doc.updatedAt ? store.save(doc) : undefined));
             if (root.localStorage.getItem(key) === raw) root.localStorage.removeItem(key);
         }
     }

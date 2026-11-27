@@ -15,7 +15,7 @@ const { createSecureLogger } = require('./qisi-secure-logger');
 const { instanceIdFor } = require('./qisi-local-instance');
 const { createAiRequestLimiter, networkFailureCode } = require('./qisi-local-ai-request-policy');
 const { assertDocxUploadType, validateDocxPackage } = require('./qisi-docx-upload-policy');
-const { postDashScope, closeDashScopeConnections } = require('./qisi-local-https-transport');
+const { postDashScope: requestDashScope, closeDashScopeConnections } = require('./qisi-local-https-transport');
 const { isAllowedLocalHost, isAllowedLocalOrigin, publicRootAssets, isPublicAsset } = require('./qisi-local-http-boundary');
 const { createMineruClient } = require('./qisi-mineru-client');
 
@@ -31,6 +31,7 @@ const { validateEquations, createNativeTranslator } = require('./qisi-mathtype-l
 const translateLocalMtef = createNativeTranslator(ROOT);
 const PORT = Number(process.env.PORT || 3000);
 const HOST = '127.0.0.1';
+const APP_ORIGIN = `http://${HOST}:${PORT}`;
 const CONVERT_TIMEOUT_MS = Number(process.env.DOCX_CONVERT_TIMEOUT_MS || 120000);
 const CONVERTER_MODE = String(process.env.QISI_DOCX_CONVERTER || 'auto').toLowerCase();
 const DASHSCOPE_API_KEY = String(process.env.DASHSCOPE_API_KEY || '').trim();
@@ -67,8 +68,10 @@ app.disable('x-powered-by');
 // The pipeline legitimately issues page-parallel requests (a 21-page paper opens
 // up to 12 in flight). The old fixed cap of 4 turned that into AI_PROXY_BUSY,
 // which is a local rejection and looks like a provider failure to the caller.
+const aiMaxConcurrent = Math.max(1, Number(process.env.AI_MAX_CONCURRENT || 16) | 0);
+const postDashScope = options => requestDashScope({ ...options, concurrency: aiMaxConcurrent });
 const aiRequestLimiter = createAiRequestLimiter({
-    maxConcurrent: Math.max(1, Number(process.env.AI_MAX_CONCURRENT || 16) | 0),
+    maxConcurrent: aiMaxConcurrent,
     capacity: Math.max(1, Number(process.env.AI_RATE_CAPACITY || 600) | 0)
 });
 const aiJsonParser = express.json({ limit: AI_BODY_LIMIT, type: 'application/json' });
@@ -241,6 +244,17 @@ app.post('/api/ai/ocr', aiJsonParser, (req, res) => {
 });
 
 const MAIN_HTML_PATH = path.join(ROOT, 'main.html');
+app.get(['/', '/main.html'], (req, res, next) => {
+  if (req.hostname.toLowerCase() !== 'localhost' || req.query.legacy === 'backup') return next();
+  res.set('Cache-Control', 'no-store').type('html').send(`<!doctype html>
+    <html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>打开奇思数学</title><main>
+    <h1>打开奇思数学</h1>
+    <p>启动器使用 127.0.0.1。浏览器会把这个地址和 localhost 的题库分别保存。</p>
+    <p><a href="${APP_ORIGIN}/main.html">打开常用题库</a></p>
+    <p>如果以前用 localhost 录过题，可以<a href="/main.html?legacy=backup">打开旧地址</a>，在「个人中心」下载完整备份。</p>
+    </main></html>`);
+});
 // The served file allow-list follows main.html on disk. A server started before a
 // new <script> tag existed must not keep answering 404 for it, because a single
 // missing module leaves the page blank with no visible error.
@@ -265,7 +279,7 @@ app.use(express.static(ROOT, { extensions: ['html'], maxAge: 0, etag: true }));
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => {
-    const safe = sanitizeFilename(file.originalname || 'upload.docx');
+    const safe = sanitizeFilename(decodeMultipartFilename(file.originalname) || 'upload.docx');
     const ext = path.extname(safe) || '.docx';
     const base = path.basename(safe, ext);
     trackIncomingUpload(req, `${Date.now()}_${randomUUID()}_${base}${ext}`, cb);
@@ -388,6 +402,7 @@ async function convertWithWordCom(inputPath, outputDir) {
 
   const result = await runProcess('powershell.exe', [
     '-NoProfile',
+    '-NonInteractive',
     '-ExecutionPolicy',
     'Bypass',
     '-File',
@@ -398,6 +413,13 @@ async function convertWithWordCom(inputPath, outputDir) {
     outputDir
   ], { cwd: ROOT }, CONVERT_TIMEOUT_MS);
 
+  if (result.code === -2) {
+    const owner = /^QISI_WORD_OWNER (\d+) (\d+)\r?$/m.exec(result.stdout);
+    if (owner) {
+      await runProcess('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+        '-File', PS_CONVERTER, '-OwnedWordPid', owner[1], '-OwnedWordStart', owner[2]], { cwd: ROOT }, 8000);
+    }
+  }
   const json = parseLastJson(result.stdout);
 
   if (!result.ok || !json?.ok) {
@@ -762,8 +784,8 @@ app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => 
 
     res.json({
       ok: true,
-      originalFilename: uploaded.originalname,
-      pdfFilename: `${path.basename(uploaded.originalname, ext)}.pdf`,
+      originalFilename: decodeMultipartFilename(uploaded.originalname),
+      pdfFilename: `${path.basename(decodeMultipartFilename(uploaded.originalname), ext)}.pdf`,
       pdfHeader,
       looksLikePdf,
       actualPdfFilename: path.basename(pdfPath),
@@ -782,13 +804,13 @@ app.post('/api/convert/docx-to-pdf', upload.single('file'), async (req, res) => 
       error: unsafeInput ? 'DOCX文件格式或安全校验未通过。' : error.message || String(error),
       code: error?.code || 'DOCX_CONVERT_FAILED',
       detail: {
-        file: uploaded?.originalname || '',
+        file: decodeMultipartFilename(uploaded?.originalname),
         server: 'qisi-local-server',
         platform: process.platform,
         cwd: ROOT,
         hint: [
           'Confirm npm start is running.',
-          'Confirm the browser is opened at http://localhost:3000/main.html.',
+          `Confirm the browser is opened at ${APP_ORIGIN}/main.html.`,
           'On Windows, confirm Microsoft Word is installed and can open this DOCX normally.',
           'Install LibreOffice as a fallback converter if Word COM is unavailable.',
           'If Word shows first-run, activation, privacy, protected-view, or add-in dialogs, open Word manually and finish those prompts first.'
@@ -995,10 +1017,10 @@ app.use((error, req, res, next) => {
 async function startServer() {
   await tempJobManager.cleanupExpired();
   const server = app.listen(PORT, HOST, () => {
-    console.log(`[qisi-local-server] running at http://localhost:${PORT}`);
-    console.log(`[qisi-local-server] open http://localhost:${PORT}/main.html`);
-    console.log(`[qisi-local-server] health check: http://localhost:${PORT}/api/health`);
-    console.log(`[qisi-local-server] converter self-test: http://localhost:${PORT}/api/convert/self-test`);
+    console.log(`[qisi-local-server] running at ${APP_ORIGIN}`);
+    console.log(`[qisi-local-server] open ${APP_ORIGIN}/main.html`);
+    console.log(`[qisi-local-server] health check: ${APP_ORIGIN}/api/health`);
+    console.log(`[qisi-local-server] converter self-test: ${APP_ORIGIN}/api/convert/self-test`);
     console.log(`[qisi-local-server] converter mode: ${CONVERTER_MODE}`);
     console.log('[qisi-local-server] LibreOffice candidates:');
     findLibreOfficeExecutable().forEach(p => console.log(`  - ${p}`));

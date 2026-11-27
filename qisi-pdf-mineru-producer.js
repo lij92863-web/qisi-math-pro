@@ -96,16 +96,24 @@
             const primary = sourceResults.find(row => row.file.id === questionFiles[0].id);
             const paper = S.segmentPaper(primary.blocks);
             // Question-only sources cannot silently contribute embedded answers.
+            const hasPrimarySupport = primary.roles.includes('full') && !primary.result.answerTableIssue;
             const base = S.assemblePartial({ questionSegment: paper.questionSegment,
-                solutionSegment: primary.roles.includes('full') ? paper.solutionSegment : null,
-                answerTable: primary.roles.includes('full') ? primary.result.answerTable : null });
+                solutionSegment: hasPrimarySupport ? paper.solutionSegment : null,
+                answerTable: hasPrimarySupport ? primary.result.answerTable : null });
             const assemblies = [{ row: primary, built: base }];
             for (const row of sourceResults.filter(row => row !== primary)) {
-                const support = S.segment(row.blocks, { numbers: paper.questionSegment.order, role: 'support' });
-                assemblies.push({ row, built: S.assemblePartial({ questionSegment: paper.questionSegment, solutionSegment: support, answerTable: row.result.answerTable }) });
+                const support = row.result.answerTableIssue ? null :
+                    S.segment(row.blocks, { numbers: paper.questionSegment.order, role: 'support' });
+                assemblies.push({ row, built: S.assemblePartial({ questionSegment: paper.questionSegment,
+                    solutionSegment: support, answerTable: support ? row.result.answerTable : null }) });
             }
             if (!paper.questionSegment.valid || !base.questions.length) throw fail('PDF_MINERU_QUESTION_SEQUENCE_INVALID');
             const issues = assemblies.flatMap(({ row, built }) => built.issues.map(issue => ({ ...issue, sourceId: row.file.id })));
+            for (const { file, result } of sourceResults) {
+                if (result.answerTableIssue === 'MINERU_ANSWER_TABLE_INVALID') {
+                    issues.push({ code: result.answerTableIssue, sourceId: file.id });
+                }
+            }
             // A support sequence rejected as a whole leaves even correctly ordered
             // questions without a bound answer. Say so per question instead of only
             // reporting the two backward transitions.
@@ -121,7 +129,13 @@
                 if (heading) printedType = heading.type;
                 const no = S.numberOnBlock(block); if (no && !types.has(no)) types.set(no, printedType);
             }
-            const issueMessage = issue => `${issue.sourceId}: ${issue.code}${issue.no ? ' (' + issue.no + ')' : ''}`;
+            const issueMessage = issue => {
+                if (issue.code === 'MINERU_ANSWER_TABLE_INVALID') {
+                    const filename = sourceResults.find(row => row.file.id === issue.sourceId)?.file.filename;
+                    return `「${filename}」的答案表无法对齐，请对照原卷核对和补录。`;
+                }
+                return `${issue.sourceId}: ${issue.code}${issue.no ? ' (' + issue.no + ')' : ''}`;
+            };
             const taskProblems = issues.map(issueMessage);
             const issuesByQuestion = new Map();
             const globalIssues = [];

@@ -184,16 +184,18 @@
             throw new TypeError('Qwen proxy transport is required.');
         }
 
-        const assertResponse = response => {
-            if (response?.ok) return response;
+        const responseError = response => {
             const status = Number(response?.status || 0);
-            throw createTaskError(
+            return createTaskError(
                 'QWEN_PROXY_HTTP_FAILED',
                 `Qwen proxy failed with HTTP ${status || 'unknown'}.`,
                 // Provider-side 4xx other than 408 refuses the request outright,
                 // so the submission cannot have been accepted.
                 { status, ...(status >= 400 && status < 500 && status !== 408 ? { definitelyNotSubmitted: true, submissionAccepted: false } : {}) }
             );
+        };
+        const assertResponse = response => {
+            if (!response?.ok) throw responseError(response);
         };
 
         const modelsFor = (task, mode) => {
@@ -238,49 +240,55 @@
                     cancelled.name = 'AbortError';
                     throw cancelled;
                 }
-                try {
-                    const content = imageUrl
-                        ? [
-                            {
-                                type: 'image_url',
-                                image_url: { url: imageUrl, ...imageOptions }
-                            },
-                            { type: 'text', text: String(prompt) }
-                        ]
-                        : String(prompt);
-                    const response = await transport.request('chat', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            model,
-                            messages: [{ role: 'user', content }],
-                            temperature: 0,
-                            top_p: 0.001,
-                            max_tokens: maxTokens
-                        }),
-                        signal
-                    }, timeoutMs, label);
-                    assertResponse(response);
-                    const text = extractProxyText(await response.json());
-                    if (!text) {
-                        throw createTaskError(
-                            'QWEN_TASK_EMPTY', 'Qwen task returned no text.'
-                        );
+                const content = imageUrl
+                    ? [
+                        {
+                            type: 'image_url',
+                            image_url: { url: imageUrl, ...imageOptions }
+                        },
+                        { type: 'text', text: String(prompt) }
+                    ]
+                    : String(prompt);
+                const response = await transport.request('chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model,
+                        messages: [{ role: 'user', content }],
+                        temperature: 0,
+                        top_p: 0.001,
+                        max_tokens: maxTokens
+                    }),
+                    signal
+                }, timeoutMs, label);
+                if (!response?.ok) {
+                    const error = responseError(response);
+                    if ([400, 404].includes(error.status)) {
+                        const body = await Promise.resolve().then(() => response.json()).catch(() => null);
+                        const code = body?.error?.code || body?.code;
+                        if (['model_not_found', 'ModelNotFound', 'unsupported_model'].includes(code)) {
+                            lastError = error;
+                            continue;
+                        }
                     }
-                    if (
-                        typeof validateText === 'function' &&
-                        validateText(text, { model, task }) !== true
-                    ) {
-                        throw createTaskError(
-                            'QWEN_TASK_RESPONSE_REJECTED',
-                            'Qwen task response failed producer validation.'
-                        );
-                    }
-                    return Object.freeze({ text, model, task });
-                } catch (error) {
-                    if (error?.name === 'AbortError') throw error;
-                    lastError = error;
+                    throw error;
                 }
+                const text = extractProxyText(await response.json());
+                if (!text) {
+                    throw createTaskError(
+                        'QWEN_TASK_EMPTY', 'Qwen task returned no text.'
+                    );
+                }
+                if (
+                    typeof validateText === 'function' &&
+                    validateText(text, { model, task }) !== true
+                ) {
+                    throw createTaskError(
+                        'QWEN_TASK_RESPONSE_REJECTED',
+                        'Qwen task response failed producer validation.'
+                    );
+                }
+                return Object.freeze({ text, model, task });
             }
             throw lastError || createTaskError(
                 'QWEN_TASK_FAILED', 'Qwen task failed.'

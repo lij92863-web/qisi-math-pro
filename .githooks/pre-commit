@@ -2,7 +2,10 @@
 set -e
 node scripts/verify-runtime-modules.js
 node scripts/verify-app-shell-architecture.js
-npm run verify:safe
+npm run verify:no-real-ai
+npm run check
+node scripts/verify-write-boundary.js
+npm run test:quick
 if [ -n "$QISI_ALLOWED_DIFF" ]; then
     npm run verify:diff-scope
 fi

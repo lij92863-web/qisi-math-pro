@@ -238,10 +238,11 @@
     // Cropper.js owns pointer capture, crop-box movement/resizing and pixel cropping.
     // PDF.js owns PDF parsing, rotation and rasterization. No custom crop algorithm.
     const Page = {
-        props: ['page', 'anchors', 'crops', 'enabled', 'correcting', 'adjustable', 'locked'],
-        emits: ['selection', 'locate', 'frame', 'resume', 'crop-draft', 'select-source'],
-        data: () => ({ cropper: null, imageRatio: null, raster: null, nearby: false, width: 0, height: 0 }),
+        props: ['page', 'anchors', 'crops', 'enabled', 'correcting', 'adjustable', 'locked', 'retainRaster', 'zoom'],
+        emits: ['selection', 'locate', 'frame', 'resume', 'crop-draft', 'select-source', 'render-error'],
+        data: () => ({ cropper: null, imageRatio: null, raster: null, nearby: false, width: 0, height: 0, localUrl: '' }),
         computed: {
+            imageUrl() { return this.localUrl || this.page.url; },
             frames() {
                 const frames = this.anchors.map(a => ({ ...a, box: a.box || suggestedFrame(a.regions, this.raster) }));
                 return layoutQuestionLabels(frames, this.raster, this.width, this.height);
@@ -255,6 +256,7 @@
             this.resizeObserver.observe(this.$refs.surface);
             this.observer = new IntersectionObserver(entries => {
                 this.nearby = entries[0].isIntersecting;
+                this.syncLocalPage();
                 if (this.nearby) {
                     this.readRaster();
                     this.init();
@@ -262,20 +264,54 @@
             }, {root:this.$el.closest('.v-source-scroll'), rootMargin:'120px'});
             this.observer.observe(this.$el);
         },
-        beforeUnmount() { this.observer?.disconnect(); this.resizeObserver?.disconnect(); this.destroyCropper(); },
+        beforeUnmount() {
+            this._disposed = true;
+            this.observer?.disconnect();
+            this.resizeObserver?.disconnect();
+            this._pageRender?.abort();
+            this.releaseLocalPage();
+        },
         watch: {
             enabled(value) {
                 if (value || this.correcting) this.$nextTick(this.init);
                 else this.destroyCropper();
             },
             correcting() { this.clear(); if (this.correcting || this.enabled) this.$nextTick(this.init); else this.destroyCropper(); },
-            'page.url'() {
+            imageUrl() {
                 this.destroyCropper();
                 this.imageRatio = null;
-            }
+            },
+            zoom() { if (this.cropper) { this.destroyCropper(); this.$nextTick(this.init); } },
+            retainRaster() { this.syncLocalPage(); }
         },
         methods: {
             boxStyle,
+            releaseLocalPage() {
+                this.destroyCropper();
+                if (!this.localUrl) return;
+                URL.revokeObjectURL(this.localUrl);
+                this.localUrl = '';
+            },
+            async syncLocalPage() {
+                if (!this.page.render || this._disposed) return;
+                if (!this.nearby && !this.retainRaster) {
+                    this._pageRender?.abort();
+                    this.releaseLocalPage();
+                    return;
+                }
+                if (this.localUrl || this._pageRender) return;
+                const controller = new AbortController();
+                this._pageRender = controller;
+                try {
+                    const blob = await this.page.render(controller.signal);
+                    if (!controller.signal.aborted) this.localUrl = URL.createObjectURL(blob);
+                } catch {
+                    if (!controller.signal.aborted && this.nearby) this.$emit('render-error', this.page.number);
+                } finally {
+                    this._pageRender = null;
+                    if (controller.signal.aborted && !this._disposed && (this.nearby || this.retainRaster)) this.syncLocalPage();
+                }
+            },
             imageLoaded() {
                 const image = this.$refs.image;
                 this.imageRatio = image.naturalWidth / image.naturalHeight;
@@ -382,7 +418,7 @@
         template: `<div class="v-page-sheet">
             <div ref="surface" class="v-source-page" :class="{'v-adjustable-crop':adjustable}" :style="{aspectRatio:imageRatio || page.width/page.height}"
                 @pointerdown.capture="startPointer" @pointermove.capture="trackPointer" @pointerup.capture="endPointer">
-                <img ref="image" :src="page.url" alt="原卷页面" @load="imageLoaded" draggable="false" />
+                <img v-if="imageUrl" ref="image" :src="imageUrl" alt="原卷页面" @load="imageLoaded" draggable="false" />
             </div>
             <div class="v-page-marks">
                 <div v-for="frame in frames" :key="frame.questionId" class="v-question-frame"
@@ -597,7 +633,9 @@
                         const imageType = root.Qisi.ClipboardFiles.imageMime(file);
                         const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
                         if (isPdf) {
+                            if (this.dead) return;
                             const job=root.pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer()),isEvalSupported:false});
+                            if (this.dead) { await job.destroy(); return; }
                             this.jobs.push(Vue.markRaw(job));
                             try {
                                 const pdf=await job.promise;
@@ -605,17 +643,34 @@
                                 for(let n=1;n<=pdf.numPages;n++) {
                                     if(this.dead) return;
                                     const page=await pdf.getPage(n), vp=page.getViewport({scale:1.6});
-                                    const canvas=document.createElement('canvas'); canvas.width=vp.width;canvas.height=vp.height;
-                                    await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
-                                    pages.push({url:canvas.toDataURL('image/png'),number:n,width:canvas.width,height:canvas.height,sourceFileId:id});
+                                    pages.push({number:n,width:vp.width,height:vp.height,sourceFileId:id,
+                                        render: async signal => {
+                                            const canvas = document.createElement('canvas');
+                                            canvas.width = vp.width;
+                                            canvas.height = vp.height;
+                                            const render = page.render({ canvasContext:canvas.getContext('2d'), viewport:vp });
+                                            const cancel = () => render.cancel();
+                                            signal.addEventListener('abort', cancel, { once: true });
+                                            try {
+                                                await render.promise;
+                                                signal.throwIfAborted();
+                                                return await new Promise((resolve, reject) => canvas.toBlob(blob =>
+                                                    blob ? resolve(blob) : reject(new Error('无法生成 PDF 页面图像。')), 'image/png'));
+                                            } finally {
+                                                signal.removeEventListener('abort', cancel);
+                                                page.cleanup();
+                                                canvas.width = canvas.height = 0;
+                                            }
+                                        }});
                                     page.cleanup();
                                 }
-                            } finally {
+                            } catch (error) {
                                 const index = this.jobs.indexOf(job);
                                 if (index >= 0) {
                                     this.jobs.splice(index, 1);
-                                    await job.destroy();
+                                    await job.destroy().catch(() => {});
                                 }
+                                throw error;
                             }
                         } else if (imageType) {
                             const image = file.type === imageType ? file : file.slice(0, file.size, imageType);
@@ -655,12 +710,14 @@
                     <button type="button" class="v-btn small" @click="clearSelection">取消选区</button>
                 </div>
             </div>
-            <div v-if="error" class="v-warning">{{error}}</div><div v-if="busy" class="v-source-busy" role="status">正在打开并渲染文档…</div>
+            <div v-if="error" class="v-warning">{{error}}</div><div v-if="busy" class="v-source-busy" role="status">正在打开文档…</div>
             <div ref="scroll" class="v-source-scroll" :tabindex="review ? null : 0"
                 @click.self="!review && $event.currentTarget.focus({preventScroll:true})"
                 @dragover.prevent @drop.prevent="addFiles($event.dataTransfer.files)">
                 <button v-if="!pages.length&&!busy" class="v-document-empty" @click="$refs.files.click()"><span class="v-upload-symbol"><icon name="upload-cloud" size="30"/></span><strong>拖入或点击上传试卷 PDF / 图片</strong><span>可同时打开试卷与答案</span><small>文件在本地打开，框选后再识别或作为插图</small></button>
-                <div v-for="p in pages" :key="(p.sourceFileId||'source')+'_'+p.number+'_'+zoom" :data-page="p.number" :data-file="p.sourceFileId" class="v-paper-wrap" :style="{width:zoom+'%'}"><video-page ref="pages" :page="p" :anchors="anchors(p)" :crops="crops(p)" :enabled="enabled" :correcting="correcting" :adjustable="!review" :locked="locked" @frame="setFrame" @resume="resume" @selection="selection" @crop-draft="stageCrop" @select-source="focusSource" @locate="$emit('locate',$event)"/><div class="v-page-number">第 {{p.number}} 页</div></div>
+                <div v-for="p in pages" :key="(p.sourceFileId||'source')+'_'+p.number" :data-page="p.number" :data-file="p.sourceFileId" class="v-paper-wrap" :style="{width:zoom+'%'}"><video-page ref="pages" :page="p" :anchors="anchors(p)" :crops="crops(p)" :enabled="enabled" :correcting="correcting" :adjustable="!review" :locked="locked" :zoom="zoom"
+                    :retain-raster="pendingCrop?.page.number===p.number && pendingCrop?.page.sourceFileId===p.sourceFileId"
+                    @render-error="error='无法显示第 '+$event+' 页。'" @frame="setFrame" @resume="resume" @selection="selection" @crop-draft="stageCrop" @select-source="focusSource" @locate="$emit('locate',$event)"/><div class="v-page-number">第 {{p.number}} 页</div></div>
             </div>
         </section>`
     };
@@ -668,13 +725,16 @@
         app.component('video-page', Page); app.component('video-source', Source);
         root.Qisi.ClipboardFiles.install(app);
         root.Qisi.HandoutComposer?.install(app);
-        app.mixin({
+    };
+    // Review badges match the rendered stem, including legacy records, apart from whitespace.
+    const reviewStemKey = value => String(value || '').replace(/\s+/g, '');
+    const workspace = {
             data() { return { video: { documentTerm:'讲义', split:false, overview:false, filter:'all', search:'', taskStatus:'all', taskSearch:'',
                 region:null,result:'',figures:[],busy:false,assigning:false,error:'',request:0,duplicate:null,property:'',help:false,selection:null,placing:false,proposal:null,
                 batchMeta:false,entryExtra:false,entryExtraText:'',entryCropNotice:'',latexCopyNotice:null,entryMetadata:null,working:false,reviewCompletion:null,
                 reviewTags:'',reviewTagError:'',reviewTagsSaving:false,reviewMetadata:null,reviewKnowledgeSearch:'' } }; },
             watch: {
-                'video.split'(value) { if(this.$root===this)sessionStorage.setItem('qisi_video_split',String(value)); },
+                'video.split'(value) { sessionStorage.setItem('qisi_video_split',String(value)); },
                 entryTab() { this.video.latexCopyNotice = null; },
                 activeDraftQuestionId() { this.videoClearReviewTools(); },
                 view(value, previous) {
@@ -688,6 +748,16 @@
                 }
             },
             computed: {
+                videoDuplicateIndex() {
+                    const index = new Map();
+                    for (const question of this.questions || []) {
+                        const key = reviewStemKey(question.stem);
+                        if (!key) continue;
+                        if (!index.has(key)) index.set(key, []);
+                        index.get(key).push(question);
+                    }
+                    return index;
+                },
                 videoMetadata() { return metadata; },
                 videoEntrySupportLabel() {
                     return this.view === 'entry' && !this.video.entryExtra ? reviewFieldLabel[this.entryTab] || '' : '';
@@ -804,9 +874,9 @@
                 videoReadOnly() {return this.view==='batchImport'&&this.activeDraftQuestion?.status==='submitted';}
             },
             mounted() {
-                if(this.$root!==this)return;
                 this.video.split=sessionStorage.getItem('qisi_video_split')==='true';
                 this._videoKeys=e=>{
+                    if (e.defaultPrevented || this.backupStatus?.restoring) return;
                     const typing=/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)||e.target.isContentEditable;
                     const source=this.view==='entry'?this.$refs.entrySource:this.$refs.reviewSource;
                     if(e.key==='Escape'){
@@ -819,6 +889,7 @@
                         if (source?.enabled) source.toggle();
                         return;
                     }
+                    if (this.video.help || this.video.duplicate || document.querySelector('dialog[open], [aria-modal="true"], .material-modal-backdrop')) return;
                     if(e.altKey&&e.key==='Enter'&&this.$refs.reviewSource){e.preventDefault();this.videoSubmitNext();return;}
                     if(typing||e.ctrlKey||e.metaKey||e.altKey)return;
                     if(e.key.toLowerCase()==='x'&&source){e.preventDefault();source.toggle();}
@@ -1349,7 +1420,9 @@
                     if (!entry) r.owner?.remember(r,field==='image'?'插图':({stem:'题目',answer:'答案',solution:'解析'})[field],r.targetId);
                     this.videoCancel();
                 },
-                videoDuplicates(q){const key=s=>String(s||'').replace(/\s+/g,'');const text=key(q.stem);return (this.questions||[]).filter(row=>row.id!==q.id&&text&&key(row.stem)===text);},
+                videoDuplicates(q) {
+                    return (this.videoDuplicateIndex.get(reviewStemKey(q.stem)) || []).filter(row => row.id !== q.id);
+                },
                 async videoBulk(){await this.confirmSelectedDrafts();},
                 async videoBulkMeta(){const type=this.video.bulkType,knowledge=this.video.bulkKnowledge;for(const id of [...this.selectedDraftIds]){const q=(this.batchDraftQuestions||[]).find(q=>q.id===id);if(!q||q.status==='submitted')continue;await this.videoSelect(id);if(this.activeDraftQuestionId!==id)break;if(type){this.activeDraftQuestion.type=type;this.markActiveDraftUserEdited('type');}if(this.videoKnowledgeById.has(knowledge))this.videoApplyKnowledgeIds([knowledge]);if(!await this.saveActiveDraftQuestion({silent:true}))break;}this.video.batchMeta=false;},
                 async videoCreate(){this.video.working=true;try{await this.createDraftImportBatch();}finally{this.video.working=false;}},
@@ -1459,7 +1532,6 @@
                     }catch(e){if(token===this.video.request)this.video.error=e.message||'AI补全失败';}finally{if(token===this.video.request)this.video.busy=false;}
                 }
             }
-        });
     };
-    return Object.freeze({ normalizeRect, matchesFilter, append, normalizeCropOcr, mergeCropStem, withoutDuplicateOcrTail, sourceMarks, questionAtPoint, layoutQuestionLabels, install });
+    return Object.freeze({ normalizeRect, matchesFilter, append, normalizeCropOcr, mergeCropStem, withoutDuplicateOcrTail, sourceMarks, questionAtPoint, layoutQuestionLabels, install, workspace });
 });

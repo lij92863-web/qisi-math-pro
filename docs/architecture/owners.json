@@ -261,9 +261,9 @@
       "forbiddenDependencies": [
         "question-repository"
       ],
-      "productionEntry": true,
+      "productionEntry": false,
       "writeAuthority": "none",
-      "status": "production"
+      "status": "deprecated"
     },
     {
       "ownerId": "support-repair",
@@ -1261,9 +1261,9 @@
         "question-repository",
         "formal-admission"
       ],
-      "productionEntry": true,
+      "productionEntry": false,
       "writeAuthority": "none",
-      "status": "production"
+      "status": "deprecated"
     },
     {
       "ownerId": "controlled-write",

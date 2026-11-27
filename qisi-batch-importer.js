@@ -981,6 +981,7 @@
         // 分步列表，展开它就会把解析切成假题目。
         const numberingEntry = zip.file('word/numbering.xml');
         const numberingXml = numberingEntry ? await numberingEntry.async('string') : '';
+        const stylesXml = numberingXml ? await zip.file('word/styles.xml')?.async('string') : '';
         const paragraphs = splitDocxParagraphs(expanded.xml);
         const heading = paragraphs.find(paragraph =>
             !paragraph.inTable && SUPPORT_HEADING_PATTERN.test(paragraph.text));
@@ -991,6 +992,7 @@
             paragraph.paragraphIndex > heading.paragraphIndex && !paragraph.inTable &&
             (SOLUTION_HEADING_PATTERN.test(paragraph.text) || SUPPORT_SOLUTION_LABEL.test(paragraph.text)));
         expanded.xml = window.Qisi.DocxNumbering.expand(expanded.xml, numberingXml, {
+            stylesXml,
             beforeIndex: answerMode && heading ? solutionStart?.paragraphIndex ?? -1 : heading?.paragraphIndex ?? -1
         }).xml;
 

@@ -377,11 +377,42 @@
             return out.replace(/\n/g, '');
         };
 
-        const renderLatexFormula = (render, expression, options) => render(expression, {
-            ...options,
-            // KaTeX mutates this object for global definitions. Scope it to one formula.
-            macros: { '\\vect': '\\overrightarrow', ...options?.macros }
-        });
+        const latexRenderCache = new Map();
+        let cachedRenderer, latexCacheSize = 0;
+        const maxLatexCacheSize = 4 * 1024 * 1024;
+        const renderLatexFormula = (render, expression, options) => {
+            if (cachedRenderer !== render) {
+                cachedRenderer = render;
+                latexRenderCache.clear();
+                latexCacheSize = 0;
+            }
+            const entries = Object.entries(options || {});
+            const cacheable = typeof expression === 'string' && expression.length <= 4096 &&
+                entries.every(([name, value]) => name !== 'macros' &&
+                    (value === null || ['string', 'boolean'].includes(typeof value) || Number.isFinite(value)));
+            const key = cacheable ? JSON.stringify([expression, entries.sort(([a], [b]) => a.localeCompare(b))]) : null;
+            if (key && latexRenderCache.has(key)) {
+                const html = latexRenderCache.get(key);
+                latexRenderCache.delete(key);
+                latexRenderCache.set(key, html);
+                return html;
+            }
+            const html = render(expression, {
+                ...options,
+                // KaTeX mutates this object for global definitions. Scope it to one formula.
+                macros: { '\\vect': '\\overrightarrow', ...options?.macros }
+            });
+            if (key && typeof html === 'string' && html.length <= 65536) {
+                latexRenderCache.set(key, html);
+                latexCacheSize += key.length + html.length;
+                while (latexRenderCache.size > 2000 || latexCacheSize > maxLatexCacheSize) {
+                    const oldest = latexRenderCache.keys().next().value;
+                    latexCacheSize -= oldest.length + latexRenderCache.get(oldest).length;
+                    latexRenderCache.delete(oldest);
+                }
+            }
+            return html;
+        };
 
         const normalizeBareLatexExpressionForDisplay = (expression = '') => String(expression || '')
             .replace(/鈭歿2\}/g, '\\sqrt{2}')
@@ -677,6 +708,7 @@
         };
 
         const isFatalQwenServiceError = (error) => {
+            if ([401, 403, 429].includes(Number(error?.status))) return true;
             const message = String(error?.message || error || '').toLowerCase();
 
             return (

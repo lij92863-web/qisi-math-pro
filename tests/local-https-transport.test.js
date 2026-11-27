@@ -32,7 +32,7 @@ test('one verified HTTPS POST preserves upstream status and exact payload', asyn
     assert.equal(ports.calls.length, 1);
     assert.equal(ports.calls[0].options.rejectUnauthorized, true);
     assert.equal(ports.calls[0].options.agent.options.keepAlive, true);
-    assert.equal(ports.calls[0].options.agent.maxSockets, 4);
+    assert.equal(ports.calls[0].options.agent.maxSockets, 16);
     assert.equal(ports.calls[0].options.agent.maxFreeSockets, 2);
     assert.equal(ports.calls[0].body, input().body);
     assert.equal(result.status, 429); assert.equal(result.ok, false);
@@ -155,6 +155,6 @@ test('separate requests use the same bounded production agent', async () => {
     const first = mock(), second = mock();
     await postDashScope(input(), first); await postDashScope(input(), second);
     assert.equal(first.calls[0].options.agent, second.calls[0].options.agent);
-    assert.equal(first.calls[0].options.agent.maxTotalSockets, 4);
+    assert.equal(first.calls[0].options.agent.maxTotalSockets, 16);
     assert.equal(first.calls[0].options.agent.scheduling, 'lifo');
 });

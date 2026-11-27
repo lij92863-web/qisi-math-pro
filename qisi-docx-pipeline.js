@@ -199,7 +199,10 @@
 
                     if (!cells.length) return '';
 
-                    if (cells.length === 4) {
+                    if (cells.length === 4 && cells.every((cell, index) => {
+                        const match = /^([A-DＡ-Ｄ])\s*[.．、:：)）]/i.exec(cell);
+                        return match && 'ABCD'[index] === match[1].normalize('NFKC').toUpperCase();
+                    })) {
                         const normalized = cells.map(normalizeDocxOptionCellText);
                         if (normalized.filter(Boolean).length >= 2) {
                             rowTexts.push(`A. ${normalized[0] || ''} B. ${normalized[1] || ''} C. ${normalized[2] || ''} D. ${normalized[3] || ''}`);

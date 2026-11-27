@@ -38,5 +38,16 @@ test('public assets revalidate by ETag while private files remain unavailable', 
         });
         assert.equal(second.status, 304); assert.equal(second.body, '');
         assert.equal((await fetch(base + '/qisi-local-server.js')).status, 404);
+        const localhostPage = path => new Promise((resolve, reject) => {
+            http.get(base + path, { headers: { Host: `localhost:${port}` } }, response => {
+                response.setEncoding('utf8');
+                let body = '';
+                response.on('data', chunk => { body += chunk; });
+                response.on('end', () => resolve(body));
+            }).once('error', reject);
+        });
+        assert.ok((await localhostPage('/main.html')).includes(base + '/main.html'));
+        assert.ok((await localhostPage('/')).includes('legacy=backup'));
+        assert.match(await localhostPage('/main.html?legacy=backup'), /id="app-tpl"/);
     } finally { child.kill(); }
 });

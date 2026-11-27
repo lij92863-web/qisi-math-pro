@@ -5,17 +5,17 @@ const PATHS = new Set(['/compatible-mode/v1/chat/completions',
     '/api/v1/services/aigc/multimodal-generation/generation']);
 // One process-local pool, matching the proxy's concurrency limit. No automatic POST retry.
 let sharedAgent;
-function getSharedAgent() {
-    if (!sharedAgent) sharedAgent = new https.Agent({ keepAlive: true, maxSockets: 4,
-        maxTotalSockets: 4, maxFreeSockets: 2, scheduling: 'lifo',
+function getSharedAgent(concurrency) {
+    if (!sharedAgent) sharedAgent = new https.Agent({ keepAlive: true, maxSockets: concurrency,
+        maxTotalSockets: concurrency, maxFreeSockets: 2, scheduling: 'lifo',
         agentKeepAliveTimeoutBuffer: 1000 });
     return sharedAgent;
 }
 function closeDashScopeConnections() {
     const retired = sharedAgent; sharedAgent = undefined; retired?.destroy();
 }
-function postDashScope({ url, headers, body, signal, onPhase, maxResponseBytes = 16 * 1024 * 1024 } = {},
-    { request = https.request, agent = getSharedAgent() } = {}) {
+function postDashScope({ url, headers, body, signal, onPhase, maxResponseBytes = 16 * 1024 * 1024, concurrency = 16 } = {},
+    { request = https.request, agent = getSharedAgent(concurrency) } = {}) {
     return new Promise((resolve, reject) => {
         let parsed;
         try { parsed = new URL(url); } catch { return reject(Error('INVALID_UPSTREAM_URL')); }

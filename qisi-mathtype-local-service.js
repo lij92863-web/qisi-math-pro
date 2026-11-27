@@ -19,25 +19,23 @@ function validateEquations(body) {
     });
 }
 
-function createNativeTranslator(root) {
+function createNativeTranslator(root, { spawnProcess = spawn, timeoutMs = 20000 } = {}) {
     let tail = Promise.resolve();
-    let unavailable = '';
     const failed = (rows, code) => ({ ok: false, code,
         equations: rows.map(row => ({ id: row.id, ok: false, code, latex: '' })) });
 
     async function invoke(rows) {
-        if (unavailable) return failed(rows, unavailable);
         const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'qisi-mtef-'));
         const input = path.join(dir, 'input.json'), output = path.join(dir, 'output.json');
         try {
             await fs.writeFile(input, JSON.stringify({ equations: rows }));
             const status = await new Promise(resolve => {
-                const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive',
+                const child = spawnProcess('powershell.exe', ['-NoProfile', '-NonInteractive',
                     '-ExecutionPolicy', 'Bypass', '-File',
                     path.join(root, 'tools/translate-mathtype-mtef.ps1'),
                     '-InputPath', input, '-OutputPath', output],
                 { cwd: root, windowsHide: true, stdio: 'ignore' });
-                const timer = setTimeout(() => { child.kill(); resolve('MATHTYPE_NATIVE_TIMEOUT'); }, 20000);
+                const timer = setTimeout(() => { resolve('MATHTYPE_NATIVE_TIMEOUT'); child.kill(); }, timeoutMs);
                 child.once('error', () => { clearTimeout(timer); resolve('MATHTYPE_NATIVE_UNAVAILABLE'); });
                 child.once('exit', code => { clearTimeout(timer); resolve(code === 0 ? '' : 'MATHTYPE_NATIVE_FAILED'); });
             });
@@ -49,7 +47,6 @@ function createNativeTranslator(root) {
                 if (!expected.has(row.id) || byId.has(row.id)) return failed(rows, 'MATHTYPE_RESPONSE_ID_MISMATCH');
                 byId.set(row.id, row);
             }
-            if (status) unavailable = status;
             const equations = rows.map(row => {
                 const result = byId.get(row.id);
                 return result?.ok === true && typeof result.latex === 'string'

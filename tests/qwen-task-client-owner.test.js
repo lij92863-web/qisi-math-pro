@@ -89,3 +89,28 @@ test('missing transport, malformed JSON, HTTP failure, and cancellation fail clo
             error.code === 'OCR_REQUEST_CANCELLED'
     );
 });
+
+test('costly vision fallback is limited to explicit model unavailability', async () => {
+    const task = { task: 'strict-vision', mode: 'accurate', prompt: 'fixture' };
+    for (const status of [401, 403, 429, 503, 200]) {
+        let calls = 0;
+        const client = Qwen.createQwenTaskClient({ transport: {
+            checkHealth: async () => ({ ok: true }),
+            request: async () => {
+                calls++;
+                return status === 200 ? response('invalid result') : { ok: false, status };
+            }
+        } });
+        await assert.rejects(client.chatText({ ...task, validateText: () => false }),
+            { code: status === 200 ? 'QWEN_TASK_RESPONSE_REJECTED' : 'QWEN_PROXY_HTTP_FAILED' });
+        assert.equal(calls, 1);
+    }
+    let calls = 0;
+    const client = Qwen.createQwenTaskClient({ transport: {
+        checkHealth: async () => ({ ok: true }),
+        request: async () => ++calls === 1 ? { ok: false, status: 404,
+            json: async () => ({ error: { code: 'model_not_found' } }) } : response('fixture result')
+    } });
+    assert.equal((await client.chatText(task)).text, 'fixture result');
+    assert.equal(calls, 2);
+});
